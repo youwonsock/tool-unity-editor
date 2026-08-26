@@ -1,0 +1,98 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace Supercent.Common.TransformPath
+{
+    [CreateAssetMenu(fileName = "Path Event Setting", menuName = "Path Setting/New Path Event Setting", order = 1)]
+    public class PathEventSettingSO : ScriptableObject
+    {
+        #region Inner Classes / Structs
+
+        [Serializable]
+        public class DelayedEventEntry
+        {
+            public float Delay = 0f;
+            public PathEventSettingSO EventSetting = null;
+        }
+
+        #endregion
+
+
+        #region Member Variables
+
+        #region Event Identity
+
+        [Header("이벤트 이름")]
+        public string EventName;
+
+        #endregion
+
+
+        #region Path Move Speed
+
+        [Header("Path 이동 속도 제어 사용 (SpeedBased 모드)")]
+        public bool UseModifyPathMoveSpeed;
+        public float MoveSpeedTargetValue = 1.0f;
+        public float MoveSpeedAdjustDuration;
+        public AnimationCurve MoveSpeedAdjustCurve = AnimationCurve.EaseInOut(0, 0, 1, 1);
+
+        #endregion
+
+
+        #region Path Move Duration
+
+        [Header("Path 이동 Duration 제어 사용 (TimeBased 모드)")]
+        public bool UseModifyPathMoveDuration;
+        public float MoveDurationTargetValue = 5.0f;
+        public float MoveDurationAdjustDuration;
+        public AnimationCurve MoveDurationAdjustCurve = AnimationCurve.EaseInOut(0, 0, 1, 1);
+
+        #endregion
+
+
+        #region Time Scale
+
+        [Header("타임 스케일 조정 사용")]
+        public bool UseTimeScaleAdjust;
+        public float TimeScaleAdjustValue;
+        public float TimeScaleAdjustDuration;
+        public AnimationCurve TimeScaleAdjustCurve = AnimationCurve.EaseInOut(0, 0, 1, 1);
+
+        #endregion
+
+
+        #region Delayed Events
+
+        [Header("지연 이벤트 목록 (경로 상 다음 이벤트 트리거 시 취소됨)")]
+        public bool UseDelayedEvents;
+        public List<DelayedEventEntry> DelayedEvents = new List<DelayedEventEntry>();
+
+        #endregion
+
+        #endregion
+
+
+        #region Unity Events
+
+        private void OnValidate()
+        {
+            MoveSpeedAdjustDuration = Mathf.Max(0f, MoveSpeedAdjustDuration);
+            MoveDurationAdjustDuration = Mathf.Max(0f, MoveDurationAdjustDuration);
+            TimeScaleAdjustDuration = Mathf.Max(0f, TimeScaleAdjustDuration);
+
+            if (DelayedEvents == null)
+                return;
+
+            foreach (DelayedEventEntry entry in DelayedEvents)
+            {
+                if (entry == null)
+                    continue;
+
+                entry.Delay = Mathf.Max(0f, entry.Delay);
+            }
+        }
+
+        #endregion
+    }
+}
