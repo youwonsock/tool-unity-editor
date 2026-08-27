@@ -7,7 +7,7 @@ namespace Supercent.Common.TransformPath
     /// PathFollower를 사용하여 경로를 따라 이동하며,
     /// 앞에 다른 객체가 있으면 자동으로 멈추는 기능을 제공합니다.
     /// </summary>
-    public partial class QueuedPathFollower : MonoBehaviour
+    public class QueuedPathFollower : MonoBehaviour, IQueuedPathAgent
     {
         #region Constants
 
@@ -23,7 +23,7 @@ namespace Supercent.Common.TransformPath
         #endregion
 
 
-        #region Member Variables
+        #region Queue Follower State
 
         [Header("컴포넌트")]
         [SerializeField] private PathFollower _pathFollower;
@@ -56,7 +56,7 @@ namespace Supercent.Common.TransformPath
         #endregion
 
 
-        #region Properties
+        #region Queue Follower Properties
 
         public bool IsBlocked => _isBlocked;
         public bool IsMoving => _isMoving;
@@ -99,7 +99,8 @@ namespace Supercent.Common.TransformPath
 
         private void Reset()
         {
-            _pathFollower = PathComponentUtility.EnsureComponent<PathFollower>(gameObject);
+            if (!TryGetComponent(out _pathFollower))
+                _pathFollower = gameObject.AddComponent<PathFollower>();
         }
 
         private void OnValidate()
@@ -149,7 +150,7 @@ namespace Supercent.Common.TransformPath
         #endregion
 
 
-        #region Public Methods
+        #region Queue Follower API
 
         /// <summary>
         /// Manager를 설정합니다.
@@ -261,7 +262,7 @@ namespace Supercent.Common.TransformPath
         #endregion
 
 
-        #region Private Methods
+        #region Queue Follower Helpers
 
         private void UpdateMoveModifiers()
         {
@@ -293,8 +294,8 @@ namespace Supercent.Common.TransformPath
             }
 
             float spacing = ActorSpacing;
-            bool shouldBlock = QueuedPathBlockingHelper.ShouldStartBlocking(distance, spacing);
-            bool shouldUnblock = QueuedPathBlockingHelper.ShouldEndBlocking(distance, spacing, _unblockHysteresis, _blockTimer);
+            bool shouldBlock = ShouldStartBlocking(distance, spacing);
+            bool shouldUnblock = ShouldEndBlocking(distance, spacing, _unblockHysteresis, _blockTimer);
 
             if (shouldBlock)
             {
@@ -442,6 +443,12 @@ namespace Supercent.Common.TransformPath
             return false;
         }
 
+        private static bool ShouldStartBlocking(float distance, float spacing)
+            => distance >= 0f && distance <= spacing;
+
+        private static bool ShouldEndBlocking(float distance, float spacing, float hysteresis, float blockTimer)
+            => blockTimer <= 0f && distance > spacing + hysteresis;
+
         #endregion
 
 
@@ -457,5 +464,36 @@ namespace Supercent.Common.TransformPath
             UnityEditor.EditorUtility.SetDirty(this);
         }
 #endif
+
+        #region IQueuedPathAgent Contract
+
+        IPathFollower IQueuedPathAgent.PathFollower => _pathFollower;
+        UnityEngine.Object IQueuedPathAgent.UnityOwner => this;
+
+        #endregion
+
+
+        #region Provider Start API
+
+        public bool TryStartMove(IPathProvider provider, PathMoveSettings settings, Action onComplete = null)
+        {
+            if (!EnsurePathFollowerReady())
+                return false;
+
+            _onComplete = onComplete;
+            PrepareMoveStart();
+
+            if (!(_pathFollower is IPathFollower follower) || !follower.TryStartMove(provider, settings))
+            {
+                ResetMoveState();
+                _onComplete = null;
+                return false;
+            }
+
+            _isMoving = true;
+            return true;
+        }
+
+        #endregion
     }
 }

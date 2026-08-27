@@ -8,7 +8,7 @@ namespace Supercent.Common.TransformPath
     /// PathData를 사용하여 시간 기반 또는 속도 기반으로 경로를 따라 이동하는 애니메이터입니다.
     /// 공개 API와 직렬화 상태는 partial 파일에 책임별로 나뉘어 있습니다.
     /// </summary>
-    public partial class PathFollower : MonoBehaviour
+    public partial class PathFollower : MonoBehaviour, IPathFollower
     {
         #region Constants
 
@@ -84,7 +84,8 @@ namespace Supercent.Common.TransformPath
 
         private void Reset()
         {
-            _pathEventHandler = PathComponentUtility.EnsureComponent<PathEventHandler>(gameObject);
+            if (!TryGetComponent(out _pathEventHandler))
+                _pathEventHandler = gameObject.AddComponent<PathEventHandler>();
         }
 
         private void Awake()
@@ -119,5 +120,464 @@ namespace Supercent.Common.TransformPath
         }
 
         #endregion
-    }
+
+        #region Follower Properties
+
+        public AnimationCurve TimeCurve
+        {
+            get => _timeCurve;
+            set => _timeCurve = value;
+        }
+
+        public PathData PathData
+        {
+            get => _pathData;
+            set
+            {
+                if (_pathData == value)
+                    return;
+
+                _pathData = value;
+                _normalizedTime = 0f;
+            }
+        }
+
+        public float NormalizedTime
+        {
+            get => _normalizedTime;
+            set
+            {
+                _normalizedTime = Mathf.Clamp01(value);
+                UpdatePosition(_normalizedTime);
+            }
+        }
+
+        public bool IsMoving => _isMoving;
+        public bool HasActiveMoveCoroutine => _moveCoroutine != null;
+
+        public bool ReplacePathStartWithFollowerPosition
+        {
+            get => _replacePathStartWithFollowerPosition;
+            set => _replacePathStartWithFollowerPosition = value;
+        }
+
+        public EMoveType CurrentMoveType
+        {
+            get => _moveType;
+            set => _moveType = value;
+        }
+
+        public float Duration
+        {
+            get => _duration;
+            set
+            {
+                float clampedValue = Mathf.Clamp(value, TIME_BASED_MIN_DURATION, TIME_BASED_MAX_DURATION);
+                if (_isMoving
+                    && _moveType == EMoveType.TimeBased
+                    && !Mathf.Approximately(_duration, clampedValue))
+                {
+                    _durationChangeBaseNormalizedTime = _normalizedTime;
+                    _needsElapsedTimeReset = true;
+                }
+
+                _duration = clampedValue;
+            }
+        }
+
+        public float Speed
+        {
+            get => _speed;
+            set => _speed = Mathf.Clamp(value, SPEED_BASED_MIN_SPEED, SPEED_BASED_MAX_SPEED);
+        }
+
+        public bool Loop
+        {
+            get => _loop;
+            set => _loop = value;
+        }
+
+        public float DefaultSpeed => _defaultSpeed;
+        public float DefaultDuration => _defaultDuration;
+
+        public Animator Animator
+        {
+            get => _animator;
+            set => _animator = value;
+        }
+
+        public MultiPathData MultiPathData
+        {
+            get => _multiPathData;
+            set => _multiPathData = value;
+        }
+
+        public int CurrentPathIndex => _currentPathIndex;
+
+        public float GlobalNormalizedTime
+        {
+            get
+            {
+                if (_useMultiPaths && _multiPathData != null && _multiPathData.PathCount > 0)
+                {
+                    float pathStartNormalized = _multiPathData.GetPathStartNormalizedValue(_currentPathIndex);
+                    float pathEndNormalized = _multiPathData.GetPathEndNormalizedValue(_currentPathIndex);
+                    float pathRange = pathEndNormalized - pathStartNormalized;
+                    return pathStartNormalized + pathRange * _normalizedTime;
+                }
+
+                return _normalizedTime;
+            }
+        }
+
+        #endregion
+
+        #region Provider Contract State
+
+        private IPathProvider _activePathProvider = null;
+        private bool _providerChangePending = false;
+        private EPathFollowerState _pathState = EPathFollowerState.Stopped;
+        private int _stateRevision = 0;
+
+        private event Action _stateChanged;
+        private event Action _segmentChanged;
+        private event Action _completed;
+
+        #endregion
+
+
+        #region IPathFollower Contract
+
+        IPathProvider IPathFollower.CurrentProvider
+        {
+            get
+            {
+                if (_activePathProvider != null)
+                    return _activePathProvider;
+
+                if (_useMultiPaths)
+                    return _multiPathData;
+
+                return _pathData;
+            }
+        }
+        EPathFollowerState IPathFollower.State => _pathState;
+        int IPathFollower.StateRevision => _stateRevision;
+        int IPathFollower.CurrentSegmentIndex => _currentPathIndex;
+        EPathMoveType IPathFollower.CurrentMoveType => PathTypeConversion.ToPublic(_moveType);
+
+        event Action IPathFollower.StateChanged
+        {
+            add => _stateChanged += value;
+            remove => _stateChanged -= value;
+        }
+
+        event Action IPathFollower.SegmentChanged
+        {
+            add => _segmentChanged += value;
+            remove => _segmentChanged -= value;
+        }
+
+        event Action IPathFollower.Completed
+        {
+            add => _completed += value;
+            remove => _completed -= value;
+        }
+
+        #endregion
+
+
+        #region Provider API
+
+        public bool TryStartMove(IPathProvider provider, PathMoveSettings settings)
+        {
+            if (!IsAlive(provider))
+                return false;
+
+            if (!provider.IsReady && provider is IPathController controller)
+                controller.TryRebuild();
+
+            if (!provider.IsReady)
+                return false;
+
+            if (_replacePathStartWithFollowerPosition && !(provider is PathData))
+            {
+                Debug.LogWarning("PathFollower: ReplacePathStartWithFollowerPosition은 PathData Provider에서만 지원됩니다.");
+                return false;
+            }
+
+            if (provider is PathData pathData)
+            {
+                StartMove(
+                    pathData,
+                    PathTypeConversion.ToLegacy(settings.MoveType),
+                    settings.Value,
+                    settings.TimeCurve,
+                    null);
+                Loop = settings.Loop;
+                return IsMoving;
+            }
+
+            StopMove();
+            _useMultiPaths = false;
+            _activePathProvider = provider;
+            _moveType = PathTypeConversion.ToLegacy(settings.MoveType);
+            _timeCurve = settings.TimeCurve ?? AnimationCurve.Linear(0, 0, 1, 1);
+            _loop = settings.Loop;
+
+            if (_moveType == EMoveType.TimeBased)
+                Duration = settings.Value;
+            else
+                Speed = settings.Value;
+
+            _normalizedTime = 0f;
+            _onComplete = null;
+            _onMultiComplete = null;
+            _hasPathEvents = provider is IPathEventSource eventSource && eventSource.PathEvents.Count > 0;
+            _nextPathEventIndex = 0;
+            _providerChangePending = false;
+            SubscribeToActiveProvider();
+            AbortMoveCoroutineAndBumpRevision();
+
+            _defaultSpeed = _speed;
+            _defaultDuration = _duration;
+            _defaultAnimatorSpeed = _animator != null ? _animator.speed : 1f;
+            _isMoving = true;
+            PublishState(EPathFollowerState.Moving);
+
+            if (_hasPathEvents)
+            {
+                InvokePendingPathEventsUpTo(0f);
+                if (!_isMoving)
+                    return false;
+            }
+
+            StartMoveCoroutine(_moveRevision);
+            return true;
+        }
+
+        public bool TrySeek(float normalizedTime)
+        {
+            if (!IsFinite(normalizedTime) || !IsPathValid())
+                return false;
+
+            SetNormalizedTime(normalizedTime);
+            PublishState(_isMoving ? EPathFollowerState.Moving : EPathFollowerState.Paused);
+            return true;
+        }
+
+        #endregion
+
+
+        #region Provider Helpers
+
+        private void SubscribeToActiveProvider()
+        {
+            UnsubscribeFromActiveProvider();
+
+            if (_activePathProvider != null)
+                _activePathProvider.PathChanged += HandleActiveProviderChanged;
+        }
+
+        private void UnsubscribeFromActiveProvider()
+        {
+            if (_activePathProvider != null)
+                _activePathProvider.PathChanged -= HandleActiveProviderChanged;
+        }
+
+        private void HandleActiveProviderChanged()
+        {
+            _providerChangePending = true;
+        }
+
+        private bool ConsumeProviderChange()
+        {
+            if (!_providerChangePending)
+                return true;
+
+            _providerChangePending = false;
+
+            if (!IsAlive(_activePathProvider) || !_activePathProvider.IsReady)
+            {
+                _isMoving = false;
+                PublishState(EPathFollowerState.Stopped);
+                return false;
+            }
+
+            UpdatePosition(_normalizedTime);
+            return true;
+        }
+
+        private void PublishState(EPathFollowerState state)
+        {
+            if (_pathState == state)
+                return;
+
+            _pathState = state;
+            _stateRevision++;
+            _stateChanged?.Invoke();
+        }
+
+        private void PublishSegmentChanged()
+        {
+            _stateRevision++;
+            _segmentChanged?.Invoke();
+        }
+
+        private void PublishCompleted()
+        {
+            _completed?.Invoke();
+        }
+
+        private float GetActivePathLength()
+            => _activePathProvider != null ? _activePathProvider.PathLength : (_pathData != null ? _pathData.PathLength : 0f);
+
+        private IReadOnlyList<PathEventEntry> GetActivePathEvents()
+        {
+            if (_activePathProvider is IPathEventSource providerEventSource)
+                return providerEventSource.PathEvents;
+
+            return _pathData != null ? _pathData.PathEvents : null;
+        }
+
+        private static bool IsAlive(IPathProvider provider)
+        {
+            if (provider == null)
+                return false;
+
+            if (provider is UnityEngine.Object unityObject && unityObject == null)
+                return false;
+
+            return true;
+        }
+
+        private static bool IsFinite(float value)
+            => !float.IsNaN(value) && !float.IsInfinity(value);
+
+        #endregion
+
+        #region Lifecycle Helpers
+
+        private void StartSinglePath(Action onComplete)
+        {
+            if (_pathData == null)
+            {
+                Debug.LogWarning("PathFollower: PathData가 설정되지 않았습니다!");
+                return;
+            }
+
+            _activePathProvider = _pathData;
+            SubscribeToActiveProvider();
+            RestorePathDataCacheFromSerializedTransformsIfNeeded();
+
+            bool requestReplace = _pendingReplacePathStart;
+            _pendingReplacePathStart = false;
+
+            if (requestReplace && _replacePathStartWithFollowerPosition)
+            {
+                if (_pathData.TryCopyWorldControlPoints(_controlPointScratch))
+                {
+                    _controlPointScratch[0] = transform.position;
+                    _pathData?.Init(_controlPointScratch, forceReinit: true);
+                    _pathDataWithStartOverrideCache = _pathData;
+                }
+                else
+                {
+                    Debug.LogWarning("PathFollower: 시작점 치환에 필요한 제어점이 부족합니다. Transform 기준으로 강제 재초기화합니다.");
+                    _pathData?.Init(forceReinit: true);
+                }
+            }
+            else
+            {
+                _pathData?.Init();
+            }
+
+            AbortMoveCoroutineAndBumpRevision();
+            _isMoving = false;
+            StopRestoreSpeed();
+            int moveRevision = _moveRevision;
+            _defaultSpeed = _speed > 0f ? _speed : _pendingDefaultSpeed;
+            _defaultDuration = _duration;
+            _defaultAnimatorSpeed = _animator != null ? _animator.speed : 1f;
+            _pausedAnimatorSpeed = _defaultAnimatorSpeed;
+            _isAnimatorPaused = false;
+            _hasPathEvents = _pathData.HasPathEvents;
+            _onComplete = onComplete;
+            _isMoving = true;
+            PublishState(EPathFollowerState.Moving);
+            ResetMoveProgressState(resetNormalizedTime: true, needsTravelDistanceReset: false);
+
+            if (_hasPathEvents)
+            {
+                InvokePendingPathEventsUpTo(0f);
+                if (moveRevision != _moveRevision)
+                    return;
+            }
+
+            StartMoveCoroutine(moveRevision);
+        }
+
+        private bool IsPathValid()
+        {
+            if (_activePathProvider != null)
+                return _activePathProvider.IsReady;
+
+            if (_pathData == null)
+                return false;
+
+            return _pathData.PathPoints != null && _pathData.PathPoints.Length > 0;
+        }
+
+        private void RestorePathDataCacheFromSerializedTransformsIfNeeded()
+        {
+            if (_pathDataWithStartOverrideCache == null)
+                return;
+
+            _pathDataWithStartOverrideCache?.Init(forceReinit: true);
+            _pathDataWithStartOverrideCache = null;
+        }
+
+        private void ResetMoveProgressState(
+            bool resetNormalizedTime,
+            bool needsTravelDistanceReset,
+            bool needsElapsedTimeReset = false)
+        {
+            if (resetNormalizedTime)
+            {
+                _normalizedTime = 0f;
+                _previousNormalizedTime = 0f;
+                _durationChangeBaseNormalizedTime = 0f;
+                _nextPathEventIndex = 0;
+            }
+
+            _needsElapsedTimeReset = needsElapsedTimeReset;
+            _needsTravelDistanceReset = needsTravelDistanceReset;
+        }
+
+        private void CacheRuntimeReferences()
+        {
+            if (_pathEventHandler == null)
+                TryGetComponent(out _pathEventHandler);
+
+            if (_animator == null)
+            {
+                if (!TryGetComponent(out _animator))
+                    _animator = GetComponentInChildren<Animator>();
+            }
+        }
+
+        #endregion
+
+#if UNITY_EDITOR
+        [ContextMenu("Bind Serialized Field")]
+        private void BindSerializedField()
+        {
+            UnityEditor.Undo.RecordObject(this, "Bind Serialized Field");
+            TryGetComponent(out _pathEventHandler);
+            if (!TryGetComponent(out _animator))
+                _animator = GetComponentInChildren<Animator>();
+            UnityEditor.EditorUtility.SetDirty(this);
+        }
+#endif
+}
 }

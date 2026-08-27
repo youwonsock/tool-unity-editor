@@ -4,8 +4,48 @@ using UnityEngine;
 
 namespace Supercent.Common.FlowField
 {
-    internal sealed partial class FlowFieldModifierRegistry
+    internal sealed class FlowFieldModifierRegistry
     {
+        internal sealed class Entry
+        {
+            internal readonly IFlowFieldVectorModifier Modifier;
+            internal readonly long RegistrationOrder;
+            internal bool[] InfluenceMask;
+            internal bool[] InfluenceScratch;
+            internal readonly List<int> InfluenceIndices = new List<int>(64);
+            internal Collider InfluenceCollider;
+            internal int Priority;
+            internal int Revision;
+            internal bool AreaDirty = true;
+            internal bool SnapshotInitialized;
+            internal bool LastEnabled;
+            internal bool LastActive;
+            internal bool LastTrigger;
+            internal Vector3 LastPosition;
+            internal Quaternion LastRotation;
+            internal Vector3 LastScale;
+            internal Bounds LastBounds;
+
+#if UNITY_EDITOR
+            internal bool[] EditorInfluenceMask;
+            internal bool[] EditorInfluenceScratch;
+#endif
+
+            internal Entry(
+                IFlowFieldVectorModifier modifier,
+                long registrationOrder,
+                Collider influenceCollider,
+                int priority,
+                int revision)
+            {
+                Modifier = modifier;
+                RegistrationOrder = registrationOrder;
+                InfluenceCollider = influenceCollider;
+                Priority = priority;
+                Revision = revision;
+            }
+        }
+
         private readonly List<Entry> _entries = new List<Entry>(16);
         private readonly HashSet<IFlowFieldVectorModifier> _faultedModifiers = new HashSet<IFlowFieldVectorModifier>();
         private readonly HashSet<IFlowFieldVectorModifier> _invalidWarnings = new HashSet<IFlowFieldVectorModifier>();
@@ -495,6 +535,52 @@ namespace Supercent.Common.FlowField
             Bounds bounds = collider.bounds;
             return (entry.LastBounds.center - bounds.center).sqrMagnitude > 0.00000001f
                 || (entry.LastBounds.size - bounds.size).sqrMagnitude > 0.00000001f;
+        }
+    }
+
+    internal enum FlowFieldModifierDiagnosticKind
+    {
+        InvalidConfiguration,
+        AccessException,
+        RuntimeException,
+        EditorException,
+        DuplicatePriority,
+    }
+
+    internal readonly struct FlowFieldModifierDiagnostic
+    {
+        public FlowFieldModifierDiagnosticKind Kind { get; }
+        public IFlowFieldVectorModifier Modifier { get; }
+        public string Message { get; }
+        public Exception Exception { get; }
+        public int Priority { get; }
+
+        public FlowFieldModifierDiagnostic(
+            FlowFieldModifierDiagnosticKind kind,
+            IFlowFieldVectorModifier modifier,
+            string message = null,
+            Exception exception = null,
+            int priority = 0)
+        {
+            Kind = kind;
+            Modifier = modifier;
+            Message = message;
+            Exception = exception;
+            Priority = priority;
+        }
+    }
+
+    internal readonly struct FlowFieldModifierRegistryResult
+    {
+        public bool AreaDirty { get; }
+        public bool ValueDirty { get; }
+        public bool FinalDirty { get; }
+
+        public FlowFieldModifierRegistryResult(bool areaDirty, bool valueDirty, bool finalDirty)
+        {
+            AreaDirty = areaDirty;
+            ValueDirty = valueDirty;
+            FinalDirty = finalDirty;
         }
     }
 }

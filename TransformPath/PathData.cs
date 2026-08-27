@@ -22,7 +22,7 @@ namespace Supercent.Common.TransformPath
     /// 경로 데이터 클래스
     /// 연출을 위한 이동에 사용
     /// </summary>
-    public partial class PathData : MonoBehaviour
+    public partial class PathData : MonoBehaviour, IPathProvider, IPathController, IPathEventSource
     {
         #region Constants
 
@@ -61,7 +61,7 @@ namespace Supercent.Common.TransformPath
         #endregion
 
 
-        #region Member Variables
+        #region Path Definition and Cache State
 
         [SerializeField] private List<Transform> _pathPoints = new List<Transform>();
 
@@ -86,7 +86,7 @@ namespace Supercent.Common.TransformPath
         #endregion
 
 
-        #region Properties
+        #region Path Properties
 
         /// <summary>
         /// 전체 경로 포인트 배열
@@ -128,7 +128,7 @@ namespace Supercent.Common.TransformPath
         #endregion
 
 
-        #region Public Methods
+        #region Path Construction and Query API
 
         /// <summary>
         /// 경로 데이터를 초기화합니다
@@ -373,6 +373,186 @@ namespace Supercent.Common.TransformPath
 
         #endregion
 
+        #region Provider Contract State
 
-    }
-} 
+        private int _revision = 0;
+
+        #endregion
+
+
+        #region Provider Contract
+
+        public bool IsReady => _isInitialized && _cachedPathPoints != null && _cachedPathPoints.Length > 0;
+        public int Revision => _revision;
+
+        public event Action PathChanged;
+
+        #endregion
+
+
+        #region Provider API
+
+        public bool TrySample(float normalizedTime, out Vector3 position)
+        {
+            position = Vector3.zero;
+
+            if (!IsFinite(normalizedTime))
+                return false;
+
+            if (!IsReady)
+                Init();
+
+            if (!IsReady)
+                return false;
+
+            position = GetPointOnPath(Mathf.Clamp01(normalizedTime));
+            return true;
+        }
+
+        public bool TrySampleDistance(float distance, out Vector3 position)
+        {
+            position = Vector3.zero;
+
+            if (!IsFinite(distance))
+                return false;
+
+            if (!IsReady)
+                Init();
+
+            if (!IsReady || _cachedPathLength <= 0f)
+                return false;
+
+            position = GetPointAtDistance(Mathf.Clamp(distance, 0f, _cachedPathLength));
+            return true;
+        }
+
+        public bool TryRebuild(bool forceRebuild = false)
+        {
+            Init(forceRebuild);
+            return IsReady;
+        }
+
+        internal void NotifyPathBuild(bool resultChanged)
+        {
+            if (!resultChanged)
+                return;
+
+            _revision++;
+            PathChanged?.Invoke();
+        }
+
+        #endregion
+
+
+        #region Provider Helpers
+
+        private static bool IsFinite(float value)
+            => !float.IsNaN(value) && !float.IsInfinity(value);
+
+        #endregion
+
+        #region Sampling
+
+        private Vector3[] SamplePointsOnPath(int count)
+        {
+            if (count <= 0)
+                return Array.Empty<Vector3>();
+
+            if (!_isInitialized)
+                Init();
+
+            if (_cachedPathPoints == null || _cachedPathPoints.Length == 0)
+            {
+                Debug.LogWarning("PathData: 경로 데이터가 비어있습니다!");
+                return Array.Empty<Vector3>();
+            }
+
+#if UNITY_EDITOR
+            if (_samplingType != ESamplingType.Random
+                && _cachedSamplePoints != null
+                && _cachedSampleCount == count
+                && _cachedESamplingType == _samplingType)
+                return _cachedSamplePoints;
+#endif
+
+            Vector3[] sampledPoints;
+            switch (_samplingType)
+            {
+                case ESamplingType.Uniform:
+                    sampledPoints = SampleUniformPoints(count);
+                    break;
+                case ESamplingType.Random:
+                    sampledPoints = SampleRandomPoints(count);
+                    break;
+                case ESamplingType.DistanceBased:
+                    sampledPoints = SampleDistanceBasedPoints(count);
+                    break;
+                default:
+                    sampledPoints = SampleUniformPoints(count);
+                    break;
+            }
+
+#if UNITY_EDITOR
+            if (_samplingType != ESamplingType.Random)
+            {
+                _cachedSamplePoints = sampledPoints;
+                _cachedSampleCount = count;
+                _cachedESamplingType = _samplingType;
+            }
+#endif
+
+            return sampledPoints;
+        }
+
+        private Vector3[] SampleUniformPoints(int count)
+        {
+            Vector3[] results = new Vector3[count];
+
+            for (int i = 0; i < count; i++)
+            {
+                float t = count > 1 ? (float)i / (count - 1) : 0f;
+                results[i] = GetPointOnPath(Mathf.Clamp01(t));
+            }
+
+            return results;
+        }
+
+        private Vector3[] SampleRandomPoints(int count)
+        {
+            Vector3[] results = new Vector3[count];
+
+            for (int i = 0; i < count; i++)
+                results[i] = GetPointOnPath(UnityEngine.Random.Range(0f, 1f));
+
+            return results;
+        }
+
+        private Vector3[] SampleDistanceBasedPoints(int count)
+        {
+            if (count <= 1)
+                return count == 1 ? new[] { GetPointOnPath(0f) } : Array.Empty<Vector3>();
+
+            Vector3[] results = new Vector3[count];
+            float pathLength = PathLength;
+
+            if (pathLength <= 0f)
+            {
+                Vector3 point = GetPointOnPath(0f);
+                for (int i = 0; i < count; i++)
+                    results[i] = point;
+                return results;
+            }
+
+            float segmentDistance = pathLength / (count - 1);
+            for (int i = 0; i < count; i++)
+            {
+                float distance = i * segmentDistance;
+                results[i] = GetPointOnPath(Mathf.Clamp01(distance / pathLength));
+            }
+
+            return results;
+        }
+
+        #endregion
+}
+}

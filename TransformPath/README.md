@@ -29,7 +29,7 @@ flowchart LR
 | 영역 | 주요 타입 |
 |------|-----------|
 | 경로 정의 | `PathData`, `MultiPathData` |
-| 이동 | `PathFollower` (`Move` / `Animator` / `MultiPath` / `PathEvents` partial) |
+| 이동 | `PathFollower` (이동 제어 / Animator / 다중 경로 / 경로 이벤트) |
 | 이벤트 | `PathEventSettingSO`, `PathEventHandler`, `IPathEventSink`, `PathEventBroker` |
 | 대기열 | `QueuedPathFollower`, `QueuedPathManager` |
 | 시각화 | 에디터 기즈모 (`PathData_Editor`, `MultiPathData_Editor`), 런타임 `PathDataLineRenderer` |
@@ -74,7 +74,7 @@ if (_providerObject is IPathController controller)
 
 `Revision`은 최초 성공, 준비 상태 전환 또는 실제 샘플 결과가 달라진 재빌드에서 증가합니다. 변경 알림은 `PathChanged` 한 번만 게시되며, 구독자는 콜백에서 무거운 재진입 작업을 하지 말고 다음 조회 또는 기존 갱신 시점에 Provider를 다시 읽어야 합니다.
 
-내부 헬퍼(`PathComponentUtility`, `PathDataInitialization`, `QueuedPathHelpers`)는 공용 유틸이며, 기능 소개에서는 별도 설명하지 않습니다.
+내부 계산과 캐시는 각 기능 클래스와 전용 알고리즘 타입에서 관리합니다.
 
 ## PathData
 

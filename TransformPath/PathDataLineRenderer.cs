@@ -46,7 +46,8 @@ namespace Supercent.Common.TransformPath
 
         private void Awake()
         {
-            _lineRenderer = PathComponentUtility.EnsureComponent<LineRenderer>(gameObject);
+            if (!TryGetComponent(out _lineRenderer))
+                _lineRenderer = gameObject.AddComponent<LineRenderer>();
             ConfigureLineRenderer();
         }
 
@@ -84,7 +85,7 @@ namespace Supercent.Common.TransformPath
                 return;
             }
 
-            PathDataInitialization.Initialize(_pathData, forceReinit: true);
+            _pathData?.Init(forceReinit: true);
 
             Vector3[] pathPoints = _pathData.PathPoints;
             if (pathPoints == null || pathPoints.Length < MIN_PATH_POINT_COUNT)
@@ -225,7 +226,8 @@ namespace Supercent.Common.TransformPath
             if (_pathData == null)
                 TryGetComponent(out _pathData);
 
-            _lineRenderer = PathComponentUtility.EnsureComponent<LineRenderer>(gameObject);
+            if (!TryGetComponent(out _lineRenderer))
+                _lineRenderer = gameObject.AddComponent<LineRenderer>();
             ConfigureLineRenderer();
         }
 

@@ -173,6 +173,20 @@ namespace Supercent.Common.TransformPath
         void ReceivePathEvent(string eventName, IPathFollower follower);
     }
 
+    public interface IPathEventSink
+    {
+        void SendPathEvent(string eventName, PathFollower follower);
+    }
+
+    /// <summary>
+    /// 씬 전역 기본 경로 이벤트 수신기. 프로젝트별 이벤트 구현을 등록합니다.
+    /// </summary>
+    public static class PathEventBroker
+    {
+        public static IPathEventSink Sink { get; set; }
+        public static IPathEventReceiver Receiver { get; set; }
+    }
+
     internal static class PathTypeConversion
     {
         public static EPathMoveType ToPublic(PathFollower.EMoveType moveType)

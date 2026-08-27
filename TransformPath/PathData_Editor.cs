@@ -338,7 +338,7 @@ namespace Supercent.Common.TransformPath
                 if (snappedCount > 0)
                 {
                     EditorUtility.SetDirty(pathData);
-                    PathDataInitialization.Initialize(pathData, forceReinit: true);
+                    pathData?.Init(forceReinit: true);
                     Debug.Log($"PathData: {snappedCount}개의 포인트를 지면에 스냅했습니다. (실패: {failedCount}개)");
                 }
                 else
@@ -373,7 +373,7 @@ namespace Supercent.Common.TransformPath
                 pathData._pathPoints.Add(endPoint.transform);
 
                 EditorUtility.SetDirty(pathData);
-                PathDataInitialization.Initialize(pathData, forceReinit: true);
+                pathData?.Init(forceReinit: true);
 
                 Debug.Log("PathData: PathPointStart, PathPoint, PathPointEnd 생성 완료");
             }
@@ -396,7 +396,7 @@ namespace Supercent.Common.TransformPath
                     pathData._pathPoints.Add(collected[i]);
 
                 EditorUtility.SetDirty(pathData);
-                PathDataInitialization.Initialize(pathData, forceReinit: true);
+                pathData?.Init(forceReinit: true);
 
                 if (pathData._pathPoints.Count < MIN_PATH_POINTS_FOR_VALID_PATH)
                 {
@@ -425,6 +425,22 @@ namespace Supercent.Common.TransformPath
         }
 
         #endregion
+    }
+
+    /// <summary>
+    /// PathData gizmo/인스펙터 SerializedProperty 필드명 상수입니다.
+    /// </summary>
+    internal static class PathDataEditorProperties
+    {
+        public const string ShowPathInEditor = "_showPathInEditor";
+        public const string PointColor = "_pointColor";
+        public const string PathColor = "_pathColor";
+        public const string SamplePointColor = "_samplePointColor";
+        public const string EventPointColor = "_eventPointColor";
+        public const string LineWidth = "_lineWidth";
+        public const string PointSize = "_pointSize";
+        public const string SamplePointSize = "_samplePointSize";
+        public const string EventPointSize = "_eventPointSize";
     }
 }
 #endif

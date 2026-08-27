@@ -1,4 +1,3 @@
-
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -7,7 +6,7 @@ namespace Supercent.Common.TransformPath
     /// <summary>
     /// 같은 경로 위의 QueuedPathFollower들을 관리하고 충돌 감지를 수행하는 매니저
     /// </summary>
-    public partial class QueuedPathManager : MonoBehaviour
+    public class QueuedPathManager : MonoBehaviour, IPathQueue
     {
         #region Constants
 
@@ -22,7 +21,7 @@ namespace Supercent.Common.TransformPath
         #endregion
 
 
-        #region Member Variables
+        #region Queue Manager State
 
         [Header("간격 설정")]
         [SerializeField] private float _defaultSpacing = DEFAULT_SPACING;
@@ -45,7 +44,7 @@ namespace Supercent.Common.TransformPath
         #endregion
 
 
-        #region Properties
+        #region Queue Manager Properties
 
         public float DefaultSpacing { get => _defaultSpacing; set => _defaultSpacing = value; }
         public bool EnableGradualSlowdown { get => _enableGradualSlowdown; set => _enableGradualSlowdown = value; }
@@ -93,7 +92,7 @@ namespace Supercent.Common.TransformPath
         #endregion
 
 
-        #region Public Methods
+        #region Queue Manager API
 
         /// <summary>
         /// Follower를 매니저에 등록합니다.
@@ -175,7 +174,7 @@ namespace Supercent.Common.TransformPath
                 return false;
 
             float spacing = GetEffectiveSpacing(follower);
-            return QueuedPathBlockingHelper.ShouldStartBlocking(distance, spacing);
+            return ShouldStartBlocking(distance, spacing);
         }
 
         /// <summary>
@@ -259,7 +258,7 @@ namespace Supercent.Common.TransformPath
         #endregion
 
 
-        #region Private Methods
+        #region Queue Manager Helpers
 
         /// <summary>
         /// Follower 리스트를 GlobalNormalizedTime 기준 내림차순으로 정렬합니다.
@@ -313,7 +312,120 @@ namespace Supercent.Common.TransformPath
         }
 
         private float GetEffectiveSpacing(QueuedPathFollower follower)
-            => QueuedPathSpacingHelper.GetEffectiveSpacing(follower, this, _defaultSpacing);
+        {
+            if (follower != null && follower.UseManagerSpacing)
+                return _defaultSpacing;
+
+            return follower != null ? follower.ActorSpacing : _defaultSpacing;
+        }
+
+        private static bool ShouldStartBlocking(float distance, float spacing)
+            => distance >= 0f && distance <= spacing;
+
+        #endregion
+
+        #region IPathQueue Contract State
+
+        private readonly PathQueueRegistry _queueRegistry = new PathQueueRegistry();
+
+        #endregion
+
+
+        #region IPathQueue Contract
+
+        int IPathQueue.AgentCount => _queueRegistry.Count;
+
+        #endregion
+
+
+        #region IPathQueue Implementation
+
+        void IPathQueue.Register(IQueuedPathAgent agent)
+        {
+            if (agent is QueuedPathFollower concreteFollower)
+            {
+                Register(concreteFollower);
+                return;
+            }
+
+            _queueRegistry.Register(agent);
+        }
+
+        void IPathQueue.Unregister(IQueuedPathAgent agent)
+        {
+            if (agent is QueuedPathFollower concreteFollower)
+            {
+                Unregister(concreteFollower);
+                return;
+            }
+
+            _queueRegistry.Unregister(agent);
+        }
+
+        bool IPathQueue.ShouldBlock(IQueuedPathAgent agent)
+        {
+            float distance = ((IPathQueue)this).GetDistanceToAhead(agent);
+            return distance >= 0f && ShouldStartBlocking(distance, GetEffectiveSpacing(agent));
+        }
+
+        float IPathQueue.GetDistanceToAhead(IQueuedPathAgent agent)
+        {
+            IQueuedPathAgent ahead = _queueRegistry.GetAhead(agent);
+            if (ahead == null || TotalPathLength <= 0f)
+                return -1f;
+
+            float normalizedDifference = ahead.GlobalNormalizedTime - agent.GlobalNormalizedTime;
+            return normalizedDifference >= 0f ? normalizedDifference * TotalPathLength : -1f;
+        }
+
+        float IPathQueue.GetSpeedMultiplier(IQueuedPathAgent agent)
+        {
+            if (!_enableGradualSlowdown || !agent.EnableGradualSlowdown)
+                return 1f;
+
+            float distance = ((IPathQueue)this).GetDistanceToAhead(agent);
+            if (distance < 0f)
+                return 1f;
+
+            float spacing = GetEffectiveSpacing(agent);
+            if (distance >= _slowdownStartDistance)
+                return 1f;
+            if (distance <= spacing)
+                return 0f;
+
+            float range = _slowdownStartDistance - spacing;
+            if (range <= 0f)
+                return 1f;
+
+            float normalizedDistance = (distance - spacing) / range;
+            float curveValue = _slowdownCurve != null ? _slowdownCurve.Evaluate(normalizedDistance) : normalizedDistance;
+            return UnityEngine.Mathf.Lerp(_minSpeedMultiplier, 1f, curveValue);
+        }
+
+        float IPathQueue.GetClampedNormalizedTime(IQueuedPathAgent agent, float targetNormalizedTime)
+        {
+            IQueuedPathAgent ahead = _queueRegistry.GetAhead(agent);
+            if (ahead == null)
+                return UnityEngine.Mathf.Clamp01(targetNormalizedTime);
+
+            float spacingNormalized = TotalPathLength > 0f ? GetEffectiveSpacing(agent) / TotalPathLength : 0f;
+            float maxNormalizedTime = ahead.GlobalNormalizedTime - spacingNormalized;
+            return UnityEngine.Mathf.Clamp01(UnityEngine.Mathf.Min(targetNormalizedTime, maxNormalizedTime));
+        }
+
+        void IPathQueue.NotifySortNeeded()
+        {
+            _queueRegistry.NotifySortNeeded();
+            NotifySortNeeded();
+        }
+
+        #endregion
+
+
+        #region IPathQueue Helpers
+
+        private float GetEffectiveSpacing(IQueuedPathAgent agent)
+            => agent.UseManagerSpacing ? _defaultSpacing : UnityEngine.Mathf.Max(0f, agent.ActorSpacing);
 
         #endregion
     }
