@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1045 &1
+EditorBuildSettings:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Scenes:
+  - enabled: 1
+    path: Assets/Scenes/SampleScene.unity
+    guid: 99c9720ab356a0642a771bea13969a05
+  - enabled: 1
+    path: Assets/_FlowField/Scene/FlowFieldSample.unity
+    guid: 2d61c3aeada20074ba232f6398c7c342
+  - enabled: 1
+    path: Assets/_TransformPath/Scene/TransformPathSample.unity
+    guid: 89eb690eb83ac0f428888d99e38f6913
+  - enabled: 1
+    path: Assets/_OptimizeTool/Scene/OptimizeToolSample.unity
+    guid: e982d8034c0f545418d55bfe96a6eb6f
+  m_configObjects: {}
+  m_UseUCBPForAssetBundles: 0

@@ -1,0 +1,21 @@
+{
+  "name": "Common.FlowField.Core.EditModeTests",
+  "rootNamespace": "Common.FlowField",
+  "references": [
+    "Common.FlowField.Core"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ],
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

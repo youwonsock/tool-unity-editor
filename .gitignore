@@ -1,0 +1,28 @@
+# Unity generated folders
+ToyProject/[Ll]ibrary/
+ToyProject/[Tt]emp/
+ToyProject/[Ll]ogs/
+ToyProject/[Uu]ser[Ss]ettings/
+ToyProject/[Oo]bj/
+ToyProject/[Bb]uild/
+ToyProject/[Bb]uilds/
+ToyProject/[Mm]emoryCaptures/
+ToyProject/.vs/
+
+# Unity / IDE generated files
+*.csproj
+*.sln
+*.slnx
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# OS files
+.DS_Store
+Thumbs.db
