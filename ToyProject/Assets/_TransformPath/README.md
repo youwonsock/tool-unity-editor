@@ -26,7 +26,7 @@ pathData.Release();
 
 쇼케이스 기능 검증용 `TransformPathSampleController`와 `TransformPathSampleMessageReceiver`는 `Script/Temp`에 보관합니다.
 
-`IPathFollower.StartMove(IPathProvider, PathMoveSettings)`로 Provider를 주입할 수 있고 `Seek`으로 진행도를 명시적으로 변경할 수 있습니다. `IPathSequenceProvider.GetSegment`은 준비된 MultiPath 구간만 반환합니다. Queue의 `GetDistanceToAhead`는 선행 객체가 없을 때 `null`을 반환하며, `-1` 거리 센티넬은 사용하지 않습니다.
+`IPathFollower.StartMove(IPathProvider, PathMoveSettings)`로 Provider를 주입할 수 있고 `Seek`으로 진행도를 명시적으로 변경할 수 있습니다. `SetCurveType`/`SetSamplingType`은 설정을 stale 상태로 만들므로 반드시 `Rebuild` 뒤에 조회해야 합니다. `IPathSequenceProvider.GetSegment`은 준비된 MultiPath 구간만 반환합니다. Queue의 `GetDistanceToAhead`는 선행 객체가 없을 때 `null`을 반환하며, `-1` 거리 센티넬은 사용하지 않습니다.
 
 ## 이벤트 메시지
 
@@ -39,6 +39,8 @@ pathData.Release();
 전체 Demo 계층은 `Prefab/TransformPathShowcase.prefab`에서 재사용할 수 있습니다.
 
 `TransformPathSampleMessageReceiver`는 `IPathEventReceiver`를 구현하며 `LastMessage`, `ReceivedCount`, `LastFollower`를 공개합니다. 수신 시 Console 로그, Game View 오버레이, 수신 횟수와 Actor의 0.5초 노란색 점멸을 확인할 수 있습니다.
+
+`TransformPathOverviewController`가 기본 경로, MultiPath 두 구간, Queue Follower 3개를 하나의 씬에서 실행합니다. `1/2/3`은 각각 Linear/Uniform, SplineInterpolating/DistanceBased, SplineApproximating/Random 조합을 `Set... → Rebuild → Reset → Resume` 순서로 적용합니다. `Q`는 Queue 표시, `Space`는 Pause/Resume, `R`은 Reset, `←/→`는 Seek, `E`는 테스트 메시지를 즉시 발화합니다. 월드 공간 Overview Board에는 경로 Revision, 진행도, `Sample`/`SampleDistance` 결과, 복사된 제어점 수, 첫 MultiPath 세그먼트 준비 상태, Queue 선행 거리, 마지막 메시지와 수신 횟수가 표시됩니다.
 
 ## Editor 도구
 

@@ -39,7 +39,7 @@ namespace Common.FlowField.Samples
             // parent is inactive. Awake can run before Configure, so only auto-init when
             // a provider was already serialized; the controller performs explicit Init
             // after Configure for newly spawned agents.
-            if (Application.isPlaying && _provider != null)
+            if (Application.isPlaying && _provider != null && !_isInitialized)
                 Init();
         }
 
@@ -80,6 +80,8 @@ namespace Common.FlowField.Samples
             {
                 if (_provider == null)
                     throw new InvalidOperationException("FlowFieldSampleAgent requires a configured FlowField provider.");
+                if (_rigidbody == null)
+                    _rigidbody = GetComponent<Rigidbody>();
                 if (_rigidbody == null)
                     throw new InvalidOperationException("FlowFieldSampleAgent requires a Rigidbody.");
                 if (!IsFinite(_brakingAcceleration) || _brakingAcceleration <= 0f)

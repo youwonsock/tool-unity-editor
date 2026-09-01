@@ -7,7 +7,8 @@ namespace Common.TransformPath
     /// <summary>
     /// 같은 경로 위의 QueuedPathFollower들을 관리하고 충돌 감지를 수행하는 매니저
     /// </summary>
-    [DefaultExecutionOrder(-200)]
+    // MultiPathData (-200) must complete its Init before the queue validates it.
+    [DefaultExecutionOrder(-180)]
     public class QueuedPathManager : MonoBehaviour, IPathQueue
     {
         #region Constants

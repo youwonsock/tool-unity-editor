@@ -62,7 +62,9 @@ controller.NotifyObstacleRegionDirty(obstacleCollider.bounds);
 
 Play Mode에서 `FlowFieldSampleController`가 40×25 배열의 1,000개 공유 Prefab을 생성한 후에만 시뮬레이션을 시작합니다. Agent는 비키네마틱 Rigidbody, CapsuleCollider(반경 0.25m/높이 0.8m), Continuous Speculative 충돌과 0 마찰·0 반발 PhysicMaterial을 사용합니다. 중앙 `FixedUpdate`가 Flow 방향을 목표 속도 3m/s, 최대 가속도 8m/s²로 `Rigidbody.AddForce`에 전달합니다.
 
-Goal은 맵 안쪽 후보 8개 중 하나를 고정 난수로 15초마다 변경하며 영향 반경은 10m입니다. Space 키로 즉시 변경할 수 있습니다. 화면에는 Ready/Revision, 생성 수, Goal, 변경 횟수, 공간 해시로 계산한 깊은 관통 쌍 수가 표시됩니다.
+Goal은 맵 안쪽 후보 8개 중 하나를 고정 난수로 15초마다 변경하며 영향 반경은 10m입니다. Space 키로 즉시 다음 후보를 선택하고 G 키로 Goal을 명시적으로 삭제할 수 있습니다. 화면에는 Ready/Revision, 생성 수, Goal 활성 상태, 변경 횟수, 공간 해시로 계산한 깊은 관통 쌍 수가 표시됩니다.
+
+`FlowFieldShowcaseOverviewController`는 `Baseline → SpeedModifier → NoiseModifier → DynamicObstacle → SampleAndClamp` 모드를 8초마다 순환합니다. `1/2/3`으로 기본·속도·노이즈 모드를 선택하고 `M`으로 동적 장애물, `O`로 Sample/Clamp, `R`로 명시적 Rebuild, `C`로 진단을 실행할 수 있습니다. Space는 Goal 변경, G는 Goal 삭제입니다. Overview Board에는 Modifier/Obstacle 등록 상태, 현재 Sample 방향·속도, Clamp 결과와 Bounds 진단이 함께 표시됩니다. 동적 장애물은 이동할 때마다 즉시 필드를 재계산하지 않고 Dirty 통지 후 명시적인 Rebuild 경계에서만 반영됩니다.
 
 ## 정상적인 `Try*` API
 

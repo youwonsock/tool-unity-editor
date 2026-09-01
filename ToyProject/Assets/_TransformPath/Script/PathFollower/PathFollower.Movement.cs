@@ -226,7 +226,7 @@ namespace Common.TransformPath
             {
                 ForcePathCompletion();
             }
-            else if (IsPathValid() && _normalizedTime < 1f && !_loop)
+            else if (IsPathValid() && (_loop || _normalizedTime < 1f))
             {
                 if (_moveCoroutine != null)
                 {

@@ -56,6 +56,7 @@ namespace Common.FlowField.Samples
         private int _goalChangeCount;
         private int _deepOverlapPairs;
         private bool _simulationReady;
+        private bool _automaticGoalChanges = true;
         private bool _isInitialized;
         private bool _isFaulted;
         private Exception _fault;
@@ -63,6 +64,12 @@ namespace Common.FlowField.Samples
         public int SpawnedAgentCount => _agents.Count;
         public int ActiveGoalIndex => _activeGoalIndex;
         public int GoalChangeCount => _goalChangeCount;
+        public bool HasActiveGoal => _activeGoalIndex >= 0;
+        public int ManagerRevision => _manager != null ? _manager.Revision : 0;
+        public Vector3 ActiveGoalPosition => _activeGoalIndex >= 0 && _activeGoalIndex < _goalPositions.Length
+            ? _goalPositions[_activeGoalIndex]
+            : throw new InvalidOperationException("FlowField sample has no active goal.");
+        public bool AutomaticGoalChangesEnabled => _automaticGoalChanges;
         public int DeepOverlapPairs => _deepOverlapPairs;
         public bool IsSimulationReady => _simulationReady;
         public bool IsInitialized => _isInitialized;
@@ -120,6 +127,7 @@ namespace Common.FlowField.Samples
                 if (!IsFinite(_deepOverlapDistance) || _deepOverlapDistance <= 0f)
                     throw new ArgumentOutOfRangeException(nameof(_deepOverlapDistance));
                 _random = new System.Random(_randomSeed);
+                _automaticGoalChanges = true;
                 _isInitialized = true;
             }
             catch (Exception exception)
@@ -174,11 +182,14 @@ namespace Common.FlowField.Samples
             if (Input.GetKeyDown(KeyCode.Space))
                 ChooseRandomGoal();
 
-            _goalTimer += Time.deltaTime;
-            if (_goalTimer >= _goalChangeInterval)
+            if (_automaticGoalChanges)
             {
-                _goalTimer = 0f;
-                ChooseRandomGoal();
+                _goalTimer += Time.deltaTime;
+                if (_goalTimer >= _goalChangeInterval)
+                {
+                    _goalTimer = 0f;
+                    ChooseRandomGoal();
+                }
             }
         }
 
@@ -234,6 +245,31 @@ namespace Common.FlowField.Samples
                     agent.Init();
                 _agents.Add(agent);
             }
+        }
+
+        public void ChooseNextGoal()
+        {
+            ThrowIfUnavailable();
+            ChooseRandomGoal();
+        }
+
+        /// <summary>
+        /// 활성 Goal을 명시적으로 제거해 Goal 없는 Field 결과를 확인합니다.
+        /// </summary>
+        public void ClearGoal()
+        {
+            ThrowIfUnavailable();
+            _manager.ClearGoal();
+            _activeGoalIndex = -1;
+            _goalTimer = 0f;
+            _goalChangeCount++;
+        }
+
+        public void SetAutomaticGoalChanges(bool enabled)
+        {
+            ThrowIfUnavailable();
+            _automaticGoalChanges = enabled;
+            _goalTimer = 0f;
         }
 
         private void ChooseRandomGoal()
@@ -337,6 +373,14 @@ namespace Common.FlowField.Samples
             GUI.Label(new Rect(30f, 110f, 400f, 22f), $"Revision: {revision}");
             GUI.Label(new Rect(30f, 132f, 400f, 22f), $"Deep overlaps: {_deepOverlapPairs}");
             GUI.Label(new Rect(30f, 154f, 400f, 22f), "Space: choose another random Goal");
+        }
+
+        private void ThrowIfUnavailable()
+        {
+            if (_isFaulted)
+                throw new InvalidOperationException("FlowFieldSampleController is faulted; call Release before use.", _fault);
+            if (!_isInitialized)
+                throw new InvalidOperationException("FlowFieldSampleController is not initialized.");
         }
 
         private void OnValidate()

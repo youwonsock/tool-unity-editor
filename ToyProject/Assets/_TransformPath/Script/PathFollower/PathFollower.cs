@@ -595,7 +595,7 @@ namespace Common.TransformPath
 
         #region Lifecycle Helpers
 
-        private void StartSinglePath(Action onComplete)
+        private void StartSinglePath(Action onComplete, bool preserveMultiPathState = false)
         {
             if (_pathData == null)
                 throw new InvalidOperationException("PathFollower requires a PathData reference.");
@@ -603,10 +603,20 @@ namespace Common.TransformPath
                 throw new InvalidOperationException("PathData must be initialized and ready before movement.");
 
             bool requestReplace = _pendingReplacePathStart;
+            bool wasMultiPath = preserveMultiPathState && _useMultiPaths;
+            MultiPathData multiPath = wasMultiPath ? _multiPathData : null;
+            Action multiComplete = wasMultiPath ? _onMultiComplete : null;
+            Action<int> pathChanged = wasMultiPath ? _onPathChanged : null;
             _pendingReplacePathStart = false;
             StopMove();
 
-            _useMultiPaths = false;
+            _useMultiPaths = wasMultiPath;
+            if (wasMultiPath)
+            {
+                _multiPathData = multiPath;
+                _onMultiComplete = multiComplete;
+                _onPathChanged = pathChanged;
+            }
             _activePathProvider = _pathData;
             SubscribeToActiveProvider();
             if (requestReplace && _replacePathStartWithFollowerPosition)

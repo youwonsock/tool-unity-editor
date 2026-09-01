@@ -7,7 +7,8 @@ namespace Common.TransformPath
     /// PathFollower를 사용하여 경로를 따라 이동하며,
     /// 앞에 다른 객체가 있으면 자동으로 멈추는 기능을 제공합니다.
     /// </summary>
-    [DefaultExecutionOrder(-100)]
+    // Queue followers depend on the sibling PathFollower, so initialize after it.
+    [DefaultExecutionOrder(-90)]
     [RequireComponent(typeof(PathFollower))]
     public class QueuedPathFollower : MonoBehaviour, IQueuedPathAgent
     {
@@ -238,7 +239,14 @@ namespace Common.TransformPath
                     _manager.Unregister(this);
                 }
             if (_isInitialized)
-                StopMove();
+            {
+                // During scene teardown Unity may destroy the sibling PathFollower first.
+                // Release the queue state without calling into an already released sibling.
+                if (_pathFollower != null && _pathFollower.IsInitialized)
+                    StopMove();
+                else
+                    ResetMoveState();
+            }
             else
             {
                 _isMoving = false;

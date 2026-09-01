@@ -97,7 +97,7 @@ namespace Common.TransformPath
             ApplyPathConfig(config, useContinuous);
 
             _loop = false;
-            StartSinglePath(OnCurrentPathComplete);
+            StartSinglePath(OnCurrentPathComplete, preserveMultiPathState: true);
 
             _onPathChanged?.Invoke(_currentPathIndex);
             PublishSegmentChanged();

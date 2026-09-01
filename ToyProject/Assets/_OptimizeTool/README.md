@@ -14,6 +14,8 @@ Unity Editor에서 메시 결합, Backface Culling 메시 베이크, Physics Rec
 
 `Scene/OptimizeToolSample.unity`는 동일 재질의 3×3 Cube 원본과 실제 `MeshCombiner`가 만든 단일 메시를 나란히 보여줍니다. Play Mode에서는 원본과 최적화 결과를 3초 간격으로 전환하며, 에셋을 생성하거나 덮어쓰지 않습니다.
 
+Overview Board는 Original(9 Renderer), Combined, Backface Cull, Occlusion Cull, Physics Recorded 다섯 결과를 Renderer/Vertex 수와 함께 표시합니다. `1~5`로 결과를 선택하고 `Space`로 순환하며 `R`로 원본을 복원합니다. 편집 모드에서 씬의 `OriginalMeshes` GameObject를 선택한 뒤 `Tools/OptimizeTool/Build Showcase Assets` 메뉴를 실행하면 명시적인 출력 경로 `Settings/Generated`에 결과 Mesh·Animation·Recorded Prefab을 사전 생성합니다.
+
 비교용 계층은 `Prefab/OptimizeToolShowcase.prefab`에 보관하고, 결합 Mesh 결과는 `Settings/Generated`에 둡니다.
 
 도구는 `Init → Combine/Bake/Record → Release` 수명 주기를 사용합니다. 입력 Mesh, Readable/Normal 정책, 기존 Asset 충돌 정책과 `Assets/` 하위 출력 경로를 먼저 검증하며 계약 위반은 예외입니다. 출력 경로와 파일명은 기본값 없이 각 컴포넌트에 직렬화하여 지정해야 합니다. 샘플 `MeshCombiner`의 결과 경로는 `Assets/_OptimizeTool/Settings/Generated`입니다.
