@@ -14,7 +14,22 @@ namespace Common.FlowField.Editor
 
         public override void OnInspectorGUI()
         {
-            DrawDefaultInspector();
+            serializedObject.Update();
+            // Keep the mode immutable while a play-mode Init session is
+            // active. The rest of the serialized settings retain Unity's
+            // default inspector rendering.
+            DrawPropertiesExcluding(
+                serializedObject,
+                "_bakeMode",
+                "_staticBakeData",
+                "_surfaceBakeData",
+                "_staticObstacleBakeData");
+            SerializedProperty mode = serializedObject.FindProperty("_bakeMode");
+            using (new EditorGUI.DisabledScope(Application.isPlaying))
+                EditorGUILayout.PropertyField(mode);
+            if (mode != null && mode.enumValueIndex == (int)FlowFieldBakeMode.StaticBaked)
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("_staticBakeData"));
+            serializedObject.ApplyModifiedProperties();
             var manager = (FlowFieldManager)target;
 
             EditorGUILayout.Space();
@@ -25,11 +40,14 @@ namespace Common.FlowField.Editor
             {
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    string bakeLabel = manager.SurfaceBakeData == null ? "Bake Surface" : "Rebake Surface";
+                    string bakeLabel = manager.BakeMode == FlowFieldBakeMode.StaticBaked
+                        ? "Bake Static Flow Field"
+                        : manager.SurfaceBakeData == null ? "Bake Surface" : "Rebake Surface";
                     if (GUILayout.Button(bakeLabel))
                         FlowFieldSurfaceBakeEditor.ScheduleBake(manager);
 
-                    using (new EditorGUI.DisabledScope(manager.SurfaceBakeData == null))
+                    using (new EditorGUI.DisabledScope(
+                        manager.SurfaceBakeData == null && manager.StaticBakeData == null))
                     {
                         if (GUILayout.Button("Clear Bake"))
                             FlowFieldSurfaceBakeEditor.ClearReference(manager);
@@ -124,10 +142,23 @@ namespace Common.FlowField.Editor
         {
             if (manager.TryValidateSurfaceBake(out string reason))
             {
-                FlowFieldSurfaceBakeData data = manager.SurfaceBakeData;
-                EditorGUILayout.HelpBox(
-                    $"Surface Bake is valid. {data.ValidCellCount}/{data.CellCount} cells.",
-                    MessageType.Info);
+                if (manager.BakeMode == FlowFieldBakeMode.StaticBaked && manager.StaticBakeData != null)
+                {
+                    FlowFieldSurfaceBakeData data = manager.EditorSurfaceBakeData;
+                    string cellInfo = data != null
+                        ? $"{data.ValidCellCount}/{data.CellCount} cells"
+                        : "surface snapshot available";
+                    EditorGUILayout.HelpBox(
+                        $"Static Flow Bake is valid. {cellInfo}.",
+                        MessageType.Info);
+                }
+                else
+                {
+                    FlowFieldSurfaceBakeData data = manager.SurfaceBakeData;
+                    EditorGUILayout.HelpBox(
+                        $"Surface Bake is valid. {data.ValidCellCount}/{data.CellCount} cells.",
+                        MessageType.Info);
+                }
                 return;
             }
 

@@ -38,7 +38,11 @@ namespace Common.TransformPath
 
         private void OnValidate()
         {
-            if (_isInitialized)
+            // Runtime showcase controls call SetCurveType/SetSamplingType followed
+            // by an explicit Rebuild. Unity can invoke OnValidate after that
+            // serialized-field change while the editor is still attached, which
+            // would invalidate the freshly rebuilt runtime cache one frame later.
+            if (_isInitialized && !Application.isPlaying)
                 _cachedPathLength = -1f;
         }
 

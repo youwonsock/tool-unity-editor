@@ -4,12 +4,11 @@ using UnityEngine;
 namespace Common.FlowField
 {
     [DefaultExecutionOrder(-300)]
-    public partial class FlowFieldManager : MonoBehaviour, IFlowFieldProvider, IFlowFieldController
+    public partial class FlowFieldManager : MonoBehaviour, IFlowFieldProvider, IFlowFieldController, IFlowFieldBakeController
     {
         private const float MIN_REFRESH_RATE = 0.05f;
         private const float VALUE_EPSILON = 0.0001f;
-        private const int DefaultCoarseMultiplier = 4;
-        private const int DefaultFineRingCoarseRadius = 1;
+        private const int DefaultMaxGpuWaves = 1024;
 
         [Header("Surface Bake")]
         [SerializeField, Tooltip("Manager 위치 기준 월드 축 정렬 Bake 영역입니다. XZ는 Grid, Y는 Ground Ray 범위입니다.")]
@@ -20,14 +19,13 @@ namespace Common.FlowField
         [SerializeField] private LayerMask _groundBakeLayer = Physics.DefaultRaycastLayers;
         [SerializeField] private float _maxSurfaceSlope = 45f;
         [SerializeField] private float _maxStepHeight = 0.5f;
-        [SerializeField] private FlowFieldSurfaceBakeData _surfaceBakeData;
-        [SerializeField] private FlowFieldStaticObstacleBakeData _staticObstacleBakeData;
-        [SerializeField] private FlowFieldCoarseTopologyData _coarseTopologyData;
-
-        [Header("Hierarchical Goal")]
-        [SerializeField] private int _coarseCellMultiplier = DefaultCoarseMultiplier;
-        [SerializeField] private int _fineRingCoarseRadius = DefaultFineRingCoarseRadius;
-        [SerializeField] private float _coarseWalkableRatio = FlowFieldCoarseTopologyData.DefaultWalkableRatio;
+        [SerializeField, HideInInspector] private FlowFieldSurfaceBakeData _surfaceBakeData;
+        [SerializeField, HideInInspector] private FlowFieldStaticObstacleBakeData _staticObstacleBakeData;
+        [SerializeField, Tooltip("정적 모드에서 사용할 전체 Flow Field Snapshot입니다.")] private FlowFieldStaticBakeData _staticBakeData;
+        [Header("GPU Frontier BFS")]
+        [SerializeField] private ComputeShader _frontierComputeShader;
+        [SerializeField, Min(64), Tooltip("GPU batch wave 상한입니다. Cell Count보다 큰 값은 Cell Count로 제한됩니다.")]
+        private int _maxGpuWaves = DefaultMaxGpuWaves;
 
         [Header("Obstacles")]
         [SerializeField] private LayerMask _obstacleLayer;
@@ -38,6 +36,10 @@ namespace Common.FlowField
         [SerializeField, Tooltip("ON이면 obstacle layer 전수 스윕(미등록 보정). OFF면 Static bake + RegisterDynamicObstacle만 사용.")]
         private bool _enableUnregisteredObstacleSweep;
         [SerializeField] private float _refreshRate = 0.2f;
+
+        [Header("Bake Mode")]
+        [SerializeField, Tooltip("RuntimeDynamic은 런타임 Surface/장애물을 다시 계산하고, StaticBaked는 Editor에서 저장한 base field를 사용합니다.")]
+        private FlowFieldBakeMode _bakeMode = FlowFieldBakeMode.RuntimeDynamic;
 
         [Header("Default Flow")]
         [SerializeField] private Vector3 _defaultFlowDirection = Vector3.forward;
@@ -61,6 +63,16 @@ namespace Common.FlowField
 
         private readonly FlowFieldRuntimeContext _context = new FlowFieldRuntimeContext();
         private readonly FlowFieldObstaclePipeline _obstaclePipeline = new FlowFieldObstaclePipeline();
+        private FlowFieldBuildPipeline _buildPipeline;
+        private FlowFieldSurfaceBakeData _runtimeSurfaceBakeData;
+        private FlowFieldSurfaceBakeData _editorSurfaceBakeData;
+        private FlowFieldSurfaceBakeData _runtimeStaticSurfaceBakeData;
+        private int _runtimeStaticSourceRevision = -1;
+        private readonly FlowFieldWorkspace _committedWorkspace = new FlowFieldWorkspace();
+        private FlowFieldSurfaceBakeData _committedSurfaceBakeData;
+        private FlowFieldSurfaceBakeData _committedSourceSurfaceBakeData;
+        private FlowFieldGridSpace _committedGrid;
+        private int _committedSourceSurfaceRevision = -1;
 
         private float _refreshTimer;
         private bool _hasExplicitGoal;
@@ -71,6 +83,11 @@ namespace Common.FlowField
         private Exception _fault;
         private bool _requiresActivationRebuild;
         private bool _configurationStale;
+        private bool _isRebuilding;
+        private FlowFieldBakeMode _sessionBakeMode;
+        private int _inputVersion;
+        private int _resolvedGoalX = -1;
+        private int _resolvedGoalZ = -1;
         private readonly FlowFieldGoalTracker _goalTracker = new FlowFieldGoalTracker();
 
         public bool IsInitialized => _lifecycleState == LifecycleState.Initialized;
@@ -78,28 +95,150 @@ namespace Common.FlowField
         public bool IsReady => _lifecycleState == LifecycleState.Initialized
             && !_configurationStale
             && _isReady;
+        public bool IsRebuilding => _isRebuilding;
+        public FlowFieldBakeMode BakeMode => IsInitialized ? _sessionBakeMode : _bakeMode;
         public int Revision => _revision;
         public event Action FieldChanged;
 
         internal FlowFieldSurfaceBakeData SurfaceBakeData => _surfaceBakeData;
+        private FlowFieldBakeMode CurrentBakeMode
+            => IsInitialized ? _sessionBakeMode : _bakeMode;
+
+        internal FlowFieldSurfaceBakeData ActiveSurfaceBakeData
+            => CurrentBakeMode == FlowFieldBakeMode.StaticBaked
+                ? _runtimeStaticSurfaceBakeData != null
+                    ? _runtimeStaticSurfaceBakeData
+                    : _staticBakeData != null ? _staticBakeData.SurfaceBakeData : null
+                : _runtimeSurfaceBakeData;
+        internal FlowFieldSurfaceBakeData EditorSurfaceBakeData
+        {
+            get
+            {
+                if (CurrentBakeMode != FlowFieldBakeMode.StaticBaked)
+                {
+                    if (Application.isPlaying)
+                        return _runtimeSurfaceBakeData ?? _surfaceBakeData;
+
+                    // Dynamic preview follows the same downward-ray Surface
+                    // baker as RuntimeDynamic. A persisted legacy asset is
+                    // reused only while its complete signature still matches;
+                    // otherwise a hidden transient view is rebuilt in memory.
+                    try
+                    {
+                        FlowFieldSurfaceBakeSettings settings = CreateSurfaceBakeSettings();
+                        if (_surfaceBakeData != null
+                            && _surfaceBakeData.HasValidData
+                            && _surfaceBakeData.Matches(settings, out _))
+                            return _surfaceBakeData;
+
+                        if (_editorSurfaceBakeData != null
+                            && _editorSurfaceBakeData.HasValidData
+                            && _editorSurfaceBakeData.Matches(settings, out _))
+                            return _editorSurfaceBakeData;
+
+                        FlowFieldSurfaceBakeResult result = FlowFieldSurfaceBaker.Bake(settings);
+                        DestroyTransientSurface(ref _editorSurfaceBakeData);
+                        _editorSurfaceBakeData = ScriptableObject.CreateInstance<FlowFieldSurfaceBakeData>();
+                        _editorSurfaceBakeData.name = $"{name}_EditorSurfaceBake";
+                        _editorSurfaceBakeData.hideFlags = HideFlags.HideAndDontSave;
+                        _editorSurfaceBakeData.Apply(settings, result);
+                        return _editorSurfaceBakeData;
+                    }
+                    catch
+                    {
+                        // The inspector reports the persisted bake mismatch or
+                        // missing ground. Repaint callbacks must not throw.
+                        return _surfaceBakeData;
+                    }
+                }
+
+                if ((_runtimeStaticSurfaceBakeData == null
+                        || _staticBakeData != null
+                            && _runtimeStaticSourceRevision != _staticBakeData.Revision)
+                    && !Application.isPlaying
+                    && _staticBakeData != null
+                    && _staticBakeData.HasValidData)
+                {
+                    try
+                    {
+                        EnsureStaticSurfaceBakeData();
+                    }
+                    catch
+                    {
+                        // Inspector/gizmo validation reports the actual
+                        // mismatch. Avoid throwing from a repaint callback.
+                    }
+                }
+
+                return _runtimeStaticSurfaceBakeData != null
+                    ? _runtimeStaticSurfaceBakeData
+                    : _staticBakeData != null ? _staticBakeData.SurfaceBakeData : null;
+            }
+        }
         internal FlowFieldStaticObstacleBakeData StaticObstacleBakeData => _staticObstacleBakeData;
-        internal FlowFieldCoarseTopologyData CoarseTopologyData => _coarseTopologyData;
+        internal FlowFieldStaticBakeData StaticBakeData => _staticBakeData;
         internal Bounds BakeBoundsLocal => _bakeBoundsLocal;
         internal float CellSize => _cellSize;
-        internal int CoarseCellMultiplier => _coarseCellMultiplier;
-        internal float CoarseWalkableRatio => _coarseWalkableRatio;
+        internal int MaxGpuWaves => _maxGpuWaves;
+        internal ComputeShader FrontierComputeShader => _frontierComputeShader;
         internal LayerMask ObstacleLayer => _obstacleLayer;
         internal float ObstacleCheckHeight => _obstacleCheckHeight;
         internal float ObstacleCheckCenterOffset => _obstacleCheckCenterOffset;
         internal float ObstacleClearance => _obstacleClearance;
+
+        internal FlowFieldGoalResolution ResolveConfiguredGoal(FlowFieldGridSpace grid)
+            => FlowFieldGoalPipeline.Resolve(
+                grid,
+                _goalTransform,
+                _hasExplicitGoal,
+                _explicitGoalWorld,
+                _goalInfluenceRadius);
+
+        internal Vector3 ConfiguredGoalWorld
+            => _goalTransform != null ? _goalTransform.position : _explicitGoalWorld;
+
+        internal bool HasConfiguredGoal
+            => _goalTransform != null || _hasExplicitGoal;
+
+        internal float ConfiguredGoalInfluenceRadius => _goalInfluenceRadius;
+
+        private void DestroyRuntimeSurfaceBakeData()
+        {
+            DestroyTransientSurface(ref _runtimeSurfaceBakeData);
+            DestroyTransientSurface(ref _editorSurfaceBakeData);
+            DestroyTransientSurface(ref _runtimeStaticSurfaceBakeData);
+            _runtimeStaticSourceRevision = -1;
+            DestroyCommittedSurfaceBakeData();
+        }
+
+        private void DestroyCommittedSurfaceBakeData()
+        {
+            DestroyTransientSurface(ref _committedSurfaceBakeData);
+            _committedSourceSurfaceBakeData = null;
+            _committedSourceSurfaceRevision = -1;
+            _committedGrid = default;
+            _committedWorkspace.Release();
+        }
+
+        private static void DestroyTransientSurface(ref FlowFieldSurfaceBakeData surface)
+        {
+            if (surface == null)
+                return;
+
+            if (Application.isPlaying)
+                UnityEngine.Object.Destroy(surface);
+            else
+                UnityEngine.Object.DestroyImmediate(surface);
+            surface = null;
+        }
 
         private void Reset()
         {
             _bakeBoundsLocal = FlowFieldBakeBoundsUtility.DefaultLocalBounds;
             _cellSize = 0.5f;
             _groundBakeLayer = Physics.DefaultRaycastLayers;
-            _coarseCellMultiplier = DefaultCoarseMultiplier;
-            _fineRingCoarseRadius = DefaultFineRingCoarseRadius;
+            _maxGpuWaves = DefaultMaxGpuWaves;
+            _bakeMode = FlowFieldBakeMode.RuntimeDynamic;
             _enableUnregisteredObstacleSweep = false;
         }
 
@@ -114,15 +253,17 @@ namespace Common.FlowField
             _context.DirtyFlags = FlowFieldDirtyFlags.All;
             _refreshTimer = 0f;
             // A disabled manager invalidates its runtime field.  Once it is
-            // enabled again, allow the next FixedUpdate to perform the
-            // explicit rebuild requested by OnDisable.  Rebuild at this
-            // lifecycle boundary instead of relying on a hidden recovery
-            // path in the next update tick.
+            // enabled again, rebuild at this lifecycle boundary instead of
+            // relying on a hidden recovery path in the next update tick.
             if (Application.isPlaying
                 && _lifecycleState == LifecycleState.Initialized
                 && _requiresActivationRebuild)
             {
                 _requiresActivationRebuild = false;
+                // OnDisable disposes the GPU solver together with its
+                // readbacks.  Recreate the backend for the new activation
+                // session before rebuilding the latest input.
+                InitServices();
                 Rebuild();
             }
         }
@@ -152,12 +293,24 @@ namespace Common.FlowField
 
             _refreshTimer = _refreshRate;
             DetectGridTransformChange();
-            DetectGoalChange();
+            if (CurrentBakeMode == FlowFieldBakeMode.RuntimeDynamic)
+                DetectGoalChange();
             DetectModifierChanges();
+            if (CurrentBakeMode != FlowFieldBakeMode.RuntimeDynamic)
+                return;
+            // A registered obstacle can move while a GPU wave batch is in
+            // flight. Record that newer input immediately so the callback is
+            // discarded instead of committing a field for the old bounds.
             if (_obstaclePipeline.DetectDynamicTransformsChanged())
+            {
                 _context.DirtyFlags |= FlowFieldDirtyFlags.DynamicObstacles | FlowFieldDirtyFlags.Escape;
-            if (_enableUnregisteredObstacleSweep && _context.SurfaceReady)
+                _inputVersion++;
+            }
+            if (!_isRebuilding && _enableUnregisteredObstacleSweep && _context.SurfaceReady)
+            {
                 _context.DirtyFlags |= FlowFieldDirtyFlags.DynamicObstacles | FlowFieldDirtyFlags.Escape;
+                _inputVersion++;
+            }
         }
 
         private void FixedUpdate()
@@ -187,6 +340,13 @@ namespace Common.FlowField
                 _modifierRegistry = new FlowFieldModifierRegistry();
             if (_modifierPipeline == null)
                 _modifierPipeline = new FlowFieldModifierPipeline(_modifierRegistry);
+            if (_buildPipeline == null && CurrentBakeMode == FlowFieldBakeMode.RuntimeDynamic)
+            {
+                ComputeShader shader = _frontierComputeShader;
+                if (shader == null)
+                    shader = Resources.Load<ComputeShader>("FlowFieldFrontier");
+                _buildPipeline = new FlowFieldBuildPipeline(shader);
+            }
 #if UNITY_EDITOR
             if (_editorPreview == null)
             {
@@ -198,11 +358,24 @@ namespace Common.FlowField
 
         private void OnDisable()
         {
+            unchecked
+            {
+                _inputVersion++;
+            }
+            _buildPipeline?.Dispose();
+            _buildPipeline = null;
+            DestroyRuntimeSurfaceBakeData();
+            _isRebuilding = false;
             _context.SurfaceReady = false;
             _context.HasObstacleMask = false;
             _context.Surface = null;
             _context.Workspace.ClearAll();
             _context.DirtyFlags = FlowFieldDirtyFlags.All;
+            // Disabling the component ends the active runtime session. Keep
+            // the next activation aligned with the serialized mode so a mode
+            // change made while stopped can be applied without tripping the
+            // active-session immutability guard.
+            _sessionBakeMode = _bakeMode;
             _requiresActivationRebuild = true;
             UpdateReadyState(false, resultChanged: false);
         }
@@ -227,6 +400,7 @@ namespace Common.FlowField
             try
             {
                 InitServices();
+                _sessionBakeMode = _bakeMode;
                 _lifecycleState = LifecycleState.Initialized;
                 _fault = null;
                 _configurationStale = false;
@@ -272,13 +446,21 @@ namespace Common.FlowField
 
         private void ReleaseCore()
         {
+            unchecked
+            {
+                _inputVersion++;
+            }
             ClearModifierRuntimeState();
             _obstaclePipeline.ClearDynamicObstacles();
             _goalTracker.Clear();
 #if UNITY_EDITOR
             ReleaseEditorPreview();
 #endif
+            _buildPipeline?.Dispose();
+            _buildPipeline = null;
+            DestroyRuntimeSurfaceBakeData();
             _context.Release();
+            _isRebuilding = false;
             _isReady = false;
             _configurationStale = false;
             _lifecycleState = LifecycleState.Released;
@@ -306,6 +488,7 @@ namespace Common.FlowField
 
             _configurationStale = true;
             _isReady = false;
+            _inputVersion++;
             _context.DirtyFlags = FlowFieldDirtyFlags.All;
         }
 
@@ -318,6 +501,9 @@ namespace Common.FlowField
                 throw new ArgumentOutOfRangeException(nameof(_bakeBoundsLocal), "Bake Bounds must be finite and positive.");
             if (!FlowFieldGridSpace.IsFinite(_defaultFlowDirection) || _defaultFlowDirection.sqrMagnitude <= VALUE_EPSILON)
                 throw new ArgumentOutOfRangeException(nameof(_defaultFlowDirection), "Default Flow Direction must be finite and non-zero.");
+            if (Quaternion.Angle(transform.rotation, Quaternion.identity) > 0.01f
+                || (transform.lossyScale - Vector3.one).sqrMagnitude > 0.0001f)
+                throw new ArgumentException("FlowField Manager must use an unrotated transform with unit scale.", nameof(transform));
             if (_groundBakeLayer.value == 0)
                 throw new ArgumentException("Ground Bake LayerMask must contain at least one layer.", nameof(_groundBakeLayer));
             if (_obstacleLayer.value == 0)
@@ -334,49 +520,47 @@ namespace Common.FlowField
                 throw new ArgumentOutOfRangeException(nameof(_obstacleClearance));
             if (!FlowFieldGridSpace.IsFinite(_refreshRate) || _refreshRate < MIN_REFRESH_RATE)
                 throw new ArgumentOutOfRangeException(nameof(_refreshRate));
-            if (_coarseCellMultiplier < 2 || _fineRingCoarseRadius < 0
-                || !FlowFieldGridSpace.IsFinite(_coarseWalkableRatio)
-                || _coarseWalkableRatio < 0f || _coarseWalkableRatio > 1f)
-                throw new ArgumentOutOfRangeException(nameof(_coarseCellMultiplier), "Hierarchical goal settings are out of range.");
+            if (_maxGpuWaves < 64)
+                throw new ArgumentOutOfRangeException(nameof(_maxGpuWaves), "GPU wave limit must be at least 64.");
+            if (!Enum.IsDefined(typeof(FlowFieldBakeMode), _bakeMode))
+                throw new ArgumentOutOfRangeException(nameof(_bakeMode));
+            if (_lifecycleState == LifecycleState.Initialized && _bakeMode != _sessionBakeMode)
+                throw new InvalidOperationException("FlowField Bake Mode cannot change during an active Init session. Release and Init again.");
             if (!FlowFieldGridSpace.IsFinite(_goalInfluenceRadius) || _goalInfluenceRadius < 0f)
                 throw new ArgumentOutOfRangeException(nameof(_goalInfluenceRadius));
             if (!FlowFieldBakeBoundsUtility.TryCreateWorldLayout(transform.position, _bakeBoundsLocal, _cellSize, out _, out FlowFieldGridSpace grid)
                 || !grid.IsValid)
                 throw new ArgumentException("Bake Bounds and Cell Size do not produce a valid grid.", nameof(_bakeBoundsLocal));
-            if (_surfaceBakeData == null)
-                throw new InvalidOperationException("FlowFieldManager requires a serialized Surface Bake asset.");
-            if (!_surfaceBakeData.HasValidData)
-                throw new ArgumentException("Surface bake asset data is invalid.", nameof(_surfaceBakeData));
-            if (_surfaceBakeData.CellCount != grid.CellCount)
-                throw new ArgumentException("Surface bake cell count does not match the configured grid.", nameof(_surfaceBakeData));
-            if (_staticObstacleBakeData != null)
+            if (CurrentBakeMode == FlowFieldBakeMode.StaticBaked)
             {
-                if (!_staticObstacleBakeData.HasValidData)
-                    throw new ArgumentException("Static obstacle bake asset data is invalid.", nameof(_staticObstacleBakeData));
-                if (_staticObstacleBakeData.CellCount != grid.CellCount)
-                    throw new ArgumentException("Static obstacle bake cell count does not match the configured grid.", nameof(_staticObstacleBakeData));
+                if (_staticBakeData == null)
+                    throw new InvalidOperationException("StaticBaked mode requires a FlowFieldStaticBakeData asset.");
+                FlowFieldSurfaceBakeSettings staticSurfaceSettings = CreateSurfaceBakeSettings();
+                if (!_staticBakeData.MatchesSurface(staticSurfaceSettings, out string surfaceMismatch))
+                    throw new InvalidOperationException(surfaceMismatch);
+                if (!_staticBakeData.Matches(
+                        grid,
+                        _staticBakeData.SurfaceBakeData,
+                        _obstacleLayer,
+                        _obstacleCheckHeight,
+                        _obstacleCheckCenterOffset,
+                        _obstacleClearance,
+                        out string mismatchReason))
+                    throw new InvalidOperationException(mismatchReason);
             }
-            if (_coarseTopologyData != null)
-            {
-                if (!_coarseTopologyData.HasValidData)
-                    throw new ArgumentException("Coarse topology bake asset data is invalid.", nameof(_coarseTopologyData));
-                int expectedCoarseWidth = (int)(((long)grid.Width + _coarseCellMultiplier - 1L) / _coarseCellMultiplier);
-                int expectedCoarseDepth = (int)(((long)grid.Depth + _coarseCellMultiplier - 1L) / _coarseCellMultiplier);
-                if (_coarseTopologyData.CoarseWidth != expectedCoarseWidth
-                    || _coarseTopologyData.CoarseDepth != expectedCoarseDepth
-                    || _coarseTopologyData.CoarseMultiplier != _coarseCellMultiplier)
-                    throw new ArgumentException("Coarse topology dimensions do not match the configured grid.", nameof(_coarseTopologyData));
-            }
-            if (_surfaceBakeData != null && _surfaceBakeData.HasValidData)
+            FlowFieldSurfaceBakeData validationSurface = CurrentBakeMode == FlowFieldBakeMode.StaticBaked
+                ? ActiveSurfaceBakeData
+                : _surfaceBakeData;
+            if (validationSurface != null && validationSurface.HasValidData)
             {
                 for (int index = 0; index < grid.CellCount; index++)
                 {
-                    if (_surfaceBakeData.IsSurfaceValid(index))
+                    if (validationSurface.IsSurfaceValid(index))
                     {
-                        Vector3 surfaceCenter = _surfaceBakeData.GetCellCenter(grid, index);
+                        Vector3 surfaceCenter = validationSurface.GetCellCenter(grid, index);
                         if (!FlowFieldGridSpace.IsFinite(surfaceCenter))
-                            throw new ArgumentException("Surface bake contains a non-finite height.", nameof(_surfaceBakeData));
-                        _surfaceBakeData.GetSurfaceNormal(index);
+                            throw new ArgumentException("Surface bake contains a non-finite height.", nameof(validationSurface));
+                        validationSurface.GetSurfaceNormal(index);
                     }
                 }
             }
@@ -384,10 +568,39 @@ namespace Common.FlowField
 
         private void RebuildDirtyData()
         {
+            if (_isRebuilding)
+                return;
+
             FlowFieldDirtyFlags pending = _context.DirtyFlags;
             _context.DirtyFlags = FlowFieldDirtyFlags.None;
 
             PrepareGridAndSurface(ref pending);
+
+            if (CurrentBakeMode == FlowFieldBakeMode.StaticBaked)
+            {
+                // StaticBaked contains the complete base field. Runtime only
+                // rebuilds modifier masks/default composition; physics and BFS
+                // are intentionally never queried here.
+                if (_staticBakeData == null || !_staticBakeData.HasValidData)
+                    throw new InvalidOperationException("Static Flow Bake Asset is missing or invalid.");
+                if (pending == FlowFieldDirtyFlags.None && _isReady)
+                {
+                    // A no-op Rebuild must not manufacture a new revision or
+                    // FieldChanged event for an identical committed snapshot.
+                    UpdateReadyState(true, resultChanged: false);
+                    return;
+                }
+                _staticBakeData.CopyToWorkspace(_context.Grid, _context.Workspace);
+                _context.HasObstacleMask = true;
+                _context.DirtyFinalRegion = FlowFieldCellRect.Full(_context.Grid);
+                _context.ResolvedDefaultDirection = FlowFieldVectorUtility.NormalizeDefaultDirection(_defaultFlowDirection);
+                RebuildModifierAreaData();
+                FlushPendingModifierChanges();
+                bool staticChanged = RebuildFinalField();
+                CommitStagingWorkspace();
+                UpdateReadyState(true, staticChanged);
+                return;
+            }
 
             if ((pending & FlowFieldDirtyFlags.DefaultDirection) != 0)
             {
@@ -395,13 +608,62 @@ namespace Common.FlowField
                 MarkFinalDirtyFull(ref pending);
             }
 
-            if (RebuildObstacleMasks(pending))
-                CommitObstaclesAndMarkGoalDirty(ref pending);
-
-            if ((pending & FlowFieldDirtyFlags.Goal) != 0)
+            bool rebuildStaticObstacles = (pending & FlowFieldDirtyFlags.StaticObstacles) != 0;
+            bool rebuildDynamicObstacles = (pending & FlowFieldDirtyFlags.DynamicObstacles) != 0;
+            bool rebuildGoal = (pending & FlowFieldDirtyFlags.Goal) != 0;
+            if (rebuildStaticObstacles || rebuildDynamicObstacles || rebuildGoal)
             {
-                RebuildGoalData();
-                MarkFinalDirtyFull(ref pending);
+                FlowFieldGoalResolution goalResolution = ResolveConfiguredGoal(_context.Grid);
+                _resolvedGoalX = goalResolution.IsValid ? goalResolution.LocalX : -1;
+                _resolvedGoalZ = goalResolution.IsValid ? goalResolution.LocalZ : -1;
+                FlowFieldBuildResult prepared = FlowFieldBuildPipeline.PrepareBase(
+                    new FlowFieldBuildRequest(
+                        _context.Grid,
+                        FlowFieldSurfaceData.From(ActiveSurfaceBakeData),
+                        new FlowFieldObstacleRequest(
+                            _context.Grid,
+                            ActiveSurfaceBakeData,
+                            null,
+                            _context.Workspace,
+                            _obstacleLayer,
+                            _obstacleCheckHeight,
+                            _obstacleCheckCenterOffset,
+                            _obstacleClearance,
+                            _enableUnregisteredObstacleSweep,
+                            _context.DirtyObstacleRegion),
+                        goalResolution,
+                        pending,
+                        Mathf.Min(_context.Grid.CellCount, Mathf.Max(64, _maxGpuWaves)),
+                        _inputVersion),
+                    _obstaclePipeline,
+                    _goalTracker,
+                    rebuildStaticObstacles,
+                    rebuildDynamicObstacles,
+                    rebuildGoal);
+                // The coordinator consumes the current union of moved/dirty
+                // obstacle cells. Do not carry that rectangle into a later
+                // request after the overlay has been rebuilt.
+                _context.DirtyObstacleRegion = FlowFieldCellRect.Invalid;
+
+                if (rebuildStaticObstacles || rebuildDynamicObstacles)
+                    _context.HasObstacleMask = true;
+                if (prepared.ObstacleMaskChanged)
+                {
+                    if (prepared.ObstacleDirtyRegion.IsValid)
+                        _context.ExpandObstacleDirty(prepared.ObstacleDirtyRegion);
+                    UpdateBlockedWarning(prepared.HasWalkableSurface);
+                    pending |= FlowFieldDirtyFlags.Goal | FlowFieldDirtyFlags.FinalRegion;
+                    _context.ExpandFinalDirty(FlowFieldCellRect.Full(_context.Grid));
+                }
+                if (rebuildGoal || prepared.ObstacleMaskChanged)
+                    MarkFinalDirtyFull(ref pending);
+                if (prepared.GoalStatus == FlowFieldGoalBuildStatus.NoWalkableSurface
+                    && _goalTracker.TryConsumeMissingWalkableWarning())
+                {
+                    Debug.LogWarning(
+                        $"[{nameof(FlowFieldManager)}] Goal 범위에 이동 가능한 표면 셀이 없습니다.",
+                        this);
+                }
             }
 
             if ((pending & FlowFieldDirtyFlags.ModifierArea) != 0 && RebuildModifierAreaData())
@@ -410,11 +672,28 @@ namespace Common.FlowField
             if ((pending & FlowFieldDirtyFlags.ModifierValue) != 0)
                 MarkFinalDirtyFull(ref pending);
 
+            FlushPendingModifierChanges();
+            pending |= _context.DirtyFlags;
+            _context.DirtyFlags = FlowFieldDirtyFlags.None;
+
+            bool topologyChanged = (pending & (FlowFieldDirtyFlags.Grid
+                | FlowFieldDirtyFlags.StaticObstacles
+                | FlowFieldDirtyFlags.DynamicObstacles
+                | FlowFieldDirtyFlags.Escape
+                | FlowFieldDirtyFlags.Goal)) != 0;
+            if (WorkspaceHasGoal() && topologyChanged)
+            {
+                StartBfsSolve();
+                return;
+            }
+
             bool resultChanged = false;
             if ((pending & FlowFieldDirtyFlags.FinalRegion) != 0)
                 resultChanged = RebuildFinalField();
 
-            FlushPendingModifierChanges();
+            if (resultChanged)
+                CommitStagingWorkspace();
+
             UpdateReadyState(
                 _context.SurfaceReady
                     && _context.HasObstacleMask
@@ -433,14 +712,36 @@ namespace Common.FlowField
             if ((pending & FlowFieldDirtyFlags.Grid) == 0 && _context.Grid.IsValid && _context.SurfaceReady)
                 return;
 
-            FlowFieldSurfaceResult result = FlowFieldSurfacePipeline.Prepare(CreateSurfaceRequest());
+            FlowFieldSurfaceBakeData activeSurface;
+            if (CurrentBakeMode == FlowFieldBakeMode.StaticBaked)
+            {
+                activeSurface = EnsureStaticSurfaceBakeData();
+            }
+            else
+            {
+                FlowFieldSurfaceBakeSettings settings = CreateSurfaceBakeSettings();
+                FlowFieldSurfaceBakeResult bakeResult = FlowFieldSurfaceBaker.Bake(settings);
+                if (_runtimeSurfaceBakeData == null)
+                {
+                    _runtimeSurfaceBakeData = ScriptableObject.CreateInstance<FlowFieldSurfaceBakeData>();
+                    _runtimeSurfaceBakeData.name = $"{name}_RuntimeSurfaceBake";
+                    _runtimeSurfaceBakeData.hideFlags = HideFlags.HideAndDontSave;
+                }
+                _runtimeSurfaceBakeData.Apply(settings, bakeResult);
+                activeSurface = _runtimeSurfaceBakeData;
+            }
+
+            FlowFieldSurfaceResult result = FlowFieldSurfacePipeline.Prepare(new FlowFieldSurfaceRequest(
+                _context,
+                CreateSurfaceBakeSettings(),
+                activeSurface,
+                null,
+                _obstacleLayer,
+                _obstacleCheckHeight,
+                _obstacleCheckCenterOffset,
+                _obstacleClearance));
             if (!result.IsReady)
                 throw new ArgumentException($"Surface Bake 설정이 유효하지 않습니다: {result.Error}", nameof(_surfaceBakeData));
-
-            // Native job storage is part of the explicit Manager rebuild contract.
-            // Job execution never allocates or repairs a missing workspace.
-            if (!_context.Workspace.HasNative)
-                _context.Workspace.Init(_context.Grid.CellCount);
 
             pending |= FlowFieldDirtyFlags.StaticObstacles
                 | FlowFieldDirtyFlags.DynamicObstacles
@@ -454,46 +755,22 @@ namespace Common.FlowField
             MarkAllModifierAreasDirty();
         }
 
-        private bool RebuildObstacleMasks(FlowFieldDirtyFlags pending)
+        private FlowFieldSurfaceBakeData EnsureStaticSurfaceBakeData()
         {
-            bool rebuildStatic = (pending & FlowFieldDirtyFlags.StaticObstacles) != 0;
-            bool rebuildDynamic = (pending & FlowFieldDirtyFlags.DynamicObstacles) != 0;
-            if (!rebuildStatic && !rebuildDynamic)
-                return false;
+            if (_staticBakeData == null || !_staticBakeData.HasValidData)
+                return null;
 
-            FlowFieldObstacleRequest request = new FlowFieldObstacleRequest(
-                _context.Grid,
-                _surfaceBakeData,
-                _staticObstacleBakeData,
-                _context.Workspace,
-                _obstacleLayer,
-                _obstacleCheckHeight,
-                _obstacleCheckCenterOffset,
-                _obstacleClearance,
-                _enableUnregisteredObstacleSweep,
-                _context.DirtyObstacleRegion);
-            FlowFieldObstacleResult result = _obstaclePipeline.RebuildMasks(
-                request,
-                rebuildStatic,
-                rebuildDynamic);
-            if (result.MaskChanged && result.DirtyRegion.IsValid)
-                _context.ExpandObstacleDirty(result.DirtyRegion);
-            _context.DirtyObstacleRegion = FlowFieldCellRect.Invalid;
-            return result.MaskChanged;
-        }
+            FlowFieldSurfaceBakeSettings settings = CreateSurfaceBakeSettings();
+            if (_runtimeStaticSurfaceBakeData != null
+                && _runtimeStaticSurfaceBakeData.HasValidData
+                && _runtimeStaticSourceRevision == _staticBakeData.Revision
+                && _runtimeStaticSurfaceBakeData.Matches(settings, out _))
+                return _runtimeStaticSurfaceBakeData;
 
-        private void CommitObstaclesAndMarkGoalDirty(ref FlowFieldDirtyFlags pending)
-        {
-            _obstaclePipeline.CommitCombinedAndBuildEscape(
-                _context.Grid,
-                _surfaceBakeData,
-                _context.Workspace,
-                out bool hasWalkable);
-            _context.HasObstacleMask = true;
-            UpdateBlockedWarning(hasWalkable);
-            pending |= FlowFieldDirtyFlags.Goal | FlowFieldDirtyFlags.FinalRegion;
-            _context.ExpandFinalDirty(FlowFieldCellRect.Full(_context.Grid));
-            _context.DirtyObstacleRegion = FlowFieldCellRect.Invalid;
+            DestroyTransientSurface(ref _runtimeStaticSurfaceBakeData);
+            _runtimeStaticSurfaceBakeData = _staticBakeData.CreateSurfaceBakeData(settings);
+            _runtimeStaticSourceRevision = _staticBakeData.Revision;
+            return _runtimeStaticSurfaceBakeData;
         }
 
         private void UpdateBlockedWarning(bool hasWalkableCell)
@@ -511,9 +788,8 @@ namespace Common.FlowField
 
         private void UpdateReadyState(bool ready, bool resultChanged)
         {
-            bool stateChanged = _isReady != ready;
             _isReady = ready;
-            if (!stateChanged && !resultChanged)
+            if (!resultChanged)
                 return;
 
             unchecked
@@ -524,32 +800,109 @@ namespace Common.FlowField
             FieldChanged?.Invoke();
         }
 
-        private void RebuildGoalData()
+        private void CommitStagingWorkspace()
         {
-            FlowFieldGoalResolution resolution = FlowFieldGoalPipeline.Resolve(
-                _context.Grid,
-                _goalTransform,
-                _hasExplicitGoal,
-                _explicitGoalWorld,
-                _goalInfluenceRadius);
-            if (!resolution.IsValid && resolution.HasActiveGoal)
-                throw new InvalidOperationException("Active Goal resolution is invalid.");
+            FlowFieldSurfaceBakeData sourceSurface = ActiveSurfaceBakeData;
+            if (sourceSurface == null || !sourceSurface.HasValidData || !_context.Grid.IsValid)
+                throw new InvalidOperationException("Cannot commit a FlowField without a valid staging surface.");
 
-            FlowFieldGoalBuildStatus status = FlowFieldGoalPipeline.Build(
-                resolution,
-                _context.Grid,
-                _surfaceBakeData,
-                _coarseTopologyData,
-                _context.Workspace,
-                _fineRingCoarseRadius,
-                _goalTracker);
-            if (status == FlowFieldGoalBuildStatus.NoWalkableSurface)
+            if (_committedWorkspace.Capacity != _context.Grid.CellCount)
+                _committedWorkspace.Resize(_context.Grid.CellCount);
+
+            if (_committedSurfaceBakeData == null
+                || !ReferenceEquals(_committedSourceSurfaceBakeData, sourceSurface)
+                || _committedSourceSurfaceRevision != sourceSurface.Revision)
             {
-                if (_goalTracker.TryConsumeMissingWalkableWarning())
-                    Debug.LogWarning(
-                        $"[{nameof(FlowFieldManager)}] Goal 범위에 이동 가능한 표면 셀이 없습니다.",
-                        this);
+                DestroyTransientSurface(ref _committedSurfaceBakeData);
+                _committedSurfaceBakeData = sourceSurface.CreateTransientCopy();
+                _committedSourceSurfaceBakeData = sourceSurface;
+                _committedSourceSurfaceRevision = sourceSurface.Revision;
             }
+
+            _committedWorkspace.CopyFrom(_context.Workspace);
+            _committedGrid = _context.Grid;
+        }
+
+        private bool WorkspaceHasGoal()
+            => _context.Workspace.HasActiveGoal
+                && _context.Workspace.ResolvedGoalIndex >= 0;
+
+        private int ResolveGoalX() => _resolvedGoalX;
+        private int ResolveGoalZ() => _resolvedGoalZ;
+
+        private void StartBfsSolve()
+        {
+            if (!WorkspaceHasGoal())
+            {
+                bool noGoalChanged = RebuildFinalField();
+                if (noGoalChanged)
+                    CommitStagingWorkspace();
+                UpdateReadyState(true, noGoalChanged);
+                return;
+            }
+
+            InitServices();
+            if (_buildPipeline == null)
+                throw new InvalidOperationException("FlowField build pipeline is not initialized.");
+
+            int effectiveWaves = Mathf.Min(_context.Grid.CellCount, Mathf.Max(64, _maxGpuWaves));
+            FlowFieldBfsRequest request = new FlowFieldBfsRequest(
+                _context.Grid,
+                ActiveSurfaceBakeData,
+                _context.Workspace,
+                true,
+                ResolveGoalX(),
+                ResolveGoalZ(),
+                _goalInfluenceRadius,
+                _context.Workspace.ResolvedGoalIndex,
+                effectiveWaves,
+                _inputVersion);
+
+            // The runner may complete synchronously when Managed BFS is used,
+            // so set the flag before entering it.
+            _isRebuilding = true;
+            bool accepted = _buildPipeline.StartBfs(request, OnBfsCompleted, OnBfsFailed);
+            if (!accepted)
+            {
+                _isRebuilding = false;
+                throw new InvalidOperationException("FlowField BFS session could not be started.");
+            }
+        }
+
+        private void OnBfsCompleted(FlowFieldBfsRequest request)
+        {
+            _isRebuilding = false;
+            if (_lifecycleState != LifecycleState.Initialized
+                || request.Version != _inputVersion
+                || _context.DirtyFlags != FlowFieldDirtyFlags.None
+                || !_context.Grid.MatchesBounds(request.Grid))
+            {
+                _context.DirtyFlags |= FlowFieldDirtyFlags.Goal | FlowFieldDirtyFlags.FinalRegion;
+                return;
+            }
+
+            bool resultChanged = RebuildFinalField();
+            CommitStagingWorkspace();
+            UpdateReadyState(true, resultChanged);
+        }
+
+        private void OnBfsFailed(FlowFieldBfsRequest request, Exception exception)
+        {
+            _isRebuilding = false;
+            if (_lifecycleState != LifecycleState.Initialized)
+                return;
+
+            if (request.Version != _inputVersion
+                || _context.DirtyFlags != FlowFieldDirtyFlags.None
+                || !_context.Grid.MatchesBounds(request.Grid))
+            {
+                _context.DirtyFlags |= FlowFieldDirtyFlags.Goal | FlowFieldDirtyFlags.FinalRegion;
+                return;
+            }
+
+            _fault = exception ?? new InvalidOperationException("Managed FlowField BFS failed.");
+            _lifecycleState = LifecycleState.Faulted;
+            Debug.LogError($"[{nameof(FlowFieldManager)}] Managed FlowField BFS failed: {_fault.Message}", this);
         }
 
         private void MarkDynamicObstacleRegionDirty(FlowFieldCellRect dirtyRect)
@@ -562,25 +915,32 @@ namespace Common.FlowField
 
             _context.DirtyFlags |= FlowFieldDirtyFlags.DynamicObstacles
                 | FlowFieldDirtyFlags.Escape
-                | FlowFieldDirtyFlags.GoalFine
                 | FlowFieldDirtyFlags.FinalRegion;
+            _inputVersion++;
+#if UNITY_EDITOR
+            InvalidateEditorPreview();
+#endif
         }
 
         private void DetectGridTransformChange()
         {
+            if (CurrentBakeMode == FlowFieldBakeMode.StaticBaked)
+                return;
             FlowFieldGridSpace current = CreateGridSpace();
-            if (!_context.Grid.MatchesBounds(current)
-                || _surfaceBakeData != _context.Surface
-                || (_surfaceBakeData != null && _surfaceBakeData.Revision != _context.LastSurfaceRevision)
-                || (_staticObstacleBakeData != null
-                    && _staticObstacleBakeData.Revision != _context.LastStaticObstacleRevision)
-                || (_coarseTopologyData != null
-                    && _coarseTopologyData.Revision != _context.LastCoarseRevision))
+            bool changed = !_context.Grid.MatchesBounds(current)
+                || _runtimeSurfaceBakeData != _context.Surface
+                || (_runtimeSurfaceBakeData != null && _runtimeSurfaceBakeData.Revision != _context.LastSurfaceRevision);
+            if (changed)
+            {
                 _context.DirtyFlags |= FlowFieldDirtyFlags.Grid;
+                _inputVersion++;
+            }
         }
 
         private void DetectGoalChange()
         {
+            if (CurrentBakeMode == FlowFieldBakeMode.StaticBaked)
+                return;
             FlowFieldGoalChangeStatus status = _goalTracker.DetectChange(
                 _context.Grid,
                 _context.SurfaceReady,
@@ -592,12 +952,16 @@ namespace Common.FlowField
                 throw new InvalidOperationException("Active Goal became invalid.");
 
             if (status == FlowFieldGoalChangeStatus.Changed)
+            {
                 _context.MarkDirty(FlowFieldDirtyFlags.Goal);
+                _inputVersion++;
+            }
         }
 
         private void MarkGoalDirty()
         {
             _context.DirtyFlags |= FlowFieldDirtyFlags.Goal;
+            _inputVersion++;
             _goalTracker.ResetWarning();
 #if UNITY_EDITOR
             InvalidateEditorPreview();
@@ -620,33 +984,91 @@ namespace Common.FlowField
                 throw new InvalidOperationException($"{nameof(FlowFieldManager)} is not ready.");
             if (!FlowFieldGridSpace.IsFinite(worldPosition))
                 throw new ArgumentOutOfRangeException(nameof(worldPosition));
-            if (!_context.Grid.ContainsWorldPosition(worldPosition))
+            FlowFieldGridSpace sampleGrid = _isRebuilding && _committedGrid.IsValid
+                ? _committedGrid
+                : _context.Grid;
+            FlowFieldSurfaceBakeData sampleSurface = _isRebuilding && _committedSurfaceBakeData != null
+                ? _committedSurfaceBakeData
+                : ActiveSurfaceBakeData;
+            FlowFieldWorkspace sampleWorkspace = _isRebuilding && _committedWorkspace.Capacity > 0
+                ? _committedWorkspace
+                : _context.Workspace;
+            if (!sampleGrid.ContainsWorldPosition(worldPosition))
                 throw new ArgumentOutOfRangeException(nameof(worldPosition), "Position is outside the FlowField grid.");
 
-            if (!FlowFieldBilinearSampler.TrySample(
-                _context.Grid,
-                _surfaceBakeData,
-                _context.Workspace,
+            if (!FlowFieldCellSampler.TrySample(
+                sampleGrid,
+                sampleSurface,
+                sampleWorkspace,
                 worldPosition,
-                out FlowFieldSample sample,
-                out _,
-                out _,
-                out _,
-                out _,
-                out _))
+                out FlowFieldSample sample))
                 throw new InvalidOperationException("FlowField sampling data is inconsistent.");
+
+            if (sampleGrid.TryWorldToLocal(worldPosition, out int sampleX, out int sampleZ))
+            {
+                int sampleIndex = sampleGrid.ToFlatIndex(sampleX, sampleZ);
+                // During an async rebuild the staging obstacle mask is the
+                // only new input allowed to affect the old committed field:
+                // if it blocks the sampled cell, stop until the new field is
+                // committed. Directions themselves continue to come from the
+                // committed workspace below.
+                if (_isRebuilding
+                    && _context.Workspace.Capacity == _context.Grid.CellCount
+                    && sampleIndex < _context.Workspace.Blocked.Length
+                    && _context.Workspace.Blocked[sampleIndex])
+                    return new FlowFieldSample(
+                        Vector3.zero,
+                        0f,
+                        sample.SurfaceNormal,
+                        sample.HasSurface);
+
+                int next = sampleWorkspace.NextCells[sampleIndex];
+                if (next >= 0)
+                {
+                    FlowFieldWorkspace latestWorkspace = _context.Workspace;
+                    FlowFieldSurfaceBakeData latestSurface = ActiveSurfaceBakeData;
+                    bool nextBlocked = next >= sampleGrid.CellCount
+                        || latestWorkspace.Capacity != _context.Grid.CellCount
+                        || (next < latestWorkspace.Blocked.Length && latestWorkspace.Blocked[next])
+                        || latestSurface == null
+                        || !latestSurface.IsSurfaceValid(next);
+                    bool topologyChanged = false;
+                    if (!_isRebuilding && !nextBlocked && next != sampleIndex)
+                    {
+                        sampleGrid.FromFlatIndex(sampleIndex, out int currentX, out int currentZ);
+                        sampleGrid.FromFlatIndex(next, out int nextX, out int nextZ);
+                        int directionIndex = FlowFieldNeighborUtility.FindDirectionIndex(
+                            nextX - currentX,
+                            nextZ - currentZ);
+                        topologyChanged = directionIndex < 0
+                            || latestWorkspace.TopologyMasks == null
+                            || sampleIndex >= latestWorkspace.TopologyMasks.Length
+                            || (latestWorkspace.TopologyMasks[sampleIndex] & (1 << directionIndex)) == 0;
+                    }
+
+                    if (nextBlocked || topologyChanged)
+                        return new FlowFieldSample(
+                            Vector3.zero,
+                            0f,
+                            sample.SurfaceNormal,
+                            sample.HasSurface);
+                }
+            }
             return sample;
         }
 
         public FlowFieldClampResult ClampPositionToGrid(Vector3 worldPosition)
         {
             ThrowIfUnavailable();
-            if (!_context.Grid.IsValid)
-                throw new InvalidOperationException("FlowField grid is not initialized.");
             if (!FlowFieldGridSpace.IsFinite(worldPosition))
                 throw new ArgumentOutOfRangeException(nameof(worldPosition));
 
-            Vector3 clampedPosition = _context.Grid.ClampWorldXZ(worldPosition);
+            FlowFieldGridSpace clampGrid = _isRebuilding && _committedGrid.IsValid
+                ? _committedGrid
+                : _context.Grid;
+            if (!clampGrid.IsValid)
+                throw new InvalidOperationException("FlowField grid is not initialized.");
+            Vector3 clampedPosition = clampGrid.ClampWorldXZ(worldPosition);
             return new FlowFieldClampResult(
                 clampedPosition,
                 !Mathf.Approximately(worldPosition.x, clampedPosition.x),
@@ -658,6 +1080,8 @@ namespace Common.FlowField
             ThrowIfUnavailable();
             if (collider == null)
                 throw new ArgumentNullException(nameof(collider));
+            if (CurrentBakeMode == FlowFieldBakeMode.StaticBaked)
+                return;
             if (!_obstaclePipeline.RegisterDynamicObstacle(collider))
                 throw new InvalidOperationException("Dynamic obstacle registration failed.");
 
@@ -669,6 +1093,8 @@ namespace Common.FlowField
             ThrowIfUnavailable();
             if (collider == null)
                 throw new ArgumentNullException(nameof(collider));
+            if (CurrentBakeMode == FlowFieldBakeMode.StaticBaked)
+                return;
             Bounds bounds = collider.bounds;
             if (!_obstaclePipeline.UnregisterDynamicObstacle(collider))
                 throw new InvalidOperationException("Dynamic obstacle is not registered.");
@@ -684,6 +1110,9 @@ namespace Common.FlowField
             if (!_context.Grid.IsValid)
                 throw new InvalidOperationException("FlowField grid is not initialized.");
 
+            if (CurrentBakeMode == FlowFieldBakeMode.StaticBaked)
+                return;
+
             MarkDynamicObstacleRegionDirty(FlowFieldCellRect.FromBounds(_context.Grid, worldBounds));
         }
 
@@ -697,6 +1126,9 @@ namespace Common.FlowField
                 throw new ArgumentOutOfRangeException(nameof(worldPosition));
             if (!FlowFieldGridSpace.IsFinite(influenceRadius) || influenceRadius < 0f)
                 throw new ArgumentOutOfRangeException(nameof(influenceRadius));
+
+            if (CurrentBakeMode == FlowFieldBakeMode.StaticBaked)
+                return;
 
             float resolvedRadius = influenceRadius;
             if (_goalTransform == null
@@ -727,6 +1159,9 @@ namespace Common.FlowField
             if (!FlowFieldGridSpace.IsFinite(influenceRadius) || influenceRadius < 0f)
                 throw new ArgumentOutOfRangeException(nameof(influenceRadius));
 
+            if (CurrentBakeMode == FlowFieldBakeMode.StaticBaked)
+                return;
+
             float resolvedRadius = influenceRadius;
             if (_goalTransform == target
                 && !_hasExplicitGoal
@@ -742,6 +1177,8 @@ namespace Common.FlowField
         public void ClearGoal()
         {
             ThrowIfUnavailable();
+            if (CurrentBakeMode == FlowFieldBakeMode.StaticBaked)
+                return;
             if (_goalTransform == null && !_hasExplicitGoal)
                 return;
 
@@ -752,21 +1189,42 @@ namespace Common.FlowField
 
         #endregion
 
+        public void NotifySurfaceDirty()
+        {
+            ThrowIfUnavailable();
+            if (CurrentBakeMode == FlowFieldBakeMode.StaticBaked)
+                return;
+
+            _context.DirtyFlags |= FlowFieldDirtyFlags.Grid;
+            _context.ExpandFinalDirty(FlowFieldCellRect.Full(_context.Grid));
+            _context.ExpandObstacleDirty(FlowFieldCellRect.Full(_context.Grid));
+            unchecked
+            {
+                _inputVersion++;
+            }
+#if UNITY_EDITOR
+            InvalidateEditorPreview();
+#endif
+        }
+
         #region Bake Integration
 
         private FlowFieldSurfaceRequest CreateSurfaceRequest()
             => new FlowFieldSurfaceRequest(
                 _context,
                 CreateSurfaceBakeSettings(),
-                _surfaceBakeData,
-                _staticObstacleBakeData,
-                _coarseTopologyData,
+                CurrentBakeMode == FlowFieldBakeMode.StaticBaked
+                    ? (_staticBakeData != null ? _staticBakeData.SurfaceBakeData : null)
+                    : Application.isPlaying ? _runtimeSurfaceBakeData : EditorSurfaceBakeData,
+                // Legacy StaticObstacleBakeData is intentionally not part of
+                // the new mode selection. Dynamic mode discovers static
+                // colliders through BuildStatic; StaticBaked loads its complete
+                // mask from FlowFieldStaticBakeData.
+                null,
                 _obstacleLayer,
                 _obstacleCheckHeight,
                 _obstacleCheckCenterOffset,
-                _obstacleClearance,
-                _coarseCellMultiplier,
-                _coarseWalkableRatio);
+                _obstacleClearance);
 
         internal FlowFieldSurfaceBakeSettings CreateSurfaceBakeSettings()
         {
@@ -801,6 +1259,7 @@ namespace Common.FlowField
 
             _bakeBoundsLocal = snapped;
             _context.DirtyFlags = FlowFieldDirtyFlags.All;
+            _inputVersion++;
 #if UNITY_EDITOR
             InvalidateEditorPreview();
 #endif
@@ -811,12 +1270,68 @@ namespace Common.FlowField
         /// </summary>
         /// <returns>모든 Bake 참조가 유효하면 true, 진단 오류가 있으면 false입니다.</returns>
         internal bool TryValidateSurfaceBake(out string reason)
+            => TryValidateSurfaceBake(out reason, includeStaticGoal: true);
+
+        /// <summary>
+        /// Validates the baked geometry/signature. Static editor previews can
+        /// deliberately omit the current Goal comparison because their
+        /// displayed Goal is the immutable one stored in the snapshot.
+        /// </summary>
+        internal bool TryValidateSurfaceBake(out string reason, bool includeStaticGoal)
         {
             reason = string.Empty;
             if (!TryGetBakeLayout(out _, out _))
             {
                 reason = "Bake Bounds 또는 Cell Size가 유효하지 않습니다.";
                 return false;
+            }
+
+            if (CurrentBakeMode == FlowFieldBakeMode.StaticBaked)
+            {
+                if (_staticBakeData == null)
+                {
+                    reason = "StaticBaked 모드에는 FlowFieldStaticBakeData가 필요합니다.";
+                    return false;
+                }
+
+                if (!FlowFieldBakeBoundsUtility.TryCreateWorldLayout(
+                        transform.position,
+                        _bakeBoundsLocal,
+                        _cellSize,
+                        out _,
+                        out FlowFieldGridSpace staticGrid))
+                {
+                    reason = "Bake Bounds 또는 Cell Size가 유효하지 않습니다.";
+                    return false;
+                }
+
+                if (!_staticBakeData.MatchesSurface(CreateSurfaceBakeSettings(), out reason))
+                    return false;
+
+                if (!_staticBakeData.Matches(
+                    staticGrid,
+                    null,
+                    _obstacleLayer,
+                    _obstacleCheckHeight,
+                    _obstacleCheckCenterOffset,
+                    _obstacleClearance,
+                    out reason))
+                    return false;
+
+                // This diagnostic is intentionally editor-facing. Runtime
+                // StaticBaked sessions continue to use the baked Goal even if
+                // a serialized Transform was moved after the bake.
+                if (includeStaticGoal
+                    && !_staticBakeData.MatchesGoal(
+                            HasConfiguredGoal,
+                            ConfiguredGoalWorld,
+                            _goalInfluenceRadius))
+                {
+                    reason = "Static Flow Bake Goal이 현재 Manager 설정과 다릅니다. ReBake가 필요합니다.";
+                    return false;
+                }
+
+                return true;
             }
 
             return FlowFieldSurfacePipeline.TryValidate(CreateSurfaceRequest(), out reason);
@@ -829,6 +1344,7 @@ namespace Common.FlowField
 
             _surfaceBakeData = bakeData;
             _context.DirtyFlags = FlowFieldDirtyFlags.All;
+            _inputVersion++;
 #if UNITY_EDITOR
             InvalidateEditorPreview();
 #endif
@@ -841,18 +1357,20 @@ namespace Common.FlowField
 
             _staticObstacleBakeData = bakeData;
             _context.DirtyFlags = FlowFieldDirtyFlags.All;
+            _inputVersion++;
 #if UNITY_EDITOR
             InvalidateEditorPreview();
 #endif
         }
 
-        internal void AssignCoarseTopologyData(FlowFieldCoarseTopologyData bakeData)
+        internal void AssignStaticBakeData(FlowFieldStaticBakeData bakeData)
         {
-            if (_coarseTopologyData == bakeData)
+            if (_staticBakeData == bakeData)
                 return;
 
-            _coarseTopologyData = bakeData;
+            _staticBakeData = bakeData;
             _context.DirtyFlags = FlowFieldDirtyFlags.All;
+            _inputVersion++;
 #if UNITY_EDITOR
             InvalidateEditorPreview();
 #endif
@@ -861,6 +1379,7 @@ namespace Common.FlowField
         internal void NotifySurfaceBakeChanged()
         {
             _context.DirtyFlags = FlowFieldDirtyFlags.All;
+            _inputVersion++;
 #if UNITY_EDITOR
             InvalidateEditorPreview();
 #endif

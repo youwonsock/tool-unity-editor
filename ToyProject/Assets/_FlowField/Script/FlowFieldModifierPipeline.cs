@@ -33,11 +33,6 @@ namespace Common.FlowField
         private readonly List<FlowFieldModifierLayer> _runtimeLayers = new List<FlowFieldModifierLayer>(16);
         private Collider[] _overlapBuffer;
 
-#if UNITY_EDITOR
-        private readonly List<FlowFieldModifierLayer> _editorLayers = new List<FlowFieldModifierLayer>(16);
-        private Collider[] _editorOverlapBuffer;
-#endif
-
         internal FlowFieldModifierPipeline(FlowFieldModifierRegistry registry)
         {
             if (registry == null)
@@ -138,17 +133,12 @@ namespace Common.FlowField
                     dirty = FlowFieldCellRect.Full(request.Grid);
 
                 BuildRuntimeLayers(request.Grid.CellCount);
-                FlowFieldJobRunner.RunBaseComposeJob(
+                FlowFieldFinalFieldComposer.Compose(
                     request.Grid,
                     request.Surface,
                     request.Workspace,
-                    defaultDirection);
-                FlowFieldFinalFieldComposer.ApplyModifiers(
-                    request.Grid,
-                    request.Surface,
-                    request.Workspace,
+                    defaultDirection,
                     _runtimeLayers);
-                request.Workspace.BumpGeneration(request.Grid, dirty);
                 return true;
             }
             finally
@@ -157,82 +147,10 @@ namespace Common.FlowField
             }
         }
 
-#if UNITY_EDITOR
-        internal void BuildEditorFinalField(
-            FlowFieldGridSpace grid,
-            FlowFieldSurfaceBakeData surface,
-            FlowFieldWorkspace workspace,
-            Vector3 defaultDirection,
-            float obstacleCheckHeight,
-            float obstacleCheckCenterOffset)
-        {
-            if (!grid.IsValid)
-                throw new ArgumentException("Editor modifier compose requires a valid grid.", nameof(grid));
-            if (surface == null)
-                throw new ArgumentNullException(nameof(surface));
-            if (!surface.HasValidData)
-                throw new ArgumentException("Editor modifier compose requires a valid surface bake.", nameof(surface));
-            if (workspace == null)
-                throw new ArgumentNullException(nameof(workspace));
-            if (workspace.Capacity != grid.CellCount)
-                throw new ArgumentException("Editor modifier workspace capacity must match the grid.", nameof(workspace));
-            if (!FlowFieldGridSpace.IsFinite(obstacleCheckHeight) || obstacleCheckHeight <= 0f)
-                throw new ArgumentOutOfRangeException(nameof(obstacleCheckHeight));
-            if (!FlowFieldGridSpace.IsFinite(obstacleCheckCenterOffset))
-                throw new ArgumentOutOfRangeException(nameof(obstacleCheckCenterOffset));
-
-            _registry.BeginComposition();
-            try
-            {
-                Physics.SyncTransforms();
-                _editorLayers.Clear();
-                for (int i = 0; i < _registry.Entries.Count; i++)
-                {
-                    FlowFieldModifierRegistry.Entry entry = _registry.Entries[i];
-                    IFlowFieldVectorModifier modifier = entry.Modifier;
-                    if (IsMissingModifier(modifier))
-                        throw new InvalidOperationException("Registered modifier data is inconsistent.");
-
-                    ResizeEditorMask(entry, grid.CellCount);
-                    Collider collider = modifier.InfluenceCollider;
-
-                    FlowFieldModifierMaskBuilder.Build(
-                        grid,
-                        surface,
-                        collider,
-                        obstacleCheckHeight,
-                        obstacleCheckCenterOffset,
-                        entry.EditorInfluenceScratch,
-                        ref _editorOverlapBuffer);
-                    Array.Copy(
-                        entry.EditorInfluenceScratch,
-                        entry.EditorInfluenceMask,
-                        entry.EditorInfluenceMask.Length);
-                    _editorLayers.Add(new FlowFieldModifierLayer(modifier, entry.EditorInfluenceMask));
-                }
-
-                FlowFieldFinalFieldComposer.Compose(
-                    grid,
-                    surface,
-                    workspace,
-                    defaultDirection,
-                    _editorLayers);
-            }
-            finally
-            {
-                _registry.EndComposition();
-            }
-        }
-#endif
-
         internal void Clear()
         {
             _runtimeLayers.Clear();
             _overlapBuffer = null;
-#if UNITY_EDITOR
-            _editorLayers.Clear();
-            _editorOverlapBuffer = null;
-#endif
         }
 
         private void BuildRuntimeLayers(int cellCount)
@@ -271,19 +189,6 @@ namespace Common.FlowField
             entry.InfluenceScratch = new bool[cellCount];
             entry.InfluenceIndices.Clear();
         }
-
-#if UNITY_EDITOR
-        private static void ResizeEditorMask(
-            FlowFieldModifierRegistry.Entry entry,
-            int cellCount)
-        {
-            if (entry.EditorInfluenceMask != null && entry.EditorInfluenceMask.Length == cellCount)
-                return;
-
-            entry.EditorInfluenceMask = new bool[cellCount];
-            entry.EditorInfluenceScratch = new bool[cellCount];
-        }
-#endif
 
         private static bool IsMissingModifier(IFlowFieldVectorModifier modifier)
             => modifier == null || modifier is UnityEngine.Object unityObject && unityObject == null;

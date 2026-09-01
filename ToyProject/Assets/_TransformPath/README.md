@@ -38,9 +38,11 @@ pathData.Release();
 
 전체 Demo 계층은 `Prefab/TransformPathShowcase.prefab`에서 재사용할 수 있습니다.
 
-`TransformPathSampleMessageReceiver`는 `IPathEventReceiver`를 구현하며 `LastMessage`, `ReceivedCount`, `LastFollower`를 공개합니다. 수신 시 Console 로그, Game View 오버레이, 수신 횟수와 Actor의 0.5초 노란색 점멸을 확인할 수 있습니다.
+`TransformPathSampleMessageReceiver`는 `IPathEventReceiver`를 구현하며 `LastMessage`, `ReceivedCount`, `LastFollower`를 공개합니다. 수신 시 Console 로그, 수신 횟수와 Actor의 0.5초 노란색 점멸을 확인할 수 있습니다. 기존 IMGUI 오버레이는 비활성화하고 결과는 컴팩트 uGUI 패널에 표시합니다.
 
-`TransformPathOverviewController`가 기본 경로, MultiPath 두 구간, Queue Follower 3개를 하나의 씬에서 실행합니다. `1/2/3`은 각각 Linear/Uniform, SplineInterpolating/DistanceBased, SplineApproximating/Random 조합을 `Set... → Rebuild → Reset → Resume` 순서로 적용합니다. `Q`는 Queue 표시, `Space`는 Pause/Resume, `R`은 Reset, `←/→`는 Seek, `E`는 테스트 메시지를 즉시 발화합니다. 월드 공간 Overview Board에는 경로 Revision, 진행도, `Sample`/`SampleDistance` 결과, 복사된 제어점 수, 첫 MultiPath 세그먼트 준비 상태, Queue 선행 거리, 마지막 메시지와 수신 횟수가 표시됩니다.
+`TransformPathOverviewController`가 Normal Path, MultiPath, Queued Path를 서로 다른 세로 lane으로 분리하고 선택된 lane만 렌더링·실행합니다. Provider와 Queue manager 수명 주기는 유지해 lane 전환 시 중복 등록을 방지합니다. Normal lane은 독립 `PathData + PathFollower`, MultiPath lane은 독립 `PathData` 두 개와 `MultiPathData + PathFollower`, Queue lane은 Counter 스타일의 별도 1-segment `MultiPathData + QueuedPathManager + QueuedPathFollower` 3개로 구성됩니다. Queue leader는 manager의 정렬된 `Followers[0]`로 판별하며, 초기화/reset 때 등록된 follower를 먼저 멈추고 manager spacing보다 큰 간격으로 재배치합니다.
+
+`1/2/3`은 Normal Path의 Linear/Uniform, SplineInterpolating/DistanceBased, SplineApproximating/Random 조합을 `Set... → Rebuild → Reset → Resume` 순서로 적용합니다. `Q`는 Queue 표시, `Space`는 전체 Pause/Resume, `R`은 전체 Reset, `←/→`는 선택 lane Seek, `E`는 테스트 메시지를 즉시 발화합니다. `TransformPathShowcaseUI`는 기존 Overview Board/Image를 Screen Space Overlay Canvas의 좌측 하단 컴팩트 패널로 전환해 Normal/Multi/Queue 탭에서 선택 lane의 설정과 상태만 표시하며, 필요한 경우 `EventSystem`을 런타임에 생성합니다. `TransformPathFreeCamera`는 Perspective 카메라로 선택 lane을 Focus하고 우클릭 중 마우스 회전, WASD 이동, Q/E 수직 이동, 휠 속도 조절과 Shift 가속을 제공합니다.
 
 ## Editor 도구
 

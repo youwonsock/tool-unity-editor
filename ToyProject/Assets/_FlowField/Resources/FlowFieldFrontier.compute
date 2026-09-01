@@ -1,0 +1,259 @@
+#pragma kernel InitializeField
+#pragma kernel PrepareWave
+#pragma kernel ExpandFrontier
+#pragma kernel BuildFlowDirections
+#pragma target 4.5
+
+struct SurfaceCell
+{
+    float Height;
+    float3 Normal;
+};
+
+struct FlowCell
+{
+    float3 Direction;
+    int NextCell;
+};
+
+// The state buffer is deliberately raw: word 0 is the BFS cost and word 1
+// contains VALID/BLOCKED/INFLUENCE plus the eight pre-baked topology bits.
+RWByteAddressBuffer CellStateBuffer;
+StructuredBuffer<SurfaceCell> SurfaceDataBuffer;
+RWStructuredBuffer<uint> FrontierA;
+RWStructuredBuffer<uint> FrontierB;
+RWByteAddressBuffer ControlBuffer;
+// Indirect arguments are a dedicated buffer. RWBuffer is used so the
+// PrepareWave kernel can write dispatch dimensions before DispatchIndirect.
+RWBuffer<uint> IndirectArgsBuffer;
+RWStructuredBuffer<FlowCell> OutputBuffer;
+
+uint _CellCount;
+uint _Width;
+uint _Depth;
+uint _GoalIndex;
+uint _FrontierParity;
+uint _CurrentCountOffset;
+uint _NextCountOffset;
+float _CellSize;
+float3 _GridOrigin;
+
+static const uint VALID = 1u;
+static const uint BLOCKED = 2u;
+static const uint INFLUENCE = 4u;
+static const uint NEIGHBOR_SHIFT = 3u;
+static const uint UNVISITED = 0x7fffffffu;
+static const int DX[8] = { 1, -1, 0, 0, 1, 1, -1, -1 };
+static const int DZ[8] = { 0, 0, 1, -1, 1, -1, 1, -1 };
+
+uint LoadCost(uint index)
+{
+    return CellStateBuffer.Load(index * 8u);
+}
+
+uint LoadFlags(uint index)
+{
+    return CellStateBuffer.Load(index * 8u + 4u);
+}
+
+bool InBounds(int x, int z)
+{
+    return x >= 0 && z >= 0 && x < (int)_Width && z < (int)_Depth;
+}
+
+uint Flat(int x, int z)
+{
+    return (uint)(z * (int)_Width + x);
+}
+
+uint LoadFrontier(uint parity, uint index)
+{
+    return parity == 0u ? FrontierA[index] : FrontierB[index];
+}
+
+void StoreFrontier(uint parity, uint index, uint value)
+{
+    if (parity == 0u)
+        FrontierA[index] = value;
+    else
+        FrontierB[index] = value;
+}
+
+uint LoadCount(uint byteOffset)
+{
+    return ControlBuffer.Load(byteOffset);
+}
+
+void StoreResult(uint index, FlowCell result)
+{
+    OutputBuffer[index] = result;
+    if (index == _CellCount - 1u)
+        ControlBuffer.Store(12u, 1u);
+}
+
+[numthreads(64, 1, 1)]
+void InitializeField(uint3 id : SV_DispatchThreadID)
+{
+    uint index = id.x;
+    if (index >= _CellCount)
+        return;
+
+    CellStateBuffer.Store(index * 8u, UNVISITED);
+    if (index == 0u)
+        ControlBuffer.Store(12u, 0u);
+    uint flags = LoadFlags(index);
+    if (index == _GoalIndex && (flags & (VALID | BLOCKED | INFLUENCE)) == (VALID | INFLUENCE))
+    {
+        CellStateBuffer.Store(index * 8u, 0u);
+        FrontierA[0] = index;
+        ControlBuffer.Store(0u, 1u);
+    }
+}
+
+[numthreads(1, 1, 1)]
+void PrepareWave(uint3 id : SV_DispatchThreadID)
+{
+    ControlBuffer.Store(_NextCountOffset, 0u);
+    uint currentCount = LoadCount(_CurrentCountOffset);
+    uint groups = max(1u, (currentCount + 63u) / 64u);
+    IndirectArgsBuffer[0] = groups;
+    IndirectArgsBuffer[1] = 1u;
+    IndirectArgsBuffer[2] = 1u;
+}
+
+[numthreads(64, 1, 1)]
+void ExpandFrontier(uint3 id : SV_DispatchThreadID)
+{
+    uint currentCount = LoadCount(_CurrentCountOffset);
+    if (id.x >= currentCount)
+        return;
+
+    uint current = LoadFrontier(_FrontierParity, id.x);
+    int x = (int)(current % _Width);
+    int z = (int)(current / _Width);
+    uint currentCost = LoadCost(current);
+    uint currentFlags = LoadFlags(current);
+    if ((currentFlags & (VALID | BLOCKED | INFLUENCE)) != (VALID | INFLUENCE))
+        return;
+
+    uint topology = currentFlags >> NEIGHBOR_SHIFT;
+    for (uint direction = 0u; direction < 8u; direction++)
+    {
+        if ((topology & (1u << direction)) == 0u)
+            continue;
+
+        int nx = x + DX[direction];
+        int nz = z + DZ[direction];
+        if (!InBounds(nx, nz))
+            continue;
+
+        uint neighbor = Flat(nx, nz);
+        uint neighborFlags = LoadFlags(neighbor);
+        if ((neighborFlags & (VALID | BLOCKED | INFLUENCE)) != (VALID | INFLUENCE))
+            continue;
+
+        uint original;
+        CellStateBuffer.InterlockedCompareExchange(
+            neighbor * 8u,
+            UNVISITED,
+            currentCost + 1u,
+            original);
+        if (original != UNVISITED)
+            continue;
+
+        uint slot;
+        ControlBuffer.InterlockedAdd(_NextCountOffset, 1u, slot);
+        if (slot < _CellCount)
+            StoreFrontier(_FrontierParity ^ 1u, slot, neighbor);
+        else
+            // Overflow is a sticky bit.  A plain store is sufficient and is
+            // supported by all backends (including Metal) where an atomic
+            // exchange output value can be rejected as unbound.
+            ControlBuffer.Store(8u, 1u);
+    }
+}
+
+[numthreads(64, 1, 1)]
+void BuildFlowDirections(uint3 id : SV_DispatchThreadID)
+{
+    uint index = id.x;
+    if (index >= _CellCount)
+        return;
+
+    uint flags = LoadFlags(index);
+    FlowCell result;
+    result.Direction = float3(0.0, 0.0, 0.0);
+    result.NextCell = -2;
+    if ((flags & VALID) == 0u)
+    {
+        result.NextCell = -2;
+        StoreResult(index, result);
+        return;
+    }
+    if ((flags & BLOCKED) != 0u)
+    {
+        result.NextCell = -2;
+        StoreResult(index, result);
+        return;
+    }
+    if ((flags & INFLUENCE) == 0u)
+    {
+        result.NextCell = -1;
+        StoreResult(index, result);
+        return;
+    }
+
+    uint cost = LoadCost(index);
+    if (cost == UNVISITED)
+    {
+        result.NextCell = -3;
+        StoreResult(index, result);
+        return;
+    }
+    if (cost == 0u)
+    {
+        result.NextCell = (int)index;
+        StoreResult(index, result);
+        return;
+    }
+
+    int x = (int)(index % _Width);
+    int z = (int)(index / _Width);
+    uint topology = flags >> NEIGHBOR_SHIFT;
+    uint best = _CellCount;
+    for (uint direction = 0u; direction < 8u; direction++)
+    {
+        if ((topology & (1u << direction)) == 0u)
+            continue;
+        int nx = x + DX[direction];
+        int nz = z + DZ[direction];
+        if (!InBounds(nx, nz))
+            continue;
+        uint neighbor = Flat(nx, nz);
+        if (LoadCost(neighbor) != cost - 1u)
+            continue;
+        if (neighbor < best)
+            best = neighbor;
+    }
+
+    if (best == _CellCount)
+    {
+        result.NextCell = -3;
+        StoreResult(index, result);
+        return;
+    }
+
+    result.NextCell = (int)best;
+    int bx = (int)(best % _Width);
+    int bz = (int)(best / _Width);
+    SurfaceCell currentSurface = SurfaceDataBuffer[index];
+    SurfaceCell nextSurface = SurfaceDataBuffer[best];
+    float3 currentPosition = _GridOrigin + float3((x + 0.5) * _CellSize, currentSurface.Height, (z + 0.5) * _CellSize);
+    float3 nextPosition = _GridOrigin + float3((bx + 0.5) * _CellSize, nextSurface.Height, (bz + 0.5) * _CellSize);
+    float3 normal = normalize(currentSurface.Normal);
+    float3 projected = (nextPosition - currentPosition) - normal * dot(nextPosition - currentPosition, normal);
+    float lengthSquared = dot(projected, projected);
+    if (lengthSquared > 1e-8)
+        result.Direction = projected * rsqrt(lengthSquared);
+    StoreResult(index, result);
+}

@@ -46,17 +46,23 @@ namespace Common.FlowField
     {
         public bool MaskChanged { get; }
         public FlowFieldCellRect DirtyRegion { get; }
+        public int ExcludedColliderCount { get; }
 
-        public FlowFieldObstacleResult(bool maskChanged, FlowFieldCellRect dirtyRegion)
+        public FlowFieldObstacleResult(
+            bool maskChanged,
+            FlowFieldCellRect dirtyRegion,
+            int excludedColliderCount = 0)
         {
             MaskChanged = maskChanged;
             DirtyRegion = dirtyRegion;
+            ExcludedColliderCount = excludedColliderCount;
         }
     }
 
     internal sealed class FlowFieldObstaclePipeline
     {
         private Collider[] _overlapBuffer;
+        private Collider[] _targetOverlapBuffer;
         private readonly List<Collider> _dynamicObstacles = new List<Collider>(32);
         private readonly List<Bounds> _dynamicBounds = new List<Bounds>(32);
         private readonly HashSet<Collider> _dynamicSet = new HashSet<Collider>();
@@ -104,14 +110,26 @@ namespace Common.FlowField
             ValidateRequest(request);
             bool changed = false;
             FlowFieldCellRect dirty = FlowFieldCellRect.Invalid;
+            int excludedColliderCount = 0;
             if (rebuildStatic)
             {
-                ApplyStaticMask(request.Grid, request.Workspace, request.StaticBake);
+                ApplyStaticMask(
+                    request.Grid,
+                    request.Surface,
+                    request.Workspace,
+                    request.StaticBake,
+                    request.ObstacleLayer,
+                    request.CheckHeight,
+                    request.CenterOffset,
+                    request.Clearance,
+                    ref _overlapBuffer,
+                    ref _targetOverlapBuffer,
+                    out excludedColliderCount);
                 changed = true;
             }
 
             if (!rebuildDynamic)
-                return new FlowFieldObstacleResult(changed, dirty);
+                return new FlowFieldObstacleResult(changed, dirty, excludedColliderCount);
 
             if (request.UseUnregisteredSweep)
             {
@@ -163,14 +181,23 @@ namespace Common.FlowField
                 }
             }
 
-            return new FlowFieldObstacleResult(changed, dirty);
+            return new FlowFieldObstacleResult(changed, dirty, excludedColliderCount);
         }
 
         private static bool ApplyStaticMask(
             FlowFieldGridSpace grid,
+            FlowFieldSurfaceBakeData surface,
             FlowFieldWorkspace workspace,
-            FlowFieldStaticObstacleBakeData staticBake)
+            FlowFieldStaticObstacleBakeData staticBake,
+            LayerMask obstacleLayer,
+            float checkHeight,
+            float centerOffset,
+            float clearance,
+            ref Collider[] overlapBuffer,
+            ref Collider[] targetOverlapBuffer,
+            out int excludedColliderCount)
         {
+            excludedColliderCount = 0;
             if (!grid.IsValid)
                 throw new ArgumentException("Static obstacle composition requires a valid grid.", nameof(grid));
             if (workspace == null)
@@ -186,7 +213,19 @@ namespace Common.FlowField
                 return true;
             }
 
-            System.Array.Clear(workspace.StaticBlocked, 0, workspace.Capacity);
+            if (!FlowFieldObstacleMaskBuilder.BuildStatic(
+                    grid,
+                    surface,
+                    obstacleLayer,
+                    checkHeight,
+                    centerOffset,
+                    clearance,
+                    workspace.StaticBlocked,
+                    ref overlapBuffer,
+                    ref targetOverlapBuffer,
+                    out excludedColliderCount,
+                    syncTransformsBeforeQuery: true))
+                throw new InvalidOperationException("Static obstacle mask 생성에 실패했습니다.");
             return true;
         }
 

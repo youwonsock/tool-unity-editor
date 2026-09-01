@@ -86,7 +86,11 @@ namespace Common.TransformPath
 
         private void OnValidate()
         {
-            if (_pathDataConfigs != null)
+            // Runtime callers use ConfigureSegments/Rebuild explicitly. Unity can
+            // invoke OnValidate while Play Mode is running after serialized data
+            // changes elsewhere in the showcase, which would otherwise leave a
+            // freshly built sequence stale on the next frame.
+            if (!Application.isPlaying && _pathDataConfigs != null)
                 _sequenceDirty = true;
         }
 

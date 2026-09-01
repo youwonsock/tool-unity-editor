@@ -214,6 +214,11 @@ namespace Common.TransformPath
             if (string.IsNullOrEmpty(eventName))
                 return;
 
+            // Serialized receiver references can be restored after Awake during
+            // prefab/domain reloads. Refresh the interface cache at the dispatch
+            // boundary so a valid receiver is never treated as missing.
+            CacheEventSinkReference();
+
             if (_eventReceiver != null && _eventSink != null)
                 throw new InvalidOperationException("Exactly one event receiver or sink is allowed.");
             if (_eventReceiver != null)

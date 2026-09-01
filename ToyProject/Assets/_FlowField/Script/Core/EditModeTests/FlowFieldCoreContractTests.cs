@@ -48,17 +48,12 @@ namespace Common.FlowField
             FlowFieldWorkspace workspace = new FlowFieldWorkspace();
             workspace.Resize(grid.CellCount);
 
-            bool sampled = FlowFieldBilinearSampler.TrySample(
+            bool sampled = FlowFieldCellSampler.TrySample(
                 grid,
                 null,
                 workspace,
                 new Vector3(0.5f, 0f, 0.5f),
-                out FlowFieldSample sample,
-                out _,
-                out _,
-                out _,
-                out _,
-                out _);
+                out FlowFieldSample sample);
 
             Assert.That(sampled, Is.False);
             Assert.That(sample.HasSurface, Is.False);

@@ -26,11 +26,6 @@ namespace Common.FlowField
             internal Vector3 LastScale;
             internal Bounds LastBounds;
 
-#if UNITY_EDITOR
-            internal bool[] EditorInfluenceMask;
-            internal bool[] EditorInfluenceScratch;
-#endif
-
             internal Entry(
                 IFlowFieldVectorModifier modifier,
                 long registrationOrder,

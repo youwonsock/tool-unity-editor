@@ -38,7 +38,7 @@ namespace Common.FlowField.Samples
             new Vector3(5f, 0.4f, 5f),
         };
         [SerializeField] private float _goalChangeInterval = 15f;
-        [SerializeField] private float _goalInfluenceRadius = 10f;
+        [SerializeField] private float _goalInfluenceRadius = 0f;
         [SerializeField] private int _randomSeed = 20260831;
 
         [Header("Diagnostics")]
@@ -159,7 +159,7 @@ namespace Common.FlowField.Samples
                 }
 
                 ChooseRandomGoal();
-                _simulationReady = _agents.Count == _agentCount;
+                _simulationReady = _agents.Count == _agentCount && _manager.IsReady;
             }
             catch (Exception exception)
             {
@@ -179,6 +179,8 @@ namespace Common.FlowField.Samples
                 throw new InvalidOperationException("FlowFieldSampleController is faulted; call Release before use.", _fault);
             if (!_isInitialized)
                 throw new InvalidOperationException("FlowFieldSampleController is not initialized.");
+            if (!_simulationReady && _manager != null && _manager.IsReady)
+                _simulationReady = _agents.Count == _agentCount;
             if (Input.GetKeyDown(KeyCode.Space))
                 ChooseRandomGoal();
 
@@ -199,7 +201,7 @@ namespace Common.FlowField.Samples
                 throw new InvalidOperationException("FlowFieldSampleController is faulted; call Release before use.", _fault);
             if (!_isInitialized)
                 throw new InvalidOperationException("FlowFieldSampleController is not initialized.");
-            if (!_simulationReady)
+            if (!_simulationReady || _manager == null || !_manager.IsReady)
                 return;
 
             float deltaTime = Time.fixedDeltaTime;

@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: FlowFieldSample_SurfaceBake
   m_EditorClassIdentifier: 
   _formatVersion: 2
-  _revision: 3
+  _revision: 6
   _gridOriginWorld: {x: -50, y: 2, z: -50}
   _width: 200
   _depth: 200

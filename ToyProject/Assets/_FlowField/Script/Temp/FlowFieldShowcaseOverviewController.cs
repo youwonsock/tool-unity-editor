@@ -39,6 +39,7 @@ namespace Common.FlowField.Samples
         private float _obstacleTimer;
         private bool _dynamicObstacleRegistered;
         private bool _isInitialized;
+        private bool _waitingForManager;
         private bool _isFaulted;
         private Exception _fault;
         private FlowFieldSample _lastSample;
@@ -74,8 +75,8 @@ namespace Common.FlowField.Samples
             {
                 if (_manager == null || _sampleController == null || _board == null)
                     throw new InvalidOperationException("FlowField overview requires serialized Manager, Sample Controller, and Board references.");
-                if (!_manager.IsInitialized || !_manager.IsReady)
-                    throw new InvalidOperationException("FlowFieldManager must be initialized and ready before the overview controller.");
+                if (!_manager.IsInitialized)
+                    throw new InvalidOperationException("FlowFieldManager must be initialized before the overview controller.");
                 if (!_sampleController.IsInitialized)
                     throw new InvalidOperationException("FlowFieldSampleController must be initialized before the overview controller.");
                 if (_speedModifier == null || _noiseModifier == null)
@@ -89,6 +90,7 @@ namespace Common.FlowField.Samples
                     throw new ArgumentOutOfRangeException(nameof(_sampleProbe));
 
                 _sampleController.SetAutomaticGoalChanges(false);
+                _waitingForManager = !_manager.IsReady;
                 _isInitialized = true;
             }
             catch (Exception exception)
@@ -102,6 +104,8 @@ namespace Common.FlowField.Samples
         private void Start()
         {
             ThrowIfUnavailable();
+            if (_waitingForManager)
+                return;
             ApplyMode(ShowcaseMode.Baseline);
             RefreshDiagnostics();
             RenderBoard();
@@ -110,6 +114,16 @@ namespace Common.FlowField.Samples
         private void Update()
         {
             ThrowIfUnavailable();
+
+            if (_waitingForManager)
+            {
+                if (!_manager.IsReady)
+                    return;
+                _waitingForManager = false;
+                ApplyMode(ShowcaseMode.Baseline);
+                RefreshDiagnostics();
+                RenderBoard();
+            }
 
             if (Input.GetKeyDown(KeyCode.Space))
                 _sampleController.ChooseNextGoal();

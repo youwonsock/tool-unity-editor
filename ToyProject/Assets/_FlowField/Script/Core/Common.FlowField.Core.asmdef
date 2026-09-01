@@ -2,9 +2,7 @@
     "name": "Common.FlowField.Core",
     "rootNamespace": "Common.FlowField",
     "references": [
-        "Unity.Burst",
         "Unity.Collections",
-        "Unity.Jobs",
         "Unity.Mathematics"
     ],
     "includePlatforms": [],

@@ -37,6 +37,9 @@ namespace Common.FlowField
         public int Revision => _revision;
         public Vector3 GridOriginWorld => _gridOriginWorld;
         public Bounds BakeBoundsWorld => new Bounds(_bakeBoundsCenterWorld, _bakeBoundsSizeWorld);
+        internal LayerMask GroundLayer => _groundLayerMask;
+        internal float MaxSurfaceSlope => _maxSurfaceSlope;
+        internal float MaxStepHeight => _maxStepHeight;
 
         public bool HasValidData
         {
@@ -166,6 +169,45 @@ namespace Common.FlowField
             => directionIndex >= 0
                 && directionIndex < FlowFieldNeighborUtility.Count
                 && (GetNeighborMask(index) & (1 << directionIndex)) != 0;
+
+        /// <summary>
+        /// Makes a transient copy for the committed workspace. Keeping this
+        /// copy separate means a new runtime Surface bake can be staged while
+        /// consumers continue sampling the previous field.
+        /// </summary>
+        internal FlowFieldSurfaceBakeData CreateTransientCopy()
+        {
+            if (!HasValidData)
+                throw new InvalidOperationException("Surface bake data is invalid.");
+
+            FlowFieldGridSpace grid = FlowFieldGridSpace.FromCellGrid(
+                _gridOriginWorld,
+                _width,
+                _depth,
+                _cellSize);
+            var result = new FlowFieldSurfaceBakeResult(grid.CellCount);
+            for (int index = 0; index < grid.CellCount; index++)
+            {
+                if (!IsSurfaceValid(index))
+                    continue;
+
+                result.SetSurface(index, _surfaceHeights[index], _surfaceNormals[index]);
+                result.NeighborMasks[index] = _neighborMasks[index];
+            }
+
+            var copy = ScriptableObject.CreateInstance<FlowFieldSurfaceBakeData>();
+            copy.name = $"{name}_Committed";
+            copy.hideFlags = HideFlags.HideAndDontSave;
+            copy.Apply(
+                new FlowFieldSurfaceBakeSettings(
+                    grid,
+                    BakeBoundsWorld,
+                    _groundLayerMask,
+                    _maxSurfaceSlope,
+                    _maxStepHeight),
+                result);
+            return copy;
+        }
 
         /// <summary>
         /// 유효한 Surface 셀들의 높이 범위를 계산합니다. 유효한 셀이 없는

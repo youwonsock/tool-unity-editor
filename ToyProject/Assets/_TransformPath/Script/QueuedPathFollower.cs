@@ -48,8 +48,10 @@ namespace Common.TransformPath
         [SerializeField] private string _speedParamName = "Speed";
 
         private bool _isBlocked = false;
+        private bool _isManuallyBlocked = false;
         private float _blockTimer = 0f;
         private bool _isMoving = false;
+        private bool _isExternallyPaused = false;
         private Action _onComplete;
         private int _speedParamHash;
         private float _currentSpeedMultiplier = 1f;
@@ -250,6 +252,7 @@ namespace Common.TransformPath
             else
             {
                 _isMoving = false;
+                _isExternallyPaused = false;
                 _isBlocked = false;
                 _blockTimer = 0f;
                 _onComplete = null;
@@ -301,7 +304,7 @@ namespace Common.TransformPath
                 throw new InvalidOperationException("QueuedPathFollower is faulted; call Release before use.", _fault);
             if (!_isInitialized)
                 throw new InvalidOperationException("QueuedPathFollower is not initialized.");
-            if (!_isMoving)
+            if (!_isMoving || _isExternallyPaused)
                 return;
 
             float currentNormalized = GlobalNormalizedTime;
@@ -399,6 +402,7 @@ namespace Common.TransformPath
             ThrowIfFaulted();
             if (!_isInitialized)
                 throw new InvalidOperationException("QueuedPathFollower is not initialized.");
+            _isExternallyPaused = true;
             _pathFollower.PauseMove(pauseAnimation);
         }
 
@@ -410,6 +414,9 @@ namespace Common.TransformPath
             ThrowIfFaulted();
             if (!_isInitialized)
                 throw new InvalidOperationException("QueuedPathFollower is not initialized.");
+            _isExternallyPaused = false;
+            if (_isBlocked)
+                return;
             _pathFollower.ResumeMove(resumeAnimation);
         }
 
@@ -427,8 +434,14 @@ namespace Common.TransformPath
                 return;
 
             bool wasBlocked = _isBlocked;
+            // A negative duration means that an explicit block remains active
+            // until ForceUnblock. This is required for a queue leader because it
+            // has no follower ahead to keep the automatic block alive.
+            _isManuallyBlocked = duration < 0f;
             _isBlocked = true;
-            _blockTimer = duration > 0f ? duration : _resumeMovementDelay;
+            _blockTimer = duration > 0f
+                ? duration
+                : _isManuallyBlocked ? -1f : _resumeMovementDelay;
 
             _pathFollower.PauseMove();
 
@@ -444,6 +457,7 @@ namespace Common.TransformPath
             ThrowIfFaulted();
             if (!_isInitialized)
                 throw new InvalidOperationException("QueuedPathFollower is not initialized.");
+            _isManuallyBlocked = false;
             if (!_isBlocked)
                 return;
 
@@ -481,6 +495,9 @@ namespace Common.TransformPath
         {
             if (_manager == null)
                 throw new InvalidOperationException("QueuedPathFollower manager reference is missing.");
+
+            if (_isManuallyBlocked)
+                return;
 
             // 블로킹 타이머 처리
             if (_isBlocked)
@@ -622,7 +639,9 @@ namespace Common.TransformPath
         private void ResetMoveState()
         {
             _isMoving = false;
+            _isExternallyPaused = false;
             _isBlocked = false;
+            _isManuallyBlocked = false;
             _blockTimer = 0f;
             _speedSmoothSuspended = false;
             _currentSpeedMultiplier = 1f;
@@ -631,13 +650,15 @@ namespace Common.TransformPath
 
         private void ResumeFromBlock()
         {
+            _isManuallyBlocked = false;
             _isBlocked = false;
             _blockTimer = 0f;
             _speedSmoothSuspended = false;
 
             _currentSpeedMultiplier = _manager.MinSpeedMultiplier;
 
-            _pathFollower.ResumeMove();
+            if (!_isExternallyPaused)
+                _pathFollower.ResumeMove();
             OnResumed?.Invoke(this);
         }
 

@@ -39,7 +39,9 @@ namespace Common.FlowField
 
             if (!grid.IsValid
                 || !FlowFieldBakeBoundsUtility.TryValidateCellCount(grid.Width, grid.Depth, out _)
-                || !TryValidateSurfaceBake(out _))
+                || !TryValidateSurfaceBake(
+                    out _,
+                    includeStaticGoal: BakeMode != FlowFieldBakeMode.StaticBaked))
                 return;
 
             if (!FlowFieldGridSpace.IsFinite(_defaultFlowDirection)
@@ -50,15 +52,28 @@ namespace Common.FlowField
 
             if (!Application.isPlaying)
                 RefreshEditorPreview(grid);
-            FlowFieldGoalResolution goal = FlowFieldGoalPipeline.Resolve(
-                grid,
-                _goalTransform,
-                _hasExplicitGoal,
-                _explicitGoalWorld,
-                _goalInfluenceRadius);
+            FlowFieldGoalResolution goal = BakeMode == FlowFieldBakeMode.StaticBaked
+                && _staticBakeData != null
+                ? new FlowFieldGoalResolution(
+                    _staticBakeData.HasGoal,
+                    _staticBakeData.HasGoal,
+                    0,
+                    0,
+                    _staticBakeData.ResolvedGoalIndex,
+                    _staticBakeData.GoalInfluenceRadius,
+                    _staticBakeData.RequestedGoalWorld)
+                : FlowFieldGoalPipeline.Resolve(
+                    grid,
+                    _goalTransform,
+                    _hasExplicitGoal,
+                    _explicitGoalWorld,
+                    _goalInfluenceRadius);
+            FlowFieldSurfaceBakeData gizmoSurface = EditorSurfaceBakeData;
+            if (gizmoSurface == null || !gizmoSurface.HasValidData)
+                return;
             FlowFieldGizmoDrawer.Draw(new FlowFieldGizmoRequest(
                 grid,
-                _surfaceBakeData,
+                gizmoSurface,
                 ResolveGizmoWorkspace(),
                 _cellSize,
                 goal.IsValid,
@@ -77,6 +92,21 @@ namespace Common.FlowField
         private void RefreshEditorPreview(FlowFieldGridSpace grid)
         {
             InitServices();
+            if (BakeMode == FlowFieldBakeMode.StaticBaked)
+            {
+                if (_staticBakeData == null || !_staticBakeData.HasValidData)
+                    return;
+                _editorPreview.LoadStatic(
+                    grid,
+                    _staticBakeData,
+                    EditorSurfaceBakeData,
+                    FlowFieldVectorUtility.NormalizeDefaultDirection(_defaultFlowDirection),
+                    _obstacleCheckHeight,
+                    _obstacleCheckCenterOffset,
+                    _modifierPipeline);
+                return;
+            }
+
             FlowFieldGoalResolution goal = FlowFieldGoalPipeline.Resolve(
                 grid,
                 _goalTransform,
@@ -85,19 +115,19 @@ namespace Common.FlowField
                 _goalInfluenceRadius);
             _editorPreview.Refresh(
                 grid,
-                _surfaceBakeData,
-                _coarseTopologyData,
-                _fineRingCoarseRadius,
+                EditorSurfaceBakeData,
                 FlowFieldVectorUtility.NormalizeDefaultDirection(_defaultFlowDirection),
                 _obstacleLayer,
                 _obstacleCheckHeight,
                 _obstacleCheckCenterOffset,
                 _obstacleClearance,
+                _enableUnregisteredObstacleSweep,
                 _obstaclePipeline,
                 _modifierPipeline,
                 goal.IsValid,
                 goal.LocalX,
                 goal.LocalZ,
+                goal.RequestedWorld,
                 goal.InfluenceRadius,
                 _refreshRate);
         }

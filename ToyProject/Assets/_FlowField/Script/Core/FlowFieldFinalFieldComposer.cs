@@ -98,7 +98,7 @@ namespace Common.FlowField
         {
             if (!surface.IsSurfaceValid(index)
                 || workspace.Blocked[index]
-                || (workspace.GoalFlags[index] & FlowFieldGoalFlags.Anchor) != 0)
+                || (workspace.GoalFlags[index] & (FlowFieldGoalFlags.Anchor | FlowFieldGoalFlags.Unreachable)) != 0)
                 return;
 
             workspace.ModifierInfluence[index] = true;
@@ -133,8 +133,10 @@ namespace Common.FlowField
             {
                 if (!surface.IsSurfaceValid(index))
                 {
+                    if (!workspace.HasActiveGoal)
+                        workspace.NextCells[index] = -2;
                     workspace.FinalDirections[index] = Vector3.zero;
-                    workspace.FinalSpeedMultipliers[index] = 1f;
+                    workspace.FinalSpeedMultipliers[index] = 0f;
                     continue;
                 }
 
@@ -142,7 +144,13 @@ namespace Common.FlowField
                 bool isDefaultDirection = false;
                 if (workspace.Blocked[index])
                 {
+                    if (!workspace.HasActiveGoal)
+                        workspace.NextCells[index] = -2;
                     direction = workspace.EscapeDirections[index];
+                }
+                else if ((workspace.GoalFlags[index] & FlowFieldGoalFlags.Unreachable) != 0)
+                {
+                    direction = Vector3.zero;
                 }
                 else if ((workspace.GoalFlags[index] & FlowFieldGoalFlags.Directed) != 0)
                 {
@@ -150,11 +158,16 @@ namespace Common.FlowField
                 }
                 else
                 {
+                    if (!workspace.HasActiveGoal)
+                        workspace.NextCells[index] = -1;
                     direction = defaultDirection;
                     isDefaultDirection = true;
                 }
 
-                var baseState = new FlowFieldVectorState(direction, 1f);
+                float speed = (workspace.GoalFlags[index] & FlowFieldGoalFlags.Unreachable) != 0
+                    ? 0f
+                    : 1f;
+                var baseState = new FlowFieldVectorState(direction, speed);
                 if (isDefaultDirection)
                 {
                     direction = FlowFieldVectorUtility.ProjectDefaultOnSurface(
@@ -191,6 +204,70 @@ namespace Common.FlowField
                 || workspace.FinalSpeedMultipliers == null
                 || workspace.ModifierInfluence == null)
                 throw new ArgumentException("FlowField compose workspace arrays are not initialized.", nameof(workspace));
+        }
+    }
+
+    /// <summary>
+    /// Direct cell sampler for the committed field. A position is resolved to
+    /// its owning cell; no interpolation can leak a direction across a wall.
+    /// </summary>
+    internal static class FlowFieldCellSampler
+    {
+        internal static bool TrySample(
+            FlowFieldGridSpace grid,
+            FlowFieldSurfaceBakeData surface,
+            FlowFieldWorkspace workspace,
+            Vector3 worldPosition,
+            out FlowFieldSample sample)
+        {
+            sample = FlowFieldSample.Stopped;
+            if (!grid.IsValid
+                || surface == null
+                || !surface.HasValidData
+                || workspace == null
+                || workspace.Capacity != grid.CellCount
+                || !grid.TryWorldToLocal(worldPosition, out int x, out int z))
+                return false;
+
+            int index = grid.ToFlatIndex(x, z);
+            if (!surface.IsSurfaceValid(index))
+                return true;
+
+            Vector3 normal = FlowFieldVectorUtility.ValidateSurfaceNormal(surface.GetSurfaceNormal(index));
+            Vector3 direction = workspace.FinalDirections[index];
+            if (direction.sqrMagnitude > FlowFieldVectorUtility.DIRECTION_EPSILON_SQR)
+                direction = Vector3.ProjectOnPlane(direction, normal).normalized;
+            else
+                direction = Vector3.zero;
+
+            sample = new FlowFieldSample(
+                direction,
+                workspace.FinalSpeedMultipliers[index],
+                normal,
+                true);
+            return true;
+        }
+    }
+
+    internal readonly struct FlowFieldModifierLayer
+    {
+        public IFlowFieldVectorModifier Modifier { get; }
+        public bool[] InfluenceMask { get; }
+        public IReadOnlyList<int> InfluenceIndices { get; }
+
+        public FlowFieldModifierLayer(IFlowFieldVectorModifier modifier, bool[] influenceMask)
+            : this(modifier, influenceMask, null)
+        {
+        }
+
+        public FlowFieldModifierLayer(
+            IFlowFieldVectorModifier modifier,
+            bool[] influenceMask,
+            IReadOnlyList<int> influenceIndices)
+        {
+            Modifier = modifier;
+            InfluenceMask = influenceMask;
+            InfluenceIndices = influenceIndices;
         }
     }
 }

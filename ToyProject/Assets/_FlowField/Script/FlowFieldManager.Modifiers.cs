@@ -101,7 +101,7 @@ namespace Common.FlowField
         private FlowFieldModifierBuildRequest CreateModifierBuildRequest(FlowFieldWorkspace workspace)
             => new FlowFieldModifierBuildRequest(
                 _context.Grid,
-                _surfaceBakeData,
+                ActiveSurfaceBakeData,
                 workspace,
                 _obstacleCheckHeight,
                 _obstacleCheckCenterOffset);

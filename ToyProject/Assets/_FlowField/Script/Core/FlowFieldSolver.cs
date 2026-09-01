@@ -9,6 +9,7 @@ namespace Common.FlowField
         None = 0,
         Directed = 1 << 0,
         Anchor = 1 << 1,
+        Unreachable = 1 << 2,
     }
 
     internal static class FlowFieldSolver
@@ -69,7 +70,7 @@ namespace Common.FlowField
             return hasWalkableCell;
         }
 
-        public static bool BuildGoal(
+        public static bool PrepareGoal(
             FlowFieldGridSpace grid,
             FlowFieldSurfaceBakeData surface,
             FlowFieldWorkspace workspace,
@@ -102,6 +103,30 @@ namespace Common.FlowField
                 surfaceAnchorIndex,
                 useDistanceTieEpsilon: true);
             if (resolvedGoalIndex < 0)
+                return false;
+
+            workspace.SetResolvedGoal(resolvedGoalIndex);
+            FlowFieldGraphTraversal.BuildTopologyMasks(grid, surface, workspace);
+            return true;
+        }
+
+        public static bool BuildGoal(
+            FlowFieldGridSpace grid,
+            FlowFieldSurfaceBakeData surface,
+            FlowFieldWorkspace workspace,
+            int requestedGoalX,
+            int requestedGoalZ,
+            float influenceRadius,
+            out int resolvedGoalIndex)
+        {
+            if (!PrepareGoal(
+                    grid,
+                    surface,
+                    workspace,
+                    requestedGoalX,
+                    requestedGoalZ,
+                    influenceRadius,
+                    out resolvedGoalIndex))
                 return false;
 
             BuildIntegration(grid, surface, workspace, resolvedGoalIndex);
@@ -141,21 +166,21 @@ namespace Common.FlowField
             int goalIndex)
         {
             for (int index = 0; index < grid.CellCount; index++)
-            {
                 workspace.Costs[index] = UNREACHABLE;
-                workspace.HeapPositions[index] = -1;
-            }
 
-            workspace.HeapCount = 0;
+            int head = 0;
+            int tail = 0;
             workspace.Costs[goalIndex] = 0;
-            FlowFieldDijkstraHeap.InsertOrDecrease(workspace, goalIndex);
-            while (workspace.HeapCount > 0)
+            workspace.Queue[tail++] = goalIndex;
+            while (head < tail)
             {
-                int current = FlowFieldDijkstraHeap.Pop(workspace);
+                int current = workspace.Queue[head++];
                 grid.FromFlatIndex(current, out int currentX, out int currentZ);
                 int currentCost = workspace.Costs[current];
                 for (int directionIndex = 0; directionIndex < FlowFieldNeighborUtility.Count; directionIndex++)
                 {
+                    if ((workspace.TopologyMasks[current] & (1 << directionIndex)) == 0)
+                        continue;
                     if (!FlowFieldGraphTraversal.CanTraverse(
                             grid,
                             surface,
@@ -167,16 +192,12 @@ namespace Common.FlowField
                             out int neighbor))
                         continue;
 
-                    int transitionCost = FlowFieldGraphTraversal.GetTransitionCost(grid, surface, current, neighbor);
-                    if (currentCost > UNREACHABLE - transitionCost)
-                        continue;
-
-                    int candidate = currentCost + transitionCost;
+                    int candidate = currentCost + 1;
                     if (candidate >= workspace.Costs[neighbor])
                         continue;
 
                     workspace.Costs[neighbor] = candidate;
-                    FlowFieldDijkstraHeap.InsertOrDecrease(workspace, neighbor);
+                    workspace.Queue[tail++] = neighbor;
                 }
             }
         }
@@ -189,15 +210,30 @@ namespace Common.FlowField
         {
             for (int index = 0; index < grid.CellCount; index++)
             {
+                workspace.NextCells[index] = !surface.IsSurfaceValid(index)
+                    ? -2
+                    : workspace.Blocked[index]
+                        ? -2
+                        : !workspace.InfluenceMask[index]
+                            ? -1
+                            : -3;
                 if (!FlowFieldGraphTraversal.IsCellTraversable(surface, workspace, index)
                     || workspace.Costs[index] == UNREACHABLE)
+                {
+                    if (FlowFieldGraphTraversal.IsCellTraversable(surface, workspace, index))
+                    {
+                        workspace.GoalFlags[index] = FlowFieldGoalFlags.Unreachable;
+                        workspace.NextCells[index] = -3;
+                    }
                     continue;
+                }
 
                 workspace.GoalFlags[index] = FlowFieldGoalFlags.Directed;
                 if (index == goalIndex)
                 {
                     workspace.GoalFlags[index] |= FlowFieldGoalFlags.Anchor;
                     workspace.GoalDirections[index] = Vector3.zero;
+                    workspace.NextCells[index] = index;
                     continue;
                 }
 
@@ -206,6 +242,8 @@ namespace Common.FlowField
                 int bestTotalCost = UNREACHABLE;
                 for (int directionIndex = 0; directionIndex < FlowFieldNeighborUtility.Count; directionIndex++)
                 {
+                    if ((workspace.TopologyMasks[index] & (1 << directionIndex)) == 0)
+                        continue;
                     if (!FlowFieldGraphTraversal.CanTraverse(
                             grid,
                             surface,
@@ -221,25 +259,33 @@ namespace Common.FlowField
                     if (neighborCost == UNREACHABLE)
                         continue;
 
-                    int transitionCost = FlowFieldGraphTraversal.GetTransitionCost(grid, surface, index, neighbor);
-                    if (neighborCost > UNREACHABLE - transitionCost)
+                    // Every edge has cost one.  Selecting exactly the previous
+                    // wave makes the direction deterministic and prevents
+                    // zero-cost cycles; ties are resolved by flat index.
+                    if (neighborCost != workspace.Costs[index] - 1)
                         continue;
 
-                    int totalCost = neighborCost + transitionCost;
-                    if (totalCost < bestTotalCost
-                        || totalCost == bestTotalCost && neighbor < bestIndex)
+                    if (neighborCost < bestTotalCost
+                        || neighborCost == bestTotalCost && (bestIndex < 0 || neighbor < bestIndex))
                     {
-                        bestTotalCost = totalCost;
+                        bestTotalCost = neighborCost;
                         bestIndex = neighbor;
                     }
                 }
 
                 if (bestIndex < 0)
+                {
+                    workspace.GoalFlags[index] = FlowFieldGoalFlags.Unreachable;
+                    workspace.NextCells[index] = -3;
                     continue;
+                }
 
-                Vector3 direction = surface.GetCellCenter(grid, bestIndex)
-                    - surface.GetCellCenter(grid, index);
-                workspace.GoalDirections[index] = FlowFieldGraphTraversal.NormalizeOrZero(direction);
+                Vector3 currentPosition = surface.GetCellCenter(grid, index);
+                Vector3 nextPosition = surface.GetCellCenter(grid, bestIndex);
+                Vector3 normal = surface.GetSurfaceNormal(index);
+                Vector3 projected = Vector3.ProjectOnPlane(nextPosition - currentPosition, normal);
+                workspace.GoalDirections[index] = FlowFieldGraphTraversal.NormalizeOrZero(projected);
+                workspace.NextCells[index] = bestIndex;
             }
         }
 
@@ -259,5 +305,180 @@ namespace Common.FlowField
             if (workspace.Capacity != grid.CellCount)
                 throw new ArgumentException("FlowField solver workspace capacity must match the grid.", nameof(workspace));
         }
+    }
+
+    /// <summary>
+    /// Solver들이 공유하는 그래프 탐색 헬퍼 모음.
+    /// </summary>
+    internal static class FlowFieldGraphTraversal
+    {
+        private const float DISTANCE_TIE_EPSILON = 0.000001f;
+
+        public static void BuildTopologyMasks(
+            FlowFieldGridSpace grid,
+            FlowFieldSurfaceBakeData surface,
+            FlowFieldWorkspace workspace)
+        {
+            if (!grid.IsValid)
+                throw new System.ArgumentException("Topology mask requires a valid grid.", nameof(grid));
+            if (surface == null)
+                throw new System.ArgumentNullException(nameof(surface));
+            if (!surface.HasValidData)
+                throw new System.ArgumentException("Topology mask requires a valid surface bake.", nameof(surface));
+            if (workspace == null)
+                throw new System.ArgumentNullException(nameof(workspace));
+            if (workspace.Capacity != grid.CellCount
+                || workspace.TopologyMasks == null
+                || workspace.TopologyMasks.Length != grid.CellCount)
+                throw new System.ArgumentException("Topology mask workspace capacity must match the grid.", nameof(workspace));
+
+            System.Array.Clear(workspace.TopologyMasks, 0, workspace.TopologyMasks.Length);
+            for (int index = 0; index < grid.CellCount; index++)
+            {
+                if (!IsCellTraversable(surface, workspace, index))
+                    continue;
+
+                grid.FromFlatIndex(index, out int x, out int z);
+                byte mask = 0;
+                for (int directionIndex = 0; directionIndex < FlowFieldNeighborUtility.Count; directionIndex++)
+                {
+                    if (CanTraverse(
+                            grid,
+                            surface,
+                            workspace,
+                            index,
+                            x,
+                            z,
+                            directionIndex,
+                            out _))
+                    {
+                        mask |= (byte)(1 << directionIndex);
+                    }
+                }
+
+                workspace.TopologyMasks[index] = mask;
+            }
+        }
+
+        public static int FindNearestSurfaceAnchor(
+            FlowFieldGridSpace grid,
+            FlowFieldSurfaceBakeData surface,
+            int requestedGoalX,
+            int requestedGoalZ)
+        {
+            int requested = grid.ToFlatIndex(requestedGoalX, requestedGoalZ);
+            if (surface.IsSurfaceValid(requested))
+                return requested;
+
+            int bestIndex = -1;
+            long bestDistanceSqr = long.MaxValue;
+            for (int index = 0; index < grid.CellCount; index++)
+            {
+                if (!surface.IsSurfaceValid(index))
+                    continue;
+
+                grid.FromFlatIndex(index, out int x, out int z);
+                long dx = x - (long)requestedGoalX;
+                long dz = z - (long)requestedGoalZ;
+                long distanceSqr = dx * dx + dz * dz;
+                if (distanceSqr < bestDistanceSqr
+                    || distanceSqr == bestDistanceSqr && index < bestIndex)
+                {
+                    bestIndex = index;
+                    bestDistanceSqr = distanceSqr;
+                }
+            }
+
+            return bestIndex;
+        }
+
+        public static int FindNearestWalkableGoal(
+            FlowFieldGridSpace grid,
+            FlowFieldSurfaceBakeData surface,
+            FlowFieldWorkspace workspace,
+            int anchorIndex,
+            bool useDistanceTieEpsilon)
+        {
+            if (workspace.InfluenceMask[anchorIndex] && !workspace.Blocked[anchorIndex])
+                return anchorIndex;
+
+            Vector3 anchor = surface.GetCellCenter(grid, anchorIndex);
+            int bestIndex = -1;
+            float bestDistanceSqr = float.PositiveInfinity;
+            for (int index = 0; index < grid.CellCount; index++)
+            {
+                if (!workspace.InfluenceMask[index]
+                    || !surface.IsSurfaceValid(index)
+                    || workspace.Blocked[index])
+                    continue;
+
+                float distanceSqr = (surface.GetCellCenter(grid, index) - anchor).sqrMagnitude;
+                bool replace = useDistanceTieEpsilon
+                    ? distanceSqr < bestDistanceSqr - DISTANCE_TIE_EPSILON
+                        || Mathf.Abs(distanceSqr - bestDistanceSqr) <= DISTANCE_TIE_EPSILON
+                            && index < bestIndex
+                    : distanceSqr < bestDistanceSqr;
+                if (replace)
+                {
+                    bestIndex = index;
+                    bestDistanceSqr = distanceSqr;
+                }
+            }
+
+            return bestIndex;
+        }
+
+        public static bool CanTraverse(
+            FlowFieldGridSpace grid,
+            FlowFieldSurfaceBakeData surface,
+            FlowFieldWorkspace workspace,
+            int current,
+            int currentX,
+            int currentZ,
+            int directionIndex,
+            out int neighbor)
+        {
+            neighbor = -1;
+            if (!surface.HasConnection(current, directionIndex))
+                return false;
+
+            int dx = FlowFieldNeighborUtility.DeltaX[directionIndex];
+            int dz = FlowFieldNeighborUtility.DeltaZ[directionIndex];
+            int nx = currentX + dx;
+            int nz = currentZ + dz;
+            if (!grid.IsLocalInBounds(nx, nz))
+                return false;
+
+            neighbor = grid.ToFlatIndex(nx, nz);
+            if (!IsCellTraversable(surface, workspace, neighbor))
+                return false;
+
+            if (!FlowFieldNeighborUtility.IsDiagonal(directionIndex))
+                return true;
+
+            int firstDirection = dx > 0 ? 0 : 1;
+            int secondDirection = dz > 0 ? 2 : 3;
+            int orthogonalX = grid.ToFlatIndex(currentX + dx, currentZ);
+            int orthogonalZ = grid.ToFlatIndex(currentX, currentZ + dz);
+            return surface.HasConnection(current, firstDirection)
+                && surface.HasConnection(current, secondDirection)
+                && IsCellTraversable(surface, workspace, orthogonalX)
+                && IsCellTraversable(surface, workspace, orthogonalZ);
+        }
+
+        public static bool IsCellTraversable(
+            FlowFieldSurfaceBakeData surface,
+            FlowFieldWorkspace workspace,
+            int index)
+            => index >= 0
+                && index < workspace.Capacity
+                && surface.IsSurfaceValid(index)
+                && workspace.InfluenceMask[index]
+                && !workspace.Blocked[index];
+
+        public static Vector3 NormalizeOrZero(Vector3 direction)
+            => direction.sqrMagnitude > FlowFieldVectorUtility.DIRECTION_EPSILON_SQR
+                ? direction.normalized
+                : Vector3.zero;
     }
 }

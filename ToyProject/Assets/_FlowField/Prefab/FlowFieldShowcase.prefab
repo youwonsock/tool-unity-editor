@@ -3526,7 +3526,7 @@ MonoBehaviour:
   - {x: -35, y: 0.4, z: -5}
   - {x: 5, y: 0.4, z: 5}
   _goalChangeInterval: 15
-  _goalInfluenceRadius: 10
+  _goalInfluenceRadius: 0
   _randomSeed: 20260831
   _diagnosticsInterval: 1
   _deepOverlapDistance: 0.45
@@ -7439,11 +7439,8 @@ MonoBehaviour:
   _surfaceBakeData: {fileID: 11400000, guid: 98672b884918a2847891f88b3cad7ea8, type: 2}
   _staticObstacleBakeData: {fileID: 11400000, guid: 194c48ce1cd2d3b4eb5b8e7fa18efe73,
     type: 2}
-  _coarseTopologyData: {fileID: 11400000, guid: d3a89fc9058bc914d837771f5906dd6d,
-    type: 2}
-  _coarseCellMultiplier: 4
-  _fineRingCoarseRadius: 1
-  _coarseWalkableRatio: 0.25
+  _frontierComputeShader: {fileID: 7200000, guid: 9bcae8d0ec8446a2b2e8ef1e3d0d8f45, type: 3}
+  _maxGpuWaves: 1024
   _obstacleLayer:
     serializedVersion: 2
     m_Bits: 512
@@ -7452,6 +7449,7 @@ MonoBehaviour:
   _obstacleClearance: 0.3
   _enableUnregisteredObstacleSweep: 0
   _refreshRate: 0.2
+  _bakeMode: 0
   _defaultFlowDirection: {x: 0, y: 0, z: 1}
   _goalTransform: {fileID: 1757447674168876635}
   _goalInfluenceRadius: 0
