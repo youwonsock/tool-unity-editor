@@ -208,6 +208,7 @@ namespace Common.FlowField
             FlowFieldWorkspace workspace,
             int goalIndex)
         {
+            grid.FromFlatIndex(goalIndex, out int goalX, out int goalZ);
             for (int index = 0; index < grid.CellCount; index++)
             {
                 workspace.NextCells[index] = !surface.IsSurfaceValid(index)
@@ -239,7 +240,8 @@ namespace Common.FlowField
 
                 grid.FromFlatIndex(index, out int x, out int z);
                 int bestIndex = -1;
-                int bestTotalCost = UNREACHABLE;
+                int bestGoalScore = 0;
+                bool hasBest = false;
                 for (int directionIndex = 0; directionIndex < FlowFieldNeighborUtility.Count; directionIndex++)
                 {
                     if ((workspace.TopologyMasks[index] & (1 << directionIndex)) == 0)
@@ -259,17 +261,27 @@ namespace Common.FlowField
                     if (neighborCost == UNREACHABLE)
                         continue;
 
-                    // Every edge has cost one.  Selecting exactly the previous
-                    // wave makes the direction deterministic and prevents
-                    // zero-cost cycles; ties are resolved by flat index.
+                    // Every edge has cost one. Selecting exactly the previous
+                    // wave prevents zero-cost cycles. Among those candidates,
+                    // prefer the one that is closest to the resolved Goal in
+                    // XZ; flat index is the deterministic final tie-breaker.
                     if (neighborCost != workspace.Costs[index] - 1)
                         continue;
 
-                    if (neighborCost < bestTotalCost
-                        || neighborCost == bestTotalCost && (bestIndex < 0 || neighbor < bestIndex))
+                    int goalScore = FlowFieldGraphTraversal.CalculateGoalAlignmentScore(
+                        x,
+                        z,
+                        goalX,
+                        goalZ,
+                        FlowFieldNeighborUtility.DeltaX[directionIndex],
+                        FlowFieldNeighborUtility.DeltaZ[directionIndex]);
+                    if (!hasBest
+                        || goalScore > bestGoalScore
+                        || goalScore == bestGoalScore && neighbor < bestIndex)
                     {
-                        bestTotalCost = neighborCost;
+                        bestGoalScore = goalScore;
                         bestIndex = neighbor;
+                        hasBest = true;
                     }
                 }
 
@@ -480,5 +492,26 @@ namespace Common.FlowField
             => direction.sqrMagnitude > FlowFieldVectorUtility.DIRECTION_EPSILON_SQR
                 ? direction.normalized
                 : Vector3.zero;
+
+        /// <summary>
+        /// Returns a deterministic integer score equivalent to minimizing the
+        /// candidate cell's squared XZ distance to the Goal. The step is one
+        /// of the eight immediate neighbor offsets, so the score remains
+        /// within signed 32-bit range for the supported grid size.
+        /// </summary>
+        internal static int CalculateGoalAlignmentScore(
+            int currentX,
+            int currentZ,
+            int goalX,
+            int goalZ,
+            int stepX,
+            int stepZ)
+        {
+            int goalDeltaX = goalX - currentX;
+            int goalDeltaZ = goalZ - currentZ;
+            int dot = stepX * goalDeltaX + stepZ * goalDeltaZ;
+            int stepLengthSqr = stepX * stepX + stepZ * stepZ;
+            return 2 * dot - stepLengthSqr;
+        }
     }
 }

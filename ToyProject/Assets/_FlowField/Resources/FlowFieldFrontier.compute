@@ -219,8 +219,14 @@ void BuildFlowDirections(uint3 id : SV_DispatchThreadID)
 
     int x = (int)(index % _Width);
     int z = (int)(index / _Width);
+    int goalX = (int)(_GoalIndex % _Width);
+    int goalZ = (int)(_GoalIndex / _Width);
+    int goalDeltaX = goalX - x;
+    int goalDeltaZ = goalZ - z;
     uint topology = flags >> NEIGHBOR_SHIFT;
     uint best = _CellCount;
+    int bestScore = 0;
+    bool hasBest = false;
     for (uint direction = 0u; direction < 8u; direction++)
     {
         if ((topology & (1u << direction)) == 0u)
@@ -232,11 +238,22 @@ void BuildFlowDirections(uint3 id : SV_DispatchThreadID)
         uint neighbor = Flat(nx, nz);
         if (LoadCost(neighbor) != cost - 1u)
             continue;
-        if (neighbor < best)
+
+        int stepX = DX[direction];
+        int stepZ = DZ[direction];
+        int goalScore = 2 * (stepX * goalDeltaX + stepZ * goalDeltaZ)
+            - (stepX * stepX + stepZ * stepZ);
+        if (!hasBest
+            || goalScore > bestScore
+            || goalScore == bestScore && neighbor < best)
+        {
+            hasBest = true;
+            bestScore = goalScore;
             best = neighbor;
+        }
     }
 
-    if (best == _CellCount)
+    if (!hasBest)
     {
         result.NextCell = -3;
         StoreResult(index, result);

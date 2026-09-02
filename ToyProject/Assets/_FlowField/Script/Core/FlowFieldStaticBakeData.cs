@@ -12,7 +12,9 @@ namespace Common.FlowField
     /// </summary>
     public sealed class FlowFieldStaticBakeData : ScriptableObject
     {
-        internal const int CURRENT_FORMAT_VERSION = 2;
+        // Direction predecessor selection is part of the serialized base
+        // field, so changing its deterministic tie-break requires a ReBake.
+        internal const int CURRENT_FORMAT_VERSION = 3;
         private const float SIGNATURE_EPSILON = 0.0001f;
         private const int MIN_NEXT_SENTINEL = -3;
 
