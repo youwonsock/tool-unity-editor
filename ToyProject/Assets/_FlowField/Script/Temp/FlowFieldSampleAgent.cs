@@ -136,8 +136,8 @@ namespace Common.FlowField.Samples
             if (!IsFinite(deltaTime) || deltaTime <= 0f)
                 throw new ArgumentOutOfRangeException(nameof(deltaTime));
 
-            if (!_provider.IsInitialized || !_provider.IsReady)
-                throw new InvalidOperationException("FlowField provider is not ready.");
+            if (_provider == null || !_provider.IsInitialized || !_provider.IsReady)
+                return;
 
             FlowFieldSample sample = _provider.Sample(Position);
             Vector3 desiredVelocity = Vector3.zero;
@@ -152,8 +152,6 @@ namespace Common.FlowField.Samples
             }
 
             Vector3 currentVelocity = _rigidbody.velocity;
-            currentVelocity.y = 0f;
-            desiredVelocity.y = 0f;
 
             Vector3 velocityDelta = desiredVelocity - currentVelocity;
             float acceleration = desiredVelocity.sqrMagnitude > 0.0001f
@@ -187,8 +185,7 @@ namespace Common.FlowField.Samples
             _rigidbody.angularDrag = 0f;
             _rigidbody.interpolation = RigidbodyInterpolation.None;
             _rigidbody.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
-            _rigidbody.constraints = RigidbodyConstraints.FreezePositionY
-                | RigidbodyConstraints.FreezeRotation;
+            _rigidbody.constraints = RigidbodyConstraints.FreezeRotation;
             _rigidbody.solverIterations = 8;
             _rigidbody.solverVelocityIterations = 2;
             _rigidbody.maxDepenetrationVelocity = 10f;

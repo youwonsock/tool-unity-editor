@@ -1,10 +1,11 @@
 using System;
 using UnityEngine;
+using Common.TransformPath.Samples;
 
 namespace Common.FlowField.Samples
 {
     /// <summary>
-    /// FlowField 공개 기능을 한 씬에서 전환해 확인하는 샘플 전용 컨트롤러입니다.
+    /// FlowField 공개 기능을 한 씬에서 수동으로 전환해 확인하는 샘플 전용 컨트롤러입니다.
     /// </summary>
     [DefaultExecutionOrder(10)]
     public sealed class FlowFieldShowcaseOverviewController : MonoBehaviour
@@ -14,7 +15,6 @@ namespace Common.FlowField.Samples
             Baseline,
             SpeedModifier,
             NoiseModifier,
-            DynamicObstacle,
             SampleAndClamp,
         }
 
@@ -26,20 +26,20 @@ namespace Common.FlowField.Samples
         [SerializeField] private Collider _dynamicObstacle;
         [SerializeField] private GameObject _dynamicObstacleObject;
         [SerializeField] private FlowFieldOverviewBoard _board;
+        [SerializeField] private TransformPathFreeCamera _freeCamera;
+        [SerializeField] private Transform _mapBoundsRoot;
+        [SerializeField] private Transform _agentRoot;
 
-        [Header("Showcase Timing")]
-        [SerializeField] private float _modeInterval = 8f;
-        [SerializeField] private float _goalInterval = 15f;
-        [SerializeField] private float _obstacleMoveInterval = 0.5f;
-        [SerializeField] private Vector3 _sampleProbe = new Vector3(0f, 0.4f, 0f);
+        [Header("Showcase Defaults")]
+        [SerializeField] private bool _dynamicObstacleStartsEnabled = true;
+        [SerializeField] private Vector3 _sampleProbe = new Vector3(-35f, 1f, 5f);
 
         private ShowcaseMode _mode;
-        private float _modeTimer;
-        private float _goalTimer;
-        private float _obstacleTimer;
+        private bool _dynamicObstacleEnabled;
         private bool _dynamicObstacleRegistered;
         private bool _isInitialized;
         private bool _waitingForManager;
+        private bool _showcaseStarted;
         private bool _isFaulted;
         private Exception _fault;
         private FlowFieldSample _lastSample;
@@ -49,8 +49,14 @@ namespace Common.FlowField.Samples
         public bool IsInitialized => _isInitialized;
         public bool IsFaulted => _isFaulted;
         public string CurrentMode => _mode.ToString();
+        public bool DynamicObstacleEnabled => _dynamicObstacleEnabled;
         public bool DynamicObstacleRegistered => _dynamicObstacleRegistered;
         public bool HasSample => _hasSample;
+        public int ActiveGoalIndex => _sampleController != null ? _sampleController.ActiveGoalIndex : -1;
+        public int GoalCount => _sampleController != null ? _sampleController.GoalCount : 0;
+        public Vector3 ActiveGoalPosition => _sampleController != null && _sampleController.HasActiveGoal
+            ? _sampleController.ActiveGoalPosition
+            : throw new InvalidOperationException("FlowField sample has no active goal.");
         public FlowFieldSample LastSample => _hasSample
             ? _lastSample
             : throw new InvalidOperationException("FlowField overview has not sampled a probe yet.");
@@ -83,13 +89,18 @@ namespace Common.FlowField.Samples
                     throw new InvalidOperationException("FlowField overview requires serialized Speed and Noise modifiers.");
                 if (_dynamicObstacle == null || _dynamicObstacleObject == null)
                     throw new InvalidOperationException("FlowField overview requires a serialized dynamic obstacle collider and object.");
-                ValidatePositive(_modeInterval, nameof(_modeInterval));
-                ValidatePositive(_goalInterval, nameof(_goalInterval));
-                ValidatePositive(_obstacleMoveInterval, nameof(_obstacleMoveInterval));
+                if (_freeCamera == null)
+                    throw new InvalidOperationException("FlowField overview requires a serialized free camera.");
+                if (_mapBoundsRoot == null)
+                    throw new InvalidOperationException("FlowField overview requires a serialized map bounds root.");
+                if (_agentRoot == null)
+                    throw new InvalidOperationException("FlowField overview requires a serialized agent root.");
                 if (!IsFinite(_sampleProbe))
                     throw new ArgumentOutOfRangeException(nameof(_sampleProbe));
 
                 _sampleController.SetAutomaticGoalChanges(false);
+                _dynamicObstacleEnabled = false;
+                _dynamicObstacleRegistered = false;
                 _waitingForManager = !_manager.IsReady;
                 _isInitialized = true;
             }
@@ -104,11 +115,8 @@ namespace Common.FlowField.Samples
         private void Start()
         {
             ThrowIfUnavailable();
-            if (_waitingForManager)
-                return;
-            ApplyMode(ShowcaseMode.Baseline);
-            RefreshDiagnostics();
-            RenderBoard();
+            if (!_waitingForManager)
+                BeginShowcase();
         }
 
         private void Update()
@@ -119,14 +127,16 @@ namespace Common.FlowField.Samples
             {
                 if (!_manager.IsReady)
                     return;
+
                 _waitingForManager = false;
-                ApplyMode(ShowcaseMode.Baseline);
-                RefreshDiagnostics();
-                RenderBoard();
+                BeginShowcase();
             }
 
+            if (!_showcaseStarted)
+                return;
+
             if (Input.GetKeyDown(KeyCode.Space))
-                _sampleController.ChooseNextGoal();
+                AdvanceGoal();
             if (Input.GetKeyDown(KeyCode.G))
                 _sampleController.ClearGoal();
             if (Input.GetKeyDown(KeyCode.Alpha1))
@@ -136,73 +146,116 @@ namespace Common.FlowField.Samples
             if (Input.GetKeyDown(KeyCode.Alpha3))
                 ApplyMode(ShowcaseMode.NoiseModifier);
             if (Input.GetKeyDown(KeyCode.M))
-                ApplyMode(ShowcaseMode.DynamicObstacle);
+                ToggleDynamicObstacle();
             if (Input.GetKeyDown(KeyCode.O))
                 ApplyMode(ShowcaseMode.SampleAndClamp);
             if (Input.GetKeyDown(KeyCode.R))
                 _manager.Rebuild();
             if (Input.GetKeyDown(KeyCode.C))
                 RefreshDiagnostics();
+            if (Input.GetKeyDown(KeyCode.F))
+                FocusCamera();
 
-            _modeTimer += Time.deltaTime;
-            _goalTimer += Time.deltaTime;
-            if (_modeTimer >= _modeInterval)
+            if (_manager.IsReady)
+                RefreshDiagnostics();
+            RenderBoard();
+        }
+
+        private void BeginShowcase()
+        {
+            if (_showcaseStarted)
+                return;
+
+            ApplyMode(ShowcaseMode.Baseline);
+            SetDynamicObstacle(_dynamicObstacleStartsEnabled);
+            RefreshDiagnostics();
+            FocusCamera();
+            _showcaseStarted = true;
+            RenderBoard();
+        }
+
+        public void AdvanceGoal()
+        {
+            ThrowIfUnavailable();
+            _sampleController.AdvanceToNextGoal();
+            RenderBoard();
+        }
+
+        public void ToggleDynamicObstacle()
+        {
+            SetDynamicObstacle(!_dynamicObstacleEnabled);
+        }
+
+        public void SetDynamicObstacle(bool enabled)
+        {
+            ThrowIfUnavailable();
+
+            if (enabled == _dynamicObstacleEnabled)
             {
-                _modeTimer = 0f;
-                ApplyMode((ShowcaseMode)(((int)_mode + 1) % Enum.GetValues(typeof(ShowcaseMode)).Length));
+                _dynamicObstacleObject.SetActive(enabled);
+                if (enabled && !_dynamicObstacleRegistered && _manager.IsReady)
+                    RegisterDynamicObstacle();
+                return;
             }
 
-            if (_goalTimer >= _goalInterval)
+            if (enabled)
             {
-                _goalTimer = 0f;
-                _sampleController.ChooseNextGoal();
+                _dynamicObstacleObject.SetActive(true);
+                _dynamicObstacleEnabled = true;
+                if (_manager.IsReady)
+                    RegisterDynamicObstacle();
             }
+            else
+            {
+                if (_dynamicObstacleRegistered)
+                    UnregisterDynamicObstacleSafely();
 
-            if (_mode == ShowcaseMode.DynamicObstacle)
-                MoveDynamicObstacle();
+                _dynamicObstacleEnabled = false;
+                _dynamicObstacleObject.SetActive(false);
+            }
 
             RenderBoard();
+        }
+
+        private void RegisterDynamicObstacle()
+        {
+            if (_dynamicObstacleRegistered)
+                return;
+
+            _dynamicObstacleObject.SetActive(true);
+            _manager.RegisterDynamicObstacle(_dynamicObstacle);
+            _dynamicObstacleRegistered = true;
+        }
+
+        private void UnregisterDynamicObstacleSafely()
+        {
+            if (!_dynamicObstacleRegistered)
+                return;
+
+            try
+            {
+                _manager.UnregisterDynamicObstacle(_dynamicObstacle);
+            }
+            catch (InvalidOperationException)
+            {
+                // A manager rebuild or teardown can already have cleared the
+                // pipeline. Treat that state as successfully unregistered.
+            }
+            finally
+            {
+                _dynamicObstacleRegistered = false;
+            }
         }
 
         private void ApplyMode(ShowcaseMode mode)
         {
             ThrowIfUnavailable();
-            if (_dynamicObstacleRegistered)
-            {
-                _manager.UnregisterDynamicObstacle(_dynamicObstacle);
-                _dynamicObstacleRegistered = false;
-            }
-
             _speedModifier.gameObject.SetActive(mode == ShowcaseMode.SpeedModifier);
             _noiseModifier.gameObject.SetActive(mode == ShowcaseMode.NoiseModifier);
-            _dynamicObstacleObject.SetActive(mode == ShowcaseMode.DynamicObstacle);
-
-            if (mode == ShowcaseMode.DynamicObstacle)
-            {
-                _manager.RegisterDynamicObstacle(_dynamicObstacle);
-                _dynamicObstacleRegistered = true;
-            }
-
             _mode = mode;
-            _modeTimer = 0f;
+
             if (mode == ShowcaseMode.SampleAndClamp)
                 RefreshDiagnostics();
-        }
-
-        private void MoveDynamicObstacle()
-        {
-            _obstacleTimer += Time.deltaTime;
-            if (_obstacleTimer < _obstacleMoveInterval)
-                return;
-            _obstacleTimer = 0f;
-
-            Bounds previous = _dynamicObstacle.bounds;
-            Vector3 position = _dynamicObstacleObject.transform.position;
-            position.x = Mathf.Sin(Time.time * 0.7f) * 12f;
-            _dynamicObstacleObject.transform.position = position;
-            Bounds current = _dynamicObstacle.bounds;
-            previous.Encapsulate(current);
-            _manager.NotifyObstacleRegionDirty(previous);
         }
 
         private void RefreshDiagnostics()
@@ -214,35 +267,72 @@ namespace Common.FlowField.Samples
             _hasSample = true;
         }
 
+        public void FocusCamera()
+        {
+            ThrowIfUnavailable();
+            Renderer[] renderers = _mapBoundsRoot.GetComponentsInChildren<Renderer>(true);
+            Bounds bounds = new Bounds(_mapBoundsRoot.position, Vector3.one);
+            bool hasBounds = false;
+
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                Renderer renderer = renderers[i];
+                if (renderer == null || renderer.transform == _agentRoot || renderer.transform.IsChildOf(_agentRoot))
+                    continue;
+
+                if (!hasBounds)
+                {
+                    bounds = renderer.bounds;
+                    hasBounds = true;
+                }
+                else
+                {
+                    bounds.Encapsulate(renderer.bounds);
+                }
+            }
+
+            if (hasBounds)
+                _freeCamera.FocusOnBounds(bounds);
+        }
+
         private void RenderBoard()
         {
-            if (!_board.IsInitialized)
-                throw new InvalidOperationException("FlowFieldOverviewBoard must be initialized before rendering.");
+            if (_board == null || !_board.IsInitialized)
+                return;
 
+            string goalText = _sampleController.HasActiveGoal
+                ? $"Goal: {_sampleController.ActiveGoalIndex + 1}/{_sampleController.GoalCount} "
+                    + $"({_sampleController.ActiveGoalPosition.x:F0}, {_sampleController.ActiveGoalPosition.y:F1}, {_sampleController.ActiveGoalPosition.z:F0})"
+                : "Goal: none";
             string sampleText = _hasSample
-                ? $"Sample surface={_lastSample.HasSurface} dir={_lastSample.Direction} speed={_lastSample.SpeedMultiplier:F2}"
-                : "Sample: press C or O";
+                ? $"Probe dir.y: {_lastSample.Direction.y:F2}  surface: {_lastSample.HasSurface}"
+                : "Probe: pending";
             string clampText = _hasSample
-                ? $"Clamp={_lastClamp.Position} ({((_lastClamp.ClampedX || _lastClamp.ClampedZ) ? "clamped" : "inside")})"
-                : "Clamp: pending";
+                ? $"Probe clamp: {(_lastClamp.ClampedX || _lastClamp.ClampedZ ? "clamped" : "inside")}"
+                : "Probe clamp: pending";
+
             _board.Render(
-                "FLOWFIELD SHOWCASE\n"
+                "2.5D FLOWFIELD\n"
                 + $"Ready: {_manager.IsReady}  Revision: {_manager.Revision}\n"
-                + $"Agents: {_sampleController.SpawnedAgentCount}/1000  Goal changes: {_sampleController.GoalChangeCount}\n"
-                + $"Goal active: {_sampleController.HasActiveGoal}\n"
-                + $"Mode: {_mode}  Dynamic obstacle: {_dynamicObstacleRegistered}\n"
-                + $"Deep overlaps: {_sampleController.DeepOverlapPairs}\n"
-                + $"{sampleText}\n{clampText}\n"
-                + "Space Goal | G clear Goal | 1/2/3 modifiers | M obstacle | O sample | R rebuild | C diagnostics");
+                + $"Agents: {_sampleController.SpawnedAgentCount}/1000  Mode: {_mode}\n"
+                + $"{goalText}\n"
+                + $"West Ramp Gate: {(_dynamicObstacleEnabled ? "ON" : "OFF")}  Registered: {_dynamicObstacleRegistered}\n"
+                + "Ramps: WEST / EAST  Y=0.0 -> Y=2.0 | ON => EAST bypass\n"
+                + $"{sampleText}  {clampText}\n"
+                + "Space: next Goal | M: Gate | F: Focus | RMB+WASD/QE: Camera");
         }
 
         public void Release()
         {
             if (!_isInitialized && !_isFaulted)
                 throw new InvalidOperationException("FlowFieldShowcaseOverviewController has not been initialized.");
+
             if (_dynamicObstacleRegistered && _manager != null && _manager.IsInitialized)
-                _manager.UnregisterDynamicObstacle(_dynamicObstacle);
-            _dynamicObstacleRegistered = false;
+                UnregisterDynamicObstacleSafely();
+            else
+                _dynamicObstacleRegistered = false;
+            _dynamicObstacleEnabled = false;
+            _showcaseStarted = false;
             _isInitialized = false;
             _isFaulted = false;
             _fault = null;
@@ -260,12 +350,6 @@ namespace Common.FlowField.Samples
                 throw new InvalidOperationException("FlowFieldShowcaseOverviewController is faulted; call Release before use.", _fault);
             if (!_isInitialized)
                 throw new InvalidOperationException("FlowFieldShowcaseOverviewController is not initialized.");
-        }
-
-        private static void ValidatePositive(float value, string name)
-        {
-            if (!IsFinite(value) || value <= 0f)
-                throw new ArgumentOutOfRangeException(name);
         }
 
         private static bool IsFinite(float value)

@@ -5,7 +5,7 @@ using UnityEngine;
 namespace Common.FlowField.Samples
 {
     /// <summary>
-    /// 1,000개 물리 Agent를 생성하고 FlowField Goal을 무작위로 변경하는 샘플 컨트롤러입니다.
+    /// 1,000개 물리 Agent를 생성하고 사전 정의된 Goal을 순서대로 변경하는 샘플 컨트롤러입니다.
     /// </summary>
     [DefaultExecutionOrder(0)]
     public sealed class FlowFieldSampleController : MonoBehaviour
@@ -25,45 +25,48 @@ namespace Common.FlowField.Samples
         [SerializeField] private float _agentSpeed = 3f;
         [SerializeField] private float _agentAcceleration = 8f;
 
-        [Header("Random Goal")]
+        [Header("Goal Sequence")]
         [SerializeField] private Vector3[] _goalPositions =
         {
-            new Vector3(-35f, 0.4f, 35f),
-            new Vector3(-5f, 0.4f, 35f),
-            new Vector3(35f, 0.4f, 35f),
+            new Vector3(-35f, 2.4f, 35f),
+            new Vector3(-5f, 2.4f, 35f),
+            new Vector3(35f, 2.4f, 35f),
             new Vector3(35f, 0.4f, 5f),
             new Vector3(35f, 0.4f, -35f),
             new Vector3(5f, 0.4f, -35f),
             new Vector3(-35f, 0.4f, -5f),
             new Vector3(5f, 0.4f, 5f),
         };
-        [SerializeField] private float _goalChangeInterval = 15f;
         [SerializeField] private float _goalInfluenceRadius = 0f;
-        [SerializeField] private int _randomSeed = 20260831;
 
         [Header("Diagnostics")]
         [SerializeField] private float _diagnosticsInterval = 1f;
         [SerializeField] private float _deepOverlapDistance = 0.45f;
-        [SerializeField] private bool _showOverlay = true;
 
         private readonly List<FlowFieldSampleAgent> _agents = new List<FlowFieldSampleAgent>();
         private readonly Dictionary<Vector2Int, List<int>> _overlapBuckets =
             new Dictionary<Vector2Int, List<int>>();
-        private System.Random _random;
-        private float _goalTimer;
         private float _diagnosticsTimer;
         private int _activeGoalIndex = -1;
         private int _goalChangeCount;
         private int _deepOverlapPairs;
         private bool _simulationReady;
-        private bool _automaticGoalChanges = true;
+        private bool _automaticGoalChanges;
         private bool _isInitialized;
         private bool _isFaulted;
         private Exception _fault;
 
-        public int SpawnedAgentCount => _agents.Count;
+        public int SpawnedAgentCount
+        {
+            get
+            {
+                SynchronizeAgentCacheIfNeeded();
+                return _agents.Count;
+            }
+        }
         public int ActiveGoalIndex => _activeGoalIndex;
         public int GoalChangeCount => _goalChangeCount;
+        public int GoalCount => _goalPositions != null ? _goalPositions.Length : 0;
         public bool HasActiveGoal => _activeGoalIndex >= 0;
         public int ManagerRevision => _manager != null ? _manager.Revision : 0;
         public Vector3 ActiveGoalPosition => _activeGoalIndex >= 0 && _activeGoalIndex < _goalPositions.Length
@@ -118,16 +121,13 @@ namespace Common.FlowField.Samples
                     if (!IsFinite(_goalPositions[i]))
                         throw new ArgumentOutOfRangeException(nameof(_goalPositions));
                 }
-                if (!IsFinite(_goalChangeInterval) || _goalChangeInterval <= 0f)
-                    throw new ArgumentOutOfRangeException(nameof(_goalChangeInterval));
                 if (!IsFinite(_goalInfluenceRadius) || _goalInfluenceRadius < 0f)
                     throw new ArgumentOutOfRangeException(nameof(_goalInfluenceRadius));
                 if (!IsFinite(_diagnosticsInterval) || _diagnosticsInterval <= 0f)
                     throw new ArgumentOutOfRangeException(nameof(_diagnosticsInterval));
                 if (!IsFinite(_deepOverlapDistance) || _deepOverlapDistance <= 0f)
                     throw new ArgumentOutOfRangeException(nameof(_deepOverlapDistance));
-                _random = new System.Random(_randomSeed);
-                _automaticGoalChanges = true;
+                _automaticGoalChanges = false;
                 _isInitialized = true;
             }
             catch (Exception exception)
@@ -158,7 +158,7 @@ namespace Common.FlowField.Samples
                         throw new InvalidOperationException($"FlowField agent {i} did not initialize when Agent Root was activated.");
                 }
 
-                ChooseRandomGoal();
+                SetGoalByIndex(0);
                 _simulationReady = _agents.Count == _agentCount && _manager.IsReady;
             }
             catch (Exception exception)
@@ -179,20 +179,9 @@ namespace Common.FlowField.Samples
                 throw new InvalidOperationException("FlowFieldSampleController is faulted; call Release before use.", _fault);
             if (!_isInitialized)
                 throw new InvalidOperationException("FlowFieldSampleController is not initialized.");
+            SynchronizeAgentCacheIfNeeded();
             if (!_simulationReady && _manager != null && _manager.IsReady)
                 _simulationReady = _agents.Count == _agentCount;
-            if (Input.GetKeyDown(KeyCode.Space))
-                ChooseRandomGoal();
-
-            if (_automaticGoalChanges)
-            {
-                _goalTimer += Time.deltaTime;
-                if (_goalTimer >= _goalChangeInterval)
-                {
-                    _goalTimer = 0f;
-                    ChooseRandomGoal();
-                }
-            }
         }
 
         private void FixedUpdate()
@@ -223,6 +212,12 @@ namespace Common.FlowField.Samples
 
         private void SpawnAgents()
         {
+            // A domain reload can preserve instantiated children while resetting
+            // this managed list. Reconcile before clearing so stale agents are
+            // released instead of being duplicated on the next play session.
+            SynchronizeAgentCacheIfNeeded();
+            if (_agents.Count > 0)
+                ReleaseSpawnedAgents();
             _agents.Clear();
             if (_agentPrefab == null)
                 throw new InvalidOperationException("FlowFieldSampleController requires a serialized agent prefab.");
@@ -249,10 +244,53 @@ namespace Common.FlowField.Samples
             }
         }
 
+        private void SynchronizeAgentCacheIfNeeded()
+        {
+            if (_agentRoot == null)
+                return;
+
+            // Avoid scanning all 1,000 children every frame during the normal
+            // showcase path. A child-count mismatch still repairs the managed
+            // cache after a domain reload or an external agent change.
+            if (_agentRoot.childCount != _agents.Count)
+            {
+                FlowFieldSampleAgent[] sceneAgents = _agentRoot.GetComponentsInChildren<FlowFieldSampleAgent>(true);
+                _agents.Clear();
+                for (int i = 0; i < sceneAgents.Length; i++)
+                {
+                    if (sceneAgents[i] != null)
+                        _agents.Add(sceneAgents[i]);
+                }
+            }
+
+            if (_manager == null || !_manager.IsReady)
+                return;
+
+            for (int i = 0; i < _agents.Count; i++)
+            {
+                FlowFieldSampleAgent agent = _agents[i];
+                if (agent == null || agent.IsFlowReady)
+                    continue;
+
+                if (agent.IsInitialized || agent.IsFaulted)
+                    agent.Release();
+                agent.Configure(_manager, _agentSpeed, _agentAcceleration);
+                agent.Init();
+            }
+        }
+
         public void ChooseNextGoal()
         {
+            AdvanceToNextGoal();
+        }
+
+        public void AdvanceToNextGoal()
+        {
             ThrowIfUnavailable();
-            ChooseRandomGoal();
+            int nextIndex = _activeGoalIndex < 0
+                ? 0
+                : (_activeGoalIndex + 1) % _goalPositions.Length;
+            SetGoalByIndex(nextIndex);
         }
 
         /// <summary>
@@ -263,7 +301,6 @@ namespace Common.FlowField.Samples
             ThrowIfUnavailable();
             _manager.ClearGoal();
             _activeGoalIndex = -1;
-            _goalTimer = 0f;
             _goalChangeCount++;
         }
 
@@ -271,25 +308,19 @@ namespace Common.FlowField.Samples
         {
             ThrowIfUnavailable();
             _automaticGoalChanges = enabled;
-            _goalTimer = 0f;
         }
 
-        private void ChooseRandomGoal()
+        private void SetGoalByIndex(int index)
         {
             if (_isFaulted)
                 throw new InvalidOperationException("FlowFieldSampleController is faulted; call Release before use.", _fault);
             if (!_isInitialized)
                 throw new InvalidOperationException("FlowFieldSampleController is not initialized.");
+            if (index < 0 || index >= _goalPositions.Length)
+                throw new ArgumentOutOfRangeException(nameof(index));
 
-            int nextIndex = _random.Next(_goalPositions.Length);
-            if (_goalPositions.Length > 1)
-            {
-                while (nextIndex == _activeGoalIndex)
-                    nextIndex = _random.Next(_goalPositions.Length);
-            }
-
-            _activeGoalIndex = nextIndex;
-            Vector3 goalPosition = _goalPositions[nextIndex];
+            _activeGoalIndex = index;
+            Vector3 goalPosition = _goalPositions[index];
             _goalMarker.position = goalPosition;
 
             _manager.SetGoalPosition(goalPosition, _goalInfluenceRadius);
@@ -362,21 +393,6 @@ namespace Common.FlowField.Samples
             }
         }
 
-        private void OnGUI()
-        {
-            if (!_showOverlay)
-                return;
-
-            GUI.Box(new Rect(16f, 16f, 430f, 170f), "FlowField 1,000 Agent Sample");
-            GUI.Label(new Rect(30f, 44f, 400f, 22f), $"Ready: {_manager != null && _manager.IsReady}");
-            GUI.Label(new Rect(30f, 66f, 400f, 22f), $"Agents: {_agents.Count}/{_agentCount}");
-            GUI.Label(new Rect(30f, 88f, 400f, 22f), $"Goal: {_activeGoalIndex} / changes: {_goalChangeCount}");
-            int revision = _manager != null ? _manager.Revision : 0;
-            GUI.Label(new Rect(30f, 110f, 400f, 22f), $"Revision: {revision}");
-            GUI.Label(new Rect(30f, 132f, 400f, 22f), $"Deep overlaps: {_deepOverlapPairs}");
-            GUI.Label(new Rect(30f, 154f, 400f, 22f), "Space: choose another random Goal");
-        }
-
         private void ThrowIfUnavailable()
         {
             if (_isFaulted)
@@ -402,11 +418,11 @@ namespace Common.FlowField.Samples
                 throw new InvalidOperationException("FlowFieldSampleController has not been initialized.");
 
             _simulationReady = false;
+            SynchronizeAgentCacheIfNeeded();
             ReleaseSpawnedAgents();
             _activeGoalIndex = -1;
             _goalChangeCount = 0;
             _deepOverlapPairs = 0;
-            _random = null;
             _isInitialized = false;
             _isFaulted = false;
             _fault = null;

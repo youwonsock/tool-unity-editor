@@ -169,6 +169,42 @@ MonoBehaviour:
     m_MipBias: 0
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
+--- !u!134 &930426330
+PhysicMaterial:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: 
+  dynamicFriction: 0.6
+  staticFriction: 0.6
+  bounciness: 0
+  frictionCombine: 0
+  bounceCombine: 0
+--- !u!134 &973330755
+PhysicMaterial:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: 
+  dynamicFriction: 0.6
+  staticFriction: 0.6
+  bounciness: 0
+  frictionCombine: 0
+  bounceCombine: 0
+--- !u!134 &1084360901
+PhysicMaterial:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: 
+  dynamicFriction: 0.6
+  staticFriction: 0.6
+  bounciness: 0
+  frictionCombine: 0
+  bounceCombine: 0
 --- !u!1001 &5129881909066175170
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -197,20 +233,25 @@ PrefabInstance:
       propertyPath: m_BackGroundColor.r
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 467178286904518749, guid: ea9473f2a5a61c044828d7e078c86447,
+        type: 3}
+      propertyPath: m_Material
+      value: 
+      objectReference: {fileID: 1084360901}
     - target: {fileID: 840984156376940602, guid: ea9473f2a5a61c044828d7e078c86447,
         type: 3}
       propertyPath: m_LocalPosition.z
-      value: -40.8
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 840984156376940602, guid: ea9473f2a5a61c044828d7e078c86447,
         type: 3}
       propertyPath: m_LocalRotation.w
-      value: 0.7071068
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 840984156376940602, guid: ea9473f2a5a61c044828d7e078c86447,
         type: 3}
       propertyPath: m_LocalRotation.x
-      value: 0.7071068
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 840984156376940602, guid: ea9473f2a5a61c044828d7e078c86447,
         type: 3}
@@ -225,7 +266,7 @@ PrefabInstance:
     - target: {fileID: 840984156376940602, guid: ea9473f2a5a61c044828d7e078c86447,
         type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: -67.6
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 1888116987211774303, guid: ea9473f2a5a61c044828d7e078c86447,
         type: 3}
@@ -292,6 +333,16 @@ PrefabInstance:
       propertyPath: m_Name
       value: FlowFieldDemo
       objectReference: {fileID: 0}
+    - target: {fileID: 4534474314790452063, guid: ea9473f2a5a61c044828d7e078c86447,
+        type: 3}
+      propertyPath: m_Material
+      value: 
+      objectReference: {fileID: 930426330}
+    - target: {fileID: 8741370550662483104, guid: ea9473f2a5a61c044828d7e078c86447,
+        type: 3}
+      propertyPath: m_Material
+      value: 
+      objectReference: {fileID: 973330755}
     - target: {fileID: 9149604339505932419, guid: ea9473f2a5a61c044828d7e078c86447,
         type: 3}
       propertyPath: m_Enabled

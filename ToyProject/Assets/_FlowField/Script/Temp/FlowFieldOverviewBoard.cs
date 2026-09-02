@@ -5,7 +5,7 @@ using UnityEngine.UI;
 namespace Common.FlowField.Samples
 {
     /// <summary>
-    /// FlowField 쇼케이스의 상태와 조작법을 월드 공간 UGUI로 표시합니다.
+    /// FlowField 쇼케이스의 상태 텍스트를 UGUI로 표시합니다.
     /// </summary>
     [DefaultExecutionOrder(100)]
     public sealed class FlowFieldOverviewBoard : MonoBehaviour
