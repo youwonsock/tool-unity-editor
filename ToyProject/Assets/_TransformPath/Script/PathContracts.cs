@@ -39,48 +39,155 @@ namespace Common.TransformPath
     }
 
     [Serializable]
-    public readonly struct PathMoveSettings
+    public readonly struct PathMovementSettings
     {
         public EPathMoveType MoveType { get; }
         public float Value { get; }
         public AnimationCurve TimeCurve { get; }
-        public bool Loop { get; }
-        public bool PreserveSpeedBetweenSegments { get; }
 
-        public PathMoveSettings(
+        public PathMovementSettings(
             EPathMoveType moveType = EPathMoveType.TimeBased,
-            float value = 1f,
-            AnimationCurve timeCurve = null,
-            bool loop = false,
-            bool preserveSpeedBetweenSegments = false)
+            float value = 5f,
+            AnimationCurve timeCurve = null)
         {
             MoveType = moveType;
             Value = value;
-            TimeCurve = timeCurve ?? AnimationCurve.Linear(0f, 0f, 1f, 1f);
-            Loop = loop;
-            PreserveSpeedBetweenSegments = preserveSpeedBetweenSegments;
+            TimeCurve = moveType == EPathMoveType.TimeBased
+                ? timeCurve ?? AnimationCurve.Linear(0f, 0f, 1f, 1f)
+                : timeCurve;
         }
 
-        public static PathMoveSettings Time(float duration, AnimationCurve curve = null, bool loop = false)
+        public static PathMovementSettings Time(float duration, AnimationCurve curve = null)
         {
-            return new PathMoveSettings(EPathMoveType.TimeBased, duration, curve, loop);
+            return new PathMovementSettings(EPathMoveType.TimeBased, duration, curve);
         }
 
-        public static PathMoveSettings Speed(float speed, AnimationCurve curve = null, bool loop = false)
+        public static PathMovementSettings Speed(float speed)
         {
-            return new PathMoveSettings(EPathMoveType.SpeedBased, speed, curve, loop);
+            return new PathMovementSettings(EPathMoveType.SpeedBased, speed, null);
         }
     }
 
-    public readonly struct PathSequenceSettings
+    internal static class PathMovementSettingsUtility
+    {
+        internal const float MinValue = 0.001f;
+        internal const float MaxValue = 9999f;
+
+        internal static AnimationCurve CloneCurve(AnimationCurve source)
+        {
+            if (source == null)
+                return null;
+
+            AnimationCurve clone = new AnimationCurve(source.keys)
+            {
+                preWrapMode = source.preWrapMode,
+                postWrapMode = source.postWrapMode,
+            };
+            return clone;
+        }
+
+        internal static PathMovementSettings Clone(PathMovementSettings source)
+        {
+            return new PathMovementSettings(
+                source.MoveType,
+                source.Value,
+                CloneCurve(source.TimeCurve));
+        }
+
+        internal static bool AreSame(PathMovementSettings left, PathMovementSettings right)
+        {
+            if (left.MoveType != right.MoveType
+                || !Mathf.Approximately(left.Value, right.Value))
+                return false;
+            if (left.MoveType != EPathMoveType.TimeBased)
+                return true;
+            return AreSameCurve(left.TimeCurve, right.TimeCurve);
+        }
+
+        internal static bool AreSameCurve(AnimationCurve left, AnimationCurve right)
+        {
+            if (ReferenceEquals(left, right))
+                return true;
+            if (left == null || right == null
+                || left.preWrapMode != right.preWrapMode
+                || left.postWrapMode != right.postWrapMode
+                || left.length != right.length)
+                return false;
+
+            Keyframe[] leftKeys = left.keys;
+            Keyframe[] rightKeys = right.keys;
+            for (int i = 0; i < leftKeys.Length; i++)
+            {
+                Keyframe a = leftKeys[i];
+                Keyframe b = rightKeys[i];
+                if (!Mathf.Approximately(a.time, b.time)
+                    || !Mathf.Approximately(a.value, b.value)
+                    || !Mathf.Approximately(a.inTangent, b.inTangent)
+                    || !Mathf.Approximately(a.outTangent, b.outTangent)
+                    || !Mathf.Approximately(a.inWeight, b.inWeight)
+                    || !Mathf.Approximately(a.outWeight, b.outWeight)
+                    || a.weightedMode != b.weightedMode)
+                    return false;
+            }
+            return true;
+        }
+
+        internal static void Validate(PathMovementSettings settings, string parameterName)
+        {
+            if (!Enum.IsDefined(typeof(EPathMoveType), settings.MoveType))
+                throw new ArgumentOutOfRangeException(parameterName, "MoveType is invalid.");
+            if (!IsFinite(settings.Value)
+                || settings.Value < MinValue
+                || settings.Value > MaxValue)
+                throw new ArgumentOutOfRangeException(parameterName, "Movement value must be finite and within 0.001..9999.");
+            if (settings.MoveType == EPathMoveType.TimeBased)
+                ValidateCurve(settings.TimeCurve, parameterName);
+        }
+
+        internal static void ValidateCurve(AnimationCurve curve, string parameterName)
+        {
+            if (curve == null || curve.length == 0)
+                throw new ArgumentException("TimeCurve must contain at least one key.", parameterName);
+
+            Keyframe[] keys = curve.keys;
+            for (int i = 0; i < keys.Length; i++)
+            {
+                if (!IsFinite(keys[i].time)
+                    || !IsFinite(keys[i].value)
+                    || !IsFinite(keys[i].inTangent)
+                    || !IsFinite(keys[i].outTangent)
+                    || !IsFinite(keys[i].inWeight)
+                    || !IsFinite(keys[i].outWeight))
+                    throw new ArgumentException("TimeCurve keys must be finite.", parameterName);
+            }
+
+            float previous = curve.Evaluate(0f);
+            if (!IsFinite(previous) || Mathf.Abs(previous) > 0.001f)
+                throw new ArgumentException("TimeCurve must start at 0.", parameterName);
+            for (int i = 1; i <= 64; i++)
+            {
+                float value = curve.Evaluate(i / 64f);
+                if (!IsFinite(value) || value + 0.001f < previous)
+                    throw new ArgumentException("TimeCurve must be finite and non-decreasing.", parameterName);
+                previous = value;
+            }
+            if (Mathf.Abs(curve.Evaluate(1f) - 1f) > 0.001f)
+                throw new ArgumentException("TimeCurve must end at 1.", parameterName);
+        }
+
+        internal static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
+        }
+    }
+
+    public readonly struct PathPlaybackSettings
     {
         public bool Loop { get; }
-        public bool PreserveSpeedBetweenSegments { get; }
 
-        public PathSequenceSettings(bool loop = false, bool preserveSpeedBetweenSegments = false)
+        public PathPlaybackSettings(bool loop = false)
         {
             Loop = loop;
-            PreserveSpeedBetweenSegments = preserveSpeedBetweenSegments;
         }
     }
 
@@ -91,30 +198,22 @@ namespace Common.TransformPath
     public struct PathSegmentConfig
     {
         [SerializeField] private PathData _pathData;
-        [SerializeField] private EPathMoveType _moveType;
-        [SerializeField] private float _value;
-        [SerializeField] private AnimationCurve _timeCurve;
+        [SerializeField] private bool _preservePreviousSpeed;
 
         public PathData PathData => _pathData;
-        public EPathMoveType MoveType => _moveType;
-        public float Value => _value;
-        public AnimationCurve TimeCurve => _timeCurve;
+        public bool PreservePreviousSpeed => _preservePreviousSpeed;
 
         public PathSegmentConfig(
             PathData pathData,
-            EPathMoveType moveType = EPathMoveType.TimeBased,
-            float value = 1f,
-            AnimationCurve timeCurve = null)
+            bool preservePreviousSpeed = false)
         {
             _pathData = pathData;
-            _moveType = moveType;
-            _value = value;
-            _timeCurve = timeCurve ?? AnimationCurve.Linear(0f, 0f, 1f, 1f);
+            _preservePreviousSpeed = preservePreviousSpeed;
         }
 
         public PathSegmentConfig WithPathData(PathData pathData)
         {
-            return new PathSegmentConfig(pathData, _moveType, _value, _timeCurve);
+            return new PathSegmentConfig(pathData, _preservePreviousSpeed);
         }
     }
 
@@ -122,20 +221,17 @@ namespace Common.TransformPath
     public readonly struct PathSegmentDescriptor
     {
         public IPathProvider Provider { get; }
-        public EPathMoveType MoveType { get; }
-        public float Value { get; }
-        public AnimationCurve TimeCurve { get; }
+        public PathMovementSettings MovementSettings { get; }
+        public bool PreservePreviousSpeed { get; }
 
         public PathSegmentDescriptor(
             IPathProvider provider,
-            EPathMoveType moveType,
-            float value,
-            AnimationCurve timeCurve)
+            PathMovementSettings movementSettings,
+            bool preservePreviousSpeed)
         {
             Provider = provider;
-            MoveType = moveType;
-            Value = value;
-            TimeCurve = timeCurve;
+            MovementSettings = movementSettings;
+            PreservePreviousSpeed = preservePreviousSpeed;
         }
     }
 
@@ -177,6 +273,11 @@ namespace Common.TransformPath
         Vector3 SampleDistance(float distance);
     }
 
+    public interface IPathMovementProvider : IPathProvider
+    {
+        PathMovementSettings MovementSettings { get; }
+    }
+
     public interface IPathSequenceProvider : IPathProvider
     {
         int SegmentCount { get; }
@@ -215,8 +316,9 @@ namespace Common.TransformPath
 
         void Init();
         void Release();
-        void StartMove(IPathProvider provider, PathMoveSettings settings);
-        void StartSequence(IPathSequenceProvider provider, PathSequenceSettings settings);
+        void StartMove(IPathMovementProvider provider, PathPlaybackSettings playback);
+        void StartMove(IPathProvider provider, PathMovementSettings movementOverride, PathPlaybackSettings playback);
+        void StartSequence(IPathSequenceProvider provider, PathPlaybackSettings playback);
         void StopMove();
         void PauseMove();
         void ResumeMove();

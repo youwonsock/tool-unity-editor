@@ -169,36 +169,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _startupProviderObject: {fileID: 0}
-  _startupAsSequence: 1
   _playOnStart: 0
-  _startupMoveType: 0
-  _startupValue: 2
-  _startupTimeCurve:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 0
-      value: 0
-      inSlope: 0
-      outSlope: 1
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    - serializedVersion: 3
-      time: 1
-      value: 1
-      inSlope: 1
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
   _startupLoop: 0
-  _startupPreserveSpeedBetweenSegments: 1
   _pathEventHandler: {fileID: 4021795820735661241}
   _animator: {fileID: 0}
 --- !u!114 &5437495982911894610
@@ -359,36 +331,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _startupProviderObject: {fileID: 0}
-  _startupAsSequence: 1
-  _playOnStart: 0
-  _startupMoveType: 0
-  _startupValue: 2
-  _startupTimeCurve:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 0
-      value: 0
-      inSlope: 0
-      outSlope: 1
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    - serializedVersion: 3
-      time: 1
-      value: 1
-      inSlope: 1
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
   _startupLoop: 0
-  _startupPreserveSpeedBetweenSegments: 1
   _pathEventHandler: {fileID: 5659340322544956}
   _animator: {fileID: 0}
 --- !u!114 &7119315875045243401
@@ -549,36 +492,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _startupProviderObject: {fileID: 0}
-  _startupAsSequence: 1
-  _playOnStart: 0
-  _startupMoveType: 0
-  _startupValue: 2
-  _startupTimeCurve:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 0
-      value: 0
-      inSlope: 0
-      outSlope: 1
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    - serializedVersion: 3
-      time: 1
-      value: 1
-      inSlope: 1
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
   _startupLoop: 0
-  _startupPreserveSpeedBetweenSegments: 1
   _pathEventHandler: {fileID: 7969805473449115826}
   _animator: {fileID: 0}
 --- !u!114 &4355684901334086907
@@ -801,36 +715,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _startupProviderObject: {fileID: 0}
-  _startupAsSequence: 1
-  _playOnStart: 0
-  _startupMoveType: 0
-  _startupValue: 2
-  _startupTimeCurve:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 0
-      value: 0
-      inSlope: 0
-      outSlope: 1
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    - serializedVersion: 3
-      time: 1
-      value: 1
-      inSlope: 1
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
   _startupLoop: 0
-  _startupPreserveSpeedBetweenSegments: 1
   _pathEventHandler: {fileID: 3090205978380184557}
   _animator: {fileID: 0}
 --- !u!114 &2828592278171850358
@@ -1127,36 +1012,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _startupProviderObject: {fileID: 0}
-  _startupAsSequence: 1
-  _playOnStart: 0
-  _startupMoveType: 0
-  _startupValue: 5
-  _startupTimeCurve:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 0
-      value: 0
-      inSlope: 0
-      outSlope: 1
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    - serializedVersion: 3
-      time: 1
-      value: 1
-      inSlope: 1
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
   _startupLoop: 0
-  _startupPreserveSpeedBetweenSegments: 1
   _pathEventHandler: {fileID: 7403141165102534239}
   _animator: {fileID: 0}
 --- !u!1 &2411843356809523431
@@ -1552,59 +1408,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _segments:
   - _pathData: {fileID: 830505861753064085}
-    _moveType: 0
-    _value: 5
-    _timeCurve:
-      serializedVersion: 2
-      m_Curve:
-      - serializedVersion: 3
-        time: 0
-        value: 0
-        inSlope: 0
-        outSlope: 1
-        tangentMode: 0
-        weightedMode: 0
-        inWeight: 0
-        outWeight: 0
-      - serializedVersion: 3
-        time: 1
-        value: 1
-        inSlope: 1
-        outSlope: 0
-        tangentMode: 0
-        weightedMode: 0
-        inWeight: 0
-        outWeight: 0
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
+    _preservePreviousSpeed: 0
   - _pathData: {fileID: 3101732148213765793}
-    _moveType: 0
-    _value: 5
-    _timeCurve:
-      serializedVersion: 2
-      m_Curve:
-      - serializedVersion: 3
-        time: 0
-        value: 0
-        inSlope: 0
-        outSlope: 1
-        tangentMode: 0
-        weightedMode: 0
-        inWeight: 0
-        outWeight: 0
-      - serializedVersion: 3
-        time: 1
-        value: 1
-        inSlope: 1
-        outSlope: 0
-        tangentMode: 0
-        weightedMode: 0
-        inWeight: 0
-        outWeight: 0
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
+    _preservePreviousSpeed: 1
   _autoLinkPathPoints: 1
   _multiPathLineWidth: 2
   _multiPathPointSize: 0.1
@@ -1877,6 +1683,9 @@ MonoBehaviour:
     EventSetting: {fileID: 11400000, guid: 4a19d7e2c83f4b60915d3e8c7a2f6b04, type: 2}
   _segmentCount: 200
   _curveType: 2
+  _moveType: 1
+  _moveValue: 3
+  _timeCurve: {fileID: 0}
   _showPathInEditor: 1
   _previewSamplingType: 0
   _previewSampleCount: 10
@@ -2419,36 +2228,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _startupProviderObject: {fileID: 0}
-  _startupAsSequence: 1
-  _playOnStart: 0
-  _startupMoveType: 0
-  _startupValue: 2
-  _startupTimeCurve:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 0
-      value: 0
-      inSlope: 0
-      outSlope: 1
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    - serializedVersion: 3
-      time: 1
-      value: 1
-      inSlope: 1
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
   _startupLoop: 0
-  _startupPreserveSpeedBetweenSegments: 1
   _pathEventHandler: {fileID: 2108073158229803554}
   _animator: {fileID: 0}
 --- !u!114 &1548854285891510683
@@ -2540,6 +2320,9 @@ MonoBehaviour:
     EventSetting: {fileID: 11400000, guid: 9f4c8ab5a7e34e8fa7c0e6d2b1f5c901, type: 2}
   _segmentCount: 500
   _curveType: 0
+  _moveType: 1
+  _moveValue: 2
+  _timeCurve: {fileID: 0}
   _showPathInEditor: 1
   _previewSamplingType: 0
   _previewSampleCount: 10
@@ -2565,32 +2348,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _segments:
   - _pathData: {fileID: 5616179923128869812}
-    _moveType: 1
-    _value: 2
-    _timeCurve:
-      serializedVersion: 2
-      m_Curve:
-      - serializedVersion: 3
-        time: 0
-        value: 0
-        inSlope: 0
-        outSlope: 1
-        tangentMode: 0
-        weightedMode: 0
-        inWeight: 0
-        outWeight: 0
-      - serializedVersion: 3
-        time: 1
-        value: 1
-        inSlope: 1
-        outSlope: 0
-        tangentMode: 0
-        weightedMode: 0
-        inWeight: 0
-        outWeight: 0
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
+    _preservePreviousSpeed: 0
   _autoLinkPathPoints: 1
   _multiPathLineWidth: 2
   _multiPathPointSize: 0.1
@@ -2782,6 +2540,32 @@ MonoBehaviour:
     EventSetting: {fileID: 11400000, guid: 9f4c8ab5a7e34e8fa7c0e6d2b1f5c901, type: 2}
   _segmentCount: 120
   _curveType: 2
+  _moveType: 0
+  _moveValue: 5
+  _timeCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 1
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 1
+      inSlope: 1
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
   _showPathInEditor: 1
   _previewSamplingType: 0
   _previewSampleCount: 12
@@ -2917,36 +2701,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _startupProviderObject: {fileID: 0}
-  _startupAsSequence: 0
-  _playOnStart: 0
-  _startupMoveType: 1
-  _startupValue: 2
-  _startupTimeCurve:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 0
-      value: 0
-      inSlope: 0
-      outSlope: 1
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    - serializedVersion: 3
-      time: 1
-      value: 1
-      inSlope: 1
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
   _startupLoop: 1
-  _startupPreserveSpeedBetweenSegments: 0
   _pathEventHandler: {fileID: 6109858950784113130}
   _animator: {fileID: 0}
 --- !u!114 &6109858950784113130
@@ -3121,6 +2876,32 @@ MonoBehaviour:
     EventSetting: {fileID: 11400000, guid: b8c4e1f7a6d34920c5e8f3a1d7b0e624, type: 2}
   _segmentCount: 120
   _curveType: 1
+  _moveType: 0
+  _moveValue: 5
+  _timeCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 1
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 1
+      inSlope: 1
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
   _showPathInEditor: 1
   _previewSamplingType: 2
   _previewSampleCount: 12
@@ -3332,36 +3113,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _startupProviderObject: {fileID: 0}
-  _startupAsSequence: 1
-  _playOnStart: 0
-  _startupMoveType: 0
-  _startupValue: 2
-  _startupTimeCurve:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 0
-      value: 0
-      inSlope: 0
-      outSlope: 1
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    - serializedVersion: 3
-      time: 1
-      value: 1
-      inSlope: 1
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
   _startupLoop: 0
-  _startupPreserveSpeedBetweenSegments: 1
   _pathEventHandler: {fileID: 1329424909292520726}
   _animator: {fileID: 0}
 --- !u!114 &3600725696844987565

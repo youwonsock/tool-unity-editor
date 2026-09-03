@@ -3,11 +3,13 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using UnityEditor;
+using UnityEditorInternal;
 using UnityEngine;
 
 namespace Common.TransformPath
 {
     [CustomEditor(typeof(MultiPathData))]
+    [CanEditMultipleObjects]
     internal sealed class MultiPathDataEditor : Editor
     {
         private const float GOLDEN_RATIO_CONJUGATE = 0.618033988749895f;
@@ -27,6 +29,12 @@ namespace Common.TransformPath
         private readonly Dictionary<int, DrawingTemplate> _drawingTemplateByTargetId =
             new Dictionary<int, DrawingTemplate>();
 
+        private ReorderableList _segmentsList;
+        private SerializedProperty _segmentsProperty;
+        private EPathMoveType _bulkMoveType = EPathMoveType.TimeBased;
+        private float _bulkMoveValue = 5f;
+        private AnimationCurve _bulkTimeCurve = null;
+
         private struct DrawingTemplate
         {
             public float LineWidth;
@@ -38,6 +46,7 @@ namespace Common.TransformPath
         private void OnEnable()
         {
             Undo.undoRedoPerformed += HandleUndoRedo;
+            SetupSegmentsList();
             foreach (UnityEngine.Object targetObject in targets)
             {
                 MultiPathData multiPathData = targetObject as MultiPathData;
@@ -65,10 +74,16 @@ namespace Common.TransformPath
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
-            bool inspectorChanged = DrawDefaultInspector();
+            EditorGUI.BeginChangeCheck();
+            DrawPropertiesExcluding(serializedObject, SEGMENTS_PROPERTY);
+            bool inspectorChanged = EditorGUI.EndChangeCheck();
+            inspectorChanged |= DrawSegments();
             inspectorChanged |= serializedObject.ApplyModifiedProperties();
             if (inspectorChanged)
                 SceneView.RepaintAll();
+
+            bool authoringToolsEnabled = !Application.isPlaying;
+            DrawMovementBulkTools(authoringToolsEnabled);
 
             EditorGUILayout.Space();
             EditorGUILayout.HelpBox(
@@ -78,7 +93,6 @@ namespace Common.TransformPath
 
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Path Link Tools", EditorStyles.boldLabel);
-            bool authoringToolsEnabled = !Application.isPlaying;
             EditorGUI.BeginDisabledGroup(!authoringToolsEnabled);
             if (GUILayout.Button("Force Sync All Path Points"))
                 ForceSyncAllPathPoints();
@@ -89,10 +103,303 @@ namespace Common.TransformPath
             if (!authoringToolsEnabled)
                 EditorGUILayout.HelpBox("Path authoring tools are disabled in Play Mode.", MessageType.Info);
 
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Sequence Tools", EditorStyles.boldLabel);
             if (GUILayout.Button("Rebuild Sequence"))
                 RebuildSequences();
 
             SyncDrawingAndColorsAfterInspectorEdit();
+        }
+
+        private void SetupSegmentsList()
+        {
+            _segmentsProperty = serializedObject.FindProperty(SEGMENTS_PROPERTY);
+            if (_segmentsProperty == null || targets.Length != 1)
+            {
+                _segmentsList = null;
+                return;
+            }
+
+            _segmentsList = new ReorderableList(
+                serializedObject,
+                _segmentsProperty,
+                true,
+                true,
+                true,
+                true);
+            _segmentsList.drawHeaderCallback = rect =>
+                EditorGUI.LabelField(rect, "Segments (PathData owns movement settings)");
+            _segmentsList.elementHeightCallback = GetSegmentElementHeight;
+            _segmentsList.drawElementCallback = DrawSegmentElement;
+            _segmentsList.onAddCallback = list =>
+            {
+                int index = list.serializedProperty.arraySize;
+                list.serializedProperty.InsertArrayElementAtIndex(Mathf.Max(0, index - 1));
+                if (index == 0)
+                {
+                    SerializedProperty element = list.serializedProperty.GetArrayElementAtIndex(0);
+                    element.FindPropertyRelative(PATH_DATA_PROPERTY).objectReferenceValue = null;
+                    element.FindPropertyRelative("_preservePreviousSpeed").boolValue = false;
+                }
+                list.index = list.serializedProperty.arraySize - 1;
+            };
+        }
+
+        private bool DrawSegments()
+        {
+            SerializedProperty segments = _segmentsProperty;
+            if (segments == null)
+                return false;
+
+            if (targets.Length == 1)
+            {
+                // SerializedProperty wrappers are recreated by Unity during
+                // inspector updates. Do not compare wrapper identity here;
+                // rebuilding the list every repaint resets its layout state
+                // and can make rows render on top of one another.
+                if (_segmentsList == null)
+                    SetupSegmentsList();
+
+                EditorGUI.BeginChangeCheck();
+                _segmentsList?.DoLayoutList();
+                return EditorGUI.EndChangeCheck();
+            }
+
+            EditorGUI.BeginChangeCheck();
+            EditorGUILayout.PropertyField(segments, new GUIContent("Segments"), true);
+            return EditorGUI.EndChangeCheck();
+        }
+
+        private float GetSegmentElementHeight(int index)
+        {
+            SerializedProperty segments = _segmentsProperty;
+            if (segments == null || index < 0 || index >= segments.arraySize)
+                return EditorGUIUtility.singleLineHeight + 4f;
+
+            SerializedProperty element = segments.GetArrayElementAtIndex(index);
+            SerializedProperty pathDataProperty = element.FindPropertyRelative(PATH_DATA_PROPERTY);
+            SerializedProperty preserveProperty = element.FindPropertyRelative("_preservePreviousSpeed");
+            PathData pathData = GetPathData(segments, index);
+            float spacing = EditorGUIUtility.standardVerticalSpacing;
+            float height = 4f;
+            height += GetPropertyHeight(pathDataProperty, new GUIContent($"PathData {index}"));
+            height += spacing;
+            height += GetPropertyHeight(preserveProperty, new GUIContent("Preserve Previous Speed"));
+
+            if (pathData == null)
+                return height;
+
+            SerializedObject child = new SerializedObject(pathData);
+            child.Update();
+            SerializedProperty moveType = child.FindProperty("_moveType");
+            SerializedProperty moveValue = child.FindProperty("_moveValue");
+            SerializedProperty timeCurve = child.FindProperty("_timeCurve");
+            if (moveType == null || moveValue == null || timeCurve == null)
+                return height;
+
+            height += spacing + GetPropertyHeight(moveType, new GUIContent("Mode"));
+            height += spacing + GetPropertyHeight(
+                moveValue,
+                new GUIContent(moveType.enumValueIndex == (int)EPathMoveType.SpeedBased
+                    ? "Speed"
+                    : "Duration"));
+            if (moveType.enumValueIndex == (int)EPathMoveType.TimeBased)
+                height += spacing + GetPropertyHeight(timeCurve, new GUIContent("Time Curve"), true);
+
+            return height;
+        }
+
+        private void DrawSegmentElement(Rect rect, int index, bool isActive, bool isFocused)
+        {
+            SerializedProperty segments = _segmentsProperty;
+            if (segments == null || index < 0 || index >= segments.arraySize)
+                return;
+
+            SerializedProperty element = segments.GetArrayElementAtIndex(index);
+            SerializedProperty pathDataProperty = element.FindPropertyRelative(PATH_DATA_PROPERTY);
+            SerializedProperty preserveProperty = element.FindPropertyRelative("_preservePreviousSpeed");
+            float spacing = EditorGUIUtility.standardVerticalSpacing;
+            float y = rect.y + 2f;
+            y = DrawPropertyField(
+                rect,
+                y,
+                pathDataProperty,
+                new GUIContent($"PathData {index}"),
+                false,
+                spacing);
+            y = DrawPropertyField(
+                rect,
+                y,
+                preserveProperty,
+                new GUIContent("Preserve Previous Speed"),
+                false,
+                spacing);
+
+            PathData pathData = pathDataProperty.objectReferenceValue as PathData;
+            if (pathData == null)
+                return;
+
+            DrawInlineMovement(pathData, rect, ref y, spacing);
+        }
+
+        private static void DrawInlineMovement(PathData pathData, Rect rect, ref float y, float spacing)
+        {
+            SerializedObject child = new SerializedObject(pathData);
+            child.Update();
+            SerializedProperty moveType = child.FindProperty("_moveType");
+            SerializedProperty moveValue = child.FindProperty("_moveValue");
+            SerializedProperty timeCurve = child.FindProperty("_timeCurve");
+            if (moveType == null || moveValue == null || timeCurve == null)
+                return;
+
+            bool changed = false;
+            EditorGUI.BeginChangeCheck();
+            y = DrawPropertyField(
+                rect,
+                y,
+                moveType,
+                new GUIContent("Mode"),
+                false,
+                spacing);
+            string label = moveType.enumValueIndex == (int)EPathMoveType.SpeedBased ? "Speed" : "Duration";
+            y = DrawPropertyField(
+                rect,
+                y,
+                moveValue,
+                new GUIContent(label),
+                false,
+                spacing);
+            if (moveType.enumValueIndex == (int)EPathMoveType.TimeBased)
+            {
+                if (timeCurve.animationCurveValue == null || timeCurve.animationCurveValue.length == 0)
+                {
+                    timeCurve.animationCurveValue = AnimationCurve.Linear(0f, 0f, 1f, 1f);
+                    changed = true;
+                }
+                y = DrawPropertyField(
+                    rect,
+                    y,
+                    timeCurve,
+                    new GUIContent("Time Curve"),
+                    true,
+                    spacing);
+            }
+            changed |= EditorGUI.EndChangeCheck();
+
+            if (changed)
+            {
+                child.ApplyModifiedProperties();
+                EditorUtility.SetDirty(pathData);
+                RecordPrefabOverride(pathData);
+            }
+        }
+
+        private static float GetPropertyHeight(
+            SerializedProperty property,
+            GUIContent label,
+            bool includeChildren = false)
+        {
+            return property == null
+                ? EditorGUIUtility.singleLineHeight
+                : EditorGUI.GetPropertyHeight(property, label, includeChildren);
+        }
+
+        private static float DrawPropertyField(
+            Rect container,
+            float y,
+            SerializedProperty property,
+            GUIContent label,
+            bool includeChildren,
+            float spacing)
+        {
+            if (property == null)
+                return y;
+
+            float height = GetPropertyHeight(property, label, includeChildren);
+            Rect fieldRect = new Rect(container.x, y, container.width, height);
+            EditorGUI.PropertyField(fieldRect, property, label, includeChildren);
+            return y + height + spacing;
+        }
+
+        private void DrawMovementBulkTools(bool enabled)
+        {
+            EditorGUILayout.Space();
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            EditorGUILayout.LabelField("Movement Preset", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField(
+                "Editor-only bulk settings for every unique PathData in this MultiPath.",
+                EditorStyles.miniLabel);
+            EditorGUI.BeginDisabledGroup(!enabled);
+            _bulkMoveType = (EPathMoveType)EditorGUILayout.EnumPopup("Mode", _bulkMoveType);
+            _bulkMoveValue = EditorGUILayout.FloatField(
+                _bulkMoveType == EPathMoveType.SpeedBased ? "Speed" : "Duration",
+                _bulkMoveValue);
+            if (_bulkMoveType == EPathMoveType.TimeBased)
+            {
+                if (_bulkTimeCurve == null)
+                    _bulkTimeCurve = AnimationCurve.Linear(0f, 0f, 1f, 1f);
+                _bulkTimeCurve = EditorGUILayout.CurveField("Time Curve", _bulkTimeCurve);
+            }
+            if (GUILayout.Button("Apply To All Paths"))
+                ApplyMovementToAllPaths();
+            EditorGUI.EndDisabledGroup();
+            if (!enabled)
+                EditorGUILayout.HelpBox("Movement authoring is disabled in Play Mode.", MessageType.Info);
+            EditorGUILayout.EndVertical();
+        }
+
+        private void ApplyMovementToAllPaths()
+        {
+            foreach (UnityEngine.Object targetObject in targets)
+            {
+                MultiPathData multiPathData = targetObject as MultiPathData;
+                if (multiPathData == null)
+                    continue;
+                List<PathData> pathDatas = CollectUniquePathDatas(multiPathData);
+                if (pathDatas.Count == 0)
+                    continue;
+
+                Undo.RecordObjects(pathDatas.ToArray(), "Apply movement preset to PathData");
+                for (int i = 0; i < pathDatas.Count; i++)
+                {
+                    SerializedObject child = new SerializedObject(pathDatas[i]);
+                    child.Update();
+                    SetEnum(child, "_moveType", _bulkMoveType);
+                    SetFloat(child, "_moveValue", _bulkMoveValue);
+                    if (_bulkMoveType == EPathMoveType.TimeBased)
+                        SetCurve(child, "_timeCurve", _bulkTimeCurve);
+                    child.ApplyModifiedProperties();
+                    EditorUtility.SetDirty(pathDatas[i]);
+                    RecordPrefabOverride(pathDatas[i]);
+                }
+            }
+            SceneView.RepaintAll();
+        }
+
+        private static void SetEnum(SerializedObject serializedObject, string propertyName, EPathMoveType value)
+        {
+            SerializedProperty property = serializedObject.FindProperty(propertyName);
+            if (property != null)
+                property.enumValueIndex = (int)value;
+        }
+
+        private static void SetCurve(SerializedObject serializedObject, string propertyName, AnimationCurve value)
+        {
+            SerializedProperty property = serializedObject.FindProperty(propertyName);
+            if (property != null)
+            {
+                if (value == null)
+                {
+                    property.animationCurveValue = null;
+                    return;
+                }
+                AnimationCurve clone = new AnimationCurve(value.keys)
+                {
+                    preWrapMode = value.preWrapMode,
+                    postWrapMode = value.postWrapMode,
+                };
+                property.animationCurveValue = clone;
+            }
         }
 
         private void SyncDrawingAndColorsAfterInspectorEdit()

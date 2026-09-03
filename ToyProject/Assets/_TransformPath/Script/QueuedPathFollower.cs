@@ -170,18 +170,29 @@ namespace Common.TransformPath
             _currentSpeedMultiplier = 1f;
         }
 
-        public void StartMove(IPathProvider provider, PathMoveSettings settings)
+        public void StartMove(IPathMovementProvider provider, PathPlaybackSettings playback)
         {
             EnsureReadyToStart(provider);
-            _pathFollower.StartMove(provider, settings);
+            _pathFollower.StartMove(provider, playback);
             _snapshotRevision = _pathFollower.SnapshotRevision;
             RegisterAfterStart();
         }
 
-        public void StartSequence(IPathSequenceProvider provider, PathSequenceSettings settings)
+        public void StartMove(
+            IPathProvider provider,
+            PathMovementSettings movementOverride,
+            PathPlaybackSettings playback)
         {
             EnsureReadyToStart(provider);
-            _pathFollower.StartSequence(provider, settings);
+            _pathFollower.StartMove(provider, movementOverride, playback);
+            _snapshotRevision = _pathFollower.SnapshotRevision;
+            RegisterAfterStart();
+        }
+
+        public void StartSequence(IPathSequenceProvider provider, PathPlaybackSettings playback)
+        {
+            EnsureReadyToStart(provider);
+            _pathFollower.StartSequence(provider, playback);
             _snapshotRevision = _pathFollower.SnapshotRevision;
             RegisterAfterStart();
         }

@@ -20,13 +20,8 @@ namespace Common.TransformPath
 
         [Header("Startup")]
         [SerializeField] private MonoBehaviour _startupProviderObject;
-        [SerializeField] private bool _startupAsSequence;
         [SerializeField] private bool _playOnStart;
-        [SerializeField] private EPathMoveType _startupMoveType = EPathMoveType.TimeBased;
-        [SerializeField, Min(0.001f)] private float _startupValue = 5f;
-        [SerializeField] private AnimationCurve _startupTimeCurve = null;
         [SerializeField] private bool _startupLoop;
-        [SerializeField] private bool _startupPreserveSpeedBetweenSegments;
 
         [Header("Runtime")]
         [SerializeField] private PathEventHandler _pathEventHandler;
@@ -41,7 +36,6 @@ namespace Common.TransformPath
         private float _duration;
         private AnimationCurve _timeCurve;
         private bool _loop;
-        private bool _preserveSpeedBetweenSegments;
         private int _currentSegmentIndex = -1;
         private float _normalizedTime;
         private float _globalNormalizedTime;
@@ -92,8 +86,6 @@ namespace Common.TransformPath
         private void Reset()
         {
             _pathEventHandler = GetComponent<PathEventHandler>();
-            if (_startupTimeCurve == null)
-                _startupTimeCurve = AnimationCurve.Linear(0f, 0f, 1f, 1f);
         }
 
         private void Awake()
@@ -115,25 +107,17 @@ namespace Common.TransformPath
                 return;
             }
 
-            if (_startupAsSequence)
+            IPathSequenceProvider sequence = provider as IPathSequenceProvider;
+            if (sequence != null)
             {
-                IPathSequenceProvider sequence = provider as IPathSequenceProvider;
-                if (sequence == null)
-                {
-                    Debug.LogError($"PathFollower '{name}' startup provider is not a sequence.", this);
-                    return;
-                }
-                StartSequence(sequence, new PathSequenceSettings(_startupLoop, _startupPreserveSpeedBetweenSegments));
+                StartSequence(sequence, new PathPlaybackSettings(_startupLoop));
+            }
+            else if (provider is IPathMovementProvider movementProvider)
+            {
+                StartMove(movementProvider, new PathPlaybackSettings(_startupLoop));
             }
             else
-            {
-                StartMove(provider, new PathMoveSettings(
-                    _startupMoveType,
-                    _startupValue,
-                    _startupTimeCurve,
-                    _startupLoop,
-                    _startupPreserveSpeedBetweenSegments));
-            }
+                Debug.LogError($"PathFollower '{name}' startup provider does not expose movement settings. Use the explicit override StartMove API.", this);
         }
 
         private void Update()
@@ -192,9 +176,6 @@ namespace Common.TransformPath
                 _pathEventHandler = GetComponent<PathEventHandler>();
             if (_pathEventHandler != null && !_pathEventHandler.IsInitialized)
                 _pathEventHandler.Init();
-            if (_startupTimeCurve == null)
-                _startupTimeCurve = AnimationCurve.Linear(0f, 0f, 1f, 1f);
-
             _isInitialized = true;
             _state = EPathFollowerState.Ready;
             _playbackRevision++;
@@ -222,20 +203,35 @@ namespace Common.TransformPath
             Release();
         }
 
-        public void StartMove(IPathProvider provider, PathMoveSettings settings)
+        public void StartMove(IPathMovementProvider provider, PathPlaybackSettings playback)
+        {
+            if (provider == null)
+                throw new ArgumentNullException(nameof(provider));
+            StartMove(provider, provider.MovementSettings, playback);
+        }
+
+        public void StartMove(
+            IPathProvider provider,
+            PathMovementSettings movementOverride,
+            PathPlaybackSettings playback)
         {
             EnsureInitialized();
             ValidateProvider(provider);
-            ValidateMoveSettings(settings);
+            if (provider is IPathSequenceProvider)
+                Debug.LogWarning($"PathFollower '{name}' is playing an IPathSequenceProvider as one aggregate path with an explicit movement override.", this);
+            PathMovementSettings settings = PathMovementSettingsUtility.Clone(movementOverride);
+            PathMovementSettingsUtility.Validate(settings, nameof(movementOverride));
 
             StopPlaybackOnly();
             _playbackSession = new PathPlaybackSession(provider, null, null);
             _moveType = settings.MoveType;
             _speed = settings.MoveType == EPathMoveType.SpeedBased ? settings.Value : _speed;
             _duration = settings.MoveType == EPathMoveType.TimeBased ? settings.Value : _duration;
-            _timeCurve = settings.TimeCurve;
-            _loop = settings.Loop;
-            _preserveSpeedBetweenSegments = settings.PreserveSpeedBetweenSegments;
+            _timeCurve = PathMovementSettingsUtility.CloneCurve(settings.TimeCurve);
+            _playbackSession.ProviderMovementSettings = provider is IPathMovementProvider providerWithMovement
+                ? PathMovementSettingsUtility.Clone(providerWithMovement.MovementSettings)
+                : (PathMovementSettings?)null;
+            _loop = playback.Loop;
             _currentSegmentIndex = 0;
             _normalizedTime = 0f;
             _globalNormalizedTime = 0f;
@@ -249,7 +245,7 @@ namespace Common.TransformPath
             ApplyCurrentPosition();
         }
 
-        public void StartSequence(IPathSequenceProvider provider, PathSequenceSettings settings)
+        public void StartSequence(IPathSequenceProvider provider, PathPlaybackSettings playback)
         {
             EnsureInitialized();
             ValidateProvider(provider);
@@ -259,8 +255,7 @@ namespace Common.TransformPath
 
             StopPlaybackOnly();
             _playbackSession = new PathPlaybackSession(provider, provider, snapshot);
-            _loop = settings.Loop;
-            _preserveSpeedBetweenSegments = settings.PreserveSpeedBetweenSegments;
+            _loop = playback.Loop;
             _currentSegmentIndex = 0;
             _normalizedTime = 0f;
             _globalNormalizedTime = 0f;
@@ -450,16 +445,17 @@ namespace Common.TransformPath
             transitioned = false;
             PathSequenceSnapshot snapshot = _playbackSession.Snapshot;
             PathSegmentDescriptor descriptor = snapshot.GetDescriptor(_currentSegmentIndex);
+            PathMovementSettings movementSettings = descriptor.MovementSettings;
             float multiplier = Mathf.Max(_queueSpeedMultiplier, MIN_VALUE);
             float consume;
 
-            if (descriptor.MoveType == EPathMoveType.TimeBased)
+            if (movementSettings.MoveType == EPathMoveType.TimeBased)
             {
                 float duration = Mathf.Max(_duration, MIN_VALUE);
                 float remaining = Mathf.Max(0f, duration - _segmentElapsed);
                 consume = Mathf.Min(availableTime, remaining / multiplier);
                 _segmentElapsed += consume * multiplier;
-                _normalizedTime = EvaluateTimeProgress(_segmentElapsed / duration, descriptor.TimeCurve);
+                _normalizedTime = EvaluateTimeProgress(_segmentElapsed / duration, movementSettings.TimeCurve);
             }
             else
             {
@@ -476,7 +472,7 @@ namespace Common.TransformPath
             if (_playbackRevision != tickRevision)
                 return Mathf.Max(consume, EPSILON);
 
-            bool atEnd = descriptor.MoveType == EPathMoveType.TimeBased
+            bool atEnd = movementSettings.MoveType == EPathMoveType.TimeBased
                 ? _segmentElapsed >= _duration - EPSILON
                 : _segmentDistance >= snapshot.GetLength(_currentSegmentIndex) - EPSILON;
             if (atEnd)
@@ -515,7 +511,8 @@ namespace Common.TransformPath
             _segmentDistance = 0f;
             _normalizedTime = 0f;
             _globalNormalizedTime = _playbackSession.Snapshot.GetGlobalProgress(index, 0f);
-            ConfigureSequenceSegment(index, previousNominalSpeed, _preserveSpeedBetweenSegments);
+            PathSegmentDescriptor descriptor = _playbackSession.Snapshot.GetDescriptor(index);
+            ConfigureSequenceSegment(index, previousNominalSpeed, descriptor.PreservePreviousSpeed);
             _playbackSession.EventCursor.Reset(_playbackSession.Snapshot.GetEventSource(index), 0f);
             InvokeSegmentChanged(index, tickRevision);
         }
@@ -523,10 +520,12 @@ namespace Common.TransformPath
         private void ConfigureSequenceSegment(int index, float previousNominalSpeed, bool preserveSpeed)
         {
             PathSegmentDescriptor descriptor = _playbackSession.Snapshot.GetDescriptor(index);
-            _moveType = descriptor.MoveType;
+            PathMovementSettings settings = descriptor.MovementSettings;
+            _moveType = settings.MoveType;
+            _timeCurve = settings.TimeCurve;
             if (preserveSpeed && previousNominalSpeed >= MIN_VALUE && IsFinite(previousNominalSpeed))
             {
-                if (descriptor.MoveType == EPathMoveType.SpeedBased)
+                if (settings.MoveType == EPathMoveType.SpeedBased)
                     _speed = previousNominalSpeed;
                 else
                     _duration = Mathf.Clamp(
@@ -534,13 +533,13 @@ namespace Common.TransformPath
                         MIN_VALUE,
                         MAX_VALUE);
             }
-            else if (descriptor.MoveType == EPathMoveType.SpeedBased)
+            else if (settings.MoveType == EPathMoveType.SpeedBased)
             {
-                _speed = descriptor.Value;
+                _speed = settings.Value;
             }
             else
             {
-                _duration = descriptor.Value;
+                _duration = settings.Value;
             }
         }
 
@@ -608,6 +607,19 @@ namespace Common.TransformPath
                 _globalNormalizedTime = _playbackSession.Snapshot.GetGlobalProgress(_currentSegmentIndex, _normalizedTime);
                 ApplyCurrentPosition();
                 return true;
+            }
+
+            if (_playbackSession.Provider is IPathMovementProvider movementProvider)
+            {
+                PathMovementSettings current = movementProvider.MovementSettings;
+                if (!_playbackSession.ProviderMovementSettings.HasValue
+                    || !PathMovementSettingsUtility.AreSame(
+                        _playbackSession.ProviderMovementSettings.Value,
+                        current))
+                {
+                    StopMove();
+                    return false;
+                }
             }
 
             _playbackSession.ProviderRevision = _playbackSession.Provider.Revision;
@@ -701,41 +713,6 @@ namespace Common.TransformPath
                 throw new InvalidOperationException("Path provider must be initialized and ready.");
         }
 
-        private static void ValidateMoveSettings(PathMoveSettings settings)
-        {
-            if (!Enum.IsDefined(typeof(EPathMoveType), settings.MoveType))
-                throw new ArgumentOutOfRangeException(nameof(settings));
-            ValidatePositive(settings.Value, nameof(settings));
-            if (settings.MoveType == EPathMoveType.TimeBased)
-                ValidateCurve(settings.TimeCurve);
-        }
-
-        private static void ValidateCurve(AnimationCurve curve)
-        {
-            if (curve == null || curve.length == 0)
-                throw new ArgumentException("TimeCurve must contain at least one key.");
-
-            Keyframe[] keys = curve.keys;
-            for (int i = 0; i < keys.Length; i++)
-            {
-                if (!IsFinite(keys[i].time) || !IsFinite(keys[i].value))
-                    throw new ArgumentException("TimeCurve keys must be finite.");
-            }
-
-            float previous = curve.Evaluate(0f);
-            if (!IsFinite(previous) || Mathf.Abs(previous) > 0.001f)
-                throw new ArgumentException("TimeCurve must start at 0.");
-            for (int i = 1; i <= 64; i++)
-            {
-                float value = curve.Evaluate(i / 64f);
-                if (!IsFinite(value) || value + 0.001f < previous)
-                    throw new ArgumentException("TimeCurve must be finite and non-decreasing.");
-                previous = value;
-            }
-            if (Mathf.Abs(curve.Evaluate(1f) - 1f) > 0.001f)
-                throw new ArgumentException("TimeCurve must end at 1.");
-        }
-
         private static float EvaluateTimeProgress(float rawProgress, AnimationCurve curve)
         {
             return Mathf.Clamp01(curve == null ? rawProgress : curve.Evaluate(Mathf.Clamp01(rawProgress)));
@@ -820,6 +797,7 @@ namespace Common.TransformPath
             public PathSequenceSnapshot Snapshot;
             public readonly PathEventCursor EventCursor;
             public int ProviderRevision;
+            public PathMovementSettings? ProviderMovementSettings;
 
             public PathPlaybackSession(
                 IPathProvider provider,
@@ -884,14 +862,24 @@ namespace Common.TransformPath
                 for (int i = 0; i < count; i++)
                 {
                     descriptors[i] = provider.GetSegment(i);
+                    descriptors[i] = new PathSegmentDescriptor(
+                        descriptors[i].Provider,
+                        PathMovementSettingsUtility.Clone(descriptors[i].MovementSettings),
+                        descriptors[i].PreservePreviousSpeed);
                     if (descriptors[i].Provider == null
                         || !descriptors[i].Provider.IsInitialized
                         || !descriptors[i].Provider.IsReady)
                         throw new InvalidOperationException($"Sequence segment {i} provider is not ready.");
-                    if (!Enum.IsDefined(typeof(EPathMoveType), descriptors[i].MoveType)
-                        || !IsFinite(descriptors[i].Value)
-                        || descriptors[i].Value < MIN_VALUE)
-                        throw new InvalidOperationException($"Sequence segment {i} has invalid movement settings.");
+                    try
+                    {
+                        PathMovementSettingsUtility.Validate(
+                            descriptors[i].MovementSettings,
+                            $"Sequence segment {i} movement settings");
+                    }
+                    catch (Exception exception)
+                    {
+                        throw new InvalidOperationException(exception.Message, exception);
+                    }
                     lengths[i] = provider.GetSegmentLength(i);
                     starts[i] = total;
                     total += lengths[i];
@@ -899,8 +887,6 @@ namespace Common.TransformPath
                         throw new InvalidOperationException($"Sequence segment {i} has an invalid length.");
                     if (!Mathf.Approximately(lengths[i], descriptors[i].Provider.PathLength))
                         throw new InvalidOperationException($"Sequence segment {i} length does not match its provider.");
-                    if (descriptors[i].MoveType == EPathMoveType.TimeBased)
-                        ValidateCurve(descriptors[i].TimeCurve);
                 }
                 if (total <= 0f)
                     throw new InvalidOperationException("Sequence total length must be positive.");
@@ -956,9 +942,10 @@ namespace Common.TransformPath
                     PathSegmentDescriptor left = _descriptors[i];
                     PathSegmentDescriptor right = other._descriptors[i];
                     if (!ReferenceEquals(left.Provider, right.Provider)
-                        || left.MoveType != right.MoveType
-                        || !Mathf.Approximately(left.Value, right.Value)
-                        || left.TimeCurve != right.TimeCurve)
+                        || left.PreservePreviousSpeed != right.PreservePreviousSpeed
+                        || !PathMovementSettingsUtility.AreSame(
+                            left.MovementSettings,
+                            right.MovementSettings))
                         return false;
                 }
                 return true;

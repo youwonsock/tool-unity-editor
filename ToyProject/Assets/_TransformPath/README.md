@@ -16,10 +16,11 @@ components can be configured first and initialized explicitly.
 path.ConfigureControlPoints(points);
 path.ConfigureBuildSettings(new PathBuildSettings(
     PathData.ECurveType.SplineInterpolating, 500));
+path.ConfigureMovementSettings(PathMovementSettings.Speed(3f));
 path.Init();
 
 follower.Init();
-follower.StartMove(path, PathMoveSettings.Speed(3f, loop: true));
+follower.StartMove(path, new PathPlaybackSettings(loop: true));
 follower.Seek(0.5f);
 ```
 
@@ -31,14 +32,26 @@ exception does not stop the others.
 
 ## Aggregate paths and sequences
 
-- `StartMove(IPathProvider, PathMoveSettings)` treats the provider as one
-  aggregate path. A `MultiPathData` passed here is sampled as one continuous
-  length-indexed route.
-- `StartSequence(IPathSequenceProvider, PathSequenceSettings)` snapshots the
-  ordered segments and applies each segment's move type, value, and time curve.
+- `PathData` implements `IPathMovementProvider`; its `PathMovementSettings` are
+  the single source of truth for normal playback. The follower no longer has
+  serialized movement authoring fields.
+- `StartMove(IPathMovementProvider, PathPlaybackSettings)` uses the provider's
+  movement settings. `StartMove(IPathProvider, PathMovementSettings,
+  PathPlaybackSettings)` is the explicit-session override for geometry-only
+  providers or aggregate playback; it does not mutate the provider.
+- `StartSequence(IPathSequenceProvider, PathPlaybackSettings)` snapshots the
+  ordered segments and uses each referenced `PathData`'s movement settings.
+  `PathSegmentConfig` stores only the child `PathData` and the destination
+  segment's `PreservePreviousSpeed` flag.
   `SegmentChanged` identifies transitions; `CurrentSegmentIndex` and
   `NormalizedTime` are local to the active segment, while
   `GlobalNormalizedTime` is length-weighted across the sequence.
+
+For a segment transition with `PreservePreviousSpeed`, the previous nominal
+speed is converted into the destination mode: SpeedBased receives that speed,
+while TimeBased receives `segment length / previous speed` as its duration.
+The flag is ignored on initial start and Seek, and applies to natural
+transitions including the final-to-first loop transition.
 
 Sequence boundaries use `[start, end)`: an exact boundary selects the next
 segment at local `0`; only global `1` selects the final segment at local `1`.
@@ -103,13 +116,18 @@ code are separated into `Common.TransformPath.Runtime`,
 
 ## Authoring checklist
 
-1. Add at least two control points to `PathData` and choose its curve type.
-2. Rebuild after changing control points or runtime build settings.
+1. Add at least two control points to `PathData`, choose its curve type, and
+   set its Movement Mode plus Speed or Duration.
+2. Rebuild after changing control points, movement authoring, or runtime build
+   settings. Inspector edits alone do not publish runtime revisions.
 3. For a sequence, configure `PathSegmentConfig` entries on `MultiPathData`.
 4. Start a follower with `StartMove` for aggregate playback or `StartSequence`
    for per-segment playback.
 5. Subscribe to `StateChanged`, `SegmentChanged`, and `Completed` during the
    component's active lifetime, and unsubscribe in `Release`/teardown.
 
-There are no compatibility aliases in 2.0: use `EPathMoveType`, `MoveType`,
-`PathSegmentConfig`, `Seek`, `SeekSegment`, and `IPathEventReceiver` directly.
+There are no compatibility aliases in 2.0. Use `EPathMoveType`,
+`PathMovementSettings`, `PathPlaybackSettings`, `PathSegmentConfig`, `Seek`,
+`SeekSegment`, and `IPathEventReceiver` directly. `PathData` is the authoring
+source for initial movement; `PathEventHandler` may still change the follower's
+runtime Speed or Duration during a session.

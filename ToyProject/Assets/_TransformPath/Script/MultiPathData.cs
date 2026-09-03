@@ -28,6 +28,7 @@ namespace Common.TransformPath
         private float[] _segmentLengths;
         private float[] _segmentStartDistances;
         private int[] _childRevisions;
+        private PathSegmentDescriptor[] _cachedDescriptors;
         private float _pathLength;
         private bool _isInitialized;
         private bool _isDirty;
@@ -90,6 +91,7 @@ namespace Common.TransformPath
             _segmentLengths = null;
             _segmentStartDistances = null;
             _childRevisions = null;
+            _cachedDescriptors = null;
             _pathLength = 0f;
         }
 
@@ -118,7 +120,12 @@ namespace Common.TransformPath
         public PathSegmentDescriptor GetSegment(int index)
         {
             PathSegmentConfig config = GetSegmentConfig(index);
-            return new PathSegmentDescriptor(config.PathData, config.MoveType, config.Value, config.TimeCurve);
+            if (!(config.PathData is IPathMovementProvider movementProvider))
+                throw new InvalidOperationException($"Segment {index} PathData does not provide movement settings.");
+            return new PathSegmentDescriptor(
+                movementProvider,
+                movementProvider.MovementSettings,
+                config.PreservePreviousSpeed);
         }
 
         public float GetSegmentStartDistance(int index)
@@ -190,6 +197,7 @@ namespace Common.TransformPath
                     out float[] nextLengths,
                     out float[] nextStarts,
                     out int[] nextRevisions,
+                    out PathSegmentDescriptor[] nextDescriptors,
                     out float nextTotalLength);
 
                 bool changed = !_isInitialized
@@ -208,6 +216,16 @@ namespace Common.TransformPath
                             changed = true;
                             break;
                         }
+                        if (_cachedDescriptors == null
+                            || !PathMovementSettingsUtility.AreSame(
+                                _cachedDescriptors[i].MovementSettings,
+                                nextDescriptors[i].MovementSettings)
+                            || _cachedDescriptors[i].PreservePreviousSpeed
+                                != nextDescriptors[i].PreservePreviousSpeed)
+                        {
+                            changed = true;
+                            break;
+                        }
                     }
                 }
 
@@ -216,6 +234,7 @@ namespace Common.TransformPath
                 _segmentLengths = nextLengths;
                 _segmentStartDistances = nextStarts;
                 _childRevisions = nextRevisions;
+                _cachedDescriptors = nextDescriptors;
                 _pathLength = nextTotalLength;
                 _isInitialized = true;
                 _isDirty = false;
@@ -235,6 +254,7 @@ namespace Common.TransformPath
                 _segmentLengths = null;
                 _segmentStartDistances = null;
                 _childRevisions = null;
+                _cachedDescriptors = null;
                 _pathLength = 0f;
                 UnsubscribeFromChildren();
                 if (!_configurationErrorReported)
@@ -250,6 +270,7 @@ namespace Common.TransformPath
             out float[] nextLengths,
             out float[] nextStarts,
             out int[] nextRevisions,
+            out PathSegmentDescriptor[] nextDescriptors,
             out float nextTotalLength)
         {
             if (_segments == null || _segments.Count == 0)
@@ -264,13 +285,11 @@ namespace Common.TransformPath
                     throw new ArgumentException($"Segment {i} has no PathData provider.");
                 if (!segment.PathData.IsReady)
                     throw new InvalidOperationException($"Segment {i} PathData is not ready.");
-                if (!Enum.IsDefined(typeof(EPathMoveType), segment.MoveType))
-                    throw new ArgumentOutOfRangeException($"segments[{i}].MoveType");
-                if (!IsFinite(segment.Value) || segment.Value <= 0f)
-                    throw new ArgumentOutOfRangeException($"segments[{i}].Value");
-                if (segment.MoveType == EPathMoveType.TimeBased
-                    && (segment.TimeCurve == null || segment.TimeCurve.length == 0))
-                    throw new ArgumentException($"Segment {i} requires a non-empty TimeCurve.");
+                if (!(segment.PathData is IPathMovementProvider movementProvider))
+                    throw new ArgumentException($"Segment {i} PathData does not provide movement settings.");
+                PathMovementSettingsUtility.Validate(
+                    movementProvider.MovementSettings,
+                    $"segments[{i}].PathData.MovementSettings");
 
                 _validatedSegments.Add(segment);
                 nextTotalLength += segment.PathData.PathLength;
@@ -283,12 +302,18 @@ namespace Common.TransformPath
             nextLengths = new float[nextSegments.Count];
             nextStarts = new float[nextSegments.Count];
             nextRevisions = new int[nextSegments.Count];
+            nextDescriptors = new PathSegmentDescriptor[nextSegments.Count];
             float accumulated = 0f;
             for (int i = 0; i < nextSegments.Count; i++)
             {
                 nextStarts[i] = accumulated;
                 nextLengths[i] = nextSegments[i].PathData.PathLength;
                 nextRevisions[i] = nextSegments[i].PathData.Revision;
+                IPathMovementProvider movementProvider = nextSegments[i].PathData;
+                nextDescriptors[i] = new PathSegmentDescriptor(
+                    movementProvider,
+                    PathMovementSettingsUtility.Clone(movementProvider.MovementSettings),
+                    nextSegments[i].PreservePreviousSpeed);
                 accumulated += nextLengths[i];
             }
         }
@@ -351,9 +376,7 @@ namespace Common.TransformPath
         private static bool AreSameConfig(PathSegmentConfig left, PathSegmentConfig right)
         {
             return left.PathData == right.PathData
-                && left.MoveType == right.MoveType
-                && Mathf.Approximately(left.Value, right.Value)
-                && left.TimeCurve == right.TimeCurve;
+                && left.PreservePreviousSpeed == right.PreservePreviousSpeed;
         }
 
         private void NotifyPathChanged()

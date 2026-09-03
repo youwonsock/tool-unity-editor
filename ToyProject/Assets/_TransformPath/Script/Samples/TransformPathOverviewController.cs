@@ -339,13 +339,13 @@ namespace Common.TransformPath.Samples
         private void StartNormalPath()
         {
             if (_pathFollower != null && !_pathFollower.IsMoving)
-                _pathFollower.StartMove(_pathData, new PathMoveSettings(EPathMoveType.SpeedBased, 3f, loop: true));
+                _pathFollower.StartMove(_pathData, new PathPlaybackSettings(loop: true));
         }
 
         private void StartMultiPath()
         {
             if (_multiPathFollower != null && !_multiPathFollower.IsMoving)
-                _multiPathFollower.StartSequence(_multiPathData, new PathSequenceSettings(loop: false, preserveSpeedBetweenSegments: true));
+                _multiPathFollower.StartSequence(_multiPathData, new PathPlaybackSettings(loop: false));
         }
 
         private void StartQueueFollowers()
@@ -355,7 +355,7 @@ namespace Common.TransformPath.Samples
                 QueuedPathFollower follower = _queueFollowers[i];
                 if (follower == null || !follower.isActiveAndEnabled || follower.IsMoving)
                     continue;
-                follower.StartSequence(_queuePathData, new PathSequenceSettings(loop: false, preserveSpeedBetweenSegments: true));
+                follower.StartSequence(_queuePathData, new PathPlaybackSettings(loop: false));
             }
             ApplyQueueStartSpacing();
         }
@@ -413,7 +413,7 @@ namespace Common.TransformPath.Samples
         {
             if (!_isInitialized || _isPaused || follower == null || !follower.isActiveAndEnabled)
                 return;
-            follower.StartSequence(_queuePathData, new PathSequenceSettings(loop: false, preserveSpeedBetweenSegments: true));
+            follower.StartSequence(_queuePathData, new PathPlaybackSettings(loop: false));
         }
 
         private QueuedPathFollower GetQueueLeader()

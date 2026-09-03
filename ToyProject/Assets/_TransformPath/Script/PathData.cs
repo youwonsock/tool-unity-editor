@@ -18,7 +18,7 @@ namespace Common.TransformPath
     /// editor-only and is compiled out of player builds.
     /// </summary>
     [DefaultExecutionOrder(-300)]
-    public sealed class PathData : MonoBehaviour, IPathProvider, IPathEventSource
+    public sealed class PathData : MonoBehaviour, IPathMovementProvider, IPathEventSource
     {
         public const float MAX_PATH_EVENT_NORMALIZED_TIME = 0.995f;
 
@@ -37,6 +37,11 @@ namespace Common.TransformPath
         [SerializeField] private List<PathEventEntry> _pathEvents = new List<PathEventEntry>();
         [SerializeField, Min(2)] private int _segmentCount = DEFAULT_SEGMENT_COUNT;
         [SerializeField] private ECurveType _curveType = ECurveType.Linear;
+
+        [Header("Movement")]
+        [SerializeField] private EPathMoveType _moveType = EPathMoveType.TimeBased;
+        [SerializeField, Min(0.001f)] private float _moveValue = 5f;
+        [SerializeField] private AnimationCurve _timeCurve = null;
 
 #if UNITY_EDITOR
         private enum EPreviewSamplingType
@@ -66,6 +71,8 @@ namespace Common.TransformPath
         private bool _isInitialized;
         private bool _hasConfiguredVectorPoints;
         private bool _configurationErrorReported;
+        private bool _movementSettingsPublished;
+        private PathMovementSettings _publishedMovementSettings;
         private int _revision;
 
         private readonly List<Vector3> _configuredPoints = new List<Vector3>();
@@ -79,7 +86,8 @@ namespace Common.TransformPath
             && _cachedPathPoints != null
             && _cachedDistances != null
             && _cachedPathPoints.Length >= MIN_PATH_POINTS
-            && _cachedPathLength > 0f;
+            && _cachedPathLength > 0f
+            && _movementSettingsPublished;
         public int Revision => _revision;
         public float PathLength
         {
@@ -91,6 +99,8 @@ namespace Common.TransformPath
         }
         public ECurveType CurveType => _curveType;
         public int BuildSegmentCount => _segmentCount;
+        public PathMovementSettings MovementSettings =>
+            PathMovementSettingsUtility.Clone(_publishedMovementSettings);
         public int SamplePointCount
         {
             get
@@ -127,13 +137,31 @@ namespace Common.TransformPath
 
         public void Release()
         {
-            if (!_isInitialized && _cachedPathPoints == null && _cachedDistances == null)
-                return;
-
             _isInitialized = false;
             _cachedPathPoints = null;
             _cachedDistances = null;
             _cachedPathLength = 0f;
+            _movementSettingsPublished = false;
+        }
+
+        public void ConfigureMovementSettings(PathMovementSettings settings)
+        {
+            PathMovementSettingsUtility.Validate(settings, nameof(settings));
+            PathMovementSettings next = PathMovementSettingsUtility.Clone(settings);
+            bool changed = !_movementSettingsPublished
+                || !PathMovementSettingsUtility.AreSame(_publishedMovementSettings, next);
+
+            _moveType = next.MoveType;
+            _moveValue = next.Value;
+            _timeCurve = PathMovementSettingsUtility.CloneCurve(next.TimeCurve);
+            _publishedMovementSettings = PathMovementSettingsUtility.Clone(next);
+            _movementSettingsPublished = true;
+
+            if (changed)
+            {
+                _revision++;
+                NotifyPathChanged();
+            }
         }
 
         public void ConfigureBuildSettings(PathBuildSettings settings)
@@ -372,6 +400,8 @@ namespace Common.TransformPath
                 throw new ArgumentOutOfRangeException(nameof(_segmentCount));
             ValidateCurveType(_curveType);
             ValidatePathEvents();
+            PathMovementSettings nextMovementSettings = GetAuthoringMovementSettings();
+            PathMovementSettingsUtility.Validate(nextMovementSettings, nameof(_moveValue));
 
             _buildPointsScratch.Clear();
             switch (_curveType)
@@ -409,12 +439,17 @@ namespace Common.TransformPath
                 }
             }
 
+            bool movementChanged = !_movementSettingsPublished
+                || !PathMovementSettingsUtility.AreSame(_publishedMovementSettings, nextMovementSettings);
+
             // Publish only after the complete temporary result passed validation.
             _cachedPathPoints = nextPoints;
             _cachedDistances = nextDistances;
             _cachedPathLength = nextLength;
+            _publishedMovementSettings = PathMovementSettingsUtility.Clone(nextMovementSettings);
+            _movementSettingsPublished = true;
             _isInitialized = true;
-            if (changed)
+            if (changed || movementChanged)
             {
                 _revision++;
                 NotifyPathChanged();
@@ -436,6 +471,14 @@ namespace Common.TransformPath
                 if (entry.EventSetting == null)
                     throw new ArgumentNullException($"_pathEvents[{i}].EventSetting");
             }
+        }
+
+        private PathMovementSettings GetAuthoringMovementSettings()
+        {
+            AnimationCurve curve = _timeCurve;
+            if (_moveType == EPathMoveType.TimeBased && curve == null)
+                curve = AnimationCurve.Linear(0f, 0f, 1f, 1f);
+            return new PathMovementSettings(_moveType, _moveValue, curve);
         }
 
         private Vector3 SampleInternal(float normalizedTime)

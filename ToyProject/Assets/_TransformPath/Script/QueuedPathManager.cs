@@ -31,10 +31,7 @@ namespace Common.TransformPath
         private readonly List<QueueEntry> _entries = new List<QueueEntry>(100);
         private readonly Dictionary<IQueuedPathAgent, int> _indices = new Dictionary<IQueuedPathAgent, int>(100);
         private readonly Dictionary<IQueuedPathAgent, PathQueueState> _states = new Dictionary<IQueuedPathAgent, PathQueueState>(100);
-        private readonly List<IPathProvider> _routeStructureProviders = new List<IPathProvider>();
-        private readonly List<EPathMoveType> _routeStructureMoveTypes = new List<EPathMoveType>();
-        private readonly List<float> _routeStructureValues = new List<float>();
-        private readonly List<AnimationCurve> _routeStructureCurves = new List<AnimationCurve>();
+        private readonly List<PathSegmentDescriptor> _routeStructure = new List<PathSegmentDescriptor>();
 
         private IPathProvider _routeProvider;
         private bool _isInitialized;
@@ -173,10 +170,7 @@ namespace Common.TransformPath
             if (_routeProvider != null)
                 _routeProvider.PathChanged -= HandleRouteChanged;
             _routeProvider = null;
-            _routeStructureProviders.Clear();
-            _routeStructureMoveTypes.Clear();
-            _routeStructureValues.Clear();
-            _routeStructureCurves.Clear();
+            _routeStructure.Clear();
             _isInitialized = false;
             _observedRouteRevision = -1;
             _routeRevision = 0;
@@ -283,15 +277,17 @@ namespace Common.TransformPath
         private bool IsSameRouteStructure()
         {
             int count = GetRouteSegmentCount(_routeProvider);
-            if (count != _routeStructureProviders.Count)
+            if (count != _routeStructure.Count)
                 return false;
             for (int i = 0; i < count; i++)
             {
                 PathSegmentDescriptor descriptor = GetRouteSegment(_routeProvider, i);
-                if (!ReferenceEquals(descriptor.Provider, _routeStructureProviders[i])
-                    || descriptor.MoveType != _routeStructureMoveTypes[i]
-                    || !Mathf.Approximately(descriptor.Value, _routeStructureValues[i])
-                    || descriptor.TimeCurve != _routeStructureCurves[i])
+                PathSegmentDescriptor cached = _routeStructure[i];
+                if (!ReferenceEquals(descriptor.Provider, cached.Provider)
+                    || descriptor.PreservePreviousSpeed != cached.PreservePreviousSpeed
+                    || !PathMovementSettingsUtility.AreSame(
+                        descriptor.MovementSettings,
+                        cached.MovementSettings))
                     return false;
             }
             return true;
@@ -299,18 +295,15 @@ namespace Common.TransformPath
 
         private void CaptureRouteStructure()
         {
-            _routeStructureProviders.Clear();
-            _routeStructureMoveTypes.Clear();
-            _routeStructureValues.Clear();
-            _routeStructureCurves.Clear();
+            _routeStructure.Clear();
             int count = GetRouteSegmentCount(_routeProvider);
             for (int i = 0; i < count; i++)
             {
                 PathSegmentDescriptor descriptor = GetRouteSegment(_routeProvider, i);
-                _routeStructureProviders.Add(descriptor.Provider);
-                _routeStructureMoveTypes.Add(descriptor.MoveType);
-                _routeStructureValues.Add(descriptor.Value);
-                _routeStructureCurves.Add(descriptor.TimeCurve);
+                _routeStructure.Add(new PathSegmentDescriptor(
+                    descriptor.Provider,
+                    PathMovementSettingsUtility.Clone(descriptor.MovementSettings),
+                    descriptor.PreservePreviousSpeed));
             }
         }
 
@@ -355,7 +348,13 @@ namespace Common.TransformPath
             IPathSequenceProvider sequence = provider as IPathSequenceProvider;
             if (sequence != null)
                 return sequence.GetSegment(index);
-            return new PathSegmentDescriptor(provider, EPathMoveType.SpeedBased, 1f, null);
+            IPathMovementProvider movementProvider = provider as IPathMovementProvider;
+            if (movementProvider == null)
+                throw new InvalidOperationException("A queue route provider must expose PathMovementSettings.");
+            return new PathSegmentDescriptor(
+                movementProvider,
+                movementProvider.MovementSettings,
+                false);
         }
 
         private void StopAllAgents()

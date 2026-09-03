@@ -22,7 +22,14 @@ namespace Common.TransformPath
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
-            bool inspectorChanged = DrawDefaultInspector();
+            EditorGUI.BeginChangeCheck();
+            DrawPropertiesExcluding(
+                serializedObject,
+                "_moveType",
+                "_moveValue",
+                "_timeCurve");
+            bool inspectorChanged = EditorGUI.EndChangeCheck();
+            inspectorChanged |= DrawMovementSettings();
             inspectorChanged |= serializedObject.ApplyModifiedProperties();
             if (inspectorChanged)
                 SceneView.RepaintAll();
@@ -54,6 +61,39 @@ namespace Common.TransformPath
             if (GUILayout.Button("Sort Path Events"))
                 SortPathEvents();
             EditorGUI.EndDisabledGroup();
+        }
+
+        private bool DrawMovementSettings()
+        {
+            SerializedProperty moveTypeProperty = serializedObject.FindProperty("_moveType");
+            SerializedProperty moveValueProperty = serializedObject.FindProperty("_moveValue");
+            SerializedProperty timeCurveProperty = serializedObject.FindProperty("_timeCurve");
+            if (moveTypeProperty == null || moveValueProperty == null || timeCurveProperty == null)
+                return false;
+
+            bool changed = false;
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Movement", EditorStyles.boldLabel);
+            EditorGUI.BeginChangeCheck();
+            EditorGUILayout.PropertyField(moveTypeProperty, new GUIContent("Mode"));
+            changed |= EditorGUI.EndChangeCheck();
+
+            string valueLabel = moveTypeProperty.enumValueIndex == (int)EPathMoveType.SpeedBased
+                ? "Speed"
+                : "Duration";
+            EditorGUILayout.PropertyField(moveValueProperty, new GUIContent(valueLabel));
+
+            if (moveTypeProperty.enumValueIndex == (int)EPathMoveType.TimeBased)
+            {
+                if (timeCurveProperty.animationCurveValue == null
+                    || timeCurveProperty.animationCurveValue.length == 0)
+                {
+                    timeCurveProperty.animationCurveValue = AnimationCurve.Linear(0f, 0f, 1f, 1f);
+                    changed = true;
+                }
+                EditorGUILayout.PropertyField(timeCurveProperty, new GUIContent("Time Curve"));
+            }
+            return changed;
         }
 
         [DrawGizmo(GizmoType.Selected | GizmoType.NonSelected)]
