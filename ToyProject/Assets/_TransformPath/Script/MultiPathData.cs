@@ -12,6 +12,19 @@ namespace Common.TransformPath
     {
         [SerializeField] private List<PathSegmentConfig> _segments = new List<PathSegmentConfig>();
 
+#if UNITY_EDITOR
+        private const float DEFAULT_MULTI_PATH_POINT_SIZE = 0.1f;
+
+        [Header("Editor Only")]
+        [SerializeField] private bool _autoLinkPathPoints = true;
+
+        [Header("MultiPath → all PathData drawing")]
+        [SerializeField, Range(0.1f, 20f)] private float _multiPathLineWidth = 2f;
+        [SerializeField, Range(0f, 1f)] private float _multiPathPointSize = DEFAULT_MULTI_PATH_POINT_SIZE;
+        [SerializeField, Range(0f, 1f)] private float _multiPathSamplePointSize = 0f;
+        [SerializeField, Range(0f, 1f)] private float _multiPathEventPointSize = 0.15f;
+#endif
+
         private float[] _segmentLengths;
         private float[] _segmentStartDistances;
         private int[] _childRevisions;

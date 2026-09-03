@@ -40,8 +40,8 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  UseModifyPathMoveDuration: 0
-  MoveDurationTargetValue: 5
+  UseModifyPathMoveDuration: 1
+  MoveDurationTargetValue: 9999
   MoveDurationAdjustDuration: 0
   MoveDurationAdjustCurve:
     serializedVersion: 2

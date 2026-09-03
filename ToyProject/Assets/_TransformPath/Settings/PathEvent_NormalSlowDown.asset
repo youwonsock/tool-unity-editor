@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   EventName: SlowDown
   UseModifyPathMoveSpeed: 1
-  MoveSpeedTargetValue: 1.5
+  MoveSpeedTargetValue: 1
   MoveSpeedAdjustDuration: 0
   MoveSpeedAdjustCurve:
     serializedVersion: 2

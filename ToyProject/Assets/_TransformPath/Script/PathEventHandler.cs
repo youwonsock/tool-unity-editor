@@ -11,13 +11,45 @@ namespace Common.TransformPath
         #region Constants
 
         private const float BASE_FIXED_DELTA_TIME = 0.02f;
+        private const float MAX_MOVE_VALUE = 9999f;
+        private const float TIME_BASED_PAUSE_VALUE = 9999f;
 
-        private enum ESpeedEventIntent
+        private enum EMoveControlChannel
+        {
+            None,
+            Speed,
+            Duration,
+        }
+
+        private enum EMoveEventIntent
         {
             None,
             Pause,
             Resume,
-            ChangeSpeed,
+            ChangeValue,
+        }
+
+        private readonly struct MoveEventContext
+        {
+            public readonly EMoveControlChannel Channel;
+            public readonly EMoveEventIntent Intent;
+            public readonly float TargetValue;
+            public readonly float AdjustDuration;
+            public readonly AnimationCurve AdjustCurve;
+
+            public MoveEventContext(
+                EMoveControlChannel channel,
+                EMoveEventIntent intent,
+                float targetValue,
+                float adjustDuration,
+                AnimationCurve adjustCurve)
+            {
+                Channel = channel;
+                Intent = intent;
+                TargetValue = targetValue;
+                AdjustDuration = adjustDuration;
+                AdjustCurve = adjustCurve;
+            }
         }
 
         #endregion
@@ -134,9 +166,13 @@ namespace Common.TransformPath
             if (eventSetting == null)
                 throw new ArgumentNullException(nameof(eventSetting));
 
-            ValidateSetting(eventSetting, pathAnimator, new HashSet<PathEventSettingSO>(), false);
+            MoveEventContext context = ValidateSetting(
+                eventSetting,
+                pathAnimator,
+                new HashSet<PathEventSettingSO>(),
+                false);
             CancelAllDelayedEvents();
-            ProcessEvent(eventSetting, pathAnimator, false);
+            ProcessEvent(eventSetting, pathAnimator, context);
         }
 
         public void CancelAllDelayedEvents()
@@ -168,70 +204,118 @@ namespace Common.TransformPath
             _eventReceiver = _receiverObject as IPathEventReceiver;
         }
 
-        private void ProcessEvent(PathEventSettingSO eventSetting, PathFollower pathFollower, bool resumeOnly)
+        private void ProcessEvent(
+            PathEventSettingSO eventSetting,
+            PathFollower pathFollower,
+            MoveEventContext context)
         {
             // Validate every operation that can throw before dispatching a message or
             // starting a coroutine. A malformed movement event must not partially
             // mutate the receiver or the follower.
-            ESpeedEventIntent speedIntent = ResolveSpeedEventIntent(eventSetting, pathFollower, resumeOnly);
-            if (eventSetting.UseModifyPathMoveDuration && pathFollower == null)
-                throw new ArgumentNullException(nameof(pathFollower));
-            if (speedIntent == ESpeedEventIntent.ChangeSpeed
-                && pathFollower.MoveType != EPathMoveType.SpeedBased)
-                throw new InvalidOperationException("Move speed control requires SpeedBased mode.");
-            if (eventSetting.UseModifyPathMoveDuration
-                && pathFollower.MoveType != EPathMoveType.TimeBased)
-                throw new InvalidOperationException("Move duration control requires TimeBased mode.");
-
             DispatchPathEvent(eventSetting.EventName, pathFollower);
 
-            ApplySpeedLifecycle(speedIntent, eventSetting, pathFollower);
+            ApplyMoveLifecycle(context.Intent, eventSetting, pathFollower);
 
             if (eventSetting.UseTimeScaleAdjust)
                 ControlTimeScale(eventSetting);
 
-            if (speedIntent == ESpeedEventIntent.ChangeSpeed)
-                ControlMoveSpeed(eventSetting, pathFollower);
-
-            if (eventSetting.UseModifyPathMoveDuration)
-                ControlMoveDuration(eventSetting, pathFollower);
+            if (context.Intent == EMoveEventIntent.ChangeValue)
+            {
+                switch (context.Channel)
+                {
+                    case EMoveControlChannel.Speed:
+                        ControlMoveSpeed(context, pathFollower);
+                        break;
+                    case EMoveControlChannel.Duration:
+                        ControlMoveDuration(context, pathFollower);
+                        break;
+                }
+            }
 
             if (eventSetting.UseDelayedEvents)
-                EnqueueDelayedEvents(eventSetting, pathFollower, speedIntent == ESpeedEventIntent.Pause);
+                EnqueueDelayedEvents(eventSetting, pathFollower, context.Intent == EMoveEventIntent.Pause);
         }
 
-        private static ESpeedEventIntent ResolveSpeedEventIntent(
+        private static MoveEventContext ResolveMoveEventContext(
             PathEventSettingSO eventSetting,
             PathFollower pathFollower,
             bool resumeOnly)
         {
-            if (eventSetting == null || !eventSetting.UseModifyPathMoveSpeed)
-                return ESpeedEventIntent.None;
+            if (eventSetting == null)
+                throw new ArgumentNullException(nameof(eventSetting));
+
+            bool hasMovementControl = eventSetting.UseModifyPathMoveSpeed
+                || eventSetting.UseModifyPathMoveDuration;
             if (pathFollower == null)
-                throw new ArgumentNullException(nameof(pathFollower));
-            if (float.IsNaN(eventSetting.MoveSpeedTargetValue)
-                || float.IsInfinity(eventSetting.MoveSpeedTargetValue)
-                || eventSetting.MoveSpeedTargetValue < 0f)
-                throw new ArgumentOutOfRangeException(nameof(eventSetting.MoveSpeedTargetValue));
-            if (eventSetting.MoveSpeedTargetValue == 0f)
-                return ESpeedEventIntent.Pause;
-            if (resumeOnly || pathFollower.State == EPathFollowerState.Paused)
-                return ESpeedEventIntent.Resume;
-            return ESpeedEventIntent.ChangeSpeed;
+            {
+                if (hasMovementControl)
+                    throw new ArgumentNullException(nameof(pathFollower));
+                return default;
+            }
+
+            switch (pathFollower.MoveType)
+            {
+                case EPathMoveType.SpeedBased:
+                    if (!eventSetting.UseModifyPathMoveSpeed)
+                        return default;
+                    return new MoveEventContext(
+                        EMoveControlChannel.Speed,
+                        ResolveSpeedEventIntent(eventSetting.MoveSpeedTargetValue, pathFollower, resumeOnly),
+                        eventSetting.MoveSpeedTargetValue,
+                        eventSetting.MoveSpeedAdjustDuration,
+                        eventSetting.MoveSpeedAdjustCurve);
+                case EPathMoveType.TimeBased:
+                    if (!eventSetting.UseModifyPathMoveDuration)
+                        return default;
+                    return new MoveEventContext(
+                        EMoveControlChannel.Duration,
+                        ResolveDurationEventIntent(eventSetting.MoveDurationTargetValue, pathFollower, resumeOnly),
+                        eventSetting.MoveDurationTargetValue,
+                        eventSetting.MoveDurationAdjustDuration,
+                        eventSetting.MoveDurationAdjustCurve);
+                default:
+                    throw new InvalidOperationException("Path follower has an unsupported move mode.");
+            }
         }
 
-        private void ApplySpeedLifecycle(
-            ESpeedEventIntent speedIntent,
+        private static EMoveEventIntent ResolveSpeedEventIntent(
+            float targetValue,
+            PathFollower pathFollower,
+            bool resumeOnly)
+        {
+            if (targetValue == 0f)
+                return EMoveEventIntent.Pause;
+            if (resumeOnly || pathFollower.State == EPathFollowerState.Paused)
+                return EMoveEventIntent.Resume;
+            return EMoveEventIntent.ChangeValue;
+        }
+
+        private static EMoveEventIntent ResolveDurationEventIntent(
+            float targetValue,
+            PathFollower pathFollower,
+            bool resumeOnly)
+        {
+            if (targetValue == TIME_BASED_PAUSE_VALUE)
+                return EMoveEventIntent.Pause;
+            if (resumeOnly || pathFollower.State == EPathFollowerState.Paused)
+                return EMoveEventIntent.Resume;
+            return EMoveEventIntent.ChangeValue;
+        }
+
+        private void ApplyMoveLifecycle(
+            EMoveEventIntent moveIntent,
             PathEventSettingSO eventSetting,
             PathFollower pathFollower)
         {
-            if (speedIntent == ESpeedEventIntent.None || pathFollower == null)
+            if (moveIntent == EMoveEventIntent.None || pathFollower == null)
                 return;
 
             QueuedPathFollower queuedFollower = pathFollower.GetComponent<QueuedPathFollower>();
-            switch (speedIntent)
+            switch (moveIntent)
             {
-                case ESpeedEventIntent.Pause:
+                case EMoveEventIntent.Pause:
+                    StopCoroutineSafe(ref _speedControlCoroutine);
+                    StopCoroutineSafe(ref _durationControlCoroutine);
                     if (queuedFollower != null)
                         queuedFollower.PauseMove();
                     else
@@ -241,7 +325,9 @@ namespace Common.TransformPath
                         $"[TransformPath] PauseFollower event: actor='{pathFollower.name}', duration={GetPauseDuration(eventSetting):F2}s",
                         pathFollower);
                     break;
-                case ESpeedEventIntent.Resume:
+                case EMoveEventIntent.Resume:
+                    if (pathFollower.State != EPathFollowerState.Paused)
+                        return;
                     if (queuedFollower != null)
                         queuedFollower.ResumeMove();
                     else
@@ -298,11 +384,11 @@ namespace Common.TransformPath
             _timeScaleCoroutine = StartCoroutine(Co_ProcessTimeScale(setting));
         }
 
-        private void ControlMoveSpeed(PathEventSettingSO setting, PathFollower pathFollower)
+        private void ControlMoveSpeed(MoveEventContext context, PathFollower pathFollower)
         {
             StopCoroutineSafe(ref _speedControlCoroutine);
 
-            if (setting.MoveSpeedAdjustDuration <= 0f)
+            if (context.AdjustDuration <= 0f)
             {
                 if (pathFollower.MoveType != EPathMoveType.SpeedBased)
                 {
@@ -310,29 +396,29 @@ namespace Common.TransformPath
                 }
 
                 // instant 변경은 Speed=만 사용 (SetSpeed/ApplyAnimatorSpeed 미호출 — pause 시 animator freeze 방지)
-                pathFollower.Speed = setting.MoveSpeedTargetValue;
+                pathFollower.Speed = context.TargetValue;
                 return;
             }
 
-            _speedControlCoroutine = StartCoroutine(Co_ProcessMoveSpeed(setting, pathFollower));
+            _speedControlCoroutine = StartCoroutine(Co_ProcessMoveSpeed(pathFollower, context));
         }
 
-        private void ControlMoveDuration(PathEventSettingSO setting, PathFollower pathFollower)
+        private void ControlMoveDuration(MoveEventContext context, PathFollower pathFollower)
         {
             StopCoroutineSafe(ref _durationControlCoroutine);
 
-            if (setting.MoveDurationAdjustDuration <= 0f)
+            if (context.AdjustDuration <= 0f)
             {
                 if (pathFollower.MoveType != EPathMoveType.TimeBased)
                 {
                     throw new InvalidOperationException("Move duration control requires TimeBased mode.");
                 }
 
-                pathFollower.Duration = setting.MoveDurationTargetValue;
+                pathFollower.Duration = context.TargetValue;
                 return;
             }
 
-            _durationControlCoroutine = StartCoroutine(Co_ProcessMoveDuration(setting, pathFollower));
+            _durationControlCoroutine = StartCoroutine(Co_ProcessMoveDuration(pathFollower, context));
         }
 
         private void EnqueueDelayedEvents(PathEventSettingSO setting, PathFollower pathFollower, bool pauseEvent)
@@ -436,7 +522,12 @@ namespace Common.TransformPath
             if (this == null || !isActiveAndEnabled)
                 yield break;
 
-            ProcessEvent(eventSetting, pathFollower, resumeOnly);
+            MoveEventContext context = ValidateSetting(
+                eventSetting,
+                pathFollower,
+                new HashSet<PathEventSettingSO>(),
+                resumeOnly);
+            ProcessEvent(eventSetting, pathFollower, context);
         }
 
         private IEnumerator Co_ProcessTimeScale(PathEventSettingSO setting)
@@ -465,7 +556,7 @@ namespace Common.TransformPath
             _timeScaleCoroutine = null;
         }
 
-        private IEnumerator Co_ProcessMoveSpeed(PathEventSettingSO setting, PathFollower pathFollower)
+        private IEnumerator Co_ProcessMoveSpeed(PathFollower pathFollower, MoveEventContext context)
         {
             if (pathFollower.MoveType != EPathMoveType.SpeedBased)
             {
@@ -475,14 +566,14 @@ namespace Common.TransformPath
             yield return Co_LerpPathFollowerScalar(
                 pathFollower,
                 pathFollower.Speed,
-                setting.MoveSpeedTargetValue,
-                setting.MoveSpeedAdjustDuration,
-                setting.MoveSpeedAdjustCurve,
+                context.TargetValue,
+                context.AdjustDuration,
+                context.AdjustCurve,
                 static (follower, value) => follower.Speed = value,
                 () => _speedControlCoroutine = null);
         }
 
-        private IEnumerator Co_ProcessMoveDuration(PathEventSettingSO setting, PathFollower pathFollower)
+        private IEnumerator Co_ProcessMoveDuration(PathFollower pathFollower, MoveEventContext context)
         {
             if (pathFollower.MoveType != EPathMoveType.TimeBased)
             {
@@ -492,16 +583,16 @@ namespace Common.TransformPath
             yield return Co_LerpPathFollowerScalar(
                 pathFollower,
                 pathFollower.Duration,
-                setting.MoveDurationTargetValue,
-                setting.MoveDurationAdjustDuration,
-                setting.MoveDurationAdjustCurve,
+                context.TargetValue,
+                context.AdjustDuration,
+                context.AdjustCurve,
                 static (follower, value) => follower.Duration = value,
                 () => _durationControlCoroutine = null);
         }
 
         #endregion
 
-        private void ValidateSetting(
+        private MoveEventContext ValidateSetting(
             PathEventSettingSO setting,
             PathFollower pathFollower,
             HashSet<PathEventSettingSO> validationStack,
@@ -516,47 +607,13 @@ namespace Common.TransformPath
 
             try
             {
-                ValidateNonNegativeFinite(setting.MoveSpeedAdjustDuration, nameof(setting.MoveSpeedAdjustDuration));
-                ValidateNonNegativeFinite(setting.MoveDurationAdjustDuration, nameof(setting.MoveDurationAdjustDuration));
                 ValidateNonNegativeFinite(setting.TimeScaleAdjustDuration, nameof(setting.TimeScaleAdjustDuration));
                 if (setting.UseDelayedEvents && setting.DelayedEvents == null)
                     throw new ArgumentException("Delayed event list is required when delayed events are enabled.", nameof(setting));
-                if (setting.UseModifyPathMoveSpeed)
-                {
-                    if (pathFollower == null)
-                        throw new ArgumentNullException(nameof(pathFollower));
-                    if (float.IsNaN(setting.MoveSpeedTargetValue)
-                        || float.IsInfinity(setting.MoveSpeedTargetValue)
-                        || setting.MoveSpeedTargetValue < 0f)
-                        throw new ArgumentOutOfRangeException(nameof(setting.MoveSpeedTargetValue));
 
-                    ESpeedEventIntent speedIntent = ResolveSpeedEventIntent(setting, pathFollower, resumeOnly);
-                    if (speedIntent == ESpeedEventIntent.Pause)
-                    {
-                        if (setting.MoveSpeedAdjustDuration > 0f)
-                            throw new ArgumentException("A zero-speed pause must be applied immediately.", nameof(setting.MoveSpeedAdjustDuration));
-                        ValidatePauseEvent(setting);
-                    }
-                    else if (speedIntent == ESpeedEventIntent.ChangeSpeed)
-                    {
-                        if (pathFollower.MoveType != EPathMoveType.SpeedBased)
-                            throw new InvalidOperationException("Move speed control requires SpeedBased mode.");
-                        ValidateMoveSpeedAdjustment(setting);
-                    }
-                }
-                if (setting.UseModifyPathMoveDuration)
-                {
-                    if (pathFollower == null)
-                        throw new ArgumentNullException(nameof(pathFollower));
-                    if (pathFollower.MoveType != EPathMoveType.TimeBased)
-                        throw new InvalidOperationException("Move duration control requires TimeBased mode.");
-                    if (setting.MoveDurationAdjustDuration > 0f && setting.MoveDurationAdjustCurve == null)
-                        throw new ArgumentNullException(nameof(setting.MoveDurationAdjustCurve));
-                    if (setting.MoveDurationAdjustDuration > 0f && setting.MoveDurationAdjustCurve.length == 0)
-                        throw new ArgumentException("Move duration adjustment requires a non-empty curve.", nameof(setting.MoveDurationAdjustCurve));
-                    if (setting.MoveDurationTargetValue <= 0f || float.IsNaN(setting.MoveDurationTargetValue) || float.IsInfinity(setting.MoveDurationTargetValue))
-                        throw new ArgumentOutOfRangeException(nameof(setting));
-                }
+                MoveEventContext context = ResolveMoveEventContext(setting, pathFollower, resumeOnly);
+                ValidateMoveEventContext(setting, pathFollower, context);
+
                 if (setting.UseTimeScaleAdjust)
                 {
                     if (setting.TimeScaleAdjustDuration <= 0f || setting.TimeScaleAdjustValue <= 0f
@@ -582,14 +639,81 @@ namespace Common.TransformPath
                             entry.EventSetting,
                             pathFollower,
                             validationStack,
-                            setting.UseModifyPathMoveSpeed
-                                && setting.MoveSpeedTargetValue == 0f);
+                            context.Intent == EMoveEventIntent.Pause);
                     }
                 }
+
+                return context;
             }
             finally
             {
                 validationStack.Remove(setting);
+            }
+        }
+
+        private static void ValidateMoveEventContext(
+            PathEventSettingSO setting,
+            PathFollower pathFollower,
+            MoveEventContext context)
+        {
+            if (context.Channel == EMoveControlChannel.None)
+                return;
+            if (pathFollower == null)
+                throw new ArgumentNullException(nameof(pathFollower));
+
+            ValidateNonNegativeFinite(context.AdjustDuration, nameof(context.AdjustDuration));
+
+            switch (context.Channel)
+            {
+                case EMoveControlChannel.Speed:
+                    if (!IsFinite(context.TargetValue)
+                        || context.TargetValue < 0f
+                        || context.TargetValue > MAX_MOVE_VALUE)
+                        throw new ArgumentOutOfRangeException(nameof(setting.MoveSpeedTargetValue));
+
+                    switch (context.Intent)
+                    {
+                        case EMoveEventIntent.Pause:
+                            if (context.TargetValue != 0f || context.AdjustDuration > 0f)
+                                throw new ArgumentException("A zero-speed pause must be applied immediately.", nameof(setting));
+                            ValidatePauseEvent(setting, pathFollower, EPathMoveType.SpeedBased);
+                            break;
+                        case EMoveEventIntent.Resume:
+                            if (context.TargetValue <= 0f || context.AdjustDuration > 0f)
+                                throw new ArgumentException("A Resume event must use an immediate positive speed target.", nameof(setting));
+                            break;
+                        case EMoveEventIntent.ChangeValue:
+                            if (context.TargetValue <= 0f)
+                                throw new ArgumentOutOfRangeException(nameof(setting.MoveSpeedTargetValue));
+                            ValidateMoveSpeedAdjustment(setting);
+                            break;
+                    }
+                    break;
+
+                case EMoveControlChannel.Duration:
+                    if (!IsFinite(context.TargetValue)
+                        || context.TargetValue <= 0f
+                        || context.TargetValue > MAX_MOVE_VALUE)
+                        throw new ArgumentOutOfRangeException(nameof(setting.MoveDurationTargetValue));
+
+                    switch (context.Intent)
+                    {
+                        case EMoveEventIntent.Pause:
+                            if (context.TargetValue != TIME_BASED_PAUSE_VALUE || context.AdjustDuration > 0f)
+                                throw new ArgumentException("A Duration value of 9999 must be applied as an immediate pause.", nameof(setting));
+                            ValidatePauseEvent(setting, pathFollower, EPathMoveType.TimeBased);
+                            break;
+                        case EMoveEventIntent.Resume:
+                            if (context.TargetValue >= TIME_BASED_PAUSE_VALUE || context.AdjustDuration > 0f)
+                                throw new ArgumentException("A Resume event must use an immediate Duration target below 9999.", nameof(setting));
+                            break;
+                        case EMoveEventIntent.ChangeValue:
+                            if (context.TargetValue >= TIME_BASED_PAUSE_VALUE)
+                                throw new ArgumentOutOfRangeException(nameof(setting.MoveDurationTargetValue));
+                            ValidateMoveDurationAdjustment(setting);
+                            break;
+                    }
+                    break;
             }
         }
 
@@ -603,27 +727,51 @@ namespace Common.TransformPath
                 throw new ArgumentException("Move speed adjustment requires a non-empty curve.", nameof(setting.MoveSpeedAdjustCurve));
         }
 
-        private static void ValidatePauseEvent(PathEventSettingSO setting)
+        private static void ValidateMoveDurationAdjustment(PathEventSettingSO setting)
+        {
+            if (setting.MoveDurationAdjustDuration <= 0f)
+                return;
+            if (setting.MoveDurationAdjustCurve == null)
+                throw new ArgumentNullException(nameof(setting.MoveDurationAdjustCurve));
+            if (setting.MoveDurationAdjustCurve.length == 0)
+                throw new ArgumentException("Move duration adjustment requires a non-empty curve.", nameof(setting.MoveDurationAdjustCurve));
+        }
+
+        private static void ValidatePauseEvent(
+            PathEventSettingSO setting,
+            PathFollower pathFollower,
+            EPathMoveType pausedMoveType)
         {
             if (!setting.UseDelayedEvents || setting.DelayedEvents == null || setting.DelayedEvents.Count != 1)
-                throw new ArgumentException("A zero-speed pause requires exactly one delayed positive-speed Resume event.", nameof(setting));
+                throw new ArgumentException("A pause requires exactly one delayed Resume event.", nameof(setting));
 
             PathEventSettingSO.DelayedEventEntry entry = setting.DelayedEvents[0];
             if (entry == null || entry.EventSetting == null)
-                throw new ArgumentException("A zero-speed pause requires a delayed positive-speed Resume event.", nameof(setting));
-            if (!entry.EventSetting.UseModifyPathMoveSpeed
-                || float.IsNaN(entry.EventSetting.MoveSpeedTargetValue)
-                || float.IsInfinity(entry.EventSetting.MoveSpeedTargetValue)
-                || entry.EventSetting.MoveSpeedTargetValue <= 0f)
-                throw new ArgumentException("A pause delayed event must enable a positive move speed target.", nameof(setting));
-            if (entry.EventSetting.MoveSpeedAdjustDuration > 0f)
-                throw new ArgumentException("A delayed Resume event must be applied immediately.", nameof(setting));
+                throw new ArgumentException("A pause requires a delayed Resume event.", nameof(setting));
+
+            MoveEventContext resumeContext = ResolveMoveEventContext(
+                entry.EventSetting,
+                pathFollower,
+                true);
+            EMoveControlChannel expectedChannel = pausedMoveType == EPathMoveType.SpeedBased
+                ? EMoveControlChannel.Speed
+                : EMoveControlChannel.Duration;
+            if (resumeContext.Channel != expectedChannel
+                || resumeContext.Intent != EMoveEventIntent.Resume)
+                throw new ArgumentException("A pause delayed event must provide a positive Resume value for the current follower mode.", nameof(setting));
+
+            ValidateMoveEventContext(entry.EventSetting, pathFollower, resumeContext);
             if (entry.EventSetting.DelayedEvents != null
                 && entry.EventSetting.DelayedEvents.Count > 0)
                 throw new ArgumentException("A delayed Resume event cannot enqueue another delayed event.", nameof(setting));
             ValidateNonNegativeFinite(entry.Delay, nameof(entry.Delay));
             if (entry.Delay <= 0f)
                 throw new ArgumentOutOfRangeException(nameof(entry.Delay), "Pause duration must be greater than zero.");
+        }
+
+        private static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
         }
 
         private static void ValidateNonNegativeFinite(float value, string parameterName)

@@ -31,8 +31,8 @@ namespace Common.TransformPath
 
         #region Path Move Speed
 
-        [Header("Path 이동 속도 및 Follower lifecycle 제어")]
-        [Tooltip("속도 제어를 켜면 목표 속도 0은 Pause, 일시정지 중 양수 속도는 Resume, 그 외 양수 속도는 SpeedBased 속도 변경으로 자동 처리됩니다.")]
+        [Header("Path 이동 속도 및 Follower lifecycle 제어 (SpeedBased 자동 선택)")]
+        [Tooltip("현재 follower가 SpeedBased이면 이 설정을 사용합니다. 목표 속도 0은 Pause, 일시정지 중 양수 속도는 Resume 신호, 그 외 양수 속도는 Speed 변경으로 처리됩니다. TimeBased follower에서는 무시됩니다.")]
         public bool UseModifyPathMoveSpeed;
         public float MoveSpeedTargetValue = 1.0f;
         public float MoveSpeedAdjustDuration;
@@ -43,7 +43,8 @@ namespace Common.TransformPath
 
         #region Path Move Duration
 
-        [Header("Path 이동 Duration 제어 사용 (TimeBased 모드)")]
+        [Header("Path 이동 Duration 제어 (TimeBased 자동 선택)")]
+        [Tooltip("현재 follower가 TimeBased이면 이 설정을 사용합니다. Duration 9999는 Pause, 일시정지 중 0 초과 9999 미만 값은 Resume 신호, 그 외 값은 Duration 변경으로 처리됩니다. SpeedBased follower에서는 무시됩니다.")]
         public bool UseModifyPathMoveDuration;
         public float MoveDurationTargetValue = 5.0f;
         public float MoveDurationAdjustDuration;

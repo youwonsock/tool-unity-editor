@@ -7,6 +7,7 @@ namespace Common.TransformPath
     [Serializable]
     public struct PathEventEntry
     {
+        [Range(0f, PathData.MAX_PATH_EVENT_NORMALIZED_TIME)]
         public float NormalizedTime;
         public PathEventSettingSO EventSetting;
     }
@@ -53,9 +54,10 @@ namespace Common.TransformPath
         [SerializeField] private Color _pathColor = Color.blue;
         [SerializeField] private Color _samplePointColor = Color.yellow;
         [SerializeField] private Color _eventPointColor = Color.green;
-        [SerializeField, Min(0f)] private float _pointSize = 0.1f;
-        [SerializeField, Min(0f)] private float _samplePointSize = 0f;
-        [SerializeField, Min(0f)] private float _eventPointSize = 0.15f;
+        [SerializeField, Range(0.1f, 20f)] private float _lineWidth = 2f;
+        [SerializeField, Range(0f, 1f)] private float _pointSize = 0.1f;
+        [SerializeField, Range(0f, 1f)] private float _samplePointSize = 0f;
+        [SerializeField, Range(0f, 1f)] private float _eventPointSize = 0.15f;
 #endif
 
         private Vector3[] _cachedPathPoints;
@@ -616,81 +618,6 @@ namespace Common.TransformPath
                 + (2f * p0 - 5f * p1 + 4f * p2 - p3) * t2
                 + (-p0 + 3f * p1 - 3f * p2 + p3) * t3);
         }
-
-#if UNITY_EDITOR
-        private void OnDrawGizmos()
-        {
-            if (!_showPathInEditor || _pathPoints == null || _pathPoints.Count < 2)
-                return;
-
-            if (IsReady)
-            {
-                Gizmos.color = _pathColor;
-                for (int i = 1; i < SamplePointCount; i++)
-                    Gizmos.DrawLine(GetSamplePoint(i - 1), GetSamplePoint(i));
-            }
-            else
-            {
-                Gizmos.color = _pathColor;
-                for (int i = 1; i < _pathPoints.Count; i++)
-                {
-                    if (_pathPoints[i - 1] != null && _pathPoints[i] != null)
-                        Gizmos.DrawLine(_pathPoints[i - 1].position, _pathPoints[i].position);
-                }
-            }
-
-            Gizmos.color = _pointColor;
-            for (int i = 0; i < _pathPoints.Count; i++)
-            {
-                if (_pathPoints[i] != null && _pointSize > 0f)
-                    Gizmos.DrawSphere(_pathPoints[i].position, _pointSize);
-            }
-
-            if (IsReady && _samplePointSize > 0f && _previewSampleCount > 0)
-            {
-                Vector3[] samples = BuildPreviewSamples(_previewSampleCount);
-                Gizmos.color = _samplePointColor;
-                for (int i = 0; i < samples.Length; i++)
-                    Gizmos.DrawSphere(samples[i], _samplePointSize);
-            }
-
-            if (IsReady && _eventPointSize > 0f)
-            {
-                Gizmos.color = _eventPointColor;
-                for (int i = 0; i < EventCount; i++)
-                {
-                    PathEventEntry entry = GetEvent(i);
-                    if (entry.EventSetting != null)
-                        Gizmos.DrawSphere(Sample(entry.NormalizedTime), _eventPointSize);
-                }
-            }
-        }
-
-        private Vector3[] BuildPreviewSamples(int count)
-        {
-            Vector3[] result = new Vector3[count];
-            uint state = (uint)(GetInstanceID() * 747796405 + 2891336453u);
-            for (int i = 0; i < count; i++)
-            {
-                float t;
-                switch (_previewSamplingType)
-                {
-                    case EPreviewSamplingType.DeterministicRandom:
-                        state = state * 747796405u + 2891336453u;
-                        t = (state & 0x00ffffffu) / 16777215f;
-                        break;
-                    case EPreviewSamplingType.DistanceBased:
-                    case EPreviewSamplingType.Uniform:
-                    default:
-                        t = count == 1 ? 0f : (float)i / (count - 1);
-                        break;
-                }
-                result[i] = Sample(t);
-            }
-            return result;
-        }
-
-#endif
 
     }
 }

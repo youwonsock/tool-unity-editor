@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   EventName: Acceleration
   UseModifyPathMoveSpeed: 1
-  MoveSpeedTargetValue: 2
+  MoveSpeedTargetValue: 4
   MoveSpeedAdjustDuration: 0
   MoveSpeedAdjustCurve:
     serializedVersion: 2
