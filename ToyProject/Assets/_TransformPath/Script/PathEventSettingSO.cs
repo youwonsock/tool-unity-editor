@@ -4,13 +4,6 @@ using UnityEngine;
 
 namespace Common.TransformPath
 {
-    public enum EFollowerEventAction
-    {
-        None = 0,
-        Pause = 1,
-        Resume = 2,
-    }
-
     [CreateAssetMenu(fileName = "Path Event Setting", menuName = "Path Setting/New Path Event Setting", order = 1)]
     public class PathEventSettingSO : ScriptableObject
     {
@@ -33,15 +26,13 @@ namespace Common.TransformPath
         [Header("이벤트 이름")]
         public string EventName;
 
-        [Header("Follower lifecycle action")]
-        public EFollowerEventAction FollowerAction = EFollowerEventAction.None;
-
         #endregion
 
 
         #region Path Move Speed
 
-        [Header("Path 이동 속도 제어 사용 (SpeedBased 모드)")]
+        [Header("Path 이동 속도 및 Follower lifecycle 제어")]
+        [Tooltip("속도 제어를 켜면 목표 속도 0은 Pause, 일시정지 중 양수 속도는 Resume, 그 외 양수 속도는 SpeedBased 속도 변경으로 자동 처리됩니다.")]
         public bool UseModifyPathMoveSpeed;
         public float MoveSpeedTargetValue = 1.0f;
         public float MoveSpeedAdjustDuration;

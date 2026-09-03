@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: PathEvent_NormalAcceleration
   m_EditorClassIdentifier: 
   EventName: Acceleration
-  FollowerAction: 0
   UseModifyPathMoveSpeed: 1
   MoveSpeedTargetValue: 6
   MoveSpeedAdjustDuration: 0

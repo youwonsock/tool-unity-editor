@@ -13,9 +13,8 @@ MonoBehaviour:
   m_Name: PathEvent_PauseFollower
   m_EditorClassIdentifier: 
   EventName: PauseFollower
-  FollowerAction: 1
-  UseModifyPathMoveSpeed: 0
-  MoveSpeedTargetValue: 1
+  UseModifyPathMoveSpeed: 1
+  MoveSpeedTargetValue: 0
   MoveSpeedAdjustDuration: 0
   MoveSpeedAdjustCurve:
     serializedVersion: 2

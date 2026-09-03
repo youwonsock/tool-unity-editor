@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: PathEvent_NormalSlowDown
   m_EditorClassIdentifier: 
   EventName: SlowDown
-  FollowerAction: 0
   UseModifyPathMoveSpeed: 1
   MoveSpeedTargetValue: 1.5
   MoveSpeedAdjustDuration: 0
