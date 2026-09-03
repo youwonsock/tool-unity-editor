@@ -40,26 +40,21 @@ namespace Common.TransformPath
         #endregion
 
 
-        #region Unity Events
-
-        private void Awake()
-        {
-            _lineRenderer = GetComponent<LineRenderer>();
-            if (!Application.isPlaying)
-                return;
-            ConfigureLineRenderer();
-            Init();
-            Refresh();
-        }
+        #region Properties
 
         public bool IsInitialized => _isInitialized;
+
+        #endregion
+
+
+        #region Unity Events
 
         public void Init()
         {
             if (_isInitialized)
                 return;
             if (_lineRenderer == null)
-                _lineRenderer = GetComponent<LineRenderer>();
+                TryGetComponent(out _lineRenderer);
             if (_lineRenderer == null || _pathData == null)
             {
                 Debug.LogError("PathDataLineRenderer requires LineRenderer and PathData references.", this);
@@ -72,6 +67,25 @@ namespace Common.TransformPath
                 _pathData.PathChanged -= HandlePathChanged;
                 _pathData.PathChanged += HandlePathChanged;
             }
+        }
+
+        public void Release()
+        {
+            if (_pathData != null)
+                _pathData.PathChanged -= HandlePathChanged;
+            _isInitialized = false;
+            _hasValidPath = false;
+            SetLineRendererEnabled(false);
+        }
+
+        private void Awake()
+        {
+            TryGetComponent(out _lineRenderer);
+            if (!Application.isPlaying)
+                return;
+            ConfigureLineRenderer();
+            Init();
+            Refresh();
         }
 
         private void OnEnable()
@@ -94,15 +108,6 @@ namespace Common.TransformPath
         private void OnDestroy()
         {
             Release();
-        }
-
-        public void Release()
-        {
-            if (_pathData != null)
-                _pathData.PathChanged -= HandlePathChanged;
-            _isInitialized = false;
-            _hasValidPath = false;
-            SetLineRendererEnabled(false);
         }
 
         #endregion
@@ -203,7 +208,7 @@ namespace Common.TransformPath
 #if UNITY_EDITOR
         private void Reset()
         {
-            _lineRenderer = GetComponent<LineRenderer>();
+            TryGetComponent(out _lineRenderer);
             ConfigureLineRenderer();
         }
 

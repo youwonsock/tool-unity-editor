@@ -533,8 +533,13 @@ namespace Common.TransformPath.Samples
             {
                 if (renderers[i] == null)
                     continue;
-                if (!hasBounds) { bounds = renderers[i].bounds; hasBounds = true; }
-                else bounds.Encapsulate(renderers[i].bounds);
+                if (!hasBounds)
+                {
+                    bounds = renderers[i].bounds;
+                    hasBounds = true;
+                }
+                else
+                    bounds.Encapsulate(renderers[i].bounds);
             }
             return bounds;
         }
@@ -544,8 +549,8 @@ namespace Common.TransformPath.Samples
             if (_freeCamera != null)
                 return;
             Camera main = Camera.main;
-            if (main != null)
-                _freeCamera = main.GetComponent<TransformPathFreeCamera>();
+            if (main != null && main.TryGetComponent(out _freeCamera))
+                return;
             if (_freeCamera == null)
                 _freeCamera = FindFirstObjectByType<TransformPathFreeCamera>();
         }

@@ -40,7 +40,7 @@ namespace Common.TransformPath.Samples
 
         private void Awake()
         {
-            _camera = GetComponent<Camera>();
+            TryGetComponent(out _camera);
             ConfigureCamera();
             SyncAnglesFromTransform();
         }
@@ -71,7 +71,7 @@ namespace Common.TransformPath.Samples
         public void FocusOnBounds(Bounds bounds)
         {
             if (_camera == null)
-                _camera = GetComponent<Camera>();
+                TryGetComponent(out _camera);
             if (_camera == null)
                 return;
 

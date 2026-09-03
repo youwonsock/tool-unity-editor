@@ -4,26 +4,23 @@ using UnityEngine;
 
 namespace Common.TransformPath
 {
-    /// <summary>
-    /// A length-indexed sequence of independent PathData providers.
-    /// </summary>
+    /// <summary>Length-indexed sequence of independent PathData providers.</summary>
     [DefaultExecutionOrder(-200)]
     public sealed class MultiPathData : MonoBehaviour, IPathSequenceProvider
     {
-        [SerializeField] private List<PathSegmentConfig> _segments = new List<PathSegmentConfig>();
+        #region Constants
 
 #if UNITY_EDITOR
         private const float DEFAULT_MULTI_PATH_POINT_SIZE = 0.1f;
-
-        [Header("Editor Only")]
-        [SerializeField] private bool _autoLinkPathPoints = true;
-
-        [Header("MultiPath → all PathData drawing")]
-        [SerializeField, Range(0.1f, 20f)] private float _multiPathLineWidth = 2f;
-        [SerializeField, Range(0f, 1f)] private float _multiPathPointSize = DEFAULT_MULTI_PATH_POINT_SIZE;
-        [SerializeField, Range(0f, 1f)] private float _multiPathSamplePointSize = 0f;
-        [SerializeField, Range(0f, 1f)] private float _multiPathEventPointSize = 0.15f;
 #endif
+
+        #endregion
+
+
+        #region Member Variables
+
+        [SerializeField] private List<PathSegmentConfig> _segments =
+            new List<PathSegmentConfig>();
 
         private float[] _segmentLengths;
         private float[] _segmentStartDistances;
@@ -34,8 +31,17 @@ namespace Common.TransformPath
         private bool _isDirty;
         private bool _configurationErrorReported;
         private int _revision;
-        private readonly List<PathData> _subscribedProviders = new List<PathData>();
-        private readonly List<PathSegmentConfig> _validatedSegments = new List<PathSegmentConfig>();
+        private readonly List<PathData> _subscribedProviders =
+            new List<PathData>();
+        private readonly List<PathSegmentConfig> _validatedSegments =
+            new List<PathSegmentConfig>();
+        private readonly List<PathSegmentDescriptor> _validatedDescriptors =
+            new List<PathSegmentDescriptor>();
+
+        #endregion
+
+
+        #region Properties
 
         public bool IsInitialized => _isInitialized;
         public bool IsReady => _isInitialized
@@ -44,6 +50,7 @@ namespace Common.TransformPath
             && _segmentLengths.Length > 0
             && !HasChildRevisionChanged();
         public int Revision => _revision;
+
         public float PathLength
         {
             get
@@ -52,6 +59,7 @@ namespace Common.TransformPath
                 return _pathLength;
             }
         }
+
         public int SegmentCount
         {
             get
@@ -63,24 +71,18 @@ namespace Common.TransformPath
 
         public event Action PathChanged;
 
-        private void Awake()
-        {
-            if (Application.isPlaying && HasAuthoringConfiguration())
-                Init();
-        }
+        #endregion
 
-        private void OnDestroy()
-        {
-            Release();
-        }
+
+        #region Unity Events
 
         public void Init()
         {
-            if (_isInitialized)
+            if (_isInitialized || !HasAuthoringConfiguration())
                 return;
-            if (!HasAuthoringConfiguration())
-                return;
-            TryBuild();
+
+            if (!TryBuild(out string error))
+                MarkConfigurationError(error);
         }
 
         public void Release()
@@ -95,6 +97,22 @@ namespace Common.TransformPath
             _pathLength = 0f;
         }
 
+        private void Awake()
+        {
+            if (Application.isPlaying && HasAuthoringConfiguration())
+                Init();
+        }
+
+        private void OnDestroy()
+        {
+            Release();
+        }
+
+        #endregion
+
+
+        #region Public Methods
+
         public void ConfigureSegments(IReadOnlyList<PathSegmentConfig> segments)
         {
             if (segments == null)
@@ -106,7 +124,10 @@ namespace Common.TransformPath
             _isDirty = true;
 
             if (_isInitialized)
-                Rebuild();
+            {
+                if (!TryBuild(out string error))
+                    MarkConfigurationError(error);
+            }
         }
 
         public PathSegmentConfig GetSegmentConfig(int index)
@@ -119,13 +140,15 @@ namespace Common.TransformPath
 
         public PathSegmentDescriptor GetSegment(int index)
         {
-            PathSegmentConfig config = GetSegmentConfig(index);
-            if (!(config.PathData is IPathMovementProvider movementProvider))
-                throw new InvalidOperationException($"Segment {index} PathData does not provide movement settings.");
+            ThrowIfNotReady();
+            if (index < 0 || index >= _cachedDescriptors.Length)
+                throw new ArgumentOutOfRangeException(nameof(index));
+
+            PathSegmentDescriptor descriptor = _cachedDescriptors[index];
             return new PathSegmentDescriptor(
-                movementProvider,
-                movementProvider.MovementSettings,
-                config.PreservePreviousSpeed);
+                descriptor.Provider,
+                PathMovementSettingsUtility.Clone(descriptor.MovementSettings),
+                descriptor.PreservePreviousSpeed);
         }
 
         public float GetSegmentStartDistance(int index)
@@ -147,7 +170,7 @@ namespace Common.TransformPath
         public Vector3 Sample(float normalizedTime)
         {
             ThrowIfNotReady();
-            if (!IsFinite(normalizedTime))
+            if (!PathValueUtility.IsFinite(normalizedTime))
                 throw new ArgumentOutOfRangeException(nameof(normalizedTime));
             return SampleDistance(Mathf.Clamp01(normalizedTime) * _pathLength);
         }
@@ -155,8 +178,9 @@ namespace Common.TransformPath
         public Vector3 SampleDistance(float distance)
         {
             ThrowIfNotReady();
-            if (!IsFinite(distance))
+            if (!PathValueUtility.IsFinite(distance))
                 throw new ArgumentOutOfRangeException(nameof(distance));
+
             float clamped = Mathf.Clamp(distance, 0f, _pathLength);
             int index = FindSegmentIndex(clamped);
             float length = _segmentLengths[index];
@@ -173,14 +197,21 @@ namespace Common.TransformPath
                 Init();
                 return;
             }
-            TryBuild();
+
+            if (!TryBuild(out string error))
+                MarkConfigurationError(error);
         }
+
+        #endregion
+
+
+        #region Private Methods
 
         internal void MarkDirtyFromChild()
         {
             _isDirty = true;
-            if (_isInitialized)
-                TryBuild();
+            if (_isInitialized && !TryBuild(out string error))
+                MarkConfigurationError(error);
         }
 
         private bool HasAuthoringConfiguration()
@@ -188,115 +219,120 @@ namespace Common.TransformPath
             return _segments != null && _segments.Count > 0;
         }
 
-        private void TryBuild()
+        private bool TryBuild(out string error)
         {
-            try
-            {
-                ValidateAndBuildTemporary(
+            if (!TryBuildTemporary(
                     out List<PathSegmentConfig> nextSegments,
                     out float[] nextLengths,
                     out float[] nextStarts,
                     out int[] nextRevisions,
                     out PathSegmentDescriptor[] nextDescriptors,
-                    out float nextTotalLength);
+                    out float nextTotalLength,
+                    out error))
+                return false;
 
-                bool changed = !_isInitialized
-                    || _segmentLengths == null
-                    || _segmentLengths.Length != nextLengths.Length
-                    || !Mathf.Approximately(_pathLength, nextTotalLength);
-                if (!changed)
+            bool changed = !_isInitialized
+                || _segmentLengths == null
+                || _segmentLengths.Length != nextLengths.Length
+                || !Mathf.Approximately(_pathLength, nextTotalLength);
+            if (!changed)
+            {
+                for (int i = 0; i < nextLengths.Length; i++)
                 {
-                    for (int i = 0; i < nextLengths.Length; i++)
+                    if (!AreSameConfig(_segments[i], nextSegments[i])
+                        || !Mathf.Approximately(_segmentLengths[i], nextLengths[i])
+                        || _cachedDescriptors == null
+                        || !PathProviderUtility.AreSameDescriptor(
+                            _cachedDescriptors[i],
+                            nextDescriptors[i]))
                     {
-                        PathSegmentConfig oldConfig = _segments[i];
-                        PathSegmentConfig newConfig = nextSegments[i];
-                        if (!AreSameConfig(oldConfig, newConfig)
-                            || !Mathf.Approximately(_segmentLengths[i], nextLengths[i]))
-                        {
-                            changed = true;
-                            break;
-                        }
-                        if (_cachedDescriptors == null
-                            || !PathMovementSettingsUtility.AreSame(
-                                _cachedDescriptors[i].MovementSettings,
-                                nextDescriptors[i].MovementSettings)
-                            || _cachedDescriptors[i].PreservePreviousSpeed
-                                != nextDescriptors[i].PreservePreviousSpeed)
-                        {
-                            changed = true;
-                            break;
-                        }
+                        changed = true;
+                        break;
                     }
                 }
-
-                _segments.Clear();
-                _segments.AddRange(nextSegments);
-                _segmentLengths = nextLengths;
-                _segmentStartDistances = nextStarts;
-                _childRevisions = nextRevisions;
-                _cachedDescriptors = nextDescriptors;
-                _pathLength = nextTotalLength;
-                _isInitialized = true;
-                _isDirty = false;
-                _configurationErrorReported = false;
-                SubscribeToChildren();
-
-                if (changed)
-                {
-                    _revision++;
-                    NotifyPathChanged();
-                }
             }
-            catch (Exception exception)
+
+            _segments.Clear();
+            _segments.AddRange(nextSegments);
+            _segmentLengths = nextLengths;
+            _segmentStartDistances = nextStarts;
+            _childRevisions = nextRevisions;
+            _cachedDescriptors = nextDescriptors;
+            _pathLength = nextTotalLength;
+            _isInitialized = true;
+            _isDirty = false;
+            _configurationErrorReported = false;
+            SubscribeToChildren();
+
+            if (changed)
             {
-                _isInitialized = false;
-                _isDirty = true;
-                _segmentLengths = null;
-                _segmentStartDistances = null;
-                _childRevisions = null;
-                _cachedDescriptors = null;
-                _pathLength = 0f;
-                UnsubscribeFromChildren();
-                if (!_configurationErrorReported)
-                {
-                    Debug.LogError($"MultiPathData '{name}' could not build: {exception.Message}", this);
-                    _configurationErrorReported = true;
-                }
+                _revision++;
+                NotifyPathChanged();
             }
+
+            return true;
         }
 
-        private void ValidateAndBuildTemporary(
+        private bool TryBuildTemporary(
             out List<PathSegmentConfig> nextSegments,
             out float[] nextLengths,
             out float[] nextStarts,
             out int[] nextRevisions,
             out PathSegmentDescriptor[] nextDescriptors,
-            out float nextTotalLength)
+            out float nextTotalLength,
+            out string error)
         {
+            nextSegments = null;
+            nextLengths = null;
+            nextStarts = null;
+            nextRevisions = null;
+            nextDescriptors = null;
+            nextTotalLength = 0f;
+
             if (_segments == null || _segments.Count == 0)
-                throw new ArgumentException("MultiPathData requires at least one segment.");
+            {
+                error = "MultiPathData requires at least one segment.";
+                return false;
+            }
 
             _validatedSegments.Clear();
-            nextTotalLength = 0f;
+            _validatedDescriptors.Clear();
             for (int i = 0; i < _segments.Count; i++)
             {
                 PathSegmentConfig segment = _segments[i];
-                if (segment.PathData == null)
-                    throw new ArgumentException($"Segment {i} has no PathData provider.");
-                if (!segment.PathData.IsReady)
-                    throw new InvalidOperationException($"Segment {i} PathData is not ready.");
-                if (!(segment.PathData is IPathMovementProvider movementProvider))
-                    throw new ArgumentException($"Segment {i} PathData does not provide movement settings.");
-                PathMovementSettingsUtility.Validate(
-                    movementProvider.MovementSettings,
-                    $"segments[{i}].PathData.MovementSettings");
+                PathData pathData = segment.PathData;
+                if (pathData == null)
+                {
+                    error = $"Segment {i} has no PathData provider.";
+                    return false;
+                }
+                if (!PathProviderUtility.TryGetDescriptor(
+                        pathData,
+                        0,
+                        out PathSegmentDescriptor descriptor,
+                        out string descriptorError))
+                {
+                    error = $"Segment {i} provider is invalid: {descriptorError}";
+                    return false;
+                }
+
+                float length = descriptor.Provider.PathLength;
+                if (!PathValueUtility.IsFinite(length) || length <= 0f)
+                {
+                    error = $"Segment {i} has an invalid path length.";
+                    return false;
+                }
 
                 _validatedSegments.Add(segment);
-                nextTotalLength += segment.PathData.PathLength;
+                _validatedDescriptors.Add(descriptor);
+                nextTotalLength += length;
             }
 
-            if (!IsFinite(nextTotalLength) || nextTotalLength <= 0f)
-                throw new ArgumentException("MultiPathData requires a measurable total length.");
+            if (!PathValueUtility.IsFinite(nextTotalLength) || nextTotalLength <= 0f)
+            {
+                error = "MultiPathData requires a measurable total length.";
+                return false;
+            }
 
             nextSegments = new List<PathSegmentConfig>(_validatedSegments);
             nextLengths = new float[nextSegments.Count];
@@ -307,15 +343,19 @@ namespace Common.TransformPath
             for (int i = 0; i < nextSegments.Count; i++)
             {
                 nextStarts[i] = accumulated;
-                nextLengths[i] = nextSegments[i].PathData.PathLength;
-                nextRevisions[i] = nextSegments[i].PathData.Revision;
-                IPathMovementProvider movementProvider = nextSegments[i].PathData;
+                PathSegmentDescriptor descriptor = _validatedDescriptors[i];
+                PathData pathData = nextSegments[i].PathData;
+                nextLengths[i] = descriptor.Provider.PathLength;
+                nextRevisions[i] = pathData.Revision;
                 nextDescriptors[i] = new PathSegmentDescriptor(
-                    movementProvider,
-                    PathMovementSettingsUtility.Clone(movementProvider.MovementSettings),
+                    descriptor.Provider,
+                    PathMovementSettingsUtility.Clone(descriptor.MovementSettings),
                     nextSegments[i].PreservePreviousSpeed);
                 accumulated += nextLengths[i];
             }
+
+            error = null;
+            return true;
         }
 
         private int FindSegmentIndex(float distance)
@@ -323,17 +363,9 @@ namespace Common.TransformPath
             if (distance >= _pathLength)
                 return _segmentLengths.Length - 1;
 
-            int low = 0;
-            int high = _segmentStartDistances.Length - 1;
-            while (low < high)
-            {
-                int middle = (low + high + 1) / 2;
-                if (_segmentStartDistances[middle] <= distance)
-                    low = middle;
-                else
-                    high = middle - 1;
-            }
-            return low;
+            return PathGeometryUtility.FindSegmentIndex(
+                _segmentStartDistances,
+                distance);
         }
 
         private void SubscribeToChildren()
@@ -341,6 +373,7 @@ namespace Common.TransformPath
             UnsubscribeFromChildren();
             if (_segments == null)
                 return;
+
             for (int i = 0; i < _segments.Count; i++)
             {
                 PathData pathData = _segments[i].PathData;
@@ -358,22 +391,30 @@ namespace Common.TransformPath
                 if (_subscribedProviders[i] != null)
                     _subscribedProviders[i].PathChanged -= MarkDirtyFromChild;
             }
+
             _subscribedProviders.Clear();
         }
 
         private bool HasChildRevisionChanged()
         {
-            if (_segments == null || _childRevisions == null || _segments.Count != _childRevisions.Length)
+            if (_segments == null
+                || _childRevisions == null
+                || _segments.Count != _childRevisions.Length)
                 return true;
+
             for (int i = 0; i < _segments.Count; i++)
             {
-                if (_segments[i].PathData == null || _segments[i].PathData.Revision != _childRevisions[i])
+                if (_segments[i].PathData == null
+                    || _segments[i].PathData.Revision != _childRevisions[i])
                     return true;
             }
+
             return false;
         }
 
-        private static bool AreSameConfig(PathSegmentConfig left, PathSegmentConfig right)
+        private static bool AreSameConfig(
+            PathSegmentConfig left,
+            PathSegmentConfig right)
         {
             return left.PathData == right.PathData
                 && left.PreservePreviousSpeed == right.PreservePreviousSpeed;
@@ -381,31 +422,47 @@ namespace Common.TransformPath
 
         private void NotifyPathChanged()
         {
-            Delegate[] listeners = PathChanged?.GetInvocationList();
-            if (listeners == null)
+            PathChanged?.Invoke();
+        }
+
+        private void MarkConfigurationError(string message)
+        {
+            UnsubscribeFromChildren();
+            _isInitialized = false;
+            _isDirty = true;
+            _segmentLengths = null;
+            _segmentStartDistances = null;
+            _childRevisions = null;
+            _cachedDescriptors = null;
+            _pathLength = 0f;
+            if (_configurationErrorReported)
                 return;
-            for (int i = 0; i < listeners.Length; i++)
-            {
-                try
-                {
-                    ((Action)listeners[i])();
-                }
-                catch (Exception exception)
-                {
-                    Debug.LogException(exception, this);
-                }
-            }
+
+            Debug.LogError($"MultiPathData '{name}' could not build: {message}", this);
+            _configurationErrorReported = true;
         }
 
         private void ThrowIfNotReady()
         {
             if (!IsReady)
-                throw new InvalidOperationException("MultiPathData is not initialized and ready. Rebuild after changing a segment.");
+                throw new InvalidOperationException(
+                    "MultiPathData is not initialized and ready. Rebuild after changing a segment.");
         }
 
-        private static bool IsFinite(float value)
-        {
-            return !float.IsNaN(value) && !float.IsInfinity(value);
-        }
+        #endregion
+
+#if UNITY_EDITOR
+#pragma warning disable 0414
+        [Header("Editor Only")]
+        [SerializeField] private bool _autoLinkPathPoints = true;
+
+        [Header("MultiPath → all PathData drawing")]
+        [SerializeField, Range(0.1f, 20f)] private float _multiPathLineWidth = 2f;
+        [SerializeField, Range(0f, 1f)] private float _multiPathPointSize =
+            DEFAULT_MULTI_PATH_POINT_SIZE;
+        [SerializeField, Range(0f, 1f)] private float _multiPathSamplePointSize;
+        [SerializeField, Range(0f, 1f)] private float _multiPathEventPointSize = 0.15f;
+#pragma warning restore 0414
+#endif
     }
 }

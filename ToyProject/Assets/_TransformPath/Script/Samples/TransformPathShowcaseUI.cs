@@ -12,16 +12,16 @@ namespace Common.TransformPath.Samples
     [DefaultExecutionOrder(110)]
     public sealed class TransformPathShowcaseUI : MonoBehaviour
     {
-        private const float BoardWidth = 420f;
-        private const float BoardHeight = 346f;
-        private const float ContentWidth = 388f;
+        private const float BOARD_WIDTH = 420f;
+        private const float BOARD_HEIGHT = 346f;
+        private const float CONTENT_WIDTH = 388f;
 
-        private static readonly Color PanelColor = new Color(0.025f, 0.04f, 0.07f, 0.9f);
-        private static readonly Color NormalColor = new Color(0.15f, 0.65f, 1f, 1f);
-        private static readonly Color MultiColorA = new Color(0.8f, 0.35f, 1f, 1f);
-        private static readonly Color QueueColor = new Color(1f, 0.65f, 0.1f, 1f);
-        private static readonly Color CommonButtonColor = new Color(0.16f, 0.28f, 0.43f, 1f);
-        private static readonly Color DarkButtonColor = new Color(0.11f, 0.18f, 0.28f, 1f);
+        private static readonly Color PANEL_COLOR = new Color(0.025f, 0.04f, 0.07f, 0.9f);
+        private static readonly Color NORMAL_COLOR = new Color(0.15f, 0.65f, 1f, 1f);
+        private static readonly Color MULTI_COLOR_A = new Color(0.8f, 0.35f, 1f, 1f);
+        private static readonly Color QUEUE_COLOR = new Color(1f, 0.65f, 0.1f, 1f);
+        private static readonly Color COMMON_BUTTON_COLOR = new Color(0.16f, 0.28f, 0.43f, 1f);
+        private static readonly Color DARK_BUTTON_COLOR = new Color(0.11f, 0.18f, 0.28f, 1f);
 
         private TransformPathOverviewController _controller;
         private TransformPathOverviewBoard _board;
@@ -53,13 +53,13 @@ namespace Common.TransformPath.Samples
 
         private void Build()
         {
-            _controller = GetComponent<TransformPathOverviewController>();
+            TryGetComponent(out _controller);
             _board = GetComponentInChildren<TransformPathOverviewBoard>(true);
             if (_controller == null || _board == null)
                 throw new InvalidOperationException("TransformPathShowcaseUI requires the overview controller and board.");
 
-            Canvas canvas = _board.GetComponent<Canvas>();
-            RectTransform boardRect = _board.GetComponent<RectTransform>();
+            _board.TryGetComponent(out Canvas canvas);
+            _board.TryGetComponent(out RectTransform boardRect);
             _statusText = _board.GetComponentInChildren<Text>(true);
             if (canvas == null || boardRect == null || _statusText == null)
                 throw new InvalidOperationException("TransformPath overview board requires Canvas, RectTransform, and Text.");
@@ -68,7 +68,7 @@ namespace Common.TransformPath.Samples
             canvas.worldCamera = null;
             canvas.sortingOrder = 100;
 
-            CanvasScaler scaler = _board.GetComponent<CanvasScaler>();
+            _board.TryGetComponent(out CanvasScaler scaler);
             if (scaler != null)
             {
                 scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
@@ -79,7 +79,7 @@ namespace Common.TransformPath.Samples
 
             // A root Canvas always covers the display. Keep its old Image from
             // painting a full-screen backdrop and create a real compact panel child.
-            Image rootBackground = _board.GetComponent<Image>();
+            _board.TryGetComponent(out Image rootBackground);
             if (rootBackground != null)
             {
                 rootBackground.enabled = false;
@@ -90,24 +90,24 @@ namespace Common.TransformPath.Samples
             panelObject.transform.SetParent(_board.transform, false);
             panelObject.transform.SetAsFirstSibling();
             _panelRoot = panelObject.transform;
-            RectTransform panelRect = panelObject.GetComponent<RectTransform>();
-            ConfigureBottomLeftRect(panelRect, new Vector2(24f, 24f), new Vector2(BoardWidth, BoardHeight));
-            Image panelImage = panelObject.GetComponent<Image>();
-            panelImage.color = PanelColor;
+            panelObject.TryGetComponent(out RectTransform panelRect);
+            ConfigureBottomLeftRect(panelRect, new Vector2(24f, 24f), new Vector2(BOARD_WIDTH, BOARD_HEIGHT));
+            panelObject.TryGetComponent(out Image panelImage);
+            panelImage.color = PANEL_COLOR;
             panelImage.raycastTarget = true;
 
             // Move the serialized board text into the compact child panel so the
             // board component can still own its status Text reference.
             _statusText.transform.SetParent(_panelRoot, false);
             _font = _statusText.font;
-            ConfigureText(_statusText, new Vector2(16f, -246f), new Vector2(ContentWidth, 64f), 10, Color.white);
+            ConfigureText(_statusText, new Vector2(16f, -246f), new Vector2(CONTENT_WIDTH, 64f), 10, Color.white);
 
             CreateText(
                 _panelRoot,
                 "Title",
                 "TRANSFORM PATH SHOWCASE",
                 new Vector2(16f, -12f),
-                new Vector2(ContentWidth, 22f),
+                new Vector2(CONTENT_WIDTH, 22f),
                 18,
                 Color.white,
                 TextAnchor.MiddleLeft);
@@ -116,9 +116,9 @@ namespace Common.TransformPath.Samples
                 "Active Lane",
                 string.Empty,
                 new Vector2(16f, -36f),
-                new Vector2(ContentWidth, 18f),
+                new Vector2(CONTENT_WIDTH, 18f),
                 11,
-                NormalColor,
+                NORMAL_COLOR,
                 TextAnchor.MiddleLeft);
 
             CreateLaneButtons(_panelRoot);
@@ -130,7 +130,7 @@ namespace Common.TransformPath.Samples
                 "Keyboard Help",
                 "1/2/3 curve preset · Space pause · R reset · ←/→ seek · Q queue",
                 new Vector2(16f, -316f),
-                new Vector2(ContentWidth, 14f),
+                new Vector2(CONTENT_WIDTH, 14f),
                 9,
                 new Color(0.58f, 0.67f, 0.78f, 1f),
                 TextAnchor.MiddleLeft);
@@ -139,7 +139,7 @@ namespace Common.TransformPath.Samples
                 "Camera Help",
                 "RMB look/move · WASD · Q/E vertical · wheel speed · Shift boost",
                 new Vector2(16f, -331f),
-                new Vector2(ContentWidth, 14f),
+                new Vector2(CONTENT_WIDTH, 14f),
                 9,
                 new Color(0.58f, 0.67f, 0.78f, 1f),
                 TextAnchor.MiddleLeft);
@@ -152,17 +152,18 @@ namespace Common.TransformPath.Samples
 
         private void CreateLaneButtons(Transform parent)
         {
-            const float gap = 5f;
-            float width = (ContentWidth - gap * 2f) / 3f;
-            CreateLaneButton(parent, "NORMAL", new Vector2(16f, -60f), new Vector2(width, 32f), NormalColor, _controller.ShowNormalLane);
-            CreateLaneButton(parent, "MULTI", new Vector2(16f + width + gap, -60f), new Vector2(width, 32f), MultiColorA, _controller.ShowMultiPathLane);
-            CreateLaneButton(parent, "QUEUE", new Vector2(16f + (width + gap) * 2f, -60f), new Vector2(width, 32f), QueueColor, _controller.ShowQueuedLane);
+            const float GAP = 5f;
+            float width = (CONTENT_WIDTH - GAP * 2f) / 3f;
+            CreateLaneButton(parent, "NORMAL", new Vector2(16f, -60f), new Vector2(width, 32f), NORMAL_COLOR, _controller.ShowNormalLane);
+            CreateLaneButton(parent, "MULTI", new Vector2(16f + width + GAP, -60f), new Vector2(width, 32f), MULTI_COLOR_A, _controller.ShowMultiPathLane);
+            CreateLaneButton(parent, "QUEUE", new Vector2(16f + (width + GAP) * 2f, -60f), new Vector2(width, 32f), QUEUE_COLOR, _controller.ShowQueuedLane);
         }
 
         private void CreateLaneButton(Transform parent, string label, Vector2 position, Vector2 size, Color color, Action action)
         {
             Button button = CreateButton(parent, label, position, size, color, action);
-            _laneButtonImages.Add(button.GetComponent<Image>());
+            button.TryGetComponent(out Image image);
+            _laneButtonImages.Add(image);
         }
 
         private void CreateCommonControls(Transform parent)
@@ -172,33 +173,33 @@ namespace Common.TransformPath.Samples
                 "PAUSE",
                 new Vector2(16f, -100f),
                 new Vector2(122f, 32f),
-                CommonButtonColor,
+                COMMON_BUTTON_COLOR,
                 _controller.TogglePauseAll);
             _pauseButtonLabel = pauseButton.GetComponentInChildren<Text>(true);
-            CreateButton(parent, "RESET", new Vector2(144f, -100f), new Vector2(90f, 32f), CommonButtonColor, _controller.ResetAll);
-            CreateButton(parent, "FOCUS CAMERA", new Vector2(240f, -100f), new Vector2(164f, 32f), CommonButtonColor, _controller.FocusActiveLane);
+            CreateButton(parent, "RESET", new Vector2(144f, -100f), new Vector2(90f, 32f), COMMON_BUTTON_COLOR, _controller.ResetAll);
+            CreateButton(parent, "FOCUS CAMERA", new Vector2(240f, -100f), new Vector2(164f, 32f), COMMON_BUTTON_COLOR, _controller.FocusActiveLane);
         }
 
         private void CreateSettingsGroups(Transform parent)
         {
             _normalSettings = CreateSettingsGroup(parent, "Normal Settings");
-            CreateText(_normalSettings.transform, "Normal Header", "NORMAL PATH SETTINGS", new Vector2(16f, -142f), new Vector2(ContentWidth, 18f), 11, NormalColor, TextAnchor.MiddleLeft);
-            CreateButton(_normalSettings.transform, "LINEAR", new Vector2(16f, -166f), new Vector2(122f, 32f), DarkButtonColor, () => _controller.SelectPresentationMode(0));
-            CreateButton(_normalSettings.transform, "INTERPOLATE", new Vector2(143f, -166f), new Vector2(130f, 32f), DarkButtonColor, () => _controller.SelectPresentationMode(1));
-            CreateButton(_normalSettings.transform, "APPROXIMATE", new Vector2(278f, -166f), new Vector2(126f, 32f), DarkButtonColor, () => _controller.SelectPresentationMode(2));
-            CreateButton(_normalSettings.transform, "SEEK -", new Vector2(16f, -204f), new Vector2(88f, 32f), DarkButtonColor, _controller.SeekBackward);
-            CreateButton(_normalSettings.transform, "SEEK +", new Vector2(110f, -204f), new Vector2(88f, 32f), DarkButtonColor, _controller.SeekForward);
+            CreateText(_normalSettings.transform, "Normal Header", "NORMAL PATH SETTINGS", new Vector2(16f, -142f), new Vector2(CONTENT_WIDTH, 18f), 11, NORMAL_COLOR, TextAnchor.MiddleLeft);
+            CreateButton(_normalSettings.transform, "LINEAR", new Vector2(16f, -166f), new Vector2(122f, 32f), DARK_BUTTON_COLOR, () => _controller.SelectPresentationMode(0));
+            CreateButton(_normalSettings.transform, "INTERPOLATE", new Vector2(143f, -166f), new Vector2(130f, 32f), DARK_BUTTON_COLOR, () => _controller.SelectPresentationMode(1));
+            CreateButton(_normalSettings.transform, "APPROXIMATE", new Vector2(278f, -166f), new Vector2(126f, 32f), DARK_BUTTON_COLOR, () => _controller.SelectPresentationMode(2));
+            CreateButton(_normalSettings.transform, "SEEK -", new Vector2(16f, -204f), new Vector2(88f, 32f), DARK_BUTTON_COLOR, _controller.SeekBackward);
+            CreateButton(_normalSettings.transform, "SEEK +", new Vector2(110f, -204f), new Vector2(88f, 32f), DARK_BUTTON_COLOR, _controller.SeekForward);
             _multiSettings = CreateSettingsGroup(parent, "Multi Settings");
-            CreateText(_multiSettings.transform, "Multi Header", "MULTI PATH SETTINGS", new Vector2(16f, -142f), new Vector2(ContentWidth, 18f), 11, MultiColorA, TextAnchor.MiddleLeft);
-            CreateButton(_multiSettings.transform, "SEEK -", new Vector2(16f, -166f), new Vector2(92f, 32f), DarkButtonColor, _controller.SeekBackward);
-            CreateButton(_multiSettings.transform, "SEEK +", new Vector2(114f, -166f), new Vector2(92f, 32f), DarkButtonColor, _controller.SeekForward);
+            CreateText(_multiSettings.transform, "Multi Header", "MULTI PATH SETTINGS", new Vector2(16f, -142f), new Vector2(CONTENT_WIDTH, 18f), 11, MULTI_COLOR_A, TextAnchor.MiddleLeft);
+            CreateButton(_multiSettings.transform, "SEEK -", new Vector2(16f, -166f), new Vector2(92f, 32f), DARK_BUTTON_COLOR, _controller.SeekBackward);
+            CreateButton(_multiSettings.transform, "SEEK +", new Vector2(114f, -166f), new Vector2(92f, 32f), DARK_BUTTON_COLOR, _controller.SeekForward);
             CreateText(_multiSettings.transform, "Multi Hint", "Two independent segments · global/local progress", new Vector2(216f, -166f), new Vector2(188f, 32f), 9, new Color(0.78f, 0.7f, 0.9f, 1f), TextAnchor.MiddleLeft);
 
             _queueSettings = CreateSettingsGroup(parent, "Queue Settings");
-            CreateText(_queueSettings.transform, "Queue Header", "QUEUED PATH SETTINGS", new Vector2(16f, -142f), new Vector2(ContentWidth, 18f), 11, QueueColor, TextAnchor.MiddleLeft);
+            CreateText(_queueSettings.transform, "Queue Header", "QUEUED PATH SETTINGS", new Vector2(16f, -142f), new Vector2(CONTENT_WIDTH, 18f), 11, QUEUE_COLOR, TextAnchor.MiddleLeft);
             CreateButton(_queueSettings.transform, "BLOCK LEADER", new Vector2(16f, -166f), new Vector2(122f, 32f), new Color(0.58f, 0.25f, 0.12f, 1f), _controller.BlockQueueLeader);
             CreateButton(_queueSettings.transform, "UNBLOCK", new Vector2(143f, -166f), new Vector2(94f, 32f), new Color(0.16f, 0.45f, 0.28f, 1f), _controller.UnblockQueueLeader);
-            Button visibilityButton = CreateButton(_queueSettings.transform, "QUEUE ON", new Vector2(242f, -166f), new Vector2(162f, 32f), DarkButtonColor, _controller.ToggleQueueVisibility);
+            Button visibilityButton = CreateButton(_queueSettings.transform, "QUEUE ON", new Vector2(242f, -166f), new Vector2(162f, 32f), DARK_BUTTON_COLOR, _controller.ToggleQueueVisibility);
             _queueVisibilityLabel = visibilityButton.GetComponentInChildren<Text>(true);
         }
 
@@ -206,8 +207,8 @@ namespace Common.TransformPath.Samples
         {
             GameObject group = new GameObject(name, typeof(RectTransform));
             group.transform.SetParent(parent, false);
-            RectTransform rect = group.GetComponent<RectTransform>();
-            ConfigureRect(rect, Vector2.zero, new Vector2(BoardWidth, BoardHeight));
+            group.TryGetComponent(out RectTransform rect);
+            ConfigureRect(rect, Vector2.zero, new Vector2(BOARD_WIDTH, BOARD_HEIGHT));
             group.SetActive(false);
             return group;
         }
@@ -259,11 +260,11 @@ namespace Common.TransformPath.Samples
             switch (lane)
             {
                 case TransformPathShowcaseLane.MultiPath:
-                    return MultiColorA;
+                    return MULTI_COLOR_A;
                 case TransformPathShowcaseLane.Queue:
-                    return QueueColor;
+                    return QUEUE_COLOR;
                 default:
-                    return NormalColor;
+                    return NORMAL_COLOR;
             }
         }
 
@@ -280,14 +281,14 @@ namespace Common.TransformPath.Samples
         {
             GameObject buttonObject = new GameObject(label + " Button", typeof(RectTransform), typeof(Image), typeof(Button));
             buttonObject.transform.SetParent(parent, false);
-            RectTransform rect = buttonObject.GetComponent<RectTransform>();
+            buttonObject.TryGetComponent(out RectTransform rect);
             ConfigureRect(rect, position, size);
 
-            Image image = buttonObject.GetComponent<Image>();
+            buttonObject.TryGetComponent(out Image image);
             image.color = color;
             image.raycastTarget = true;
 
-            Button button = buttonObject.GetComponent<Button>();
+            buttonObject.TryGetComponent(out Button button);
             button.targetGraphic = image;
             ColorBlock colors = button.colors;
             colors.normalColor = color;
@@ -306,7 +307,7 @@ namespace Common.TransformPath.Samples
         {
             GameObject textObject = new GameObject(name, typeof(RectTransform), typeof(Text));
             textObject.transform.SetParent(parent, false);
-            Text text = textObject.GetComponent<Text>();
+            textObject.TryGetComponent(out Text text);
             text.font = _font != null ? _font : Resources.GetBuiltinResource<Font>("Arial.ttf");
             text.text = value;
             text.fontSize = fontSize;
@@ -315,7 +316,8 @@ namespace Common.TransformPath.Samples
             text.horizontalOverflow = HorizontalWrapMode.Wrap;
             text.verticalOverflow = VerticalWrapMode.Overflow;
             text.raycastTarget = false;
-            ConfigureRect(textObject.GetComponent<RectTransform>(), position, size);
+            textObject.TryGetComponent(out RectTransform textRect);
+            ConfigureRect(textRect, position, size);
             return text;
         }
 
@@ -328,7 +330,8 @@ namespace Common.TransformPath.Samples
             text.horizontalOverflow = HorizontalWrapMode.Wrap;
             text.verticalOverflow = VerticalWrapMode.Overflow;
             text.raycastTarget = false;
-            ConfigureRect(text.GetComponent<RectTransform>(), position, size);
+            text.TryGetComponent(out RectTransform textRect);
+            ConfigureRect(textRect, position, size);
         }
 
         private static void ConfigureBottomLeftRect(RectTransform rect, Vector2 position, Vector2 size)

@@ -8,7 +8,7 @@ Bake된 표면·장애물·Goal·Modifier로 방향과 속도 배율을 제공�
 - Collections `1.4.0`, Mathematics `1.2.6`
 - GPU 경로는 Compute Shader, raw-buffer atomic, indirect dispatch와 AsyncGPUReadback을 지원하는 플랫폼에서 사용합니다. 지원하지 않는 플랫폼은 동일한 Managed FIFO BFS로 자동 전환합니다.
 
-`Script/Core/Common.FlowField.Core.asmdef`가 저수준 계산과 패키지 참조를 소유합니다. Core EditMode 테스트용 asmdef는 `Script/Core/EditModeTests`에 있습니다.
+`Script/Core/Common.FlowField.Core.asmdef`가 저수준 계산과 패키지 참조를 소유합니다.
 
 ## 베이크 모드
 

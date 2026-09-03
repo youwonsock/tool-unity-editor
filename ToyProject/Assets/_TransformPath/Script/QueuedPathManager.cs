@@ -12,9 +12,47 @@ namespace Common.TransformPath
     [DefaultExecutionOrder(-180)]
     public sealed class QueuedPathManager : MonoBehaviour
     {
+        #region Constants
+
         private const float DEFAULT_SPACING = 1.5f;
         private const float DEFAULT_SLOWDOWN_START_DISTANCE = 3f;
         private const float DEFAULT_MIN_SPEED_MULTIPLIER = 0.1f;
+
+        #endregion
+
+
+        #region Inner Classes / Structs
+
+        private sealed class QueueEntry
+        {
+            public readonly IQueuedPathAgent Agent;
+            public readonly int RegistrationSequence;
+            public float Progress;
+
+            public QueueEntry(IQueuedPathAgent agent, int registrationSequence)
+            {
+                Agent = agent;
+                RegistrationSequence = registrationSequence;
+            }
+        }
+
+        private sealed class QueueEntryComparer : IComparer<QueueEntry>
+        {
+            public static readonly QueueEntryComparer INSTANCE = new QueueEntryComparer();
+
+            public int Compare(QueueEntry left, QueueEntry right)
+            {
+                int progress = right.Progress.CompareTo(left.Progress);
+                return progress != 0
+                    ? progress
+                    : left.RegistrationSequence.CompareTo(right.RegistrationSequence);
+            }
+        }
+
+        #endregion
+
+
+        #region Member Variables
 
         [Header("Route")]
         [SerializeField] private MonoBehaviour _routeProviderObject;
@@ -36,9 +74,15 @@ namespace Common.TransformPath
         private IPathProvider _routeProvider;
         private bool _isInitialized;
         private bool _awaitingFollowerSnapshots;
+        private bool _configurationErrorReported;
         private int _observedRouteRevision = -1;
         private int _routeRevision;
         private int _registrationSequence;
+
+        #endregion
+
+
+        #region Properties
 
         public bool IsInitialized => _isInitialized;
         public IPathProvider RouteProvider => _routeProvider;
@@ -49,7 +93,7 @@ namespace Common.TransformPath
             get => _defaultSpacing;
             set
             {
-                ValidateNonNegative(value, nameof(value));
+                ValidateNonNegativeFinite(value, nameof(value));
                 _defaultSpacing = value;
             }
         }
@@ -63,7 +107,7 @@ namespace Common.TransformPath
             get => _slowdownStartDistance;
             set
             {
-                ValidateNonNegative(value, nameof(value));
+                ValidateNonNegativeFinite(value, nameof(value));
                 _slowdownStartDistance = value;
             }
         }
@@ -72,11 +116,16 @@ namespace Common.TransformPath
             get => _minSpeedMultiplier;
             set
             {
-                if (!IsFinite(value) || value < 0f || value > 1f)
+                if (!PathValueUtility.IsInRange(value, 0f, 1f))
                     throw new ArgumentOutOfRangeException(nameof(value));
                 _minSpeedMultiplier = value;
             }
         }
+
+        #endregion
+
+
+        #region Unity Events
 
         private void Awake()
         {
@@ -99,7 +148,7 @@ namespace Common.TransformPath
 
             for (int i = 0; i < _entries.Count; i++)
                 _entries[i].Progress = Mathf.Clamp01(_entries[i].Agent.GlobalNormalizedTime);
-            _entries.Sort(QueueEntryComparer.Instance);
+            _entries.Sort(QueueEntryComparer.INSTANCE);
             _indices.Clear();
             for (int i = 0; i < _entries.Count; i++)
                 _indices[_entries[i].Agent] = i;
@@ -112,7 +161,7 @@ namespace Common.TransformPath
                 float progress = _entries[i].Progress;
                 float? distance = ahead == null
                     ? (float?)null
-                    : Mathf.Max(0f, ( _entries[i - 1].Progress - progress) * routeLength);
+                    : Mathf.Max(0f, (_entries[i - 1].Progress - progress) * routeLength);
                 float spacing = GetSpacing(agent);
                 bool revisionBlocked = _awaitingFollowerSnapshots && agent.SnapshotRevision != _routeRevision;
                 bool spacingBlocked = distance.HasValue && distance.Value <= spacing;
@@ -142,21 +191,32 @@ namespace Common.TransformPath
             Release();
         }
 
+        #endregion
+
+
+        #region Public Methods
+
         public void Init()
         {
             if (_isInitialized)
                 return;
-            ValidateSettings();
+            if (!TryValidateSettings(out string settingsError))
+            {
+                MarkConfigurationError(settingsError);
+                return;
+            }
             if (_slowdownCurve == null)
                 _slowdownCurve = AnimationCurve.Linear(0f, 0f, 1f, 1f);
 
             _isInitialized = true;
+            _configurationErrorReported = false;
             if (_routeProviderObject != null)
             {
                 IPathProvider provider = _routeProviderObject as IPathProvider;
                 if (provider == null)
                 {
-                    Debug.LogError($"QueuedPathManager '{name}' route object does not implement IPathProvider.", this);
+                    MarkConfigurationError(
+                        $"QueuedPathManager '{name}' route object does not implement IPathProvider.");
                     return;
                 }
                 if (provider.IsInitialized && provider.IsReady)
@@ -181,8 +241,8 @@ namespace Common.TransformPath
         {
             if (provider == null)
                 throw new ArgumentNullException(nameof(provider));
-            if (!provider.IsInitialized || !provider.IsReady)
-                throw new InvalidOperationException("Queue route provider must be initialized and ready.");
+            if (!PathProviderUtility.TryValidateReady(provider, out string error))
+                throw new InvalidOperationException(error);
 
             if (ReferenceEquals(_routeProvider, provider))
                 return;
@@ -249,6 +309,11 @@ namespace Common.TransformPath
             return false;
         }
 
+        #endregion
+
+
+        #region Private Methods
+
         private void HandleRouteChanged()
         {
             // The revision is consumed in Update so followers are constrained
@@ -276,18 +341,23 @@ namespace Common.TransformPath
 
         private bool IsSameRouteStructure()
         {
-            int count = GetRouteSegmentCount(_routeProvider);
+            if (!PathProviderUtility.TryGetRouteSegmentCount(
+                    _routeProvider,
+                    out int count,
+                    out _))
+                return false;
             if (count != _routeStructure.Count)
                 return false;
             for (int i = 0; i < count; i++)
             {
-                PathSegmentDescriptor descriptor = GetRouteSegment(_routeProvider, i);
-                PathSegmentDescriptor cached = _routeStructure[i];
-                if (!ReferenceEquals(descriptor.Provider, cached.Provider)
-                    || descriptor.PreservePreviousSpeed != cached.PreservePreviousSpeed
-                    || !PathMovementSettingsUtility.AreSame(
-                        descriptor.MovementSettings,
-                        cached.MovementSettings))
+                if (!PathProviderUtility.TryGetDescriptor(
+                        _routeProvider,
+                        i,
+                        out PathSegmentDescriptor descriptor,
+                        out _)
+                    || !PathProviderUtility.AreSameDescriptor(
+                        descriptor,
+                        _routeStructure[i]))
                     return false;
             }
             return true;
@@ -296,10 +366,20 @@ namespace Common.TransformPath
         private void CaptureRouteStructure()
         {
             _routeStructure.Clear();
-            int count = GetRouteSegmentCount(_routeProvider);
+            if (!PathProviderUtility.TryGetRouteSegmentCount(
+                    _routeProvider,
+                    out int count,
+                    out string countError))
+                throw new InvalidOperationException(countError);
+
             for (int i = 0; i < count; i++)
             {
-                PathSegmentDescriptor descriptor = GetRouteSegment(_routeProvider, i);
+                if (!PathProviderUtility.TryGetDescriptor(
+                        _routeProvider,
+                        i,
+                        out PathSegmentDescriptor descriptor,
+                        out string descriptorError))
+                    throw new InvalidOperationException(descriptorError);
                 _routeStructure.Add(new PathSegmentDescriptor(
                     descriptor.Provider,
                     PathMovementSettingsUtility.Clone(descriptor.MovementSettings),
@@ -337,26 +417,6 @@ namespace Common.TransformPath
             return concrete == null || concrete.UseManagerSpacing ? _defaultSpacing : concrete.ActorSpacing;
         }
 
-        private static int GetRouteSegmentCount(IPathProvider provider)
-        {
-            IPathSequenceProvider sequence = provider as IPathSequenceProvider;
-            return sequence == null ? 1 : sequence.SegmentCount;
-        }
-
-        private static PathSegmentDescriptor GetRouteSegment(IPathProvider provider, int index)
-        {
-            IPathSequenceProvider sequence = provider as IPathSequenceProvider;
-            if (sequence != null)
-                return sequence.GetSegment(index);
-            IPathMovementProvider movementProvider = provider as IPathMovementProvider;
-            if (movementProvider == null)
-                throw new InvalidOperationException("A queue route provider must expose PathMovementSettings.");
-            return new PathSegmentDescriptor(
-                movementProvider,
-                movementProvider.MovementSettings,
-                false);
-        }
-
         private void StopAllAgents()
         {
             for (int i = _entries.Count - 1; i >= 0; i--)
@@ -372,47 +432,44 @@ namespace Common.TransformPath
             _states.Clear();
         }
 
-        private void ValidateSettings()
+        private bool TryValidateSettings(out string error)
         {
-            ValidateNonNegative(_defaultSpacing, nameof(_defaultSpacing));
-            ValidateNonNegative(_slowdownStartDistance, nameof(_slowdownStartDistance));
-            if (!IsFinite(_minSpeedMultiplier) || _minSpeedMultiplier < 0f || _minSpeedMultiplier > 1f)
-                throw new ArgumentOutOfRangeException(nameof(_minSpeedMultiplier));
+            if (!PathValueUtility.IsNonNegativeFinite(_defaultSpacing))
+            {
+                error = "Default spacing must be finite and non-negative.";
+                return false;
+            }
+            if (!PathValueUtility.IsNonNegativeFinite(_slowdownStartDistance))
+            {
+                error = "Slowdown start distance must be finite and non-negative.";
+                return false;
+            }
+            if (!PathValueUtility.IsInRange(_minSpeedMultiplier, 0f, 1f))
+            {
+                error = "Minimum speed multiplier must be within 0..1.";
+                return false;
+            }
+
+            error = null;
+            return true;
         }
 
-        private static void ValidateNonNegative(float value, string parameterName)
+        private static void ValidateNonNegativeFinite(float value, string parameterName)
         {
-            if (!IsFinite(value) || value < 0f)
+            if (!PathValueUtility.IsNonNegativeFinite(value))
                 throw new ArgumentOutOfRangeException(parameterName);
         }
 
-        private static bool IsFinite(float value)
+        private void MarkConfigurationError(string message)
         {
-            return !float.IsNaN(value) && !float.IsInfinity(value);
+            _isInitialized = false;
+            if (_configurationErrorReported)
+                return;
+
+            Debug.LogError(message, this);
+            _configurationErrorReported = true;
         }
 
-        private sealed class QueueEntry
-        {
-            public readonly IQueuedPathAgent Agent;
-            public readonly int RegistrationSequence;
-            public float Progress;
-
-            public QueueEntry(IQueuedPathAgent agent, int registrationSequence)
-            {
-                Agent = agent;
-                RegistrationSequence = registrationSequence;
-            }
-        }
-
-        private sealed class QueueEntryComparer : IComparer<QueueEntry>
-        {
-            public static readonly QueueEntryComparer Instance = new QueueEntryComparer();
-
-            public int Compare(QueueEntry left, QueueEntry right)
-            {
-                int progress = right.Progress.CompareTo(left.Progress);
-                return progress != 0 ? progress : left.RegistrationSequence.CompareTo(right.RegistrationSequence);
-            }
-        }
+        #endregion
     }
 }

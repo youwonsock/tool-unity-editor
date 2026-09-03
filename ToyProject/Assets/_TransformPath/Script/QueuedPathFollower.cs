@@ -8,7 +8,14 @@ namespace Common.TransformPath
     [RequireComponent(typeof(PathFollower))]
     public sealed class QueuedPathFollower : MonoBehaviour, IQueuedPathAgent
     {
+        #region Constants
+
         private const float DEFAULT_ACTOR_SPACING = 1.5f;
+
+        #endregion
+
+
+        #region Member Variables
 
         [Header("Components")]
         [SerializeField] private PathFollower _pathFollower;
@@ -32,98 +39,118 @@ namespace Common.TransformPath
         private int _speedParamHash;
         private PathQueueState _managerState;
         private bool _hasManagerState;
-        private int _snapshotRevision = -1;
         private Action _completedSubscription;
+
+        #endregion
+
+
+        #region Properties
 
         public bool IsInitialized => _isInitialized;
         public bool IsBlocked => _effectiveBlocked;
         public bool IsMoving => _pathFollower != null && _pathFollower.IsMoving;
         public bool IsActuallyMoving => IsMoving && !_effectiveBlocked;
         public bool IsRegistered => _isRegistered;
+
         public float ActorSpacing
         {
             get => _actorSpacing;
             set
             {
-                if (!IsFinite(value) || value < 0f)
+                if (!PathValueUtility.IsNonNegativeFinite(value))
                     throw new ArgumentOutOfRangeException(nameof(value));
                 _actorSpacing = value;
             }
         }
+
         public bool UseManagerSpacing
         {
             get => _useManagerSpacing;
             set => _useManagerSpacing = value;
         }
+
         public bool EnableGradualSlowdown
         {
             get => _enableGradualSlowdown;
             set => _enableGradualSlowdown = value;
         }
+
         public bool EnableOvertakeProtection
         {
             get => _enableOvertakeProtection;
             set => _enableOvertakeProtection = value;
         }
+
         public float CurrentSpeedMultiplier => _currentSpeedMultiplier;
-        public float GlobalNormalizedTime => _pathFollower == null ? 0f : _pathFollower.GlobalNormalizedTime;
+        public float GlobalNormalizedTime => _pathFollower == null
+            ? 0f
+            : _pathFollower.GlobalNormalizedTime;
         public PathFollower PathFollower => _pathFollower;
         public QueuedPathManager Manager => _manager;
-        public IPathProvider QueueProvider => _pathFollower == null ? null : _pathFollower.CurrentProvider;
-        public int SnapshotRevision => _pathFollower == null ? -1 : _pathFollower.SnapshotRevision;
+        public IPathProvider QueueProvider => _pathFollower == null
+            ? null
+            : _pathFollower.CurrentProvider;
+        public int SnapshotRevision => _pathFollower == null
+            ? -1
+            : _pathFollower.SnapshotRevision;
 
         public event Action<QueuedPathFollower> OnBlocked;
         public event Action<QueuedPathFollower> OnResumed;
         public event Action<QueuedPathFollower> OnCompleted;
         public event Action<QueuedPathFollower, float> OnSpeedChanged;
 
+        #endregion
+
+
+        #region Unity Events
+
+        public void Init()
+        {
+            if (_isInitialized)
+                return;
+
+            if (_pathFollower == null)
+                TryGetComponent(out _pathFollower);
+            if (_pathFollower == null)
+                return;
+            if (!_pathFollower.IsInitialized)
+                _pathFollower.Init();
+            if (_manager == null)
+                _manager = GetComponentInParent<QueuedPathManager>();
+
+            _speedParamHash = string.IsNullOrEmpty(_speedParamName)
+                ? 0
+                : Animator.StringToHash(_speedParamName);
+            _completedSubscription = HandleUnderlyingCompleted;
+            _pathFollower.Completed -= _completedSubscription;
+            _pathFollower.Completed += _completedSubscription;
+            _isInitialized = true;
+        }
+
+        public void Release()
+        {
+            if (!_isInitialized && !_isRegistered)
+                return;
+
+            UnregisterIfRegistered();
+            if (_pathFollower != null && _completedSubscription != null)
+                _pathFollower.Completed -= _completedSubscription;
+            _completedSubscription = null;
+            _isInitialized = false;
+            _hasManagerState = false;
+            _effectiveBlocked = false;
+            _currentSpeedMultiplier = 1f;
+        }
+
         private void Reset()
         {
-            _pathFollower = GetComponent<PathFollower>();
+            TryGetComponent(out _pathFollower);
         }
 
         private void Awake()
         {
             if (Application.isPlaying)
                 Init();
-        }
-
-        private void Update()
-        {
-            if (!_isInitialized || _pathFollower == null || !_pathFollower.IsMoving)
-                return;
-            if (!_isRegistered)
-                TryRegister();
-
-            PathQueueState state = default(PathQueueState);
-            bool hasState = _manager != null && _manager.TryGetState(this, out state);
-            if (hasState)
-            {
-                _managerState = state;
-                _hasManagerState = true;
-            }
-
-            bool blocked = _externalPause || _manualBlock || (_hasManagerState && _managerState.IsBlocked);
-            float multiplier = _hasManagerState ? _managerState.SpeedMultiplier : 1f;
-            if (_manualBlock || _externalPause)
-                multiplier = 0f;
-
-            if (_enableOvertakeProtection && _hasManagerState && !_manualBlock && !_externalPause
-                && GlobalNormalizedTime > _managerState.MaxGlobalNormalizedTime)
-            {
-                _pathFollower.Seek(_managerState.MaxGlobalNormalizedTime);
-            }
-
-            bool wasBlocked = _effectiveBlocked;
-            _effectiveBlocked = blocked;
-            _currentSpeedMultiplier = Mathf.Clamp01(multiplier);
-            _pathFollower.SetQueueConstraint(
-                _effectiveBlocked,
-                _currentSpeedMultiplier,
-                _hasManagerState ? _managerState.MaxGlobalNormalizedTime : 1f,
-                _hasManagerState ? _managerState.RouteRevision : SnapshotRevision);
-            UpdateAnimator();
-            ReportStateChanges(wasBlocked, blocked);
         }
 
         private void OnDisable()
@@ -136,45 +163,58 @@ namespace Common.TransformPath
             Release();
         }
 
-        public void Init()
+        private void Update()
         {
-            if (_isInitialized)
+            if (!_isInitialized || _pathFollower == null || !_pathFollower.IsMoving)
                 return;
-            if (_pathFollower == null)
-                _pathFollower = GetComponent<PathFollower>();
-            if (_pathFollower == null)
-                return;
-            if (!_pathFollower.IsInitialized)
-                _pathFollower.Init();
-            if (_manager == null)
-                _manager = GetComponentInParent<QueuedPathManager>();
-            _speedParamHash = string.IsNullOrEmpty(_speedParamName) ? 0 : Animator.StringToHash(_speedParamName);
-            _completedSubscription = HandleUnderlyingCompleted;
-            _pathFollower.Completed -= _completedSubscription;
-            _pathFollower.Completed += _completedSubscription;
-            _isInitialized = true;
-            _snapshotRevision = _pathFollower.SnapshotRevision;
+            if (!_isRegistered)
+                TryRegister();
+
+            PathQueueState state = default(PathQueueState);
+            bool hasState = _manager != null
+                && _manager.TryGetState(this, out state);
+            if (hasState)
+            {
+                _managerState = state;
+                _hasManagerState = true;
+            }
+
+            bool blocked = _externalPause
+                || _manualBlock
+                || (_hasManagerState && _managerState.IsBlocked);
+            float multiplier = _hasManagerState
+                ? _managerState.SpeedMultiplier
+                : 1f;
+            if (_manualBlock || _externalPause)
+                multiplier = 0f;
+
+            if (_enableOvertakeProtection
+                && _hasManagerState
+                && !_manualBlock
+                && !_externalPause
+                && GlobalNormalizedTime > _managerState.MaxGlobalNormalizedTime)
+                _pathFollower.Seek(_managerState.MaxGlobalNormalizedTime);
+
+            bool wasBlocked = _effectiveBlocked;
+            _effectiveBlocked = blocked;
+            _currentSpeedMultiplier = Mathf.Clamp01(multiplier);
+            _pathFollower.SetQueueConstraint(
+                _effectiveBlocked,
+                _currentSpeedMultiplier,
+                _hasManagerState ? _managerState.MaxGlobalNormalizedTime : 1f);
+            UpdateAnimator();
+            ReportStateChanges(wasBlocked, blocked);
         }
 
-        public void Release()
-        {
-            if (!_isInitialized && !_isRegistered)
-                return;
-            UnregisterIfRegistered();
-            if (_pathFollower != null && _completedSubscription != null)
-                _pathFollower.Completed -= _completedSubscription;
-            _completedSubscription = null;
-            _isInitialized = false;
-            _hasManagerState = false;
-            _effectiveBlocked = false;
-            _currentSpeedMultiplier = 1f;
-        }
+        #endregion
+
+
+        #region Public Methods
 
         public void StartMove(IPathMovementProvider provider, PathPlaybackSettings playback)
         {
             EnsureReadyToStart(provider);
             _pathFollower.StartMove(provider, playback);
-            _snapshotRevision = _pathFollower.SnapshotRevision;
             RegisterAfterStart();
         }
 
@@ -185,7 +225,6 @@ namespace Common.TransformPath
         {
             EnsureReadyToStart(provider);
             _pathFollower.StartMove(provider, movementOverride, playback);
-            _snapshotRevision = _pathFollower.SnapshotRevision;
             RegisterAfterStart();
         }
 
@@ -193,7 +232,6 @@ namespace Common.TransformPath
         {
             EnsureReadyToStart(provider);
             _pathFollower.StartSequence(provider, playback);
-            _snapshotRevision = _pathFollower.SnapshotRevision;
             RegisterAfterStart();
         }
 
@@ -208,6 +246,7 @@ namespace Common.TransformPath
         {
             if (_pathFollower == null)
                 return;
+
             _externalPause = true;
             _pathFollower.PauseMove();
             UnregisterIfRegistered();
@@ -218,6 +257,7 @@ namespace Common.TransformPath
         {
             if (_pathFollower == null)
                 return;
+
             _externalPause = false;
             _pathFollower.ResumeMove();
             RegisterAfterStart();
@@ -239,11 +279,18 @@ namespace Common.TransformPath
             _hasManagerState = true;
         }
 
+        #endregion
+
+
+        #region Private Methods
+
         internal void MarkUnregisteredByManager()
         {
             _isRegistered = false;
             _hasManagerState = false;
             _effectiveBlocked = false;
+            if (_pathFollower != null)
+                _pathFollower.ResetQueueConstraint();
         }
 
         private void EnsureReadyToStart(IPathProvider provider)
@@ -253,21 +300,25 @@ namespace Common.TransformPath
             if (!_isInitialized || _pathFollower == null)
                 throw new InvalidOperationException("QueuedPathFollower is not initialized.");
             if (_manager == null || !_manager.IsInitialized)
-                throw new InvalidOperationException("QueuedPathManager must be initialized before starting a queued move.");
+                throw new InvalidOperationException(
+                    "QueuedPathManager must be initialized before starting a queued move.");
             if (provider == null || !provider.IsReady)
                 throw new InvalidOperationException("Queue provider must be initialized and ready.");
             if (_manager.RouteProvider == null)
                 _manager.ConfigureRoute(provider);
             if (!ReferenceEquals(_manager.RouteProvider, provider))
-                throw new InvalidOperationException("Queue follower and manager must use the same route provider instance.");
+                throw new InvalidOperationException(
+                    "Queue follower and manager must use the same route provider instance.");
         }
 
         private void RegisterAfterStart()
         {
             if (_manager == null)
                 return;
+            _pathFollower.ResetQueueConstraint();
             if (!_isRegistered)
-                _isRegistered = _manager.Register(this) || _manager.TryGetState(this, out _managerState);
+                _isRegistered = _manager.Register(this)
+                    || _manager.TryGetState(this, out _managerState);
             _hasManagerState = false;
             _effectiveBlocked = false;
             _currentSpeedMultiplier = 1f;
@@ -281,7 +332,8 @@ namespace Common.TransformPath
             if (_manager.RouteProvider == null)
                 _manager.ConfigureRoute(_pathFollower.CurrentProvider);
             if (ReferenceEquals(_manager.RouteProvider, _pathFollower.CurrentProvider))
-                _isRegistered = _manager.Register(this) || _manager.TryGetState(this, out _managerState);
+                _isRegistered = _manager.Register(this)
+                    || _manager.TryGetState(this, out _managerState);
         }
 
         private void UnregisterIfRegistered()
@@ -321,7 +373,9 @@ namespace Common.TransformPath
                 else
                     InvokeResumed();
             }
-            if (!Mathf.Approximately(_lastReportedSpeedMultiplier, _currentSpeedMultiplier))
+            if (!Mathf.Approximately(
+                    _lastReportedSpeedMultiplier,
+                    _currentSpeedMultiplier))
             {
                 _lastReportedSpeedMultiplier = _currentSpeedMultiplier;
                 InvokeSpeedChanged(_currentSpeedMultiplier);
@@ -338,53 +392,31 @@ namespace Common.TransformPath
 
         private void InvokeBlocked()
         {
-            Delegate[] listeners = OnBlocked?.GetInvocationList();
-            if (listeners == null) return;
-            for (int i = 0; i < listeners.Length; i++)
-            {
-                try { ((Action<QueuedPathFollower>)listeners[i])(this); }
-                catch (Exception exception) { Debug.LogException(exception, this); }
-            }
+            OnBlocked?.Invoke(this);
         }
 
         private void InvokeResumed()
         {
-            Delegate[] listeners = OnResumed?.GetInvocationList();
-            if (listeners == null) return;
-            for (int i = 0; i < listeners.Length; i++)
-            {
-                try { ((Action<QueuedPathFollower>)listeners[i])(this); }
-                catch (Exception exception) { Debug.LogException(exception, this); }
-            }
+            OnResumed?.Invoke(this);
         }
 
         private void InvokeCompleted()
         {
-            Delegate[] listeners = OnCompleted?.GetInvocationList();
-            if (listeners == null) return;
-            for (int i = 0; i < listeners.Length; i++)
-            {
-                try { ((Action<QueuedPathFollower>)listeners[i])(this); }
-                catch (Exception exception) { Debug.LogException(exception, this); }
-            }
+            OnCompleted?.Invoke(this);
         }
 
         private void InvokeSpeedChanged(float value)
         {
-            Delegate[] listeners = OnSpeedChanged?.GetInvocationList();
-            if (listeners == null) return;
-            for (int i = 0; i < listeners.Length; i++)
-            {
-                try { ((Action<QueuedPathFollower, float>)listeners[i])(this, value); }
-                catch (Exception exception) { Debug.LogException(exception, this); }
-            }
+            OnSpeedChanged?.Invoke(this, value);
         }
 
-        private static bool IsFinite(float value)
-        {
-            return !float.IsNaN(value) && !float.IsInfinity(value);
-        }
+        #endregion
+
+
+        #region Explicit Interface Implementation
 
         IPathFollower IQueuedPathAgent.PathFollower => _pathFollower;
+
+        #endregion
     }
 }

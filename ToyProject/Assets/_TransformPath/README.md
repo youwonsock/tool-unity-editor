@@ -27,8 +27,21 @@ follower.Seek(0.5f);
 Invalid or incomplete configuration leaves the provider not ready and reports
 one error per failed configuration. A rebuild publishes a complete temporary
 cache atomically, so consumers never observe a partial path. `PathChanged`
-increments `Revision`; listeners are invoked from a snapshot and one listener
-exception does not stop the others.
+increments `Revision`. Runtime listeners use a fail-fast contract: the first
+listener exception propagates to the caller and later listeners are not
+invoked. `SegmentChanged` snapshots its invocation list only to stop the
+current tick safely when a listener changes playback state.
+
+## Internal utility layers
+
+The runtime keeps small purpose-specific internal helpers instead of a
+single broad utility class. `PathValueUtility` owns finite/range predicates,
+`PathMovementSettingsUtility` owns movement validation and curve snapshots,
+`PathGeometryUtility` owns the shared curve and arc-length algorithms, and
+`PathProviderUtility` owns provider and route descriptor checks. The editor
+uses `PathEditorSerializationUtility` and `PathEditorUndoUtility`; preview
+cache ownership and MultiPath auto-link state remain in their respective
+collaborators. These helpers do not own Unity lifecycle or playback state.
 
 ## Aggregate paths and sequences
 
@@ -97,8 +110,9 @@ segment change safely stops and unregisters all agents.
 `PathEventHandler` is optional authoring support for `PathEventSettingSO`. Set
 its `_receiverObject` to an `IPathEventReceiver` when a named event needs a
 receiver; speed, duration, time-scale, and delayed effects can also be used
-without a receiver. Receiver and event listeners are isolated so an exception
-does not prevent movement cleanup.
+without a receiver. Event dispatch is fail-fast: a receiver exception is
+propagated before lifecycle, time-scale, or delayed processing, and a listener
+exception stops the remaining dispatch for that event.
 
 ## ToyProject showcase
 
