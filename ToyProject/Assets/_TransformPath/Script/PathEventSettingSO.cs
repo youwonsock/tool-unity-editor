@@ -4,6 +4,13 @@ using UnityEngine;
 
 namespace Common.TransformPath
 {
+    public enum EFollowerEventAction
+    {
+        None = 0,
+        Pause = 1,
+        Resume = 2,
+    }
+
     [CreateAssetMenu(fileName = "Path Event Setting", menuName = "Path Setting/New Path Event Setting", order = 1)]
     public class PathEventSettingSO : ScriptableObject
     {
@@ -25,6 +32,9 @@ namespace Common.TransformPath
 
         [Header("이벤트 이름")]
         public string EventName;
+
+        [Header("Follower lifecycle action")]
+        public EFollowerEventAction FollowerAction = EFollowerEventAction.None;
 
         #endregion
 

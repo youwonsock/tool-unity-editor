@@ -178,6 +178,8 @@ namespace Common.TransformPath
 
             DispatchPathEvent(eventSetting.EventName, pathFollower);
 
+            ApplyFollowerAction(eventSetting, pathFollower);
+
             if (eventSetting.UseTimeScaleAdjust)
                 ControlTimeScale(eventSetting);
 
@@ -189,6 +191,47 @@ namespace Common.TransformPath
 
             if (eventSetting.UseDelayedEvents)
                 EnqueueDelayedEvents(eventSetting, pathFollower);
+        }
+
+        private void ApplyFollowerAction(PathEventSettingSO eventSetting, PathFollower pathFollower)
+        {
+            if (eventSetting == null || pathFollower == null)
+                return;
+
+            QueuedPathFollower queuedFollower = pathFollower.GetComponent<QueuedPathFollower>();
+            switch (eventSetting.FollowerAction)
+            {
+                case EFollowerEventAction.Pause:
+                    if (queuedFollower != null)
+                        queuedFollower.PauseMove();
+                    else
+                        pathFollower.PauseMove();
+
+                    Debug.Log(
+                        $"[TransformPath] PauseFollower event: actor='{pathFollower.name}', duration={GetPauseDuration(eventSetting):F2}s",
+                        pathFollower);
+                    break;
+                case EFollowerEventAction.Resume:
+                    if (queuedFollower != null)
+                        queuedFollower.ResumeMove();
+                    else
+                        pathFollower.ResumeMove();
+                    break;
+            }
+        }
+
+        private static float GetPauseDuration(PathEventSettingSO eventSetting)
+        {
+            if (eventSetting == null || eventSetting.DelayedEvents == null)
+                return 0f;
+            for (int i = 0; i < eventSetting.DelayedEvents.Count; i++)
+            {
+                PathEventSettingSO.DelayedEventEntry entry = eventSetting.DelayedEvents[i];
+                if (entry != null && entry.EventSetting != null
+                    && entry.EventSetting.FollowerAction == EFollowerEventAction.Resume)
+                    return entry.Delay;
+            }
+            return 0f;
         }
 
         private void DispatchPathEvent(string eventName, PathFollower pathFollower)
@@ -438,6 +481,18 @@ namespace Common.TransformPath
 
             try
             {
+                if (!Enum.IsDefined(typeof(EFollowerEventAction), setting.FollowerAction))
+                    throw new ArgumentOutOfRangeException(nameof(setting.FollowerAction));
+                if (setting.FollowerAction != EFollowerEventAction.None && pathFollower == null)
+                    throw new ArgumentNullException(nameof(pathFollower));
+                if (setting.FollowerAction == EFollowerEventAction.Pause)
+                    ValidatePauseAction(setting);
+                if (setting.FollowerAction == EFollowerEventAction.Resume
+                    && setting.UseDelayedEvents
+                    && setting.DelayedEvents != null
+                    && setting.DelayedEvents.Count > 0)
+                    throw new ArgumentException("Resume follower events cannot enqueue delayed events.", nameof(setting));
+
                 ValidateNonNegativeFinite(setting.MoveSpeedAdjustDuration, nameof(setting.MoveSpeedAdjustDuration));
                 ValidateNonNegativeFinite(setting.MoveDurationAdjustDuration, nameof(setting.MoveDurationAdjustDuration));
                 ValidateNonNegativeFinite(setting.TimeScaleAdjustDuration, nameof(setting.TimeScaleAdjustDuration));
@@ -498,6 +553,21 @@ namespace Common.TransformPath
             {
                 validationStack.Remove(setting);
             }
+        }
+
+        private static void ValidatePauseAction(PathEventSettingSO setting)
+        {
+            if (!setting.UseDelayedEvents || setting.DelayedEvents == null || setting.DelayedEvents.Count != 1)
+                throw new ArgumentException("Pause follower events require exactly one delayed Resume event.", nameof(setting));
+
+            PathEventSettingSO.DelayedEventEntry entry = setting.DelayedEvents[0];
+            if (entry == null || entry.EventSetting == null)
+                throw new ArgumentException("Pause follower events require a delayed Resume event.", nameof(setting));
+            if (entry.EventSetting.FollowerAction != EFollowerEventAction.Resume)
+                throw new ArgumentException("Pause follower events must delay a Resume follower event.", nameof(setting));
+            ValidateNonNegativeFinite(entry.Delay, nameof(entry.Delay));
+            if (entry.Delay <= 0f)
+                throw new ArgumentOutOfRangeException(nameof(entry.Delay), "Pause duration must be greater than zero.");
         }
 
         private static void ValidateNonNegativeFinite(float value, string parameterName)

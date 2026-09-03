@@ -28,6 +28,7 @@ namespace Common.TransformPath.Samples
 
         [Header("Queued Path Lane")]
         [SerializeField] private QueuedPathManager _queueManager;
+        [SerializeField] private MultiPathData _queuePathData;
         [SerializeField] private QueuedPathFollower[] _queueFollowers;
 
         [Header("Presentation")]
@@ -35,11 +36,6 @@ namespace Common.TransformPath.Samples
         [SerializeField] private TransformPathOverviewBoard _board;
 
         private readonly List<LineRenderer> _multiRouteRenderers = new List<LineRenderer>();
-        private PathData _queuePath;
-        private MultiPathData _queuePathData;
-        private GameObject _queueRouteDataObject;
-        private GameObject _queueRouteLineObject;
-        private Material _queueRouteMaterial;
         private Material _multiRouteMaterial;
         private bool _isInitialized;
         private bool _isPaused;
@@ -116,7 +112,6 @@ namespace Common.TransformPath.Samples
 
             _queueWasMovingWhenHidden = new bool[_queueFollowers.Length];
 
-            CreateQueueRoute();
             if (!_pathData.IsReady || !_multiPathData.IsReady || _queuePathData == null || !_queuePathData.IsReady)
             {
                 Debug.LogError("TransformPath overview requires all providers to be ready.", this);
@@ -132,7 +127,7 @@ namespace Common.TransformPath.Samples
 
         public void Release()
         {
-            if (!_isInitialized && _queueRouteDataObject == null)
+            if (!_isInitialized)
                 return;
 
             UnsubscribeCompletionEvents();
@@ -150,19 +145,9 @@ namespace Common.TransformPath.Samples
                     Destroy(_multiRouteRenderers[i].gameObject);
             }
             _multiRouteRenderers.Clear();
-            if (_queueRouteLineObject != null)
-                Destroy(_queueRouteLineObject);
-            if (_queueRouteDataObject != null)
-                Destroy(_queueRouteDataObject);
-            if (_queueRouteMaterial != null)
-                Destroy(_queueRouteMaterial);
             if (_multiRouteMaterial != null)
                 Destroy(_multiRouteMaterial);
 
-            _queueRouteDataObject = null;
-            _queueRouteLineObject = null;
-            _queuePath = null;
-            _queuePathData = null;
             _isInitialized = false;
         }
 
@@ -316,7 +301,8 @@ namespace Common.TransformPath.Samples
         {
             return $"NORMAL  ready={_pathData.IsReady}  curve={_pathData.CurveType}\n"
                 + $"length={_pathData.PathLength:F2}m  progress={_pathFollower.NormalizedTime:F2}\n"
-                + $"samples={_pathData.SamplePointCount}  state={_pathFollower.State}";
+                + $"samples={_pathData.SamplePointCount}  state={_pathFollower.State}\n"
+                + "events=Pause @ 0.25 (0.5s) · SlowDown @ 0.50 (1.5) · Accel @ 0.75 (6.0)";
         }
 
         private string GetMultiStatus()
@@ -325,7 +311,8 @@ namespace Common.TransformPath.Samples
             int index = count == 0 ? 0 : Mathf.Clamp(_multiPathFollower.CurrentSegmentIndex + 1, 1, count);
             return $"MULTI  ready={_multiPathData.IsReady}  segment={index}/{count}\n"
                 + $"global={_multiPathFollower.GlobalNormalizedTime:F2}  local={_multiPathFollower.NormalizedTime:F2}\n"
-                + $"length={_multiPathData.PathLength:F2}m  state={_multiPathFollower.State}";
+                + $"length={_multiPathData.PathLength:F2}m  state={_multiPathFollower.State}\n"
+                + "events=Pause @ 0.25 (0.5s) · SlowDown @ 0.50 (dur 2.0) · Accel @ 0.75 (dur 0.5)";
         }
 
         private string GetQueueStatus()
@@ -345,7 +332,8 @@ namespace Common.TransformPath.Samples
             return $"QUEUE  agents={_queueManager.AgentCount}/{_queueFollowers.Length}  visible={_queueVisible}\n"
                 + $"spacing={spacing}  leader={leaderText}  ahead={ahead}\n"
                 + $"speed x{multiplier}  routeRev={_queueManager.RouteRevision}\n"
-                + $"length={_queuePathData.PathLength:F2}m  state={(_isPaused ? "paused" : "running")}";
+                + $"length={_queuePathData.PathLength:F2}m  state={(_isPaused ? "paused" : "running")}\n"
+                + "events=Pause @ 0.25 (0.5s) · SlowDown @ 0.50 (0.5) · Accel @ 0.75 (2.0)";
         }
 
         private void StartNormalPath()
@@ -560,54 +548,6 @@ namespace Common.TransformPath.Samples
                 _freeCamera = main.GetComponent<TransformPathFreeCamera>();
             if (_freeCamera == null)
                 _freeCamera = FindFirstObjectByType<TransformPathFreeCamera>();
-        }
-
-        private void CreateQueueRoute()
-        {
-            if (_queuePathData != null)
-                return;
-
-            _queueRouteDataObject = new GameObject("Queued Path Route (Canonical Sequence)");
-            _queueRouteDataObject.transform.SetParent(transform.Find("Queued Path Lane"), false);
-            _queuePath = _queueRouteDataObject.AddComponent<PathData>();
-            _queuePath.ConfigureControlPoints(new[]
-            {
-                new Vector3(-7f, 0.8f, -16f),
-                new Vector3(-4f, 0.8f, -13f),
-                new Vector3(0f, 0.8f, -15f),
-                new Vector3(4f, 0.8f, -13f),
-                new Vector3(7f, 0.8f, -16f),
-            });
-            _queuePath.Init();
-            _queuePathData = _queueRouteDataObject.AddComponent<MultiPathData>();
-            _queuePathData.ConfigureSegments(new[]
-            {
-                new PathSegmentConfig(_queuePath, EPathMoveType.SpeedBased, 1f),
-            });
-            _queuePathData.Init();
-
-            _queueRouteLineObject = new GameObject("Queued Path Route Line");
-            _queueRouteLineObject.transform.SetParent(transform.Find("Queued Path Lane"), false);
-            LineRenderer line = _queueRouteLineObject.AddComponent<LineRenderer>();
-            line.useWorldSpace = true;
-            line.widthMultiplier = 0.09f;
-            line.startColor = new Color(1f, 0.7f, 0.15f, 1f);
-            line.endColor = new Color(1f, 0.35f, 0.1f, 1f);
-            line.positionCount = _queuePath.SamplePointCount;
-            for (int i = 0; i < line.positionCount; i++)
-                line.SetPosition(i, _queuePath.GetSamplePoint(i));
-            LineRenderer source = _pathData.GetComponent<LineRenderer>();
-            if (source != null && source.sharedMaterial != null)
-                line.sharedMaterial = source.sharedMaterial;
-            else
-            {
-                Shader shader = Shader.Find("Sprites/Default");
-                if (shader != null)
-                {
-                    _queueRouteMaterial = new Material(shader);
-                    line.sharedMaterial = _queueRouteMaterial;
-                }
-            }
         }
 
         private void CreateMultiPathRouteLines()
