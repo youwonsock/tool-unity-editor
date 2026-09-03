@@ -80,11 +80,31 @@ namespace Common.FlowField
 
             CacheValidationSnapshot();
 
+#if UNITY_EDITOR
+            if (!Application.isPlaying
+                && (valueChanged || priorityChanged || areaChanged)
+                && _flowFieldManager != null)
+            {
+                // Editor Preview is event-invalidated just like the runtime
+                // Session.  A modifier's own OnValidate runs after the
+                // manager's callback, so notify the manager directly instead
+                // of waiting for the next repaint to discover stale data.
+                _flowFieldManager.InvalidateEditorPreview();
+            }
+#endif
+
             if (Application.isPlaying
                 && (valueChanged || priorityChanged || areaChanged)
                 && _registeredManager != null)
             {
-                _registeredManager.MarkConfigurationStale();
+                // Modifier edits only affect the final composition. Keep the
+                // committed base field usable while the Session coalesces the
+                // area/value change; a modifier must never invalidate or
+                // rerun Surface, obstacle or Goal/BFS preparation.
+                if (areaChanged)
+                    _registeredManager.MarkVectorModifierAreaDirty(this);
+                if (valueChanged || priorityChanged)
+                    _registeredManager.MarkVectorModifierDirty(this);
             }
         }
 
@@ -228,10 +248,54 @@ namespace Common.FlowField
             _registeredManager = _flowFieldManager;
         }
 
+        /// <summary>
+        /// Release clears the Session registry, so an enabled modifier must
+        /// forget the old registration as well.  The Manager calls this
+        /// before releasing its Session; the next Init can then attach the
+        /// already-enabled component again without requiring an OnEnable
+        /// cycle.
+        /// </summary>
+        internal void DetachFromFlowFieldSession(FlowFieldManager manager)
+        {
+            if (_registeredManager == manager)
+                _registeredManager = null;
+        }
+
+        /// <summary>
+        /// Reattaches an initialized, enabled volume after a Manager
+        /// Release/Init sequence.  This keeps the public component lifecycle
+        /// independent from the Session's internal registry lifetime.
+        /// </summary>
+        internal void ReattachToConfiguredManager()
+        {
+            if (!_isInitialized
+                || !isActiveAndEnabled
+                || _flowFieldManager == null
+                || _registeredManager != null)
+                return;
+
+            RegisterWithConfiguredManager();
+        }
+
         private void UnregisterFromCurrentManager()
         {
             if (_registeredManager != null && _registeredManager.IsInitialized)
-                _registeredManager.UnregisterVectorModifier(this);
+            {
+                if (_registeredManager.IsFaulted)
+                {
+                    // A Faulted Manager rejects public input calls, but a
+                    // component must still be able to disable/destroy itself
+                    // without producing a second exception. Remove the
+                    // registry entry directly; the failed field is already
+                    // discarded by the Session.
+                    try { _registeredManager.Session.ModifierRegistry?.Unregister(this); }
+                    catch { }
+                }
+                else
+                {
+                    _registeredManager.UnregisterVectorModifier(this);
+                }
+            }
             _registeredManager = null;
         }
 

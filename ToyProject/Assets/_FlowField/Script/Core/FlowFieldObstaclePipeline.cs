@@ -7,8 +7,7 @@ namespace Common.FlowField
     internal readonly struct FlowFieldObstacleRequest
     {
         public FlowFieldGridSpace Grid { get; }
-        public FlowFieldSurfaceBakeData Surface { get; }
-        public FlowFieldStaticObstacleBakeData StaticBake { get; }
+        public FlowFieldSurfaceData Surface { get; }
         public FlowFieldWorkspace Workspace { get; }
         public LayerMask ObstacleLayer { get; }
         public float CheckHeight { get; }
@@ -19,8 +18,7 @@ namespace Common.FlowField
 
         public FlowFieldObstacleRequest(
             FlowFieldGridSpace grid,
-            FlowFieldSurfaceBakeData surface,
-            FlowFieldStaticObstacleBakeData staticBake,
+            FlowFieldSurfaceData surface,
             FlowFieldWorkspace workspace,
             LayerMask obstacleLayer,
             float checkHeight,
@@ -31,7 +29,6 @@ namespace Common.FlowField
         {
             Grid = grid;
             Surface = surface;
-            StaticBake = staticBake;
             Workspace = workspace;
             ObstacleLayer = obstacleLayer;
             CheckHeight = checkHeight;
@@ -65,18 +62,33 @@ namespace Common.FlowField
         private Collider[] _targetOverlapBuffer;
         private readonly List<Collider> _dynamicObstacles = new List<Collider>(32);
         private readonly List<Bounds> _dynamicBounds = new List<Bounds>(32);
+        // Last observed bounds are kept separate from the last-built bounds.
+        // This prevents LateUpdate from versioning the same transform change
+        // on every poll while a GPU solve is still in flight, while the
+        // rebuild still receives the complete previous→latest dirty range.
+        private readonly List<Bounds> _observedDynamicBounds = new List<Bounds>(32);
         private readonly HashSet<Collider> _dynamicSet = new HashSet<Collider>();
+        // A transform/sweep probe leaves its candidate in the reusable
+        // scratch mask.  The next base build consumes that candidate instead
+        // of issuing the same Physics queries a second time.  Keeping the
+        // flag separate from the mask itself lets sampling stop immediately
+        // for a newly blocked cell while the committed graph is still old.
+        private bool _hasStagedDynamicProbe;
+        private FlowFieldCellRect _stagedDynamicDirtyRegion = FlowFieldCellRect.Invalid;
 
         public IReadOnlyList<Collider> DynamicObstacles => _dynamicObstacles;
         public bool AllBlockedWarningIssued;
+        internal bool HasStagedDynamicProbe => _hasStagedDynamicProbe;
 
         public bool RegisterDynamicObstacle(Collider collider)
         {
             if (collider == null || !_dynamicSet.Add(collider))
                 return false;
 
+            DiscardStagedDynamicProbe();
             _dynamicObstacles.Add(collider);
             _dynamicBounds.Add(collider.bounds);
+            _observedDynamicBounds.Add(collider.bounds);
             return true;
         }
 
@@ -85,11 +97,13 @@ namespace Common.FlowField
             if (collider == null || !_dynamicSet.Remove(collider))
                 return false;
 
+            DiscardStagedDynamicProbe();
             int index = _dynamicObstacles.IndexOf(collider);
             if (index >= 0)
             {
                 _dynamicObstacles.RemoveAt(index);
                 _dynamicBounds.RemoveAt(index);
+                _observedDynamicBounds.RemoveAt(index);
             }
 
             return true;
@@ -97,8 +111,10 @@ namespace Common.FlowField
 
         public void ClearDynamicObstacles()
         {
+            DiscardStagedDynamicProbe();
             _dynamicObstacles.Clear();
             _dynamicBounds.Clear();
+            _observedDynamicBounds.Clear();
             _dynamicSet.Clear();
         }
 
@@ -108,16 +124,17 @@ namespace Common.FlowField
             bool rebuildDynamic)
         {
             ValidateRequest(request);
-            bool changed = false;
-            FlowFieldCellRect dirty = FlowFieldCellRect.Invalid;
+            bool consumeStagedDynamicProbe = rebuildDynamic && _hasStagedDynamicProbe;
+            bool staticChanged = false;
+            bool dynamicChanged = false;
+            FlowFieldCellRect dynamicDirty = FlowFieldCellRect.Invalid;
             int excludedColliderCount = 0;
             if (rebuildStatic)
             {
-                ApplyStaticMask(
+                staticChanged = BuildStaticScratch(
                     request.Grid,
                     request.Surface,
                     request.Workspace,
-                    request.StaticBake,
                     request.ObstacleLayer,
                     request.CheckHeight,
                     request.CenterOffset,
@@ -125,13 +142,39 @@ namespace Common.FlowField
                     ref _overlapBuffer,
                     ref _targetOverlapBuffer,
                     out excludedColliderCount);
-                changed = true;
             }
 
             if (!rebuildDynamic)
-                return new FlowFieldObstacleResult(changed, dirty, excludedColliderCount);
+            {
+                bool effectiveMaskChangedWithoutDynamic = CompareEffectiveMask(
+                    request.Grid,
+                    request.Workspace,
+                    staticChanged,
+                    dynamicChanged,
+                    ref dynamicDirty,
+                    out FlowFieldCellRect effectiveMaskDirtyWithoutDynamic);
+                return new FlowFieldObstacleResult(
+                    effectiveMaskChangedWithoutDynamic,
+                    effectiveMaskDirtyWithoutDynamic,
+                    excludedColliderCount);
+            }
 
-            if (request.UseUnregisteredSweep)
+            if (consumeStagedDynamicProbe)
+            {
+                dynamicDirty = _stagedDynamicDirtyRegion;
+                dynamicChanged = !FlowFieldObstacleMaskBuilder.AreEqual(
+                    request.Workspace.ObstacleScratch,
+                    request.Workspace.DynamicBlocked);
+                if (dynamicChanged)
+                {
+                    System.Array.Copy(
+                        request.Workspace.ObstacleScratch,
+                        request.Workspace.DynamicBlocked,
+                        request.Workspace.Capacity);
+                }
+                DiscardStagedDynamicProbe();
+            }
+            else if (request.UseUnregisteredSweep)
             {
                 if (BuildFullLayerScratch(
                         request.Grid,
@@ -143,23 +186,22 @@ namespace Common.FlowField
                         request.Workspace.ObstacleScratch,
                         syncTransforms: false))
                 {
-                    bool dynamicChanged = !FlowFieldObstacleMaskBuilder.AreEqual(
+                    dynamicChanged = !FlowFieldObstacleMaskBuilder.AreEqual(
                         request.Workspace.ObstacleScratch,
                         request.Workspace.DynamicBlocked);
-                    changed |= dynamicChanged;
                     if (dynamicChanged)
                     {
                         System.Array.Copy(
                             request.Workspace.ObstacleScratch,
                             request.Workspace.DynamicBlocked,
                             request.Workspace.Capacity);
-                        dirty = FlowFieldCellRect.Full(request.Grid);
+                        dynamicDirty = FlowFieldCellRect.Full(request.Grid);
                     }
                 }
             }
             else
             {
-                FlowFieldCellRect dynamicDirty = RebuildDynamicOverlay(
+                dynamicDirty = RebuildDynamicOverlay(
                     request.Grid,
                     request.Surface,
                     request.CheckHeight,
@@ -167,28 +209,150 @@ namespace Common.FlowField
                     request.Clearance,
                     request.Workspace.ObstacleScratch,
                     request.DirtyRegion);
-                bool dynamicChanged = !FlowFieldObstacleMaskBuilder.AreEqual(
+                dynamicChanged = !FlowFieldObstacleMaskBuilder.AreEqual(
                     request.Workspace.ObstacleScratch,
                     request.Workspace.DynamicBlocked);
-                changed |= dynamicChanged;
                 if (dynamicChanged)
                 {
                     System.Array.Copy(
                         request.Workspace.ObstacleScratch,
                         request.Workspace.DynamicBlocked,
                         request.Workspace.Capacity);
-                    dirty = dynamicDirty;
                 }
             }
 
-            return new FlowFieldObstacleResult(changed, dirty, excludedColliderCount);
+            bool effectiveMaskChanged = CompareEffectiveMask(
+                request.Grid,
+                request.Workspace,
+                staticChanged,
+                dynamicChanged,
+                ref dynamicDirty,
+                out FlowFieldCellRect effectiveMaskDirty);
+            return new FlowFieldObstacleResult(
+                effectiveMaskChanged,
+                effectiveMaskDirty,
+                excludedColliderCount);
         }
 
-        private static bool ApplyStaticMask(
+        private static bool CompareEffectiveMask(
             FlowFieldGridSpace grid,
-            FlowFieldSurfaceBakeData surface,
             FlowFieldWorkspace workspace,
-            FlowFieldStaticObstacleBakeData staticBake,
+            bool staticChanged,
+            bool dynamicChanged,
+            ref FlowFieldCellRect dynamicDirty,
+            out FlowFieldCellRect dirty)
+        {
+            dirty = FlowFieldCellRect.Invalid;
+            if (!staticChanged && !dynamicChanged)
+                return false;
+
+            bool effectiveChanged = false;
+            for (int index = 0; index < grid.CellCount; index++)
+            {
+                bool effectiveBlocked = workspace.StaticBlocked[index]
+                    || workspace.DynamicBlocked[index];
+                if (workspace.Blocked[index] == effectiveBlocked)
+                    continue;
+                effectiveChanged = true;
+                if (!staticChanged && dynamicChanged)
+                {
+                    grid.FromFlatIndex(index, out int x, out int z);
+                    dirty = FlowFieldCellRect.Union(
+                        dirty,
+                        new FlowFieldCellRect
+                        {
+                            MinX = x,
+                            MaxX = x,
+                            MinZ = z,
+                            MaxZ = z,
+                        });
+                }
+            }
+
+            if (effectiveChanged && staticChanged)
+                dirty = FlowFieldCellRect.Full(grid);
+            else if (effectiveChanged && !dirty.IsValid)
+                dirty = dynamicDirty;
+            return effectiveChanged;
+        }
+
+        /// <summary>
+        /// Non-versioning obstacle probe. It writes only the reusable scratch
+        /// mask and compares it with the last committed dynamic overlay. The
+        /// caller promotes a changed probe to a rebuild; an identical probe
+        /// has no observable version, BFS or Revision side effect.
+        /// </summary>
+        internal bool ProbeDynamicMask(
+            in FlowFieldObstacleRequest request,
+            out FlowFieldCellRect dirtyRegion)
+        {
+            ValidateRequest(request);
+            dirtyRegion = FlowFieldCellRect.Invalid;
+            bool built;
+            if (request.UseUnregisteredSweep)
+            {
+                built = BuildFullLayerScratch(
+                    request.Grid,
+                    request.Surface,
+                    request.ObstacleLayer,
+                    request.CheckHeight,
+                    request.CenterOffset,
+                    request.Clearance,
+                    request.Workspace.ObstacleScratch,
+                    syncTransforms: false);
+                if (!built)
+                {
+                    DiscardStagedDynamicProbe();
+                    return false;
+                }
+                bool changed = !FlowFieldObstacleMaskBuilder.AreEqual(
+                    request.Workspace.ObstacleScratch,
+                    request.Workspace.DynamicBlocked);
+                if (changed)
+                {
+                    _stagedDynamicDirtyRegion = FlowFieldCellRect.Full(request.Grid);
+                    _hasStagedDynamicProbe = true;
+                }
+                else
+                {
+                    DiscardStagedDynamicProbe();
+                }
+                return changed;
+            }
+
+            dirtyRegion = RebuildDynamicOverlay(
+                request.Grid,
+                request.Surface,
+                request.CheckHeight,
+                request.CenterOffset,
+                request.Clearance,
+                request.Workspace.ObstacleScratch,
+                request.DirtyRegion);
+            bool overlayChanged = !FlowFieldObstacleMaskBuilder.AreEqual(
+                request.Workspace.ObstacleScratch,
+                request.Workspace.DynamicBlocked);
+            if (overlayChanged)
+            {
+                _stagedDynamicDirtyRegion = dirtyRegion;
+                _hasStagedDynamicProbe = true;
+            }
+            else
+            {
+                DiscardStagedDynamicProbe();
+            }
+            return overlayChanged;
+        }
+
+        internal void DiscardStagedDynamicProbe()
+        {
+            _hasStagedDynamicProbe = false;
+            _stagedDynamicDirtyRegion = FlowFieldCellRect.Invalid;
+        }
+
+        private static bool BuildStaticScratch(
+            FlowFieldGridSpace grid,
+            FlowFieldSurfaceData surface,
+            FlowFieldWorkspace workspace,
             LayerMask obstacleLayer,
             float checkHeight,
             float centerOffset,
@@ -205,33 +369,30 @@ namespace Common.FlowField
             if (workspace.Capacity != grid.CellCount)
                 throw new ArgumentException("Static obstacle workspace capacity must match the grid.", nameof(workspace));
 
-            if (staticBake != null)
-            {
-                if (!staticBake.HasValidData)
-                    throw new ArgumentException("Static obstacle bake data is invalid.", nameof(staticBake));
-                staticBake.CopyTo(workspace.StaticBlocked);
-                return true;
-            }
-
             if (!FlowFieldObstacleMaskBuilder.BuildStatic(
-                    grid,
-                    surface,
+                grid,
+                surface,
                     obstacleLayer,
                     checkHeight,
                     centerOffset,
                     clearance,
-                    workspace.StaticBlocked,
+                    workspace.ObstacleScratch,
                     ref overlapBuffer,
                     ref targetOverlapBuffer,
                     out excludedColliderCount,
                     syncTransformsBeforeQuery: true))
                 throw new InvalidOperationException("Static obstacle mask 생성에 실패했습니다.");
-            return true;
+            bool changed = !FlowFieldObstacleMaskBuilder.AreEqual(
+                workspace.ObstacleScratch,
+                workspace.StaticBlocked);
+            if (changed)
+                Array.Copy(workspace.ObstacleScratch, workspace.StaticBlocked, workspace.Capacity);
+            return changed;
         }
 
         public bool BuildFullLayerScratch(
             FlowFieldGridSpace grid,
-            FlowFieldSurfaceBakeData surface,
+            FlowFieldSurfaceData surface,
             LayerMask obstacleLayer,
             float checkHeight,
             float centerOffset,
@@ -251,7 +412,7 @@ namespace Common.FlowField
 
         public FlowFieldCellRect RebuildDynamicOverlay(
             FlowFieldGridSpace grid,
-            FlowFieldSurfaceBakeData surface,
+            FlowFieldSurfaceData surface,
             float checkHeight,
             float centerOffset,
             float clearance,
@@ -260,9 +421,7 @@ namespace Common.FlowField
         {
             if (!grid.IsValid)
                 throw new ArgumentException("Dynamic obstacle rebuild requires a valid grid.", nameof(grid));
-            if (surface == null)
-                throw new ArgumentNullException(nameof(surface));
-            if (!surface.HasValidData)
+            if (!surface.IsValid)
                 throw new ArgumentException("Dynamic obstacle rebuild requires a valid surface bake.", nameof(surface));
             if (dynamicBlocked == null)
                 throw new ArgumentNullException(nameof(dynamicBlocked));
@@ -284,13 +443,23 @@ namespace Common.FlowField
             {
                 Collider collider = _dynamicObstacles[i];
                 if (collider == null)
-                    throw new InvalidOperationException("A registered dynamic obstacle was destroyed without being unregistered.");
+                {
+                    dirty = FlowFieldCellRect.Union(
+                        dirty,
+                        FlowFieldCellRect.FromBounds(grid, _dynamicBounds[i]));
+                    _dynamicSet.Remove(collider);
+                    _dynamicObstacles.RemoveAt(i);
+                    _dynamicBounds.RemoveAt(i);
+                    _observedDynamicBounds.RemoveAt(i);
+                    continue;
+                }
 
                 Bounds previous = _dynamicBounds[i];
                 Bounds current = collider.bounds;
                 dirty = FlowFieldCellRect.Union(dirty, FlowFieldCellRect.FromBounds(grid, previous));
                 dirty = FlowFieldCellRect.Union(dirty, FlowFieldCellRect.FromBounds(grid, current));
                 _dynamicBounds[i] = current;
+                _observedDynamicBounds[i] = current;
 
                 Bounds expanded = current;
                 expanded.Expand(new Vector3(halfXZ * 2f, 0f, halfXZ * 2f));
@@ -334,18 +503,40 @@ namespace Common.FlowField
         }
 
         public bool DetectDynamicTransformsChanged()
+            => DetectDynamicTransformsChanged(default, out _);
+
+        internal bool DetectDynamicTransformsChanged(
+            FlowFieldGridSpace grid,
+            out FlowFieldCellRect dirtyRegion)
         {
+            dirtyRegion = FlowFieldCellRect.Invalid;
             for (int i = 0; i < _dynamicObstacles.Count; i++)
             {
                 Collider collider = _dynamicObstacles[i];
                 if (collider == null)
-                    throw new InvalidOperationException("A registered dynamic obstacle was destroyed without being unregistered.");
+                {
+                    if (grid.IsValid)
+                        dirtyRegion = FlowFieldCellRect.Union(
+                            dirtyRegion,
+                            FlowFieldCellRect.FromBounds(grid, _dynamicBounds[i]));
+                    _dynamicSet.Remove(collider);
+                    _dynamicObstacles.RemoveAt(i);
+                    _dynamicBounds.RemoveAt(i);
+                    _observedDynamicBounds.RemoveAt(i);
+                    return true;
+                }
 
                 Bounds current = collider.bounds;
-                Bounds previous = _dynamicBounds[i];
+                Bounds previous = _observedDynamicBounds[i];
                 if ((current.center - previous.center).sqrMagnitude > 0.0001f
                     || (current.size - previous.size).sqrMagnitude > 0.0001f)
+                {
+                    _observedDynamicBounds[i] = current;
+                    // The exact grid conversion is performed by the caller;
+                    // return an invalid rect here and let RebuildDynamicOverlay
+                    // union the cached world bounds at probe time.
                     return true;
+                }
             }
 
             return false;
@@ -353,15 +544,13 @@ namespace Common.FlowField
 
         public bool CommitCombinedAndBuildEscape(
             FlowFieldGridSpace grid,
-            FlowFieldSurfaceBakeData surface,
+            FlowFieldSurfaceData surface,
             FlowFieldWorkspace workspace,
             out bool hasWalkable)
         {
             if (!grid.IsValid)
                 throw new ArgumentException("Obstacle commit requires a valid grid.", nameof(grid));
-            if (surface == null)
-                throw new ArgumentNullException(nameof(surface));
-            if (!surface.HasValidData)
+            if (!surface.IsValid)
                 throw new ArgumentException("Obstacle commit requires a valid surface bake.", nameof(surface));
             if (workspace == null)
                 throw new ArgumentNullException(nameof(workspace));
@@ -374,14 +563,12 @@ namespace Common.FlowField
 
         internal void CommitPreviewAndBuildEscape(
             FlowFieldGridSpace grid,
-            FlowFieldSurfaceBakeData surface,
+            FlowFieldSurfaceData surface,
             FlowFieldWorkspace workspace)
         {
             if (!grid.IsValid)
                 throw new ArgumentException("Obstacle preview commit requires a valid grid.", nameof(grid));
-            if (surface == null)
-                throw new ArgumentNullException(nameof(surface));
-            if (!surface.HasValidData)
+            if (!surface.IsValid)
                 throw new ArgumentException("Obstacle preview commit requires a valid surface bake.", nameof(surface));
             if (workspace == null)
                 throw new ArgumentNullException(nameof(workspace));
@@ -395,9 +582,7 @@ namespace Common.FlowField
         {
             if (!request.Grid.IsValid)
                 throw new ArgumentException("Obstacle rebuild requires a valid grid.", nameof(request));
-            if (request.Surface == null)
-                throw new ArgumentNullException(nameof(request.Surface));
-            if (!request.Surface.HasValidData)
+            if (request.Surface == null || !request.Surface.IsValid)
                 throw new ArgumentException("Obstacle rebuild requires a valid surface bake.", nameof(request.Surface));
             if (request.Workspace == null)
                 throw new ArgumentNullException(nameof(request.Workspace));

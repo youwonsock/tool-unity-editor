@@ -7,7 +7,7 @@ namespace Common.FlowField
     internal readonly struct FlowFieldGizmoRequest
     {
         internal FlowFieldGridSpace Grid { get; }
-        internal FlowFieldSurfaceBakeData Surface { get; }
+        internal FlowFieldSurfaceData Surface { get; }
         internal FlowFieldWorkspace Workspace { get; }
         internal float CellSize { get; }
         internal bool HasGoal { get; }
@@ -16,7 +16,7 @@ namespace Common.FlowField
 
         internal FlowFieldGizmoRequest(
             FlowFieldGridSpace grid,
-            FlowFieldSurfaceBakeData surface,
+            FlowFieldSurfaceData surface,
             FlowFieldWorkspace workspace,
             float cellSize,
             bool hasGoal,
@@ -199,182 +199,5 @@ namespace Common.FlowField
         }
     }
 
-    internal sealed class FlowFieldEditorPreview
-    {
-        private readonly FlowFieldWorkspace _workspace = new FlowFieldWorkspace();
-        private readonly FlowFieldGoalTracker _goalTracker = new FlowFieldGoalTracker();
-        private FlowFieldGridSpace _grid;
-        private int _bakeRevision = -1;
-        private bool _valid;
-        private bool _invalidated = true;
-        private bool _initialized;
-
-        internal FlowFieldWorkspace Workspace => _workspace;
-
-        internal void Init()
-        {
-            if (_initialized)
-                throw new InvalidOperationException("Editor preview is already initialized.");
-            _initialized = true;
-            _invalidated = true;
-        }
-
-        internal void Refresh(
-            FlowFieldGridSpace grid,
-            FlowFieldSurfaceBakeData surface,
-            Vector3 defaultDirection,
-            LayerMask obstacleLayer,
-            float obstacleCheckHeight,
-            float obstacleCheckCenterOffset,
-            float obstacleClearance,
-            bool useUnregisteredSweep,
-            FlowFieldObstaclePipeline obstaclePipeline,
-            FlowFieldModifierPipeline modifierPipeline,
-            bool hasGoal,
-            int goalX,
-            int goalZ,
-            Vector3 goalWorld,
-            float goalRadius,
-            float refreshRate)
-        {
-            if (!grid.IsValid || surface == null || !surface.HasValidData)
-                throw new ArgumentException("Editor preview requires a valid grid and surface bake.");
-
-            if (refreshRate <= 0f || float.IsNaN(refreshRate) || float.IsInfinity(refreshRate))
-                throw new ArgumentOutOfRangeException(nameof(refreshRate));
-            if (_valid
-                && !_invalidated
-                && _grid.MatchesBounds(grid)
-                && _bakeRevision == surface.Revision)
-                return;
-
-            FlowFieldGoalResolution goalResolution = hasGoal
-                ? new FlowFieldGoalResolution(
-                    true,
-                    true,
-                    goalX,
-                    goalZ,
-                    grid.ToFlatIndex(goalX, goalZ),
-                    goalRadius,
-                    goalWorld)
-                : FlowFieldGoalResolution.None;
-
-            _workspace.Resize(grid.CellCount);
-            FlowFieldBuildRequest buildRequest = new FlowFieldBuildRequest(
-                grid,
-                FlowFieldSurfaceData.From(surface),
-                new FlowFieldObstacleRequest(
-                    grid,
-                    surface,
-                    null,
-                    _workspace,
-                    obstacleLayer,
-                    obstacleCheckHeight,
-                    obstacleCheckCenterOffset,
-                    obstacleClearance,
-                    useUnregisteredSweep,
-                    FlowFieldCellRect.Full(grid)),
-                goalResolution,
-                FlowFieldDirtyFlags.All,
-                grid.CellCount,
-                surface.Revision);
-            FlowFieldBuildResult prepared = FlowFieldBuildPipeline.PrepareBase(
-                buildRequest,
-                obstaclePipeline,
-                _goalTracker,
-                rebuildStaticObstacles: true,
-                rebuildDynamicObstacles: true,
-                rebuildGoal: true);
-
-            int resolvedGoalIndex = prepared.ResolvedGoalIndex;
-            FlowFieldBfsRequest bfsRequest = new FlowFieldBfsRequest(
-                grid,
-                surface,
-                _workspace,
-                _workspace.HasActiveGoal && resolvedGoalIndex >= 0,
-                goalX,
-                goalZ,
-                goalRadius,
-                resolvedGoalIndex,
-                grid.CellCount,
-                surface.Revision);
-            FlowFieldBuildPipeline.BuildManaged(bfsRequest);
-
-            FlowFieldModifierBuildRequest modifierRequest = new FlowFieldModifierBuildRequest(
-                grid,
-                surface,
-                _workspace,
-                obstacleCheckHeight,
-                obstacleCheckCenterOffset);
-            modifierPipeline.RebuildAreaData(modifierRequest, out _);
-            modifierPipeline.RebuildFinalField(
-                modifierRequest,
-                defaultDirection,
-                FlowFieldCellRect.Full(grid));
-            _grid = grid;
-            _bakeRevision = surface.Revision;
-            _valid = true;
-            _invalidated = false;
-        }
-
-        internal void LoadStatic(
-            FlowFieldGridSpace grid,
-            FlowFieldStaticBakeData staticBake,
-            FlowFieldSurfaceBakeData surface,
-            Vector3 defaultDirection,
-            float obstacleCheckHeight,
-            float obstacleCheckCenterOffset,
-            FlowFieldModifierPipeline modifierPipeline)
-        {
-            if (!grid.IsValid || staticBake == null || !staticBake.HasValidData)
-                throw new ArgumentException("Static editor preview requires a valid bake asset.");
-            if (modifierPipeline == null)
-                throw new ArgumentNullException(nameof(modifierPipeline));
-            if (surface == null || !surface.HasValidData)
-                throw new ArgumentException("Static editor preview requires a valid surface view.", nameof(surface));
-
-            if (_valid
-                && !_invalidated
-                && _grid.MatchesBounds(grid)
-                && _bakeRevision == staticBake.Revision)
-                return;
-
-            _workspace.Resize(grid.CellCount);
-            staticBake.CopyToWorkspace(grid, _workspace);
-            FlowFieldModifierBuildRequest request = new FlowFieldModifierBuildRequest(
-                grid,
-                surface,
-                _workspace,
-                obstacleCheckHeight,
-                obstacleCheckCenterOffset);
-            modifierPipeline.RebuildAreaData(request, out _);
-            modifierPipeline.RebuildFinalField(
-                request,
-                defaultDirection,
-                FlowFieldCellRect.Full(grid));
-            _grid = grid;
-            _bakeRevision = staticBake.Revision;
-            _valid = true;
-            _invalidated = false;
-        }
-
-        internal void Invalidate()
-        {
-            _valid = false;
-            _invalidated = true;
-            _grid = default;
-            _bakeRevision = -1;
-        }
-
-        public void Release()
-        {
-            if (!_initialized)
-                return;
-            _workspace.Release();
-            _initialized = false;
-            _valid = false;
-            _invalidated = true;
-        }
-    }
 }
 #endif

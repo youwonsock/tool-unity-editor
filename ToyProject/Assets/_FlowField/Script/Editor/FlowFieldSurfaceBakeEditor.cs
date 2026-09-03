@@ -1,16 +1,27 @@
-using System.IO;
 using System;
+using System.Collections.Generic;
+using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 
 namespace Common.FlowField.Editor
 {
+    /// <summary>
+    /// Editor adapter for the shared build session.  It owns only queueing,
+    /// Undo and AssetDatabase side effects; surface, obstacle and BFS logic is
+    /// the same code used by runtime sessions.
+    /// </summary>
     internal static class FlowFieldSurfaceBakeEditor
     {
         private static bool _isBaking;
-        private static bool _asyncSessionPending;
+        private static bool _asyncPending;
+        private static bool _processingQueue;
+        private static bool _shuttingDown;
         private static int _callbackGeneration;
+        private static readonly Queue<int> _queue = new Queue<int>();
+        private static Action _cancel;
+        private static string _progressLabel = string.Empty;
 
         static FlowFieldSurfaceBakeEditor()
         {
@@ -19,581 +30,402 @@ namespace Common.FlowField.Editor
         }
 
         public static bool IsBaking => _isBaking;
+        public static string ProgressLabel => _progressLabel;
+
+        /// <summary>
+        /// Cancels the active bake at the next safe callback/readback
+        /// boundary. The generation is invalidated before cleanup so a late
+        /// GPU callback cannot write an Asset after the user cancels.
+        /// </summary>
+        public static void CancelBake()
+        {
+            if (!_isBaking && !_asyncPending)
+                return;
+
+            _shuttingDown = true;
+            unchecked { _callbackGeneration++; }
+            _cancel?.Invoke();
+            _cancel = null;
+            _queue.Clear();
+            _asyncPending = false;
+            _isBaking = false;
+            _progressLabel = string.Empty;
+            EditorUtility.ClearProgressBar();
+            _shuttingDown = false;
+        }
 
         private static void InvalidateCallbacks()
         {
-            unchecked
-            {
-                _callbackGeneration++;
-            }
-
+            _shuttingDown = true;
+            unchecked { _callbackGeneration++; }
+            _cancel?.Invoke();
+            _cancel = null;
+            _queue.Clear();
+            _asyncPending = false;
             _isBaking = false;
-            _asyncSessionPending = false;
+            _processingQueue = false;
+            _progressLabel = string.Empty;
+            EditorUtility.ClearProgressBar();
+            _shuttingDown = false;
         }
 
         [MenuItem("Tools/FlowField/Bake All Managers In Open Scenes")]
         private static void BakeAllManagersInOpenScenes()
         {
             if (_isBaking)
-                throw new System.InvalidOperationException("A FlowField bake is already in progress.");
-
+                throw new InvalidOperationException("A FlowField bake is already in progress.");
+            FlowFieldManager[] managers = Resources.FindObjectsOfTypeAll<FlowFieldManager>();
+            for (int i = 0; i < managers.Length; i++)
+            {
+                FlowFieldManager manager = managers[i];
+                if (manager != null && !EditorUtility.IsPersistent(manager)
+                    && manager.gameObject.scene.IsValid()
+                    && !string.IsNullOrEmpty(manager.gameObject.scene.path)
+                    && manager.BakeMode == FlowFieldBakeMode.StaticBaked)
+                    _queue.Enqueue(manager.GetInstanceID());
+            }
             _isBaking = true;
-            try
-            {
-                FlowFieldManager[] managers = Resources.FindObjectsOfTypeAll<FlowFieldManager>();
-                int bakedCount = 0;
-                for (int i = 0; i < managers.Length; i++)
-                {
-                    FlowFieldManager manager = managers[i];
-                    if (manager == null
-                        || EditorUtility.IsPersistent(manager)
-                        || !manager.gameObject.scene.IsValid()
-                        || string.IsNullOrEmpty(manager.gameObject.scene.path))
-                    {
-                        continue;
-                    }
-
-                    BakeAndAssign(manager);
-                    bakedCount++;
-                }
-
-                Debug.Log(
-                    $"[FlowField Surface Bake] 열린 Scene 처리 완료: 성공 {bakedCount}.");
-            }
-            finally
-            {
-                if (!_asyncSessionPending)
-                    _isBaking = false;
-            }
+            EditorApplication.delayCall += ProcessQueue;
         }
 
         public static void ScheduleBake(FlowFieldManager manager)
         {
             if (manager == null)
-                throw new System.ArgumentNullException(nameof(manager));
-            if (_isBaking)
-                throw new System.InvalidOperationException("A FlowField bake is already in progress.");
-
-            _isBaking = true;
-            int managerId = manager.GetInstanceID();
-            EditorApplication.delayCall += () =>
+                throw new ArgumentNullException(nameof(manager));
+            if (manager.BakeMode != FlowFieldBakeMode.StaticBaked)
             {
-                try
-                {
-                    var resolved = EditorUtility.InstanceIDToObject(managerId) as FlowFieldManager;
-                    if (resolved == null)
-                        throw new System.InvalidOperationException("The scheduled FlowField manager no longer exists.");
+                Debug.Log("RuntimeDynamic does not persist a bake asset; Surface is rebuilt by the runtime session.", manager);
+                return;
+            }
+            if (_isBaking)
+            {
+                // latest-wins for a repeated request of the same Manager
+                int instanceId = manager.GetInstanceID();
+                if (!_queue.Contains(instanceId))
+                    _queue.Enqueue(instanceId);
+                return;
+            }
+            _queue.Enqueue(manager.GetInstanceID());
+            _isBaking = true;
+            EditorApplication.delayCall += ProcessQueue;
+        }
 
-                    BakeAndAssign(resolved);
-                }
-                finally
-                {
-                    if (!_asyncSessionPending)
-                        _isBaking = false;
-                }
-            };
+        private static void ProcessQueue()
+        {
+            if (_processingQueue || _asyncPending)
+                return;
+            _processingQueue = true;
+            if (_queue.Count == 0)
+            {
+                _isBaking = false;
+                _processingQueue = false;
+                return;
+            }
+
+            int id = _queue.Dequeue();
+            FlowFieldManager manager = EditorUtility.InstanceIDToObject(id) as FlowFieldManager;
+            _progressLabel = manager == null
+                ? "Resolving FlowField manager"
+                : $"Baking {manager.name}";
+            EditorUtility.DisplayProgressBar("FlowField Static Bake", _progressLabel, 0f);
+            try
+            {
+                if (manager == null)
+                    throw new InvalidOperationException("The scheduled FlowField manager no longer exists.");
+                BakeAndAssign(manager);
+            }
+            catch (OperationCanceledException)
+            {
+                Debug.Log("FlowField Static Bake cancelled.");
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception, manager);
+            }
+            _processingQueue = false;
+            if (!_asyncPending)
+            {
+                ScheduleNextOrStop();
+            }
+        }
+
+        private static void ScheduleNextOrStop()
+        {
+            if (_shuttingDown)
+                return;
+            if (_queue.Count > 0)
+            {
+                _isBaking = true;
+                EditorApplication.delayCall += ProcessQueue;
+            }
+            else
+            {
+                _isBaking = false;
+                _progressLabel = string.Empty;
+                EditorUtility.ClearProgressBar();
+            }
         }
 
         public static void BakeAndAssign(FlowFieldManager manager)
         {
             if (manager == null)
-                throw new System.ArgumentNullException(nameof(manager));
-
-            string assetPath = FlowFieldBakeAssetUtility.ResolveAssetPath(manager);
+                throw new ArgumentNullException(nameof(manager));
+            if (manager.BakeMode != FlowFieldBakeMode.StaticBaked)
+                return;
 
             FlowFieldSurfaceBakeSettings settings = manager.CreateSurfaceBakeSettings();
-            FlowFieldSurfaceBakeResult result = FlowFieldSurfaceBaker.Bake(settings);
-            FlowFieldBakeAssetUtility.CreateBakeFolder();
-
-            if (manager.BakeMode == FlowFieldBakeMode.StaticBaked)
+            LayerMask obstacleLayer = manager.ObstacleLayer;
+            float obstacleCheckHeight = manager.ObstacleCheckHeight;
+            float obstacleCheckCenterOffset = manager.ObstacleCheckCenterOffset;
+            float obstacleClearance = manager.ObstacleClearance;
+            bool hasConfiguredGoal = manager.HasConfiguredGoal;
+            Vector3 configuredGoalWorld = manager.ConfiguredGoalWorld;
+            float configuredGoalRadius = manager.ConfiguredGoalInfluenceRadius;
+            FlowFieldSurfaceBakeResult result = FlowFieldSurfaceBaker.Bake(
+                settings,
+                ReportSurfaceProgress);
+            FlowFieldSurfaceData surface = FlowFieldSurfaceData.FromRuntime(settings, result, 1);
+            FlowFieldSession session = new FlowFieldSession(new FlowFieldFixedSurfaceSource(surface));
+            int generation = _callbackGeneration;
+            bool cleaned = false;
+            void Cleanup()
             {
-                BakeStaticSnapshot(manager, settings, result, assetPath);
-                return;
+                if (cleaned) return;
+                cleaned = true;
+                _cancel = null;
+                _asyncPending = false;
+                session.FieldCommitted -= Complete;
+                session.Failed -= Failed;
+                session.DisposePermanently();
+                EditorUtility.ClearProgressBar();
+                _progressLabel = string.Empty;
+                if (!_processingQueue)
+                    ScheduleNextOrStop();
             }
 
-            FlowFieldSurfaceBakeData data = manager.SurfaceBakeData;
-            bool assignedNewData = false;
-            if (data == null)
+            void Failed(Exception exception)
             {
-                data = AssetDatabase.LoadAssetAtPath<FlowFieldSurfaceBakeData>(assetPath);
-                if (data == null)
-                {
-                    data = ScriptableObject.CreateInstance<FlowFieldSurfaceBakeData>();
-                    data.name = Path.GetFileNameWithoutExtension(assetPath);
-                    AssetDatabase.CreateAsset(data, assetPath);
-                    Undo.RegisterCreatedObjectUndo(data, "Create FlowField Surface Bake");
-                }
-
-                Undo.RecordObject(manager, "Assign FlowField Surface Bake");
-                manager.AssignSurfaceBakeData(data);
-                assignedNewData = true;
-            }
-
-            Undo.RecordObject(data, "Bake FlowField Surface");
-            data.Apply(settings, result);
-            EditorUtility.SetDirty(data);
-
-            BakeStaticObstacles(manager, settings.Grid, assetPath);
-
-            manager.NotifySurfaceBakeChanged();
-            EditorUtility.SetDirty(manager);
-            if (manager.gameObject.scene.IsValid())
-                EditorSceneManager.MarkSceneDirty(manager.gameObject.scene);
-            AssetDatabase.SaveAssetIfDirty(data);
-            if (manager.StaticObstacleBakeData != null)
-                AssetDatabase.SaveAssetIfDirty(manager.StaticObstacleBakeData);
-            if (assignedNewData)
-                AssetDatabase.SaveAssetIfDirty(manager);
-            SceneView.RepaintAll();
-            Debug.Log(
-                $"[{nameof(FlowFieldManager)}] Surface Bake 완료: "
-                + $"{result.ValidCellCount}/{settings.Grid.CellCount} cells → {AssetDatabase.GetAssetPath(data)}",
-                manager);
-        }
-
-        private static void BakeStaticSnapshot(
-            FlowFieldManager manager,
-            FlowFieldSurfaceBakeSettings settings,
-            FlowFieldSurfaceBakeResult surfaceResult,
-            string surfaceAssetPath)
-        {
-            // Keep all calculation data transient until the common BFS has
-            // completed. Existing assets therefore remain untouched if either
-            // GPU or Managed fallback fails.
-            var surface = ScriptableObject.CreateInstance<FlowFieldSurfaceBakeData>();
-            surface.hideFlags = HideFlags.HideAndDontSave;
-            surface.Apply(settings, surfaceResult);
-
-            var workspace = new FlowFieldWorkspace();
-            workspace.Resize(settings.Grid.CellCount);
-            FlowFieldGoalResolution goal = manager.ResolveConfiguredGoal(settings.Grid);
-            FlowFieldBuildRequest buildRequest = new FlowFieldBuildRequest(
-                settings.Grid,
-                FlowFieldSurfaceData.From(surface),
-                new FlowFieldObstacleRequest(
-                    settings.Grid,
-                    surface,
-                    null,
-                    workspace,
-                    manager.ObstacleLayer,
-                    manager.ObstacleCheckHeight,
-                    manager.ObstacleCheckCenterOffset,
-                    manager.ObstacleClearance,
-                    useUnregisteredSweep: false,
-                    FlowFieldCellRect.Full(settings.Grid)),
-                goal,
-                FlowFieldDirtyFlags.All,
-                Mathf.Min(settings.Grid.CellCount, Mathf.Max(64, manager.MaxGpuWaves)),
-                surface.Revision);
-            FlowFieldBuildResult prepared = FlowFieldBuildPipeline.PrepareBase(
-                buildRequest,
-                new FlowFieldObstaclePipeline(),
-                new FlowFieldGoalTracker(),
-                rebuildStaticObstacles: true,
-                rebuildDynamicObstacles: false,
-                rebuildGoal: true);
-            if (prepared.ExcludedColliderCount > 0)
-            {
-                Debug.LogWarning(
-                    $"[{nameof(FlowFieldManager)}] Static Bake에서 "
-                    + $"{prepared.ExcludedColliderCount}개의 비정적 또는 Rigidbody Collider를 제외했습니다.",
-                    manager);
-            }
-            bool hasGoal = prepared.Workspace.HasActiveGoal
-                && prepared.ResolvedGoalIndex >= 0;
-            int resolvedGoalIndex = hasGoal ? prepared.ResolvedGoalIndex : -1;
-
-            var pipeline = new FlowFieldBuildPipeline(LoadFrontierShader(manager));
-            int version = surface.Revision;
-            int callbackGeneration = _callbackGeneration;
-            int managerInstanceId = manager.GetInstanceID();
-            bool capturedGoalActive = goal.HasActiveGoal;
-            Vector3 capturedGoalWorld = goal.RequestedWorld;
-            float capturedGoalRadius = goal.InfluenceRadius;
-            LayerMask capturedObstacleLayer = manager.ObstacleLayer;
-            float capturedObstacleCheckHeight = manager.ObstacleCheckHeight;
-            float capturedObstacleCenterOffset = manager.ObstacleCheckCenterOffset;
-            float capturedObstacleClearance = manager.ObstacleClearance;
-            int maxWaves = Mathf.Min(settings.Grid.CellCount, Mathf.Max(64, manager.MaxGpuWaves));
-            var request = new FlowFieldBfsRequest(
-                settings.Grid,
-                surface,
-                workspace,
-                hasGoal,
-                goal.LocalX,
-                goal.LocalZ,
-                goal.InfluenceRadius,
-                resolvedGoalIndex,
-                maxWaves,
-                version);
-
-            void Complete(FlowFieldBfsRequest completedRequest)
-            {
-                int undoGroup = Undo.GetCurrentGroup();
-                Undo.SetCurrentGroupName("Bake FlowField Static Snapshot");
                 try
                 {
-                    if (!IsCurrentBakeInput(
+                    if (generation == _callbackGeneration)
+                        Debug.LogError($"[{nameof(FlowFieldManager)}] Static Flow Bake failed: {exception?.Message}", manager);
+                }
+                finally { Cleanup(); }
+            }
+
+            void Complete(bool changed)
+            {
+                int undoGroup = -1;
+                string assetPath = null;
+                FlowFieldStaticBakeData asset = null;
+                bool createdAsset = false;
+                try
+                {
+                    if (generation != _callbackGeneration)
+                        return;
+                    if (!IsCurrentInput(
                             manager,
-                            managerInstanceId,
-                            callbackGeneration,
                             settings,
-                            capturedGoalActive,
-                            capturedGoalWorld,
-                            capturedGoalRadius,
-                            capturedObstacleLayer,
-                            capturedObstacleCheckHeight,
-                            capturedObstacleCenterOffset,
-                            capturedObstacleClearance))
+                            obstacleLayer,
+                            obstacleCheckHeight,
+                            obstacleCheckCenterOffset,
+                            obstacleClearance,
+                            hasConfiguredGoal,
+                            configuredGoalWorld,
+                            configuredGoalRadius))
                     {
-                        Debug.LogWarning(
-                            $"[{nameof(FlowFieldManager)}] Static Flow Bake 입력이 변경되어 이전 Asset을 유지합니다.",
-                            manager);
+                        Debug.LogWarning("Static Flow Bake input changed; existing asset was preserved.", manager);
                         return;
                     }
+                    FlowFieldWorkspace workspace = session.CommittedWorkspace;
+                    if (workspace == null || session.CommittedSurface == null)
+                        throw new InvalidOperationException("Static Flow Bake produced no committed field.");
 
-                    if (!hasGoal)
+                    assetPath = FlowFieldBakeAssetUtility.ResolveStaticAssetPath(manager);
+                    FlowFieldBakeAssetUtility.CreateBakeFolder();
+                    undoGroup = Undo.GetCurrentGroup();
+                    Undo.SetCurrentGroupName("Bake FlowField Static Snapshot");
+                    asset = AssetDatabase.LoadAssetAtPath<FlowFieldStaticBakeData>(assetPath);
+                    if (asset == null)
                     {
-                        for (int index = 0; index < settings.Grid.CellCount; index++)
-                        {
-                            if (!surface.IsSurfaceValid(index) || workspace.Blocked[index])
-                                completedRequest.Workspace.NextCells[index] = -2;
-                        }
+                        asset = ScriptableObject.CreateInstance<FlowFieldStaticBakeData>();
+                        createdAsset = true;
+                        asset.name = Path.GetFileNameWithoutExtension(assetPath);
+                        AssetDatabase.CreateAsset(asset, assetPath);
+                        Undo.RegisterCreatedObjectUndo(asset, "Create FlowField Static Snapshot");
                     }
-
-                    FlowFieldFinalFieldComposer.Compose(
-                        settings.Grid,
-                        surface,
-                        workspace,
-                        Vector3.forward,
-                        Array.Empty<FlowFieldModifierLayer>());
-
-                    FlowFieldSurfaceBakeData persistentSurface =
-                        AssetDatabase.LoadAssetAtPath<FlowFieldSurfaceBakeData>(surfaceAssetPath);
-                    if (persistentSurface == null)
-                    {
-                        persistentSurface = ScriptableObject.CreateInstance<FlowFieldSurfaceBakeData>();
-                        persistentSurface.name = Path.GetFileNameWithoutExtension(surfaceAssetPath);
-                        AssetDatabase.CreateAsset(persistentSurface, surfaceAssetPath);
-                        Undo.RegisterCreatedObjectUndo(persistentSurface, "Create FlowField Surface Bake");
-                    }
-                    Undo.RecordObject(persistentSurface, "Bake FlowField Surface");
-                    persistentSurface.Apply(settings, surfaceResult);
-                    EditorUtility.SetDirty(persistentSurface);
-
-                    string legacyStaticPath = FlowFieldBakeAssetUtility.DeriveSiblingAssetPath(
-                        surfaceAssetPath,
-                        "_StaticObstacleBake.asset");
-                    FlowFieldStaticObstacleBakeData legacyObstacle =
-                        AssetDatabase.LoadAssetAtPath<FlowFieldStaticObstacleBakeData>(legacyStaticPath);
-                    if (legacyObstacle == null)
-                    {
-                        legacyObstacle = ScriptableObject.CreateInstance<FlowFieldStaticObstacleBakeData>();
-                        legacyObstacle.name = Path.GetFileNameWithoutExtension(legacyStaticPath);
-                        AssetDatabase.CreateAsset(legacyObstacle, legacyStaticPath);
-                        Undo.RegisterCreatedObjectUndo(legacyObstacle, "Create FlowField Static Obstacles");
-                    }
-                    Undo.RecordObject(legacyObstacle, "Bake FlowField Static Obstacles");
-                    legacyObstacle.Apply(
-                        settings.Grid,
-                        manager.ObstacleLayer,
-                        manager.ObstacleCheckHeight,
-                        manager.ObstacleCheckCenterOffset,
-                        manager.ObstacleClearance,
-                        workspace.StaticBlocked);
-                    EditorUtility.SetDirty(legacyObstacle);
-
-                    string staticPath = FlowFieldBakeAssetUtility.ResolveStaticAssetPath(manager);
-                    FlowFieldStaticBakeData staticData = AssetDatabase.LoadAssetAtPath<FlowFieldStaticBakeData>(staticPath);
-                    if (staticData == null)
-                    {
-                        staticData = ScriptableObject.CreateInstance<FlowFieldStaticBakeData>();
-                        staticData.name = Path.GetFileNameWithoutExtension(staticPath);
-                        AssetDatabase.CreateAsset(staticData, staticPath);
-                        Undo.RegisterCreatedObjectUndo(staticData, "Create FlowField Static Snapshot");
-                    }
-                    Undo.RecordObject(staticData, "Bake FlowField Static Snapshot");
-                    staticData.Apply(
-                        settings,
-                        persistentSurface,
-                        manager.ObstacleLayer,
-                        manager.ObstacleCheckHeight,
-                        manager.ObstacleCheckCenterOffset,
-                        manager.ObstacleClearance,
-                        hasGoal,
-                        goal.RequestedWorld,
-                        goal.InfluenceRadius,
-                        resolvedGoalIndex,
-                        workspace);
-                    EditorUtility.SetDirty(staticData);
-
-                    Undo.RecordObject(manager, "Assign FlowField Static Bake Assets");
-                    manager.AssignSurfaceBakeData(persistentSurface);
-                    manager.AssignStaticObstacleBakeData(legacyObstacle);
-                    manager.AssignStaticBakeData(staticData);
+                    Undo.RecordObject(asset, "Bake FlowField Static Snapshot");
+                    bool hasGoal = workspace.HasActiveGoal && workspace.ResolvedGoalIndex >= 0;
+                    FlowFieldGoalResolution goal = manager.ResolveConfiguredGoal(settings.Grid);
+                    asset.Apply(settings, session.CommittedSurface, manager.ObstacleLayer,
+                        manager.ObstacleCheckHeight, manager.ObstacleCheckCenterOffset,
+                        manager.ObstacleClearance, hasGoal, goal.RequestedWorld,
+                        goal.InfluenceRadius, hasGoal ? workspace.ResolvedGoalIndex : -1, workspace);
+                    EditorUtility.SetDirty(asset);
+                    Undo.RecordObject(manager, "Assign FlowField Static Snapshot");
+                    manager.AssignStaticBakeData(asset);
                     EditorUtility.SetDirty(manager);
                     if (manager.gameObject.scene.IsValid())
                         EditorSceneManager.MarkSceneDirty(manager.gameObject.scene);
                     AssetDatabase.SaveAssets();
-                    SceneView.RepaintAll();
-                    Debug.Log(
-                        $"[{nameof(FlowFieldManager)}] Static Flow Bake 완료: "
-                        + $"{settings.Grid.CellCount:N0} cells → {staticPath}",
-                        manager);
                     Undo.CollapseUndoOperations(undoGroup);
+                    Debug.Log($"[{nameof(FlowFieldManager)}] Static Flow Bake complete: {assetPath}", manager);
                 }
-                finally
+                catch (Exception exception)
                 {
-                    pipeline.Dispose();
-                    workspace.Release();
-                    UnityEngine.Object.DestroyImmediate(surface);
-                    _asyncSessionPending = false;
-                    _isBaking = false;
+                    if (undoGroup >= 0)
+                    {
+                        try { Undo.RevertAllDownToGroup(undoGroup); }
+                        catch (Exception undoException) { Debug.LogException(undoException, manager); }
+                    }
+                    if (createdAsset && !string.IsNullOrEmpty(assetPath)
+                        && AssetDatabase.LoadAssetAtPath<FlowFieldStaticBakeData>(assetPath) != null)
+                    {
+                        AssetDatabase.DeleteAsset(assetPath);
+                    }
+                    AssetDatabase.SaveAssets();
+                    Debug.LogException(exception, manager);
                 }
+                finally { Cleanup(); }
             }
 
-            void Failed(FlowFieldBfsRequest failedRequest, Exception exception)
-            {
-                try
-                {
-                    if (callbackGeneration != _callbackGeneration)
-                        return;
-                    Debug.LogError(
-                        $"[{nameof(FlowFieldManager)}] Static Flow Bake failed: {exception?.Message}",
-                        manager);
-                }
-                finally
-                {
-                    pipeline.Dispose();
-                    workspace.Release();
-                    UnityEngine.Object.DestroyImmediate(surface);
-                    _asyncSessionPending = false;
-                    _isBaking = false;
-                }
-            }
-
-            _isBaking = true;
-            _asyncSessionPending = true;
-            if (!pipeline.StartBfs(request, Complete, Failed))
-            {
-                pipeline.Dispose();
-                workspace.Release();
-                UnityEngine.Object.DestroyImmediate(surface);
-                _asyncSessionPending = false;
-                _isBaking = false;
-                throw new InvalidOperationException("Static Flow Bake BFS session could not be started.");
-            }
-        }
-
-        private static bool IsCurrentBakeInput(
-            FlowFieldManager manager,
-            int managerInstanceId,
-            int callbackGeneration,
-            FlowFieldSurfaceBakeSettings bakedSettings,
-            bool bakedGoalActive,
-            Vector3 bakedGoalWorld,
-            float bakedGoalRadius,
-            LayerMask bakedObstacleLayer,
-            float bakedObstacleCheckHeight,
-            float bakedObstacleCenterOffset,
-            float bakedObstacleClearance)
-        {
-            if (callbackGeneration != _callbackGeneration
-                || manager == null
-                || manager.GetInstanceID() != managerInstanceId
-                || manager.BakeMode != FlowFieldBakeMode.StaticBaked)
-                return false;
-
-            FlowFieldSurfaceBakeSettings currentSettings;
+            session.FieldCommitted += Complete;
+            session.Failed += Failed;
+            _cancel = Cleanup;
+            _asyncPending = true;
             try
             {
-                currentSettings = manager.CreateSurfaceBakeSettings();
+                session.Initialize(
+                    FlowFieldBakeMode.RuntimeDynamic,
+                    FlowFieldSessionSourceKind.SceneBuild,
+                    FlowFieldBfsBackendPolicy.PreferGpu,
+                    manager.FrontierComputeShader != null
+                        ? manager.FrontierComputeShader
+                        : Resources.Load<ComputeShader>("FlowFieldFrontier"));
+
+                FlowFieldGoalResolution goalSnapshot = manager.ResolveConfiguredGoal(settings.Grid);
+                bool accepted = session.Submit(FlowFieldSessionRequest.ForSceneBuild(
+                    settings,
+                    obstacleLayer,
+                    obstacleCheckHeight,
+                    obstacleCheckCenterOffset,
+                    obstacleClearance,
+                    false,
+                    goalSnapshot,
+                    manager.DefaultFlowDirection,
+                    FlowFieldDirtyFlags.All,
+                    FlowFieldCellRect.Full(settings.Grid),
+                    FlowFieldCellRect.Full(settings.Grid),
+                    Mathf.Min(settings.Grid.CellCount, Mathf.Max(64, manager.MaxGpuWaves)),
+                    $"{manager.name}_StaticBakeSurface"));
+                if (!accepted && !session.IsFaulted)
+                    throw new InvalidOperationException("Static Flow Bake session could not be started.");
+                if (session.IsFaulted)
+                    throw session.Fault ?? new InvalidOperationException("Static Flow Bake failed.");
             }
             catch
             {
-                return false;
+                Cleanup();
+                throw;
             }
-
-            if (!currentSettings.IsValid
-                || !currentSettings.Grid.MatchesBounds(bakedSettings.Grid)
-                || !FlowFieldBakeBoundsUtility.Approximately(
-                    currentSettings.BakeBounds,
-                    bakedSettings.BakeBounds)
-                || currentSettings.GroundLayer.value != bakedSettings.GroundLayer.value
-                || Mathf.Abs(currentSettings.MaxSurfaceSlope - bakedSettings.MaxSurfaceSlope) > 0.0001f
-                || Mathf.Abs(currentSettings.MaxStepHeight - bakedSettings.MaxStepHeight) > 0.0001f
-                || manager.ObstacleLayer.value != bakedObstacleLayer.value
-                || Mathf.Abs(manager.ObstacleCheckHeight - bakedObstacleCheckHeight) > 0.0001f
-                || Mathf.Abs(manager.ObstacleCheckCenterOffset - bakedObstacleCenterOffset) > 0.0001f
-                || Mathf.Abs(manager.ObstacleClearance - bakedObstacleClearance) > 0.0001f)
-                return false;
-
-            bool currentGoalActive = manager.HasConfiguredGoal;
-            if (currentGoalActive != bakedGoalActive)
-                return false;
-            if (!currentGoalActive)
-                return true;
-
-            Vector3 currentGoalWorld = manager.ConfiguredGoalWorld;
-            return (currentGoalWorld - bakedGoalWorld).sqrMagnitude <= 0.00000001f
-                && Mathf.Abs(manager.ConfiguredGoalInfluenceRadius - bakedGoalRadius) <= 0.0001f;
         }
 
-        private static ComputeShader LoadFrontierShader(FlowFieldManager manager)
+        private static bool ReportSurfaceProgress(int row, int rowCount)
         {
-            ComputeShader shader = manager.FrontierComputeShader;
-            return shader != null ? shader : Resources.Load<ComputeShader>("FlowFieldFrontier");
+            if (_shuttingDown)
+                return false;
+            _progressLabel = $"Baking Surface row {row + 1}/{rowCount}";
+            float progress = rowCount <= 0 ? 0f : (float)row / rowCount;
+            return !EditorUtility.DisplayCancelableProgressBar(
+                "FlowField Static Bake",
+                _progressLabel,
+                progress);
         }
 
-        private static void BakeStaticObstacles(
+        private static bool IsCurrentInput(
             FlowFieldManager manager,
-            FlowFieldGridSpace grid,
-            string surfaceAssetPath)
+            in FlowFieldSurfaceBakeSettings settings,
+            LayerMask obstacleLayer,
+            float obstacleCheckHeight,
+            float obstacleCheckCenterOffset,
+            float obstacleClearance,
+            bool hasConfiguredGoal,
+            Vector3 configuredGoalWorld,
+            float configuredGoalRadius)
         {
-            string assetPath = FlowFieldBakeAssetUtility.DeriveSiblingAssetPath(surfaceAssetPath, "_StaticObstacleBake.asset");
-            FlowFieldStaticObstacleBakeData data = manager.StaticObstacleBakeData;
-            if (data == null)
+            if (manager == null || manager.BakeMode != FlowFieldBakeMode.StaticBaked)
+                return false;
+            try
             {
-                data = AssetDatabase.LoadAssetAtPath<FlowFieldStaticObstacleBakeData>(assetPath);
-                if (data == null)
-                {
-                    data = ScriptableObject.CreateInstance<FlowFieldStaticObstacleBakeData>();
-                    data.name = Path.GetFileNameWithoutExtension(assetPath);
-                    AssetDatabase.CreateAsset(data, assetPath);
-                    Undo.RegisterCreatedObjectUndo(data, "Create FlowField Static Obstacles");
-                }
-
-                Undo.RecordObject(manager, "Assign FlowField Static Obstacle Bake");
-                manager.AssignStaticObstacleBakeData(data);
+                FlowFieldSurfaceBakeSettings current = manager.CreateSurfaceBakeSettings();
+                return current.IsValid && current.Grid.MatchesBounds(settings.Grid)
+                    && FlowFieldBakeBoundsUtility.Approximately(current.BakeBounds, settings.BakeBounds)
+                    && current.GroundLayer.value == settings.GroundLayer.value
+                    && Mathf.Abs(current.MaxSurfaceSlope - settings.MaxSurfaceSlope) <= 0.0001f
+                    && Mathf.Abs(current.MaxStepHeight - settings.MaxStepHeight) <= 0.0001f
+                    && manager.ObstacleLayer.value == obstacleLayer.value
+                    && Mathf.Abs(manager.ObstacleCheckHeight - obstacleCheckHeight) <= 0.0001f
+                    && Mathf.Abs(manager.ObstacleCheckCenterOffset - obstacleCheckCenterOffset) <= 0.0001f
+                    && Mathf.Abs(manager.ObstacleClearance - obstacleClearance) <= 0.0001f
+                    && manager.HasConfiguredGoal == hasConfiguredGoal
+                    && (!hasConfiguredGoal
+                        || (manager.ConfiguredGoalWorld - configuredGoalWorld).sqrMagnitude <= 0.00000001f
+                            && Mathf.Abs(manager.ConfiguredGoalInfluenceRadius - configuredGoalRadius) <= 0.0001f);
             }
-
-            var blocked = new bool[grid.CellCount];
-            Collider[] buffer = null;
-            Collider[] targetOverlapBuffer = null;
-            if (!FlowFieldObstacleMaskBuilder.BuildStatic(
-                grid,
-                    manager.SurfaceBakeData,
-                    manager.ObstacleLayer,
-                    manager.ObstacleCheckHeight,
-                    manager.ObstacleCheckCenterOffset,
-                    manager.ObstacleClearance,
-                    blocked,
-                    ref buffer,
-                ref targetOverlapBuffer,
-                out int excludedColliderCount,
-                syncTransformsBeforeQuery: true))
-                throw new System.InvalidOperationException("Static Obstacle mask 생성에 실패했습니다.");
-
-            if (excludedColliderCount > 0)
-            {
-                Debug.LogWarning(
-                    $"[{nameof(FlowFieldManager)}] Static Bake에서 "
-                    + $"{excludedColliderCount}개의 비정적 또는 Rigidbody Collider를 제외했습니다. "
-                    + "이 Collider는 RegisterDynamicObstacle 또는 Unregistered Sweep으로 처리해야 합니다.",
-                    manager);
-            }
-
-            Undo.RecordObject(data, "Bake FlowField Static Obstacles");
-            data.Apply(
-                grid,
-                manager.ObstacleLayer,
-                manager.ObstacleCheckHeight,
-                manager.ObstacleCheckCenterOffset,
-                manager.ObstacleClearance,
-                blocked);
-            EditorUtility.SetDirty(data);
+            catch { return false; }
         }
 
         public static void ClearReference(FlowFieldManager manager)
         {
-            if (manager == null
-                || (manager.SurfaceBakeData == null
-                    && manager.StaticObstacleBakeData == null
-                    && manager.StaticBakeData == null))
+            if (manager == null || manager.StaticBakeData == null)
                 return;
-
-            Undo.RecordObject(manager, "Clear FlowField Surface Bake Reference");
-            manager.AssignSurfaceBakeData(null);
-            manager.AssignStaticObstacleBakeData(null);
+            Undo.RecordObject(manager, "Clear FlowField Static Bake Reference");
             manager.AssignStaticBakeData(null);
             EditorUtility.SetDirty(manager);
             if (manager.gameObject.scene.IsValid())
                 EditorSceneManager.MarkSceneDirty(manager.gameObject.scene);
         }
-
     }
 
     internal static class FlowFieldBakeAssetUtility
     {
         private const string BAKE_DIRECTORY = "Assets/_FlowField/Settings";
 
-        internal static string DeriveSiblingAssetPath(string surfaceAssetPath, string suffix)
-        {
-            string directory = Path.GetDirectoryName(surfaceAssetPath)?.Replace('\\', '/');
-            if (string.IsNullOrEmpty(directory))
-                throw new System.ArgumentException("Surface asset path must include an Assets directory.", nameof(surfaceAssetPath));
-            string fileName = Path.GetFileNameWithoutExtension(surfaceAssetPath);
-            if (fileName.EndsWith("_SurfaceBake"))
-                fileName = fileName.Substring(0, fileName.Length - "_SurfaceBake".Length);
-            return $"{directory}/{fileName}{suffix}";
-        }
-
-        internal static string ResolveAssetPath(FlowFieldManager manager)
-        {
-            if (manager == null)
-                throw new System.ArgumentNullException(nameof(manager));
-            if (!manager.gameObject.scene.IsValid() || string.IsNullOrEmpty(manager.gameObject.scene.path))
-                throw new System.InvalidOperationException("Scene을 먼저 저장해야 합니다.");
-
-            ValidateFileName(manager.name);
-            GlobalObjectId globalId = GlobalObjectId.GetGlobalObjectIdSlow(manager);
-            string id = globalId.targetObjectId != 0
-                ? globalId.targetObjectId.ToString()
-                : manager.GetInstanceID().ToString();
-            return $"{BAKE_DIRECTORY}/{manager.name}_{id}_SurfaceBake.asset";
-        }
-
         internal static string ResolveStaticAssetPath(FlowFieldManager manager)
         {
-            string surfacePath = ResolveAssetPath(manager);
-            return DeriveSiblingAssetPath(surfacePath, "_StaticBake.asset");
+            if (manager == null)
+                throw new ArgumentNullException(nameof(manager));
+            if (!manager.gameObject.scene.IsValid() || string.IsNullOrEmpty(manager.gameObject.scene.path))
+                throw new InvalidOperationException("Scene을 먼저 저장해야 합니다.");
+            ValidateFileName(manager.name);
+            GlobalObjectId id = GlobalObjectId.GetGlobalObjectIdSlow(manager);
+            string suffix = id.targetObjectId != 0 ? id.targetObjectId.ToString() : manager.GetInstanceID().ToString();
+            return $"{BAKE_DIRECTORY}/{manager.name}_{suffix}_StaticBake.asset";
         }
 
         internal static void CreateBakeFolder()
-            => CreateFolderHierarchy(BAKE_DIRECTORY);
-
-        private static void CreateFolderHierarchy(string path)
         {
-            string[] parts = path.Split('/');
+            string[] parts = BAKE_DIRECTORY.Split('/');
             string current = parts[0];
             for (int i = 1; i < parts.Length; i++)
             {
                 string next = current + "/" + parts[i];
-                if (!AssetDatabase.IsValidFolder(next))
-                {
-                    if (string.IsNullOrEmpty(AssetDatabase.CreateFolder(current, parts[i])))
-                        throw new System.InvalidOperationException($"Unable to create FlowField bake folder '{next}'.");
-                }
+                if (!AssetDatabase.IsValidFolder(next) && string.IsNullOrEmpty(AssetDatabase.CreateFolder(current, parts[i])))
+                    throw new InvalidOperationException($"Unable to create bake folder '{next}'.");
                 current = next;
             }
-
-            if (!AssetDatabase.IsValidFolder(path))
-                throw new System.InvalidOperationException($"FlowField bake folder is not available: {path}");
         }
 
         private static void ValidateFileName(string value)
         {
-            if (string.IsNullOrWhiteSpace(value)
-                || value == "."
-                || value == ".."
+            if (string.IsNullOrWhiteSpace(value) || value == "." || value == ".."
                 || value.IndexOfAny(new[] { '/', '\\' }) >= 0
-                || value.IndexOf("..", System.StringComparison.Ordinal) >= 0)
-                throw new System.ArgumentException("FlowField manager name must be a simple asset file name.", nameof(value));
-
-            char[] invalidCharacters = Path.GetInvalidFileNameChars();
-            for (int i = 0; i < invalidCharacters.Length; i++)
-                if (value.IndexOf(invalidCharacters[i]) >= 0)
-                    throw new System.ArgumentException("FlowField manager name contains an invalid character.", nameof(value));
+                || value.IndexOf("..", StringComparison.Ordinal) >= 0)
+                throw new ArgumentException("FlowField manager name must be a simple asset file name.", nameof(value));
+            char[] invalid = Path.GetInvalidFileNameChars();
+            for (int i = 0; i < invalid.Length; i++)
+                if (value.IndexOf(invalid[i]) >= 0)
+                    throw new ArgumentException("FlowField manager name contains an invalid character.", nameof(value));
         }
     }
 }

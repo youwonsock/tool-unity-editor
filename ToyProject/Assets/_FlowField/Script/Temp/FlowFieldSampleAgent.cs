@@ -30,7 +30,7 @@ namespace Common.FlowField.Samples
         public Vector3 Velocity => _rigidbody != null
             ? GetVelocity()
             : throw new InvalidOperationException("FlowFieldSampleAgent requires a Rigidbody.");
-        public bool IsFlowReady => _provider != null && _provider.IsInitialized && _provider.IsReady;
+        public bool IsFlowReady => _provider != null && _provider.IsReady;
 
         private void Awake()
         {
@@ -136,7 +136,7 @@ namespace Common.FlowField.Samples
             if (!IsFinite(deltaTime) || deltaTime <= 0f)
                 throw new ArgumentOutOfRangeException(nameof(deltaTime));
 
-            if (_provider == null || !_provider.IsInitialized || !_provider.IsReady)
+            if (_provider == null || !_provider.IsReady)
                 return;
 
             FlowFieldSample sample = _provider.Sample(Position);

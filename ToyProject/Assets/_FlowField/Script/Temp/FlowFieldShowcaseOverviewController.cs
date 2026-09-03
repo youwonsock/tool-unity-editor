@@ -150,7 +150,7 @@ namespace Common.FlowField.Samples
             if (Input.GetKeyDown(KeyCode.O))
                 ApplyMode(ShowcaseMode.SampleAndClamp);
             if (Input.GetKeyDown(KeyCode.R))
-                _manager.Rebuild();
+                _manager.RequestRebuild();
             if (Input.GetKeyDown(KeyCode.C))
                 RefreshDiagnostics();
             if (Input.GetKeyDown(KeyCode.F))

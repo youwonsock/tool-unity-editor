@@ -3,748 +3,377 @@ using UnityEngine;
 
 namespace Common.TransformPath
 {
-    /// <summary>
-    /// PathFollower를 사용하여 경로를 따라 이동하며,
-    /// 앞에 다른 객체가 있으면 자동으로 멈추는 기능을 제공합니다.
-    /// </summary>
-    // Queue followers depend on the sibling PathFollower, so initialize after it.
-    [DefaultExecutionOrder(-90)]
+    /// <summary>PathFollower adapter that applies one manager constraint per frame.</summary>
+    [DefaultExecutionOrder(-110)]
     [RequireComponent(typeof(PathFollower))]
-    public class QueuedPathFollower : MonoBehaviour, IQueuedPathAgent
+    public sealed class QueuedPathFollower : MonoBehaviour, IQueuedPathAgent
     {
-        #region Constants
-
-        private const float MIN_SPACING = 0f;
-        private const float MIN_RESUME_DELAY = 0f;
-        private const float MIN_HYSTERESIS = 0f;
-        private const float MIN_SPEED_SMOOTH_RATE = 0f;
         private const float DEFAULT_ACTOR_SPACING = 1.5f;
-        private const float DEFAULT_RESUME_MOVEMENT_DELAY = 0.1f;
-        private const float DEFAULT_UNBLOCK_HYSTERESIS = 0.3f;
-        private const float DEFAULT_SPEED_SMOOTH_RATE = 5f;
 
-        #endregion
-
-
-        #region Queue Follower State
-
-        [Header("컴포넌트")]
+        [Header("Components")]
         [SerializeField] private PathFollower _pathFollower;
         [SerializeField] private QueuedPathManager _manager;
 
-        [Header("블로킹 설정")]
-        [SerializeField] private float _actorSpacing = DEFAULT_ACTOR_SPACING;
-        [SerializeField] private float _resumeMovementDelay = DEFAULT_RESUME_MOVEMENT_DELAY;
+        [Header("Queue")]
+        [SerializeField, Min(0f)] private float _actorSpacing = DEFAULT_ACTOR_SPACING;
         [SerializeField] private bool _useManagerSpacing = true;
-        [SerializeField] private float _unblockHysteresis = DEFAULT_UNBLOCK_HYSTERESIS;
-
-        [Header("속도 설정")]
         [SerializeField] private bool _enableGradualSlowdown = true;
         [SerializeField] private bool _enableOvertakeProtection = true;
-        [SerializeField] private float _speedSmoothRate = DEFAULT_SPEED_SMOOTH_RATE;
-
-        [Header("애니메이션 설정")]
         [SerializeField] private Animator _animator;
         [SerializeField] private string _speedParamName = "Speed";
 
-        private bool _isBlocked = false;
-        private bool _isManuallyBlocked = false;
-        private float _blockTimer = 0f;
-        private bool _isMoving = false;
-        private bool _isExternallyPaused = false;
-        private Action _onComplete;
-        private int _speedParamHash;
-        private float _currentSpeedMultiplier = 1f;
-        private float _lastCheckedNormalizedTime = -1f;
-        private bool _speedSmoothSuspended = false;
         private bool _isInitialized;
-        private bool _isFaulted;
-        private System.Exception _fault;
         private bool _isRegistered;
+        private bool _manualBlock;
+        private bool _externalPause;
+        private bool _effectiveBlocked;
+        private float _currentSpeedMultiplier = 1f;
+        private float _lastReportedSpeedMultiplier = 1f;
+        private int _speedParamHash;
+        private PathQueueState _managerState;
+        private bool _hasManagerState;
+        private int _snapshotRevision = -1;
+        private Action _completedSubscription;
 
-        #endregion
-
-
-        #region Queue Follower Properties
-
-        public bool IsBlocked => _isBlocked;
-        public bool IsMoving => _isMoving;
-
-        /// <summary>
-        /// 실제 이동 중인지 여부 (이동 중이면서 블로킹되지 않은 상태)
-        /// </summary>
-        public bool IsActuallyMoving => _isMoving && !_isBlocked;
-
+        public bool IsInitialized => _isInitialized;
+        public bool IsBlocked => _effectiveBlocked;
+        public bool IsMoving => _pathFollower != null && _pathFollower.IsMoving;
+        public bool IsActuallyMoving => IsMoving && !_effectiveBlocked;
+        public bool IsRegistered => _isRegistered;
         public float ActorSpacing
         {
-            get
-            {
-                ThrowIfFaulted();
-                if (_useManagerSpacing)
-                {
-                    if (_manager == null)
-                        throw new InvalidOperationException("QueuedPathFollower requires a manager when UseManagerSpacing is enabled.");
-                    if (!_manager.IsInitialized)
-                        throw new InvalidOperationException("QueuedPathManager must be initialized before reading managed spacing.");
-                    return _manager.DefaultSpacing;
-                }
-                return _actorSpacing;
-            }
+            get => _actorSpacing;
             set
             {
-                ThrowIfFaulted();
-                if (!IsFinite(value) || value < MIN_SPACING)
+                if (!IsFinite(value) || value < 0f)
                     throw new ArgumentOutOfRangeException(nameof(value));
                 _actorSpacing = value;
             }
         }
-
         public bool UseManagerSpacing
         {
-            get
-            {
-                ThrowIfFaulted();
-                return _useManagerSpacing;
-            }
-            set
-            {
-                ThrowIfFaulted();
-                _useManagerSpacing = value;
-            }
+            get => _useManagerSpacing;
+            set => _useManagerSpacing = value;
         }
         public bool EnableGradualSlowdown
         {
-            get
-            {
-                ThrowIfFaulted();
-                return _enableGradualSlowdown;
-            }
-            set
-            {
-                ThrowIfFaulted();
-                _enableGradualSlowdown = value;
-            }
+            get => _enableGradualSlowdown;
+            set => _enableGradualSlowdown = value;
         }
         public bool EnableOvertakeProtection
         {
-            get
-            {
-                ThrowIfFaulted();
-                return _enableOvertakeProtection;
-            }
-            set
-            {
-                ThrowIfFaulted();
-                _enableOvertakeProtection = value;
-            }
+            get => _enableOvertakeProtection;
+            set => _enableOvertakeProtection = value;
         }
         public float CurrentSpeedMultiplier => _currentSpeedMultiplier;
-
-        /// <summary>
-        /// 전체 경로 기준 현재 위치 (0~1)
-        /// </summary>
-        public float GlobalNormalizedTime
-        {
-            get
-            {
-                ThrowIfFaulted();
-                if (!_isInitialized)
-                    throw new InvalidOperationException("QueuedPathFollower is not initialized.");
-                return _pathFollower != null
-                    ? _pathFollower.GlobalNormalizedTime
-                    : throw new InvalidOperationException("QueuedPathFollower requires a PathFollower reference.");
-            }
-        }
-
+        public float GlobalNormalizedTime => _pathFollower == null ? 0f : _pathFollower.GlobalNormalizedTime;
         public PathFollower PathFollower => _pathFollower;
         public QueuedPathManager Manager => _manager;
+        public IPathProvider QueueProvider => _pathFollower == null ? null : _pathFollower.CurrentProvider;
+        public int SnapshotRevision => _pathFollower == null ? -1 : _pathFollower.SnapshotRevision;
 
         public event Action<QueuedPathFollower> OnBlocked;
         public event Action<QueuedPathFollower> OnResumed;
         public event Action<QueuedPathFollower> OnCompleted;
         public event Action<QueuedPathFollower, float> OnSpeedChanged;
 
-        #endregion
-
-
-        #region Unity Events
-
         private void Reset()
         {
             _pathFollower = GetComponent<PathFollower>();
         }
 
-        private void OnValidate()
-        {
-            // Validation is performed at Init.
-        }
-
         private void Awake()
         {
-            if (!Application.isPlaying)
-                return;
-
-            Init();
-
-            if (_animator != null && !string.IsNullOrEmpty(_speedParamName))
-                _speedParamHash = Animator.StringToHash(_speedParamName);
-        }
-
-        public bool IsInitialized => _isInitialized;
-        public bool IsFaulted => _isFaulted;
-
-        public void Init()
-        {
-            if (_isInitialized)
-                throw new InvalidOperationException("QueuedPathFollower is already initialized.");
-            if (_isFaulted)
-                throw new InvalidOperationException("QueuedPathFollower is faulted; call Release before Init.", _fault);
-            try
-            {
-                if (_pathFollower == null)
-                    throw new InvalidOperationException("QueuedPathFollower requires a serialized PathFollower.");
-                if (_manager == null)
-                    throw new InvalidOperationException("QueuedPathFollower requires a serialized QueuedPathManager.");
-                if (!_pathFollower.IsInitialized || !_manager.IsInitialized)
-                    throw new InvalidOperationException("PathFollower and QueuedPathManager must be initialized first.");
-                if (!IsFinite(_actorSpacing) || _actorSpacing < MIN_SPACING
-                    || !IsFinite(_resumeMovementDelay) || _resumeMovementDelay < MIN_RESUME_DELAY
-                    || !IsFinite(_unblockHysteresis) || _unblockHysteresis < MIN_HYSTERESIS
-                    || !IsFinite(_speedSmoothRate) || _speedSmoothRate < MIN_SPEED_SMOOTH_RATE)
-                    throw new ArgumentOutOfRangeException(nameof(_actorSpacing));
-                _isInitialized = true;
-                if (isActiveAndEnabled)
-                {
-                    _manager.Register(this);
-                    _isRegistered = true;
-                }
-            }
-            catch (System.Exception exception)
-            {
-                _isInitialized = false;
-                _isFaulted = true;
-                if (_fault == null)
-                    _fault = exception;
-                throw;
-            }
-        }
-
-        public void Release()
-        {
-            if (!_isInitialized && !_isFaulted)
-                throw new InvalidOperationException("QueuedPathFollower has not been initialized.");
-            if (_isInitialized && _isRegistered)
-            {
-                if (_manager == null)
-                    throw new InvalidOperationException("QueuedPathFollower manager reference is missing.");
-                if (_manager.IsInitialized)
-                    _manager.Unregister(this);
-                }
-            if (_isInitialized)
-            {
-                // During scene teardown Unity may destroy the sibling PathFollower first.
-                // Release the queue state without calling into an already released sibling.
-                if (_pathFollower != null && _pathFollower.IsInitialized)
-                    StopMove();
-                else
-                    ResetMoveState();
-            }
-            else
-            {
-                _isMoving = false;
-                _isExternallyPaused = false;
-                _isBlocked = false;
-                _blockTimer = 0f;
-                _onComplete = null;
-                _currentSpeedMultiplier = 1f;
-            }
-            _isRegistered = false;
-            _isInitialized = false;
-            _isFaulted = false;
-            _fault = null;
-        }
-
-        private void OnEnable()
-        {
-            ThrowIfFaulted();
-            if (_isInitialized && !_isRegistered)
-            {
-                if (_manager == null || !_manager.IsInitialized)
-                    throw new InvalidOperationException("QueuedPathFollower requires an initialized manager before enabling.");
-                _manager.Register(this);
-                _isRegistered = true;
-            }
-        }
-
-        private void OnDisable()
-        {
-            if (_isInitialized)
-            {
-                if (_isRegistered)
-                {
-                    if (_manager == null)
-                        throw new InvalidOperationException("QueuedPathFollower manager reference is missing.");
-                    if (_manager.IsInitialized)
-                        _manager.Unregister(this);
-                    _isRegistered = false;
-                }
-                StopMove();
-            }
-        }
-
-        private void OnDestroy()
-        {
-            if (_isInitialized || _isFaulted)
-                Release();
+            if (Application.isPlaying)
+                Init();
         }
 
         private void Update()
         {
-            if (_isFaulted)
-                throw new InvalidOperationException("QueuedPathFollower is faulted; call Release before use.", _fault);
-            if (!_isInitialized)
-                throw new InvalidOperationException("QueuedPathFollower is not initialized.");
-            if (!_isMoving || _isExternallyPaused)
+            if (!_isInitialized || _pathFollower == null || !_pathFollower.IsMoving)
                 return;
+            if (!_isRegistered)
+                TryRegister();
 
-            float currentNormalized = GlobalNormalizedTime;
-            bool shouldProcess = _isBlocked || _blockTimer > 0f;
-
-            if (!shouldProcess && Mathf.Approximately(currentNormalized, _lastCheckedNormalizedTime))
-                return;
-
-            _lastCheckedNormalizedTime = currentNormalized;
-
-            UpdateMoveModifiers();
-        }
-
-        #endregion
-
-
-        #region Queue Follower API
-
-        /// <summary>
-        /// Manager를 설정합니다.
-        /// </summary>
-        public void SetManager(QueuedPathManager manager)
-        {
-            if (_isFaulted)
-                throw new InvalidOperationException("QueuedPathFollower is faulted; call Release before changing its manager.", _fault);
-            if (manager == null)
-                throw new ArgumentNullException(nameof(manager));
-            if (_isRegistered && _manager != null)
+            PathQueueState state = default(PathQueueState);
+            bool hasState = _manager != null && _manager.TryGetState(this, out state);
+            if (hasState)
             {
-                if (_manager.IsInitialized)
-                    _manager.Unregister(this);
-                _isRegistered = false;
+                _managerState = state;
+                _hasManagerState = true;
             }
 
-            _manager = manager;
+            bool blocked = _externalPause || _manualBlock || (_hasManagerState && _managerState.IsBlocked);
+            float multiplier = _hasManagerState ? _managerState.SpeedMultiplier : 1f;
+            if (_manualBlock || _externalPause)
+                multiplier = 0f;
 
-            if (_isInitialized && enabled && !_isRegistered)
+            if (_enableOvertakeProtection && _hasManagerState && !_manualBlock && !_externalPause
+                && GlobalNormalizedTime > _managerState.MaxGlobalNormalizedTime)
             {
-                _manager.Register(this);
-                _isRegistered = true;
+                _pathFollower.Seek(_managerState.MaxGlobalNormalizedTime);
             }
+
+            bool wasBlocked = _effectiveBlocked;
+            _effectiveBlocked = blocked;
+            _currentSpeedMultiplier = Mathf.Clamp01(multiplier);
+            _pathFollower.SetQueueConstraint(
+                _effectiveBlocked,
+                _currentSpeedMultiplier,
+                _hasManagerState ? _managerState.MaxGlobalNormalizedTime : 1f,
+                _hasManagerState ? _managerState.RouteRevision : SnapshotRevision);
+            UpdateAnimator();
+            ReportStateChanges(wasBlocked, blocked);
         }
 
-        /// <summary>
-        /// 경로 이동을 시작합니다.
-        /// </summary>
-        public void StartMove(Action onComplete = null)
+        private void OnDisable()
         {
-            ThrowIfFaulted();
-            if (!_isInitialized)
-                throw new InvalidOperationException("QueuedPathFollower is not initialized.");
-
-            _onComplete = onComplete;
-            PrepareMoveStart();
-
-            _pathFollower.StartMove(OnPathComplete);
+            UnregisterIfRegistered();
         }
 
-        /// <summary>
-        /// 외부에서 MultiPathData를 주입하여 경로 이동을 시작합니다.
-        /// </summary>
-        public void StartMove(MultiPathData multiPathData, Action onComplete = null)
+        private void OnDestroy()
         {
-            ThrowIfFaulted();
-            if (!_isInitialized)
-                throw new InvalidOperationException("QueuedPathFollower is not initialized.");
-            if (multiPathData == null)
-                throw new ArgumentNullException(nameof(multiPathData));
-
-            _onComplete = onComplete;
-            PrepareMoveStart();
-
-            _pathFollower.StartMove(multiPathData, OnPathComplete);
+            Release();
         }
 
-        /// <summary>
-        /// 경로 이동을 중지합니다.
-        /// </summary>
+        public void Init()
+        {
+            if (_isInitialized)
+                return;
+            if (_pathFollower == null)
+                _pathFollower = GetComponent<PathFollower>();
+            if (_pathFollower == null)
+                return;
+            if (!_pathFollower.IsInitialized)
+                _pathFollower.Init();
+            if (_manager == null)
+                _manager = GetComponentInParent<QueuedPathManager>();
+            _speedParamHash = string.IsNullOrEmpty(_speedParamName) ? 0 : Animator.StringToHash(_speedParamName);
+            _completedSubscription = HandleUnderlyingCompleted;
+            _pathFollower.Completed -= _completedSubscription;
+            _pathFollower.Completed += _completedSubscription;
+            _isInitialized = true;
+            _snapshotRevision = _pathFollower.SnapshotRevision;
+        }
+
+        public void Release()
+        {
+            if (!_isInitialized && !_isRegistered)
+                return;
+            UnregisterIfRegistered();
+            if (_pathFollower != null && _completedSubscription != null)
+                _pathFollower.Completed -= _completedSubscription;
+            _completedSubscription = null;
+            _isInitialized = false;
+            _hasManagerState = false;
+            _effectiveBlocked = false;
+            _currentSpeedMultiplier = 1f;
+        }
+
+        public void StartMove(IPathProvider provider, PathMoveSettings settings)
+        {
+            EnsureReadyToStart(provider);
+            _pathFollower.StartMove(provider, settings);
+            _snapshotRevision = _pathFollower.SnapshotRevision;
+            RegisterAfterStart();
+        }
+
+        public void StartSequence(IPathSequenceProvider provider, PathSequenceSettings settings)
+        {
+            EnsureReadyToStart(provider);
+            _pathFollower.StartSequence(provider, settings);
+            _snapshotRevision = _pathFollower.SnapshotRevision;
+            RegisterAfterStart();
+        }
+
         public void StopMove()
         {
-            ThrowIfFaulted();
-            if (!_isInitialized)
-                throw new InvalidOperationException("QueuedPathFollower is not initialized.");
-            ResetMoveState();
-            _onComplete = null;
-
-            _pathFollower.StopMove();
+            _pathFollower?.StopMove();
+            UnregisterIfRegistered();
+            ResetConstraintState();
         }
 
-        /// <summary>
-        /// 경로 이동을 일시정지합니다.
-        /// </summary>
-        public void PauseMove(bool pauseAnimation = false)
+        public void PauseMove()
         {
-            ThrowIfFaulted();
-            if (!_isInitialized)
-                throw new InvalidOperationException("QueuedPathFollower is not initialized.");
-            _isExternallyPaused = true;
-            _pathFollower.PauseMove(pauseAnimation);
-        }
-
-        /// <summary>
-        /// 일시정지된 경로 이동을 재개합니다.
-        /// </summary>
-        public void ResumeMove(bool resumeAnimation = true)
-        {
-            ThrowIfFaulted();
-            if (!_isInitialized)
-                throw new InvalidOperationException("QueuedPathFollower is not initialized.");
-            _isExternallyPaused = false;
-            if (_isBlocked)
+            if (_pathFollower == null)
                 return;
-            _pathFollower.ResumeMove(resumeAnimation);
-        }
-
-        /// <summary>
-        /// 외부에서 블로킹 상태를 강제로 설정합니다.
-        /// </summary>
-        public void ForceBlock(float duration = -1f)
-        {
-            ThrowIfFaulted();
-            if (!_isInitialized)
-                throw new InvalidOperationException("QueuedPathFollower is not initialized.");
-            if (duration < -1f || float.IsNaN(duration) || float.IsInfinity(duration))
-                throw new ArgumentOutOfRangeException(nameof(duration));
-            if (!_isMoving)
-                return;
-
-            bool wasBlocked = _isBlocked;
-            // A negative duration means that an explicit block remains active
-            // until ForceUnblock. This is required for a queue leader because it
-            // has no follower ahead to keep the automatic block alive.
-            _isManuallyBlocked = duration < 0f;
-            _isBlocked = true;
-            _blockTimer = duration > 0f
-                ? duration
-                : _isManuallyBlocked ? -1f : _resumeMovementDelay;
-
+            _externalPause = true;
             _pathFollower.PauseMove();
-
-            if (!wasBlocked)
-                OnBlocked?.Invoke(this);
+            UnregisterIfRegistered();
+            _effectiveBlocked = true;
         }
 
-        /// <summary>
-        /// 블로킹 상태를 강제로 해제합니다.
-        /// </summary>
+        public void ResumeMove()
+        {
+            if (_pathFollower == null)
+                return;
+            _externalPause = false;
+            _pathFollower.ResumeMove();
+            RegisterAfterStart();
+        }
+
+        public void ForceBlock()
+        {
+            _manualBlock = true;
+        }
+
         public void ForceUnblock()
         {
-            ThrowIfFaulted();
-            if (!_isInitialized)
-                throw new InvalidOperationException("QueuedPathFollower is not initialized.");
-            _isManuallyBlocked = false;
-            if (!_isBlocked)
-                return;
-
-            ResumeFromBlock();
+            _manualBlock = false;
         }
 
-        /// <summary>
-        /// 스무딩에 의한 속도 제어를 일시정지합니다.
-        /// 다음 블로킹/해제 사이클 또는 StartMove/StopMove 시 자동 해제됩니다.
-        /// </summary>
-        public void SuspendSpeedSmooth()
+        public void ApplyQueueState(PathQueueState state)
         {
-            ThrowIfFaulted();
-            if (!_isInitialized)
-                throw new InvalidOperationException("QueuedPathFollower is not initialized.");
-            _speedSmoothSuspended = true;
+            _managerState = state;
+            _hasManagerState = true;
         }
 
-        #endregion
-
-
-        #region Queue Follower Helpers
-
-        private void UpdateMoveModifiers()
+        internal void MarkUnregisteredByManager()
         {
-            UpdateBlockingState();
-            UpdateSpeedMultiplier();
-            UpdateOvertakeProtection();
+            _isRegistered = false;
+            _hasManagerState = false;
+            _effectiveBlocked = false;
         }
 
-        /// <summary>
-        /// 매 프레임 블로킹 상태를 업데이트합니다.
-        /// </summary>
-        private void UpdateBlockingState()
+        private void EnsureReadyToStart(IPathProvider provider)
+        {
+            if (!_isInitialized)
+                Init();
+            if (!_isInitialized || _pathFollower == null)
+                throw new InvalidOperationException("QueuedPathFollower is not initialized.");
+            if (_manager == null || !_manager.IsInitialized)
+                throw new InvalidOperationException("QueuedPathManager must be initialized before starting a queued move.");
+            if (provider == null || !provider.IsReady)
+                throw new InvalidOperationException("Queue provider must be initialized and ready.");
+            if (_manager.RouteProvider == null)
+                _manager.ConfigureRoute(provider);
+            if (!ReferenceEquals(_manager.RouteProvider, provider))
+                throw new InvalidOperationException("Queue follower and manager must use the same route provider instance.");
+        }
+
+        private void RegisterAfterStart()
         {
             if (_manager == null)
-                throw new InvalidOperationException("QueuedPathFollower manager reference is missing.");
-
-            if (_isManuallyBlocked)
                 return;
+            if (!_isRegistered)
+                _isRegistered = _manager.Register(this) || _manager.TryGetState(this, out _managerState);
+            _hasManagerState = false;
+            _effectiveBlocked = false;
+            _currentSpeedMultiplier = 1f;
+            UpdateAnimator();
+        }
 
-            // 블로킹 타이머 처리
-            if (_isBlocked)
-                _blockTimer -= Time.deltaTime;
-
-            float? distance = _manager.GetDistanceToAhead(this);
-
-            // 앞에 객체가 없으면 블로킹 해제
-            if (!distance.HasValue)
-            {
-                if (_isBlocked)
-                    ResumeFromBlock();
+        private void TryRegister()
+        {
+            if (_manager == null || _pathFollower == null || !_pathFollower.IsMoving)
                 return;
-            }
+            if (_manager.RouteProvider == null)
+                _manager.ConfigureRoute(_pathFollower.CurrentProvider);
+            if (ReferenceEquals(_manager.RouteProvider, _pathFollower.CurrentProvider))
+                _isRegistered = _manager.Register(this) || _manager.TryGetState(this, out _managerState);
+        }
 
-            float spacing = ActorSpacing;
-            bool shouldBlock = ShouldStartBlocking(distance.Value, spacing);
-            bool shouldUnblock = ShouldEndBlocking(distance.Value, spacing, _unblockHysteresis, _blockTimer);
+        private void UnregisterIfRegistered()
+        {
+            if (!_isRegistered)
+                return;
+            if (_manager != null)
+                _manager.Unregister(this);
+            _isRegistered = false;
+        }
 
-            if (shouldBlock)
+        private void HandleUnderlyingCompleted()
+        {
+            UnregisterIfRegistered();
+            ResetConstraintState();
+            InvokeCompleted();
+        }
+
+        private void ResetConstraintState()
+        {
+            _externalPause = false;
+            _manualBlock = false;
+            _effectiveBlocked = false;
+            _hasManagerState = false;
+            _currentSpeedMultiplier = 1f;
+            if (_pathFollower != null)
+                _pathFollower.ResetQueueConstraint();
+            UpdateAnimator();
+        }
+
+        private void ReportStateChanges(bool wasBlocked, bool blocked)
+        {
+            if (blocked != wasBlocked)
             {
-                if (!_isBlocked)
-                {
-                    // 블로킹 시작
-                    _isBlocked = true;
-                    _blockTimer = _resumeMovementDelay;
-                    _pathFollower.PauseMove();
-                    OnBlocked?.Invoke(this);
-                }
+                if (blocked)
+                    InvokeBlocked();
                 else
-                {
-                    // 계속 블로킹 상태 - 타이머 리셋
-                    _blockTimer = _resumeMovementDelay;
-                }
+                    InvokeResumed();
             }
-            else if (_isBlocked && _blockTimer <= 0f && shouldUnblock)
+            if (!Mathf.Approximately(_lastReportedSpeedMultiplier, _currentSpeedMultiplier))
             {
-                ResumeFromBlock();
+                _lastReportedSpeedMultiplier = _currentSpeedMultiplier;
+                InvokeSpeedChanged(_currentSpeedMultiplier);
             }
         }
 
-        /// <summary>
-        /// 앞 객체와의 거리에 따라 속도를 조절합니다.
-        /// </summary>
-        private void UpdateSpeedMultiplier()
-        {
-            if (!_enableGradualSlowdown || _isBlocked)
-                return;
-
-            if (_speedSmoothSuspended)
-                return;
-
-            float targetMultiplier = _manager.GetSpeedMultiplier(this);
-
-            if (!Mathf.Approximately(_currentSpeedMultiplier, targetMultiplier))
-            {
-                _currentSpeedMultiplier = Mathf.Lerp(_currentSpeedMultiplier, targetMultiplier, Time.deltaTime * _speedSmoothRate);
-
-                if (Mathf.Approximately(_currentSpeedMultiplier, targetMultiplier))
-                    _currentSpeedMultiplier = targetMultiplier;
-
-                _pathFollower.SetSpeedMultiplier(_currentSpeedMultiplier, true);
-
-                UpdateAnimatorSpeed();
-                OnSpeedChanged?.Invoke(this, _currentSpeedMultiplier);
-            }
-        }
-
-        /// <summary>
-        /// 추월 방지 처리를 수행합니다.
-        /// </summary>
-        private void UpdateOvertakeProtection()
-        {
-            // 블로킹 상태에서는 추월 방지 처리 스킵 (떨림 방지)
-            if (!_enableOvertakeProtection || _isBlocked)
-                return;
-
-            float currentNormalized = GlobalNormalizedTime;
-            float clampedNormalized = _manager.GetClampedNormalizedTime(this, currentNormalized);
-
-            if (currentNormalized > clampedNormalized)
-            {
-                // 앞 객체를 추월하려고 함 - 위치 클램핑
-                _pathFollower.SetNormalizedTime(clampedNormalized);
-            }
-        }
-
-        /// <summary>
-        /// Animator 속도를 업데이트합니다.
-        /// </summary>
-        private void UpdateAnimatorSpeed()
+        private void UpdateAnimator()
         {
             if (_animator == null)
                 return;
-
             if (_speedParamHash != 0)
                 _animator.SetFloat(_speedParamHash, _currentSpeedMultiplier);
         }
 
-        /// <summary>
-        /// 경로 완료 시 호출됩니다.
-        /// </summary>
-        private void OnPathComplete()
+        private void InvokeBlocked()
         {
-            ResetMoveState();
-
-            if (_isRegistered)
+            Delegate[] listeners = OnBlocked?.GetInvocationList();
+            if (listeners == null) return;
+            for (int i = 0; i < listeners.Length; i++)
             {
-                if (_manager == null || !_manager.IsInitialized)
-                    throw new InvalidOperationException("QueuedPathFollower cannot complete while its manager is uninitialized.");
-                _manager.Unregister(this);
-                _isRegistered = false;
+                try { ((Action<QueuedPathFollower>)listeners[i])(this); }
+                catch (Exception exception) { Debug.LogException(exception, this); }
             }
-
-            OnCompleted?.Invoke(this);
-            _onComplete?.Invoke();
         }
 
-        /// <summary>
-        /// 이동 시작 시 <see cref="ResetMoveState"/>와 대칭으로 호출됩니다.
-        /// </summary>
-        private void PrepareMoveStart()
+        private void InvokeResumed()
         {
-            if (_manager == null || !_manager.IsInitialized)
-                throw new InvalidOperationException("QueuedPathManager must be initialized before movement.");
-            if (!_isRegistered)
+            Delegate[] listeners = OnResumed?.GetInvocationList();
+            if (listeners == null) return;
+            for (int i = 0; i < listeners.Length; i++)
             {
-                _manager.Register(this);
-                _isRegistered = true;
+                try { ((Action<QueuedPathFollower>)listeners[i])(this); }
+                catch (Exception exception) { Debug.LogException(exception, this); }
             }
-            ResetMoveState();
-
-            _isMoving = true;
         }
 
-        /// <summary>
-        /// 이동/정지 시 내부 상태를 초기화합니다. <see cref="PrepareMoveStart"/>와 대칭입니다.
-        /// </summary>
-        private void ResetMoveState()
+        private void InvokeCompleted()
         {
-            _isMoving = false;
-            _isExternallyPaused = false;
-            _isBlocked = false;
-            _isManuallyBlocked = false;
-            _blockTimer = 0f;
-            _speedSmoothSuspended = false;
-            _currentSpeedMultiplier = 1f;
-            _lastCheckedNormalizedTime = -1f;
-        }
-
-        private void ResumeFromBlock()
-        {
-            _isManuallyBlocked = false;
-            _isBlocked = false;
-            _blockTimer = 0f;
-            _speedSmoothSuspended = false;
-
-            _currentSpeedMultiplier = _manager.MinSpeedMultiplier;
-
-            if (!_isExternallyPaused)
-                _pathFollower.ResumeMove();
-            OnResumed?.Invoke(this);
-        }
-
-        private void ValidatePathFollower()
-        {
-            if (_pathFollower == null)
-                throw new InvalidOperationException("PathFollower reference is missing.");
-        }
-
-        private static bool ShouldStartBlocking(float distance, float spacing)
-        {
-            if (!IsFinite(distance) || !IsFinite(spacing) || distance < 0f || spacing < 0f)
-                throw new ArgumentOutOfRangeException(nameof(distance));
-            return distance <= spacing;
-        }
-
-        private static bool ShouldEndBlocking(float distance, float spacing, float hysteresis, float blockTimer)
-            => blockTimer <= 0f && distance > spacing + hysteresis;
-
-        #endregion
-
-
-#if UNITY_EDITOR
-        [ContextMenu("Bind Serialized Field")]
-        private void BindSerializedField()
-        {
-            UnityEditor.Undo.RecordObject(this, "Bind Serialized Field");
-            _pathFollower = GetComponent<PathFollower>();
-            UnityEditor.EditorUtility.SetDirty(this);
-        }
-#endif
-
-        #region IQueuedPathAgent Contract
-
-        IPathFollower IQueuedPathAgent.PathFollower => _pathFollower;
-        UnityEngine.Object IQueuedPathAgent.UnityOwner => this;
-
-        #endregion
-
-
-        #region Provider Start API
-
-        public void StartMove(IPathProvider provider, PathMoveSettings settings, Action onComplete = null)
-        {
-            ThrowIfFaulted();
-            if (!_isInitialized)
-                throw new InvalidOperationException("QueuedPathFollower is not initialized.");
-            if (provider == null)
-                throw new ArgumentNullException(nameof(provider));
-            if (!provider.IsInitialized || !provider.IsReady)
-                throw new InvalidOperationException("Path provider must be initialized and ready.");
-
-            _onComplete = onComplete;
-            PrepareMoveStart();
-
-            if (!(_pathFollower is IPathFollower follower))
-                throw new InvalidOperationException("PathFollower reference does not implement IPathFollower.");
-            try
+            Delegate[] listeners = OnCompleted?.GetInvocationList();
+            if (listeners == null) return;
+            for (int i = 0; i < listeners.Length; i++)
             {
-                follower.StartMove(provider, settings);
+                try { ((Action<QueuedPathFollower>)listeners[i])(this); }
+                catch (Exception exception) { Debug.LogException(exception, this); }
             }
-            catch
-            {
-                if (_isRegistered)
-                {
-                    _manager.Unregister(this);
-                    _isRegistered = false;
-                }
-                ResetMoveState();
-                throw;
-            }
+        }
 
-            _isMoving = true;
+        private void InvokeSpeedChanged(float value)
+        {
+            Delegate[] listeners = OnSpeedChanged?.GetInvocationList();
+            if (listeners == null) return;
+            for (int i = 0; i < listeners.Length; i++)
+            {
+                try { ((Action<QueuedPathFollower, float>)listeners[i])(this, value); }
+                catch (Exception exception) { Debug.LogException(exception, this); }
+            }
         }
 
         private static bool IsFinite(float value)
-            => !float.IsNaN(value) && !float.IsInfinity(value);
-
-        private void ThrowIfFaulted()
         {
-            if (_isFaulted)
-                throw new InvalidOperationException(
-                    "QueuedPathFollower is faulted; call Release before use.",
-                    _fault);
+            return !float.IsNaN(value) && !float.IsInfinity(value);
         }
 
-        #endregion
+        IPathFollower IQueuedPathAgent.PathFollower => _pathFollower;
     }
 }

@@ -16,19 +16,17 @@ namespace Common.FlowField
     }
 
     /// <summary>
-    /// Optional capability exposed by a FlowFieldManager that supports the
-    /// static/dynamic bake selection.  Keeping this separate from the legacy
-    /// controller contract avoids breaking external controller implementations.
+    /// Observable lifecycle of a flow-field provider.  Values are explicit so
+    /// serialized diagnostics and external integrations remain stable.
     /// </summary>
-    public interface IFlowFieldBakeController
+    public enum FlowFieldRuntimeState
     {
-        FlowFieldBakeMode BakeMode { get; }
-
-        /// <summary>
-        /// Requests a full runtime Surface bake.  Static-baked managers accept
-        /// the call but intentionally leave their committed field untouched.
-        /// </summary>
-        void NotifySurfaceDirty();
+        Uninitialized = 0,
+        Building = 1,
+        Ready = 2,
+        Suspended = 3,
+        Faulted = 4,
+        Released = 5,
     }
 
     /// <summary>
@@ -37,11 +35,16 @@ namespace Common.FlowField
     /// </summary>
     public interface IFlowFieldProvider
     {
-        bool IsInitialized { get; }
+        FlowFieldRuntimeState State { get; }
         bool IsReady { get; }
+        bool IsRebuilding { get; }
+        bool IsFaulted { get; }
+        string LastError { get; }
         int Revision { get; }
         event Action FieldChanged;
+        event Action<FlowFieldRuntimeState> StateChanged;
 
+        bool TrySample(Vector3 worldPosition, out FlowFieldSample sample);
         FlowFieldSample Sample(Vector3 worldPosition);
 
         FlowFieldClampResult ClampPositionToGrid(Vector3 worldPosition);
@@ -53,9 +56,11 @@ namespace Common.FlowField
     public interface IFlowFieldController
     {
         bool IsInitialized { get; }
+        FlowFieldBakeMode BakeMode { get; }
         void Init();
-        void Rebuild();
+        void RequestRebuild();
         void Release();
+        void NotifySurfaceDirty();
 
         void SetGoalPosition(Vector3 worldPosition);
         void SetGoalPosition(Vector3 worldPosition, float influenceRadius);
@@ -106,7 +111,7 @@ namespace Common.FlowField
             HasSurface = hasSurface;
         }
 
-        internal static FlowFieldSample Stopped
+        public static FlowFieldSample Stopped
             => new FlowFieldSample(Vector3.zero, 0f, Vector3.zero, false);
     }
 
@@ -121,7 +126,7 @@ namespace Common.FlowField
             SpeedMultiplier = speedMultiplier;
         }
 
-        internal static FlowFieldVectorState Stopped => new FlowFieldVectorState(Vector3.zero, 1f);
+        public static FlowFieldVectorState Stopped => new FlowFieldVectorState(Vector3.zero, 0f);
     }
 
     public readonly struct FlowFieldVectorModifierContext

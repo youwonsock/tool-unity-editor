@@ -18,7 +18,7 @@ namespace Common.FlowField
 
         public static bool BuildEscapeDirections(
             FlowFieldGridSpace grid,
-            FlowFieldSurfaceBakeData surface,
+            FlowFieldSurfaceData surface,
             FlowFieldWorkspace workspace)
         {
             ValidateWorkspace(grid, surface, workspace);
@@ -72,7 +72,7 @@ namespace Common.FlowField
 
         public static bool PrepareGoal(
             FlowFieldGridSpace grid,
-            FlowFieldSurfaceBakeData surface,
+            FlowFieldSurfaceData surface,
             FlowFieldWorkspace workspace,
             int requestedGoalX,
             int requestedGoalZ,
@@ -110,9 +110,10 @@ namespace Common.FlowField
             return true;
         }
 
+
         public static bool BuildGoal(
             FlowFieldGridSpace grid,
-            FlowFieldSurfaceBakeData surface,
+            FlowFieldSurfaceData surface,
             FlowFieldWorkspace workspace,
             int requestedGoalX,
             int requestedGoalZ,
@@ -134,9 +135,10 @@ namespace Common.FlowField
             return true;
         }
 
+
         private static void BuildInfluenceMask(
             FlowFieldGridSpace grid,
-            FlowFieldSurfaceBakeData surface,
+            FlowFieldSurfaceData surface,
             FlowFieldWorkspace workspace,
             int anchorIndex,
             float influenceRadius)
@@ -161,7 +163,7 @@ namespace Common.FlowField
 
         private static void BuildIntegration(
             FlowFieldGridSpace grid,
-            FlowFieldSurfaceBakeData surface,
+            FlowFieldSurfaceData surface,
             FlowFieldWorkspace workspace,
             int goalIndex)
         {
@@ -204,7 +206,7 @@ namespace Common.FlowField
 
         private static void BuildGoalDirections(
             FlowFieldGridSpace grid,
-            FlowFieldSurfaceBakeData surface,
+            FlowFieldSurfaceData surface,
             FlowFieldWorkspace workspace,
             int goalIndex)
         {
@@ -303,14 +305,12 @@ namespace Common.FlowField
 
         private static void ValidateWorkspace(
             FlowFieldGridSpace grid,
-            FlowFieldSurfaceBakeData surface,
+            FlowFieldSurfaceData surface,
             FlowFieldWorkspace workspace)
         {
             if (!grid.IsValid)
                 throw new ArgumentException("FlowField solver requires a valid grid.", nameof(grid));
-            if (surface == null)
-                throw new ArgumentNullException(nameof(surface));
-            if (!surface.HasValidData)
+            if (surface == null || !surface.IsValid)
                 throw new ArgumentException("FlowField solver requires a valid surface bake.", nameof(surface));
             if (workspace == null)
                 throw new ArgumentNullException(nameof(workspace));
@@ -328,14 +328,12 @@ namespace Common.FlowField
 
         public static void BuildTopologyMasks(
             FlowFieldGridSpace grid,
-            FlowFieldSurfaceBakeData surface,
+            FlowFieldSurfaceData surface,
             FlowFieldWorkspace workspace)
         {
             if (!grid.IsValid)
                 throw new System.ArgumentException("Topology mask requires a valid grid.", nameof(grid));
-            if (surface == null)
-                throw new System.ArgumentNullException(nameof(surface));
-            if (!surface.HasValidData)
+            if (surface == null || !surface.IsValid)
                 throw new System.ArgumentException("Topology mask requires a valid surface bake.", nameof(surface));
             if (workspace == null)
                 throw new System.ArgumentNullException(nameof(workspace));
@@ -372,9 +370,31 @@ namespace Common.FlowField
             }
         }
 
+        /// <summary>
+        /// Sets the non-goal NextCell sentinels in the Goal/base stage. Final
+        /// composition only transforms vectors and modifiers; it must never
+        /// rewrite navigation topology.
+        /// </summary>
+        internal static void ApplyNoGoalSentinels(
+            FlowFieldGridSpace grid,
+            FlowFieldSurfaceData surface,
+            FlowFieldWorkspace workspace)
+        {
+            if (!grid.IsValid || surface == null || !surface.IsValid
+                || workspace == null || workspace.Capacity != grid.CellCount)
+                throw new ArgumentException("No-goal sentinel input is invalid.");
+            for (int index = 0; index < grid.CellCount; index++)
+            {
+                workspace.NextCells[index] = !surface.IsSurfaceValid(index)
+                    || workspace.Blocked[index]
+                    ? -2
+                    : -1;
+            }
+        }
+
         public static int FindNearestSurfaceAnchor(
             FlowFieldGridSpace grid,
-            FlowFieldSurfaceBakeData surface,
+            FlowFieldSurfaceData surface,
             int requestedGoalX,
             int requestedGoalZ)
         {
@@ -406,7 +426,7 @@ namespace Common.FlowField
 
         public static int FindNearestWalkableGoal(
             FlowFieldGridSpace grid,
-            FlowFieldSurfaceBakeData surface,
+            FlowFieldSurfaceData surface,
             FlowFieldWorkspace workspace,
             int anchorIndex,
             bool useDistanceTieEpsilon)
@@ -442,7 +462,7 @@ namespace Common.FlowField
 
         public static bool CanTraverse(
             FlowFieldGridSpace grid,
-            FlowFieldSurfaceBakeData surface,
+            FlowFieldSurfaceData surface,
             FlowFieldWorkspace workspace,
             int current,
             int currentX,
@@ -479,7 +499,7 @@ namespace Common.FlowField
         }
 
         public static bool IsCellTraversable(
-            FlowFieldSurfaceBakeData surface,
+            FlowFieldSurfaceData surface,
             FlowFieldWorkspace workspace,
             int index)
             => index >= 0

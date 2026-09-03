@@ -110,7 +110,7 @@ namespace Common.FlowField
         public void ManagedSolverUsesGoalAlignedPredecessorsAndStrictlyDecreasingCosts()
         {
             FlowFieldGridSpace grid = FlowFieldGridSpace.FromCellGrid(Vector3.zero, 9, 9, 1f);
-            FlowFieldSurfaceBakeData surface = CreateFlatSurface(grid, allowDiagonals: true);
+            FlowFieldSurfaceData surface = CreateFlatSurface(grid, allowDiagonals: true);
             var workspace = new FlowFieldWorkspace();
             workspace.Resize(grid.CellCount);
 
@@ -143,7 +143,6 @@ namespace Common.FlowField
             finally
             {
                 workspace.Release();
-                UnityEngine.Object.DestroyImmediate(surface);
             }
         }
 
@@ -151,7 +150,7 @@ namespace Common.FlowField
         public void ManagedSolverUsesFlatIndexOnlyWhenGoalScoresTie()
         {
             FlowFieldGridSpace grid = FlowFieldGridSpace.FromCellGrid(Vector3.zero, 5, 5, 1f);
-            FlowFieldSurfaceBakeData surface = CreateFlatSurface(grid, allowDiagonals: false);
+            FlowFieldSurfaceData surface = CreateFlatSurface(grid, allowDiagonals: false);
             var workspace = new FlowFieldWorkspace();
             workspace.Resize(grid.CellCount);
 
@@ -173,7 +172,6 @@ namespace Common.FlowField
             finally
             {
                 workspace.Release();
-                UnityEngine.Object.DestroyImmediate(surface);
             }
         }
 
@@ -205,7 +203,7 @@ namespace Common.FlowField
         public void BlockedRequestedGoalUsesTheResolvedGoalForSelection()
         {
             FlowFieldGridSpace grid = FlowFieldGridSpace.FromCellGrid(Vector3.zero, 5, 5, 1f);
-            FlowFieldSurfaceBakeData surface = CreateFlatSurface(grid, allowDiagonals: true);
+            FlowFieldSurfaceData surface = CreateFlatSurface(grid, allowDiagonals: true);
             var workspace = new FlowFieldWorkspace();
             workspace.Resize(grid.CellCount);
             int requestedGoal = grid.ToFlatIndex(4, 4);
@@ -223,7 +221,32 @@ namespace Common.FlowField
             finally
             {
                 workspace.Release();
-                UnityEngine.Object.DestroyImmediate(surface);
+            }
+        }
+
+        [Test]
+        public void UnevenSurfaceKeepsAProjectedVerticalComponent()
+        {
+            FlowFieldGridSpace grid = FlowFieldGridSpace.FromCellGrid(Vector3.zero, 3, 3, 1f);
+            FlowFieldSurfaceData surface = CreateUnevenSurface(grid);
+            var workspace = new FlowFieldWorkspace();
+            workspace.Resize(grid.CellCount);
+
+            try
+            {
+                Assert.That(
+                    FlowFieldSolver.BuildGoal(grid, surface, workspace, 2, 2, 0f, out int goalIndex),
+                    Is.True);
+
+                int start = grid.ToFlatIndex(0, 0);
+                Assert.That(workspace.NextCells[start], Is.GreaterThanOrEqualTo(0));
+                Assert.That(Mathf.Abs(workspace.GoalDirections[start].y), Is.GreaterThan(0.0001f));
+                Assert.That(workspace.GoalDirections[start].sqrMagnitude, Is.EqualTo(1f).Within(0.0001f));
+                Assert.That(workspace.NextCells[goalIndex], Is.EqualTo(goalIndex));
+            }
+            finally
+            {
+                workspace.Release();
             }
         }
 
@@ -231,7 +254,7 @@ namespace Common.FlowField
         public void StaticBakeRejectsThePreviousDirectionFormat()
         {
             FlowFieldGridSpace grid = FlowFieldGridSpace.FromCellGrid(Vector3.zero, 3, 3, 1f);
-            FlowFieldSurfaceBakeData surface = CreateFlatSurface(grid, allowDiagonals: true);
+            FlowFieldSurfaceData surface = CreateFlatSurface(grid, allowDiagonals: true);
             var workspace = new FlowFieldWorkspace();
             workspace.Resize(grid.CellCount);
             var staticBake = ScriptableObject.CreateInstance<FlowFieldStaticBakeData>();
@@ -274,7 +297,6 @@ namespace Common.FlowField
             {
                 workspace.Release();
                 UnityEngine.Object.DestroyImmediate(staticBake);
-                UnityEngine.Object.DestroyImmediate(surface);
             }
         }
 
@@ -289,7 +311,7 @@ namespace Common.FlowField
                 Assert.Fail("FlowFieldFrontier compute shader is missing.");
 
             FlowFieldGridSpace grid = FlowFieldGridSpace.FromCellGrid(Vector3.zero, 9, 9, 1f);
-            FlowFieldSurfaceBakeData surface = CreateFlatSurface(grid, allowDiagonals: true);
+            FlowFieldSurfaceData surface = CreateUnevenSurface(grid);
             var gpuWorkspace = new FlowFieldWorkspace();
             var managedWorkspace = new FlowFieldWorkspace();
             gpuWorkspace.Resize(grid.CellCount);
@@ -353,11 +375,10 @@ namespace Common.FlowField
                 pipeline?.Dispose();
                 gpuWorkspace.Release();
                 managedWorkspace.Release();
-                UnityEngine.Object.DestroyImmediate(surface);
             }
         }
 
-        private static FlowFieldSurfaceBakeData CreateFlatSurface(
+        private static FlowFieldSurfaceData CreateFlatSurface(
             FlowFieldGridSpace grid,
             bool allowDiagonals)
         {
@@ -390,12 +411,42 @@ namespace Common.FlowField
                     grid.Origin.y,
                     grid.Origin.z + grid.WorldSizeZ * 0.5f),
                 new Vector3(grid.WorldSizeX, 10f, grid.WorldSizeZ));
-            var surface = ScriptableObject.CreateInstance<FlowFieldSurfaceBakeData>();
-            surface.hideFlags = HideFlags.HideAndDontSave;
-            surface.Apply(
+            return FlowFieldSurfaceData.FromRuntime(
                 new FlowFieldSurfaceBakeSettings(grid, bounds, (LayerMask)1, 45f, 10f),
-                result);
-            return surface;
+                result,
+                1);
+        }
+
+        private static FlowFieldSurfaceData CreateUnevenSurface(FlowFieldGridSpace grid)
+        {
+            var result = new FlowFieldSurfaceBakeResult(grid.CellCount);
+            Vector3 normal = new Vector3(-0.35f, 1f, -0.2f).normalized;
+            for (int z = 0; z < grid.Depth; z++)
+            {
+                for (int x = 0; x < grid.Width; x++)
+                {
+                    int index = grid.ToFlatIndex(x, z);
+                    result.SetSurface(index, x * 0.35f + z * 0.2f, normal);
+                    byte mask = 0;
+                    for (int direction = 0; direction < FlowFieldNeighborUtility.Count; direction++)
+                    {
+                        int nx = x + FlowFieldNeighborUtility.DeltaX[direction];
+                        int nz = z + FlowFieldNeighborUtility.DeltaZ[direction];
+                        if (grid.IsLocalInBounds(nx, nz))
+                            mask |= (byte)(1 << direction);
+                    }
+
+                    result.NeighborMasks[index] = mask;
+                }
+            }
+
+            Bounds bounds = new Bounds(
+                new Vector3(grid.WorldSizeX * 0.5f, 0f, grid.WorldSizeZ * 0.5f),
+                new Vector3(grid.WorldSizeX, 10f, grid.WorldSizeZ));
+            return FlowFieldSurfaceData.FromRuntime(
+                new FlowFieldSurfaceBakeSettings(grid, bounds, (LayerMask)1, 45f, 10f),
+                result,
+                1);
         }
     }
 }

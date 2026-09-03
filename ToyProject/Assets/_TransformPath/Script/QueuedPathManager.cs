@@ -5,165 +5,80 @@ using UnityEngine;
 namespace Common.TransformPath
 {
     /// <summary>
-    /// 같은 경로 위의 QueuedPathFollower들을 관리하고 충돌 감지를 수행하는 매니저
+    /// Concrete queue coordinator. The entry list and index dictionary are the
+    /// only source of truth; constraints are calculated once before followers
+    /// tick for the frame.
     /// </summary>
-    // MultiPathData (-200) must complete its Init before the queue validates it.
     [DefaultExecutionOrder(-180)]
-    public class QueuedPathManager : MonoBehaviour, IPathQueue
+    public sealed class QueuedPathManager : MonoBehaviour
     {
-        #region Constants
-
-        private const float MIN_SPACING = 0f;
-        private const float MIN_SLOWDOWN_START_DISTANCE = 0f;
-        private const float MIN_SPEED_MULTIPLIER = 0f;
-        private const float MAX_SPEED_MULTIPLIER = 1f;
         private const float DEFAULT_SPACING = 1.5f;
         private const float DEFAULT_SLOWDOWN_START_DISTANCE = 3f;
         private const float DEFAULT_MIN_SPEED_MULTIPLIER = 0.1f;
 
-        #endregion
+        [Header("Route")]
+        [SerializeField] private MonoBehaviour _routeProviderObject;
 
+        [Header("Spacing")]
+        [SerializeField, Min(0f)] private float _defaultSpacing = DEFAULT_SPACING;
 
-        #region Queue Manager State
-
-        [Header("간격 설정")]
-        [SerializeField] private float _defaultSpacing = DEFAULT_SPACING;
-
-        [Header("감속 설정")]
+        [Header("Slowdown")]
         [SerializeField] private bool _enableGradualSlowdown = true;
-        [SerializeField] private float _slowdownStartDistance = DEFAULT_SLOWDOWN_START_DISTANCE;
-        [SerializeField] private float _minSpeedMultiplier = DEFAULT_MIN_SPEED_MULTIPLIER;
-        [SerializeField] private AnimationCurve _slowdownCurve = AnimationCurve.Linear(0, 0, 1, 1);
+        [SerializeField, Min(0f)] private float _slowdownStartDistance = DEFAULT_SLOWDOWN_START_DISTANCE;
+        [SerializeField, Range(0f, 1f)] private float _minSpeedMultiplier = DEFAULT_MIN_SPEED_MULTIPLIER;
+        [SerializeField] private AnimationCurve _slowdownCurve = null;
 
-        [Header("경로 데이터")]
-        [SerializeField] private MultiPathData _multiPathData;
+        private readonly List<QueueEntry> _entries = new List<QueueEntry>(100);
+        private readonly Dictionary<IQueuedPathAgent, int> _indices = new Dictionary<IQueuedPathAgent, int>(100);
+        private readonly Dictionary<IQueuedPathAgent, PathQueueState> _states = new Dictionary<IQueuedPathAgent, PathQueueState>(100);
+        private readonly List<IPathProvider> _routeStructureProviders = new List<IPathProvider>();
+        private readonly List<EPathMoveType> _routeStructureMoveTypes = new List<EPathMoveType>();
+        private readonly List<float> _routeStructureValues = new List<float>();
+        private readonly List<AnimationCurve> _routeStructureCurves = new List<AnimationCurve>();
 
-        // GlobalNormalizedTime 기준 정렬된 리스트 (값이 클수록 앞에 있음)
-        private readonly List<QueuedPathFollower> _followers = new List<QueuedPathFollower>();
-        private readonly HashSet<QueuedPathFollower> _followerSet = new HashSet<QueuedPathFollower>();
-        private readonly Dictionary<QueuedPathFollower, int> _followerIndexCache = new Dictionary<QueuedPathFollower, int>();
-        private bool _needsSort = false;
+        private IPathProvider _routeProvider;
         private bool _isInitialized;
-        private bool _isFaulted;
-        private System.Exception _fault;
+        private bool _awaitingFollowerSnapshots;
+        private int _observedRouteRevision = -1;
+        private int _routeRevision;
+        private int _registrationSequence;
 
-        #endregion
-
-
-        #region Queue Manager Properties
-
+        public bool IsInitialized => _isInitialized;
+        public IPathProvider RouteProvider => _routeProvider;
+        public int RouteRevision => _routeRevision;
+        public int AgentCount => _entries.Count;
         public float DefaultSpacing
         {
-            get
-            {
-                ThrowIfUsable();
-                return _defaultSpacing;
-            }
+            get => _defaultSpacing;
             set
             {
-                ThrowIfFaulted();
-                if (!IsFinite(value) || value < MIN_SPACING)
-                    throw new ArgumentOutOfRangeException(nameof(value));
+                ValidateNonNegative(value, nameof(value));
                 _defaultSpacing = value;
             }
         }
         public bool EnableGradualSlowdown
         {
-            get
-            {
-                ThrowIfFaulted();
-                return _enableGradualSlowdown;
-            }
-            set
-            {
-                ThrowIfFaulted();
-                _enableGradualSlowdown = value;
-            }
+            get => _enableGradualSlowdown;
+            set => _enableGradualSlowdown = value;
         }
         public float SlowdownStartDistance
         {
-            get
-            {
-                ThrowIfUsable();
-                return _slowdownStartDistance;
-            }
+            get => _slowdownStartDistance;
             set
             {
-                ThrowIfFaulted();
-                if (!IsFinite(value) || value < MIN_SLOWDOWN_START_DISTANCE)
-                    throw new ArgumentOutOfRangeException(nameof(value));
+                ValidateNonNegative(value, nameof(value));
                 _slowdownStartDistance = value;
             }
         }
         public float MinSpeedMultiplier
         {
-            get
-            {
-                ThrowIfUsable();
-                return _minSpeedMultiplier;
-            }
+            get => _minSpeedMultiplier;
             set
             {
-                ThrowIfFaulted();
-                if (!IsFinite(value) || value < MIN_SPEED_MULTIPLIER || value > MAX_SPEED_MULTIPLIER)
+                if (!IsFinite(value) || value < 0f || value > 1f)
                     throw new ArgumentOutOfRangeException(nameof(value));
                 _minSpeedMultiplier = value;
             }
-        }
-        public int FollowerCount
-        {
-            get
-            {
-                ThrowIfUsable();
-                return _followers.Count;
-            }
-        }
-
-        public IReadOnlyList<QueuedPathFollower> Followers
-        {
-            get
-            {
-                ThrowIfUsable();
-                return _followers;
-            }
-        }
-
-        public MultiPathData MultiPathData
-        {
-            get
-            {
-                ThrowIfFaulted();
-                return _multiPathData;
-            }
-            set
-            {
-                ThrowIfFaulted();
-                _multiPathData = value;
-            }
-        }
-
-        /// <summary>
-        /// 전체 경로 길이
-        /// </summary>
-        public float TotalPathLength
-        {
-            get
-            {
-                ThrowIfUsable();
-                if (_multiPathData == null)
-                    throw new InvalidOperationException("QueuedPathManager requires a MultiPathData reference.");
-                return _multiPathData.PathLength;
-            }
-        }
-
-        #endregion
-
-
-        #region Unity Events
-
-        private void OnValidate()
-        {
-            // Invalid values are reported by Init; serialized values are never rewritten here.
         }
 
         private void Awake()
@@ -172,475 +87,333 @@ namespace Common.TransformPath
                 Init();
         }
 
-        private void OnDestroy()
-        {
-            if (_isInitialized || _isFaulted)
-                Release();
-        }
-
         private void Update()
         {
-            ThrowIfUsable();
-            if (!_isInitialized)
-                throw new InvalidOperationException("QueuedPathManager is not initialized.");
-            _queueRegistry.Sort();
-            if (_needsSort)
+            if (!_isInitialized || _routeProvider == null)
+                return;
+            if (!_routeProvider.IsReady)
             {
-                SortFollowers();
-                _needsSort = false;
+                StopAllAgents();
+                return;
             }
-        }
 
-        #endregion
+            if (_routeProvider.Revision != _observedRouteRevision)
+                RefreshRouteRevision();
 
+            for (int i = 0; i < _entries.Count; i++)
+                _entries[i].Progress = Mathf.Clamp01(_entries[i].Agent.GlobalNormalizedTime);
+            _entries.Sort(QueueEntryComparer.Instance);
+            _indices.Clear();
+            for (int i = 0; i < _entries.Count; i++)
+                _indices[_entries[i].Agent] = i;
 
-        #region Queue Manager API
-
-        /// <summary>
-        /// Follower를 매니저에 등록합니다.
-        /// </summary>
-        public void Register(QueuedPathFollower follower)
-        {
-            ThrowIfUsable();
-            if (follower == null)
-                throw new ArgumentNullException(nameof(follower));
-
-            if (!_followerSet.Add(follower))
-                throw new InvalidOperationException("Follower is already registered.");
-
-            int index = _followers.Count;
-            _followers.Add(follower);
-            _followerIndexCache[follower] = index;
-            _queueRegistry.Register(follower);
-            _needsSort = true;
-        }
-
-        /// <summary>
-        /// Follower를 매니저에서 해제합니다.
-        /// </summary>
-        public void Unregister(QueuedPathFollower follower)
-        {
-            ThrowIfUsable();
-            if (follower == null)
-                throw new ArgumentNullException(nameof(follower));
-
-            if (!_followerIndexCache.TryGetValue(follower, out int index))
-                throw new InvalidOperationException("Follower is not registered.");
-
-            int lastIndex = _followers.Count - 1;
-            if (index < lastIndex)
+            float routeLength = Mathf.Max(_routeProvider.PathLength, 0.001f);
+            for (int i = 0; i < _entries.Count; i++)
             {
-                _followers[index] = _followers[lastIndex];
-                _followerIndexCache[_followers[index]] = index;
+                IQueuedPathAgent agent = _entries[i].Agent;
+                IQueuedPathAgent ahead = i == 0 ? null : _entries[i - 1].Agent;
+                float progress = _entries[i].Progress;
+                float? distance = ahead == null
+                    ? (float?)null
+                    : Mathf.Max(0f, ( _entries[i - 1].Progress - progress) * routeLength);
+                float spacing = GetSpacing(agent);
+                bool revisionBlocked = _awaitingFollowerSnapshots && agent.SnapshotRevision != _routeRevision;
+                bool spacingBlocked = distance.HasValue && distance.Value <= spacing;
+                bool blocked = revisionBlocked || spacingBlocked;
+                float multiplier = CalculateSpeedMultiplier(agent, distance, spacing);
+                float maxProgress = ahead == null
+                    ? 1f
+                    : Mathf.Clamp01(_entries[i - 1].Progress - spacing / routeLength);
+
+                PathQueueState state = new PathQueueState(
+                    ahead,
+                    distance,
+                    blocked,
+                    multiplier,
+                    maxProgress,
+                    _routeRevision);
+                _states[agent] = state;
+                agent.ApplyQueueState(state);
             }
-            _followers.RemoveAt(lastIndex);
 
-            _followerSet.Remove(follower);
-            _followerIndexCache.Remove(follower);
-            _queueRegistry.Unregister(follower);
-            _needsSort = true;
+            if (_awaitingFollowerSnapshots && AllSnapshotsCurrent())
+                _awaitingFollowerSnapshots = false;
         }
 
-        /// <summary>
-        /// 지정한 Follower의 바로 앞에 있는 Follower를 반환합니다.
-        /// </summary>
-        public QueuedPathFollower GetFollowerAhead(QueuedPathFollower follower)
+        private void OnDestroy()
         {
-            ThrowIfUsable();
-            if (follower == null)
-                throw new ArgumentNullException(nameof(follower));
-
-            if (!_followerIndexCache.TryGetValue(follower, out int index))
-                throw new InvalidOperationException("Follower is not registered.");
-
-            // 리스트는 GlobalNormalizedTime 내림차순 정렬
-            // index가 작을수록 앞에 있음
-            if (index == 0)
-                return null;
-
-            return _followers[index - 1];
+            Release();
         }
-
-        /// <summary>
-        /// 지정한 Follower가 앞 객체에 의해 블로킹되어야 하는지 확인합니다.
-        /// </summary>
-        public bool ShouldBlock(QueuedPathFollower follower)
-        {
-            ThrowIfUsable();
-            if (follower == null)
-                throw new ArgumentNullException(nameof(follower));
-
-            float? distance = GetDistanceToAhead(follower);
-            if (!distance.HasValue)
-                return false;
-
-            float spacing = GetEffectiveSpacing(follower);
-            return ShouldStartBlocking(distance.Value, spacing);
-        }
-
-        /// <summary>
-        /// 지정한 Follower와 앞 객체 사이의 경로 상 거리를 반환합니다.
-        /// 앞 객체가 없으면 null을 반환합니다.
-        /// </summary>
-        public float? GetDistanceToAhead(QueuedPathFollower follower)
-        {
-            ThrowIfUsable();
-            if (follower == null)
-                throw new ArgumentNullException(nameof(follower));
-            QueuedPathFollower ahead = GetFollowerAhead(follower);
-            if (ahead == null)
-                return null;
-
-            return CalculatePathDistance(ahead, follower);
-        }
-
-        /// <summary>
-        /// 앞 객체와의 거리에 따른 속도 배율을 계산합니다.
-        /// </summary>
-        public float GetSpeedMultiplier(QueuedPathFollower follower)
-        {
-            ThrowIfUsable();
-            if (follower == null)
-                throw new ArgumentNullException(nameof(follower));
-            if (!_enableGradualSlowdown)
-                return 1f;
-
-            float? distance = GetDistanceToAhead(follower);
-            if (!distance.HasValue)
-                return 1f;
-
-            float spacing = GetEffectiveSpacing(follower);
-
-            if (distance.Value >= _slowdownStartDistance)
-                return 1f;
-
-            if (distance.Value <= spacing)
-                return 0f;
-
-            // spacing ~ slowdownStartDistance 사이에서 점진적 감속
-            float range = _slowdownStartDistance - spacing;
-            if (range <= 0f)
-                return 1f;
-            if (_slowdownCurve == null || _slowdownCurve.length == 0)
-                throw new InvalidOperationException("QueuedPathManager slowdown curve is not configured.");
-            float normalizedDistance = (distance.Value - spacing) / range;
-            float curveValue = _slowdownCurve.Evaluate(normalizedDistance);
-
-            return Mathf.Lerp(_minSpeedMultiplier, 1f, curveValue);
-        }
-
-        /// <summary>
-        /// 지정한 Follower가 앞 객체를 추월하지 않도록 클램핑된 NormalizedTime을 반환합니다.
-        /// </summary>
-        public float GetClampedNormalizedTime(QueuedPathFollower follower, float targetNormalizedTime)
-        {
-            ThrowIfUsable();
-            if (follower == null)
-                throw new ArgumentNullException(nameof(follower));
-            if (!IsFinite(targetNormalizedTime) || targetNormalizedTime < 0f || targetNormalizedTime > 1f)
-                throw new ArgumentOutOfRangeException(nameof(targetNormalizedTime));
-            QueuedPathFollower ahead = GetFollowerAhead(follower);
-            if (ahead == null)
-                return targetNormalizedTime;
-
-            float spacing = GetEffectiveSpacing(follower);
-            float spacingNormalized = spacing / TotalPathLength;
-
-            float maxNormalizedTime = ahead.GlobalNormalizedTime - spacingNormalized;
-            return Mathf.Clamp01(Mathf.Min(targetNormalizedTime, maxNormalizedTime));
-        }
-
-        /// <summary>
-        /// 정렬이 필요함을 알립니다. (Follower의 위치가 변경된 경우 호출)
-        /// </summary>
-        public void NotifySortNeeded()
-        {
-            ThrowIfUsable();
-            _needsSort = true;
-        }
-
-        /// <summary>
-        /// 모든 Follower를 해제합니다.
-        /// </summary>
-        public void ClearAllFollowers()
-        {
-            ThrowIfUsable();
-            _followers.Clear();
-            _followerSet.Clear();
-            _followerIndexCache.Clear();
-            _queueRegistry.Clear();
-        }
-
-        #endregion
-
-
-        #region Queue Manager Helpers
-
-        /// <summary>
-        /// Follower 리스트를 GlobalNormalizedTime 기준 내림차순으로 정렬합니다.
-        /// </summary>
-        private void SortFollowers()
-        {
-            _followers.Sort(CompareFollowersByGlobalTimeDesc);
-            RebuildIndexCache();
-        }
-
-        private static int CompareFollowersByGlobalTimeDesc(QueuedPathFollower a, QueuedPathFollower b)
-            => b.GlobalNormalizedTime.CompareTo(a.GlobalNormalizedTime);
-
-        /// <summary>
-        /// 인덱스 캐시를 재구축합니다.
-        /// </summary>
-        private void RebuildIndexCache()
-        {
-            _followerIndexCache.Clear();
-
-            for (int i = 0; i < _followers.Count; i++)
-                _followerIndexCache[_followers[i]] = i;
-        }
-
-        /// <summary>
-        /// 두 Follower 간의 경로 상 거리를 계산합니다.
-        /// </summary>
-        private float? CalculatePathDistance(QueuedPathFollower ahead, QueuedPathFollower behind)
-        {
-            if (ahead == null || behind == null)
-                throw new ArgumentNullException(ahead == null ? nameof(ahead) : nameof(behind));
-
-            if (TotalPathLength <= 0f)
-                throw new InvalidOperationException("QueuedPathManager requires a measurable path.");
-
-            float normalizedDiff = ahead.GlobalNormalizedTime - behind.GlobalNormalizedTime;
-
-            if (normalizedDiff < 0f)
-                throw new InvalidOperationException("Queue ordering is stale: the ahead follower is behind the requested follower.");
-
-            return normalizedDiff * TotalPathLength;
-        }
-
-        private float GetEffectiveSpacing(QueuedPathFollower follower)
-        {
-            if (follower == null)
-                throw new ArgumentNullException(nameof(follower));
-            if (follower.UseManagerSpacing)
-                return _defaultSpacing;
-
-            return follower.ActorSpacing;
-        }
-
-        private static bool ShouldStartBlocking(float distance, float spacing)
-        {
-            if (!IsFinite(distance) || !IsFinite(spacing) || distance < 0f || spacing < 0f)
-                throw new ArgumentOutOfRangeException(nameof(distance));
-            return distance <= spacing;
-        }
-
-        #endregion
-
-        #region IPathQueue Contract State
-
-        private readonly PathQueueRegistry _queueRegistry = new PathQueueRegistry();
-
-        #endregion
-
-        public bool IsInitialized => _isInitialized;
-        public bool IsFaulted => _isFaulted;
 
         public void Init()
         {
             if (_isInitialized)
-                throw new InvalidOperationException("QueuedPathManager is already initialized.");
-            if (_isFaulted)
-                throw new InvalidOperationException("QueuedPathManager is faulted; call Release before Init.", _fault);
+                return;
+            ValidateSettings();
+            if (_slowdownCurve == null)
+                _slowdownCurve = AnimationCurve.Linear(0f, 0f, 1f, 1f);
 
-            try
+            _isInitialized = true;
+            if (_routeProviderObject != null)
             {
-                if (!IsFinite(_defaultSpacing) || _defaultSpacing < MIN_SPACING)
-                    throw new ArgumentOutOfRangeException(nameof(_defaultSpacing));
-                if (!IsFinite(_slowdownStartDistance) || _slowdownStartDistance < MIN_SLOWDOWN_START_DISTANCE)
-                    throw new ArgumentOutOfRangeException(nameof(_slowdownStartDistance));
-                if (!IsFinite(_minSpeedMultiplier) || _minSpeedMultiplier < MIN_SPEED_MULTIPLIER || _minSpeedMultiplier > MAX_SPEED_MULTIPLIER)
-                    throw new ArgumentOutOfRangeException(nameof(_minSpeedMultiplier));
-                if (_slowdownCurve == null || _slowdownCurve.length == 0)
-                    throw new ArgumentException("Slowdown curve is required.", nameof(_slowdownCurve));
-                if (_multiPathData == null)
-                    throw new InvalidOperationException("QueuedPathManager requires a MultiPathData reference.");
-                if (!_multiPathData.IsInitialized || !_multiPathData.IsReady)
-                    throw new InvalidOperationException("QueuedPathManager requires an initialized and ready MultiPathData.");
-                if (_multiPathData.PathLength <= 0f)
-                    throw new InvalidOperationException("QueuedPathManager requires a measurable MultiPathData.");
-                _isInitialized = true;
-            }
-            catch (System.Exception exception)
-            {
-                _isInitialized = false;
-                _isFaulted = true;
-                if (_fault == null)
-                    _fault = exception;
-                throw;
+                IPathProvider provider = _routeProviderObject as IPathProvider;
+                if (provider == null)
+                {
+                    Debug.LogError($"QueuedPathManager '{name}' route object does not implement IPathProvider.", this);
+                    return;
+                }
+                if (provider.IsInitialized && provider.IsReady)
+                    ConfigureRoute(provider);
             }
         }
 
         public void Release()
         {
-            if (!_isInitialized && !_isFaulted)
-                throw new InvalidOperationException("QueuedPathManager has not been initialized.");
-            _followers.Clear();
-            _followerSet.Clear();
-            _followerIndexCache.Clear();
-            _queueRegistry.Clear();
-            _needsSort = false;
+            StopAllAgents();
+            if (_routeProvider != null)
+                _routeProvider.PathChanged -= HandleRouteChanged;
+            _routeProvider = null;
+            _routeStructureProviders.Clear();
+            _routeStructureMoveTypes.Clear();
+            _routeStructureValues.Clear();
+            _routeStructureCurves.Clear();
             _isInitialized = false;
-            _isFaulted = false;
-            _fault = null;
+            _observedRouteRevision = -1;
+            _routeRevision = 0;
+            _awaitingFollowerSnapshots = false;
         }
 
-
-        #region IPathQueue Contract
-
-        int IPathQueue.AgentCount
+        public void ConfigureRoute(IPathProvider provider)
         {
-            get
-            {
-                ThrowIfUsable();
-                return _queueRegistry.Count;
-            }
-        }
+            if (provider == null)
+                throw new ArgumentNullException(nameof(provider));
+            if (!provider.IsInitialized || !provider.IsReady)
+                throw new InvalidOperationException("Queue route provider must be initialized and ready.");
 
-        #endregion
-
-
-        #region IPathQueue Implementation
-
-        void IPathQueue.Register(IQueuedPathAgent agent)
-        {
-            ThrowIfUsable();
-            if (agent == null)
-                throw new ArgumentNullException(nameof(agent));
-            if (agent is QueuedPathFollower concreteFollower)
-            {
-                Register(concreteFollower);
+            if (ReferenceEquals(_routeProvider, provider))
                 return;
-            }
 
-            _queueRegistry.Register(agent);
-        }
-
-        void IPathQueue.Unregister(IQueuedPathAgent agent)
-        {
-            ThrowIfUsable();
-            if (agent == null)
-                throw new ArgumentNullException(nameof(agent));
-            if (agent is QueuedPathFollower concreteFollower)
+            if (_routeProvider != null)
             {
-                Unregister(concreteFollower);
-                return;
+                _routeProvider.PathChanged -= HandleRouteChanged;
+                StopAllAgents();
             }
-
-            _queueRegistry.Unregister(agent);
+            _routeProvider = provider;
+            _routeProvider.PathChanged += HandleRouteChanged;
+            _routeRevision = provider.Revision;
+            _observedRouteRevision = provider.Revision;
+            CaptureRouteStructure();
+            _awaitingFollowerSnapshots = false;
         }
 
-        bool IPathQueue.ShouldBlock(IQueuedPathAgent agent)
+        public IQueuedPathAgent GetAgent(int orderedIndex)
         {
-            ThrowIfUsable();
-            if (agent == null)
-                throw new ArgumentNullException(nameof(agent));
-            float? distance = ((IPathQueue)this).GetDistanceToAhead(agent);
-            return distance.HasValue && ShouldStartBlocking(distance.Value, GetEffectiveSpacing(agent));
+            if (orderedIndex < 0 || orderedIndex >= _entries.Count)
+                throw new ArgumentOutOfRangeException(nameof(orderedIndex));
+            return _entries[orderedIndex].Agent;
         }
 
-        float? IPathQueue.GetDistanceToAhead(IQueuedPathAgent agent)
+        public bool Register(IQueuedPathAgent agent)
         {
-            ThrowIfUsable();
+            if (!_isInitialized)
+                throw new InvalidOperationException("QueuedPathManager is not initialized.");
             if (agent == null)
                 throw new ArgumentNullException(nameof(agent));
-            IQueuedPathAgent ahead = _queueRegistry.GetAhead(agent);
-            if (ahead == null)
-                return null;
+            if (_routeProvider == null || !ReferenceEquals(agent.QueueProvider, _routeProvider))
+                throw new InvalidOperationException("Queue agent and manager must use the same route provider instance.");
+            if (_indices.ContainsKey(agent))
+                return false;
 
-            float normalizedDifference = ahead.GlobalNormalizedTime - agent.GlobalNormalizedTime;
-            if (normalizedDifference < 0f)
-                throw new InvalidOperationException("Queue ordering is stale: the ahead agent is behind the requested agent.");
-            return normalizedDifference * TotalPathLength;
+            _entries.Add(new QueueEntry(agent, _registrationSequence++));
+            _indices[agent] = _entries.Count - 1;
+            return true;
         }
 
-        float IPathQueue.GetSpeedMultiplier(IQueuedPathAgent agent)
+        public bool Unregister(IQueuedPathAgent agent)
         {
-            ThrowIfUsable();
             if (agent == null)
-                throw new ArgumentNullException(nameof(agent));
-            if (!_enableGradualSlowdown || !agent.EnableGradualSlowdown)
-                return 1f;
+                return false;
+            if (!_indices.TryGetValue(agent, out int index))
+                return false;
 
-            float? distance = ((IPathQueue)this).GetDistanceToAhead(agent);
-            if (!distance.HasValue)
-                return 1f;
+            int last = _entries.Count - 1;
+            if (index != last)
+                _entries[index] = _entries[last];
+            _entries.RemoveAt(last);
+            _indices.Remove(agent);
+            _states.Remove(agent);
+            if (index != last)
+                _indices[_entries[index].Agent] = index;
+            return true;
+        }
 
-            float spacing = GetEffectiveSpacing(agent);
-            if (distance.Value >= _slowdownStartDistance)
+        public bool TryGetState(IQueuedPathAgent agent, out PathQueueState state)
+        {
+            if (agent != null && _states.TryGetValue(agent, out state))
+                return true;
+            state = default(PathQueueState);
+            return false;
+        }
+
+        private void HandleRouteChanged()
+        {
+            // The revision is consumed in Update so followers are constrained
+            // before they tick in the next frame.
+            _observedRouteRevision = -1;
+        }
+
+        private void RefreshRouteRevision()
+        {
+            bool sameStructure = IsSameRouteStructure();
+            _routeRevision = _routeProvider.Revision;
+            _observedRouteRevision = _routeProvider.Revision;
+            if (!sameStructure)
+            {
+                StopAllAgents();
+                CaptureRouteStructure();
+                _awaitingFollowerSnapshots = false;
+            }
+            else
+            {
+                CaptureRouteStructure();
+                _awaitingFollowerSnapshots = true;
+            }
+        }
+
+        private bool IsSameRouteStructure()
+        {
+            int count = GetRouteSegmentCount(_routeProvider);
+            if (count != _routeStructureProviders.Count)
+                return false;
+            for (int i = 0; i < count; i++)
+            {
+                PathSegmentDescriptor descriptor = GetRouteSegment(_routeProvider, i);
+                if (!ReferenceEquals(descriptor.Provider, _routeStructureProviders[i])
+                    || descriptor.MoveType != _routeStructureMoveTypes[i]
+                    || !Mathf.Approximately(descriptor.Value, _routeStructureValues[i])
+                    || descriptor.TimeCurve != _routeStructureCurves[i])
+                    return false;
+            }
+            return true;
+        }
+
+        private void CaptureRouteStructure()
+        {
+            _routeStructureProviders.Clear();
+            _routeStructureMoveTypes.Clear();
+            _routeStructureValues.Clear();
+            _routeStructureCurves.Clear();
+            int count = GetRouteSegmentCount(_routeProvider);
+            for (int i = 0; i < count; i++)
+            {
+                PathSegmentDescriptor descriptor = GetRouteSegment(_routeProvider, i);
+                _routeStructureProviders.Add(descriptor.Provider);
+                _routeStructureMoveTypes.Add(descriptor.MoveType);
+                _routeStructureValues.Add(descriptor.Value);
+                _routeStructureCurves.Add(descriptor.TimeCurve);
+            }
+        }
+
+        private bool AllSnapshotsCurrent()
+        {
+            for (int i = 0; i < _entries.Count; i++)
+            {
+                if (_entries[i].Agent.SnapshotRevision != _routeRevision)
+                    return false;
+            }
+            return true;
+        }
+
+        private float CalculateSpeedMultiplier(IQueuedPathAgent agent, float? distance, float spacing)
+        {
+            QueuedPathFollower concrete = agent as QueuedPathFollower;
+            if (!_enableGradualSlowdown || (concrete != null && !concrete.EnableGradualSlowdown) || !distance.HasValue)
                 return 1f;
             if (distance.Value <= spacing)
                 return 0f;
-
-            float range = _slowdownStartDistance - spacing;
-            if (range <= 0f)
+            if (distance.Value >= _slowdownStartDistance || _slowdownStartDistance <= spacing)
                 return 1f;
-            if (_slowdownCurve == null || _slowdownCurve.length == 0)
-                throw new InvalidOperationException("QueuedPathManager slowdown curve is not configured.");
-
-            float normalizedDistance = (distance.Value - spacing) / range;
-            float curveValue = _slowdownCurve.Evaluate(normalizedDistance);
-            return UnityEngine.Mathf.Lerp(_minSpeedMultiplier, 1f, curveValue);
+            float t = Mathf.Clamp01((distance.Value - spacing) / (_slowdownStartDistance - spacing));
+            float curveValue = _slowdownCurve == null ? t : Mathf.Clamp01(_slowdownCurve.Evaluate(t));
+            return Mathf.Lerp(_minSpeedMultiplier, 1f, curveValue);
         }
 
-        float IPathQueue.GetClampedNormalizedTime(IQueuedPathAgent agent, float targetNormalizedTime)
+        private float GetSpacing(IQueuedPathAgent agent)
         {
-            ThrowIfUsable();
-            if (agent == null)
-                throw new ArgumentNullException(nameof(agent));
-            if (!IsFinite(targetNormalizedTime) || targetNormalizedTime < 0f || targetNormalizedTime > 1f)
-                throw new ArgumentOutOfRangeException(nameof(targetNormalizedTime));
-            IQueuedPathAgent ahead = _queueRegistry.GetAhead(agent);
-            if (ahead == null)
-                return targetNormalizedTime;
-
-            float spacingNormalized = GetEffectiveSpacing(agent) / TotalPathLength;
-            float maxNormalizedTime = ahead.GlobalNormalizedTime - spacingNormalized;
-            return UnityEngine.Mathf.Clamp01(UnityEngine.Mathf.Min(targetNormalizedTime, maxNormalizedTime));
+            QueuedPathFollower concrete = agent as QueuedPathFollower;
+            return concrete == null || concrete.UseManagerSpacing ? _defaultSpacing : concrete.ActorSpacing;
         }
 
-        void IPathQueue.NotifySortNeeded()
+        private static int GetRouteSegmentCount(IPathProvider provider)
         {
-            ThrowIfUsable();
-            _queueRegistry.NotifySortNeeded();
-            NotifySortNeeded();
+            IPathSequenceProvider sequence = provider as IPathSequenceProvider;
+            return sequence == null ? 1 : sequence.SegmentCount;
         }
 
-        #endregion
+        private static PathSegmentDescriptor GetRouteSegment(IPathProvider provider, int index)
+        {
+            IPathSequenceProvider sequence = provider as IPathSequenceProvider;
+            if (sequence != null)
+                return sequence.GetSegment(index);
+            return new PathSegmentDescriptor(provider, EPathMoveType.SpeedBased, 1f, null);
+        }
 
+        private void StopAllAgents()
+        {
+            for (int i = _entries.Count - 1; i >= 0; i--)
+            {
+                IQueuedPathAgent agent = _entries[i].Agent;
+                agent.PathFollower?.StopMove();
+                QueuedPathFollower concrete = agent as QueuedPathFollower;
+                if (concrete != null)
+                    concrete.MarkUnregisteredByManager();
+            }
+            _entries.Clear();
+            _indices.Clear();
+            _states.Clear();
+        }
 
-        #region IPathQueue Helpers
+        private void ValidateSettings()
+        {
+            ValidateNonNegative(_defaultSpacing, nameof(_defaultSpacing));
+            ValidateNonNegative(_slowdownStartDistance, nameof(_slowdownStartDistance));
+            if (!IsFinite(_minSpeedMultiplier) || _minSpeedMultiplier < 0f || _minSpeedMultiplier > 1f)
+                throw new ArgumentOutOfRangeException(nameof(_minSpeedMultiplier));
+        }
 
-        private float GetEffectiveSpacing(IQueuedPathAgent agent)
-            => agent.UseManagerSpacing ? _defaultSpacing : agent.ActorSpacing;
+        private static void ValidateNonNegative(float value, string parameterName)
+        {
+            if (!IsFinite(value) || value < 0f)
+                throw new ArgumentOutOfRangeException(parameterName);
+        }
 
         private static bool IsFinite(float value)
-            => !float.IsNaN(value) && !float.IsInfinity(value);
-
-        private void ThrowIfUsable()
         {
-            if (_isFaulted)
-                throw new InvalidOperationException("QueuedPathManager is faulted; call Release before use.", _fault);
-            if (!_isInitialized)
-                throw new InvalidOperationException("QueuedPathManager is not initialized.");
+            return !float.IsNaN(value) && !float.IsInfinity(value);
         }
 
-        private void ThrowIfFaulted()
+        private sealed class QueueEntry
         {
-            if (_isFaulted)
-                throw new InvalidOperationException("QueuedPathManager is faulted; call Release before use.", _fault);
+            public readonly IQueuedPathAgent Agent;
+            public readonly int RegistrationSequence;
+            public float Progress;
+
+            public QueueEntry(IQueuedPathAgent agent, int registrationSequence)
+            {
+                Agent = agent;
+                RegistrationSequence = registrationSequence;
+            }
         }
 
-        #endregion
+        private sealed class QueueEntryComparer : IComparer<QueueEntry>
+        {
+            public static readonly QueueEntryComparer Instance = new QueueEntryComparer();
+
+            public int Compare(QueueEntry left, QueueEntry right)
+            {
+                int progress = right.Progress.CompareTo(left.Progress);
+                return progress != 0 ? progress : left.RegistrationSequence.CompareTo(right.RegistrationSequence);
+            }
+        }
     }
 }

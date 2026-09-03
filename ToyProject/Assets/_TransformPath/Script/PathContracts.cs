@@ -1,54 +1,124 @@
 using System;
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace Common.TransformPath
 {
-    /// <summary>
-    /// 새 Path 계약에서 사용하는 이동 모드입니다.
-    /// </summary>
+    /// <summary>How a follower advances through a path.</summary>
     public enum EPathMoveType
     {
         TimeBased = 0,
         SpeedBased = 1,
     }
 
-    /// <summary>
-    /// PathFollower의 외부에 공개되는 상태입니다.
-    /// </summary>
     public enum EPathFollowerState
     {
-        Stopped = 0,
-        Moving = 1,
-        Paused = 2,
+        Uninitialized = 0,
+        Ready = 1,
+        Moving = 2,
+        Paused = 3,
+        Completed = 4,
     }
 
     /// <summary>
-    /// Provider 주입 이동에 필요한 설정입니다.
+    /// Runtime geometry build settings. Editor preview sampling is deliberately
+    /// not part of the runtime path contract.
     /// </summary>
+    [Serializable]
+    public readonly struct PathBuildSettings
+    {
+        public PathData.ECurveType CurveType { get; }
+        public int SegmentCount { get; }
+
+        public PathBuildSettings(
+            PathData.ECurveType curveType = PathData.ECurveType.Linear,
+            int segmentCount = 500)
+        {
+            CurveType = curveType;
+            SegmentCount = segmentCount;
+        }
+    }
+
+    [Serializable]
     public readonly struct PathMoveSettings
     {
         public EPathMoveType MoveType { get; }
         public float Value { get; }
         public AnimationCurve TimeCurve { get; }
         public bool Loop { get; }
+        public bool PreserveSpeedBetweenSegments { get; }
 
         public PathMoveSettings(
-            EPathMoveType moveType,
-            float value,
+            EPathMoveType moveType = EPathMoveType.TimeBased,
+            float value = 1f,
             AnimationCurve timeCurve = null,
-            bool loop = false)
+            bool loop = false,
+            bool preserveSpeedBetweenSegments = false)
         {
             MoveType = moveType;
             Value = value;
-            TimeCurve = timeCurve;
+            TimeCurve = timeCurve ?? AnimationCurve.Linear(0f, 0f, 1f, 1f);
             Loop = loop;
+            PreserveSpeedBetweenSegments = preserveSpeedBetweenSegments;
+        }
+
+        public static PathMoveSettings Time(float duration, AnimationCurve curve = null, bool loop = false)
+        {
+            return new PathMoveSettings(EPathMoveType.TimeBased, duration, curve, loop);
+        }
+
+        public static PathMoveSettings Speed(float speed, AnimationCurve curve = null, bool loop = false)
+        {
+            return new PathMoveSettings(EPathMoveType.SpeedBased, speed, curve, loop);
+        }
+    }
+
+    public readonly struct PathSequenceSettings
+    {
+        public bool Loop { get; }
+        public bool PreserveSpeedBetweenSegments { get; }
+
+        public PathSequenceSettings(bool loop = false, bool preserveSpeedBetweenSegments = false)
+        {
+            Loop = loop;
+            PreserveSpeedBetweenSegments = preserveSpeedBetweenSegments;
         }
     }
 
     /// <summary>
-    /// Sequence가 외부에 제공하는 하나의 Path 구간입니다.
+    /// Serialized authoring value for one sequence segment.
     /// </summary>
+    [Serializable]
+    public struct PathSegmentConfig
+    {
+        [SerializeField] private PathData _pathData;
+        [SerializeField] private EPathMoveType _moveType;
+        [SerializeField] private float _value;
+        [SerializeField] private AnimationCurve _timeCurve;
+
+        public PathData PathData => _pathData;
+        public EPathMoveType MoveType => _moveType;
+        public float Value => _value;
+        public AnimationCurve TimeCurve => _timeCurve;
+
+        public PathSegmentConfig(
+            PathData pathData,
+            EPathMoveType moveType = EPathMoveType.TimeBased,
+            float value = 1f,
+            AnimationCurve timeCurve = null)
+        {
+            _pathData = pathData;
+            _moveType = moveType;
+            _value = value;
+            _timeCurve = timeCurve ?? AnimationCurve.Linear(0f, 0f, 1f, 1f);
+        }
+
+        public PathSegmentConfig WithPathData(PathData pathData)
+        {
+            return new PathSegmentConfig(pathData, _moveType, _value, _timeCurve);
+        }
+    }
+
+    /// <summary>Legacy-free runtime descriptor used by sequence providers.</summary>
     public readonly struct PathSegmentDescriptor
     {
         public IPathProvider Provider { get; }
@@ -69,9 +139,32 @@ namespace Common.TransformPath
         }
     }
 
-    /// <summary>
-    /// Path를 Pull 방식으로 읽는 최소 계약입니다.
-    /// </summary>
+    public readonly struct PathQueueState
+    {
+        public IQueuedPathAgent Ahead { get; }
+        public float? DistanceToAhead { get; }
+        public bool IsBlocked { get; }
+        public float SpeedMultiplier { get; }
+        public float MaxGlobalNormalizedTime { get; }
+        public int RouteRevision { get; }
+
+        public PathQueueState(
+            IQueuedPathAgent ahead,
+            float? distanceToAhead,
+            bool isBlocked,
+            float speedMultiplier,
+            float maxGlobalNormalizedTime,
+            int routeRevision)
+        {
+            Ahead = ahead;
+            DistanceToAhead = distanceToAhead;
+            IsBlocked = isBlocked;
+            SpeedMultiplier = speedMultiplier;
+            MaxGlobalNormalizedTime = maxGlobalNormalizedTime;
+            RouteRevision = routeRevision;
+        }
+    }
+
     public interface IPathProvider
     {
         bool IsInitialized { get; }
@@ -84,116 +177,65 @@ namespace Common.TransformPath
         Vector3 SampleDistance(float distance);
     }
 
-    /// <summary>
-    /// Path 재빌드 제어 계약입니다.
-    /// </summary>
-    public interface IPathController
-    {
-        bool IsInitialized { get; }
-        void Init();
-        void Rebuild();
-        void Release();
-    }
-
-    /// <summary>
-    /// 여러 Path를 하나의 순서 있는 Provider로 제공하는 계약입니다.
-    /// </summary>
     public interface IPathSequenceProvider : IPathProvider
     {
         int SegmentCount { get; }
         PathSegmentDescriptor GetSegment(int index);
+        float GetSegmentStartDistance(int index);
+        float GetSegmentLength(int index);
     }
 
-    /// <summary>
-    /// Path 이벤트 목록을 제공하는 선택적 계약입니다.
-    /// </summary>
     public interface IPathEventSource
     {
-        IReadOnlyList<PathEventEntry> PathEvents { get; }
+        int EventCount { get; }
+        PathEventEntry GetEvent(int index);
     }
 
     /// <summary>
-    /// Follower 상태 조회와 이동 제어 계약입니다.
+    /// The complete runtime follower contract. Single paths and sequences use
+    /// the same start, seek, and lifecycle surface.
     /// </summary>
     public interface IPathFollower
     {
         bool IsInitialized { get; }
         IPathProvider CurrentProvider { get; }
+        IPathSequenceProvider CurrentSequence { get; }
         EPathFollowerState State { get; }
-        int StateRevision { get; }
         bool IsMoving { get; }
         float NormalizedTime { get; }
         float GlobalNormalizedTime { get; }
         int CurrentSegmentIndex { get; }
-        EPathMoveType CurrentMoveType { get; }
-        float Speed { get; set; }
-        float Duration { get; set; }
+        EPathMoveType MoveType { get; }
+        float Speed { get; }
+        float Duration { get; }
 
-        event Action StateChanged;
-        event Action SegmentChanged;
+        event Action<EPathFollowerState> StateChanged;
+        event Action<int> SegmentChanged;
         event Action Completed;
 
         void Init();
         void Release();
         void StartMove(IPathProvider provider, PathMoveSettings settings);
+        void StartSequence(IPathSequenceProvider provider, PathSequenceSettings settings);
         void StopMove();
-        void PauseMove(bool pauseAnimation = false);
-        void ResumeMove(bool resumeAnimation = false);
+        void PauseMove();
+        void ResumeMove();
         void Seek(float normalizedTime);
+        void SeekSegment(int segmentIndex, float localNormalizedTime);
     }
 
-    /// <summary>
-    /// Queue에서 관리되는 Agent의 읽기 계약입니다.
-    /// </summary>
     public interface IQueuedPathAgent
     {
         IPathFollower PathFollower { get; }
-        UnityEngine.Object UnityOwner { get; }
+        IPathProvider QueueProvider { get; }
         bool IsMoving { get; }
         float GlobalNormalizedTime { get; }
-        float ActorSpacing { get; }
-        bool UseManagerSpacing { get; }
-        bool EnableGradualSlowdown { get; }
-        bool EnableOvertakeProtection { get; }
+        int SnapshotRevision { get; }
+        void ApplyQueueState(PathQueueState state);
     }
 
-    /// <summary>
-    /// Path Queue의 범용 제어 계약입니다.
-    /// </summary>
-    public interface IPathQueue
-    {
-        bool IsInitialized { get; }
-        int AgentCount { get; }
-        void Init();
-        void Release();
-        void Register(IQueuedPathAgent agent);
-        void Unregister(IQueuedPathAgent agent);
-        bool ShouldBlock(IQueuedPathAgent agent);
-        float? GetDistanceToAhead(IQueuedPathAgent agent);
-        float GetSpeedMultiplier(IQueuedPathAgent agent);
-        float GetClampedNormalizedTime(IQueuedPathAgent agent, float targetNormalizedTime);
-        void NotifySortNeeded();
-    }
-
-    /// <summary>
-    /// 프로젝트 외부에서 Path 이벤트를 수신하기 위한 계약입니다.
-    /// </summary>
     public interface IPathEventReceiver
     {
         void ReceivePathEvent(string eventName, IPathFollower follower);
-    }
-
-    public interface IPathEventSink
-    {
-        void SendPathEvent(string eventName, PathFollower follower);
-    }
-
-    internal static class PathTypeConversion
-    {
-        public static EPathMoveType ToPublic(PathFollower.EMoveType moveType)
-            => (EPathMoveType)(int)moveType;
-
-        public static PathFollower.EMoveType ToInternal(EPathMoveType moveType)
-            => (PathFollower.EMoveType)(int)moveType;
     }
 }

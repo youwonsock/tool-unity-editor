@@ -5,704 +5,371 @@ using UnityEngine;
 namespace Common.TransformPath
 {
     /// <summary>
-    /// 여러 PathData를 하나의 경로처럼 관리하고 사용할 수 있게 해주는 클래스
+    /// A length-indexed sequence of independent PathData providers.
     /// </summary>
     [DefaultExecutionOrder(-200)]
-    public partial class MultiPathData : MonoBehaviour, IPathSequenceProvider, IPathController
+    public sealed class MultiPathData : MonoBehaviour, IPathSequenceProvider
     {
-        #region Inner Classes / Structs
+        [SerializeField] private List<PathSegmentConfig> _segments = new List<PathSegmentConfig>();
 
-        [Serializable]
-        public class PathDataConfig
-        {
-            public PathData PathData;
-            public PathFollower.EMoveType MoveType = PathFollower.EMoveType.TimeBased;
-            public float Value = 1f;
-            public AnimationCurve TimeCurve = AnimationCurve.Linear(0, 0, 1, 1);
-        }
+        private float[] _segmentLengths;
+        private float[] _segmentStartDistances;
+        private int[] _childRevisions;
+        private float _pathLength;
+        private bool _isInitialized;
+        private bool _isDirty;
+        private bool _configurationErrorReported;
+        private int _revision;
+        private readonly List<PathData> _subscribedProviders = new List<PathData>();
+        private readonly List<PathSegmentConfig> _validatedSegments = new List<PathSegmentConfig>();
 
-        #endregion
-
-
-        #region Path Sequence State
-
-        [SerializeField] private List<PathDataConfig> _pathDataConfigs = new List<PathDataConfig>();
-        
-        private float[] _pathLengths;
-        private float[] _cumulativePathLengths;
-        private float _totalPathLength = -1f;
-        private bool _isInitialized = false;
-        private bool _isFaulted = false;
-        private Exception _fault;
-
-        private readonly List<PathDataConfig> _validConfigsScratch = new List<PathDataConfig>();
-        private readonly List<PathData> _validPathsScratch = new List<PathData>();
-
-        #endregion
-
-
-        #region Path Sequence Properties
-
-        /// <summary>
-        /// 관리 중인 PathDataConfig 리스트
-        /// </summary>
-        public IReadOnlyList<PathDataConfig> PathDataConfigs
-        {
-            get
-            {
-                ThrowIfStale();
-                return _pathDataConfigs;
-            }
-        }
-
-        /// <summary>
-        /// 전체 경로의 총 길이
-        /// </summary>
+        public bool IsInitialized => _isInitialized;
+        public bool IsReady => _isInitialized
+            && !_isDirty
+            && _segmentLengths != null
+            && _segmentLengths.Length > 0
+            && !HasChildRevisionChanged();
+        public int Revision => _revision;
         public float PathLength
         {
             get
             {
-                ThrowIfStale();
-                return _totalPathLength;
+                ThrowIfNotReady();
+                return _pathLength;
             }
         }
-
-        /// <summary>
-        /// 관리 중인 PathData 개수
-        /// </summary>
-        public int PathCount
-        {
-            get
-            {
-                ThrowIfStale();
-                return _pathDataConfigs.Count;
-            }
-        }
-
-        #endregion
-
-
-        #region Unity Events
-
-        private void OnValidate()
-        {
-            // Runtime callers use ConfigureSegments/Rebuild explicitly. Unity can
-            // invoke OnValidate while Play Mode is running after serialized data
-            // changes elsewhere in the showcase, which would otherwise leave a
-            // freshly built sequence stale on the next frame.
-            if (!Application.isPlaying && _pathDataConfigs != null)
-                _sequenceDirty = true;
-        }
-
-        #endregion
-
-
-        #region Path Sequence API
-
-        /// <summary>
-        /// MultiPathData를 초기화합니다
-        /// </summary>
-        public void Init()
-        {
-            if (_isInitialized)
-                throw new InvalidOperationException("MultiPathData is already initialized.");
-            if (_isFaulted)
-                throw new InvalidOperationException("MultiPathData is faulted. Call Release before Init.", _fault);
-
-            try
-            {
-                if (_pathDataConfigs == null || _pathDataConfigs.Count == 0)
-                    throw new ArgumentException("MultiPathData requires at least one PathDataConfig.", nameof(_pathDataConfigs));
-
-                BuildFromConfigs(_pathDataConfigs);
-            }
-            catch (Exception exception)
-            {
-                if (_fault == null)
-                    _fault = exception;
-                _isFaulted = true;
-                _isInitialized = false;
-                throw;
-            }
-        }
-
-        /// <summary>
-        /// 외부에서 제공된 PathDataConfig 리스트로 초기화합니다
-        /// </summary>
-        /// <param name="pathDataConfigs">PathDataConfig 리스트</param>
-        public void ConfigureSegments(List<PathDataConfig> pathDataConfigs)
-        {
-            ThrowIfFaulted();
-            if (pathDataConfigs == null)
-                throw new ArgumentNullException(nameof(pathDataConfigs));
-            if (pathDataConfigs.Count == 0)
-                throw new ArgumentException("At least one PathDataConfig is required.", nameof(pathDataConfigs));
-
-            _pathDataConfigs = new List<PathDataConfig>(pathDataConfigs);
-            MarkSequenceDirty();
-        }
-
-        /// <summary>
-        /// 외부에서 제공된 PathData 리스트로 초기화합니다 (기본 설정 사용)
-        /// </summary>
-        /// <param name="pathDataList">PathData 리스트</param>
-        public void ConfigureSegments(List<PathData> pathDataList)
-        {
-            ThrowIfFaulted();
-            if (pathDataList == null)
-                throw new ArgumentNullException(nameof(pathDataList));
-            if (pathDataList.Count == 0)
-                throw new ArgumentException("At least one PathData is required.", nameof(pathDataList));
-
-            List<PathDataConfig> configs = new List<PathDataConfig>();
-            foreach (PathData pathData in pathDataList)
-            {
-                if (pathData == null)
-                    throw new ArgumentException("PathData list cannot contain null entries.", nameof(pathDataList));
-
-                PathDataConfig config = new PathDataConfig
-                {
-                    PathData = pathData,
-                    MoveType = PathFollower.EMoveType.TimeBased,
-                    Value = 1f,
-                    TimeCurve = AnimationCurve.Linear(0, 0, 1, 1)
-                };
-                configs.Add(config);
-            }
-
-            if (configs.Count == 0)
-                throw new ArgumentException("At least one valid PathData is required.", nameof(pathDataList));
-            _pathDataConfigs = configs;
-            MarkSequenceDirty();
-        }
-
-        /// <summary>
-        /// 외부에서 제공된 PathData 배열로 초기화합니다 (기본 설정 사용)
-        /// </summary>
-        /// <param name="pathDataArray">PathData 배열</param>
-        public void ConfigureSegments(PathData[] pathDataArray)
-        {
-            ThrowIfFaulted();
-            if (pathDataArray == null)
-                throw new ArgumentNullException(nameof(pathDataArray));
-            if (pathDataArray.Length == 0)
-                throw new ArgumentException("At least one PathData is required.", nameof(pathDataArray));
-
-            List<PathData> pathDataList = new List<PathData>(pathDataArray);
-            ConfigureSegments(pathDataList);
-        }
-
-        /// <summary>
-        /// 0~1의 정규화된 값으로 전체 경로 상의 위치를 가져옵니다
-        /// </summary>
-        /// <param name="normalizedValue">정규화된 진행도 (0~1)</param>
-        /// <returns>경로 상의 위치</returns>
-        public Vector3 GetPointOnPath(float normalizedValue)
-        {
-            ThrowIfStale();
-
-            if (!IsFinite(normalizedValue) || normalizedValue < 0f || normalizedValue > 1f)
-                throw new ArgumentOutOfRangeException(nameof(normalizedValue));
-
-            if (normalizedValue <= 0f)
-                return _pathDataConfigs[0].PathData.GetPointOnPath(0f);
-
-            if (normalizedValue >= 1f)
-                return _pathDataConfigs[_pathDataConfigs.Count - 1].PathData.GetPointOnPath(1f);
-
-            float targetDistance = normalizedValue * _totalPathLength;
-            int pathIndex = FindPathIndex(targetDistance);
-
-            if (pathIndex < 0 || pathIndex >= _pathDataConfigs.Count)
-                throw new InvalidOperationException("MultiPathData distance cache is inconsistent.");
-
-            float localDistance = targetDistance - _cumulativePathLengths[pathIndex];
-            float localNormalizedValue = _pathLengths[pathIndex] > 0f 
-                ? localDistance / _pathLengths[pathIndex] 
-                : 0f;
-
-            return _pathDataConfigs[pathIndex].PathData.GetPointOnPath(localNormalizedValue);
-        }
-
-        /// <summary>
-        /// 거리 값을 전체 경로 길이에 비례해 0~1로 정규화하여 경로 상의 위치를 가져옵니다
-        /// </summary>
-        /// <param name="distance">거리 값 (전체 PathLength 기준)</param>
-        /// <returns>경로 상의 위치</returns>
-        public Vector3 GetPointAtDistance(float distance)
-        {
-            ThrowIfStale();
-            if (!IsFinite(distance) || distance < 0f || distance > _totalPathLength)
-                throw new ArgumentOutOfRangeException(nameof(distance));
-            if (_totalPathLength <= 0f)
-                throw new InvalidOperationException("MultiPathData has no measurable path length.");
-
-            float normalizedValue = distance / _totalPathLength;
-            return GetPointOnPath(normalizedValue);
-        }
-
-        /// <summary>
-        /// 특정 PathData의 시작 지점을 전체 경로 기준 정규화된 값으로 가져옵니다
-        /// </summary>
-        /// <param name="pathIndex">PathData 인덱스</param>
-        /// <returns>정규화된 시작 위치 (0~1)</returns>
-        public float GetPathStartNormalizedValue(int pathIndex)
-        {
-            ThrowIfStale();
-
-            if (pathIndex < 0 || pathIndex >= _cumulativePathLengths.Length)
-                throw new ArgumentOutOfRangeException(nameof(pathIndex));
-
-            return _totalPathLength > 0f 
-                ? _cumulativePathLengths[pathIndex] / _totalPathLength 
-                : 0f;
-        }
-
-        /// <summary>
-        /// 특정 PathData의 끝 지점을 전체 경로 기준 정규화된 값으로 가져옵니다
-        /// </summary>
-        /// <param name="pathIndex">PathData 인덱스</param>
-        /// <returns>정규화된 끝 위치 (0~1)</returns>
-        public float GetPathEndNormalizedValue(int pathIndex)
-        {
-            ThrowIfStale();
-
-            if (pathIndex < 0 || pathIndex >= _pathLengths.Length)
-                throw new ArgumentOutOfRangeException(nameof(pathIndex));
-
-            float endDistance = _cumulativePathLengths[pathIndex] + _pathLengths[pathIndex];
-            return _totalPathLength > 0f 
-                ? endDistance / _totalPathLength 
-                : 0f;
-        }
-
-        /// <summary>
-        /// 할당된 모든 <see cref="PathData"/>의 경로 이벤트를 <see cref="PathEventEntry.NormalizedTime"/> 오름차순으로 정렬합니다.
-        /// 동일한 PathData가 여러 슬롯에 있으면 한 번만 정렬합니다.
-        /// </summary>
-        /// <returns>한 개 이상의 PathData에서 순서가 바뀌었으면 true</returns>
-        public bool SortAllPathEventsByNormalizedTime()
-        {
-            ThrowIfStale();
-            if (_pathDataConfigs.Count == 0)
-                throw new InvalidOperationException("MultiPathData contains no path segments.");
-
-            bool anyOrderChanged = false;
-            HashSet<PathData> seen = new HashSet<PathData>();
-
-            foreach (PathDataConfig config in _pathDataConfigs)
-            {
-                if (config == null || config.PathData == null)
-                    throw new ArgumentException("MultiPathData contains an invalid PathDataConfig.", nameof(_pathDataConfigs));
-                PathData pathData = config.PathData;
-                if (!seen.Add(pathData))
-                    continue;
-
-                if (pathData.SortPathEventsByNormalizedTime())
-                    anyOrderChanged = true;
-            }
-
-            return anyOrderChanged;
-        }
-
-        #endregion
-
-
-        #region Path Sequence Helpers
-
-        /// <summary>
-        /// PathDataConfig 리스트로 초기화하는 공통 로직
-        /// </summary>
-        /// <param name="configs">PathDataConfig 리스트</param>
-        private void BuildFromConfigs(List<PathDataConfig> configs)
-        {
-            if (!CollectValidConfigs(configs, out int validPathCount))
-                throw new ArgumentException("MultiPathData contains no valid PathData entries.", nameof(configs));
-
-            float nextTotalPathLength = 0f;
-            for (int i = 0; i < validPathCount; i++)
-            {
-                ValidateConfig(_validConfigsScratch[i]);
-                nextTotalPathLength += _validPathsScratch[i].PathLength;
-            }
-
-            if (!IsFinite(nextTotalPathLength) || nextTotalPathLength < 0f)
-                throw new ArgumentOutOfRangeException(nameof(nextTotalPathLength));
-
-            bool resultChanged = !IsSameSequenceResult(
-                _validConfigsScratch,
-                _validPathsScratch,
-                nextTotalPathLength);
-
-            _pathDataConfigs = new List<PathDataConfig>(_validConfigsScratch);
-            _pathLengths = new float[validPathCount];
-            _cumulativePathLengths = new float[validPathCount];
-            _totalPathLength = 0f;
-
-            for (int i = 0; i < validPathCount; i++)
-            {
-                _pathLengths[i] = _validPathsScratch[i].PathLength;
-                _cumulativePathLengths[i] = _totalPathLength;
-                _totalPathLength += _pathLengths[i];
-            }
-
-            _isInitialized = true;
-            _fault = null;
-            CaptureChildRevisions();
-            NotifySequenceBuild(resultChanged);
-
-#if UNITY_EDITOR
-            Debug.Log($"MultiPathData 초기화 완료: PathData 개수={validPathCount}, 총 경로 길이={_totalPathLength:F2}m");
-#endif
-        }
-
-        private bool IsSameSequenceResult(
-            List<PathDataConfig> nextConfigs,
-            List<PathData> nextPaths,
-            float nextTotalPathLength)
-        {
-            if (!_isInitialized || _pathDataConfigs == null || _pathLengths == null)
-                return false;
-
-            if (_pathDataConfigs.Count != nextConfigs.Count || _pathLengths.Length != nextPaths.Count)
-                return false;
-
-            if (!Mathf.Approximately(_totalPathLength, nextTotalPathLength))
-                return false;
-
-            for (int i = 0; i < nextPaths.Count; i++)
-            {
-                PathDataConfig previousConfig = _pathDataConfigs[i];
-                PathDataConfig nextConfig = nextConfigs[i];
-
-                if (previousConfig == null || nextConfig == null)
-                    return previousConfig == nextConfig;
-
-                if (previousConfig.PathData != nextConfig.PathData
-                    || previousConfig.MoveType != nextConfig.MoveType
-                    || !Mathf.Approximately(previousConfig.Value, nextConfig.Value)
-                    || previousConfig.TimeCurve != nextConfig.TimeCurve)
-                    return false;
-
-                if (!Mathf.Approximately(_pathLengths[i], nextPaths[i].PathLength))
-                    return false;
-            }
-
-            return !_sequenceDirty;
-        }
-
-        private bool CollectValidConfigs(List<PathDataConfig> configs, out int validPathCount)
-        {
-            _validConfigsScratch.Clear();
-            _validPathsScratch.Clear();
-            validPathCount = 0;
-
-            if (configs == null)
-                return false;
-
-            foreach (PathDataConfig config in configs)
-            {
-                if (config == null)
-                    throw new ArgumentException("PathDataConfig cannot be null.", nameof(configs));
-                if (config.PathData == null)
-                    throw new ArgumentException("PathDataConfig requires a PathData reference.", nameof(configs));
-                if (!config.PathData.IsInitialized || !config.PathData.IsReady)
-                    throw new InvalidOperationException("Every child PathData must be initialized and ready before MultiPathData.");
-                _validConfigsScratch.Add(config);
-                _validPathsScratch.Add(config.PathData);
-            }
-
-            validPathCount = _validPathsScratch.Count;
-            return validPathCount > 0;
-        }
-
-        /// <summary>
-        /// 목표 거리에 해당하는 PathData 인덱스를 찾습니다
-        /// </summary>
-        /// <param name="targetDistance">목표 거리</param>
-        /// <returns>PathData 인덱스</returns>
-        private int FindPathIndex(float targetDistance)
-        {
-            if (_cumulativePathLengths == null || _cumulativePathLengths.Length == 0)
-                return -1;
-
-            int left = 0;
-            int right = _cumulativePathLengths.Length - 1;
-
-            while (left < right)
-            {
-                int mid = (left + right + 1) / 2;
-                if (_cumulativePathLengths[mid] <= targetDistance)
-                    left = mid;
-                else
-                    right = mid - 1;
-            }
-
-            return left;
-        }
-
-        #endregion
-
-        #region Provider Contract State
-
-        private int _revision = 0;
-        private bool _sequenceDirty = false;
-        private int[] _pathRevisionSnapshot = Array.Empty<int>();
-        private readonly List<PathData> _subscribedPathData = new List<PathData>();
-
-        #endregion
-
-
-        #region Provider Contract
-
-        public bool IsInitialized => _isInitialized;
-        public bool IsFaulted => _isFaulted;
-        public bool IsReady => _isInitialized
-            && !_isFaulted
-            && !_sequenceDirty
-            && _pathLengths != null
-            && _pathLengths.Length > 0
-            && !HasChildRevisionChanged();
-        public int Revision => _revision;
         public int SegmentCount
         {
             get
             {
-                ThrowIfStale();
-                return _pathLengths.Length;
+                ThrowIfNotReady();
+                return _segments.Count;
             }
         }
 
         public event Action PathChanged;
 
-        #endregion
-
-
-        #region Provider Lifecycle and API
-
         private void Awake()
         {
-            if (Application.isPlaying)
+            if (Application.isPlaying && HasAuthoringConfiguration())
                 Init();
         }
 
         private void OnDestroy()
         {
-            if (_isInitialized || _isFaulted)
-                Release();
+            Release();
         }
 
-        private void OnEnable()
+        public void Init()
         {
-            SubscribeToChildren();
+            if (_isInitialized)
+                return;
+            if (!HasAuthoringConfiguration())
+                return;
+            TryBuild();
         }
 
-        private void OnDisable()
+        public void Release()
         {
             UnsubscribeFromChildren();
+            _isInitialized = false;
+            _isDirty = false;
+            _segmentLengths = null;
+            _segmentStartDistances = null;
+            _childRevisions = null;
+            _pathLength = 0f;
         }
 
-        public Vector3 Sample(float normalizedTime)
+        public void ConfigureSegments(IReadOnlyList<PathSegmentConfig> segments)
         {
-            ThrowIfStale();
-            if (!IsFinite(normalizedTime) || normalizedTime < 0f || normalizedTime > 1f)
-                throw new ArgumentOutOfRangeException(nameof(normalizedTime));
-            return GetPointOnPath(normalizedTime);
+            if (segments == null)
+                throw new ArgumentNullException(nameof(segments));
+
+            _segments.Clear();
+            for (int i = 0; i < segments.Count; i++)
+                _segments.Add(segments[i]);
+            _isDirty = true;
+
+            if (_isInitialized)
+                Rebuild();
         }
 
-        public Vector3 SampleDistance(float distance)
+        public PathSegmentConfig GetSegmentConfig(int index)
         {
-            ThrowIfStale();
-            if (!IsFinite(distance) || distance < 0f || distance > _totalPathLength)
-                throw new ArgumentOutOfRangeException(nameof(distance));
-            return GetPointAtDistance(distance);
+            ThrowIfNotReady();
+            if (index < 0 || index >= _segments.Count)
+                throw new ArgumentOutOfRangeException(nameof(index));
+            return _segments[index];
         }
 
         public PathSegmentDescriptor GetSegment(int index)
         {
-            ThrowIfStale();
-            if (index < 0 || index >= _pathDataConfigs.Count)
+            PathSegmentConfig config = GetSegmentConfig(index);
+            return new PathSegmentDescriptor(config.PathData, config.MoveType, config.Value, config.TimeCurve);
+        }
+
+        public float GetSegmentStartDistance(int index)
+        {
+            ThrowIfNotReady();
+            if (index < 0 || index >= _segmentStartDistances.Length)
                 throw new ArgumentOutOfRangeException(nameof(index));
+            return _segmentStartDistances[index];
+        }
 
-            PathDataConfig config = _pathDataConfigs[index];
-            if (config == null || config.PathData == null || !config.PathData.IsReady)
-                throw new InvalidOperationException("MultiPathData contains an unready segment.");
+        public float GetSegmentLength(int index)
+        {
+            ThrowIfNotReady();
+            if (index < 0 || index >= _segmentLengths.Length)
+                throw new ArgumentOutOfRangeException(nameof(index));
+            return _segmentLengths[index];
+        }
 
-            return new PathSegmentDescriptor(
-                config.PathData,
-                PathTypeConversion.ToPublic(config.MoveType),
-                config.Value,
-                config.TimeCurve);
+        public Vector3 Sample(float normalizedTime)
+        {
+            ThrowIfNotReady();
+            if (!IsFinite(normalizedTime))
+                throw new ArgumentOutOfRangeException(nameof(normalizedTime));
+            return SampleDistance(Mathf.Clamp01(normalizedTime) * _pathLength);
+        }
+
+        public Vector3 SampleDistance(float distance)
+        {
+            ThrowIfNotReady();
+            if (!IsFinite(distance))
+                throw new ArgumentOutOfRangeException(nameof(distance));
+            float clamped = Mathf.Clamp(distance, 0f, _pathLength);
+            int index = FindSegmentIndex(clamped);
+            float length = _segmentLengths[index];
+            float local = length > Mathf.Epsilon
+                ? (clamped - _segmentStartDistances[index]) / length
+                : 0f;
+            return _segments[index].PathData.Sample(local);
         }
 
         public void Rebuild()
         {
-            ThrowIfFaulted();
             if (!_isInitialized)
-                throw new InvalidOperationException("MultiPathData must be initialized before Rebuild.");
+            {
+                Init();
+                return;
+            }
+            TryBuild();
+        }
+
+        internal void MarkDirtyFromChild()
+        {
+            _isDirty = true;
+            if (_isInitialized)
+                TryBuild();
+        }
+
+        private bool HasAuthoringConfiguration()
+        {
+            return _segments != null && _segments.Count > 0;
+        }
+
+        private void TryBuild()
+        {
             try
             {
-                BuildFromConfigs(_pathDataConfigs);
+                ValidateAndBuildTemporary(
+                    out List<PathSegmentConfig> nextSegments,
+                    out float[] nextLengths,
+                    out float[] nextStarts,
+                    out int[] nextRevisions,
+                    out float nextTotalLength);
+
+                bool changed = !_isInitialized
+                    || _segmentLengths == null
+                    || _segmentLengths.Length != nextLengths.Length
+                    || !Mathf.Approximately(_pathLength, nextTotalLength);
+                if (!changed)
+                {
+                    for (int i = 0; i < nextLengths.Length; i++)
+                    {
+                        PathSegmentConfig oldConfig = _segments[i];
+                        PathSegmentConfig newConfig = nextSegments[i];
+                        if (!AreSameConfig(oldConfig, newConfig)
+                            || !Mathf.Approximately(_segmentLengths[i], nextLengths[i]))
+                        {
+                            changed = true;
+                            break;
+                        }
+                    }
+                }
+
+                _segments.Clear();
+                _segments.AddRange(nextSegments);
+                _segmentLengths = nextLengths;
+                _segmentStartDistances = nextStarts;
+                _childRevisions = nextRevisions;
+                _pathLength = nextTotalLength;
+                _isInitialized = true;
+                _isDirty = false;
+                _configurationErrorReported = false;
+                SubscribeToChildren();
+
+                if (changed)
+                {
+                    _revision++;
+                    NotifyPathChanged();
+                }
             }
             catch (Exception exception)
             {
-                if (_fault == null)
-                    _fault = exception;
-                _isFaulted = true;
                 _isInitialized = false;
-                throw;
+                _isDirty = true;
+                _segmentLengths = null;
+                _segmentStartDistances = null;
+                _childRevisions = null;
+                _pathLength = 0f;
+                UnsubscribeFromChildren();
+                if (!_configurationErrorReported)
+                {
+                    Debug.LogError($"MultiPathData '{name}' could not build: {exception.Message}", this);
+                    _configurationErrorReported = true;
+                }
             }
         }
 
-        internal void MarkSequenceDirty()
+        private void ValidateAndBuildTemporary(
+            out List<PathSegmentConfig> nextSegments,
+            out float[] nextLengths,
+            out float[] nextStarts,
+            out int[] nextRevisions,
+            out float nextTotalLength)
         {
-            if (_isFaulted)
-                throw new InvalidOperationException("MultiPathData is faulted. Call Release before changing its configuration.", _fault);
-            _sequenceDirty = true;
+            if (_segments == null || _segments.Count == 0)
+                throw new ArgumentException("MultiPathData requires at least one segment.");
+
+            _validatedSegments.Clear();
+            nextTotalLength = 0f;
+            for (int i = 0; i < _segments.Count; i++)
+            {
+                PathSegmentConfig segment = _segments[i];
+                if (segment.PathData == null)
+                    throw new ArgumentException($"Segment {i} has no PathData provider.");
+                if (!segment.PathData.IsReady)
+                    throw new InvalidOperationException($"Segment {i} PathData is not ready.");
+                if (!Enum.IsDefined(typeof(EPathMoveType), segment.MoveType))
+                    throw new ArgumentOutOfRangeException($"segments[{i}].MoveType");
+                if (!IsFinite(segment.Value) || segment.Value <= 0f)
+                    throw new ArgumentOutOfRangeException($"segments[{i}].Value");
+                if (segment.MoveType == EPathMoveType.TimeBased
+                    && (segment.TimeCurve == null || segment.TimeCurve.length == 0))
+                    throw new ArgumentException($"Segment {i} requires a non-empty TimeCurve.");
+
+                _validatedSegments.Add(segment);
+                nextTotalLength += segment.PathData.PathLength;
+            }
+
+            if (!IsFinite(nextTotalLength) || nextTotalLength <= 0f)
+                throw new ArgumentException("MultiPathData requires a measurable total length.");
+
+            nextSegments = new List<PathSegmentConfig>(_validatedSegments);
+            nextLengths = new float[nextSegments.Count];
+            nextStarts = new float[nextSegments.Count];
+            nextRevisions = new int[nextSegments.Count];
+            float accumulated = 0f;
+            for (int i = 0; i < nextSegments.Count; i++)
+            {
+                nextStarts[i] = accumulated;
+                nextLengths[i] = nextSegments[i].PathData.PathLength;
+                nextRevisions[i] = nextSegments[i].PathData.Revision;
+                accumulated += nextLengths[i];
+            }
         }
 
-        internal void NotifySequenceBuild(bool resultChanged)
+        private int FindSegmentIndex(float distance)
         {
-            if (!resultChanged)
-                return;
+            if (distance >= _pathLength)
+                return _segmentLengths.Length - 1;
 
-            _revision++;
-            PathChanged?.Invoke();
+            int low = 0;
+            int high = _segmentStartDistances.Length - 1;
+            while (low < high)
+            {
+                int middle = (low + high + 1) / 2;
+                if (_segmentStartDistances[middle] <= distance)
+                    low = middle;
+                else
+                    high = middle - 1;
+            }
+            return low;
         }
-
-        #endregion
-
-
-        #region Provider Helpers
 
         private void SubscribeToChildren()
         {
             UnsubscribeFromChildren();
-
-            if (_pathDataConfigs == null)
+            if (_segments == null)
                 return;
-
-            for (int i = 0; i < _pathDataConfigs.Count; i++)
+            for (int i = 0; i < _segments.Count; i++)
             {
-                PathDataConfig config = _pathDataConfigs[i];
-                if (config == null || config.PathData == null)
-                {
-                    if (_isInitialized)
-                        throw new InvalidOperationException($"MultiPathData segment {i} is missing its PathData reference.");
+                PathData pathData = _segments[i].PathData;
+                if (pathData == null || _subscribedProviders.Contains(pathData))
                     continue;
-                }
-
-                PathData pathData = config.PathData;
-                if (_subscribedPathData.Contains(pathData))
-                    continue;
-
-                pathData.PathChanged += MarkSequenceDirty;
-                _subscribedPathData.Add(pathData);
+                pathData.PathChanged += MarkDirtyFromChild;
+                _subscribedProviders.Add(pathData);
             }
         }
 
         private void UnsubscribeFromChildren()
         {
-            for (int i = 0; i < _subscribedPathData.Count; i++)
+            for (int i = 0; i < _subscribedProviders.Count; i++)
             {
-                PathData pathData = _subscribedPathData[i];
-                if (pathData != null)
-                    pathData.PathChanged -= MarkSequenceDirty;
+                if (_subscribedProviders[i] != null)
+                    _subscribedProviders[i].PathChanged -= MarkDirtyFromChild;
             }
-
-            _subscribedPathData.Clear();
-        }
-
-        private void CaptureChildRevisions()
-        {
-            if (_pathDataConfigs == null)
-                throw new InvalidOperationException("MultiPathData segment configuration is missing.");
-
-            int count = _pathDataConfigs.Count;
-            if (_pathRevisionSnapshot.Length != count)
-                _pathRevisionSnapshot = new int[count];
-
-            for (int i = 0; i < count; i++)
-            {
-                PathDataConfig config = _pathDataConfigs[i];
-                if (config == null)
-                    throw new ArgumentException($"MultiPathData segment {i} is null.", nameof(_pathDataConfigs));
-                if (config.PathData == null)
-                    throw new ArgumentException($"MultiPathData segment {i} has no PathData reference.", nameof(_pathDataConfigs));
-                _pathRevisionSnapshot[i] = config.PathData.Revision;
-            }
-
-            _sequenceDirty = false;
-            SubscribeToChildren();
-        }
-
-        private void ThrowIfStale()
-        {
-            ThrowIfFaulted();
-            if (!_isInitialized)
-                throw new InvalidOperationException("MultiPathData is not initialized.");
-            if (_sequenceDirty || HasChildRevisionChanged())
-                throw new InvalidOperationException("MultiPathData is stale. Call Rebuild before querying it.");
-        }
-
-        public void Release()
-        {
-            if (!_isInitialized && !_isFaulted)
-                throw new InvalidOperationException("MultiPathData has not been initialized.");
-            UnsubscribeFromChildren();
-            _isInitialized = false;
-            _isFaulted = false;
-            _sequenceDirty = false;
-            _fault = null;
-            _pathLengths = null;
-            _cumulativePathLengths = null;
-            _pathRevisionSnapshot = Array.Empty<int>();
-            _totalPathLength = -1f;
-        }
-
-        private void ThrowIfFaulted()
-        {
-            if (_isFaulted)
-                throw new InvalidOperationException("MultiPathData is faulted. Call Release before using it.", _fault);
-        }
-
-        private static void ValidateConfig(PathDataConfig config)
-        {
-            if (config == null)
-                throw new ArgumentException("PathDataConfig cannot be null.");
-            if (!IsFinite(config.Value) || config.Value <= 0f)
-                throw new ArgumentOutOfRangeException(nameof(config.Value));
-            if (!Enum.IsDefined(typeof(PathFollower.EMoveType), config.MoveType))
-                throw new ArgumentOutOfRangeException(nameof(config.MoveType));
-            if (config.MoveType == PathFollower.EMoveType.TimeBased && config.TimeCurve == null)
-                throw new ArgumentNullException(nameof(config.TimeCurve));
-            if (config.MoveType == PathFollower.EMoveType.TimeBased && config.TimeCurve.length == 0)
-                throw new ArgumentException("Time-based segments require a non-empty TimeCurve.", nameof(config.TimeCurve));
+            _subscribedProviders.Clear();
         }
 
         private bool HasChildRevisionChanged()
         {
-            if (_pathDataConfigs == null || _pathRevisionSnapshot.Length != _pathDataConfigs.Count)
+            if (_segments == null || _childRevisions == null || _segments.Count != _childRevisions.Length)
                 return true;
-
-            for (int i = 0; i < _pathDataConfigs.Count; i++)
+            for (int i = 0; i < _segments.Count; i++)
             {
-                PathDataConfig config = _pathDataConfigs[i];
-                if (config == null)
-                    throw new InvalidOperationException($"MultiPathData segment {i} is null.");
-                if (config.PathData == null)
-                    throw new InvalidOperationException($"MultiPathData segment {i} has no PathData reference.");
-                int revision = config.PathData.Revision;
-                if (_pathRevisionSnapshot[i] != revision)
+                if (_segments[i].PathData == null || _segments[i].PathData.Revision != _childRevisions[i])
                     return true;
             }
-
             return false;
         }
 
-        private static bool IsFinite(float value)
-            => !float.IsNaN(value) && !float.IsInfinity(value);
+        private static bool AreSameConfig(PathSegmentConfig left, PathSegmentConfig right)
+        {
+            return left.PathData == right.PathData
+                && left.MoveType == right.MoveType
+                && Mathf.Approximately(left.Value, right.Value)
+                && left.TimeCurve == right.TimeCurve;
+        }
 
-        #endregion
-}
+        private void NotifyPathChanged()
+        {
+            Delegate[] listeners = PathChanged?.GetInvocationList();
+            if (listeners == null)
+                return;
+            for (int i = 0; i < listeners.Length; i++)
+            {
+                try
+                {
+                    ((Action)listeners[i])();
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogException(exception, this);
+                }
+            }
+        }
+
+        private void ThrowIfNotReady()
+        {
+            if (!IsReady)
+                throw new InvalidOperationException("MultiPathData is not initialized and ready. Rebuild after changing a segment.");
+        }
+
+        private static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
+        }
+    }
 }

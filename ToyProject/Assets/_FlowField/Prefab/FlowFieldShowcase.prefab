@@ -7689,9 +7689,6 @@ MonoBehaviour:
     m_Bits: 256
   _maxSurfaceSlope: 45
   _maxStepHeight: 0.5
-  _surfaceBakeData: {fileID: 11400000, guid: 98672b884918a2847891f88b3cad7ea8, type: 2}
-  _staticObstacleBakeData: {fileID: 11400000, guid: 194c48ce1cd2d3b4eb5b8e7fa18efe73,
-    type: 2}
   _staticBakeData: {fileID: 0}
   _frontierComputeShader: {fileID: 7200000, guid: 9bcae8d0ec8446a2b2e8ef1e3d0d8f45,
     type: 3}

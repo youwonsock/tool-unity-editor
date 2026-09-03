@@ -17,17 +17,14 @@ namespace Common.TransformPath
 
         #region Member Variables
 
-        [SerializeField] private MonoBehaviour _eventSinkObject = null;
+        [SerializeField] private MonoBehaviour _receiverObject = null;
 
         private readonly List<Coroutine> _delayedEventCoroutines = new List<Coroutine>();
         private Coroutine _timeScaleCoroutine = null;
         private Coroutine _speedControlCoroutine = null;
         private Coroutine _durationControlCoroutine = null;
-        private IPathEventSink _eventSink = null;
         private IPathEventReceiver _eventReceiver = null;
         private bool _isInitialized;
-        private bool _isFaulted;
-        private System.Exception _fault;
         private bool _timeStateCaptured;
         private float _originalTimeScale;
         private float _originalFixedDeltaTime;
@@ -46,7 +43,6 @@ namespace Common.TransformPath
 
         public bool IsControllingSpeed => _speedControlCoroutine != null || _durationControlCoroutine != null;
         public bool IsInitialized => _isInitialized;
-        public bool IsFaulted => _isFaulted;
 
         #endregion
 
@@ -62,35 +58,28 @@ namespace Common.TransformPath
         public void Init()
         {
             if (_isInitialized)
-                throw new InvalidOperationException("PathEventHandler is already initialized.");
-            if (_isFaulted)
-                throw new InvalidOperationException("PathEventHandler is faulted; call Release before Init.", _fault);
+                return;
 
-            try
-            {
-                CacheEventSinkReference();
-                if (_eventSink != null && _eventReceiver != null)
-                    throw new InvalidOperationException("Event sink object must implement exactly one event contract.");
-                if (_eventSinkObject != null && _eventSink == null && _eventReceiver == null)
-                    throw new InvalidOperationException("Event sink object must implement IPathEventReceiver or IPathEventSink.");
-                _originalTimeScale = Time.timeScale;
-                _originalFixedDeltaTime = Time.fixedDeltaTime;
-                _timeStateCaptured = true;
-                _isInitialized = true;
-            }
-            catch (System.Exception exception)
-            {
-                _isInitialized = false;
-                _isFaulted = true;
-                if (_fault == null)
-                    _fault = exception;
-                throw;
-            }
+            CacheEventReceiver();
+            _originalTimeScale = Time.timeScale;
+            _originalFixedDeltaTime = Time.fixedDeltaTime;
+            _timeStateCaptured = true;
+            _isInitialized = true;
         }
 
         private void OnValidate()
         {
             // Serialized references are validated at Init/HandleEvent.
+        }
+
+        private void OnEnable()
+        {
+            if (!_isInitialized)
+                return;
+
+            _originalTimeScale = Time.timeScale;
+            _originalFixedDeltaTime = Time.fixedDeltaTime;
+            _timeStateCaptured = true;
         }
 
         private void OnDisable()
@@ -102,18 +91,16 @@ namespace Common.TransformPath
                 Time.timeScale = _originalTimeScale;
                 Time.fixedDeltaTime = _originalFixedDeltaTime;
             }
+            _timeStateCaptured = false;
         }
 
         private void OnDestroy()
         {
-            if (_isInitialized || _isFaulted)
-                Release();
+            Release();
         }
 
         public void Release()
         {
-            if (!_isInitialized && !_isFaulted)
-                throw new InvalidOperationException("PathEventHandler has not been initialized.");
             CancelAllDelayedEventsCore();
             StopAllCoroutinesSafely();
             if (_timeStateCaptured)
@@ -123,8 +110,6 @@ namespace Common.TransformPath
             }
             _timeStateCaptured = false;
             _isInitialized = false;
-            _isFaulted = false;
-            _fault = null;
         }
 
         #endregion
@@ -134,10 +119,10 @@ namespace Common.TransformPath
 
         public virtual void HandleEvent(PathEventSettingSO eventSetting, PathFollower pathAnimator)
         {
-            if (_isFaulted)
-                throw new InvalidOperationException("PathEventHandler is faulted; call Release before use.", _fault);
             if (!_isInitialized)
-                throw new InvalidOperationException("PathEventHandler is not initialized.");
+                Init();
+            if (!_isInitialized)
+                return;
             if (eventSetting == null)
                 throw new ArgumentNullException(nameof(eventSetting));
 
@@ -148,10 +133,8 @@ namespace Common.TransformPath
 
         public void CancelAllDelayedEvents()
         {
-            if (_isFaulted)
-                throw new InvalidOperationException("PathEventHandler is faulted; call Release before use.", _fault);
             if (!_isInitialized)
-                throw new InvalidOperationException("PathEventHandler is not initialized.");
+                return;
             CancelAllDelayedEventsCore();
         }
 
@@ -172,10 +155,9 @@ namespace Common.TransformPath
 
         #region Private Methods
 
-        private void CacheEventSinkReference()
+        private void CacheEventReceiver()
         {
-            _eventSink = _eventSinkObject as IPathEventSink;
-            _eventReceiver = _eventSinkObject as IPathEventReceiver;
+            _eventReceiver = _receiverObject as IPathEventReceiver;
         }
 
         private void ProcessEvent(PathEventSettingSO eventSetting, PathFollower pathFollower)
@@ -188,10 +170,10 @@ namespace Common.TransformPath
             if (eventSetting.UseModifyPathMoveDuration && pathFollower == null)
                 throw new ArgumentNullException(nameof(pathFollower));
             if (eventSetting.UseModifyPathMoveSpeed
-                && pathFollower.CurrentMoveType != PathFollower.EMoveType.SpeedBased)
+                && pathFollower.MoveType != EPathMoveType.SpeedBased)
                 throw new InvalidOperationException("Move speed control requires SpeedBased mode.");
             if (eventSetting.UseModifyPathMoveDuration
-                && pathFollower.CurrentMoveType != PathFollower.EMoveType.TimeBased)
+                && pathFollower.MoveType != EPathMoveType.TimeBased)
                 throw new InvalidOperationException("Move duration control requires TimeBased mode.");
 
             DispatchPathEvent(eventSetting.EventName, pathFollower);
@@ -214,27 +196,32 @@ namespace Common.TransformPath
             if (string.IsNullOrEmpty(eventName))
                 return;
 
-            // Serialized receiver references can be restored after Awake during
-            // prefab/domain reloads. Refresh the interface cache at the dispatch
-            // boundary so a valid receiver is never treated as missing.
-            CacheEventSinkReference();
+            CacheEventReceiver();
 
-            if (_eventReceiver != null && _eventSink != null)
-                throw new InvalidOperationException("Exactly one event receiver or sink is allowed.");
             if (_eventReceiver != null)
             {
                 if (pathFollower == null)
                     throw new ArgumentNullException(nameof(pathFollower));
-                _eventReceiver.ReceivePathEvent(eventName, pathFollower);
+                try
+                {
+                    _eventReceiver.ReceivePathEvent(eventName, pathFollower);
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogException(exception, this);
+                }
             }
-            else if (_eventSink != null)
-            {
-                _eventSink.SendPathEvent(eventName, pathFollower);
-            }
-            else
-                throw new InvalidOperationException("A non-empty path event requires exactly one serialized receiver or sink.");
+            // A receiver is optional. Movement effects and OnEventDispatched
+            // remain useful on a handler that has no message receiver.
 
-            _onEventDispatched?.Invoke(eventName);
+            Delegate[] listeners = _onEventDispatched?.GetInvocationList();
+            if (listeners == null)
+                return;
+            for (int i = 0; i < listeners.Length; i++)
+            {
+                try { ((Action<string>)listeners[i])(eventName); }
+                catch (Exception exception) { Debug.LogException(exception, this); }
+            }
         }
 
         private void ControlTimeScale(PathEventSettingSO setting)
@@ -246,11 +233,10 @@ namespace Common.TransformPath
         private void ControlMoveSpeed(PathEventSettingSO setting, PathFollower pathFollower)
         {
             StopCoroutineSafe(ref _speedControlCoroutine);
-            SuspendQueuedSpeedSmoothIfPresent(pathFollower);
 
             if (setting.MoveSpeedAdjustDuration <= 0f)
             {
-                if (pathFollower.CurrentMoveType != PathFollower.EMoveType.SpeedBased)
+                if (pathFollower.MoveType != EPathMoveType.SpeedBased)
                 {
                     throw new InvalidOperationException("Move speed control requires SpeedBased mode.");
                 }
@@ -266,11 +252,10 @@ namespace Common.TransformPath
         private void ControlMoveDuration(PathEventSettingSO setting, PathFollower pathFollower)
         {
             StopCoroutineSafe(ref _durationControlCoroutine);
-            SuspendQueuedSpeedSmoothIfPresent(pathFollower);
 
             if (setting.MoveDurationAdjustDuration <= 0f)
             {
-                if (pathFollower.CurrentMoveType != PathFollower.EMoveType.TimeBased)
+                if (pathFollower.MoveType != EPathMoveType.TimeBased)
                 {
                     throw new InvalidOperationException("Move duration control requires TimeBased mode.");
                 }
@@ -280,16 +265,6 @@ namespace Common.TransformPath
             }
 
             _durationControlCoroutine = StartCoroutine(Co_ProcessMoveDuration(setting, pathFollower));
-        }
-
-        private void SuspendQueuedSpeedSmoothIfPresent(PathFollower pathFollower)
-        {
-            if (pathFollower != null)
-            {
-                QueuedPathFollower queuedFollower = pathFollower.GetComponent<QueuedPathFollower>();
-                if (queuedFollower != null)
-                queuedFollower.SuspendSpeedSmooth();
-            }
         }
 
         private void EnqueueDelayedEvents(PathEventSettingSO setting, PathFollower pathFollower)
@@ -415,7 +390,7 @@ namespace Common.TransformPath
 
         private IEnumerator Co_ProcessMoveSpeed(PathEventSettingSO setting, PathFollower pathFollower)
         {
-            if (pathFollower.CurrentMoveType != PathFollower.EMoveType.SpeedBased)
+            if (pathFollower.MoveType != EPathMoveType.SpeedBased)
             {
                 throw new InvalidOperationException("Move speed control requires SpeedBased mode.");
             }
@@ -432,7 +407,7 @@ namespace Common.TransformPath
 
         private IEnumerator Co_ProcessMoveDuration(PathEventSettingSO setting, PathFollower pathFollower)
         {
-            if (pathFollower.CurrentMoveType != PathFollower.EMoveType.TimeBased)
+            if (pathFollower.MoveType != EPathMoveType.TimeBased)
             {
                 throw new InvalidOperationException("Move duration control requires TimeBased mode.");
             }
@@ -472,7 +447,7 @@ namespace Common.TransformPath
                 {
                     if (pathFollower == null)
                         throw new ArgumentNullException(nameof(pathFollower));
-                    if (pathFollower.CurrentMoveType != PathFollower.EMoveType.SpeedBased)
+                    if (pathFollower.MoveType != EPathMoveType.SpeedBased)
                         throw new InvalidOperationException("Move speed control requires SpeedBased mode.");
                     if (setting.MoveSpeedAdjustDuration > 0f && setting.MoveSpeedAdjustCurve == null)
                         throw new ArgumentNullException(nameof(setting.MoveSpeedAdjustCurve));
@@ -485,7 +460,7 @@ namespace Common.TransformPath
                 {
                     if (pathFollower == null)
                         throw new ArgumentNullException(nameof(pathFollower));
-                    if (pathFollower.CurrentMoveType != PathFollower.EMoveType.TimeBased)
+                    if (pathFollower.MoveType != EPathMoveType.TimeBased)
                         throw new InvalidOperationException("Move duration control requires TimeBased mode.");
                     if (setting.MoveDurationAdjustDuration > 0f && setting.MoveDurationAdjustCurve == null)
                         throw new ArgumentNullException(nameof(setting.MoveDurationAdjustCurve));

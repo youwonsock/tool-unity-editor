@@ -30,7 +30,7 @@ namespace Common.FlowField
     internal readonly struct FlowFieldComputeRequest
     {
         internal FlowFieldGridSpace Grid { get; }
-        internal FlowFieldSurfaceBakeData Surface { get; }
+        internal FlowFieldSurfaceData Surface { get; }
         internal FlowFieldWorkspace Workspace { get; }
         internal int GoalIndex { get; }
         internal int MaxGpuWaves { get; }
@@ -38,7 +38,7 @@ namespace Common.FlowField
 
         internal FlowFieldComputeRequest(
             FlowFieldGridSpace grid,
-            FlowFieldSurfaceBakeData surface,
+            FlowFieldSurfaceData surface,
             FlowFieldWorkspace workspace,
             int goalIndex,
             int maxGpuWaves,
@@ -122,8 +122,7 @@ namespace Common.FlowField
             if (_disposed || _running || !IsSupported || completed == null || failed == null)
                 return false;
             if (!request.Grid.IsValid
-                || request.Surface == null
-                || !request.Surface.HasValidData
+                || !request.Surface.IsValid
                 || request.Workspace == null
                 || request.Workspace.Capacity != request.Grid.CellCount
                 || request.Workspace.TopologyMasks == null

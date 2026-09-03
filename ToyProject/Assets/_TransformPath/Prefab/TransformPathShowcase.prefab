@@ -155,7 +155,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7f5aabe3a32d18a43800409bdf218821, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _eventSinkObject: {fileID: 0}
+  _receiverObject: {fileID: 0}
 --- !u!114 &4353847057457427061
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -168,11 +168,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fa5fe1bbda4ab594d8f6e01c0e321802, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _pathData: {fileID: 0}
-  _multiPathData: {fileID: 5766840683893775059}
-  _pathEventHandler: {fileID: 5659340322544956}
-  _moveType: 1
-  _timeCurve:
+  _startupProviderObject: {fileID: 0}
+  _startupAsSequence: 1
+  _playOnStart: 0
+  _startupMoveType: 1
+  _startupValue: 1.4
+  _startupTimeCurve:
     serializedVersion: 2
     m_Curve:
     - serializedVersion: 3
@@ -196,12 +197,10 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  _duration: 5
-  _speed: 1.4
-  _autoStart: 0
-  _useContinuousSpeedOnPathChange: 0
+  _startupLoop: 0
+  _startupPreserveSpeedBetweenSegments: 1
+  _pathEventHandler: {fileID: 5659340322544956}
   _animator: {fileID: 0}
-  _replacePathStartWithFollowerPosition: 0
 --- !u!114 &7119315875045243401
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -217,12 +216,9 @@ MonoBehaviour:
   _pathFollower: {fileID: 4353847057457427061}
   _manager: {fileID: 2829862075460814987}
   _actorSpacing: 1.5
-  _resumeMovementDelay: 0.1
   _useManagerSpacing: 1
-  _unblockHysteresis: 0.3
   _enableGradualSlowdown: 1
   _enableOvertakeProtection: 1
-  _speedSmoothRate: 5
   _animator: {fileID: 0}
   _speedParamName: Speed
 --- !u!1 &1207185434881250682
@@ -394,7 +390,7 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  _multiPathData: {fileID: 5766840683893775059}
+  _routeProviderObject: {fileID: 0}
 --- !u!1 &1872977962092640129
 GameObject:
   m_ObjectHideFlags: 0
@@ -547,7 +543,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7f5aabe3a32d18a43800409bdf218821, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _eventSinkObject: {fileID: 0}
+  _receiverObject: {fileID: 0}
 --- !u!114 &6946253953977550578
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -560,11 +556,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fa5fe1bbda4ab594d8f6e01c0e321802, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _pathData: {fileID: 0}
-  _multiPathData: {fileID: 5766840683893775059}
-  _pathEventHandler: {fileID: 7403141165102534239}
-  _moveType: 1
-  _timeCurve:
+  _startupProviderObject: {fileID: 0}
+  _startupAsSequence: 1
+  _playOnStart: 0
+  _startupMoveType: 1
+  _startupValue: 2.2
+  _startupTimeCurve:
     serializedVersion: 2
     m_Curve:
     - serializedVersion: 3
@@ -588,60 +585,10 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  _duration: 5
-  _speed: 2.2
-  _autoStart: 0
-  _useContinuousSpeedOnPathChange: 0
+  _startupLoop: 0
+  _startupPreserveSpeedBetweenSegments: 1
+  _pathEventHandler: {fileID: 7403141165102534239}
   _animator: {fileID: 0}
-  _replacePathStartWithFollowerPosition: 0
---- !u!1 &2405096328340610259
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 7470384177921040175}
-  - component: {fileID: 6420282086979064702}
-  m_Layer: 0
-  m_Name: Path Message Receiver
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &7470384177921040175
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2405096328340610259}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 8687349829112393166}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &6420282086979064702
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2405096328340610259}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: de7c5457100feba4b89be1c636b6b4ce, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _actorRenderer: {fileID: 651816749170573053}
-  _eventColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  _flashDuration: 0.5
-  _showOverlay: 0
 --- !u!1 &2411843356809523431
 GameObject:
   m_ObjectHideFlags: 0
@@ -674,7 +621,6 @@ Transform:
   - {fileID: 3718488518600942770}
   - {fileID: 9199816979022944725}
   - {fileID: 5438610073504185896}
-  - {fileID: 7470384177921040175}
   m_Father: {fileID: 6568028675629081540}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &2454506602018723394
@@ -738,7 +684,6 @@ MonoBehaviour:
   - {fileID: 3600725696844987565}
   - {fileID: 1548854285891510683}
   _freeCamera: {fileID: 0}
-  _messageReceiver: {fileID: 6420282086979064702}
   _board: {fileID: 5308964091590270829}
 --- !u!114 &934123456789012345
 MonoBehaviour:
@@ -1031,11 +976,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: aec4947d9d660bf4582ee9f49d98bb04, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _pathDataConfigs:
-  - PathData: {fileID: 830505861753064085}
-    MoveType: 0
-    Value: 1
-    TimeCurve:
+  _segments:
+  - _pathData: {fileID: 830505861753064085}
+    _moveType: 0
+    _value: 1
+    _timeCurve:
       serializedVersion: 2
       m_Curve:
       - serializedVersion: 3
@@ -1059,10 +1004,10 @@ MonoBehaviour:
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 4
-  - PathData: {fileID: 3101732148213765793}
-    MoveType: 0
-    Value: 1
-    TimeCurve:
+  - _pathData: {fileID: 3101732148213765793}
+    _moveType: 0
+    _value: 1
+    _timeCurve:
       serializedVersion: 2
       m_Curve:
       - serializedVersion: 3
@@ -1086,10 +1031,6 @@ MonoBehaviour:
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 4
-  _multiPathLineWidth: 2
-  _multiPathPointSize: 0.1
-  _multiPathSamplePointSize: 0
-  _multiPathEventPointSize: 0.15
 --- !u!1 &3881627964063493831
 GameObject:
   m_ObjectHideFlags: 0
@@ -1286,19 +1227,16 @@ MonoBehaviour:
   - {fileID: 1607345268541647270}
   - {fileID: 8837192892145261494}
   - {fileID: 3556451601430827285}
-  _pathEvents:
-  - NormalizedTime: 0.5
-    EventSetting: {fileID: 11400000, guid: fa0b805851e36524a9047bfc18b95857, type: 2}
+  _pathEvents: []
   _segmentCount: 200
-  _samplingCount: 10
   _curveType: 2
-  _samplingType: 0
+  _previewSamplingType: 0
+  _previewSampleCount: 10
   _showPathInEditor: 1
   _pointColor: {r: 1, g: 0, b: 0, a: 1}
   _pathColor: {r: 0, g: 0, b: 1, a: 1}
   _samplePointColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
   _eventPointColor: {r: 0, g: 1, b: 0, a: 1}
-  _lineWidth: 2
   _pointSize: 0.1
   _samplePointSize: 0
   _eventPointSize: 0.15
@@ -1788,7 +1726,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7f5aabe3a32d18a43800409bdf218821, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _eventSinkObject: {fileID: 0}
+  _receiverObject: {fileID: 0}
 --- !u!114 &904426417887082623
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1801,11 +1739,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fa5fe1bbda4ab594d8f6e01c0e321802, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _pathData: {fileID: 0}
-  _multiPathData: {fileID: 5766840683893775059}
-  _pathEventHandler: {fileID: 2108073158229803554}
-  _moveType: 1
-  _timeCurve:
+  _startupProviderObject: {fileID: 0}
+  _startupAsSequence: 1
+  _playOnStart: 0
+  _startupMoveType: 1
+  _startupValue: 1.8
+  _startupTimeCurve:
     serializedVersion: 2
     m_Curve:
     - serializedVersion: 3
@@ -1829,12 +1768,10 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  _duration: 5
-  _speed: 1.8
-  _autoStart: 0
-  _useContinuousSpeedOnPathChange: 0
+  _startupLoop: 0
+  _startupPreserveSpeedBetweenSegments: 1
+  _pathEventHandler: {fileID: 2108073158229803554}
   _animator: {fileID: 0}
-  _replacePathStartWithFollowerPosition: 0
 --- !u!114 &1548854285891510683
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1850,12 +1787,9 @@ MonoBehaviour:
   _pathFollower: {fileID: 904426417887082623}
   _manager: {fileID: 2829862075460814987}
   _actorSpacing: 1.5
-  _resumeMovementDelay: 0.1
   _useManagerSpacing: 1
-  _unblockHysteresis: 0.3
   _enableGradualSlowdown: 1
   _enableOvertakeProtection: 1
-  _speedSmoothRate: 5
   _animator: {fileID: 0}
   _speedParamName: Speed
 --- !u!1 &6172549786243997811
@@ -1911,15 +1845,14 @@ MonoBehaviour:
   - {fileID: 8800901667996679438}
   _pathEvents: []
   _segmentCount: 120
-  _samplingCount: 12
   _curveType: 2
-  _samplingType: 0
+  _previewSamplingType: 0
+  _previewSampleCount: 12
   _showPathInEditor: 1
   _pointColor: {r: 1, g: 0, b: 0, a: 1}
   _pathColor: {r: 0, g: 0, b: 1, a: 1}
   _samplePointColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
   _eventPointColor: {r: 0, g: 1, b: 0, a: 1}
-  _lineWidth: 2
   _pointSize: 0.1
   _samplePointSize: 0
   _eventPointSize: 0.15
@@ -2046,11 +1979,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fa5fe1bbda4ab594d8f6e01c0e321802, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _pathData: {fileID: 5106005842618629041}
-  _multiPathData: {fileID: 0}
-  _pathEventHandler: {fileID: 6109858950784113130}
-  _moveType: 1
-  _timeCurve:
+  _startupProviderObject: {fileID: 0}
+  _startupAsSequence: 0
+  _playOnStart: 0
+  _startupMoveType: 1
+  _startupValue: 3
+  _startupTimeCurve:
     serializedVersion: 2
     m_Curve:
     - serializedVersion: 3
@@ -2074,12 +2008,10 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  _duration: 5
-  _speed: 3
-  _autoStart: 0
-  _useContinuousSpeedOnPathChange: 0
+  _startupLoop: 1
+  _startupPreserveSpeedBetweenSegments: 0
+  _pathEventHandler: {fileID: 6109858950784113130}
   _animator: {fileID: 0}
-  _replacePathStartWithFollowerPosition: 0
 --- !u!114 &6109858950784113130
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2092,7 +2024,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7f5aabe3a32d18a43800409bdf218821, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _eventSinkObject: {fileID: 6420282086979064702}
+  _receiverObject: {fileID: 0}
 --- !u!1 &6582070497433375236
 GameObject:
   m_ObjectHideFlags: 0
@@ -2212,15 +2144,14 @@ MonoBehaviour:
   - {fileID: 5824946715010748417}
   _pathEvents: []
   _segmentCount: 120
-  _samplingCount: 12
   _curveType: 1
-  _samplingType: 2
+  _previewSamplingType: 2
+  _previewSampleCount: 12
   _showPathInEditor: 1
   _pointColor: {r: 1, g: 0, b: 0, a: 1}
   _pathColor: {r: 0, g: 0, b: 1, a: 1}
   _samplePointColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
   _eventPointColor: {r: 0, g: 1, b: 0, a: 1}
-  _lineWidth: 2
   _pointSize: 0.1
   _samplePointSize: 0
   _eventPointSize: 0.15
@@ -2379,7 +2310,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7f5aabe3a32d18a43800409bdf218821, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _eventSinkObject: {fileID: 0}
+  _receiverObject: {fileID: 0}
 --- !u!114 &1929806189517271856
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2392,11 +2323,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fa5fe1bbda4ab594d8f6e01c0e321802, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _pathData: {fileID: 0}
-  _multiPathData: {fileID: 5766840683893775059}
-  _pathEventHandler: {fileID: 1329424909292520726}
-  _moveType: 1
-  _timeCurve:
+  _startupProviderObject: {fileID: 0}
+  _startupAsSequence: 1
+  _playOnStart: 0
+  _startupMoveType: 1
+  _startupValue: 1.6
+  _startupTimeCurve:
     serializedVersion: 2
     m_Curve:
     - serializedVersion: 3
@@ -2420,12 +2352,10 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  _duration: 5
-  _speed: 1.6
-  _autoStart: 0
-  _useContinuousSpeedOnPathChange: 0
+  _startupLoop: 0
+  _startupPreserveSpeedBetweenSegments: 1
+  _pathEventHandler: {fileID: 1329424909292520726}
   _animator: {fileID: 0}
-  _replacePathStartWithFollowerPosition: 0
 --- !u!114 &3600725696844987565
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2441,12 +2371,9 @@ MonoBehaviour:
   _pathFollower: {fileID: 1929806189517271856}
   _manager: {fileID: 2829862075460814987}
   _actorSpacing: 1.5
-  _resumeMovementDelay: 0.1
   _useManagerSpacing: 1
-  _unblockHysteresis: 0.3
   _enableGradualSlowdown: 1
   _enableOvertakeProtection: 1
-  _speedSmoothRate: 5
   _animator: {fileID: 0}
   _speedParamName: Speed
 --- !u!1 &7924782285320085249

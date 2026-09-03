@@ -5,24 +5,19 @@ using UnityEngine;
 namespace Common.FlowField
 {
     /// <summary>
-    /// Read-only calculation view shared by runtime raycasts and static asset
-    /// snapshots.  The current SurfaceBakeData implementation remains the
-    /// serialized compatibility boundary; this value object keeps the build
-    /// request independent from which side produced that data.
+    /// Narrow backend contract consumed by FlowFieldSession. Tests can inject
+    /// a deterministic or delayed implementation while production uses the
+    /// Compute/Managed implementation below.
     /// </summary>
-    internal readonly struct FlowFieldSurfaceData
+    internal interface IFlowFieldBfsBackend : IDisposable
     {
-        internal FlowFieldSurfaceBakeData Source { get; }
+        bool SupportsGpu { get; }
 
-        internal bool IsValid => Source != null && Source.HasValidData;
-
-        internal FlowFieldSurfaceData(FlowFieldSurfaceBakeData source)
-        {
-            Source = source;
-        }
-
-        internal static FlowFieldSurfaceData From(FlowFieldSurfaceBakeData source)
-            => new FlowFieldSurfaceData(source);
+        bool StartBfs(
+            in FlowFieldBfsRequest request,
+            Action<FlowFieldBfsRequest> completed,
+            Action<FlowFieldBfsRequest, Exception> failed,
+            bool allowManagedFallback = true);
     }
 
     /// <summary>
@@ -39,6 +34,7 @@ namespace Common.FlowField
         internal FlowFieldDirtyFlags DirtyFlags { get; }
         internal int MaxGpuWaves { get; }
         internal int Version { get; }
+        internal bool SurfaceChanged { get; }
 
         internal FlowFieldBuildRequest(
             FlowFieldGridSpace grid,
@@ -47,7 +43,8 @@ namespace Common.FlowField
             FlowFieldGoalResolution goal,
             FlowFieldDirtyFlags dirtyFlags,
             int maxGpuWaves,
-            int version)
+            int version,
+            bool surfaceChanged = false)
         {
             Grid = grid;
             Surface = surface;
@@ -56,6 +53,7 @@ namespace Common.FlowField
             DirtyFlags = dirtyFlags;
             MaxGpuWaves = maxGpuWaves;
             Version = version;
+            SurfaceChanged = surfaceChanged;
         }
     }
 
@@ -75,6 +73,7 @@ namespace Common.FlowField
         internal FlowFieldCellRect ObstacleDirtyRegion { get; }
         internal bool HasWalkableSurface { get; }
         internal FlowFieldGoalBuildStatus GoalStatus { get; }
+        internal FlowFieldBuildDelta Delta { get; }
 
         internal bool[] Blocked => Workspace?.Blocked;
         internal Vector3[] EscapeDirections => Workspace?.EscapeDirections;
@@ -91,7 +90,8 @@ namespace Common.FlowField
             bool obstacleMaskChanged = false,
             FlowFieldCellRect obstacleDirtyRegion = default,
             bool hasWalkableSurface = false,
-            FlowFieldGoalBuildStatus goalStatus = FlowFieldGoalBuildStatus.None)
+            FlowFieldGoalBuildStatus goalStatus = FlowFieldGoalBuildStatus.None,
+            bool surfaceChanged = false)
         {
             Surface = surface;
             Workspace = workspace;
@@ -102,6 +102,44 @@ namespace Common.FlowField
             ObstacleDirtyRegion = obstacleDirtyRegion;
             HasWalkableSurface = hasWalkableSurface;
             GoalStatus = goalStatus;
+            bool goalChanged = goalStatus == FlowFieldGoalBuildStatus.Built
+                || goalStatus == FlowFieldGoalBuildStatus.NoWalkableSurface
+                || goalStatus == FlowFieldGoalBuildStatus.Invalid;
+            Delta = new FlowFieldBuildDelta(
+                surfaceChanged: surfaceChanged,
+                obstacleMaskChanged: obstacleMaskChanged,
+                goalChanged: goalChanged,
+                needsBfs: goalStatus == FlowFieldGoalBuildStatus.Built || obstacleMaskChanged,
+                finalDirtyRect: surfaceChanged || goalChanged
+                    ? FlowFieldCellRect.Full(surface == null ? default : surface.Grid)
+                    : obstacleDirtyRegion);
+        }
+    }
+
+    /// <summary>
+    /// Effective build changes after input probes have been evaluated. Raw
+    /// dirty flags are intentionally not exposed to pipeline consumers.
+    /// </summary>
+    internal readonly struct FlowFieldBuildDelta
+    {
+        internal bool SurfaceChanged { get; }
+        internal bool ObstacleMaskChanged { get; }
+        internal bool GoalChanged { get; }
+        internal bool NeedsBfs { get; }
+        internal FlowFieldCellRect FinalDirtyRect { get; }
+
+        internal FlowFieldBuildDelta(
+            bool surfaceChanged,
+            bool obstacleMaskChanged,
+            bool goalChanged,
+            bool needsBfs,
+            FlowFieldCellRect finalDirtyRect)
+        {
+            SurfaceChanged = surfaceChanged;
+            ObstacleMaskChanged = obstacleMaskChanged;
+            GoalChanged = goalChanged;
+            NeedsBfs = needsBfs;
+            FinalDirtyRect = finalDirtyRect;
         }
     }
 
@@ -143,15 +181,24 @@ namespace Common.FlowField
                 {
                     obstaclePipeline.CommitCombinedAndBuildEscape(
                         request.Grid,
-                        request.Surface.Source,
+                        request.Surface,
                         workspace,
                         out _);
-                    hasWalkableSurface = HasWalkableSurface(request.Grid, request.Surface.Source, workspace);
                 }
+                // The first obstacle preparation can legitimately produce an
+                // all-false mask (there are simply no colliders).  It is still
+                // a completed probe, so compute the diagnostic from the
+                // effective scratch/committed mask instead of reporting a
+                // spurious "all cells blocked" warning.
+                hasWalkableSurface = HasWalkableSurface(request.Grid, request.Surface, workspace);
             }
 
             if (rebuildGoal || obstacleChanged)
-                goalStatus = PrepareGoal(request, workspace, goalTracker);
+                goalStatus = PrepareGoal(
+                    request,
+                    workspace,
+                    goalTracker,
+                    forceRebuild: obstacleChanged || request.SurfaceChanged);
 
             return new FlowFieldBuildResult(
                 request.Surface,
@@ -162,12 +209,13 @@ namespace Common.FlowField
                 obstacleChanged,
                 obstacleDirtyRegion,
                 hasWalkableSurface,
-                goalStatus);
+                goalStatus,
+                request.SurfaceChanged);
         }
 
         private static bool HasWalkableSurface(
             FlowFieldGridSpace grid,
-            FlowFieldSurfaceBakeData surface,
+            FlowFieldSurfaceData surface,
             FlowFieldWorkspace workspace)
         {
             for (int index = 0; index < grid.CellCount; index++)
@@ -182,17 +230,20 @@ namespace Common.FlowField
         private static FlowFieldGoalBuildStatus PrepareGoal(
             in FlowFieldBuildRequest request,
             FlowFieldWorkspace workspace,
-            FlowFieldGoalTracker goalTracker)
+            FlowFieldGoalTracker goalTracker,
+            bool forceRebuild)
         {
             FlowFieldGoalTracker tracker = goalTracker ?? new FlowFieldGoalTracker();
             FlowFieldGoalBuildStatus status = FlowFieldGoalPipeline.Build(
                 request.Goal,
                 request.Grid,
-                request.Surface.Source,
+                request.Surface,
                 workspace,
-                tracker);
+                tracker,
+                forceRebuild);
 
-            if (status == FlowFieldGoalBuildStatus.Built)
+            if (status == FlowFieldGoalBuildStatus.Built
+                || status == FlowFieldGoalBuildStatus.Unchanged)
                 return status;
 
             // A missing Goal or a Goal with no walkable cell is still a valid
@@ -202,12 +253,16 @@ namespace Common.FlowField
             workspace.ClearGoal();
             for (int index = 0; index < request.Grid.CellCount; index++)
             {
-                workspace.InfluenceMask[index] = request.Surface.Source.IsSurfaceValid(index)
+                workspace.InfluenceMask[index] = request.Surface.IsSurfaceValid(index)
                     && !workspace.Blocked[index];
             }
             FlowFieldGraphTraversal.BuildTopologyMasks(
                 request.Grid,
-                request.Surface.Source,
+                request.Surface,
+                workspace);
+            FlowFieldGraphTraversal.ApplyNoGoalSentinels(
+                request.Grid,
+                request.Surface,
                 workspace);
             return status;
         }
@@ -227,6 +282,19 @@ namespace Common.FlowField
                 throw new ArgumentException("FlowField base workspace capacity does not match the grid.", nameof(request));
             if (!request.Goal.HasActiveGoal && request.Goal.IsValid)
                 throw new ArgumentException("A Goal resolution without an active Goal is inconsistent.", nameof(request));
+            if (request.Goal.HasActiveGoal && !request.Goal.IsValid)
+                throw new ArgumentException("An active FlowField Goal must resolve to an in-bounds cell.", nameof(request));
+            if (request.Goal.IsValid)
+            {
+                if (!request.Grid.IsLocalInBounds(request.Goal.LocalX, request.Goal.LocalZ))
+                    throw new ArgumentOutOfRangeException(nameof(request.Goal), "Resolved Goal cell is outside the grid.");
+                if (request.Goal.SourceCellIndex != request.Grid.ToFlatIndex(request.Goal.LocalX, request.Goal.LocalZ))
+                    throw new ArgumentException("Resolved Goal index does not match its local coordinates.", nameof(request.Goal));
+                if (!FlowFieldGridSpace.IsFinite(request.Goal.InfluenceRadius)
+                    || request.Goal.InfluenceRadius < 0f
+                    || !FlowFieldGridSpace.IsFinite(request.Goal.RequestedWorld))
+                    throw new ArgumentOutOfRangeException(nameof(request.Goal), "Goal resolution contains a non-finite value.");
+            }
         }
     }
 
@@ -238,7 +306,7 @@ namespace Common.FlowField
     internal readonly struct FlowFieldBfsRequest
     {
         internal FlowFieldGridSpace Grid { get; }
-        internal FlowFieldSurfaceBakeData Surface { get; }
+        internal FlowFieldSurfaceData Surface { get; }
         internal FlowFieldWorkspace Workspace { get; }
         internal bool HasGoal { get; }
         internal int GoalX { get; }
@@ -250,7 +318,7 @@ namespace Common.FlowField
 
         internal FlowFieldBfsRequest(
             FlowFieldGridSpace grid,
-            FlowFieldSurfaceBakeData surface,
+            FlowFieldSurfaceData surface,
             FlowFieldWorkspace workspace,
             bool hasGoal,
             int goalX,
@@ -271,15 +339,17 @@ namespace Common.FlowField
             MaxGpuWaves = maxGpuWaves;
             Version = version;
         }
+
     }
 
-    internal sealed class FlowFieldBuildPipeline : IDisposable
+    internal sealed class FlowFieldBuildPipeline : IFlowFieldBfsBackend
     {
         private FlowFieldComputeSolver _computeSolver;
         private bool _gpuDisabled;
         private bool _disposed;
 
         internal bool GpuDisabled => _gpuDisabled;
+        public bool SupportsGpu => !_gpuDisabled && _computeSolver != null && _computeSolver.IsSupported;
 
         internal FlowFieldBuildPipeline(ComputeShader shader)
         {
@@ -322,10 +392,11 @@ namespace Common.FlowField
                 rebuildDynamicObstacles,
                 rebuildGoal);
 
-        internal bool StartBfs(
+        public bool StartBfs(
             in FlowFieldBfsRequest request,
             Action<FlowFieldBfsRequest> completed,
-            Action<FlowFieldBfsRequest, Exception> failed)
+            Action<FlowFieldBfsRequest, Exception> failed,
+            bool allowManagedFallback = true)
         {
             if (_disposed || completed == null || failed == null)
                 return false;
@@ -340,6 +411,11 @@ namespace Common.FlowField
 
             if (_gpuDisabled || _computeSolver == null || !_computeSolver.IsSupported)
             {
+                if (!allowManagedFallback)
+                {
+                    failed(request, new PlatformNotSupportedException("FlowField GPU backend is unavailable."));
+                    return false;
+                }
                 return RunManaged(request, completed, failed);
             }
 
@@ -362,10 +438,20 @@ namespace Common.FlowField
             }
             catch (Exception exception)
             {
+                if (!allowManagedFallback)
+                {
+                    failed(request, exception);
+                    return false;
+                }
                 _gpuDisabled = true;
                 return RunManaged(request, completed, failed, exception);
             }
 
+            if (!allowManagedFallback)
+            {
+                failed(request, new InvalidOperationException("FlowField GPU dispatch was not accepted."));
+                return false;
+            }
             _gpuDisabled = true;
             return RunManaged(request, completed, failed, null);
 
@@ -376,13 +462,22 @@ namespace Common.FlowField
                 try
                 {
                     ApplyGpuResult(compute, result);
-                    completed(requestCopy);
                 }
                 catch (Exception exception)
                 {
+                    if (!allowManagedFallback)
+                    {
+                        failed(requestCopy, exception);
+                        return;
+                    }
                     _gpuDisabled = true;
                     RunManaged(requestCopy, completed, failed, exception);
+                    return;
                 }
+                // Consumer composition/commit is deliberately outside the
+                // GPU validation catch. A compose error must Fault the
+                // session once, never rerun BFS through the fallback path.
+                completed(requestCopy);
             }
 
             void OnGpuFailed(
@@ -391,6 +486,11 @@ namespace Common.FlowField
                 Exception exception)
             {
                 _gpuDisabled = true;
+                if (!allowManagedFallback)
+                {
+                    failed(requestCopy, exception);
+                    return;
+                }
                 RunManaged(requestCopy, completed, failed, exception);
             }
         }
@@ -427,14 +527,27 @@ namespace Common.FlowField
                     request.Workspace.ClearGoal();
                 }
 
-                completed(request);
-                return true;
             }
             catch (Exception exception)
             {
-                failed(request, gpuException ?? exception);
+                // The Managed path is the source of truth for a fallback
+                // failure. Preserve the GPU diagnostic as an inner error,
+                // but never hide the exception raised by the actual fallback
+                // solver (tests and callers rely on that transition).
+                failed(
+                    request,
+                    gpuException == null
+                        ? exception
+                        : new AggregateException(
+                            "Managed FlowField BFS failed after GPU fallback.",
+                            gpuException,
+                            exception));
                 return true;
             }
+
+            // Keep consumer callbacks outside the solver catch boundary.
+            completed(request);
+            return true;
         }
 
         /// <summary>
@@ -497,6 +610,11 @@ namespace Common.FlowField
                         if (directionIndex < 0
                             || (request.Workspace.TopologyMasks[index] & (1 << directionIndex)) == 0)
                             throw new InvalidOperationException("FlowField GPU produced a non-topological NextCell.");
+                        if (!FlowFieldGraphTraversal.IsCellTraversable(
+                                request.Surface,
+                                request.Workspace,
+                                cell.NextCell))
+                            throw new InvalidOperationException("FlowField GPU produced a blocked or invalid NextCell.");
 
                         direction = Vector3.ProjectOnPlane(
                             direction,
@@ -534,7 +652,7 @@ namespace Common.FlowField
         {
             if (!request.Grid.IsValid)
                 throw new ArgumentException("FlowField BFS requires a valid grid.", nameof(request));
-            if (request.Surface == null || !request.Surface.HasValidData)
+            if (!request.Surface.IsValid)
                 throw new ArgumentException("FlowField BFS requires a valid Surface Bake.", nameof(request));
             if (request.Workspace == null || request.Workspace.Capacity != request.Grid.CellCount)
                 throw new ArgumentException("FlowField BFS workspace capacity does not match the grid.", nameof(request));
@@ -547,6 +665,13 @@ namespace Common.FlowField
             if (!FlowFieldGridSpace.IsFinite(request.GoalInfluenceRadius)
                 || request.GoalInfluenceRadius < 0f)
                 throw new ArgumentOutOfRangeException(nameof(request.GoalInfluenceRadius));
+            if (request.Workspace.ResolvedGoalIndex != request.GoalIndex
+                || !FlowFieldGraphTraversal.IsCellTraversable(
+                    request.Surface,
+                    request.Workspace,
+                    request.GoalIndex))
+                throw new InvalidOperationException(
+                    "FlowField BFS Goal must be the resolved walkable cell in the prepared workspace.");
         }
 
         public void Dispose()
@@ -559,32 +684,4 @@ namespace Common.FlowField
         }
     }
 
-    /// <summary>
-    /// Named BFS backend façade used by build-session code.  Keeping the
-    /// façade separate lets callers depend on a solver runner without taking
-    /// a dependency on the broader build coordinator implementation.
-    /// </summary>
-    internal sealed class FlowFieldBfsRunner : IDisposable
-    {
-        private readonly FlowFieldBuildPipeline _pipeline;
-
-        internal bool GpuDisabled => _pipeline == null || _pipeline.GpuDisabled;
-
-        internal FlowFieldBfsRunner(ComputeShader shader)
-        {
-            _pipeline = new FlowFieldBuildPipeline(shader);
-        }
-
-        internal bool Start(
-            in FlowFieldBfsRequest request,
-            Action<FlowFieldBfsRequest> completed,
-            Action<FlowFieldBfsRequest, Exception> failed)
-            => _pipeline != null && _pipeline.StartBfs(request, completed, failed);
-
-        internal static bool BuildManaged(in FlowFieldBfsRequest request)
-            => FlowFieldBuildPipeline.BuildManaged(request);
-
-        public void Dispose()
-            => _pipeline?.Dispose();
-    }
 }

@@ -265,8 +265,18 @@ void BuildFlowDirections(uint3 id : SV_DispatchThreadID)
     int bz = (int)(best / _Width);
     SurfaceCell currentSurface = SurfaceDataBuffer[index];
     SurfaceCell nextSurface = SurfaceDataBuffer[best];
-    float3 currentPosition = _GridOrigin + float3((x + 0.5) * _CellSize, currentSurface.Height, (z + 0.5) * _CellSize);
-    float3 nextPosition = _GridOrigin + float3((bx + 0.5) * _CellSize, nextSurface.Height, (bz + 0.5) * _CellSize);
+    // Grid.Origin.y is the bake-volume center used only as a layout anchor;
+    // SurfaceCell.Height already stores the absolute world-space hit height.
+    // Keep Y absolute here so GPU directions match the Managed projection on
+    // elevated/offset bake volumes.
+    float3 currentPosition = float3(
+        _GridOrigin.x + (x + 0.5) * _CellSize,
+        currentSurface.Height,
+        _GridOrigin.z + (z + 0.5) * _CellSize);
+    float3 nextPosition = float3(
+        _GridOrigin.x + (bx + 0.5) * _CellSize,
+        nextSurface.Height,
+        _GridOrigin.z + (bz + 0.5) * _CellSize);
     float3 normal = normalize(currentSurface.Normal);
     float3 projected = (nextPosition - currentPosition) - normal * dot(nextPosition - currentPosition, normal);
     float lengthSquared = dot(projected, projected);

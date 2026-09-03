@@ -2,630 +2,695 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-
 namespace Common.TransformPath
 {
-    /// <summary>
-    /// 경로 이벤트 한 줄 (정규화 시각, 이벤트 SO).
-    /// </summary>
     [Serializable]
     public struct PathEventEntry
     {
         public float NormalizedTime;
-
         public PathEventSettingSO EventSetting;
     }
 
-
     /// <summary>
-    /// 경로 데이터 클래스
-    /// 연출을 위한 이동에 사용
+    /// A rebuilt, arc-length sampled path provider. Runtime consumers only see
+    /// the canonical sample and event-index APIs; editor preview sampling is
+    /// editor-only and is compiled out of player builds.
     /// </summary>
     [DefaultExecutionOrder(-300)]
-    public partial class PathData : MonoBehaviour, IPathProvider, IPathController, IPathEventSource
+    public sealed class PathData : MonoBehaviour, IPathProvider, IPathEventSource
     {
-        #region Constants
-
-        /// <summary>
-        /// 경로 이벤트 배치 상한. 경로 진행도(0~1)와 동일합니다.
-        /// 런타임 발화는 <see cref="PathFollower"/>의 인덱스 커서와 completion flush를 사용합니다.
-        /// </summary>
         public const float MAX_PATH_EVENT_NORMALIZED_TIME = 0.995f;
 
         private const int MIN_PATH_POINTS = 2;
         private const int DEFAULT_SEGMENT_COUNT = 500;
 
-        #endregion
-
-
-        #region Inner Classes / Structs
-
         public enum ECurveType
         {
             Linear = 0,
-
-            /// <summary>3차 균일 B-스플라인(근사). 내부 웨이포인트는 곡선 위에 없을 수 있습니다.</summary>
             SplineApproximating = 1,
-
-            /// <summary>Catmull-Rom 스플라인(보간). 모든 제어점을 통과합니다.</summary>
             SplineInterpolating = 2,
         }
 
-        public enum ESamplingType
-        {
-            Uniform,        // 균등 간격 샘플링
-            Random,         // 랜덤 위치 샘플링
-            DistanceBased   // 거리 기반 샘플링
-        }
-
-        #endregion
-
-
-        #region Path Definition and Cache State
-
         [SerializeField] private List<Transform> _pathPoints = new List<Transform>();
-
         [Header("Path events (normalized time → PathEventSettingSO)")]
         [SerializeField] private List<PathEventEntry> _pathEvents = new List<PathEventEntry>();
-
-        [SerializeField] private int _segmentCount = DEFAULT_SEGMENT_COUNT;
-        [SerializeField] private int _samplingCount = 10;
+        [SerializeField, Min(2)] private int _segmentCount = DEFAULT_SEGMENT_COUNT;
         [SerializeField] private ECurveType _curveType = ECurveType.Linear;
-        [SerializeField] private ESamplingType _samplingType = ESamplingType.Uniform;
 
-        private Vector3[] _cachedPathPoints = null;
-        private float[] _cachedDistances = null;
-        private float _cachedPathLength = -1f;
-        private bool _isInitialized = false;
-        private bool _isFaulted = false;
-        private Exception _fault;
-        private int _lastPathPointCount = -1;
+#if UNITY_EDITOR
+        private enum EPreviewSamplingType
+        {
+            Uniform,
+            DeterministicRandom,
+            DistanceBased,
+        }
+
+        [Header("Editor Preview Only")]
+        [SerializeField] private bool _showPathInEditor = true;
+        [SerializeField] private EPreviewSamplingType _previewSamplingType = EPreviewSamplingType.Uniform;
+        [SerializeField, Min(0)] private int _previewSampleCount = 10;
+        [SerializeField] private Color _pointColor = Color.red;
+        [SerializeField] private Color _pathColor = Color.blue;
+        [SerializeField] private Color _samplePointColor = Color.yellow;
+        [SerializeField] private Color _eventPointColor = Color.green;
+        [SerializeField, Min(0f)] private float _pointSize = 0.1f;
+        [SerializeField, Min(0f)] private float _samplePointSize = 0f;
+        [SerializeField, Min(0f)] private float _eventPointSize = 0.15f;
+#endif
+
+        private Vector3[] _cachedPathPoints;
+        private float[] _cachedDistances;
+        private float _cachedPathLength;
+        private bool _isInitialized;
+        private bool _hasConfiguredVectorPoints;
+        private bool _configurationErrorReported;
+        private int _revision;
+
+        private readonly List<Vector3> _configuredPoints = new List<Vector3>();
         private readonly List<Vector3> _validPointsScratch = new List<Vector3>();
         private readonly List<Vector3> _buildPointsScratch = new List<Vector3>();
         private readonly List<float> _segmentDistancesScratch = new List<float>();
         private readonly List<Vector3> _controlPointsScratch = new List<Vector3>();
-        private bool _hasConfiguredVectorPoints;
 
-        #endregion
+        public bool IsInitialized => _isInitialized;
+        public bool IsReady => _isInitialized
+            && _cachedPathPoints != null
+            && _cachedDistances != null
+            && _cachedPathPoints.Length >= MIN_PATH_POINTS
+            && _cachedPathLength > 0f;
+        public int Revision => _revision;
+        public float PathLength
+        {
+            get
+            {
+                ThrowIfNotReady();
+                return _cachedPathLength;
+            }
+        }
+        public ECurveType CurveType => _curveType;
+        public int BuildSegmentCount => _segmentCount;
+        public int SamplePointCount
+        {
+            get
+            {
+                ThrowIfNotReady();
+                return _cachedPathPoints.Length;
+            }
+        }
+        public int EventCount => _pathEvents == null ? 0 : _pathEvents.Count;
+
+        public event Action PathChanged;
 
         private void Awake()
         {
-            if (Application.isPlaying)
+            if (Application.isPlaying && HasAuthoringConfiguration())
                 Init();
         }
 
         private void OnDestroy()
         {
-            if (_isInitialized)
-                Release();
-            else if (_isFaulted)
-                Release();
+            Release();
         }
 
-
-        #region Path Properties
-
-        /// <summary>
-        /// 전체 경로 포인트 배열
-        /// </summary>
-        public Vector3[] PathPoints
-        {
-            get
-            {
-                if (!_isInitialized || _isFaulted || _cachedPathLength < 0f)
-                    throw new InvalidOperationException("PathData must be initialized before PathPoints is read.");
-
-                return _cachedPathPoints;
-            }
-        }
-
-        /// <summary>
-        /// 전체 경로 길이
-        /// </summary>
-        public float PathLength
-        {
-            get
-            {
-                if (!_isInitialized || _isFaulted || _cachedPathLength < 0f)
-                    throw new InvalidOperationException("PathData must be initialized before PathLength is read.");
-                return _cachedPathLength;
-            }
-        }
-
-        /// <summary>
-        /// 경로 이벤트 목록 (정규화 시간, <see cref="PathEventSettingSO"/>).
-        /// </summary>
-        public IReadOnlyList<PathEventEntry> PathEvents
-        {
-            get
-            {
-                ThrowIfNotReady();
-                return _pathEvents;
-            }
-        }
-
-        /// <summary>
-        /// 등록된 경로 이벤트가 하나 이상인지 여부
-        /// </summary>
-        public bool HasPathEvents => _pathEvents != null && _pathEvents.Count > 0;
-
-        #endregion
-
-
-        #region Path Construction and Query API
-
-        /// <summary>
-        /// 경로 데이터를 초기화합니다
-        /// </summary>
         public void Init()
         {
             if (_isInitialized)
-                throw new InvalidOperationException("PathData is already initialized.");
-            if (_isFaulted)
-                throw new InvalidOperationException("PathData is faulted. Call Release before Init.", _fault);
+                return;
 
-            try
-            {
-                if (_hasConfiguredVectorPoints)
-                {
-                    if (_validPointsScratch.Count < MIN_PATH_POINTS)
-                        throw new ArgumentException("PathData requires at least two configured control points.", nameof(_validPointsScratch));
-                }
-                else if (!CollectValidWorldPoints(_pathPoints))
-                {
-                    throw new ArgumentException("PathData requires at least two valid control points.", nameof(_pathPoints));
-                }
+            if (!HasAuthoringConfiguration())
+                return;
 
-                BuildFromPoints(_validPointsScratch);
-            }
-            catch (Exception exception)
-            {
-                if (_fault == null)
-                    _fault = exception;
-                _isFaulted = true;
-                _isInitialized = false;
-                throw;
-            }
+            TryBuildFromCurrentConfiguration();
         }
 
-        /// <summary>
-        /// 인스펙터에 등록된 제어점 Transform의 월드 좌표를 순서대로 <paramref name="destination"/>에 복사합니다.
-        /// 런타임에서 별도 경로 데이터를 만들 때 사용할 제어점을 복사합니다.
-        /// </summary>
-        /// <param name="destination">복사 대상 리스트</param>
-        /// <param name="clearDestination">true이면 복사 전에 리스트를 비웁니다</param>
-        /// <returns>항상 true. 제어점이 부족하거나 구조가 유효하지 않으면 예외를 던집니다.</returns>
-        public bool CopyWorldControlPoints(List<Vector3> destination, bool clearDestination = true)
+        public void Release()
+        {
+            if (!_isInitialized && _cachedPathPoints == null && _cachedDistances == null)
+                return;
+
+            _isInitialized = false;
+            _cachedPathPoints = null;
+            _cachedDistances = null;
+            _cachedPathLength = 0f;
+        }
+
+        public void ConfigureBuildSettings(PathBuildSettings settings)
+        {
+            ValidateCurveType(settings.CurveType);
+            if (settings.SegmentCount < MIN_PATH_POINTS)
+                throw new ArgumentOutOfRangeException(nameof(settings), "SegmentCount must be at least two.");
+
+            bool changed = _curveType != settings.CurveType || _segmentCount != settings.SegmentCount;
+            _curveType = settings.CurveType;
+            _segmentCount = settings.SegmentCount;
+            if (changed && _isInitialized)
+                Rebuild();
+        }
+
+        public void SetCurveType(ECurveType curveType)
+        {
+            ValidateCurveType(curveType);
+            if (_curveType == curveType)
+                return;
+
+            _curveType = curveType;
+            if (_isInitialized)
+                Rebuild();
+        }
+
+        public void SetSegmentCount(int segmentCount)
+        {
+            if (segmentCount < MIN_PATH_POINTS)
+                throw new ArgumentOutOfRangeException(nameof(segmentCount));
+            if (_segmentCount == segmentCount)
+                return;
+
+            _segmentCount = segmentCount;
+            if (_isInitialized)
+                Rebuild();
+        }
+
+        /// <summary>Copies the authoring control points without exposing internal lists.</summary>
+        public bool CopyControlPoints(List<Vector3> destination, bool clearDestination = true)
         {
             if (destination == null)
                 throw new ArgumentNullException(nameof(destination));
 
-            // Copying is a provider query, so fail before mutating the caller's
-            // list when this PathData has not completed its Init/Rebuild contract.
-            ThrowIfNotReady();
-
             if (clearDestination)
                 destination.Clear();
 
+            if (_hasConfiguredVectorPoints)
+            {
+                destination.AddRange(_configuredPoints);
+                return destination.Count >= MIN_PATH_POINTS;
+            }
+
             if (_pathPoints == null)
-                throw new InvalidOperationException("PathData control points are not configured.");
+                return false;
 
             for (int i = 0; i < _pathPoints.Count; i++)
             {
                 Transform point = _pathPoints[i];
-                if (point == null)
-                    throw new ArgumentNullException($"{nameof(_pathPoints)}[{i}]", "Control point references cannot be null.");
-                if (!IsFinite(point.position))
-                    throw new ArgumentOutOfRangeException($"{nameof(_pathPoints)}[{i}]", "Control point position must be finite.");
+                if (point == null || !IsFinite(point.position))
+                    return false;
                 destination.Add(point.position);
             }
 
-            if (destination.Count < MIN_PATH_POINTS)
-                throw new ArgumentException("PathData requires at least two control points.", nameof(destination));
-
-            return true;
+            return destination.Count >= MIN_PATH_POINTS;
         }
 
-        /// <summary>
-        /// 외부에서 제공된 Transform 리스트로 경로 데이터를 초기화합니다
-        /// </summary>
-        /// <param name="pathPoints">경로 포인트 Transform 리스트</param>
-        public void ConfigureControlPoints(List<Transform> pathPoints)
+        public void ConfigureControlPoints(IReadOnlyList<Vector3> points)
         {
-            ThrowIfFaulted();
-            if (pathPoints == null)
-                throw new ArgumentNullException(nameof(pathPoints));
-            if (pathPoints.Count < MIN_PATH_POINTS)
-                throw new ArgumentException("At least two control points are required.", nameof(pathPoints));
-
-            if (!CollectValidWorldPoints(pathPoints))
-                throw new ArgumentException("At least two valid control points are required.", nameof(pathPoints));
-
-            _pathPoints = new List<Transform>(pathPoints);
-            _hasConfiguredVectorPoints = false;
-            MarkStale();
-        }
-
-        /// <summary>
-        /// 외부에서 제공된 Vector3 배열로 경로 데이터를 초기화합니다
-        /// </summary>
-        /// <param name="points">경로 포인트 Vector3 배열</param>
-        public void ConfigureControlPoints(Vector3[] points)
-        {
-            ThrowIfFaulted();
-            if (points == null)
-                throw new ArgumentNullException(nameof(points));
-            if (points.Length < MIN_PATH_POINTS)
-                throw new ArgumentException("At least two control points are required.", nameof(points));
-
-            for (int i = 0; i < points.Length; i++)
-                if (!IsFinite(points[i]))
-                    throw new ArgumentOutOfRangeException(nameof(points));
-
-            _validPointsScratch.Clear();
-            for (int i = 0; i < points.Length; i++)
-                _validPointsScratch.Add(points[i]);
-
-            _hasConfiguredVectorPoints = true;
-            MarkStale();
-        }
-
-        /// <summary>
-        /// 외부에서 제공된 Vector3 리스트로 경로 데이터를 초기화합니다
-        /// </summary>
-        /// <param name="points">경로 포인트 Vector3 리스트</param>
-        public void ConfigureControlPoints(List<Vector3> points)
-        {
-            ThrowIfFaulted();
             if (points == null)
                 throw new ArgumentNullException(nameof(points));
             if (points.Count < MIN_PATH_POINTS)
                 throw new ArgumentException("At least two control points are required.", nameof(points));
 
+            _configuredPoints.Clear();
             for (int i = 0; i < points.Count; i++)
+            {
                 if (!IsFinite(points[i]))
                     throw new ArgumentOutOfRangeException(nameof(points));
+                _configuredPoints.Add(points[i]);
+            }
 
-            _validPointsScratch.Clear();
-            _validPointsScratch.AddRange(points);
             _hasConfiguredVectorPoints = true;
-            MarkStale();
+            if (_isInitialized)
+                Rebuild();
         }
 
-        /// <summary>
-        /// 0~1의 정규화된 값으로 경로 상의 위치를 가져옵니다
-        /// </summary>
-        /// <param name="normalizedValue">정규화된 진행도 (0~1)</param>
-        /// <returns>경로 상의 위치</returns>
-        public Vector3 GetPointOnPath(float normalizedValue)
+        public Vector3 GetSamplePoint(int index)
         {
             ThrowIfNotReady();
-
-            if (!IsFinite(normalizedValue) || normalizedValue < 0f || normalizedValue > 1f)
-                throw new ArgumentOutOfRangeException(nameof(normalizedValue));
-
-            if (normalizedValue <= 0f)
-                return _cachedPathPoints[0];
-
-            if (normalizedValue >= 1f)
-                return _cachedPathPoints[_cachedPathPoints.Length - 1];
-
-            float targetDistance = normalizedValue * _cachedPathLength;
-            int segmentIndex = PathGeometryUtility.FindSegmentIndex(_cachedDistances, targetDistance);
-
-            if (segmentIndex < 0 || segmentIndex >= _cachedDistances.Length - 1)
-                throw new InvalidOperationException("PathData distance cache is inconsistent.");
-
-            float segmentStart = _cachedDistances[segmentIndex];
-            float segmentEnd = _cachedDistances[segmentIndex + 1];
-            float segmentLength = segmentEnd - segmentStart;
-
-            if (segmentLength <= 0f)
-                return _cachedPathPoints[segmentIndex];
-
-            float localT = (targetDistance - segmentStart) / segmentLength;
-
-            if (segmentIndex + 1 < _cachedPathPoints.Length)
-                return Vector3.Lerp(_cachedPathPoints[segmentIndex], _cachedPathPoints[segmentIndex + 1], localT);
-
-            return _cachedPathPoints[segmentIndex];
+            if (index < 0 || index >= _cachedPathPoints.Length)
+                throw new ArgumentOutOfRangeException(nameof(index));
+            return _cachedPathPoints[index];
         }
 
-        /// <summary>
-        /// 거리 값을 전체 경로 길이에 비례해 0~1로 정규화하여 경로 상의 위치를 가져옵니다
-        /// </summary>
-        /// <param name="distance">거리 값 (전체 PathLength 기준)</param>
-        /// <returns>경로 상의 위치</returns>
-        public Vector3 GetPointAtDistance(float distance)
+        public PathEventEntry GetEvent(int index)
         {
-            ThrowIfNotReady();
-            if (!IsFinite(distance) || distance < 0f || distance > _cachedPathLength)
-                throw new ArgumentOutOfRangeException(nameof(distance));
-            if (_cachedPathLength <= 0f)
-                throw new InvalidOperationException("PathData has no measurable path length.");
-
-            float normalizedValue = distance / _cachedPathLength;
-            return GetPointOnPath(normalizedValue);
+            if (_pathEvents == null || index < 0 || index >= _pathEvents.Count)
+                throw new ArgumentOutOfRangeException(nameof(index));
+            return _pathEvents[index];
         }
-
-
-        /// <summary>
-        /// 경로 이벤트를 <see cref="PathEventEntry.NormalizedTime"/> 오름차순으로 정렬합니다.
-        /// </summary>
-        /// <returns>리스트 순서가 바뀌었으면 true</returns>
-        public bool SortPathEventsByNormalizedTime()
-        {
-            if (_pathEvents == null || _pathEvents.Count < 2)
-                return ClampPathEventNormalizedTimes();
-
-            bool orderChanged = false;
-
-            for (int i = 1; i < _pathEvents.Count; i++)
-            {
-                if (_pathEvents[i].NormalizedTime < _pathEvents[i - 1].NormalizedTime)
-                {
-                    _pathEvents.Sort((a, b) => a.NormalizedTime.CompareTo(b.NormalizedTime));
-                    orderChanged = true;
-                    break;
-                }
-            }
-
-            if (ClampPathEventNormalizedTimes())
-                orderChanged = true;
-
-            return orderChanged;
-        }
-
-        /// <summary>
-        /// 등록된 경로 이벤트의 <see cref="PathEventEntry.NormalizedTime"/>을 상한 이내로 보정합니다.
-        /// </summary>
-        /// <returns>한 개 이상의 값이 변경되었으면 true</returns>
-        public bool ClampPathEventNormalizedTimes()
-        {
-            if (_pathEvents == null || _pathEvents.Count == 0)
-                return false;
-
-            bool anyChanged = false;
-
-            for (int i = 0; i < _pathEvents.Count; i++)
-            {
-                PathEventEntry entry = _pathEvents[i];
-                float clampedTime = ClampPathEventNormalizedTime(entry.NormalizedTime);
-
-                if (Mathf.Approximately(entry.NormalizedTime, clampedTime))
-                    continue;
-
-                entry.NormalizedTime = clampedTime;
-                _pathEvents[i] = entry;
-                anyChanged = true;
-            }
-
-            return anyChanged;
-        }
-
-        public static float ClampPathEventNormalizedTime(float normalizedTime)
-            => Mathf.Clamp(normalizedTime, 0f, MAX_PATH_EVENT_NORMALIZED_TIME);
-
-        #endregion
-
-        #region Provider Contract State
-
-        private int _revision = 0;
-
-        #endregion
-
-
-        #region Provider Contract
-
-        public bool IsInitialized => _isInitialized;
-        public bool IsFaulted => _isFaulted;
-        public bool IsReady => _isInitialized && !_isFaulted && _cachedPathLength >= 0f
-            && _cachedPathPoints != null && _cachedPathPoints.Length > 0;
-        public int Revision => _revision;
-
-        public event Action PathChanged;
-
-        #endregion
-
-
-        #region Provider API
 
         public Vector3 Sample(float normalizedTime)
         {
             ThrowIfNotReady();
-            if (!IsFinite(normalizedTime) || normalizedTime < 0f || normalizedTime > 1f)
+            if (!IsFinite(normalizedTime))
                 throw new ArgumentOutOfRangeException(nameof(normalizedTime));
-            return GetPointOnPath(normalizedTime);
+            return SampleInternal(Mathf.Clamp01(normalizedTime));
         }
 
         public Vector3 SampleDistance(float distance)
         {
             ThrowIfNotReady();
-            if (!IsFinite(distance) || distance < 0f || distance > _cachedPathLength)
+            if (!IsFinite(distance))
                 throw new ArgumentOutOfRangeException(nameof(distance));
-            return GetPointAtDistance(distance);
+            return SampleDistanceInternal(Mathf.Clamp(distance, 0f, _cachedPathLength));
         }
 
         public void Rebuild()
         {
-            ThrowIfFaulted();
             if (!_isInitialized)
-                throw new InvalidOperationException("PathData must be initialized before Rebuild.");
+            {
+                Init();
+                return;
+            }
+
+            TryBuildFromCurrentConfiguration();
+        }
+
+        public bool SortPathEventsByNormalizedTime()
+        {
+            if (_pathEvents == null || _pathEvents.Count < 2)
+                return ClampPathEventNormalizedTimes();
+
+            bool changed = false;
+            for (int i = 1; i < _pathEvents.Count; i++)
+            {
+                if (_pathEvents[i].NormalizedTime < _pathEvents[i - 1].NormalizedTime)
+                {
+                    _pathEvents.Sort((left, right) => left.NormalizedTime.CompareTo(right.NormalizedTime));
+                    changed = true;
+                    break;
+                }
+            }
+
+            return ClampPathEventNormalizedTimes() || changed;
+        }
+
+        public bool ClampPathEventNormalizedTimes()
+        {
+            if (_pathEvents == null)
+                return false;
+
+            bool changed = false;
+            for (int i = 0; i < _pathEvents.Count; i++)
+            {
+                PathEventEntry entry = _pathEvents[i];
+                float clamped = ClampPathEventNormalizedTime(entry.NormalizedTime);
+                if (Mathf.Approximately(clamped, entry.NormalizedTime))
+                    continue;
+                entry.NormalizedTime = clamped;
+                _pathEvents[i] = entry;
+                changed = true;
+            }
+
+            return changed;
+        }
+
+        public static float ClampPathEventNormalizedTime(float normalizedTime)
+        {
+            return Mathf.Clamp(normalizedTime, 0f, MAX_PATH_EVENT_NORMALIZED_TIME);
+        }
+
+        private bool HasAuthoringConfiguration()
+        {
+            return _hasConfiguredVectorPoints
+                ? _configuredPoints.Count >= MIN_PATH_POINTS
+                : _pathPoints != null && _pathPoints.Count >= MIN_PATH_POINTS;
+        }
+
+        private void TryBuildFromCurrentConfiguration()
+        {
             try
             {
                 if (_hasConfiguredVectorPoints)
                 {
-                    if (_validPointsScratch.Count < MIN_PATH_POINTS)
-                        throw new ArgumentException("PathData requires at least two configured control points.", nameof(_validPointsScratch));
+                    if (_configuredPoints.Count < MIN_PATH_POINTS)
+                        throw new ArgumentException("PathData requires at least two configured control points.");
+                    BuildFromPoints(_configuredPoints);
+                }
+                else
+                {
+                    if (!CollectValidWorldPoints(_pathPoints))
+                        throw new ArgumentException("PathData requires at least two valid control points.");
                     BuildFromPoints(_validPointsScratch);
                 }
-                else if (!CollectValidWorldPoints(_pathPoints))
-                    throw new ArgumentException("PathData requires at least two valid control points.");
-                else
-                    BuildFromPoints(_validPointsScratch);
+
+                _configurationErrorReported = false;
             }
             catch (Exception exception)
             {
-                if (_fault == null)
-                    _fault = exception;
-                _isFaulted = true;
                 _isInitialized = false;
-                throw;
+                _cachedPathPoints = null;
+                _cachedDistances = null;
+                _cachedPathLength = 0f;
+                if (!_configurationErrorReported)
+                {
+                    Debug.LogError($"PathData '{name}' could not build: {exception.Message}", this);
+                    _configurationErrorReported = true;
+                }
             }
         }
 
-        public void Release()
+        private bool CollectValidWorldPoints(IReadOnlyList<Transform> sources)
         {
-            if (!_isInitialized && !_isFaulted)
-                throw new InvalidOperationException("PathData has not been initialized.");
-            _isInitialized = false;
-            _isFaulted = false;
-            _cachedPathPoints = null;
-            _cachedDistances = null;
-            _cachedPathLength = -1f;
-            _fault = null;
+            _validPointsScratch.Clear();
+            if (sources == null)
+                return false;
+
+            for (int i = 0; i < sources.Count; i++)
+            {
+                Transform source = sources[i];
+                if (source == null || !IsFinite(source.position))
+                    return false;
+                _validPointsScratch.Add(source.position);
+            }
+
+            return _validPointsScratch.Count >= MIN_PATH_POINTS;
+        }
+
+        private void BuildFromPoints(IReadOnlyList<Vector3> validPoints)
+        {
+            if (validPoints == null || validPoints.Count < MIN_PATH_POINTS)
+                throw new ArgumentException("At least two control points are required.", nameof(validPoints));
+            if (_segmentCount < MIN_PATH_POINTS)
+                throw new ArgumentOutOfRangeException(nameof(_segmentCount));
+            ValidateCurveType(_curveType);
+            ValidatePathEvents();
+
+            _buildPointsScratch.Clear();
+            switch (_curveType)
+            {
+                case ECurveType.Linear:
+                    GenerateLinearPath(validPoints, _buildPointsScratch);
+                    break;
+                case ECurveType.SplineApproximating:
+                    GenerateSplinePath(validPoints, _buildPointsScratch);
+                    break;
+                case ECurveType.SplineInterpolating:
+                    GenerateCatmullRomPath(validPoints, _buildPointsScratch);
+                    break;
+            }
+
+            Vector3[] nextPoints = _buildPointsScratch.ToArray();
+            float[] nextDistances = PathGeometryUtility.CalculateCumulativeDistances(nextPoints);
+            float nextLength = nextDistances[nextDistances.Length - 1];
+            if (!IsFinite(nextLength) || nextLength <= 0f)
+                throw new ArgumentException("Path control points must produce a measurable path length.");
+
+            bool changed = !_isInitialized
+                || _cachedPathPoints == null
+                || _cachedPathPoints.Length != nextPoints.Length
+                || !Mathf.Approximately(_cachedPathLength, nextLength);
+            if (!changed)
+            {
+                for (int i = 0; i < nextPoints.Length; i++)
+                {
+                    if (_cachedPathPoints[i] != nextPoints[i])
+                    {
+                        changed = true;
+                        break;
+                    }
+                }
+            }
+
+            // Publish only after the complete temporary result passed validation.
+            _cachedPathPoints = nextPoints;
+            _cachedDistances = nextDistances;
+            _cachedPathLength = nextLength;
+            _isInitialized = true;
+            if (changed)
+            {
+                _revision++;
+                NotifyPathChanged();
+            }
+
+        }
+
+        private void ValidatePathEvents()
+        {
+            if (_pathEvents == null)
+                throw new ArgumentException("Path event list cannot be null.");
+            for (int i = 0; i < _pathEvents.Count; i++)
+            {
+                PathEventEntry entry = _pathEvents[i];
+                if (!IsFinite(entry.NormalizedTime)
+                    || entry.NormalizedTime < 0f
+                    || entry.NormalizedTime > MAX_PATH_EVENT_NORMALIZED_TIME)
+                    throw new ArgumentOutOfRangeException($"_pathEvents[{i}].NormalizedTime");
+                if (entry.EventSetting == null)
+                    throw new ArgumentNullException($"_pathEvents[{i}].EventSetting");
+            }
+        }
+
+        private Vector3 SampleInternal(float normalizedTime)
+        {
+            if (normalizedTime <= 0f)
+                return _cachedPathPoints[0];
+            if (normalizedTime >= 1f)
+                return _cachedPathPoints[_cachedPathPoints.Length - 1];
+
+            return SampleDistanceInternal(normalizedTime * _cachedPathLength);
+        }
+
+        private Vector3 SampleDistanceInternal(float distance)
+        {
+            if (distance <= 0f)
+                return _cachedPathPoints[0];
+            if (distance >= _cachedPathLength)
+                return _cachedPathPoints[_cachedPathPoints.Length - 1];
+
+            int index = PathGeometryUtility.FindSegmentIndex(_cachedDistances, distance);
+            float start = _cachedDistances[index];
+            float end = _cachedDistances[index + 1];
+            float length = end - start;
+            if (length <= Mathf.Epsilon)
+                return _cachedPathPoints[index];
+            return Vector3.Lerp(_cachedPathPoints[index], _cachedPathPoints[index + 1], (distance - start) / length);
+        }
+
+        private void NotifyPathChanged()
+        {
+            Delegate[] listeners = PathChanged?.GetInvocationList();
+            if (listeners == null)
+                return;
+            for (int i = 0; i < listeners.Length; i++)
+            {
+                try
+                {
+                    ((Action)listeners[i])();
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogException(exception, this);
+                }
+            }
         }
 
         private void ThrowIfNotReady()
         {
-            ThrowIfFaulted();
-            if (!_isInitialized)
-                throw new InvalidOperationException("PathData is not initialized.");
             if (!IsReady)
-                throw new InvalidOperationException("PathData is not ready.");
+                throw new InvalidOperationException("PathData is not initialized and ready.");
         }
 
-        private void MarkStale()
+        private static void ValidateCurveType(ECurveType curveType)
         {
-            if (_isFaulted)
-                throw new InvalidOperationException("PathData is faulted. Call Release before changing its configuration.", _fault);
-            if (_isInitialized)
-                _cachedPathLength = -1f;
+            if (!Enum.IsDefined(typeof(ECurveType), curveType))
+                throw new ArgumentOutOfRangeException(nameof(curveType));
         }
-
-        private void ThrowIfFaulted()
-        {
-            if (_isFaulted)
-                throw new InvalidOperationException("PathData is faulted. Call Release before using it.", _fault);
-        }
-
-        internal void NotifyPathBuild(bool resultChanged)
-        {
-            if (!resultChanged)
-                return;
-
-            _revision++;
-            PathChanged?.Invoke();
-        }
-
-        #endregion
-
-
-        #region Provider Helpers
 
         private static bool IsFinite(float value)
-            => !float.IsNaN(value) && !float.IsInfinity(value);
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
+        }
 
         private static bool IsFinite(Vector3 value)
-            => IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
-
-        #endregion
-
-        #region Sampling
-
-        private Vector3[] SamplePointsOnPath(int count)
         {
-            if (count <= 0)
-                return Array.Empty<Vector3>();
+            return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
+        }
 
-            if (_cachedPathPoints == null || _cachedPathPoints.Length == 0)
-                throw new InvalidOperationException("PathData must be initialized before sampling points.");
+        private void GenerateLinearPath(IReadOnlyList<Vector3> validPoints, List<Vector3> points)
+        {
+            float totalDistance = 0f;
+            _segmentDistancesScratch.Clear();
+            for (int i = 0; i < validPoints.Count - 1; i++)
+            {
+                float distance = Vector3.Distance(validPoints[i], validPoints[i + 1]);
+                _segmentDistancesScratch.Add(distance);
+                totalDistance += distance;
+            }
+
+            for (int i = 0; i <= _segmentCount; i++)
+            {
+                float targetDistance = (float)i / _segmentCount * totalDistance;
+                points.Add(GetLinearPointAtDistance(validPoints, targetDistance, totalDistance));
+            }
+        }
+
+        private Vector3 GetLinearPointAtDistance(IReadOnlyList<Vector3> points, float targetDistance, float totalDistance)
+        {
+            if (targetDistance <= 0f)
+                return points[0];
+            if (targetDistance >= totalDistance)
+                return points[points.Count - 1];
+
+            float currentDistance = 0f;
+            for (int i = 0; i < _segmentDistancesScratch.Count; i++)
+            {
+                float segmentLength = _segmentDistancesScratch[i];
+                float endDistance = currentDistance + segmentLength;
+                if (targetDistance <= endDistance)
+                {
+                    if (segmentLength <= Mathf.Epsilon)
+                        return points[i];
+                    return Vector3.Lerp(points[i], points[i + 1], (targetDistance - currentDistance) / segmentLength);
+                }
+                currentDistance = endDistance;
+            }
+            return points[points.Count - 1];
+        }
+
+        private void GenerateSplinePath(IReadOnlyList<Vector3> validPoints, List<Vector3> points)
+        {
+            PrepareControlPoints(validPoints);
+            for (int i = 0; i <= _segmentCount; i++)
+                points.Add(GetBSplinePoint((float)i / _segmentCount));
+            points[0] = validPoints[0];
+            points[points.Count - 1] = validPoints[validPoints.Count - 1];
+        }
+
+        private void GenerateCatmullRomPath(IReadOnlyList<Vector3> validPoints, List<Vector3> points)
+        {
+            PrepareControlPoints(validPoints);
+            int pathSegments = validPoints.Count - 1;
+            for (int i = 0; i <= _segmentCount; i++)
+            {
+                float pathParameter = (float)i / _segmentCount * pathSegments;
+                int segmentIndex = Mathf.Min(Mathf.FloorToInt(pathParameter), pathSegments - 1);
+                float localT = pathParameter - segmentIndex;
+                points.Add(CalculateCatmullRom(
+                    _controlPointsScratch[segmentIndex],
+                    _controlPointsScratch[segmentIndex + 1],
+                    _controlPointsScratch[segmentIndex + 2],
+                    _controlPointsScratch[segmentIndex + 3],
+                    localT));
+            }
+            points[0] = validPoints[0];
+            points[points.Count - 1] = validPoints[validPoints.Count - 1];
+        }
+
+        private void PrepareControlPoints(IReadOnlyList<Vector3> validPoints)
+        {
+            _controlPointsScratch.Clear();
+            _controlPointsScratch.Add(validPoints[0] + validPoints[0] - validPoints[1]);
+            for (int i = 0; i < validPoints.Count; i++)
+                _controlPointsScratch.Add(validPoints[i]);
+            int last = validPoints.Count - 1;
+            _controlPointsScratch.Add(validPoints[last] + validPoints[last] - validPoints[last - 1]);
+        }
+
+        private Vector3 GetBSplinePoint(float t)
+        {
+            int segmentCount = _controlPointsScratch.Count - 3;
+            float scaled = t * segmentCount;
+            int index = Mathf.Min(Mathf.FloorToInt(scaled), segmentCount - 1);
+            return CalculateBSpline(
+                _controlPointsScratch[index],
+                _controlPointsScratch[index + 1],
+                _controlPointsScratch[index + 2],
+                _controlPointsScratch[index + 3],
+                scaled - index);
+        }
+
+        private static Vector3 CalculateBSpline(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, float t)
+        {
+            const float oneSixth = 1f / 6f;
+            float t2 = t * t;
+            float t3 = t2 * t;
+            float b0 = oneSixth * (1f - t) * (1f - t) * (1f - t);
+            float b1 = oneSixth * (3f * t3 - 6f * t2 + 4f);
+            float b2 = oneSixth * (-3f * t3 + 3f * t2 + 3f * t + 1f);
+            float b3 = oneSixth * t3;
+            return b0 * p0 + b1 * p1 + b2 * p2 + b3 * p3;
+        }
+
+        private static Vector3 CalculateCatmullRom(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, float t)
+        {
+            float t2 = t * t;
+            float t3 = t2 * t;
+            return 0.5f * (2f * p1
+                + (-p0 + p2) * t
+                + (2f * p0 - 5f * p1 + 4f * p2 - p3) * t2
+                + (-p0 + 3f * p1 - 3f * p2 + p3) * t3);
+        }
 
 #if UNITY_EDITOR
-            if (_samplingType != ESamplingType.Random
-                && _cachedSamplePoints != null
-                && _cachedSampleCount == count
-                && _cachedESamplingType == _samplingType)
-                return _cachedSamplePoints;
+        private void OnDrawGizmos()
+        {
+            if (!_showPathInEditor || _pathPoints == null || _pathPoints.Count < 2)
+                return;
+
+            if (IsReady)
+            {
+                Gizmos.color = _pathColor;
+                for (int i = 1; i < SamplePointCount; i++)
+                    Gizmos.DrawLine(GetSamplePoint(i - 1), GetSamplePoint(i));
+            }
+            else
+            {
+                Gizmos.color = _pathColor;
+                for (int i = 1; i < _pathPoints.Count; i++)
+                {
+                    if (_pathPoints[i - 1] != null && _pathPoints[i] != null)
+                        Gizmos.DrawLine(_pathPoints[i - 1].position, _pathPoints[i].position);
+                }
+            }
+
+            Gizmos.color = _pointColor;
+            for (int i = 0; i < _pathPoints.Count; i++)
+            {
+                if (_pathPoints[i] != null && _pointSize > 0f)
+                    Gizmos.DrawSphere(_pathPoints[i].position, _pointSize);
+            }
+
+            if (IsReady && _samplePointSize > 0f && _previewSampleCount > 0)
+            {
+                Vector3[] samples = BuildPreviewSamples(_previewSampleCount);
+                Gizmos.color = _samplePointColor;
+                for (int i = 0; i < samples.Length; i++)
+                    Gizmos.DrawSphere(samples[i], _samplePointSize);
+            }
+
+            if (IsReady && _eventPointSize > 0f)
+            {
+                Gizmos.color = _eventPointColor;
+                for (int i = 0; i < EventCount; i++)
+                {
+                    PathEventEntry entry = GetEvent(i);
+                    if (entry.EventSetting != null)
+                        Gizmos.DrawSphere(Sample(entry.NormalizedTime), _eventPointSize);
+                }
+            }
+        }
+
+        private Vector3[] BuildPreviewSamples(int count)
+        {
+            Vector3[] result = new Vector3[count];
+            uint state = (uint)(GetInstanceID() * 747796405 + 2891336453u);
+            for (int i = 0; i < count; i++)
+            {
+                float t;
+                switch (_previewSamplingType)
+                {
+                    case EPreviewSamplingType.DeterministicRandom:
+                        state = state * 747796405u + 2891336453u;
+                        t = (state & 0x00ffffffu) / 16777215f;
+                        break;
+                    case EPreviewSamplingType.DistanceBased:
+                    case EPreviewSamplingType.Uniform:
+                    default:
+                        t = count == 1 ? 0f : (float)i / (count - 1);
+                        break;
+                }
+                result[i] = Sample(t);
+            }
+            return result;
+        }
+
 #endif
 
-            Vector3[] sampledPoints;
-            switch (_samplingType)
-            {
-                case ESamplingType.Uniform:
-                    sampledPoints = SampleUniformPoints(count);
-                    break;
-                case ESamplingType.Random:
-                    sampledPoints = SampleRandomPoints(count);
-                    break;
-                case ESamplingType.DistanceBased:
-                    sampledPoints = SampleDistanceBasedPoints(count);
-                    break;
-                default:
-                    throw new ArgumentException("Unsupported sampling type.", nameof(_samplingType));
-            }
-
-#if UNITY_EDITOR
-            if (_samplingType != ESamplingType.Random)
-            {
-                _cachedSamplePoints = sampledPoints;
-                _cachedSampleCount = count;
-                _cachedESamplingType = _samplingType;
-            }
-#endif
-
-            return sampledPoints;
-        }
-
-        private Vector3[] SampleUniformPoints(int count)
-        {
-            Vector3[] results = new Vector3[count];
-
-            for (int i = 0; i < count; i++)
-            {
-                float t = count > 1 ? (float)i / (count - 1) : 0f;
-                results[i] = GetPointOnPath(Mathf.Clamp01(t));
-            }
-
-            return results;
-        }
-
-        private Vector3[] SampleRandomPoints(int count)
-        {
-            Vector3[] results = new Vector3[count];
-
-            for (int i = 0; i < count; i++)
-                results[i] = GetPointOnPath(UnityEngine.Random.Range(0f, 1f));
-
-            return results;
-        }
-
-        private Vector3[] SampleDistanceBasedPoints(int count)
-        {
-            if (count <= 1)
-                return count == 1 ? new[] { GetPointOnPath(0f) } : Array.Empty<Vector3>();
-
-            Vector3[] results = new Vector3[count];
-            float pathLength = PathLength;
-
-            if (pathLength <= 0f)
-            {
-                Vector3 point = GetPointOnPath(0f);
-                for (int i = 0; i < count; i++)
-                    results[i] = point;
-                return results;
-            }
-
-            float segmentDistance = pathLength / (count - 1);
-            for (int i = 0; i < count; i++)
-            {
-                float distance = i * segmentDistance;
-                results[i] = GetPointOnPath(Mathf.Clamp01(distance / pathLength));
-            }
-
-            return results;
-        }
-
-        #endregion
-}
+    }
 }

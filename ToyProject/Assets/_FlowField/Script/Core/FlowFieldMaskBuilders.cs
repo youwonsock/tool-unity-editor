@@ -10,7 +10,7 @@ namespace Common.FlowField
 
         public static bool Build(
             FlowFieldGridSpace grid,
-            FlowFieldSurfaceBakeData surface,
+            FlowFieldSurfaceData surface,
             LayerMask obstacleLayer,
             float checkHeight,
             float centerOffset,
@@ -21,9 +21,7 @@ namespace Common.FlowField
         {
             if (!grid.IsValid)
                 throw new ArgumentException("Grid is invalid.", nameof(grid));
-            if (surface == null)
-                throw new ArgumentNullException(nameof(surface));
-            if (!surface.HasValidData)
+            if (!surface.IsValid)
                 throw new ArgumentException("Surface bake data is invalid.", nameof(surface));
             if (destination == null)
                 throw new ArgumentNullException(nameof(destination));
@@ -102,7 +100,7 @@ namespace Common.FlowField
 
         public static bool BuildStatic(
             FlowFieldGridSpace grid,
-            FlowFieldSurfaceBakeData surface,
+            FlowFieldSurfaceData surface,
             LayerMask obstacleLayer,
             float checkHeight,
             float centerOffset,
@@ -116,9 +114,7 @@ namespace Common.FlowField
             excludedColliderCount = 0;
             if (!grid.IsValid)
                 throw new ArgumentException("Grid is invalid.", nameof(grid));
-            if (surface == null)
-                throw new ArgumentNullException(nameof(surface));
-            if (!surface.HasValidData)
+            if (!surface.IsValid)
                 throw new ArgumentException("Surface bake data is invalid.", nameof(surface));
             if (destination == null)
                 throw new ArgumentNullException(nameof(destination));
@@ -281,7 +277,7 @@ namespace Common.FlowField
 
         public static bool Build(
             FlowFieldGridSpace grid,
-            FlowFieldSurfaceBakeData surface,
+            FlowFieldSurfaceData surface,
             Collider influenceCollider,
             float checkHeight,
             float centerOffset,
@@ -291,9 +287,7 @@ namespace Common.FlowField
         {
             if (!grid.IsValid)
                 throw new ArgumentException("Grid is invalid.", nameof(grid));
-            if (surface == null)
-                throw new ArgumentNullException(nameof(surface));
-            if (!surface.HasValidData)
+            if (!surface.IsValid)
                 throw new ArgumentException("Surface bake data is invalid.", nameof(surface));
             if (destination == null)
                 throw new ArgumentNullException(nameof(destination));
@@ -462,4 +456,3 @@ namespace Common.FlowField
         }
     }
 }
-

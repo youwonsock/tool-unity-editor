@@ -21,9 +21,7 @@ namespace Common.FlowField.Editor
             DrawPropertiesExcluding(
                 serializedObject,
                 "_bakeMode",
-                "_staticBakeData",
-                "_surfaceBakeData",
-                "_staticObstacleBakeData");
+                "_staticBakeData");
             SerializedProperty mode = serializedObject.FindProperty("_bakeMode");
             using (new EditorGUI.DisabledScope(Application.isPlaying))
                 EditorGUILayout.PropertyField(mode);
@@ -36,23 +34,38 @@ namespace Common.FlowField.Editor
             bool exceedsCellLimit = DrawBakeLayout(manager);
             DrawBakeStatus(manager);
             bool disableBakeActions = FlowFieldSurfaceBakeEditor.IsBaking || exceedsCellLimit;
-            using (new EditorGUI.DisabledScope(disableBakeActions))
+            if (manager.BakeMode == FlowFieldBakeMode.StaticBaked)
             {
-                using (new EditorGUILayout.HorizontalScope())
+                if (FlowFieldSurfaceBakeEditor.IsBaking)
                 {
-                    string bakeLabel = manager.BakeMode == FlowFieldBakeMode.StaticBaked
-                        ? "Bake Static Flow Field"
-                        : manager.SurfaceBakeData == null ? "Bake Surface" : "Rebake Surface";
-                    if (GUILayout.Button(bakeLabel))
-                        FlowFieldSurfaceBakeEditor.ScheduleBake(manager);
-
-                    using (new EditorGUI.DisabledScope(
-                        manager.SurfaceBakeData == null && manager.StaticBakeData == null))
+                    EditorGUILayout.HelpBox(
+                        string.IsNullOrEmpty(FlowFieldSurfaceBakeEditor.ProgressLabel)
+                            ? "Static Flow Bake is running."
+                            : FlowFieldSurfaceBakeEditor.ProgressLabel,
+                        MessageType.Info);
+                    if (GUILayout.Button("Cancel Static Bake"))
+                        FlowFieldSurfaceBakeEditor.CancelBake();
+                }
+                using (new EditorGUI.DisabledScope(disableBakeActions))
+                {
+                    using (new EditorGUILayout.HorizontalScope())
                     {
-                        if (GUILayout.Button("Clear Bake"))
-                            FlowFieldSurfaceBakeEditor.ClearReference(manager);
+                        if (GUILayout.Button("Bake / ReBake Static Flow Field"))
+                            FlowFieldSurfaceBakeEditor.ScheduleBake(manager);
+
+                        using (new EditorGUI.DisabledScope(manager.StaticBakeData == null))
+                        {
+                            if (GUILayout.Button("Clear Bake"))
+                                FlowFieldSurfaceBakeEditor.ClearReference(manager);
+                        }
                     }
                 }
+            }
+            else
+            {
+                EditorGUILayout.HelpBox(
+                    "RuntimeDynamic: Surface와 장애물은 실행 중 공통 Session이 계산합니다. Static Bake Asset은 사용하지 않습니다.",
+                    MessageType.Info);
             }
 
             DrawTransformWarning(manager);
@@ -144,19 +157,14 @@ namespace Common.FlowField.Editor
             {
                 if (manager.BakeMode == FlowFieldBakeMode.StaticBaked && manager.StaticBakeData != null)
                 {
-                    FlowFieldSurfaceBakeData data = manager.EditorSurfaceBakeData;
-                    string cellInfo = data != null
-                        ? $"{data.ValidCellCount}/{data.CellCount} cells"
-                        : "surface snapshot available";
                     EditorGUILayout.HelpBox(
-                        $"Static Flow Bake is valid. {cellInfo}.",
+                        "Static Flow Bake is valid.",
                         MessageType.Info);
                 }
                 else
                 {
-                    FlowFieldSurfaceBakeData data = manager.SurfaceBakeData;
                     EditorGUILayout.HelpBox(
-                        $"Surface Bake is valid. {data.ValidCellCount}/{data.CellCount} cells.",
+                        "Runtime Dynamic uses a fresh downward raycast Surface bake.",
                         MessageType.Info);
                 }
                 return;

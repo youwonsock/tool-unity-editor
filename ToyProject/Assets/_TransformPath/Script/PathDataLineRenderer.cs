@@ -1,4 +1,3 @@
-using System;
 using UnityEngine;
 
 namespace Common.TransformPath
@@ -37,8 +36,6 @@ namespace Common.TransformPath
         private bool _visible = true;
         private bool _hasValidPath = false;
         private bool _isInitialized;
-        private bool _isFaulted;
-        private Exception _fault;
 
         #endregion
 
@@ -56,35 +53,24 @@ namespace Common.TransformPath
         }
 
         public bool IsInitialized => _isInitialized;
-        public bool IsFaulted => _isFaulted;
 
         public void Init()
         {
             if (_isInitialized)
-                throw new InvalidOperationException("PathDataLineRenderer is already initialized.");
-            if (_isFaulted)
-                throw new InvalidOperationException("PathDataLineRenderer is faulted; call Release before Init.", _fault);
-            try
+                return;
+            if (_lineRenderer == null)
+                _lineRenderer = GetComponent<LineRenderer>();
+            if (_lineRenderer == null || _pathData == null)
             {
-                if (_lineRenderer == null)
-                    _lineRenderer = GetComponent<LineRenderer>();
-                if (_lineRenderer == null || _pathData == null)
-                    throw new InvalidOperationException("PathDataLineRenderer requires LineRenderer and PathData references.");
-                ConfigureLineRenderer();
-                _isInitialized = true;
-                if (isActiveAndEnabled)
-                {
-                    _pathData.PathChanged -= HandlePathChanged;
-                    _pathData.PathChanged += HandlePathChanged;
-                }
+                Debug.LogError("PathDataLineRenderer requires LineRenderer and PathData references.", this);
+                return;
             }
-            catch (Exception exception)
+            ConfigureLineRenderer();
+            _isInitialized = true;
+            if (isActiveAndEnabled)
             {
-                _isInitialized = false;
-                _isFaulted = true;
-                if (_fault == null)
-                    _fault = exception;
-                throw;
+                _pathData.PathChanged -= HandlePathChanged;
+                _pathData.PathChanged += HandlePathChanged;
             }
         }
 
@@ -107,19 +93,16 @@ namespace Common.TransformPath
 
         private void OnDestroy()
         {
-            if (_isInitialized || _isFaulted)
-                Release();
+            Release();
         }
 
         public void Release()
         {
-            if (!_isInitialized && !_isFaulted)
-                throw new InvalidOperationException("PathDataLineRenderer has not been initialized.");
             if (_pathData != null)
                 _pathData.PathChanged -= HandlePathChanged;
             _isInitialized = false;
-            _isFaulted = false;
-            _fault = null;
+            _hasValidPath = false;
+            SetLineRendererEnabled(false);
         }
 
         #endregion
@@ -132,20 +115,27 @@ namespace Common.TransformPath
         /// </summary>
         public void Refresh()
         {
-            if (_isFaulted)
-                throw new InvalidOperationException("PathDataLineRenderer is faulted; call Release before use.", _fault);
             if (!_isInitialized)
-                throw new InvalidOperationException("PathDataLineRenderer is not initialized.");
+                Init();
             if (_pathData == null || !_pathData.IsReady)
-                throw new InvalidOperationException("PathData must be initialized and ready before rendering.");
+            {
+                _hasValidPath = false;
+                ApplyVisibility();
+                return;
+            }
 
-            Vector3[] pathPoints = _pathData.PathPoints;
-            if (pathPoints == null || pathPoints.Length < MIN_PATH_POINT_COUNT)
-                throw new ArgumentException("PathData does not contain enough sampled points.");
+            int samplePointCount = _pathData.SamplePointCount;
+            if (samplePointCount < MIN_PATH_POINT_COUNT)
+            {
+                _hasValidPath = false;
+                ApplyVisibility();
+                return;
+            }
 
             _hasValidPath = true;
-            _lineRenderer.positionCount = pathPoints.Length;
-            _lineRenderer.SetPositions(pathPoints);
+            _lineRenderer.positionCount = samplePointCount;
+            for (int i = 0; i < samplePointCount; i++)
+                _lineRenderer.SetPosition(i, _pathData.GetSamplePoint(i));
             ApplyVisibility();
         }
 
@@ -155,10 +145,10 @@ namespace Common.TransformPath
         /// <param name="visible">표시 여부</param>
         public void SetVisible(bool visible)
         {
-            if (_isFaulted)
-                throw new InvalidOperationException("PathDataLineRenderer is faulted; call Release before use.", _fault);
             if (!_isInitialized)
-                throw new InvalidOperationException("PathDataLineRenderer is not initialized.");
+                Init();
+            if (!_isInitialized)
+                return;
             _visible = visible;
 
             if (_visible)
