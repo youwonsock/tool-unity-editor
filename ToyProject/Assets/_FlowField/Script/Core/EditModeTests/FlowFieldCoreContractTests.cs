@@ -176,6 +176,122 @@ namespace Common.FlowField
         }
 
         [Test]
+        public void BlockedCellKeepsEscapeDirectionAcrossCompositionAndSampling()
+        {
+            FlowFieldGridSpace grid = FlowFieldGridSpace.FromCellGrid(Vector3.zero, 3, 1, 1f);
+            FlowFieldSurfaceData surface = CreateFlatSurface(grid, allowDiagonals: false);
+            var workspace = new FlowFieldWorkspace();
+            workspace.Resize(grid.CellCount);
+            var store = new FlowFieldFieldStore();
+
+            try
+            {
+                int blockedIndex = grid.ToFlatIndex(1, 0);
+                workspace.Blocked[blockedIndex] = true;
+                Assert.That(FlowFieldSolver.BuildEscapeDirections(grid, surface, workspace), Is.True);
+                Assert.That(workspace.EscapeDirections[blockedIndex].x, Is.LessThan(-0.99f));
+
+                Vector3 blockedPosition = grid.LocalToWorldCenter(1, 0);
+                Assert.That(
+                    FlowFieldCellSampler.TrySampleEscape(
+                        grid,
+                        surface,
+                        workspace,
+                        blockedPosition,
+                        out FlowFieldSample escapeSample),
+                    Is.True);
+                Assert.That(escapeSample.Direction.x, Is.LessThan(-0.99f));
+                Assert.That(escapeSample.SpeedMultiplier, Is.EqualTo(1f));
+
+                Assert.That(
+                    FlowFieldSolver.BuildGoal(grid, surface, workspace, 2, 0, 0f, out _),
+                    Is.True);
+                FlowFieldFinalFieldComposer.Compose(
+                    grid,
+                    surface,
+                    workspace,
+                    Vector3.forward,
+                    Array.Empty<FlowFieldModifierLayer>());
+
+                Assert.That(workspace.NextCells[blockedIndex], Is.EqualTo(-2));
+                Assert.That(workspace.BaseDirections[blockedIndex].x, Is.LessThan(-0.99f));
+                Assert.That(workspace.BaseSpeedMultipliers[blockedIndex], Is.EqualTo(1f));
+                Assert.That(workspace.FinalDirections[blockedIndex].x, Is.LessThan(-0.99f));
+                Assert.That(workspace.FinalSpeedMultipliers[blockedIndex], Is.EqualTo(1f));
+
+                Assert.That(
+                    FlowFieldCellSampler.TrySample(
+                        grid,
+                        surface,
+                        workspace,
+                        blockedPosition,
+                        out FlowFieldSample workspaceSample),
+                    Is.True);
+                Assert.That(workspaceSample.Direction.x, Is.LessThan(-0.99f));
+                Assert.That(workspaceSample.SpeedMultiplier, Is.EqualTo(1f));
+
+                Assert.That(
+                    store.CommitFromWorkspace(
+                        grid,
+                        surface,
+                        workspace,
+                        includeBase: true,
+                        region: FlowFieldCellRect.Full(grid),
+                        out bool changed),
+                    Is.True);
+                Assert.That(changed, Is.True);
+                Assert.That(
+                    store.TrySample(blockedPosition, out FlowFieldSample committedSample),
+                    Is.True);
+                Assert.That(committedSample.Direction.x, Is.LessThan(-0.99f));
+                Assert.That(committedSample.SpeedMultiplier, Is.EqualTo(1f));
+            }
+            finally
+            {
+                store.Dispose();
+                workspace.Release();
+            }
+        }
+
+        [Test]
+        public void BlockedCellWithoutEscapeRemainsStopped()
+        {
+            FlowFieldGridSpace grid = FlowFieldGridSpace.FromCellGrid(Vector3.zero, 1, 1, 1f);
+            FlowFieldSurfaceData surface = CreateFlatSurface(grid, allowDiagonals: false);
+            var workspace = new FlowFieldWorkspace();
+            workspace.Resize(grid.CellCount);
+
+            try
+            {
+                workspace.Blocked[0] = true;
+                Assert.That(FlowFieldSolver.BuildEscapeDirections(grid, surface, workspace), Is.False);
+                FlowFieldFinalFieldComposer.Compose(
+                    grid,
+                    surface,
+                    workspace,
+                    Vector3.forward,
+                    Array.Empty<FlowFieldModifierLayer>());
+
+                Assert.That(workspace.BaseDirections[0], Is.EqualTo(Vector3.zero));
+                Assert.That(workspace.BaseSpeedMultipliers[0], Is.EqualTo(0f));
+                Assert.That(
+                    FlowFieldCellSampler.TrySample(
+                        grid,
+                        surface,
+                        workspace,
+                        grid.LocalToWorldCenter(0, 0),
+                        out FlowFieldSample sample),
+                    Is.True);
+                Assert.That(sample.Direction, Is.EqualTo(Vector3.zero));
+                Assert.That(sample.SpeedMultiplier, Is.EqualTo(0f));
+            }
+            finally
+            {
+                workspace.Release();
+            }
+        }
+
+        [Test]
         public void GoalAlignmentScoreRemainsWithinIntRangeAtMaximumGridCoordinates()
         {
             int towardGoal = FlowFieldGraphTraversal.CalculateGoalAlignmentScore(

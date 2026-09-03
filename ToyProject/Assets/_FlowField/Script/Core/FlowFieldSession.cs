@@ -708,45 +708,62 @@ namespace Common.FlowField
             if (sampleGrid.TryWorldToLocal(worldPosition, out int sampleX, out int sampleZ))
             {
                 int sampleIndex = sampleGrid.ToFlatIndex(sampleX, sampleZ);
-                bool stagedObstacleBlocksSample = _obstaclePipeline.HasStagedDynamicProbe
-                    && sampleIndex >= 0
-                    && sampleIndex < _state.Workspace.Capacity
-                    && _state.Workspace.ObstacleScratch[sampleIndex];
-                if ((IsRebuilding || _obstaclePipeline.HasStagedDynamicProbe)
-                    && sampleIndex >= 0
-                    && sampleIndex < _state.Workspace.Capacity
+                int latestX = 0;
+                int latestZ = 0;
+                bool latestLayoutMatchesSample = _state.Grid.IsValid
+                    && _state.Workspace != null
                     && _state.Workspace.Capacity == _state.Grid.CellCount
-                    && (_state.Workspace.Blocked[sampleIndex] || stagedObstacleBlocksSample))
-                    return new FlowFieldSample(Vector3.zero, 0f, sample.SurfaceNormal, sample.HasSurface);
-
-                int next = useCommitted
-                    ? _fieldStore.NextCells[sampleIndex]
-                    : _state.Workspace.NextCells[sampleIndex];
-                if (next >= 0)
+                    && sampleGrid.MatchesBounds(_state.Grid)
+                    && ReferenceEquals(sampleSurface, _state.Surface)
+                    && _state.Grid.TryWorldToLocal(worldPosition, out latestX, out latestZ);
+                if (latestLayoutMatchesSample)
                 {
+                    int latestIndex = _state.Grid.ToFlatIndex(latestX, latestZ);
                     FlowFieldWorkspace latestWorkspace = _state.Workspace;
                     FlowFieldSurfaceData latestSurface = _state.Surface;
-                    bool nextBlocked = next >= sampleGrid.CellCount
-                        || latestWorkspace.Capacity != _state.Grid.CellCount
-                        || next >= latestWorkspace.Capacity
-                        || latestWorkspace.Blocked[next]
-                        || _obstaclePipeline.HasStagedDynamicProbe
-                            && latestWorkspace.ObstacleScratch[next]
-                        || latestSurface == null
-                        || !latestSurface.IsSurfaceValid(next);
-                    bool topologyChanged = false;
-                    if (!IsRebuilding && !nextBlocked && next != sampleIndex)
+                    bool obstacleProbeActive = IsRebuilding || _obstaclePipeline.HasStagedDynamicProbe;
+                    bool latestBlocked = latestWorkspace.Blocked[latestIndex];
+                    bool stagedObstacleBlocksSample = _obstaclePipeline.HasStagedDynamicProbe
+                        && latestWorkspace.ObstacleScratch[latestIndex];
+                    if (obstacleProbeActive && latestBlocked)
                     {
-                        sampleGrid.FromFlatIndex(sampleIndex, out int currentX, out int currentZ);
-                        sampleGrid.FromFlatIndex(next, out int nextX, out int nextZ);
-                        int directionIndex = FlowFieldNeighborUtility.FindDirectionIndex(nextX - currentX, nextZ - currentZ);
-                        topologyChanged = directionIndex < 0
-                            || latestWorkspace.TopologyMasks == null
-                            || sampleIndex >= latestWorkspace.TopologyMasks.Length
-                            || (latestWorkspace.TopologyMasks[sampleIndex] & (1 << directionIndex)) == 0;
-                    }
-                    if (nextBlocked || topologyChanged)
+                        if (FlowFieldCellSampler.TrySampleEscape(
+                                _state.Grid,
+                                latestSurface,
+                                latestWorkspace,
+                                worldPosition,
+                                out FlowFieldSample escapeSample))
+                            return escapeSample;
                         return new FlowFieldSample(Vector3.zero, 0f, sample.SurfaceNormal, sample.HasSurface);
+                    }
+                    if (obstacleProbeActive && stagedObstacleBlocksSample)
+                        return new FlowFieldSample(Vector3.zero, 0f, sample.SurfaceNormal, sample.HasSurface);
+
+                    int next = useCommitted
+                        ? _fieldStore.NextCells[sampleIndex]
+                        : latestWorkspace.NextCells[sampleIndex];
+                    if (next >= 0)
+                    {
+                        bool nextBlocked = next >= sampleGrid.CellCount
+                            || latestWorkspace.Blocked[next]
+                            || _obstaclePipeline.HasStagedDynamicProbe
+                                && latestWorkspace.ObstacleScratch[next]
+                            || latestSurface == null
+                            || !latestSurface.IsSurfaceValid(next);
+                        bool topologyChanged = false;
+                        if (!IsRebuilding && !nextBlocked && next != sampleIndex)
+                        {
+                            sampleGrid.FromFlatIndex(sampleIndex, out int currentX, out int currentZ);
+                            sampleGrid.FromFlatIndex(next, out int nextX, out int nextZ);
+                            int directionIndex = FlowFieldNeighborUtility.FindDirectionIndex(nextX - currentX, nextZ - currentZ);
+                            topologyChanged = directionIndex < 0
+                                || latestWorkspace.TopologyMasks == null
+                                || sampleIndex >= latestWorkspace.TopologyMasks.Length
+                                || (latestWorkspace.TopologyMasks[sampleIndex] & (1 << directionIndex)) == 0;
+                        }
+                        if (nextBlocked || topologyChanged)
+                            return new FlowFieldSample(Vector3.zero, 0f, sample.SurfaceNormal, sample.HasSurface);
+                    }
                 }
             }
             return sample;

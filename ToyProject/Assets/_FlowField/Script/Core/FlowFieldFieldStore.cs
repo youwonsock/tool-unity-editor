@@ -189,11 +189,6 @@ namespace Common.FlowField
             if (!Surface.IsSurfaceValid(index))
                 return true;
             Vector3 normal = Surface.GetSurfaceNormal(index);
-            if (_blocked[index])
-            {
-                sample = new FlowFieldSample(Vector3.zero, 0f, normal, true);
-                return true;
-            }
             Vector3 direction = _finalDirections[index];
             if (direction.sqrMagnitude > FlowFieldVectorUtility.DIRECTION_EPSILON_SQR)
                 direction = Vector3.ProjectOnPlane(direction, normal).normalized;

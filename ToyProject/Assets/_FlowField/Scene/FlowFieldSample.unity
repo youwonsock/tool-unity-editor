@@ -270,9 +270,20 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1569603542928883877, guid: ea9473f2a5a61c044828d7e078c86447,
         type: 3}
+      propertyPath: _bakeMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1569603542928883877, guid: ea9473f2a5a61c044828d7e078c86447,
+        type: 3}
       propertyPath: _cellSize
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 1569603542928883877, guid: ea9473f2a5a61c044828d7e078c86447,
+        type: 3}
+      propertyPath: _staticBakeData
+      value: 
+      objectReference: {fileID: 11400000, guid: e144fe4642c6e4e8b9c73398f7caba55,
+        type: 2}
     - target: {fileID: 1888116987211774303, guid: ea9473f2a5a61c044828d7e078c86447,
         type: 3}
       propertyPath: m_Enabled
@@ -281,6 +292,11 @@ PrefabInstance:
     - target: {fileID: 1984865564045258349, guid: ea9473f2a5a61c044828d7e078c86447,
         type: 3}
       propertyPath: m_PresetInfoIsWorld
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2501798417476598195, guid: ea9473f2a5a61c044828d7e078c86447,
+        type: 3}
+      propertyPath: m_IsActive
       value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 3418177175182071978, guid: ea9473f2a5a61c044828d7e078c86447,
