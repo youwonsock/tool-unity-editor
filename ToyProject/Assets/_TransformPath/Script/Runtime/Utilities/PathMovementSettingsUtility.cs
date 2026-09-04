@@ -6,8 +6,15 @@ namespace Common.TransformPath
     /// <summary>Movement settings validation, cloning, and content comparison.</summary>
     internal static class PathMovementSettingsUtility
     {
+        #region Constants
+
         public const float MIN_VALUE = 0.001f;
         public const float MAX_VALUE = 9999f;
+
+        #endregion
+
+
+        #region Public Methods
 
         public static AnimationCurve CloneCurve(AnimationCurve source)
         {
@@ -49,12 +56,10 @@ namespace Common.TransformPath
                 || left.length != right.length)
                 return false;
 
-            Keyframe[] leftKeys = left.keys;
-            Keyframe[] rightKeys = right.keys;
-            for (int i = 0; i < leftKeys.Length; i++)
+            for (int i = 0; i < left.length; i++)
             {
-                Keyframe leftKey = leftKeys[i];
-                Keyframe rightKey = rightKeys[i];
+                Keyframe leftKey = left[i];
+                Keyframe rightKey = right[i];
                 if (!Mathf.Approximately(leftKey.time, rightKey.time)
                     || !Mathf.Approximately(leftKey.value, rightKey.value)
                     || !Mathf.Approximately(leftKey.inTangent, rightKey.inTangent)
@@ -98,10 +103,9 @@ namespace Common.TransformPath
                 return false;
             }
 
-            Keyframe[] keys = curve.keys;
-            for (int i = 0; i < keys.Length; i++)
+            for (int i = 0; i < curve.length; i++)
             {
-                Keyframe key = keys[i];
+                Keyframe key = curve[i];
                 if (!PathValueUtility.IsFinite(key.time)
                     || !PathValueUtility.IsFinite(key.value)
                     || !PathValueUtility.IsFinite(key.inTangent)
@@ -152,5 +156,7 @@ namespace Common.TransformPath
                 throw new ArgumentOutOfRangeException(parameterName, settings, error);
             throw new ArgumentException(error, parameterName);
         }
+
+        #endregion
     }
 }

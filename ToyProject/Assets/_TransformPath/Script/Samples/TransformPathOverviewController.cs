@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace Common.TransformPath.Samples
 {
-    public enum TransformPathShowcaseLane
+    public enum ETransformPathShowcaseLane
     {
         Normal = 0,
         MultiPath = 1,
@@ -18,6 +18,8 @@ namespace Common.TransformPath.Samples
     [DefaultExecutionOrder(10)]
     public sealed class TransformPathOverviewController : MonoBehaviour
     {
+        #region Member Variables
+
         [Header("Normal Path Lane")]
         [SerializeField] private PathData _pathData;
         [SerializeField] private PathFollower _pathFollower;
@@ -45,59 +47,25 @@ namespace Common.TransformPath.Samples
         private bool[] _queueWasMovingWhenHidden;
         private bool _completionEventsSubscribed;
         private int _presentationMode;
-        private TransformPathShowcaseLane _activeLane = TransformPathShowcaseLane.Normal;
+        private ETransformPathShowcaseLane _activeLane = ETransformPathShowcaseLane.Normal;
+
+        #endregion
+
+
+        #region Properties
 
         public bool IsInitialized => _isInitialized;
         public bool IsPaused => _isPaused;
         public int PresentationMode => _presentationMode;
         public bool QueueVisible => _queueVisible;
-        public TransformPathShowcaseLane ActiveLane => _activeLane;
+        public ETransformPathShowcaseLane ActiveLane => _activeLane;
         public MultiPathData QueuePathData => _queuePathData;
         public PathData.ECurveType CurrentCurveType => _pathData == null ? PathData.ECurveType.Linear : _pathData.CurveType;
 
-        private void Awake()
-        {
-            if (Application.isPlaying)
-                Init();
-        }
+        #endregion
 
-        private void Start()
-        {
-            if (!_isInitialized)
-                return;
-            StartNormalPath();
-            StartMultiPath();
-            StartQueueFollowers();
-            PauseUnselectedLanes();
-            ApplyLanePresentation();
-            FocusActiveLane();
-        }
 
-        private void Update()
-        {
-            if (!_isInitialized)
-                return;
-
-            bool cameraConsumesSharedKeys = _freeCamera != null && _freeCamera.IsLookMode;
-            if (Input.GetKeyDown(KeyCode.Alpha1))
-                SelectPresentationMode(0);
-            if (Input.GetKeyDown(KeyCode.Alpha2))
-                SelectPresentationMode(1);
-            if (Input.GetKeyDown(KeyCode.Alpha3))
-                SelectPresentationMode(2);
-            if (!cameraConsumesSharedKeys && Input.GetKeyDown(KeyCode.Q))
-                ToggleQueueVisibility();
-            if (Input.GetKeyDown(KeyCode.Space))
-                TogglePauseAll();
-            if (Input.GetKeyDown(KeyCode.R))
-                ResetAll();
-            if (Input.GetKeyDown(KeyCode.LeftArrow))
-                SeekBackward();
-            if (Input.GetKeyDown(KeyCode.RightArrow))
-                SeekForward();
-
-            _board?.Render(GetActiveStatusText());
-        }
+        #region Unity Events
 
         public void Init()
         {
@@ -151,14 +119,63 @@ namespace Common.TransformPath.Samples
             _isInitialized = false;
         }
 
+        private void Awake()
+        {
+            if (Application.isPlaying)
+                Init();
+        }
+
+        private void Start()
+        {
+            if (!_isInitialized)
+                return;
+            StartNormalPath();
+            StartMultiPath();
+            StartQueueFollowers();
+            PauseUnselectedLanes();
+            ApplyLanePresentation();
+            FocusActiveLane();
+        }
+
+        private void Update()
+        {
+            if (!_isInitialized)
+                return;
+
+            bool cameraConsumesSharedKeys = _freeCamera != null && _freeCamera.IsLookMode;
+            if (Input.GetKeyDown(KeyCode.Alpha1))
+                SelectPresentationMode(0);
+            if (Input.GetKeyDown(KeyCode.Alpha2))
+                SelectPresentationMode(1);
+            if (Input.GetKeyDown(KeyCode.Alpha3))
+                SelectPresentationMode(2);
+            if (!cameraConsumesSharedKeys && Input.GetKeyDown(KeyCode.Q))
+                ToggleQueueVisibility();
+            if (Input.GetKeyDown(KeyCode.Space))
+                TogglePauseAll();
+            if (Input.GetKeyDown(KeyCode.R))
+                ResetAll();
+            if (Input.GetKeyDown(KeyCode.LeftArrow))
+                SeekBackward();
+            if (Input.GetKeyDown(KeyCode.RightArrow))
+                SeekForward();
+
+            _board?.Render(GetActiveStatusText());
+        }
+
         private void OnDestroy()
         {
             Release();
         }
 
-        public void ShowNormalLane() => SetActiveLane(TransformPathShowcaseLane.Normal);
-        public void ShowMultiPathLane() => SetActiveLane(TransformPathShowcaseLane.MultiPath);
-        public void ShowQueuedLane() => SetActiveLane(TransformPathShowcaseLane.Queue);
+        #endregion
+
+
+        #region Public Methods
+
+        public void ShowNormalLane() => SetActiveLane(ETransformPathShowcaseLane.Normal);
+        public void ShowMultiPathLane() => SetActiveLane(ETransformPathShowcaseLane.MultiPath);
+        public void ShowQueuedLane() => SetActiveLane(ETransformPathShowcaseLane.Queue);
 
         public void FocusActiveLane()
         {
@@ -249,9 +266,9 @@ namespace Common.TransformPath.Samples
         {
             if (!_isInitialized || float.IsNaN(delta) || float.IsInfinity(delta))
                 return;
-            if (_activeLane == TransformPathShowcaseLane.Normal && _pathFollower != null)
+            if (_activeLane == ETransformPathShowcaseLane.Normal && _pathFollower != null)
                 _pathFollower.Seek(Mathf.Clamp01(_pathFollower.NormalizedTime + delta));
-            else if (_activeLane == TransformPathShowcaseLane.MultiPath && _multiPathFollower != null)
+            else if (_activeLane == ETransformPathShowcaseLane.MultiPath && _multiPathFollower != null)
                 _multiPathFollower.Seek(Mathf.Clamp01(_multiPathFollower.GlobalNormalizedTime + delta));
         }
 
@@ -272,7 +289,7 @@ namespace Common.TransformPath.Samples
             if (!_isInitialized)
                 return;
             _queueVisible = !_queueVisible;
-            if (_activeLane == TransformPathShowcaseLane.Queue)
+            if (_activeLane == ETransformPathShowcaseLane.Queue)
             {
                 if (_queueVisible)
                     ResumeQueueFromVisibilitySnapshot();
@@ -288,14 +305,19 @@ namespace Common.TransformPath.Samples
                 return "TransformPath · initializing";
             switch (_activeLane)
             {
-                case TransformPathShowcaseLane.MultiPath:
+                case ETransformPathShowcaseLane.MultiPath:
                     return GetMultiStatus();
-                case TransformPathShowcaseLane.Queue:
+                case ETransformPathShowcaseLane.Queue:
                     return GetQueueStatus();
                 default:
                     return GetNormalStatus();
             }
         }
+
+        #endregion
+
+
+        #region Private Methods
 
         private string GetNormalStatus()
         {
@@ -339,13 +361,15 @@ namespace Common.TransformPath.Samples
         private void StartNormalPath()
         {
             if (_pathFollower != null && !_pathFollower.IsMoving)
-                _pathFollower.StartMove(_pathData, new PathPlaybackSettings(loop: true));
+                _pathFollower.StartPlayback(
+                    PathPlaybackRequest.Single(_pathData, loop: true));
         }
 
         private void StartMultiPath()
         {
             if (_multiPathFollower != null && !_multiPathFollower.IsMoving)
-                _multiPathFollower.StartSequence(_multiPathData, new PathPlaybackSettings(loop: false));
+                _multiPathFollower.StartPlayback(
+                    PathPlaybackRequest.Sequence(_multiPathData, loop: false));
         }
 
         private void StartQueueFollowers()
@@ -355,7 +379,8 @@ namespace Common.TransformPath.Samples
                 QueuedPathFollower follower = _queueFollowers[i];
                 if (follower == null || !follower.isActiveAndEnabled || follower.IsMoving)
                     continue;
-                follower.StartSequence(_queuePathData, new PathPlaybackSettings(loop: false));
+                follower.StartPlayback(
+                    PathPlaybackRequest.Sequence(_queuePathData, loop: false));
             }
             ApplyQueueStartSpacing();
         }
@@ -413,7 +438,8 @@ namespace Common.TransformPath.Samples
         {
             if (!_isInitialized || _isPaused || follower == null || !follower.isActiveAndEnabled)
                 return;
-            follower.StartSequence(_queuePathData, new PathPlaybackSettings(loop: false));
+            follower.StartPlayback(
+                PathPlaybackRequest.Sequence(_queuePathData, loop: false));
         }
 
         private QueuedPathFollower GetQueueLeader()
@@ -423,7 +449,7 @@ namespace Common.TransformPath.Samples
             return _queueManager.GetAgent(0) as QueuedPathFollower;
         }
 
-        private void SetActiveLane(TransformPathShowcaseLane lane)
+        private void SetActiveLane(ETransformPathShowcaseLane lane)
         {
             if (!_isInitialized || _activeLane == lane)
                 return;
@@ -435,27 +461,27 @@ namespace Common.TransformPath.Samples
 
         private void PauseUnselectedLanes()
         {
-            if (_activeLane != TransformPathShowcaseLane.Normal)
-                PauseLane(TransformPathShowcaseLane.Normal);
-            if (_activeLane != TransformPathShowcaseLane.MultiPath)
-                PauseLane(TransformPathShowcaseLane.MultiPath);
-            if (_activeLane != TransformPathShowcaseLane.Queue || !_queueVisible)
-                PauseLane(TransformPathShowcaseLane.Queue);
+            if (_activeLane != ETransformPathShowcaseLane.Normal)
+                PauseLane(ETransformPathShowcaseLane.Normal);
+            if (_activeLane != ETransformPathShowcaseLane.MultiPath)
+                PauseLane(ETransformPathShowcaseLane.MultiPath);
+            if (_activeLane != ETransformPathShowcaseLane.Queue || !_queueVisible)
+                PauseLane(ETransformPathShowcaseLane.Queue);
         }
 
-        private void PauseLane(TransformPathShowcaseLane lane)
+        private void PauseLane(ETransformPathShowcaseLane lane)
         {
             switch (lane)
             {
-                case TransformPathShowcaseLane.Normal:
+                case ETransformPathShowcaseLane.Normal:
                     _normalWasMovingWhenHidden = _pathFollower != null && _pathFollower.IsMoving;
                     _pathFollower?.PauseMove();
                     break;
-                case TransformPathShowcaseLane.MultiPath:
+                case ETransformPathShowcaseLane.MultiPath:
                     _multiWasMovingWhenHidden = _multiPathFollower != null && _multiPathFollower.IsMoving;
                     _multiPathFollower?.PauseMove();
                     break;
-                case TransformPathShowcaseLane.Queue:
+                case ETransformPathShowcaseLane.Queue:
                     for (int i = 0; i < _queueFollowers.Length; i++)
                     {
                         _queueWasMovingWhenHidden[i] = _queueFollowers[i] != null && _queueFollowers[i].IsMoving;
@@ -467,11 +493,11 @@ namespace Common.TransformPath.Samples
 
         private void ResumeSelectedLaneFromVisibilitySnapshot()
         {
-            if (_activeLane == TransformPathShowcaseLane.Normal && _normalWasMovingWhenHidden)
+            if (_activeLane == ETransformPathShowcaseLane.Normal && _normalWasMovingWhenHidden)
                 _pathFollower.ResumeMove();
-            else if (_activeLane == TransformPathShowcaseLane.MultiPath && _multiWasMovingWhenHidden)
+            else if (_activeLane == ETransformPathShowcaseLane.MultiPath && _multiWasMovingWhenHidden)
                 _multiPathFollower.ResumeMove();
-            else if (_activeLane == TransformPathShowcaseLane.Queue && _queueVisible)
+            else if (_activeLane == ETransformPathShowcaseLane.Queue && _queueVisible)
                 ResumeQueueFromVisibilitySnapshot();
         }
 
@@ -498,9 +524,9 @@ namespace Common.TransformPath.Samples
 
         private void ApplyLanePresentation()
         {
-            SetLaneRenderersVisible("Normal Path Lane", _activeLane == TransformPathShowcaseLane.Normal);
-            SetLaneRenderersVisible("Multi Path Lane", _activeLane == TransformPathShowcaseLane.MultiPath);
-            SetLaneRenderersVisible("Queued Path Lane", _activeLane == TransformPathShowcaseLane.Queue && _queueVisible);
+            SetLaneRenderersVisible("Normal Path Lane", _activeLane == ETransformPathShowcaseLane.Normal);
+            SetLaneRenderersVisible("Multi Path Lane", _activeLane == ETransformPathShowcaseLane.MultiPath);
+            SetLaneRenderersVisible("Queued Path Lane", _activeLane == ETransformPathShowcaseLane.Queue && _queueVisible);
             if (!_isPaused)
                 ResumeSelectedLaneFromVisibilitySnapshot();
         }
@@ -520,9 +546,9 @@ namespace Common.TransformPath.Samples
 
         private Bounds GetActiveLaneBounds()
         {
-            string laneName = _activeLane == TransformPathShowcaseLane.Normal
+            string laneName = _activeLane == ETransformPathShowcaseLane.Normal
                 ? "Normal Path Lane"
-                : _activeLane == TransformPathShowcaseLane.MultiPath ? "Multi Path Lane" : "Queued Path Lane";
+                : _activeLane == ETransformPathShowcaseLane.MultiPath ? "Multi Path Lane" : "Queued Path Lane";
             Transform lane = transform.Find(laneName);
             if (lane == null)
                 return new Bounds(transform.position, Vector3.one * 10f);
@@ -581,5 +607,7 @@ namespace Common.TransformPath.Samples
                 _multiRouteRenderers.Add(line);
             }
         }
+
+        #endregion
     }
 }

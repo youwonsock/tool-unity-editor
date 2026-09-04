@@ -25,14 +25,22 @@ namespace Common.TransformPath
 
         private sealed class QueueEntry
         {
-            public readonly IQueuedPathAgent Agent;
-            public readonly int RegistrationSequence;
+            public IQueuedPathAgent Agent;
+            public int RegistrationSequence;
             public float Progress;
 
-            public QueueEntry(IQueuedPathAgent agent, int registrationSequence)
+            public void Set(IQueuedPathAgent agent, int registrationSequence)
             {
                 Agent = agent;
                 RegistrationSequence = registrationSequence;
+                Progress = 0f;
+            }
+
+            public void Clear()
+            {
+                Agent = null;
+                RegistrationSequence = 0;
+                Progress = 0f;
             }
         }
 
@@ -67,6 +75,7 @@ namespace Common.TransformPath
         [SerializeField] private AnimationCurve _slowdownCurve = null;
 
         private readonly List<QueueEntry> _entries = new List<QueueEntry>(100);
+        private readonly List<QueueEntry> _entryPool = new List<QueueEntry>(100);
         private readonly Dictionary<IQueuedPathAgent, int> _indices = new Dictionary<IQueuedPathAgent, int>(100);
         private readonly Dictionary<IQueuedPathAgent, PathQueueState> _states = new Dictionary<IQueuedPathAgent, PathQueueState>(100);
         private readonly List<PathSegmentDescriptor> _routeStructure = new List<PathSegmentDescriptor>();
@@ -126,6 +135,47 @@ namespace Common.TransformPath
 
 
         #region Unity Events
+
+        public void Init()
+        {
+            if (_isInitialized)
+                return;
+            if (!TryValidateSettings(out string settingsError))
+            {
+                MarkConfigurationError(settingsError);
+                return;
+            }
+            if (_slowdownCurve == null)
+                _slowdownCurve = AnimationCurve.Linear(0f, 0f, 1f, 1f);
+
+            _isInitialized = true;
+            _configurationErrorReported = false;
+            if (_routeProviderObject != null)
+            {
+                IPathProvider provider = _routeProviderObject as IPathProvider;
+                if (provider == null)
+                {
+                    MarkConfigurationError(
+                        $"QueuedPathManager '{name}' route object does not implement IPathProvider.");
+                    return;
+                }
+                if (provider.IsInitialized && provider.IsReady)
+                    ConfigureRoute(provider);
+            }
+        }
+
+        public void Release()
+        {
+            StopAllAgents();
+            if (_routeProvider != null)
+                _routeProvider.PathChanged -= HandleRouteChanged;
+            _routeProvider = null;
+            _routeStructure.Clear();
+            _isInitialized = false;
+            _observedRouteRevision = -1;
+            _routeRevision = 0;
+            _awaitingFollowerSnapshots = false;
+        }
 
         private void Awake()
         {
@@ -196,47 +246,6 @@ namespace Common.TransformPath
 
         #region Public Methods
 
-        public void Init()
-        {
-            if (_isInitialized)
-                return;
-            if (!TryValidateSettings(out string settingsError))
-            {
-                MarkConfigurationError(settingsError);
-                return;
-            }
-            if (_slowdownCurve == null)
-                _slowdownCurve = AnimationCurve.Linear(0f, 0f, 1f, 1f);
-
-            _isInitialized = true;
-            _configurationErrorReported = false;
-            if (_routeProviderObject != null)
-            {
-                IPathProvider provider = _routeProviderObject as IPathProvider;
-                if (provider == null)
-                {
-                    MarkConfigurationError(
-                        $"QueuedPathManager '{name}' route object does not implement IPathProvider.");
-                    return;
-                }
-                if (provider.IsInitialized && provider.IsReady)
-                    ConfigureRoute(provider);
-            }
-        }
-
-        public void Release()
-        {
-            StopAllAgents();
-            if (_routeProvider != null)
-                _routeProvider.PathChanged -= HandleRouteChanged;
-            _routeProvider = null;
-            _routeStructure.Clear();
-            _isInitialized = false;
-            _observedRouteRevision = -1;
-            _routeRevision = 0;
-            _awaitingFollowerSnapshots = false;
-        }
-
         public void ConfigureRoute(IPathProvider provider)
         {
             if (provider == null)
@@ -278,7 +287,8 @@ namespace Common.TransformPath
             if (_indices.ContainsKey(agent))
                 return false;
 
-            _entries.Add(new QueueEntry(agent, _registrationSequence++));
+            QueueEntry entry = AcquireEntry(agent, _registrationSequence++);
+            _entries.Add(entry);
             _indices[agent] = _entries.Count - 1;
             return true;
         }
@@ -290,6 +300,7 @@ namespace Common.TransformPath
             if (!_indices.TryGetValue(agent, out int index))
                 return false;
 
+            QueueEntry removedEntry = _entries[index];
             int last = _entries.Count - 1;
             if (index != last)
                 _entries[index] = _entries[last];
@@ -298,6 +309,7 @@ namespace Common.TransformPath
             _states.Remove(agent);
             if (index != last)
                 _indices[_entries[index].Agent] = index;
+            RecycleEntry(removedEntry);
             return true;
         }
 
@@ -427,9 +439,39 @@ namespace Common.TransformPath
                 if (concrete != null)
                     concrete.MarkUnregisteredByManager();
             }
+
+            for (int i = 0; i < _entries.Count; i++)
+                RecycleEntry(_entries[i]);
             _entries.Clear();
             _indices.Clear();
             _states.Clear();
+        }
+
+        private QueueEntry AcquireEntry(
+            IQueuedPathAgent agent,
+            int registrationSequence)
+        {
+            QueueEntry entry;
+            int lastIndex = _entryPool.Count - 1;
+            if (lastIndex >= 0)
+            {
+                entry = _entryPool[lastIndex];
+                _entryPool.RemoveAt(lastIndex);
+            }
+            else
+                entry = new QueueEntry();
+
+            entry.Set(agent, registrationSequence);
+            return entry;
+        }
+
+        private void RecycleEntry(QueueEntry entry)
+        {
+            if (entry == null)
+                return;
+
+            entry.Clear();
+            _entryPool.Add(entry);
         }
 
         private bool TryValidateSettings(out string error)

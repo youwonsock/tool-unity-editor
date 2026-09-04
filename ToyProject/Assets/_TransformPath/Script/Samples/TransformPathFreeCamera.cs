@@ -10,6 +10,8 @@ namespace Common.TransformPath.Samples
     [RequireComponent(typeof(Camera))]
     public sealed class TransformPathFreeCamera : MonoBehaviour
     {
+        #region Member Variables
+
         [Header("Camera")]
         [SerializeField] private float _fieldOfView = 60f;
         [SerializeField] private float _nearClipPlane = 0.1f;
@@ -35,8 +37,18 @@ namespace Common.TransformPath.Samples
         private float _yaw;
         private float _pitch;
 
+        #endregion
+
+
+        #region Properties
+
         public bool IsLookMode => _isLookMode;
         public float MoveSpeed => _moveSpeed;
+
+        #endregion
+
+
+        #region Unity Events
 
         private void Awake()
         {
@@ -68,6 +80,17 @@ namespace Common.TransformPath.Samples
             UpdateMovement();
         }
 
+        private void OnDisable()
+        {
+            if (_isLookMode)
+                ReleaseLookMode();
+        }
+
+        #endregion
+
+
+        #region Public Methods
+
         public void FocusOnBounds(Bounds bounds)
         {
             if (_camera == null)
@@ -91,6 +114,11 @@ namespace Common.TransformPath.Samples
             transform.LookAt(target);
             SyncAnglesFromTransform();
         }
+
+        #endregion
+
+
+        #region Private Methods
 
         private void ConfigureCamera()
         {
@@ -184,10 +212,6 @@ namespace Common.TransformPath.Samples
             return EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
         }
 
-        private void OnDisable()
-        {
-            if (_isLookMode)
-                ReleaseLookMode();
-        }
+        #endregion
     }
 }

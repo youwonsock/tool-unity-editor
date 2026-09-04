@@ -50,6 +50,8 @@ namespace Common.TransformPath
         private bool _queueBlocked;
         private float _queueSpeedMultiplier = 1f;
         private float _queueMaxGlobalNormalizedTime = 1f;
+        private Action<int> _segmentChanged;
+        private Delegate[] _segmentChangedInvocationList;
 
         #endregion
 
@@ -88,7 +90,19 @@ namespace Common.TransformPath
         }
 
         public event Action<EPathFollowerState> StateChanged;
-        public event Action<int> SegmentChanged;
+        public event Action<int> SegmentChanged
+        {
+            add
+            {
+                _segmentChanged += value;
+                _segmentChangedInvocationList = _segmentChanged?.GetInvocationList();
+            }
+            remove
+            {
+                _segmentChanged -= value;
+                _segmentChangedInvocationList = _segmentChanged?.GetInvocationList();
+            }
+        }
         public event Action Completed;
 
         #endregion
@@ -151,20 +165,20 @@ namespace Common.TransformPath
             IPathSequenceProvider sequenceProvider = provider as IPathSequenceProvider;
             if (sequenceProvider != null)
             {
-                StartSequence(sequenceProvider, new PathPlaybackSettings(_startupLoop));
+                StartPlayback(PathPlaybackRequest.Sequence(sequenceProvider, _startupLoop));
                 return;
             }
 
             IPathMovementProvider movementProvider = provider as IPathMovementProvider;
             if (movementProvider != null)
             {
-                StartMove(movementProvider, new PathPlaybackSettings(_startupLoop));
+                StartPlayback(PathPlaybackRequest.Single(movementProvider, _startupLoop));
                 return;
             }
 
             Debug.LogError(
                 $"PathFollower '{name}' startup provider does not expose movement settings. "
-                + "Use the explicit override StartMove API.",
+                + "Use the explicit Aggregate playback request.",
                 this);
         }
 
@@ -235,61 +249,22 @@ namespace Common.TransformPath
 
         #region Public Methods
 
-        public void StartMove(IPathMovementProvider provider, PathPlaybackSettings playback)
+        public void StartPlayback(PathPlaybackRequest request)
         {
             EnsureInitialized();
-            ValidateProvider(provider);
-            PathMovementSettings settings = PathMovementSettingsUtility.Clone(
-                provider.MovementSettings);
-            PathMovementSettingsUtility.Validate(settings, nameof(provider));
-            StartSinglePlayback(provider, settings, playback);
-        }
-
-        public void StartMove(
-            IPathProvider provider,
-            PathMovementSettings movementOverride,
-            PathPlaybackSettings playback)
-        {
-            EnsureInitialized();
-            ValidateProvider(provider);
-            if (provider is IPathSequenceProvider)
+            PathPlaybackSession session = PathPlaybackSession.CreateOrReuse(
+                request,
+                _playbackSession);
+            if (session.Kind == EPathPlaybackKind.Sequence)
             {
-                Debug.LogWarning(
-                    $"PathFollower '{name}' is playing an IPathSequenceProvider as one "
-                    + "aggregate path with an explicit movement override.",
-                    this);
+                _pathEventHandler?.PrepareForSequence(this, session.Snapshot);
             }
-
-            PathMovementSettings settings = PathMovementSettingsUtility.Clone(movementOverride);
-            PathMovementSettingsUtility.Validate(settings, nameof(movementOverride));
-            StartSinglePlayback(provider, settings, playback);
-        }
-
-        public void StartSequence(IPathSequenceProvider provider, PathPlaybackSettings playback)
-        {
-            EnsureInitialized();
-            ValidateProvider(provider);
-            if (!PathSequenceSnapshot.TryCreate(
-                    provider,
-                    out PathSequenceSnapshot snapshot,
-                    out string error))
-                throw new InvalidOperationException(error);
-
-            StopPlaybackOnly();
-            _playbackSession = new PathPlaybackSession(provider, provider, snapshot);
-            _loop = playback.Loop;
-            _currentSegmentIndex = 0;
-            _normalizedTime = 0f;
-            _globalNormalizedTime = 0f;
-            _segmentElapsed = 0f;
-            _segmentDistance = 0f;
-            ConfigureSequenceSegment(0, 0f, false);
-            _playbackSession.EventCursor.Reset(snapshot.GetEventSource(0), 0f);
-            ResetQueueConstraint();
-            _isMoving = true;
-            _playbackRevision++;
-            SetState(EPathFollowerState.Moving);
-            ApplyCurrentPosition();
+                else
+                    _pathEventHandler?.PrepareForPlayback(
+                        this,
+                        session.Provider as IPathEventSource,
+                        session.MovementSettings.MoveType);
+            BeginPlayback(session, request.Loop);
         }
 
         public void StopMove()
@@ -402,31 +377,37 @@ namespace Common.TransformPath
 
         #region Private Methods
 
-        private void StartSinglePlayback(
-            IPathProvider provider,
-            PathMovementSettings settings,
-            PathPlaybackSettings playback)
+        private void BeginPlayback(
+            PathPlaybackSession session,
+            bool loop)
         {
             StopPlaybackOnly();
-            _playbackSession = new PathPlaybackSession(provider, null, null)
-            {
-                ProviderMovementSettings = provider is IPathMovementProvider movementProvider
-                    ? PathMovementSettingsUtility.Clone(movementProvider.MovementSettings)
-                    : (PathMovementSettings?)null,
-            };
-            _moveType = settings.MoveType;
-            if (_moveType == EPathMoveType.SpeedBased)
-                _speed = settings.Value;
-            else
-                _duration = settings.Value;
-            _timeCurve = PathMovementSettingsUtility.CloneCurve(settings.TimeCurve);
-            _loop = playback.Loop;
+            _playbackSession = session;
+            _loop = loop;
             _currentSegmentIndex = 0;
             _normalizedTime = 0f;
             _globalNormalizedTime = 0f;
             _segmentElapsed = 0f;
             _segmentDistance = 0f;
-            _playbackSession.EventCursor.Reset(provider as IPathEventSource, 0f);
+            if (session.Kind == EPathPlaybackKind.Sequence)
+            {
+                ConfigureSequenceSegment(0, 0f, false);
+                session.EventCursor.Reset(
+                    session.Snapshot.GetEventSource(0),
+                    0f);
+            }
+            else
+            {
+                _moveType = session.MovementSettings.MoveType;
+                if (_moveType == EPathMoveType.SpeedBased)
+                    _speed = session.MovementSettings.Value;
+                else
+                    _duration = session.MovementSettings.Value;
+                _timeCurve = session.MovementSettings.TimeCurve;
+                session.EventCursor.Reset(
+                    session.Provider as IPathEventSource,
+                    0f);
+            }
             ResetQueueConstraint();
             _isMoving = true;
             _playbackRevision++;
@@ -830,14 +811,6 @@ namespace Common.TransformPath
                 throw new InvalidOperationException("PathFollower is not initialized.");
         }
 
-        private static void ValidateProvider(IPathProvider provider)
-        {
-            if (provider == null)
-                throw new ArgumentNullException(nameof(provider));
-            if (!PathProviderUtility.TryValidateReady(provider, out string error))
-                throw new InvalidOperationException(error);
-        }
-
         private static float EvaluateTimeProgress(
             float rawProgress,
             AnimationCurve curve)
@@ -892,7 +865,7 @@ namespace Common.TransformPath
 
         private void InvokeSegmentChanged(int value, int tickRevision)
         {
-            Delegate[] listeners = SegmentChanged?.GetInvocationList();
+            Delegate[] listeners = _segmentChangedInvocationList;
             if (listeners == null)
                 return;
 

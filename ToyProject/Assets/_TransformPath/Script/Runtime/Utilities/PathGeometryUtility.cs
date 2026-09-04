@@ -6,18 +6,29 @@ namespace Common.TransformPath
     /// <summary>Temporary collections owned by one geometry builder.</summary>
     internal sealed class PathGeometryBuildBuffer
     {
+        #region Member Variables
+
         public readonly List<Vector3> ControlPoints = new List<Vector3>();
         public readonly List<Vector3> BuildPoints = new List<Vector3>();
         public readonly List<float> SegmentDistances = new List<float>();
         public readonly List<Vector3> SplineControlPoints = new List<Vector3>();
+
+        #endregion
     }
 
     /// <summary>Immutable result published by the geometry builder.</summary>
     internal readonly struct PathGeometryResult
     {
+        #region Properties
+
         public Vector3[] Points { get; }
         public float[] CumulativeDistances { get; }
         public float Length { get; }
+
+        #endregion
+
+
+        #region Public Methods
 
         public PathGeometryResult(
             Vector3[] points,
@@ -28,6 +39,8 @@ namespace Common.TransformPath
             CumulativeDistances = cumulativeDistances;
             Length = length;
         }
+
+        #endregion
     }
 
     /// <summary>
@@ -36,7 +49,14 @@ namespace Common.TransformPath
     /// </summary>
     internal static class PathGeometryUtility
     {
+        #region Constants
+
         private const int MIN_PATH_POINTS = 2;
+
+        #endregion
+
+
+        #region Public Methods
 
         public static bool TryBuild(
             IReadOnlyList<Vector3> controlPoints,
@@ -176,6 +196,11 @@ namespace Common.TransformPath
 
             return true;
         }
+
+        #endregion
+
+
+        #region Private Methods
 
         private static void GenerateLinearPath(
             PathGeometryBuildBuffer buffer,
@@ -329,5 +354,7 @@ namespace Common.TransformPath
                 + (2f * p0 - 5f * p1 + 4f * p2 - p3) * t2
                 + (-p0 + 3f * p1 - 3f * p2 + p3) * t3);
         }
+
+        #endregion
     }
 }

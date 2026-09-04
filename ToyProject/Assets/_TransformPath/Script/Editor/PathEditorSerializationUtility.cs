@@ -10,8 +10,15 @@ namespace Common.TransformPath
     /// <summary>Shared SerializedProperty lookups used by TransformPath editors.</summary>
     internal static class PathEditorSerializationUtility
     {
+        #region Constants
+
         public const string SEGMENTS_PROPERTY = "_segments";
         public const string PATH_DATA_PROPERTY = "_pathData";
+
+        #endregion
+
+
+        #region Public Methods
 
         public static List<PathData> GetPathDatas(MultiPathData multiPathData)
         {
@@ -135,6 +142,8 @@ namespace Common.TransformPath
             }
             signature.Append(']');
         }
+
+        #endregion
     }
 }
 #endif

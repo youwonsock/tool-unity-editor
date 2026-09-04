@@ -8,6 +8,8 @@ namespace Common.TransformPath
     /// </summary>
     internal static class PathValueUtility
     {
+        #region Public Methods
+
         public static bool IsFinite(float value)
         {
             return !float.IsNaN(value) && !float.IsInfinity(value);
@@ -27,5 +29,7 @@ namespace Common.TransformPath
         {
             return IsFinite(value) && value >= 0f;
         }
+
+        #endregion
     }
 }

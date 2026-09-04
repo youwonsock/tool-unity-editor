@@ -7,6 +7,8 @@ namespace Common.TransformPath
     /// <summary>Editor-only Undo, dirty, and prefab override operations.</summary>
     internal static class PathEditorUndoUtility
     {
+        #region Public Methods
+
         public static void Record(Object targetObject, string undoName)
         {
             if (targetObject != null)
@@ -37,6 +39,8 @@ namespace Common.TransformPath
         {
             SceneView.RepaintAll();
         }
+
+        #endregion
     }
 }
 #endif

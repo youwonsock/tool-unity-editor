@@ -45,7 +45,14 @@ namespace Common.TransformPath
     /// <summary>Pure validation and mode resolution for PathEventHandler.</summary>
     internal static class PathEventValidator
     {
+        #region Constants
+
         private const float TIME_BASED_PAUSE_VALUE = 9999f;
+
+        #endregion
+
+
+        #region Public Methods
 
         public static PathEventContext ValidateSetting(
             PathEventSettingSO setting,
@@ -98,6 +105,11 @@ namespace Common.TransformPath
             validationStack.Remove(setting);
             return context;
         }
+
+        #endregion
+
+
+        #region Private Methods
 
         private static PathEventContext ResolveMoveEventContext(
             PathEventSettingSO setting,
@@ -343,5 +355,7 @@ namespace Common.TransformPath
             if (!PathValueUtility.IsNonNegativeFinite(value))
                 throw new ArgumentOutOfRangeException(parameterName);
         }
+
+        #endregion
     }
 }

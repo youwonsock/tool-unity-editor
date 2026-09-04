@@ -68,13 +68,74 @@ namespace Common.TransformPath
         }
     }
 
-    public readonly struct PathPlaybackSettings
+    internal enum EPathPlaybackKind
     {
-        public bool Loop { get; }
+        Single,
+        Aggregate,
+        Sequence,
+    }
 
-        public PathPlaybackSettings(bool loop = false)
+    /// <summary>
+    /// Runtime-only description of one playback request. The request is not
+    /// serialized; authoring data remains on the referenced provider.
+    /// </summary>
+    public readonly struct PathPlaybackRequest
+    {
+        private readonly IPathProvider _provider;
+        private readonly bool _loop;
+        private readonly EPathPlaybackKind _kind;
+        private readonly PathMovementSettings _movementOverride;
+
+        public IPathProvider Provider => _provider;
+        public bool Loop => _loop;
+
+        internal EPathPlaybackKind Kind => _kind;
+        internal PathMovementSettings MovementOverride => _movementOverride;
+
+        private PathPlaybackRequest(
+            EPathPlaybackKind kind,
+            IPathProvider provider,
+            bool loop,
+            PathMovementSettings movementOverride)
         {
-            Loop = loop;
+            _kind = kind;
+            _provider = provider;
+            _loop = loop;
+            _movementOverride = movementOverride;
+        }
+
+        public static PathPlaybackRequest Single(
+            IPathMovementProvider provider,
+            bool loop = false)
+        {
+            return new PathPlaybackRequest(
+                EPathPlaybackKind.Single,
+                provider,
+                loop,
+                default(PathMovementSettings));
+        }
+
+        public static PathPlaybackRequest Aggregate(
+            IPathProvider provider,
+            PathMovementSettings movement,
+            bool loop = false)
+        {
+            return new PathPlaybackRequest(
+                EPathPlaybackKind.Aggregate,
+                provider,
+                loop,
+                movement);
+        }
+
+        public static PathPlaybackRequest Sequence(
+            IPathSequenceProvider provider,
+            bool loop = false)
+        {
+            return new PathPlaybackRequest(
+                EPathPlaybackKind.Sequence,
+                provider,
+                loop,
+                default(PathMovementSettings));
         }
     }
 
@@ -203,9 +264,7 @@ namespace Common.TransformPath
 
         void Init();
         void Release();
-        void StartMove(IPathMovementProvider provider, PathPlaybackSettings playback);
-        void StartMove(IPathProvider provider, PathMovementSettings movementOverride, PathPlaybackSettings playback);
-        void StartSequence(IPathSequenceProvider provider, PathPlaybackSettings playback);
+        void StartPlayback(PathPlaybackRequest request);
         void StopMove();
         void PauseMove();
         void ResumeMove();

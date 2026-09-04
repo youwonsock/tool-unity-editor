@@ -7,8 +7,15 @@ namespace Common.TransformPath
     /// <summary>Editor-only cache that reuses the runtime geometry builder.</summary>
     internal static class PathDataScenePreviewCache
     {
+        #region Member Variables
+
         private static readonly Dictionary<int, PathDataScenePreview> CACHES =
             new Dictionary<int, PathDataScenePreview>();
+
+        #endregion
+
+
+        #region Public Methods
 
         public static bool TryGet(PathData pathData, out PathDataScenePreview preview)
         {
@@ -25,11 +32,20 @@ namespace Common.TransformPath
 
             return preview.Update(pathData);
         }
+
+        #endregion
     }
 
     internal sealed class PathDataScenePreview
     {
+        #region Constants
+
         private const int MIN_PATH_POINTS = 2;
+
+        #endregion
+
+
+        #region Member Variables
 
         private readonly List<Vector3> _controlPoints = new List<Vector3>();
         private readonly List<Vector3> _lastControlPoints = new List<Vector3>();
@@ -43,6 +59,11 @@ namespace Common.TransformPath
         private int _segmentCount;
         private bool _hasSignature;
 
+        #endregion
+
+
+        #region Properties
+
         public bool IsValid => _sampledPoints != null
             && _cumulativeDistances != null
             && _sampledPoints.Length >= MIN_PATH_POINTS
@@ -50,6 +71,11 @@ namespace Common.TransformPath
         public Vector3[] SampledPoints => _sampledPoints;
         public int SampledPointCount => _sampledPoints == null ? 0 : _sampledPoints.Length;
         public float PathLength => _pathLength;
+
+        #endregion
+
+
+        #region Public Methods
 
         public bool Update(PathData pathData)
         {
@@ -120,6 +146,11 @@ namespace Common.TransformPath
                 (targetDistance - start) / segmentLength);
         }
 
+        #endregion
+
+
+        #region Private Methods
+
         private void Invalidate()
         {
             _sampledPoints = null;
@@ -129,6 +160,7 @@ namespace Common.TransformPath
             _lastControlPoints.Clear();
         }
 
+        #endregion
     }
 }
 #endif

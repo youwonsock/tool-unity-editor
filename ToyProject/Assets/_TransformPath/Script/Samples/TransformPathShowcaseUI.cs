@@ -12,6 +12,8 @@ namespace Common.TransformPath.Samples
     [DefaultExecutionOrder(110)]
     public sealed class TransformPathShowcaseUI : MonoBehaviour
     {
+        #region Constants
+
         private const float BOARD_WIDTH = 420f;
         private const float BOARD_HEIGHT = 346f;
         private const float CONTENT_WIDTH = 388f;
@@ -22,6 +24,11 @@ namespace Common.TransformPath.Samples
         private static readonly Color QUEUE_COLOR = new Color(1f, 0.65f, 0.1f, 1f);
         private static readonly Color COMMON_BUTTON_COLOR = new Color(0.16f, 0.28f, 0.43f, 1f);
         private static readonly Color DARK_BUTTON_COLOR = new Color(0.11f, 0.18f, 0.28f, 1f);
+
+        #endregion
+
+
+        #region Member Variables
 
         private TransformPathOverviewController _controller;
         private TransformPathOverviewBoard _board;
@@ -38,6 +45,11 @@ namespace Common.TransformPath.Samples
         private int _lastLane = -1;
         private readonly List<Image> _laneButtonImages = new List<Image>();
 
+        #endregion
+
+
+        #region Unity Events
+
         private void Start()
         {
             Build();
@@ -50,6 +62,11 @@ namespace Common.TransformPath.Samples
 
             RefreshPresentation();
         }
+
+        #endregion
+
+
+        #region Private Methods
 
         private void Build()
         {
@@ -219,9 +236,9 @@ namespace Common.TransformPath.Samples
             if (lane != _lastLane)
             {
                 _lastLane = lane;
-                _normalSettings.SetActive(lane == (int)TransformPathShowcaseLane.Normal);
-                _multiSettings.SetActive(lane == (int)TransformPathShowcaseLane.MultiPath);
-                _queueSettings.SetActive(lane == (int)TransformPathShowcaseLane.Queue);
+                _normalSettings.SetActive(lane == (int)ETransformPathShowcaseLane.Normal);
+                _multiSettings.SetActive(lane == (int)ETransformPathShowcaseLane.MultiPath);
+                _queueSettings.SetActive(lane == (int)ETransformPathShowcaseLane.Queue);
 
                 _activeLaneText.text = GetLaneTitle(_controller.ActiveLane);
                 _activeLaneText.color = GetLaneColor(_controller.ActiveLane);
@@ -235,33 +252,33 @@ namespace Common.TransformPath.Samples
 
             for (int i = 0; i < _laneButtonImages.Count; i++)
             {
-                Color laneColor = GetLaneColor((TransformPathShowcaseLane)i);
+                Color laneColor = GetLaneColor((ETransformPathShowcaseLane)i);
                 _laneButtonImages[i].color = i == lane
                     ? Color.Lerp(laneColor, Color.white, 0.25f)
                     : new Color(0.15f, 0.22f, 0.32f, 1f);
             }
         }
 
-        private static string GetLaneTitle(TransformPathShowcaseLane lane)
+        private static string GetLaneTitle(ETransformPathShowcaseLane lane)
         {
             switch (lane)
             {
-                case TransformPathShowcaseLane.MultiPath:
+                case ETransformPathShowcaseLane.MultiPath:
                     return "ACTIVE / MULTI PATH";
-                case TransformPathShowcaseLane.Queue:
+                case ETransformPathShowcaseLane.Queue:
                     return "ACTIVE / QUEUED PATH";
                 default:
                     return "ACTIVE / NORMAL PATH";
             }
         }
 
-        private static Color GetLaneColor(TransformPathShowcaseLane lane)
+        private static Color GetLaneColor(ETransformPathShowcaseLane lane)
         {
             switch (lane)
             {
-                case TransformPathShowcaseLane.MultiPath:
+                case ETransformPathShowcaseLane.MultiPath:
                     return MULTI_COLOR_A;
-                case TransformPathShowcaseLane.Queue:
+                case ETransformPathShowcaseLane.Queue:
                     return QUEUE_COLOR;
                 default:
                     return NORMAL_COLOR;
@@ -355,5 +372,7 @@ namespace Common.TransformPath.Samples
             rect.localRotation = Quaternion.identity;
             rect.localScale = Vector3.one;
         }
+
+        #endregion
     }
 }

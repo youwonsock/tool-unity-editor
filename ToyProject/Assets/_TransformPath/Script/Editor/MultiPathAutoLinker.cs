@@ -313,6 +313,7 @@ namespace Common.TransformPath
             PrefabStage.prefabStageClosing -= HandlePrefabStageClosing;
             Undo.undoRedoPerformed -= MarkTrackedTargetsDirty;
             ObjectChangeEvents.changesPublished -= HandleObjectChanges;
+            AssemblyReloadEvents.beforeAssemblyReload -= Clear;
             TRACKED_MULTI_PATHS.Clear();
             TRACKED_BY_ID.Clear();
             LIVE_IDS.Clear();

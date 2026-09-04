@@ -5,6 +5,8 @@ namespace Common.TransformPath
     /// <summary>Provider capability and route descriptor helpers.</summary>
     internal static class PathProviderUtility
     {
+        #region Public Methods
+
         public static bool TryValidateReady(IPathProvider provider, out string error)
         {
             if (provider == null)
@@ -96,6 +98,11 @@ namespace Common.TransformPath
                     right.MovementSettings);
         }
 
+        #endregion
+
+
+        #region Private Methods
+
         private static bool TryValidateDescriptor(
             PathSegmentDescriptor descriptor,
             int index,
@@ -118,5 +125,7 @@ namespace Common.TransformPath
             error = null;
             return true;
         }
+
+        #endregion
     }
 }

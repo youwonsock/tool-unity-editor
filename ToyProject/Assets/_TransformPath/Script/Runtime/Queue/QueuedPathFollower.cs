@@ -132,7 +132,7 @@ namespace Common.TransformPath
             if (!_isInitialized && !_isRegistered)
                 return;
 
-            UnregisterIfRegistered();
+            UnregisterFromManager();
             if (_pathFollower != null && _completedSubscription != null)
                 _pathFollower.Completed -= _completedSubscription;
             _completedSubscription = null;
@@ -155,7 +155,7 @@ namespace Common.TransformPath
 
         private void OnDisable()
         {
-            UnregisterIfRegistered();
+            UnregisterFromManager();
         }
 
         private void OnDestroy()
@@ -168,7 +168,7 @@ namespace Common.TransformPath
             if (!_isInitialized || _pathFollower == null || !_pathFollower.IsMoving)
                 return;
             if (!_isRegistered)
-                TryRegister();
+                TryRegisterWithManager();
 
             PathQueueState state = default(PathQueueState);
             bool hasState = _manager != null
@@ -211,34 +211,23 @@ namespace Common.TransformPath
 
         #region Public Methods
 
-        public void StartMove(IPathMovementProvider provider, PathPlaybackSettings playback)
+        public void StartPlayback(PathPlaybackRequest request)
         {
-            EnsureReadyToStart(provider);
-            _pathFollower.StartMove(provider, playback);
-            RegisterAfterStart();
-        }
-
-        public void StartMove(
-            IPathProvider provider,
-            PathMovementSettings movementOverride,
-            PathPlaybackSettings playback)
-        {
-            EnsureReadyToStart(provider);
-            _pathFollower.StartMove(provider, movementOverride, playback);
-            RegisterAfterStart();
-        }
-
-        public void StartSequence(IPathSequenceProvider provider, PathPlaybackSettings playback)
-        {
-            EnsureReadyToStart(provider);
-            _pathFollower.StartSequence(provider, playback);
-            RegisterAfterStart();
+            EnsureQueueReady(request.Provider);
+            _pathFollower.StartPlayback(request);
+            if (!ReferenceEquals(_pathFollower.CurrentProvider, _manager.RouteProvider))
+            {
+                _pathFollower.StopMove();
+                throw new InvalidOperationException(
+                    "Queue follower and manager must use the same route provider instance.");
+            }
+            RegisterWithManager();
         }
 
         public void StopMove()
         {
             _pathFollower?.StopMove();
-            UnregisterIfRegistered();
+            UnregisterFromManager();
             ResetConstraintState();
         }
 
@@ -249,7 +238,7 @@ namespace Common.TransformPath
 
             _externalPause = true;
             _pathFollower.PauseMove();
-            UnregisterIfRegistered();
+            UnregisterFromManager();
             _effectiveBlocked = true;
         }
 
@@ -258,9 +247,12 @@ namespace Common.TransformPath
             if (_pathFollower == null)
                 return;
 
+            if (_pathFollower.State != EPathFollowerState.Paused)
+                return;
+            EnsureQueueReady(_pathFollower.CurrentProvider);
             _externalPause = false;
+            RegisterWithManager();
             _pathFollower.ResumeMove();
-            RegisterAfterStart();
         }
 
         public void ForceBlock()
@@ -293,7 +285,7 @@ namespace Common.TransformPath
                 _pathFollower.ResetQueueConstraint();
         }
 
-        private void EnsureReadyToStart(IPathProvider provider)
+        private void EnsureQueueReady(IPathProvider provider)
         {
             if (!_isInitialized)
                 Init();
@@ -311,32 +303,42 @@ namespace Common.TransformPath
                     "Queue follower and manager must use the same route provider instance.");
         }
 
-        private void RegisterAfterStart()
+        private void RegisterWithManager()
         {
             if (_manager == null)
                 return;
             _pathFollower.ResetQueueConstraint();
             if (!_isRegistered)
-                _isRegistered = _manager.Register(this)
-                    || _manager.TryGetState(this, out _managerState);
+            {
+                _manager.Register(this);
+                _isRegistered = true;
+            }
             _hasManagerState = false;
             _effectiveBlocked = false;
             _currentSpeedMultiplier = 1f;
             UpdateAnimator();
         }
 
-        private void TryRegister()
+        private void TryRegisterWithManager()
         {
-            if (_manager == null || _pathFollower == null || !_pathFollower.IsMoving)
+            if (_manager == null
+                || !_manager.IsInitialized
+                || _pathFollower == null
+                || !_pathFollower.IsMoving)
+                return;
+            IPathProvider provider = _pathFollower.CurrentProvider;
+            if (provider == null || !provider.IsReady)
                 return;
             if (_manager.RouteProvider == null)
-                _manager.ConfigureRoute(_pathFollower.CurrentProvider);
-            if (ReferenceEquals(_manager.RouteProvider, _pathFollower.CurrentProvider))
-                _isRegistered = _manager.Register(this)
-                    || _manager.TryGetState(this, out _managerState);
+                _manager.ConfigureRoute(provider);
+            if (!ReferenceEquals(_manager.RouteProvider, provider))
+                return;
+
+            _manager.Register(this);
+            _isRegistered = true;
         }
 
-        private void UnregisterIfRegistered()
+        private void UnregisterFromManager()
         {
             if (!_isRegistered)
                 return;
@@ -347,9 +349,9 @@ namespace Common.TransformPath
 
         private void HandleUnderlyingCompleted()
         {
-            UnregisterIfRegistered();
+            UnregisterFromManager();
             ResetConstraintState();
-            InvokeCompleted();
+            OnCompleted?.Invoke(this);
         }
 
         private void ResetConstraintState()
@@ -369,16 +371,16 @@ namespace Common.TransformPath
             if (blocked != wasBlocked)
             {
                 if (blocked)
-                    InvokeBlocked();
+                    OnBlocked?.Invoke(this);
                 else
-                    InvokeResumed();
+                    OnResumed?.Invoke(this);
             }
             if (!Mathf.Approximately(
                     _lastReportedSpeedMultiplier,
                     _currentSpeedMultiplier))
             {
                 _lastReportedSpeedMultiplier = _currentSpeedMultiplier;
-                InvokeSpeedChanged(_currentSpeedMultiplier);
+                OnSpeedChanged?.Invoke(this, _currentSpeedMultiplier);
             }
         }
 
@@ -388,26 +390,6 @@ namespace Common.TransformPath
                 return;
             if (_speedParamHash != 0)
                 _animator.SetFloat(_speedParamHash, _currentSpeedMultiplier);
-        }
-
-        private void InvokeBlocked()
-        {
-            OnBlocked?.Invoke(this);
-        }
-
-        private void InvokeResumed()
-        {
-            OnResumed?.Invoke(this);
-        }
-
-        private void InvokeCompleted()
-        {
-            OnCompleted?.Invoke(this);
-        }
-
-        private void InvokeSpeedChanged(float value)
-        {
-            OnSpeedChanged?.Invoke(this, value);
         }
 
         #endregion

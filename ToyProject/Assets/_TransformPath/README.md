@@ -20,7 +20,7 @@ path.ConfigureMovementSettings(PathMovementSettings.Speed(3f));
 path.Init();
 
 follower.Init();
-follower.StartMove(path, new PathPlaybackSettings(loop: true));
+follower.StartPlayback(PathPlaybackRequest.Single(path, loop: true));
 follower.Seek(0.5f);
 ```
 
@@ -29,8 +29,20 @@ one error per failed configuration. A rebuild publishes a complete temporary
 cache atomically, so consumers never observe a partial path. `PathChanged`
 increments `Revision`. Runtime listeners use a fail-fast contract: the first
 listener exception propagates to the caller and later listeners are not
-invoked. `SegmentChanged` snapshots its invocation list only to stop the
-current tick safely when a listener changes playback state.
+invoked. `SegmentChanged` caches its invocation list when listeners are added
+or removed, so segment transitions do not create a listener array.
+
+## Runtime allocation profile
+
+The steady-state TransformPath loop is designed to run without allocations
+after initialization and the first provider rebuild. Delayed path events use
+a reusable game-time scheduler, event validation reuses its recursion set,
+and repeated playback of the same provider and revision reuses its session
+and sequence snapshot. Queue registrations recycle their internal entries.
+The first encounter with a provider or event tree may grow these caches. Event
+messages are delegated to the configured `IPathEventReceiver`; logging and
+allocations made by that receiver or by user listeners are outside this runtime
+budget.
 
 ## Internal utility layers
 
@@ -48,12 +60,14 @@ collaborators. These helpers do not own Unity lifecycle or playback state.
 - `PathData` implements `IPathMovementProvider`; its `PathMovementSettings` are
   the single source of truth for normal playback. The follower no longer has
   serialized movement authoring fields.
-- `StartMove(IPathMovementProvider, PathPlaybackSettings)` uses the provider's
-  movement settings. `StartMove(IPathProvider, PathMovementSettings,
-  PathPlaybackSettings)` is the explicit-session override for geometry-only
-  providers or aggregate playback; it does not mutate the provider.
-- `StartSequence(IPathSequenceProvider, PathPlaybackSettings)` snapshots the
-  ordered segments and uses each referenced `PathData`'s movement settings.
+- `PathPlaybackRequest.Single(provider, loop)` uses the provider's movement
+  settings. Start it with `StartPlayback(request)`.
+- `PathPlaybackRequest.Aggregate(provider, movement, loop)` treats any ready
+  provider as one aggregate path and applies the movement override to that
+  playback session only; it does not mutate the provider.
+- `PathPlaybackRequest.Sequence(provider, loop)` snapshots the ordered
+  segments and uses each referenced `PathData`'s movement settings. Start it
+  with the same `StartPlayback(request)` method.
   `PathSegmentConfig` stores only the child `PathData` and the destination
   segment's `PreservePreviousSpeed` flag.
   `SegmentChanged` identifies transitions; `CurrentSegmentIndex` and
@@ -107,12 +121,23 @@ segment change safely stops and unregisters all agents.
 
 ## Events
 
-`PathEventHandler` is optional authoring support for `PathEventSettingSO`. Set
-its `_receiverObject` to an `IPathEventReceiver` when a named event needs a
-receiver; speed, duration, time-scale, and delayed effects can also be used
-without a receiver. Event dispatch is fail-fast: a receiver exception is
-propagated before lifecycle, time-scale, or delayed processing, and a listener
-exception stops the remaining dispatch for that event.
+`PathEventHandler` validates and applies the movement, time-scale, and delayed
+effects defined by `PathEventSettingSO`. For a named event, it sends only the
+serialized `EventName` string and the follower to the configured receiver:
+
+```text
+PathData event
+→ PathEventHandler
+→ IPathEventReceiver.ReceivePathEvent(EventName, follower)
+→ project-specific receiver processing
+```
+
+Set `_receiverObject` to an `IPathEventReceiver` when a named event needs
+project-specific handling. Effects can also be used without a receiver. Event
+dispatch is fail-fast: a receiver exception is propagated before lifecycle,
+time-scale, or delayed processing, and a listener exception stops the remaining
+dispatch for that event. The sample showcase uses
+`TransformPathSampleMessageReceiver` to log the event name and actor.
 
 ## ToyProject showcase
 
@@ -124,9 +149,13 @@ were removed. `TransformPathFreeCamera` keeps its class, namespace, and GUID so
 the FlowField showcase can reuse it; it provides Perspective focus, RMB look,
 WASD movement, Q/E elevation, wheel speed control, Shift boost, and Escape.
 
-The sample scripts live under `Script/Samples`. Runtime, editor, and sample
-code are separated into `Common.TransformPath.Runtime`,
-`Common.TransformPath.Editor`, and `Common.TransformPath.Samples` assemblies.
+Runtime sources live under `Script/Runtime`, editor tooling under
+`Script/Editor`, and sample scripts under `Script/Samples`. They are separated into
+`Common.TransformPath.Runtime`, `Common.TransformPath.Editor`, and
+`Common.TransformPath.Samples` assemblies. Showcase event settings and
+materials live under `Settings/Events` and `Settings/Materials`. Runtime files
+are grouped by responsibility: `Core`, `Playback`, `Events`, `Queue`,
+`Utilities`, and `Components`.
 
 ## Authoring checklist
 
@@ -135,13 +164,15 @@ code are separated into `Common.TransformPath.Runtime`,
 2. Rebuild after changing control points, movement authoring, or runtime build
    settings. Inspector edits alone do not publish runtime revisions.
 3. For a sequence, configure `PathSegmentConfig` entries on `MultiPathData`.
-4. Start a follower with `StartMove` for aggregate playback or `StartSequence`
-   for per-segment playback.
+4. Start a follower with `PathPlaybackRequest.Single` for a provider-backed
+   path, `PathPlaybackRequest.Aggregate` for an explicit movement override, or
+   `PathPlaybackRequest.Sequence` for per-segment playback, then pass the
+   request to `StartPlayback`.
 5. Subscribe to `StateChanged`, `SegmentChanged`, and `Completed` during the
    component's active lifetime, and unsubscribe in `Release`/teardown.
 
 There are no compatibility aliases in 2.0. Use `EPathMoveType`,
-`PathMovementSettings`, `PathPlaybackSettings`, `PathSegmentConfig`, `Seek`,
+`PathMovementSettings`, `PathPlaybackRequest`, `PathSegmentConfig`, `Seek`,
 `SeekSegment`, and `IPathEventReceiver` directly. `PathData` is the authoring
 source for initial movement; `PathEventHandler` may still change the follower's
 runtime Speed or Duration during a session.

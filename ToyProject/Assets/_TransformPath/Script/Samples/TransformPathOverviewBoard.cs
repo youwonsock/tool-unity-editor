@@ -9,17 +9,23 @@ namespace Common.TransformPath.Samples
     [DefaultExecutionOrder(100)]
     public sealed class TransformPathOverviewBoard : MonoBehaviour
     {
+        #region Member Variables
+
         [SerializeField] private Text _text;
 
         private bool _isInitialized;
 
+        #endregion
+
+
+        #region Properties
+
         public bool IsInitialized => _isInitialized;
 
-        private void Awake()
-        {
-            if (Application.isPlaying)
-                Init();
-        }
+        #endregion
+
+
+        #region Unity Events
 
         public void Init()
         {
@@ -35,6 +41,27 @@ namespace Common.TransformPath.Samples
             _isInitialized = true;
         }
 
+        public void Release()
+        {
+            _isInitialized = false;
+        }
+
+        private void Awake()
+        {
+            if (Application.isPlaying)
+                Init();
+        }
+
+        private void OnDestroy()
+        {
+            Release();
+        }
+
+        #endregion
+
+
+        #region Public Methods
+
         public void Render(string value)
         {
             if (!_isInitialized)
@@ -44,14 +71,6 @@ namespace Common.TransformPath.Samples
             _text.text = value;
         }
 
-        public void Release()
-        {
-            _isInitialized = false;
-        }
-
-        private void OnDestroy()
-        {
-            Release();
-        }
+        #endregion
     }
 }

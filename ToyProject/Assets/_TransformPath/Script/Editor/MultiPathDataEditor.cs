@@ -354,11 +354,10 @@ namespace Common.TransformPath
 
             PathData[] undoTargets = new PathData[_bulkPathDataSet.Count];
             _bulkPathDataSet.CopyTo(undoTargets);
+            const string undoName = "Apply movement preset to PathData";
             int undoGroup = Undo.GetCurrentGroup();
-            Undo.SetCurrentGroupName("Apply movement preset to PathData");
-            PathEditorUndoUtility.RecordObjects(
-                undoTargets,
-                "Apply movement preset to PathData");
+            Undo.SetCurrentGroupName(undoName);
+            PathEditorUndoUtility.RecordObjects(undoTargets, undoName);
             foreach (PathData pathData in _bulkPathDataSet)
             {
                 SerializedObject child = new SerializedObject(pathData);

@@ -5,24 +5,24 @@ namespace Common.TransformPath
     /// <summary>Immutable O(S) descriptor and length snapshot for sequence playback.</summary>
     internal sealed class PathSequenceSnapshot
     {
+        #region Member Variables
+
         private readonly PathSegmentDescriptor[] _descriptors;
         private readonly float[] _lengths;
         private readonly float[] _starts;
         private readonly float _totalLength;
 
+        #endregion
+
+
+        #region Properties
+
         public int Count => _descriptors.Length;
 
-        private PathSequenceSnapshot(
-            PathSegmentDescriptor[] descriptors,
-            float[] lengths,
-            float[] starts,
-            float totalLength)
-        {
-            _descriptors = descriptors;
-            _lengths = lengths;
-            _starts = starts;
-            _totalLength = totalLength;
-        }
+        #endregion
+
+
+        #region Public Methods
 
         public static bool TryCreate(
             IPathSequenceProvider provider,
@@ -153,5 +153,24 @@ namespace Common.TransformPath
 
             return true;
         }
+
+        #endregion
+
+
+        #region Private Methods
+
+        private PathSequenceSnapshot(
+            PathSegmentDescriptor[] descriptors,
+            float[] lengths,
+            float[] starts,
+            float totalLength)
+        {
+            _descriptors = descriptors;
+            _lengths = lengths;
+            _starts = starts;
+            _totalLength = totalLength;
+        }
+
+        #endregion
     }
 }

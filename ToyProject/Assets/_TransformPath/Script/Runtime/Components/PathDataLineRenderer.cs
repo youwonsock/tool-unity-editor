@@ -212,11 +212,6 @@ namespace Common.TransformPath
             ConfigureLineRenderer();
         }
 
-        private void OnValidate()
-        {
-            // Inspector edits are applied by Init/Release boundaries. OnValidate
-            // only observes serialized values and never mutates scene components.
-        }
 #endif
     }
 }
