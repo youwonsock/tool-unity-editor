@@ -1,0 +1,127 @@
+@startuml
+
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+hide empty members
+
+package "Core" {
+  interface IPathProvider {
+    +IsInitialized
+    +IsReady
+    +Revision
+    +PathLength
+    +Sample(normalizedTime)
+    +SampleDistance(distance)
+  }
+
+  interface IPathMovementProvider
+  interface IPathSequenceProvider
+  interface IPathEventSource
+
+  class PathData {
+    +Init()
+    +Rebuild()
+    +Sample(normalizedTime)
+    +SampleDistance(distance)
+    +MovementSettings
+    +PathChanged
+  }
+
+  class MultiPathData {
+    +Init()
+    +Rebuild()
+    +GetSegment(index)
+    +GetSegmentLength(index)
+    +GetSegmentStartDistance(index)
+  }
+
+  class PathSegmentConfig {
+    +PathData
+    +PreservePreviousSpeed
+  }
+
+  class PathPlaybackRequest {
+    +Single(provider, loop)
+    +Aggregate(provider, movement, loop)
+    +Sequence(provider, loop)
+  }
+}
+
+package "Playback" {
+  interface IPathFollower
+
+  class PathFollower {
+    +Init()
+    +StartPlayback(request)
+    +StopMove()
+    +PauseMove()
+    +ResumeMove()
+    +Seek(normalizedTime)
+    +SeekSegment(index, localTime)
+    +StateChanged
+    +SegmentChanged
+    +Completed
+  }
+
+  class PathPlaybackSession {
+    +ProviderRevision
+    +MovementSettings
+    +EventCursor
+    +SequenceSnapshot
+  }
+}
+
+package "Events" {
+  class PathEventSettingSO
+  class PathEventHandler {
+    +Init()
+    +Release()
+    +OnEventDispatched
+  }
+  interface IPathEventReceiver {
+    +ReceivePathEvent(eventName, follower)
+  }
+}
+
+package "Queue" {
+  interface IQueuedPathAgent
+  class QueuedPathManager {
+    +AgentCount
+    +Register(agent)
+    +Unregister(agent)
+    +TryGetState(agent, state)
+    +ConfigureRoute(provider)
+  }
+  class QueuedPathFollower {
+    +StartPlayback(request)
+    +ForceBlock()
+    +ForceUnblock()
+    +ApplyQueueState(state)
+  }
+}
+
+IPathProvider <|-- IPathMovementProvider
+IPathProvider <|-- IPathSequenceProvider
+IPathProvider <|.. PathData
+IPathEventSource <|.. PathData
+IPathProvider <|.. MultiPathData
+IPathSequenceProvider <|.. MultiPathData
+
+IPathFollower <|.. PathFollower
+IQueuedPathAgent <|.. QueuedPathFollower
+
+MultiPathData *-- "ordered" PathSegmentConfig
+PathSegmentConfig --> PathData
+PathFollower *-- PathPlaybackSession
+PathFollower --> PathPlaybackRequest
+PathPlaybackSession --> IPathProvider
+PathFollower --> PathEventHandler
+PathEventHandler --> PathEventSettingSO
+PathEventHandler --> IPathEventReceiver
+
+QueuedPathManager o-- "registered agents" IQueuedPathAgent
+QueuedPathFollower --> PathFollower
+QueuedPathFollower --> QueuedPathManager
+QueuedPathManager --> IPathProvider : shared route
+
+@enduml
