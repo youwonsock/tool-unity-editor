@@ -299,9 +299,7 @@ namespace Common.FlowField.Editor
                     FlowFieldBakeMode.RuntimeDynamic,
                     FlowFieldSessionSourceKind.SceneBuild,
                     FlowFieldBfsBackendPolicy.PreferGpu,
-                    manager.FrontierComputeShader != null
-                        ? manager.FrontierComputeShader
-                        : Resources.Load<ComputeShader>("FlowFieldFrontier"));
+                    manager.FrontierComputeShader);
 
                 FlowFieldGoalResolution goalSnapshot = manager.ResolveConfiguredGoal(settings.Grid);
                 bool accepted = session.Submit(FlowFieldSessionRequest.ForSceneBuild(

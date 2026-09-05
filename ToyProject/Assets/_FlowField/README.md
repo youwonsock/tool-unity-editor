@@ -8,7 +8,7 @@ Bake된 표면·장애물·Goal·Modifier로 방향과 속도 배율을 제공�
 - Collections `1.4.0`, Mathematics `1.2.6`
 - GPU 경로는 Compute Shader, raw-buffer atomic, indirect dispatch와 AsyncGPUReadback을 지원하는 플랫폼에서 사용합니다. 지원하지 않는 플랫폼은 동일한 Managed FIFO BFS로 자동 전환합니다.
 
-`Script/Core/Common.FlowField.Core.asmdef`가 저수준 계산과 패키지 참조를 소유합니다.
+`Script/Runtime/Core/Common.FlowField.Core.asmdef`가 저수준 계산과 패키지 참조를 소유합니다.
 
 ## 베이크 모드
 
@@ -19,7 +19,7 @@ Bake된 표면·장애물·Goal·Modifier로 방향과 속도 배율을 제공�
 
 두 모드는 동일한 Surface·Obstacle·Goal·Topology·Modifier 함수와 GPU Frontier BFS를 사용하고, Compute Shader가 지원되지 않거나 오류/overflow가 발생하면 동일 입력의 Managed FIFO BFS로 전환합니다. 정적 런타임은 Physics query와 BFS를 실행하지 않습니다.
 
-샘플 기능 검증용 `FlowFieldSampleAgent`와 `FlowFieldSampleController`는 시스템 런타임 코드와 분리해 `Script/Temp`에 보관합니다.
+샘플 기능 검증용 `FlowFieldSampleAgent`와 `FlowFieldSampleController`는 시스템 런타임 코드와 분리해 `Script/Samples`에 보관합니다.
 
 ## 수명 주기
 

@@ -347,9 +347,7 @@ namespace Common.FlowField
             FlowFieldBfsBackendPolicy policy = Application.isPlaying
                 ? FlowFieldBfsBackendPolicy.PreferGpu
                 : FlowFieldBfsBackendPolicy.ManagedOnly;
-            ComputeShader shader = _frontierComputeShader != null
-                ? _frontierComputeShader
-                : Resources.Load<ComputeShader>("FlowFieldFrontier");
+            ComputeShader shader = _frontierComputeShader;
             AttachSessionCallbacks();
             // Attach before Initialize so consumers observe the initial
             // Uninitialized → Building transition as well as later Ready and
