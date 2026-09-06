@@ -453,6 +453,7 @@ GameObject:
   - component: {fileID: 7683009162162567603}
   - component: {fileID: 3140033594287973740}
   - component: {fileID: 5520191098457446479}
+  - component: {fileID: 7093010682929290419}
   m_Layer: 0
   m_Name: OptimizeTool Overview Board
   m_TagString: Untagged
@@ -594,6 +595,18 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _text: {fileID: 7916350098099076356}
+--- !u!114 &7093010682929290419
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1927810456524045032}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 637ac4a2fe5a7a54a9d48858edb4a418, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
 --- !u!1 &2188746463711290165
 GameObject:
   m_ObjectHideFlags: 0
@@ -1547,13 +1560,13 @@ MonoBehaviour:
   - {fileID: 898261609051718784}
   - {fileID: 4134303001032405150}
   _featureNames:
-  - OriginalMeshes
-  - OptimizedMeshes
-  - BackfaceCullMeshes
-  - OcclusionCullMeshes
-  - PhysicsRecordedMeshes
+  - Original Meshes
+  - Combined Mesh
+  - Backface Preview
+  - Occlusion Preview
+  - Physics Recorded
   _board: {fileID: 5520191098457446479}
-  _toggleInterval: 3
+  _freeCamera: {fileID: 0}
 --- !u!1 &7689444072829053421
 GameObject:
   m_ObjectHideFlags: 0

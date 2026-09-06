@@ -1,0 +1,224 @@
+@startuml flowfield-uml
+!pragma layout smetana
+
+left to right direction
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam linetype ortho
+skinparam nodesep 20
+skinparam ranksep 26
+hide empty members
+
+package "Contracts" {
+  interface IFlowFieldProvider {
+    +IsInitialized
+    +IsReady
+    +Revision
+    +SpaceMode
+    +BakeMode
+    +TrySample(position)
+    +Sample(position)
+    +TryGetFieldInfo()
+  }
+
+  interface IFlowFieldController {
+    +Init()
+    +RequestRebuild()
+    +Release()
+    +SetSpaceMode(mode)
+    +SetGoal(request)
+    +NotifyCellsDirty()
+  }
+
+  interface IFlowFieldVectorModifier {
+    +InfluenceCollider
+    +Priority
+    +Revision
+    +CaptureSnapshot()
+  }
+
+  interface IFlowFieldModifierSnapshot {
+    +Modify(current, context)
+  }
+}
+
+package "Manager and Sessions" {
+  class FlowFieldManager {
+    +Init()
+    +RequestRebuild()
+    +SetGoal(request)
+    +TrySample(position)
+    +Release()
+  }
+
+  abstract class FlowFieldSessionBase <<internal>> {
+    ~LifetimeGeneration
+    ~PublishedResultId
+    ~LatestAcceptedRequest
+  }
+
+  class FlowFieldSession <<internal, Surface2D>> {
+    ~Submit(request)
+    ~Pump()
+    ~TrySample(position)
+  }
+
+  class FlowFieldVolumeSession <<internal, Volume3D>> {
+    ~Submit(request)
+    ~TrySample(position)
+    ~TryGetVisualizationView()
+  }
+
+  class FlowFieldBuildRequest <<internal, readonly struct>> {
+    ~SpaceMode
+    ~Grid
+    ~HasSameSource()
+  }
+}
+
+package "Grid, Results and Bake Data" {
+  class FlowFieldGridSpace <<readonly struct>> {
+    +Width
+    +Depth
+    +Height
+    +ToFlatIndex(x, y, z)
+    +TryWorldToLocal(world)
+  }
+
+  class FlowFieldFieldStore <<internal>> {
+    ~CommitFromWorkspace(...)
+    ~CreateReadView()
+    ~Dispose()
+  }
+
+  class FlowFieldReadView <<internal, readonly struct>> {
+    ~Revision
+    ~IsValid
+    ~TryGetCell(index)
+  }
+
+  class FlowFieldStaticBakeData {
+    +FormatVersion
+    +Revision
+    +ResolvedGoalIndex
+  }
+
+  class FlowFieldVolumeBakeData {
+    +FormatVersion
+    +Revision
+    +ResolvedGoalIndex
+  }
+}
+
+package "Build and Modifiers" {
+  class FlowFieldSurfaceBuildPipeline <<internal>> {
+    ~PrepareBase(...)
+    ~BuildManaged(...)
+    +StartBfs(...)
+  }
+
+  class FlowFieldGoalPipeline <<internal>> {
+    ~Resolve(...)
+    ~Build(...)
+  }
+
+  class FlowFieldObstaclePipeline <<internal>> {
+    +RegisterDynamicObstacle(...)
+    +UnregisterDynamicObstacle(...)
+    +BuildFullLayerScratch(...)
+    +DetectDynamicTransformsChanged()
+  }
+
+  class FlowFieldModifierRegistry <<internal>> {
+    ~Register(...)
+    ~Unregister(...)
+    ~DetectChanges()
+  }
+
+  class FlowFieldModifierPipeline <<internal>> {
+    ~RebuildAreaData(...)
+    ~RebuildFinalField(...)
+  }
+}
+
+package "GPU and Execution" {
+  interface IFlowFieldGpuBackend <<internal>> {
+    +SupportsGpu
+    +StartBfs(...)
+    +Dispose()
+  }
+
+  class FlowFieldComputeSolver <<internal>> {
+    ~IsSupported
+    ~Start(...)
+    +Dispose()
+  }
+
+  interface IFlowFieldBuildOperation <<internal>> {
+    +Owner
+    +OperationState
+    +Progress
+    +PumpInternal(...)
+    +Cancel()
+    +DisposeOperation()
+  }
+
+  class FlowFieldBuildScheduler <<internal>> {
+    ~Register(operation)
+    ~Unregister(operation)
+    ~PumpAll(...)
+  }
+
+  class FlowFieldBuildDriver <<internal>> {
+    -EnsureRuntimeDriver()
+    -LateUpdate()
+    -OnDestroy()
+  }
+}
+
+IFlowFieldProvider <|-- IFlowFieldController
+IFlowFieldController <|.. FlowFieldManager
+
+FlowFieldManager *-- FlowFieldSession : Surface2D session
+FlowFieldManager *-- FlowFieldVolumeSession : Volume3D session
+FlowFieldManager --> FlowFieldBuildRequest : accepted metadata
+
+FlowFieldSessionBase <|-- FlowFieldSession
+FlowFieldSessionBase <|-- FlowFieldVolumeSession
+FlowFieldSessionBase --> FlowFieldBuildRequest : source/version
+
+FlowFieldSession --> FlowFieldGridSpace
+FlowFieldVolumeSession --> FlowFieldGridSpace
+FlowFieldSession *-- FlowFieldFieldStore
+FlowFieldFieldStore --> FlowFieldReadView : creates
+FlowFieldVolumeSession --> FlowFieldReadView : creates
+FlowFieldSession --> FlowFieldStaticBakeData : static input
+FlowFieldVolumeSession --> FlowFieldVolumeBakeData : static input
+
+FlowFieldSession *-- FlowFieldSurfaceBuildPipeline
+FlowFieldSurfaceBuildPipeline --> FlowFieldGoalPipeline : calls
+FlowFieldSession *-- FlowFieldObstaclePipeline
+FlowFieldVolumeSession --> FlowFieldComputeSolver : owns solver
+
+FlowFieldSurfaceBuildPipeline ..|> IFlowFieldGpuBackend
+FlowFieldSurfaceBuildPipeline *-- FlowFieldComputeSolver : owns solver
+
+FlowFieldSession *-- FlowFieldModifierRegistry
+FlowFieldSession *-- FlowFieldModifierPipeline
+FlowFieldModifierPipeline --> FlowFieldModifierRegistry : reads entries
+FlowFieldModifierPipeline --> IFlowFieldVectorModifier : captures
+FlowFieldModifierPipeline --> IFlowFieldModifierSnapshot : composes
+FlowFieldVolumeSession --> IFlowFieldVectorModifier : captures
+IFlowFieldVectorModifier --> IFlowFieldModifierSnapshot : creates
+
+FlowFieldVolumeSession ..|> IFlowFieldBuildOperation
+FlowFieldBuildScheduler o-- IFlowFieldBuildOperation : registrations
+FlowFieldBuildDriver ..> FlowFieldBuildScheduler : PumpAll
+
+note right of FlowFieldReadView
+Read-only view of one published result.
+Writable arrays are not exposed.
+end note
+
+@enduml

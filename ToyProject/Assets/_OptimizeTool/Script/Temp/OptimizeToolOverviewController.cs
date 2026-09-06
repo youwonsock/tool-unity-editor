@@ -12,19 +12,18 @@ namespace Common.OptimizeTool.Samples
         [SerializeField] private GameObject[] _featureGroups;
         [SerializeField] private string[] _featureNames =
         {
-            "Original (9 Renderers)",
+            "Original Meshes",
             "Combined Mesh",
-            "Backface Cull",
-            "Occlusion Cull",
+            "Backface Preview",
+            "Occlusion Preview",
             "Physics Recorded",
         };
         [SerializeField] private OptimizeToolOverviewBoard _board;
-        [SerializeField] private float _toggleInterval = 3f;
+        [SerializeField] private OptimizeToolFreeCamera _freeCamera;
 
         private readonly int[] _rendererCounts = new int[5];
         private readonly int[] _vertexCounts = new int[5];
         private int _activeIndex;
-        private float _toggleTimer;
         private bool _isInitialized;
         private bool _isFaulted;
         private Exception _fault;
@@ -34,11 +33,20 @@ namespace Common.OptimizeTool.Samples
         public int ActiveIndex => _activeIndex;
         public int ActiveRendererCount => _rendererCounts[_activeIndex];
         public int ActiveVertexCount => _vertexCounts[_activeIndex];
+        public int FeatureCount => _featureGroups?.Length ?? 0;
 
         private void Awake()
         {
             if (Application.isPlaying)
                 Init();
+        }
+
+        private void Start()
+        {
+            ThrowIfUnavailable();
+            ResolveFreeCamera();
+            FocusCamera();
+            RenderBoard();
         }
 
         public void Init()
@@ -55,8 +63,6 @@ namespace Common.OptimizeTool.Samples
                     throw new ArgumentException("OptimizeTool overview requires exactly five result names.", nameof(_featureNames));
                 if (_board == null)
                     throw new InvalidOperationException("OptimizeTool overview requires a serialized board reference.");
-                if (!IsFinite(_toggleInterval) || _toggleInterval <= 0f)
-                    throw new ArgumentOutOfRangeException(nameof(_toggleInterval));
                 for (int i = 0; i < _featureGroups.Length; i++)
                 {
                     if (_featureGroups[i] == null)
@@ -76,23 +82,40 @@ namespace Common.OptimizeTool.Samples
             }
         }
 
+        public string GetFeatureName(int index)
+        {
+            ThrowIfUnavailable();
+            if (index < 0 || index >= _featureNames.Length)
+                throw new ArgumentOutOfRangeException(nameof(index));
+            return _featureNames[index];
+        }
+
+        public void SelectFeature(int index)
+        {
+            ThrowIfUnavailable();
+            SetVisible(index);
+            RenderBoard();
+        }
+
+        public void FocusCamera()
+        {
+            ThrowIfUnavailable();
+            ResolveFreeCamera();
+            if (_freeCamera == null || !TryGetActiveBounds(out Bounds bounds))
+                return;
+            _freeCamera.FocusOnBounds(bounds);
+        }
+
         private void Update()
         {
             ThrowIfUnavailable();
-            if (Input.GetKeyDown(KeyCode.Alpha1)) SetVisible(0);
-            if (Input.GetKeyDown(KeyCode.Alpha2)) SetVisible(1);
-            if (Input.GetKeyDown(KeyCode.Alpha3)) SetVisible(2);
-            if (Input.GetKeyDown(KeyCode.Alpha4)) SetVisible(3);
-            if (Input.GetKeyDown(KeyCode.Alpha5)) SetVisible(4);
-            if (Input.GetKeyDown(KeyCode.Space)) SetVisible((_activeIndex + 1) % _featureGroups.Length);
-            if (Input.GetKeyDown(KeyCode.R)) SetVisible(0);
-
-            _toggleTimer += Time.deltaTime;
-            if (_toggleTimer >= _toggleInterval)
-            {
-                _toggleTimer = 0f;
-                SetVisible((_activeIndex + 1) % _featureGroups.Length);
-            }
+            if (Input.GetKeyDown(KeyCode.Alpha1)) SelectFeature(0);
+            if (Input.GetKeyDown(KeyCode.Alpha2)) SelectFeature(1);
+            if (Input.GetKeyDown(KeyCode.Alpha3)) SelectFeature(2);
+            if (Input.GetKeyDown(KeyCode.Alpha4)) SelectFeature(3);
+            if (Input.GetKeyDown(KeyCode.Alpha5)) SelectFeature(4);
+            if (Input.GetKeyDown(KeyCode.Space)) SelectFeature((_activeIndex + 1) % _featureGroups.Length);
+            if (Input.GetKeyDown(KeyCode.R)) SelectFeature(0);
             RenderBoard();
         }
 
@@ -101,9 +124,33 @@ namespace Common.OptimizeTool.Samples
             if (index < 0 || index >= _featureGroups.Length)
                 throw new ArgumentOutOfRangeException(nameof(index));
             _activeIndex = index;
-            _toggleTimer = 0f;
             for (int i = 0; i < _featureGroups.Length; i++)
                 _featureGroups[i].SetActive(i == index);
+        }
+
+        private void ResolveFreeCamera()
+        {
+            if (_freeCamera != null)
+                return;
+            if (Camera.main != null)
+                Camera.main.TryGetComponent(out _freeCamera);
+            if (_freeCamera == null)
+                _freeCamera = FindFirstObjectByType<OptimizeToolFreeCamera>();
+        }
+
+        private bool TryGetActiveBounds(out Bounds bounds)
+        {
+            Renderer[] renderers = _featureGroups[_activeIndex].GetComponentsInChildren<Renderer>(true);
+            if (renderers.Length == 0)
+            {
+                bounds = default;
+                return false;
+            }
+
+            bounds = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++)
+                bounds.Encapsulate(renderers[i].bounds);
+            return true;
         }
 
         private void RenderBoard()
@@ -117,7 +164,7 @@ namespace Common.OptimizeTool.Samples
                 "OPTIMIZE TOOL SHOWCASE\n"
                 + $"Active: {_featureNames[_activeIndex]}\n"
                 + metrics
-                + "1-5 Select | Space Cycle | R Original\n"
+                + "Buttons / 1-5 Select | Space Cycle | R Original\n"
                 + "Results are pre-generated in Settings/Generated; Play does not write assets.");
         }
 
@@ -157,8 +204,5 @@ namespace Common.OptimizeTool.Samples
             if (!_isInitialized)
                 throw new InvalidOperationException("OptimizeToolOverviewController is not initialized.");
         }
-
-        private static bool IsFinite(float value)
-            => !float.IsNaN(value) && !float.IsInfinity(value);
     }
 }
