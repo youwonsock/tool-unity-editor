@@ -12,6 +12,9 @@ EditorBuildSettings:
     path: Assets/_FlowField/Scene/FlowFieldSample.unity
     guid: 2d61c3aeada20074ba232f6398c7c342
   - enabled: 1
+    path: Assets/_FlowField/Scene/FlowFieldVolume3DTest.unity
+    guid: 4e0c5f04dff149c2a9b0f9c0e7af1a6d
+  - enabled: 1
     path: Assets/_TransformPath/Scene/TransformPathSample.unity
     guid: 89eb690eb83ac0f428888d99e38f6913
   - enabled: 1

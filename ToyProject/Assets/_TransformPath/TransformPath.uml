@@ -1,12 +1,16 @@
 @startuml
 
+left to right direction
 skinparam classAttributeIconSize 0
 skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam linetype ortho
+skinparam nodesep 28
+skinparam ranksep 36
 hide empty members
 
-package "Core" {
+package "Provider" {
   interface IPathProvider {
-    +IsInitialized
     +IsReady
     +Revision
     +PathLength
@@ -14,114 +18,180 @@ package "Core" {
     +SampleDistance(distance)
   }
 
-  interface IPathMovementProvider
-  interface IPathSequenceProvider
-  interface IPathEventSource
+  interface IPathMovementProvider {
+    +MovementSettings
+  }
+
+  interface IPathSequenceProvider {
+    +SegmentCount
+    +GetSegment(index)
+    +GetSegmentLength(index)
+  }
+
+  interface IPathEventSource {
+    +EventCount
+    +GetEvent(index)
+  }
 
   class PathData {
     +Init()
     +Rebuild()
     +Sample(normalizedTime)
-    +SampleDistance(distance)
-    +MovementSettings
-    +PathChanged
   }
 
   class MultiPathData {
     +Init()
     +Rebuild()
-    +GetSegment(index)
-    +GetSegmentLength(index)
-    +GetSegmentStartDistance(index)
-  }
-
-  class PathSegmentConfig {
-    +PathData
-    +PreservePreviousSpeed
-  }
-
-  class PathPlaybackRequest {
-    +Single(provider, loop)
-    +Aggregate(provider, movement, loop)
-    +Sequence(provider, loop)
+    +ConfigureSegments(descriptors)
   }
 }
 
 package "Playback" {
-  interface IPathFollower
+  interface IPathFollower {
+    +State
+    +StartPlayback(request)
+    +PauseMove()
+    +Seek(time)
+    +SetSpeed(value)
+    +Init()
+  }
 
   class PathFollower {
     +Init()
     +StartPlayback(request)
-    +StopMove()
     +PauseMove()
     +ResumeMove()
-    +Seek(normalizedTime)
-    +SeekSegment(index, localTime)
-    +StateChanged
-    +SegmentChanged
-    +Completed
+    +Seek(time)
+  }
+
+  class PathPlaybackEngine {
+    +PlaybackId
+    +StateRevision
   }
 
   class PathPlaybackSession {
     +ProviderRevision
     +MovementSettings
     +EventCursor
-    +SequenceSnapshot
+  }
+
+  class PathRuntimeDriver {
+    +Register(tickable)
+    +Unregister(tickable)
+    +Tick(delta, unscaledDelta, frame)
   }
 }
 
 package "Events" {
-  class PathEventSettingSO
   class PathEventHandler {
     +Init()
     +Release()
-    +OnEventDispatched
+    +HandleEvent(setting)
   }
+
+  class PathEventRuntime {
+    +ResolveIntent(definition, state)
+    +ApplyLifecycle(intent, follower)
+  }
+
+  class PathEventScheduler {
+    +Schedule(event, follower)
+    +Advance(delta, frame)
+  }
+
+  class PathTimeScaleCoordinator {
+    +Request(owner, target, duration)
+    +Release(owner)
+  }
+
   interface IPathEventReceiver {
-    +ReceivePathEvent(eventName, follower)
+    +ReceivePathEvent(name, state)
   }
 }
 
 package "Queue" {
-  interface IQueuedPathAgent
+  interface IQueuedPathAgent {
+    +PlaybackId
+    +QueueProvider
+    +QueueSettings
+    +ApplyQueueState(state)
+    +OnQueueDetached(reason)
+  }
+
+  interface IPathConstraintTarget {
+    +AttachQueueConstraint(registration)
+    +ApplyQueueConstraint(constraint)
+    +ReleaseQueueConstraint(registration)
+  }
+
+  class QueuedPathFollower {
+    +StartPlayback(request)
+    +PauseMove()
+    +ResumeMove()
+    +ForceBlock()
+  }
+
   class QueuedPathManager {
     +AgentCount
     +Register(agent)
-    +Unregister(agent)
-    +TryGetState(agent, state)
+    +Unregister(registration)
     +ConfigureRoute(provider)
   }
-  class QueuedPathFollower {
-    +StartPlayback(request)
-    +ForceBlock()
-    +ForceUnblock()
-    +ApplyQueueState(state)
+
+  class PathQueueCoordinator {
+    +GetSpacing(agent)
+    +CalculateSpeedMultiplier(agent, distance, spacing)
   }
 }
 
 IPathProvider <|-- IPathMovementProvider
 IPathProvider <|-- IPathSequenceProvider
 IPathProvider <|.. PathData
+IPathMovementProvider <|.. PathData
 IPathEventSource <|.. PathData
 IPathProvider <|.. MultiPathData
 IPathSequenceProvider <|.. MultiPathData
 
 IPathFollower <|.. PathFollower
-IQueuedPathAgent <|.. QueuedPathFollower
-
-MultiPathData *-- "ordered" PathSegmentConfig
-PathSegmentConfig --> PathData
+IPathFollower <|.. QueuedPathFollower
+PathFollower *-- PathPlaybackEngine
 PathFollower *-- PathPlaybackSession
-PathFollower --> PathPlaybackRequest
-PathPlaybackSession --> IPathProvider
-PathFollower --> PathEventHandler
-PathEventHandler --> PathEventSettingSO
-PathEventHandler --> IPathEventReceiver
+PathPlaybackSession --> IPathProvider : snapshot
+PathRuntimeDriver ..> PathFollower : frame tick
+PathRuntimeDriver ..> PathEventHandler : ordered step
 
-QueuedPathManager o-- "registered agents" IQueuedPathAgent
-QueuedPathFollower --> PathFollower
-QueuedPathFollower --> QueuedPathManager
+PathFollower --> PathEventHandler : dispatches events
+PathEventHandler *-- PathEventRuntime
+PathEventHandler *-- PathEventScheduler
+PathEventHandler --> IPathFollower : reads and controls
+PathEventHandler --> IPathEventReceiver : notifies
+PathEventHandler --> PathTimeScaleCoordinator : owns time request
+
+IQueuedPathAgent <|.. QueuedPathFollower
+IPathConstraintTarget <|.. PathFollower
+QueuedPathFollower --> PathFollower : delegates commands
+QueuedPathFollower --> IPathConstraintTarget : delivers constraint
+QueuedPathManager o-- IQueuedPathAgent : registrations
+QueuedPathManager *-- PathQueueCoordinator
 QueuedPathManager --> IPathProvider : shared route
+PathQueueCoordinator --> IQueuedPathAgent : reads progress/settings
+
+note right of IPathFollower
+State, playback, movement and lifecycle
+roles are split into source contracts;
+the overview keeps their public facade here.
+end note
+
+note bottom of IPathEventSource
+Runtime event definitions and their
+authoring ScriptableObjects are omitted
+from this overview.
+end note
+
+note bottom of IQueuedPathAgent
+Registration and constraint DTOs are
+carried by the contract but omitted as
+separate nodes for readability.
+end note
 
 @enduml

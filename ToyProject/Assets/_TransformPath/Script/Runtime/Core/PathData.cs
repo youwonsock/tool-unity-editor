@@ -30,25 +30,13 @@ namespace Common.TransformPath
         #endregion
 
 
-        #region Inner Classes / Structs
-
-        public enum ECurveType
-        {
-            Linear = 0,
-            SplineApproximating = 1,
-            SplineInterpolating = 2,
-        }
-
-        #endregion
-
-
         #region Member Variables
 
         [SerializeField] private List<Transform> _pathPoints = new List<Transform>();
         [Header("Path events (normalized time → PathEventSettingSO)")]
         [SerializeField] private List<PathEventEntry> _pathEvents = new List<PathEventEntry>();
         [SerializeField, Min(2)] private int _segmentCount = DEFAULT_SEGMENT_COUNT;
-        [SerializeField] private ECurveType _curveType = ECurveType.Linear;
+        [SerializeField] private EPathCurveType _curveType = EPathCurveType.Linear;
 
         [Header("Movement")]
         [SerializeField] private EPathMoveType _moveType = EPathMoveType.TimeBased;
@@ -59,10 +47,12 @@ namespace Common.TransformPath
         private float[] _cachedDistances;
         private float _cachedPathLength;
         private bool _isInitialized;
+        private bool _isDirty;
         private bool _hasConfiguredVectorPoints;
         private bool _configurationErrorReported;
         private bool _movementSettingsPublished;
         private PathMovementSettings _publishedMovementSettings;
+        private PathRuntimeEvent[] _publishedEvents = Array.Empty<PathRuntimeEvent>();
         private int _revision;
 
         private readonly List<Vector3> _configuredPoints = new List<Vector3>();
@@ -77,6 +67,7 @@ namespace Common.TransformPath
 
         public bool IsInitialized => _isInitialized;
         public bool IsReady => _isInitialized
+            && !_isDirty
             && _cachedPathPoints != null
             && _cachedDistances != null
             && _cachedPathPoints.Length >= MIN_PATH_POINTS
@@ -91,7 +82,7 @@ namespace Common.TransformPath
                 return _cachedPathLength;
             }
         }
-        public ECurveType CurveType => _curveType;
+        public EPathCurveType CurveType => _curveType;
         public int BuildSegmentCount => _segmentCount;
         public PathMovementSettings MovementSettings =>
             PathMovementSettingsUtility.Clone(_publishedMovementSettings);
@@ -103,7 +94,8 @@ namespace Common.TransformPath
                 return _cachedPathPoints.Length;
             }
         }
-        public int EventCount => _pathEvents == null ? 0 : _pathEvents.Count;
+        public int EventCount => _publishedEvents == null ? 0 : _publishedEvents.Length;
+        public int AuthoringEventCount => _pathEvents == null ? 0 : _pathEvents.Count;
 
         public event Action PathChanged;
 
@@ -126,10 +118,12 @@ namespace Common.TransformPath
         public void Release()
         {
             _isInitialized = false;
+            _isDirty = false;
             _cachedPathPoints = null;
             _cachedDistances = null;
             _cachedPathLength = 0f;
             _movementSettingsPublished = false;
+            _publishedEvents = Array.Empty<PathRuntimeEvent>();
         }
 
         private void Awake()
@@ -181,7 +175,7 @@ namespace Common.TransformPath
                 Rebuild();
         }
 
-        public void SetCurveType(ECurveType curveType)
+        public void SetCurveType(EPathCurveType curveType)
         {
             ValidateCurveType(curveType);
             if (_curveType == curveType)
@@ -261,7 +255,14 @@ namespace Common.TransformPath
             return _cachedPathPoints[index];
         }
 
-        public PathEventEntry GetEvent(int index)
+        public PathRuntimeEvent GetEvent(int index)
+        {
+            if (_publishedEvents == null || index < 0 || index >= _publishedEvents.Length)
+                throw new ArgumentOutOfRangeException(nameof(index));
+            return _publishedEvents[index];
+        }
+
+        public PathEventEntry GetAuthoringEvent(int index)
         {
             if (_pathEvents == null || index < 0 || index >= _pathEvents.Count)
                 throw new ArgumentOutOfRangeException(nameof(index));
@@ -305,7 +306,20 @@ namespace Common.TransformPath
             {
                 if (_pathEvents[i].NormalizedTime < _pathEvents[i - 1].NormalizedTime)
                 {
-                    _pathEvents.Sort((left, right) => left.NormalizedTime.CompareTo(right.NormalizedTime));
+                    // Stable insertion sort keeps authoring order for events
+                    // that share the same normalized position.
+                    for (int sortIndex = 1; sortIndex < _pathEvents.Count; sortIndex++)
+                    {
+                        PathEventEntry current = _pathEvents[sortIndex];
+                        int previousIndex = sortIndex - 1;
+                        while (previousIndex >= 0
+                            && _pathEvents[previousIndex].NormalizedTime > current.NormalizedTime)
+                        {
+                            _pathEvents[previousIndex + 1] = _pathEvents[previousIndex];
+                            previousIndex--;
+                        }
+                        _pathEvents[previousIndex + 1] = current;
+                    }
                     changed = true;
                     break;
                 }
@@ -407,7 +421,7 @@ namespace Common.TransformPath
                 error = "Segment count must be at least two.";
                 return false;
             }
-            if (!Enum.IsDefined(typeof(ECurveType), _curveType))
+            if (!Enum.IsDefined(typeof(EPathCurveType), _curveType))
             {
                 error = "Curve type is invalid.";
                 return false;
@@ -435,15 +449,29 @@ namespace Common.TransformPath
             bool movementChanged = !_movementSettingsPublished
                 || !PathMovementSettingsUtility.AreSame(_publishedMovementSettings, nextMovementSettings);
 
+            PathRuntimeEvent[] nextEvents;
+            try
+            {
+                nextEvents = BuildRuntimeEvents();
+            }
+            catch (Exception exception)
+            {
+                error = $"Path event definitions are invalid: {exception.Message}";
+                return false;
+            }
+            bool eventsChanged = !AreSameEvents(_publishedEvents, nextEvents);
+
             // Publish only after the complete temporary result passed validation.
             _cachedPathPoints = geometry.Points;
             _cachedDistances = geometry.CumulativeDistances;
             _cachedPathLength = geometry.Length;
             _publishedMovementSettings = PathMovementSettingsUtility.Clone(nextMovementSettings);
             _movementSettingsPublished = true;
+            _publishedEvents = nextEvents;
             _isInitialized = true;
+            _isDirty = false;
             _configurationErrorReported = false;
-            if (changed || movementChanged)
+            if (changed || movementChanged || eventsChanged)
             {
                 _revision++;
                 NotifyPathChanged();
@@ -478,6 +506,95 @@ namespace Common.TransformPath
             }
 
             error = null;
+            return true;
+        }
+
+        private PathRuntimeEvent[] BuildRuntimeEvents()
+        {
+            if (_pathEvents == null || _pathEvents.Count == 0)
+                return Array.Empty<PathRuntimeEvent>();
+
+            PathRuntimeEvent[] result = new PathRuntimeEvent[_pathEvents.Count];
+            for (int i = 0; i < _pathEvents.Count; i++)
+            {
+                PathEventEntry entry = _pathEvents[i];
+                result[i] = PathEventDefinitionFactory.Create(entry);
+            }
+
+            // Runtime dispatch assumes non-decreasing positions. Equal-time
+            // events retain the order authored in the Inspector.
+            for (int sortIndex = 1; sortIndex < result.Length; sortIndex++)
+            {
+                PathRuntimeEvent current = result[sortIndex];
+                int previousIndex = sortIndex - 1;
+                while (previousIndex >= 0
+                    && result[previousIndex].NormalizedTime > current.NormalizedTime)
+                {
+                    result[previousIndex + 1] = result[previousIndex];
+                    previousIndex--;
+                }
+                result[previousIndex + 1] = current;
+            }
+            return result;
+        }
+
+        private static bool AreSameEvents(
+            IReadOnlyList<PathRuntimeEvent> left,
+            IReadOnlyList<PathRuntimeEvent> right)
+        {
+            if (ReferenceEquals(left, right))
+                return true;
+            if (left == null || right == null || left.Count != right.Count)
+                return false;
+            for (int i = 0; i < left.Count; i++)
+            {
+                if (!Mathf.Approximately(left[i].NormalizedTime, right[i].NormalizedTime)
+                    || !AreSameEventDefinitions(left[i].Definition, right[i].Definition))
+                    return false;
+            }
+            return true;
+        }
+
+        private static bool AreSameEventDefinitions(
+            PathEventDefinition left,
+            PathEventDefinition right)
+        {
+            if (ReferenceEquals(left, right))
+                return true;
+            if (left == null || right == null
+                || left.EventName != right.EventName
+                || left.UseModifyPathMoveSpeed != right.UseModifyPathMoveSpeed
+                || !Mathf.Approximately(left.MoveSpeedTargetValue, right.MoveSpeedTargetValue)
+                || !Mathf.Approximately(left.MoveSpeedAdjustDuration, right.MoveSpeedAdjustDuration)
+                || !PathMovementSettingsUtility.AreSameCurve(
+                    left.MoveSpeedAdjustCurve,
+                    right.MoveSpeedAdjustCurve)
+                || left.UseModifyPathMoveDuration != right.UseModifyPathMoveDuration
+                || !Mathf.Approximately(left.MoveDurationTargetValue, right.MoveDurationTargetValue)
+                || !Mathf.Approximately(left.MoveDurationAdjustDuration, right.MoveDurationAdjustDuration)
+                || !PathMovementSettingsUtility.AreSameCurve(
+                    left.MoveDurationAdjustCurve,
+                    right.MoveDurationAdjustCurve)
+                || left.UseTimeScaleAdjust != right.UseTimeScaleAdjust
+                || !Mathf.Approximately(left.TimeScaleAdjustValue, right.TimeScaleAdjustValue)
+                || !Mathf.Approximately(left.TimeScaleAdjustDuration, right.TimeScaleAdjustDuration)
+                || !PathMovementSettingsUtility.AreSameCurve(
+                    left.TimeScaleAdjustCurve,
+                    right.TimeScaleAdjustCurve))
+                return false;
+
+            IReadOnlyList<PathDelayedEventDefinition> leftDelayed = left.DelayedEvents;
+            IReadOnlyList<PathDelayedEventDefinition> rightDelayed = right.DelayedEvents;
+            if (leftDelayed.Count != rightDelayed.Count)
+                return false;
+            for (int i = 0; i < leftDelayed.Count; i++)
+            {
+                if (!Mathf.Approximately(leftDelayed[i].Delay, rightDelayed[i].Delay)
+                    || !AreSameEventDefinitions(
+                        leftDelayed[i].Definition,
+                        rightDelayed[i].Definition))
+                    return false;
+            }
             return true;
         }
 
@@ -522,11 +639,10 @@ namespace Common.TransformPath
 
         private void MarkConfigurationError(string message)
         {
-            _isInitialized = false;
-            _cachedPathPoints = null;
-            _cachedDistances = null;
-            _cachedPathLength = 0f;
-            _movementSettingsPublished = false;
+            // Keep the last complete publication available for diagnostics and
+            // rollback, while making it unavailable for a new playback until
+            // the next successful explicit rebuild.
+            _isDirty = true;
             if (_configurationErrorReported)
                 return;
 
@@ -540,9 +656,9 @@ namespace Common.TransformPath
                 throw new InvalidOperationException("PathData is not initialized and ready.");
         }
 
-        private static void ValidateCurveType(ECurveType curveType)
+        private static void ValidateCurveType(EPathCurveType curveType)
         {
-            if (!Enum.IsDefined(typeof(ECurveType), curveType))
+            if (!Enum.IsDefined(typeof(EPathCurveType), curveType))
                 throw new ArgumentOutOfRangeException(nameof(curveType));
         }
 

@@ -4,13 +4,13 @@ using UnityEngine;
 namespace Common.TransformPath
 {
     /// <summary>
-    /// Single Update-driven path playback. A playback session owns the current
+    /// Single driver-driven path playback. A playback session owns the current
     /// provider snapshot, event cursor, and queue constraint so no coroutine or
     /// per-frame temporary object is required.
     /// </summary>
     [DefaultExecutionOrder(-100)]
     [RequireComponent(typeof(PathEventHandler))]
-    public sealed class PathFollower : MonoBehaviour, IPathFollower
+    public sealed class PathFollower : MonoBehaviour, IPathFollower, IPathPlaybackIdentity, IPathRuntimeTickable, IPathConstraintTarget, IPathRuntimeFaultHandler
     {
         #region Constants
 
@@ -29,7 +29,7 @@ namespace Common.TransformPath
 
         [Header("Runtime")]
         [SerializeField] private PathEventHandler _pathEventHandler;
-        [SerializeField] private Animator _animator;
+        [SerializeField] private PathFollowerAnimatorView _animatorView;
 
         private bool _isInitialized;
         private bool _isMoving;
@@ -47,11 +47,24 @@ namespace Common.TransformPath
         private float _segmentDistance;
         private float _pendingDeltaTime;
         private int _playbackRevision;
+        private readonly PathPlaybackEngine _playbackEngine = new PathPlaybackEngine();
+        private PathPlaybackScope _playbackScope;
+        private IPathFollower _eventTarget;
         private bool _queueBlocked;
         private float _queueSpeedMultiplier = 1f;
         private float _queueMaxGlobalNormalizedTime = 1f;
+        private PathQueueRegistration _queueConstraintRegistration;
+        private int _queueConstraintFrameId = -1;
+        private int _queueConstraintRouteRevision = -1;
+        private bool _runtimeDriverRegistered;
         private Action<int> _segmentChanged;
         private Delegate[] _segmentChangedInvocationList;
+        private Action _loopBoundary;
+        private Delegate[] _loopBoundaryInvocationList;
+        private Action<EPathFollowerState> _stateChanged;
+        private Delegate[] _stateChangedInvocationList;
+        private Action _completed;
+        private Delegate[] _completedInvocationList;
 
         #endregion
 
@@ -68,28 +81,33 @@ namespace Common.TransformPath
         public int CurrentSegmentIndex => _currentSegmentIndex;
         public int SnapshotRevision => _playbackSession?.ProviderRevision ?? -1;
         public EPathMoveType MoveType => _moveType;
+        public ulong PlaybackId => _playbackEngine.PlaybackId;
+        public ulong StateRevision => _playbackEngine.StateRevision;
+        ulong IPathPlaybackIdentity.PlaybackOwnerId => _playbackEngine.OwnerId;
 
         public float Speed
         {
             get => _speed;
-            set
-            {
-                ValidateMovementValue(value, nameof(value));
-                _speed = value;
-            }
         }
 
         public float Duration
         {
             get => _duration;
-            set
-            {
-                ValidateMovementValue(value, nameof(value));
-                _duration = value;
-            }
         }
 
-        public event Action<EPathFollowerState> StateChanged;
+        public event Action<EPathFollowerState> StateChanged
+        {
+            add
+            {
+                _stateChanged += value;
+                _stateChangedInvocationList = _stateChanged?.GetInvocationList();
+            }
+            remove
+            {
+                _stateChanged -= value;
+                _stateChangedInvocationList = _stateChanged?.GetInvocationList();
+            }
+        }
         public event Action<int> SegmentChanged
         {
             add
@@ -103,37 +121,79 @@ namespace Common.TransformPath
                 _segmentChangedInvocationList = _segmentChanged?.GetInvocationList();
             }
         }
-        public event Action Completed;
+        internal event Action LoopBoundary
+        {
+            add
+            {
+                _loopBoundary += value;
+                _loopBoundaryInvocationList = _loopBoundary?.GetInvocationList();
+            }
+            remove
+            {
+                _loopBoundary -= value;
+                _loopBoundaryInvocationList = _loopBoundary?.GetInvocationList();
+            }
+        }
+        public event Action Completed
+        {
+            add
+            {
+                _completed += value;
+                _completedInvocationList = _completed?.GetInvocationList();
+            }
+            remove
+            {
+                _completed -= value;
+                _completedInvocationList = _completed?.GetInvocationList();
+            }
+        }
 
         #endregion
 
 
         #region Unity Events
 
-        public void Init()
+        public PathCommandReceipt Init()
         {
             if (_isInitialized)
-                return;
+                return CreateReceipt(false);
 
             if (_pathEventHandler == null)
                 TryGetComponent(out _pathEventHandler);
+            if (_animatorView == null)
+                TryGetComponent(out _animatorView);
             if (_pathEventHandler != null && !_pathEventHandler.IsInitialized)
                 _pathEventHandler.Init();
+            _pathEventHandler?.Bind(this);
+            _eventTarget = this;
 
             _isInitialized = true;
             _state = EPathFollowerState.Ready;
             _playbackRevision++;
+            _playbackEngine.Touch();
+            PathCommandReceipt receipt = CreateReceipt(true);
+            InvokeStateChanged(_state);
+            return receipt;
         }
 
-        public void Release()
+        public PathCommandReceipt Release()
         {
             if (!_isInitialized && _playbackSession == null)
-                return;
+                return CreateReceipt(false);
 
-            StopMove();
+            PathCommandReceipt stopReceipt = StopMove();
+            if (PlaybackId != 0)
+            {
+                // A StateChanged callback may have started a new playback.
+                // The release that ended the old scope must not tear it down.
+                return stopReceipt;
+            }
             _playbackSession = null;
             _isInitialized = false;
+            _playbackEngine.Touch();
+            PathCommandReceipt receipt = CreateReceipt(true);
             SetState(EPathFollowerState.Uninitialized);
+            return receipt;
         }
 
         private void Reset()
@@ -146,6 +206,21 @@ namespace Common.TransformPath
             if (!Application.isPlaying)
                 return;
             Init();
+            PathRuntimeDriverBehaviour.Instance.Register(this);
+            _runtimeDriverRegistered = true;
+        }
+
+        private void OnEnable()
+        {
+            if (!Application.isPlaying)
+                return;
+            if (!_isInitialized)
+                Init();
+            if (!_runtimeDriverRegistered)
+            {
+                PathRuntimeDriverBehaviour.Instance.Register(this);
+                _runtimeDriverRegistered = true;
+            }
         }
 
         private void Start()
@@ -182,14 +257,21 @@ namespace Common.TransformPath
                 this);
         }
 
-        private void Update()
+        void IPathRuntimeTickable.Tick(
+            float deltaTime,
+            float unscaledDeltaTime,
+            int frameId)
+        {
+            Tick(deltaTime);
+        }
+
+        internal void Tick(float deltaTime)
         {
             if (!_isInitialized || !_isMoving || _playbackSession == null)
                 return;
             if (!RefreshProviderSnapshotIfNeeded())
                 return;
 
-            float deltaTime = Time.deltaTime;
             if (deltaTime <= 0f)
                 return;
 
@@ -233,14 +315,48 @@ namespace Common.TransformPath
             ApplyCurrentPosition();
         }
 
+        void IPathRuntimeFaultHandler.HandleRuntimeFault(
+            ulong playbackId,
+            System.Exception exception)
+        {
+            if (playbackId == 0 || PlaybackId != playbackId)
+                return;
+            try
+            {
+                StopMove();
+            }
+            catch
+            {
+                if (PlaybackId != playbackId)
+                    return;
+                _pathEventHandler?.CancelPlaybackEffects(playbackId);
+                StopPlaybackOnly();
+                _playbackEngine.InvalidatePlayback();
+                DisposePlaybackScope();
+                SetState(EPathFollowerState.Ready);
+            }
+        }
+
         private void OnDisable()
         {
             if (Application.isPlaying)
+            {
+                if (_runtimeDriverRegistered && PathRuntimeDriverBehaviour.HasInstance)
+                {
+                    PathRuntimeDriverBehaviour.Instance.Unregister(this);
+                    _runtimeDriverRegistered = false;
+                }
                 StopMove();
+            }
         }
 
         private void OnDestroy()
         {
+            if (_runtimeDriverRegistered && PathRuntimeDriverBehaviour.HasInstance)
+            {
+                PathRuntimeDriverBehaviour.Instance.Unregister(this);
+                _runtimeDriverRegistered = false;
+            }
             Release();
         }
 
@@ -249,7 +365,7 @@ namespace Common.TransformPath
 
         #region Public Methods
 
-        public void StartPlayback(PathPlaybackRequest request)
+        public PathCommandReceipt StartPlayback(PathPlaybackRequest request)
         {
             EnsureInitialized();
             PathPlaybackSession session = PathPlaybackSession.CreateOrReuse(
@@ -262,73 +378,126 @@ namespace Common.TransformPath
                 else
                     _pathEventHandler?.PrepareForPlayback(
                         this,
-                        session.Provider as IPathEventSource,
+                        session.EventSource,
                         session.MovementSettings.MoveType);
-            BeginPlayback(session, request.Loop);
+            return BeginPlayback(session, request.Loop);
         }
 
-        public void StopMove()
+        internal void ValidatePlaybackRequest(PathPlaybackRequest request)
         {
-            if (!_isInitialized && !_isMoving)
+            EnsureInitialized();
+            PathPlaybackSession session = PathPlaybackSession.CreateOrReuse(
+                request,
+                _playbackSession);
+            if (_pathEventHandler == null)
                 return;
+            if (session.Kind == EPathPlaybackKind.Sequence)
+                _pathEventHandler.ValidateForSequence(this, session.Snapshot);
+            else
+                _pathEventHandler.ValidateForPlayback(
+                    this,
+                    session.EventSource,
+                    session.MovementSettings.MoveType);
+        }
+
+        public PathCommandReceipt StopMove()
+        {
+            if (_state == EPathFollowerState.Uninitialized
+                || _state == EPathFollowerState.Ready)
+                return CreateReceipt(false);
+            ulong stoppedPlaybackId = PlaybackId;
+            _pathEventHandler?.CancelPlaybackEffects(stoppedPlaybackId);
             StopPlaybackOnly();
+            _playbackEngine.InvalidatePlayback();
+            DisposePlaybackScope();
+            PathCommandReceipt receipt = CreateReceipt(true);
             SetState(_isInitialized
                 ? EPathFollowerState.Ready
                 : EPathFollowerState.Uninitialized);
+            return receipt;
         }
 
-        public void PauseMove()
+        public PathCommandReceipt PauseMove()
         {
             if (!_isMoving)
-                return;
+                return CreateReceipt(false);
 
             _isMoving = false;
             _pendingDeltaTime = 0f;
             _playbackRevision++;
+            _playbackEngine.Touch();
+            _pathEventHandler?.CancelMovementAdjustments();
+            PathCommandReceipt receipt = CreateReceipt(true);
             SetState(EPathFollowerState.Paused);
             ApplyAnimatorSpeed(0f);
+            return receipt;
         }
 
-        public void ResumeMove()
+        public PathCommandReceipt ResumeMove()
         {
             if (!_isInitialized
                 || _playbackSession == null
                 || _state != EPathFollowerState.Paused)
-                return;
+                return CreateReceipt(false);
 
             _isMoving = true;
             _playbackRevision++;
+            _playbackEngine.Touch();
+            PathCommandReceipt receipt = CreateReceipt(true);
             SetState(EPathFollowerState.Moving);
             ApplyAnimatorSpeed(1f);
+            return receipt;
         }
 
-        public void Seek(float normalizedTime)
+        public PathCommandReceipt Seek(float normalizedTime)
         {
             EnsureInitialized();
             if (_playbackSession == null)
                 throw new InvalidOperationException("PathFollower has no active provider.");
             ValidateFinite(normalizedTime, nameof(normalizedTime));
 
-            _pendingDeltaTime = 0f;
+            float targetProgress = Mathf.Clamp01(normalizedTime);
             if (_playbackSession.Sequence == null)
             {
-                _normalizedTime = Mathf.Clamp01(normalizedTime);
+                if (Mathf.Abs(_normalizedTime - targetProgress) <= EPSILON)
+                    return CreateReceipt(false);
+            }
+            else
+            {
+                int targetSegment = _playbackSession.Snapshot.FindSegment(targetProgress);
+                float targetLocal = _playbackSession.Snapshot.GetLocalProgress(
+                    targetSegment,
+                    targetProgress);
+                if (_currentSegmentIndex == targetSegment
+                    && Mathf.Abs(_normalizedTime - targetLocal) <= EPSILON)
+                    return CreateReceipt(false);
+            }
+
+            _pendingDeltaTime = 0f;
+            _queueConstraintFrameId = -1;
+            if (_queueConstraintRegistration.IsValid)
+                SetConstraintState(true, 0f, 0f);
+            if (_playbackSession.Sequence == null)
+            {
+                _normalizedTime = targetProgress;
                 _globalNormalizedTime = _normalizedTime;
-                _segmentElapsed = _duration * _normalizedTime;
+                _segmentElapsed = InverseTimeProgress(_normalizedTime, _timeCurve) * _duration;
                 _segmentDistance = _playbackSession.Provider.PathLength * _normalizedTime;
                 _playbackSession.EventCursor.Reset(
-                    _playbackSession.Provider as IPathEventSource,
+                    _playbackSession.EventSource,
                     _normalizedTime);
             }
             else
             {
-                SetSequenceGlobalProgress(Mathf.Clamp01(normalizedTime));
+                SetSequenceGlobalProgress(targetProgress);
             }
 
             ApplyCurrentPosition();
+            _playbackEngine.Touch();
+            return CreateReceipt(true);
         }
 
-        public void SeekSegment(int segmentIndex, float localNormalizedTime)
+        public PathCommandReceipt SeekSegment(int segmentIndex, float localNormalizedTime)
         {
             EnsureInitialized();
             if (_playbackSession?.Sequence == null || _playbackSession.Snapshot == null)
@@ -344,15 +513,60 @@ namespace Common.TransformPath
                 local = 0f;
             }
 
+            if (_currentSegmentIndex == segmentIndex
+                && Mathf.Abs(_normalizedTime - local) <= EPSILON)
+                return CreateReceipt(false);
+
+            _queueConstraintFrameId = -1;
+            if (_queueConstraintRegistration.IsValid)
+                SetConstraintState(true, 0f, 0f);
+
             SetSequenceSegmentProgress(segmentIndex, local);
             ApplyCurrentPosition();
+            _playbackEngine.Touch();
+            return CreateReceipt(true);
+        }
+
+        public PathCommandReceipt SetSpeed(float speed)
+        {
+            EnsureInitialized();
+            ValidateMovementValue(speed, nameof(speed));
+            if (_playbackSession == null)
+                throw new InvalidOperationException("Speed can only be changed during playback.");
+            if (_moveType != EPathMoveType.SpeedBased)
+                throw new InvalidOperationException("Speed can only be changed in SpeedBased mode.");
+            if (Mathf.Approximately(_speed, speed))
+                return CreateReceipt(false);
+            _speed = speed;
+            _playbackEngine.Touch();
+            return CreateReceipt(true);
+        }
+
+        public PathCommandReceipt SetDuration(float duration)
+        {
+            EnsureInitialized();
+            ValidateMovementValue(duration, nameof(duration));
+            if (_playbackSession == null)
+                throw new InvalidOperationException("Duration can only be changed during playback.");
+            if (_moveType != EPathMoveType.TimeBased)
+                throw new InvalidOperationException("Duration can only be changed in TimeBased mode.");
+            if (Mathf.Approximately(_duration, duration))
+                return CreateReceipt(false);
+
+            float normalized = _duration > PathMovementSettingsUtility.MIN_VALUE
+                ? EvaluateTimeProgress(_segmentElapsed / _duration, _timeCurve)
+                : 0f;
+            _duration = duration;
+            _segmentElapsed = InverseTimeProgress(normalized, _timeCurve) * duration;
+            _playbackEngine.Touch();
+            return CreateReceipt(true);
         }
 
         /// <summary>
         /// Called once per frame by QueuedPathFollower before this follower's
         /// Update tick. The constraint is a non-destructive multiplier/clamp.
         /// </summary>
-        internal void SetQueueConstraint(
+        private void SetConstraintState(
             bool blocked,
             float speedMultiplier,
             float maxGlobalNormalizedTime)
@@ -361,11 +575,67 @@ namespace Common.TransformPath
             _queueSpeedMultiplier = Mathf.Clamp01(speedMultiplier);
             _queueMaxGlobalNormalizedTime = Mathf.Clamp01(maxGlobalNormalizedTime);
 
-            if (_isMoving && _globalNormalizedTime > _queueMaxGlobalNormalizedTime)
-                Seek(_queueMaxGlobalNormalizedTime);
+            // The bound is enforced while calculating the next advance. The
+            // current pose is never rewound when the queue becomes tighter.
         }
 
-        internal void ResetQueueConstraint()
+        public bool AttachQueueConstraint(PathQueueRegistration registration)
+        {
+            if (!registration.IsValid || registration.PlaybackId == 0
+                || registration.PlaybackId != PlaybackId)
+                return false;
+
+            _queueConstraintRegistration = registration;
+            _queueConstraintFrameId = -1;
+            _queueConstraintRouteRevision = registration.RouteRevision;
+            SetConstraintState(true, 0f, 0f);
+            return true;
+        }
+
+        public void ApplyQueueConstraint(
+            PathQueueRegistration registration,
+            PathQueueConstraint constraint)
+        {
+            if (!_queueConstraintRegistration.IsValid
+                || !SameQueueRegistration(
+                    registration,
+                    _queueConstraintRegistration)
+                || registration.PlaybackId != PlaybackId
+                || !SameQueueRegistration(constraint.Registration, registration))
+                return;
+            if (constraint.RouteRevision != registration.RouteRevision
+                || constraint.FrameId < _queueConstraintFrameId)
+                return;
+
+            _queueConstraintFrameId = constraint.FrameId;
+            _queueConstraintRouteRevision = constraint.RouteRevision;
+            SetConstraintState(
+                constraint.IsBlocked,
+                constraint.SpeedMultiplier,
+                constraint.MaxGlobalNormalizedTime);
+        }
+
+        public void ReleaseQueueConstraint(PathQueueRegistration registration)
+        {
+            if (!_queueConstraintRegistration.IsValid
+                || !SameQueueRegistration(
+                    registration,
+                    _queueConstraintRegistration))
+                return;
+
+            _queueConstraintRegistration = default(PathQueueRegistration);
+            _queueConstraintFrameId = -1;
+            _queueConstraintRouteRevision = -1;
+            ClearConstraintState();
+        }
+
+        internal void SetEventTarget(IPathFollower target)
+        {
+            _eventTarget = target ?? this;
+            _pathEventHandler?.Bind(_eventTarget);
+        }
+
+        private void ClearConstraintState()
         {
             _queueBlocked = false;
             _queueSpeedMultiplier = 1f;
@@ -377,11 +647,18 @@ namespace Common.TransformPath
 
         #region Private Methods
 
-        private void BeginPlayback(
+        private PathCommandReceipt BeginPlayback(
             PathPlaybackSession session,
             bool loop)
         {
+            ulong previousPlaybackId = PlaybackId;
+            if (previousPlaybackId != 0)
+            {
+                _pathEventHandler?.CancelPlaybackEffects(previousPlaybackId);
+                _playbackEngine.InvalidatePlayback();
+            }
             StopPlaybackOnly();
+            DisposePlaybackScope();
             _playbackSession = session;
             _loop = loop;
             _currentSegmentIndex = 0;
@@ -405,14 +682,25 @@ namespace Common.TransformPath
                     _duration = session.MovementSettings.Value;
                 _timeCurve = session.MovementSettings.TimeCurve;
                 session.EventCursor.Reset(
-                    session.Provider as IPathEventSource,
+                    session.EventSource,
                     0f);
             }
-            ResetQueueConstraint();
+            ClearConstraintState();
             _isMoving = true;
             _playbackRevision++;
+            _playbackEngine.BeginPlayback();
+            _playbackScope = new PathPlaybackScope(PlaybackId);
+            PathCommandReceipt receipt = CreateReceipt(true);
+            int beginRevision = _playbackRevision;
+            ulong beginPlaybackId = PlaybackId;
+            ulong beginStateRevision = StateRevision;
             SetState(EPathFollowerState.Moving);
+            if (_playbackRevision != beginRevision
+                || PlaybackId != beginPlaybackId
+                || StateRevision != beginStateRevision)
+                return receipt;
             ApplyCurrentPosition();
+            return receipt;
         }
 
         private float TickSingle(float availableTime, int tickRevision)
@@ -422,14 +710,23 @@ namespace Common.TransformPath
             if (_moveType == EPathMoveType.TimeBased)
             {
                 float duration = Mathf.Max(_duration, PathMovementSettingsUtility.MIN_VALUE);
-                float remainingToEnd = Mathf.Max(0f, duration - _segmentElapsed);
+                if (multiplier <= EPSILON)
+                    return availableTime;
+                float currentProgress = EvaluateTimeProgress(_segmentElapsed / duration, _timeCurve);
+                float maxProgress = Mathf.Clamp01(_queueMaxGlobalNormalizedTime);
+                if (maxProgress <= currentProgress + EPSILON)
+                    return 0f;
+                float maximumElapsed = InverseTimeProgress(maxProgress, _timeCurve) * duration;
+                float targetElapsed = Mathf.Min(
+                    _segmentElapsed + availableTime * multiplier,
+                    maximumElapsed);
                 float consume = Mathf.Min(
                     availableTime,
-                    remainingToEnd / Mathf.Max(multiplier, PathMovementSettingsUtility.MIN_VALUE));
+                    Mathf.Max(0f, targetElapsed - _segmentElapsed) / multiplier);
                 _segmentElapsed += consume * multiplier;
                 _normalizedTime = EvaluateTimeProgress(_segmentElapsed / duration, _timeCurve);
                 _globalNormalizedTime = _normalizedTime;
-                DispatchEvents(provider as IPathEventSource, _normalizedTime, tickRevision);
+                DispatchEvents(_playbackSession.EventSource, _normalizedTime, tickRevision);
                 if (_playbackRevision != tickRevision)
                     return consume;
                 if (_segmentElapsed >= duration - EPSILON)
@@ -439,7 +736,10 @@ namespace Common.TransformPath
                     if (_loop)
                     {
                         ApplyCurrentPosition();
-                        FlushEvents(provider as IPathEventSource, tickRevision);
+                        FlushEvents(_playbackSession.EventSource, tickRevision);
+                        if (_playbackRevision != tickRevision)
+                            return consume;
+                        InvokeLoopBoundary(tickRevision);
                         if (_playbackRevision != tickRevision)
                             return consume;
                         _segmentElapsed = 0f;
@@ -447,11 +747,11 @@ namespace Common.TransformPath
                         _normalizedTime = 0f;
                         _globalNormalizedTime = 0f;
                         _playbackSession.EventCursor.Reset(
-                            provider as IPathEventSource,
+                            _playbackSession.EventSource,
                             0f);
                     }
                     else
-                        CompletePlayback(provider as IPathEventSource);
+                        CompletePlayback(_playbackSession.EventSource);
                 }
 
                 return Mathf.Max(consume, EPSILON);
@@ -464,13 +764,22 @@ namespace Common.TransformPath
             float effectiveSpeed = Mathf.Max(
                 _speed,
                 PathMovementSettingsUtility.MIN_VALUE) * multiplier;
+            if (multiplier <= EPSILON)
+                return availableTime;
             float consumeTime = Mathf.Min(
                 availableTime,
                 remainingDistance / Mathf.Max(effectiveSpeed, PathMovementSettingsUtility.MIN_VALUE));
+            float maximumDistance = Mathf.Clamp01(_queueMaxGlobalNormalizedTime) * pathLength;
+            if (maximumDistance <= _segmentDistance + EPSILON)
+                return 0f;
+            consumeTime = Mathf.Min(
+                consumeTime,
+                Mathf.Max(0f, maximumDistance - _segmentDistance)
+                    / Mathf.Max(effectiveSpeed, EPSILON));
             _segmentDistance += consumeTime * effectiveSpeed;
             _normalizedTime = Mathf.Clamp01(_segmentDistance / pathLength);
             _globalNormalizedTime = _normalizedTime;
-            DispatchEvents(provider as IPathEventSource, _normalizedTime, tickRevision);
+            DispatchEvents(_playbackSession.EventSource, _normalizedTime, tickRevision);
             if (_playbackRevision != tickRevision)
                 return consumeTime;
             if (_segmentDistance >= pathLength - EPSILON)
@@ -480,7 +789,10 @@ namespace Common.TransformPath
                 if (_loop)
                 {
                     ApplyCurrentPosition();
-                    FlushEvents(provider as IPathEventSource, tickRevision);
+                    FlushEvents(_playbackSession.EventSource, tickRevision);
+                    if (_playbackRevision != tickRevision)
+                        return consumeTime;
+                    InvokeLoopBoundary(tickRevision);
                     if (_playbackRevision != tickRevision)
                         return consumeTime;
                     _segmentDistance = 0f;
@@ -488,11 +800,11 @@ namespace Common.TransformPath
                     _normalizedTime = 0f;
                     _globalNormalizedTime = 0f;
                     _playbackSession.EventCursor.Reset(
-                        provider as IPathEventSource,
+                        _playbackSession.EventSource,
                         0f);
                 }
                 else
-                    CompletePlayback(provider as IPathEventSource);
+                    CompletePlayback(_playbackSession.EventSource);
             }
 
             return Mathf.Max(consumeTime, EPSILON);
@@ -507,16 +819,31 @@ namespace Common.TransformPath
             PathSequenceSnapshot snapshot = _playbackSession.Snapshot;
             PathSegmentDescriptor descriptor = snapshot.GetDescriptor(_currentSegmentIndex);
             PathMovementSettings movementSettings = descriptor.MovementSettings;
-            float multiplier = Mathf.Max(
-                _queueSpeedMultiplier,
-                PathMovementSettingsUtility.MIN_VALUE);
+            float multiplier = _queueSpeedMultiplier;
+            if (multiplier <= EPSILON)
+                return availableTime;
             float consume;
 
             if (movementSettings.MoveType == EPathMoveType.TimeBased)
             {
                 float duration = Mathf.Max(_duration, PathMovementSettingsUtility.MIN_VALUE);
-                float remaining = Mathf.Max(0f, duration - _segmentElapsed);
-                consume = Mathf.Min(availableTime, remaining / multiplier);
+                float currentProgress = EvaluateTimeProgress(
+                    _segmentElapsed / duration,
+                    movementSettings.TimeCurve);
+                float maxLocalProgress = snapshot.GetLocalProgress(
+                    _currentSegmentIndex,
+                    _queueMaxGlobalNormalizedTime);
+                if (maxLocalProgress <= currentProgress + EPSILON)
+                    return 0f;
+                float maximumElapsed = InverseTimeProgress(
+                    maxLocalProgress,
+                    movementSettings.TimeCurve) * duration;
+                float targetElapsed = Mathf.Min(
+                    _segmentElapsed + availableTime * multiplier,
+                    maximumElapsed);
+                consume = Mathf.Min(
+                    availableTime,
+                    Mathf.Max(0f, targetElapsed - _segmentElapsed) / multiplier);
                 _segmentElapsed += consume * multiplier;
                 _normalizedTime = EvaluateTimeProgress(
                     _segmentElapsed / duration,
@@ -534,6 +861,16 @@ namespace Common.TransformPath
                 consume = Mathf.Min(
                     availableTime,
                     remaining / Mathf.Max(speed, PathMovementSettingsUtility.MIN_VALUE));
+                float maxLocalProgress = snapshot.GetLocalProgress(
+                    _currentSegmentIndex,
+                    _queueMaxGlobalNormalizedTime);
+                if (maxLocalProgress <= _normalizedTime + EPSILON)
+                    return 0f;
+                float maximumDistance = maxLocalProgress * length;
+                consume = Mathf.Min(
+                    consume,
+                    Mathf.Max(0f, maximumDistance - _segmentDistance)
+                        / Mathf.Max(speed, EPSILON));
                 _segmentDistance += consume * speed;
                 _normalizedTime = Mathf.Clamp01(_segmentDistance / length);
             }
@@ -576,7 +913,7 @@ namespace Common.TransformPath
                         tickRevision);
                     if (_playbackRevision != tickRevision)
                         return Mathf.Max(consume, EPSILON);
-                    AdvanceToSegment(0, tickRevision);
+                    AdvanceToSegment(0, tickRevision, true);
                     transitioned = true;
                 }
                 else
@@ -587,6 +924,14 @@ namespace Common.TransformPath
         }
 
         private void AdvanceToSegment(int index, int tickRevision)
+        {
+            AdvanceToSegment(index, tickRevision, false);
+        }
+
+        private void AdvanceToSegment(
+            int index,
+            int tickRevision,
+            bool loopBoundary)
         {
             float previousNominalSpeed = GetCurrentNominalSpeed();
             _currentSegmentIndex = index;
@@ -599,6 +944,12 @@ namespace Common.TransformPath
             _playbackSession.EventCursor.Reset(
                 _playbackSession.Snapshot.GetEventSource(index),
                 0f);
+            if (loopBoundary)
+            {
+                InvokeLoopBoundary(tickRevision);
+                if (_playbackRevision != tickRevision)
+                    return;
+            }
             InvokeSegmentChanged(index, tickRevision);
         }
 
@@ -661,10 +1012,14 @@ namespace Common.TransformPath
             _globalNormalizedTime = 1f;
             _playbackRevision++;
             int completionRevision = _playbackRevision;
+            ulong completedPlaybackId = PlaybackId;
             ApplyCurrentPosition();
             FlushEvents(source, completionRevision);
             if (_playbackRevision != completionRevision)
                 return;
+            _pathEventHandler?.CancelPlaybackEffects(completedPlaybackId);
+            _playbackEngine.InvalidatePlayback();
+            DisposePlaybackScope();
             SetState(EPathFollowerState.Completed);
             if (_playbackRevision != completionRevision)
                 return;
@@ -702,6 +1057,13 @@ namespace Common.TransformPath
 
                 _playbackSession.Snapshot = next;
                 _playbackSession.ProviderRevision = _playbackSession.Provider.Revision;
+                if (_moveType == EPathMoveType.SpeedBased)
+                    _segmentDistance = _playbackSession.Snapshot.GetLength(
+                        _currentSegmentIndex) * _normalizedTime;
+                else
+                    _segmentElapsed = InverseTimeProgress(
+                        _normalizedTime,
+                        _timeCurve) * _duration;
                 _globalNormalizedTime = _playbackSession.Snapshot.GetGlobalProgress(
                     _currentSegmentIndex,
                     _normalizedTime);
@@ -722,9 +1084,25 @@ namespace Common.TransformPath
                 }
             }
 
+            IPathEventSource currentEventSource =
+                _playbackSession.Provider as IPathEventSource;
+            if (!_playbackSession.EventSource.Matches(currentEventSource))
+            {
+                StopMove();
+                return false;
+            }
+
             _playbackSession.ProviderRevision = _playbackSession.Provider.Revision;
+            _playbackSession.EventSource = PathEventSourceSnapshot.Create(
+                currentEventSource);
             _normalizedTime = Mathf.Clamp01(_normalizedTime);
             _globalNormalizedTime = _normalizedTime;
+            if (_moveType == EPathMoveType.SpeedBased)
+                _segmentDistance = _playbackSession.Provider.PathLength * _normalizedTime;
+            else
+                _segmentElapsed = InverseTimeProgress(
+                    _normalizedTime,
+                    _timeCurve) * _duration;
             ApplyCurrentPosition();
             return true;
         }
@@ -743,7 +1121,7 @@ namespace Common.TransformPath
             _currentSegmentIndex = index;
             _normalizedTime = Mathf.Clamp01(local);
             _segmentElapsed = _moveType == EPathMoveType.TimeBased
-                ? _duration * _normalizedTime
+                ? InverseTimeProgress(_normalizedTime, _timeCurve) * _duration
                 : 0f;
             _segmentDistance = _moveType == EPathMoveType.SpeedBased
                 ? _playbackSession.Snapshot.GetLength(index) * _normalizedTime
@@ -787,14 +1165,16 @@ namespace Common.TransformPath
 
             while (_playbackSession.EventCursor.HasNext(source))
             {
-                PathEventEntry entry = source.GetEvent(
+                PathRuntimeEvent entry = source.GetEvent(
                     _playbackSession.EventCursor.NextIndex);
                 if (entry.NormalizedTime > progress + EPSILON)
                     break;
                 _playbackSession.EventCursor.NextIndex++;
-                if (entry.EventSetting == null)
+                if (entry.Definition == null)
                     continue;
-                _pathEventHandler?.HandleEvent(entry.EventSetting, this);
+                _pathEventHandler?.HandleEvent(
+                    entry.Definition,
+                    _eventTarget ?? this);
                 if (_playbackRevision != tickRevision)
                     return;
             }
@@ -844,6 +1224,52 @@ namespace Common.TransformPath
             ApplyAnimatorSpeed(0f);
         }
 
+        private void DisposePlaybackScope()
+        {
+            if (_playbackScope == null)
+                return;
+            _playbackScope.Dispose();
+            _playbackScope = null;
+        }
+
+        private static float InverseTimeProgress(
+            float progress,
+            AnimationCurve curve)
+        {
+            float target = Mathf.Clamp01(progress);
+            if (target <= 0f || target >= 1f || curve == null)
+                return target;
+
+            float low = 0f;
+            float high = 1f;
+            for (int i = 0; i < 32; i++)
+            {
+                float middle = (low + high) * 0.5f;
+                float value = Mathf.Clamp01(curve.Evaluate(middle));
+                if (value >= target)
+                    high = middle;
+                else
+                    low = middle;
+            }
+            return high;
+        }
+
+        private static bool SameQueueRegistration(
+            PathQueueRegistration left,
+            PathQueueRegistration right)
+        {
+            return left.IsValid
+                && right.IsValid
+                && left.BelongsTo(right.Owner)
+                && left.RegistrationId == right.RegistrationId
+                && left.PlaybackId == right.PlaybackId;
+        }
+
+        private PathCommandReceipt CreateReceipt(bool changed)
+        {
+            return _playbackEngine.CreateReceipt(changed);
+        }
+
         private void SetState(EPathFollowerState state)
         {
             if (_state == state)
@@ -854,13 +1280,34 @@ namespace Common.TransformPath
 
         private void ApplyAnimatorSpeed(float value)
         {
-            if (_animator != null)
-                _animator.speed = value;
+            _animatorView?.ApplyPlaybackSpeed(value);
         }
 
         private void InvokeStateChanged(EPathFollowerState value)
         {
-            StateChanged?.Invoke(value);
+            Delegate[] listeners = _stateChangedInvocationList;
+            if (listeners == null)
+                return;
+
+            int revision = _playbackRevision;
+            ulong playbackId = PlaybackId;
+            ulong stateRevision = StateRevision;
+            for (int i = 0; i < listeners.Length; i++)
+            {
+                try
+                {
+                    ((Action<EPathFollowerState>)listeners[i])(value);
+                }
+                catch
+                {
+                    CleanupAfterCallbackFailure(playbackId);
+                    throw;
+                }
+                if (_playbackRevision != revision
+                    || PlaybackId != playbackId
+                    || StateRevision != stateRevision)
+                    return;
+            }
         }
 
         private void InvokeSegmentChanged(int value, int tickRevision)
@@ -869,17 +1316,91 @@ namespace Common.TransformPath
             if (listeners == null)
                 return;
 
+            ulong playbackId = PlaybackId;
+            ulong stateRevision = StateRevision;
             for (int i = 0; i < listeners.Length; i++)
             {
-                ((Action<int>)listeners[i])(value);
-                if (_playbackRevision != tickRevision)
+                try
+                {
+                    ((Action<int>)listeners[i])(value);
+                }
+                catch
+                {
+                    CleanupAfterCallbackFailure(playbackId);
+                    throw;
+                }
+                if (_playbackRevision != tickRevision
+                    || PlaybackId != playbackId
+                    || StateRevision != stateRevision)
+                    return;
+            }
+        }
+
+        private void InvokeLoopBoundary(int tickRevision)
+        {
+            Delegate[] listeners = _loopBoundaryInvocationList;
+            if (listeners == null)
+                return;
+
+            ulong playbackId = PlaybackId;
+            ulong stateRevision = StateRevision;
+            for (int i = 0; i < listeners.Length; i++)
+            {
+                try
+                {
+                    ((Action)listeners[i])();
+                }
+                catch
+                {
+                    CleanupAfterCallbackFailure(playbackId);
+                    throw;
+                }
+                if (_playbackRevision != tickRevision
+                    || PlaybackId != playbackId
+                    || StateRevision != stateRevision)
                     return;
             }
         }
 
         private void InvokeCompleted()
         {
-            Completed?.Invoke();
+            Delegate[] listeners = _completedInvocationList;
+            if (listeners == null)
+                return;
+
+            int revision = _playbackRevision;
+            ulong playbackId = PlaybackId;
+            ulong stateRevision = StateRevision;
+            for (int i = 0; i < listeners.Length; i++)
+            {
+                try
+                {
+                    ((Action)listeners[i])();
+                }
+                catch
+                {
+                    CleanupAfterCallbackFailure(playbackId);
+                    throw;
+                }
+                if (_playbackRevision != revision
+                    || PlaybackId != playbackId
+                    || StateRevision != stateRevision)
+                    return;
+            }
+        }
+
+        private void CleanupAfterCallbackFailure(ulong failedPlaybackId)
+        {
+            if (failedPlaybackId == 0 || PlaybackId != failedPlaybackId)
+                return;
+
+            _pathEventHandler?.CancelPlaybackEffects(failedPlaybackId);
+            StopPlaybackOnly();
+            _playbackEngine.InvalidatePlayback();
+            DisposePlaybackScope();
+            _state = _isInitialized
+                ? EPathFollowerState.Ready
+                : EPathFollowerState.Uninitialized;
         }
 
         #endregion

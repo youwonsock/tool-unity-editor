@@ -11,7 +11,7 @@ namespace Common.TransformPath.Samples
     {
         #region Public Methods
 
-        public void ReceivePathEvent(string eventName, IPathFollower follower)
+        public void ReceivePathEvent(string eventName, IPathPlaybackState follower)
         {
             if (string.IsNullOrEmpty(eventName))
                 throw new ArgumentException("Path event name is required.", nameof(eventName));

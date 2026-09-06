@@ -21,7 +21,11 @@ namespace Common.TransformPath
             new HashSet<string>();
 
         private const string SEGMENTS_PROPERTY = "_segments";
-        private const string PATH_DATA_PROPERTY = "_pathData";
+        private const string PROVIDER_OBJECT_PROPERTY = "_providerObject";
+        private const string MOVEMENT_SOURCE_PROPERTY = "_movementSource";
+        private const string MOVE_TYPE_PROPERTY = "_moveType";
+        private const string MOVE_VALUE_PROPERTY = "_moveValue";
+        private const string TIME_CURVE_PROPERTY = "_timeCurve";
         private const string PRESERVE_PROPERTY = "_preservePreviousSpeed";
 
         #endregion
@@ -156,7 +160,7 @@ namespace Common.TransformPath
             _segmentsList.drawHeaderCallback = rect =>
                 EditorGUI.LabelField(
                     rect,
-                    "Segments (PathData owns movement settings)");
+                    "Segments (Provider and movement source)");
             _segmentsList.elementHeightCallback = GetSegmentElementHeight;
             _segmentsList.drawElementCallback = DrawSegmentElement;
             _segmentsList.onSelectCallback = list =>
@@ -173,7 +177,16 @@ namespace Common.TransformPath
             if (element != null)
             {
                 if (index == 0)
-                    element.FindPropertyRelative(PATH_DATA_PROPERTY).objectReferenceValue = null;
+                {
+                    SerializedProperty provider = element.FindPropertyRelative(
+                        PROVIDER_OBJECT_PROPERTY);
+                    if (provider != null)
+                        provider.objectReferenceValue = null;
+                }
+                SerializedProperty source = element.FindPropertyRelative(
+                    MOVEMENT_SOURCE_PROPERTY);
+                if (source != null)
+                    source.enumValueIndex = (int)EPathSegmentMovementSource.Provider;
                 element.FindPropertyRelative(PRESERVE_PROPERTY).boolValue = false;
             }
             list.index = list.serializedProperty.arraySize - 1;
@@ -203,8 +216,8 @@ namespace Common.TransformPath
 
         private float GetSegmentElementHeight(int index)
         {
-            return EditorGUIUtility.singleLineHeight * 2f
-                + EditorGUIUtility.standardVerticalSpacing * 3f
+            return EditorGUIUtility.singleLineHeight * 6f
+                + EditorGUIUtility.standardVerticalSpacing * 7f
                 + SEGMENT_ROW_PADDING;
         }
 
@@ -220,21 +233,67 @@ namespace Common.TransformPath
                 return;
 
             SerializedProperty element = _segmentsProperty.GetArrayElementAtIndex(index);
-            SerializedProperty pathData = element.FindPropertyRelative(PATH_DATA_PROPERTY);
+            SerializedProperty provider = element.FindPropertyRelative(
+                PROVIDER_OBJECT_PROPERTY);
+            SerializedProperty movementSource = element.FindPropertyRelative(
+                MOVEMENT_SOURCE_PROPERTY);
+            SerializedProperty moveType = element.FindPropertyRelative(MOVE_TYPE_PROPERTY);
+            SerializedProperty moveValue = element.FindPropertyRelative(MOVE_VALUE_PROPERTY);
+            SerializedProperty timeCurve = element.FindPropertyRelative(TIME_CURVE_PROPERTY);
             SerializedProperty preserve = element.FindPropertyRelative(PRESERVE_PROPERTY);
             float lineHeight = EditorGUIUtility.singleLineHeight;
             float spacing = EditorGUIUtility.standardVerticalSpacing;
-            Rect pathRect = new Rect(
+            Rect providerRect = new Rect(
                 rect.x,
-                rect.y + 2f,
+                rect.y,
+                rect.width,
+                lineHeight);
+            Rect sourceRect = new Rect(
+                rect.x,
+                providerRect.yMax + spacing,
+                rect.width,
+                lineHeight);
+            Rect moveTypeRect = new Rect(
+                rect.x,
+                sourceRect.yMax + spacing,
+                rect.width,
+                lineHeight);
+            Rect moveValueRect = new Rect(
+                rect.x,
+                moveTypeRect.yMax + spacing,
+                rect.width,
+                lineHeight);
+            Rect curveRect = new Rect(
+                rect.x,
+                moveValueRect.yMax + spacing,
                 rect.width,
                 lineHeight);
             Rect preserveRect = new Rect(
                 rect.x,
-                pathRect.yMax + spacing,
+                curveRect.yMax + spacing,
                 rect.width,
                 lineHeight);
-            EditorGUI.PropertyField(pathRect, pathData, new GUIContent($"PathData {index}"));
+            if (provider != null)
+                EditorGUI.PropertyField(
+                    providerRect,
+                    provider,
+                    new GUIContent($"Provider {index}"));
+            EditorGUI.PropertyField(
+                sourceRect,
+                movementSource,
+                new GUIContent("Movement Source"));
+            if (movementSource != null
+                && movementSource.enumValueIndex == (int)EPathSegmentMovementSource.Override)
+            {
+                EditorGUI.PropertyField(moveTypeRect, moveType, new GUIContent("Mode"));
+                EditorGUI.PropertyField(moveValueRect, moveValue, new GUIContent("Value"));
+                if (moveType != null
+                    && moveType.enumValueIndex == (int)EPathMoveType.TimeBased)
+                    EditorGUI.PropertyField(
+                        curveRect,
+                        timeCurve,
+                        new GUIContent("Time Curve"));
+            }
             EditorGUI.PropertyField(
                 preserveRect,
                 preserve,
@@ -252,15 +311,40 @@ namespace Common.TransformPath
             PathData pathData = PathEditorSerializationUtility.GetPathData(
                 _segmentsProperty,
                 _segmentsList.index);
+            SerializedProperty element = _segmentsProperty.GetArrayElementAtIndex(
+                _segmentsList.index);
+            SerializedProperty movementSource = element.FindPropertyRelative(
+                MOVEMENT_SOURCE_PROPERTY);
             EditorGUILayout.Space();
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             EditorGUILayout.LabelField(
                 $"Selected Segment {_segmentsList.index} Movement",
                 EditorStyles.boldLabel);
+            if (movementSource != null
+                && movementSource.enumValueIndex == (int)EPathSegmentMovementSource.Override)
+            {
+                EditorGUI.BeginChangeCheck();
+                EditorGUILayout.PropertyField(
+                    element.FindPropertyRelative(MOVE_TYPE_PROPERTY),
+                    new GUIContent("Mode"));
+                EditorGUILayout.PropertyField(
+                    element.FindPropertyRelative(MOVE_VALUE_PROPERTY),
+                    new GUIContent("Value"));
+                SerializedProperty curve = element.FindPropertyRelative(TIME_CURVE_PROPERTY);
+                SerializedProperty type = element.FindPropertyRelative(MOVE_TYPE_PROPERTY);
+                if (type != null && type.enumValueIndex == (int)EPathMoveType.TimeBased)
+                    EditorGUILayout.PropertyField(curve, new GUIContent("Time Curve"));
+                bool overrideChanged = EditorGUI.EndChangeCheck();
+                if (overrideChanged)
+                    serializedObject.ApplyModifiedProperties();
+                EditorGUILayout.EndVertical();
+                return overrideChanged;
+            }
+
             if (pathData == null)
             {
                 EditorGUILayout.HelpBox(
-                    "Assign a PathData to edit its movement settings.",
+                    "Assign a provider or choose an override movement source.",
                     MessageType.Info);
                 EditorGUILayout.EndVertical();
                 return false;

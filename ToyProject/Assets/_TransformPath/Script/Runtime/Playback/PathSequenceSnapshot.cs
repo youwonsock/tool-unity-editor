@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace Common.TransformPath
@@ -8,6 +9,7 @@ namespace Common.TransformPath
         #region Member Variables
 
         private readonly PathSegmentDescriptor[] _descriptors;
+        private readonly PathEventSourceSnapshot[] _eventSources;
         private readonly float[] _lengths;
         private readonly float[] _starts;
         private readonly float _totalLength;
@@ -34,42 +36,59 @@ namespace Common.TransformPath
                 return false;
 
             PathSegmentDescriptor[] descriptors = new PathSegmentDescriptor[count];
+            PathEventSourceSnapshot[] eventSources =
+                new PathEventSourceSnapshot[count];
             float[] lengths = new float[count];
             float[] starts = new float[count];
             float totalLength = 0f;
             for (int i = 0; i < count; i++)
             {
-                if (!PathProviderUtility.TryGetDescriptor(
-                        provider,
-                        i,
-                        out PathSegmentDescriptor descriptor,
-                        out error))
-                    return false;
-
-                descriptors[i] = new PathSegmentDescriptor(
-                    descriptor.Provider,
-                    PathMovementSettingsUtility.Clone(descriptor.MovementSettings),
-                    descriptor.PreservePreviousSpeed);
-                lengths[i] = provider.GetSegmentLength(i);
-                starts[i] = totalLength;
-                if (!PathValueUtility.IsFinite(lengths[i])
-                    || lengths[i] <= 0f
-                    || !PathValueUtility.IsFinite(totalLength + lengths[i]))
+                try
                 {
-                    error = $"Sequence segment {i} has an invalid length.";
+                    if (!PathProviderUtility.TryGetDescriptor(
+                            provider,
+                            i,
+                            out PathSegmentDescriptor descriptor,
+                            out error))
+                        return false;
+
+                    descriptors[i] = new PathSegmentDescriptor(
+                        descriptor.Provider,
+                        PathMovementSettingsUtility.Clone(descriptor.MovementSettings),
+                        descriptor.PreservePreviousSpeed);
+                    eventSources[i] = PathEventSourceSnapshot.Create(
+                        descriptor.Provider as IPathEventSource);
+                    lengths[i] = provider.GetSegmentLength(i);
+                    float declaredStart = provider.GetSegmentStartDistance(i);
+                    starts[i] = totalLength;
+                    if (!PathValueUtility.IsFinite(declaredStart)
+                        || !Mathf.Approximately(declaredStart, totalLength)
+                        || !PathValueUtility.IsFinite(lengths[i])
+                        || lengths[i] <= 0f
+                        || !PathValueUtility.IsFinite(totalLength + lengths[i]))
+                    {
+                        error = $"Sequence segment {i} has inconsistent distance data.";
+                        return false;
+                    }
+
+                    if (!Mathf.Approximately(lengths[i], descriptor.Provider.PathLength))
+                    {
+                        error = $"Sequence segment {i} length does not match its provider.";
+                        return false;
+                    }
+
+                    totalLength += lengths[i];
+                }
+                catch (Exception exception)
+                {
+                    error = $"Sequence segment {i} could not be inspected: {exception.Message}";
                     return false;
                 }
-
-                if (!Mathf.Approximately(lengths[i], descriptor.Provider.PathLength))
-                {
-                    error = $"Sequence segment {i} length does not match its provider.";
-                    return false;
-                }
-
-                totalLength += lengths[i];
             }
 
-            if (!PathValueUtility.IsFinite(totalLength) || totalLength <= 0f)
+            if (!PathValueUtility.IsFinite(totalLength)
+                || totalLength <= 0f
+                || !Mathf.Approximately(totalLength, provider.PathLength))
             {
                 error = "Sequence total length must be positive.";
                 return false;
@@ -77,6 +96,7 @@ namespace Common.TransformPath
 
             snapshot = new PathSequenceSnapshot(
                 descriptors,
+                eventSources,
                 lengths,
                 starts,
                 totalLength);
@@ -96,7 +116,7 @@ namespace Common.TransformPath
 
         public IPathEventSource GetEventSource(int index)
         {
-            return _descriptors[index].Provider as IPathEventSource;
+            return _eventSources[index];
         }
 
         public Vector3 Sample(int index, float localProgress)
@@ -149,6 +169,8 @@ namespace Common.TransformPath
                         _descriptors[i],
                         other._descriptors[i]))
                     return false;
+                if (!_eventSources[i].HasSameContent(other._eventSources[i]))
+                    return false;
             }
 
             return true;
@@ -161,11 +183,13 @@ namespace Common.TransformPath
 
         private PathSequenceSnapshot(
             PathSegmentDescriptor[] descriptors,
+            PathEventSourceSnapshot[] eventSources,
             float[] lengths,
             float[] starts,
             float totalLength)
         {
             _descriptors = descriptors;
+            _eventSources = eventSources;
             _lengths = lengths;
             _starts = starts;
             _totalLength = totalLength;

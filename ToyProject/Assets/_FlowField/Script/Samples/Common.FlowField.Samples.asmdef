@@ -1,0 +1,17 @@
+{
+    "name": "Common.FlowField.Samples",
+    "rootNamespace": "Common.FlowField.Samples",
+    "references": [
+        "Common.FlowField.Core",
+        "Common.FlowField.Runtime"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

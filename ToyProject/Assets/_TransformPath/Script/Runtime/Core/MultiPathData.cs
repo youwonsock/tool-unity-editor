@@ -4,50 +4,39 @@ using UnityEngine;
 
 namespace Common.TransformPath
 {
-    /// <summary>Length-indexed sequence of independent PathData providers.</summary>
+    /// <summary>
+    /// Length-indexed sequence provider. Inspector data is converted to
+    /// interface-only descriptors in one transaction before it becomes live.
+    /// </summary>
     [DefaultExecutionOrder(-200)]
     public sealed class MultiPathData : MonoBehaviour, IPathSequenceProvider
     {
-        #region Constants
-
 #if UNITY_EDITOR
         private const float DEFAULT_MULTI_PATH_POINT_SIZE = 0.1f;
 #endif
 
-        #endregion
-
-
-        #region Member Variables
-
-        [SerializeField] private List<PathSegmentConfig> _segments =
-            new List<PathSegmentConfig>();
+        [SerializeField] private List<PathSegmentAuthoring> _segments =
+            new List<PathSegmentAuthoring>();
 
         private float[] _segmentLengths;
         private float[] _segmentStartDistances;
         private int[] _childRevisions;
         private PathSegmentDescriptor[] _cachedDescriptors;
+        private PathSegmentDescriptor[] _runtimeDescriptors;
         private float _pathLength;
         private bool _isInitialized;
         private bool _isDirty;
+        private bool _usingRuntimeInput;
         private bool _configurationErrorReported;
         private int _revision;
-        private readonly List<PathData> _subscribedProviders =
-            new List<PathData>();
-        private readonly List<PathSegmentConfig> _validatedSegments =
-            new List<PathSegmentConfig>();
-        private readonly List<PathSegmentDescriptor> _validatedDescriptors =
-            new List<PathSegmentDescriptor>();
-
-        #endregion
-
-
-        #region Properties
+        private readonly List<IPathProvider> _subscribedProviders =
+            new List<IPathProvider>();
 
         public bool IsInitialized => _isInitialized;
         public bool IsReady => _isInitialized
             && !_isDirty
-            && _segmentLengths != null
-            && _segmentLengths.Length > 0
+            && _cachedDescriptors != null
+            && _cachedDescriptors.Length > 0
             && !HasChildRevisionChanged();
         public int Revision => _revision;
 
@@ -65,24 +54,19 @@ namespace Common.TransformPath
             get
             {
                 ThrowIfNotReady();
-                return _segments.Count;
+                return _cachedDescriptors.Length;
             }
         }
 
         public event Action PathChanged;
 
-        #endregion
-
-
-        #region Unity Events
-
         public void Init()
         {
-            if (_isInitialized || !HasAuthoringConfiguration())
+            if (_isInitialized && IsReady)
                 return;
 
             if (!TryBuild(out string error))
-                MarkConfigurationError(error);
+                ReportBuildFailure(error);
         }
 
         public void Release()
@@ -90,6 +74,8 @@ namespace Common.TransformPath
             UnsubscribeFromChildren();
             _isInitialized = false;
             _isDirty = false;
+            _usingRuntimeInput = false;
+            _runtimeDescriptors = null;
             _segmentLengths = null;
             _segmentStartDistances = null;
             _childRevisions = null;
@@ -99,7 +85,7 @@ namespace Common.TransformPath
 
         private void Awake()
         {
-            if (Application.isPlaying && HasAuthoringConfiguration())
+            if (Application.isPlaying && HasInputConfiguration())
                 Init();
         }
 
@@ -108,32 +94,58 @@ namespace Common.TransformPath
             Release();
         }
 
-        #endregion
-
-
-        #region Public Methods
-
-        public void ConfigureSegments(IReadOnlyList<PathSegmentConfig> segments)
+        /// <summary>
+        /// Applies a copied runtime descriptor list only after every provider,
+        /// length, movement setting, and reference cycle has been validated.
+        /// </summary>
+        public void ConfigureSegments(IReadOnlyList<PathSegmentDescriptor> segments)
         {
             if (segments == null)
                 throw new ArgumentNullException(nameof(segments));
 
-            _segments.Clear();
-            for (int i = 0; i < segments.Count; i++)
-                _segments.Add(segments[i]);
-            _isDirty = true;
+            PathSegmentDescriptor[] candidate = CopyDescriptors(segments);
+            if (!TryBuildCandidate(
+                    candidate,
+                    out float[] lengths,
+                    out float[] starts,
+                    out int[] revisions,
+                    out float totalLength,
+                    out string error))
+                throw new InvalidOperationException(error);
 
-            if (_isInitialized)
-            {
-                if (!TryBuild(out string error))
-                    MarkConfigurationError(error);
-            }
+            bool changed = !HasSamePublishedData(
+                candidate,
+                lengths,
+                revisions,
+                totalLength);
+            _usingRuntimeInput = true;
+            _runtimeDescriptors = candidate;
+            CommitCandidate(
+                candidate,
+                lengths,
+                starts,
+                revisions,
+                totalLength,
+                changed);
+            if (changed)
+                NotifyPathChanged();
         }
 
-        public PathSegmentConfig GetSegmentConfig(int index)
+        /// <summary>Switches the provider back to its serialized authoring input.</summary>
+        public void UseAuthoringSegments()
         {
-            ThrowIfNotReady();
-            if (index < 0 || index >= _segments.Count)
+            if (!_usingRuntimeInput)
+                return;
+
+            _usingRuntimeInput = false;
+            _runtimeDescriptors = null;
+            if (!TryBuild(out string error))
+                ReportBuildFailure(error);
+        }
+
+        public PathSegmentAuthoring GetAuthoringSegment(int index)
+        {
+            if (_segments == null || index < 0 || index >= _segments.Count)
                 throw new ArgumentOutOfRangeException(nameof(index));
             return _segments[index];
         }
@@ -187,134 +199,138 @@ namespace Common.TransformPath
             float local = length > Mathf.Epsilon
                 ? (clamped - _segmentStartDistances[index]) / length
                 : 0f;
-            return _segments[index].PathData.Sample(local);
+            return _cachedDescriptors[index].Provider.Sample(local);
         }
 
         public void Rebuild()
         {
-            if (!_isInitialized)
-            {
-                Init();
-                return;
-            }
-
             if (!TryBuild(out string error))
-                MarkConfigurationError(error);
+                ReportBuildFailure(error);
         }
-
-        #endregion
-
-
-        #region Private Methods
 
         internal void MarkDirtyFromChild()
         {
             _isDirty = true;
-            if (_isInitialized && !TryBuild(out string error))
-                MarkConfigurationError(error);
+            if (!TryBuild(out string error))
+                ReportBuildFailure(error);
         }
 
-        private bool HasAuthoringConfiguration()
+        private bool HasInputConfiguration()
         {
-            return _segments != null && _segments.Count > 0;
+            return (_usingRuntimeInput && _runtimeDescriptors != null
+                    && _runtimeDescriptors.Length > 0)
+                || (_segments != null && _segments.Count > 0);
         }
 
         private bool TryBuild(out string error)
         {
-            if (!TryBuildTemporary(
-                    out List<PathSegmentConfig> nextSegments,
-                    out float[] nextLengths,
-                    out float[] nextStarts,
-                    out int[] nextRevisions,
-                    out PathSegmentDescriptor[] nextDescriptors,
-                    out float nextTotalLength,
-                    out error))
-                return false;
-
-            bool changed = !_isInitialized
-                || _segmentLengths == null
-                || _segmentLengths.Length != nextLengths.Length
-                || !Mathf.Approximately(_pathLength, nextTotalLength);
-            if (!changed)
+            PathSegmentDescriptor[] candidate;
+            if (_usingRuntimeInput)
             {
-                for (int i = 0; i < nextLengths.Length; i++)
+                candidate = CopyDescriptors(_runtimeDescriptors);
+            }
+            else
+            {
+                if (_segments == null || _segments.Count == 0)
                 {
-                    if (!AreSameConfig(_segments[i], nextSegments[i])
-                        || !Mathf.Approximately(_segmentLengths[i], nextLengths[i])
-                        || _cachedDescriptors == null
-                        || !PathProviderUtility.AreSameDescriptor(
-                            _cachedDescriptors[i],
-                            nextDescriptors[i]))
+                    error = "MultiPathData requires at least one segment.";
+                    return false;
+                }
+
+                candidate = new PathSegmentDescriptor[_segments.Count];
+                for (int i = 0; i < _segments.Count; i++)
+                {
+                    PathSegmentAuthoring authoring = _segments[i];
+                    if (authoring.Provider == null)
                     {
-                        changed = true;
-                        break;
+                        error = $"Segment {i} has no provider.";
+                        return false;
                     }
+                    if (!authoring.TryResolveMovementSettings(
+                            out PathMovementSettings movement,
+                            out error))
+                    {
+                        error = $"Segment {i} movement settings are invalid: {error}";
+                        return false;
+                    }
+                    candidate[i] = new PathSegmentDescriptor(
+                        authoring.Provider,
+                        movement,
+                        authoring.PreservePreviousSpeed);
                 }
             }
 
-            _segments.Clear();
-            _segments.AddRange(nextSegments);
-            _segmentLengths = nextLengths;
-            _segmentStartDistances = nextStarts;
-            _childRevisions = nextRevisions;
-            _cachedDescriptors = nextDescriptors;
-            _pathLength = nextTotalLength;
-            _isInitialized = true;
-            _isDirty = false;
-            _configurationErrorReported = false;
-            SubscribeToChildren();
+            if (!TryBuildCandidate(
+                    candidate,
+                    out float[] lengths,
+                    out float[] starts,
+                    out int[] revisions,
+                    out float totalLength,
+                    out error))
+                return false;
 
+            bool changed = !HasSamePublishedData(
+                candidate,
+                lengths,
+                revisions,
+                totalLength);
+            CommitCandidate(
+                candidate,
+                lengths,
+                starts,
+                revisions,
+                totalLength,
+                changed);
             if (changed)
-            {
-                _revision++;
                 NotifyPathChanged();
-            }
-
             return true;
         }
 
-        private bool TryBuildTemporary(
-            out List<PathSegmentConfig> nextSegments,
-            out float[] nextLengths,
-            out float[] nextStarts,
-            out int[] nextRevisions,
-            out PathSegmentDescriptor[] nextDescriptors,
-            out float nextTotalLength,
+        private bool TryBuildCandidate(
+            PathSegmentDescriptor[] candidate,
+            out float[] lengths,
+            out float[] starts,
+            out int[] revisions,
+            out float totalLength,
             out string error)
         {
-            nextSegments = null;
-            nextLengths = null;
-            nextStarts = null;
-            nextRevisions = null;
-            nextDescriptors = null;
-            nextTotalLength = 0f;
+            lengths = null;
+            starts = null;
+            revisions = null;
+            totalLength = 0f;
 
-            if (_segments == null || _segments.Count == 0)
+            if (candidate == null || candidate.Length == 0)
             {
                 error = "MultiPathData requires at least one segment.";
                 return false;
             }
 
-            _validatedSegments.Clear();
-            _validatedDescriptors.Clear();
-            for (int i = 0; i < _segments.Count; i++)
+            HashSet<IPathProvider> active = new HashSet<IPathProvider>();
+            HashSet<IPathProvider> completed = new HashSet<IPathProvider>();
+            active.Add(this);
+            for (int i = 0; i < candidate.Length; i++)
             {
-                PathSegmentConfig segment = _segments[i];
-                PathData pathData = segment.PathData;
-                if (pathData == null)
+                PathSegmentDescriptor descriptor = candidate[i];
+                if (!PathProviderUtility.TryValidateReady(
+                        descriptor.Provider,
+                        out error))
                 {
-                    error = $"Segment {i} has no PathData provider.";
+                    error = $"Segment {i} provider is not ready: {error}";
                     return false;
                 }
-                if (!PathProviderUtility.TryGetDescriptor(
-                        pathData,
-                        0,
-                        out PathSegmentDescriptor descriptor,
-                        out string descriptorError))
+                if (!PathMovementSettingsUtility.TryValidate(
+                        descriptor.MovementSettings,
+                        out error))
                 {
-                    error = $"Segment {i} provider is invalid: {descriptorError}";
+                    error = $"Segment {i} movement settings are invalid: {error}";
                     return false;
                 }
+                if (!ValidateProviderGraph(
+                        descriptor.Provider,
+                        active,
+                        completed,
+                        out error))
+                    return false;
 
                 float length = descriptor.Provider.PathLength;
                 if (!PathValueUtility.IsFinite(length) || length <= 0f)
@@ -322,65 +338,191 @@ namespace Common.TransformPath
                     error = $"Segment {i} has an invalid path length.";
                     return false;
                 }
-
-                _validatedSegments.Add(segment);
-                _validatedDescriptors.Add(descriptor);
-                nextTotalLength += length;
+                totalLength += length;
             }
 
-            if (!PathValueUtility.IsFinite(nextTotalLength) || nextTotalLength <= 0f)
+            if (!PathValueUtility.IsFinite(totalLength) || totalLength <= 0f)
             {
                 error = "MultiPathData requires a measurable total length.";
                 return false;
             }
 
-            nextSegments = new List<PathSegmentConfig>(_validatedSegments);
-            nextLengths = new float[nextSegments.Count];
-            nextStarts = new float[nextSegments.Count];
-            nextRevisions = new int[nextSegments.Count];
-            nextDescriptors = new PathSegmentDescriptor[nextSegments.Count];
+            lengths = new float[candidate.Length];
+            starts = new float[candidate.Length];
+            revisions = new int[candidate.Length];
             float accumulated = 0f;
-            for (int i = 0; i < nextSegments.Count; i++)
+            for (int i = 0; i < candidate.Length; i++)
             {
-                nextStarts[i] = accumulated;
-                PathSegmentDescriptor descriptor = _validatedDescriptors[i];
-                PathData pathData = nextSegments[i].PathData;
-                nextLengths[i] = descriptor.Provider.PathLength;
-                nextRevisions[i] = pathData.Revision;
-                nextDescriptors[i] = new PathSegmentDescriptor(
-                    descriptor.Provider,
-                    PathMovementSettingsUtility.Clone(descriptor.MovementSettings),
-                    nextSegments[i].PreservePreviousSpeed);
-                accumulated += nextLengths[i];
+                starts[i] = accumulated;
+                lengths[i] = candidate[i].Provider.PathLength;
+                revisions[i] = candidate[i].Provider.Revision;
+                accumulated += lengths[i];
             }
 
             error = null;
             return true;
         }
 
+        private bool ValidateProviderGraph(
+            IPathProvider provider,
+            HashSet<IPathProvider> active,
+            HashSet<IPathProvider> completed,
+            out string error)
+        {
+            if (ReferenceEquals(provider, this))
+            {
+                error = "A MultiPathData cannot contain itself.";
+                return false;
+            }
+            if (active.Contains(provider))
+            {
+                error = "MultiPathData contains a cyclic provider reference.";
+                return false;
+            }
+            if (completed.Contains(provider))
+            {
+                error = null;
+                return true;
+            }
+
+            if (!(provider is IPathSequenceProvider sequence))
+            {
+                completed.Add(provider);
+                error = null;
+                return true;
+            }
+
+            active.Add(provider);
+            try
+            {
+                if (!sequence.IsReady || sequence.SegmentCount <= 0)
+                {
+                    error = "Nested sequence provider is not ready.";
+                    return false;
+                }
+                float nestedDistance = 0f;
+                for (int i = 0; i < sequence.SegmentCount; i++)
+                {
+                    PathSegmentDescriptor child = sequence.GetSegment(i);
+                    if (!PathMovementSettingsUtility.TryValidate(
+                            child.MovementSettings,
+                            out error))
+                    {
+                        error = $"Nested sequence segment {i} movement settings are invalid: {error}";
+                        return false;
+                    }
+                    float declaredStart = sequence.GetSegmentStartDistance(i);
+                    float declaredLength = sequence.GetSegmentLength(i);
+                    if (!PathValueUtility.IsFinite(declaredStart)
+                        || !PathValueUtility.IsFinite(declaredLength)
+                        || declaredLength <= 0f
+                        || !Mathf.Approximately(declaredStart, nestedDistance)
+                        || !Mathf.Approximately(
+                            declaredLength,
+                            child.Provider == null ? 0f : child.Provider.PathLength))
+                    {
+                        error = $"Nested sequence segment {i} has inconsistent distance data.";
+                        return false;
+                    }
+                    if (!ValidateProviderGraph(
+                            child.Provider,
+                            active,
+                            completed,
+                            out error))
+                        return false;
+                    nestedDistance += declaredLength;
+                }
+                if (!Mathf.Approximately(nestedDistance, sequence.PathLength))
+                {
+                    error = "Nested sequence total length does not match its segments.";
+                    return false;
+                }
+            }
+            catch (Exception exception)
+            {
+                error = $"Nested sequence could not be inspected: {exception.Message}";
+                return false;
+            }
+            finally
+            {
+                active.Remove(provider);
+            }
+
+            completed.Add(provider);
+            error = null;
+            return true;
+        }
+
+        private bool HasSamePublishedData(
+            PathSegmentDescriptor[] candidate,
+            float[] lengths,
+            int[] revisions,
+            float totalLength)
+        {
+            if (!_isInitialized
+                || _cachedDescriptors == null
+                || _segmentLengths == null
+                || _childRevisions == null
+                || _cachedDescriptors.Length != candidate.Length
+                || _segmentLengths.Length != lengths.Length
+                || _childRevisions.Length != revisions.Length
+                || !Mathf.Approximately(_pathLength, totalLength))
+                return false;
+
+            for (int i = 0; i < candidate.Length; i++)
+            {
+                if (_childRevisions[i] != revisions[i]
+                    || !Mathf.Approximately(_segmentLengths[i], lengths[i])
+                    || !PathProviderUtility.AreSameDescriptor(
+                        _cachedDescriptors[i],
+                        candidate[i]))
+                    return false;
+            }
+            return true;
+        }
+
+        private void CommitCandidate(
+            PathSegmentDescriptor[] candidate,
+            float[] lengths,
+            float[] starts,
+            int[] revisions,
+            float totalLength,
+            bool incrementRevision)
+        {
+            UnsubscribeFromChildren();
+            _cachedDescriptors = CopyDescriptors(candidate);
+            _segmentLengths = lengths;
+            _segmentStartDistances = starts;
+            _childRevisions = revisions;
+            _pathLength = totalLength;
+            _isInitialized = true;
+            _isDirty = false;
+            _configurationErrorReported = false;
+            SubscribeToChildren(_cachedDescriptors);
+            if (incrementRevision)
+                _revision++;
+        }
+
         private int FindSegmentIndex(float distance)
         {
             if (distance >= _pathLength)
                 return _segmentLengths.Length - 1;
-
             return PathGeometryUtility.FindSegmentIndex(
                 _segmentStartDistances,
                 distance);
         }
 
-        private void SubscribeToChildren()
+        private void SubscribeToChildren(PathSegmentDescriptor[] descriptors)
         {
-            UnsubscribeFromChildren();
-            if (_segments == null)
+            if (descriptors == null)
                 return;
-
-            for (int i = 0; i < _segments.Count; i++)
+            for (int i = 0; i < descriptors.Length; i++)
             {
-                PathData pathData = _segments[i].PathData;
-                if (pathData == null || _subscribedProviders.Contains(pathData))
+                IPathProvider provider = descriptors[i].Provider;
+                if (provider == null || _subscribedProviders.Contains(provider))
                     continue;
-                pathData.PathChanged += MarkDirtyFromChild;
-                _subscribedProviders.Add(pathData);
+                provider.PathChanged += MarkDirtyFromChild;
+                _subscribedProviders.Add(provider);
             }
         }
 
@@ -391,33 +533,42 @@ namespace Common.TransformPath
                 if (_subscribedProviders[i] != null)
                     _subscribedProviders[i].PathChanged -= MarkDirtyFromChild;
             }
-
             _subscribedProviders.Clear();
         }
 
         private bool HasChildRevisionChanged()
         {
-            if (_segments == null
+            if (_cachedDescriptors == null
                 || _childRevisions == null
-                || _segments.Count != _childRevisions.Length)
+                || _cachedDescriptors.Length != _childRevisions.Length)
                 return true;
-
-            for (int i = 0; i < _segments.Count; i++)
+            for (int i = 0; i < _cachedDescriptors.Length; i++)
             {
-                if (_segments[i].PathData == null
-                    || _segments[i].PathData.Revision != _childRevisions[i])
+                IPathProvider provider = _cachedDescriptors[i].Provider;
+                if (provider == null
+                    || !provider.IsReady
+                    || provider.Revision != _childRevisions[i])
                     return true;
             }
-
             return false;
         }
 
-        private static bool AreSameConfig(
-            PathSegmentConfig left,
-            PathSegmentConfig right)
+        private static PathSegmentDescriptor[] CopyDescriptors(
+            IReadOnlyList<PathSegmentDescriptor> source)
         {
-            return left.PathData == right.PathData
-                && left.PreservePreviousSpeed == right.PreservePreviousSpeed;
+            if (source == null)
+                return null;
+            PathSegmentDescriptor[] result =
+                new PathSegmentDescriptor[source.Count];
+            for (int i = 0; i < source.Count; i++)
+            {
+                PathSegmentDescriptor descriptor = source[i];
+                result[i] = new PathSegmentDescriptor(
+                    descriptor.Provider,
+                    PathMovementSettingsUtility.Clone(descriptor.MovementSettings),
+                    descriptor.PreservePreviousSpeed);
+            }
+            return result;
         }
 
         private void NotifyPathChanged()
@@ -425,20 +576,14 @@ namespace Common.TransformPath
             PathChanged?.Invoke();
         }
 
-        private void MarkConfigurationError(string message)
+        private void ReportBuildFailure(string message)
         {
-            UnsubscribeFromChildren();
-            _isInitialized = false;
             _isDirty = true;
-            _segmentLengths = null;
-            _segmentStartDistances = null;
-            _childRevisions = null;
-            _cachedDescriptors = null;
-            _pathLength = 0f;
             if (_configurationErrorReported)
                 return;
-
-            Debug.LogError($"MultiPathData '{name}' could not build: {message}", this);
+            Debug.LogError(
+                $"MultiPathData '{name}' could not build: {message}",
+                this);
             _configurationErrorReported = true;
         }
 
@@ -448,8 +593,6 @@ namespace Common.TransformPath
                 throw new InvalidOperationException(
                     "MultiPathData is not initialized and ready. Rebuild after changing a segment.");
         }
-
-        #endregion
 
 #if UNITY_EDITOR
 #pragma warning disable 0414

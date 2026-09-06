@@ -136,14 +136,17 @@ namespace Common.FlowField.Samples
             if (!IsFinite(deltaTime) || deltaTime <= 0f)
                 throw new ArgumentOutOfRangeException(nameof(deltaTime));
 
-            if (_provider == null || !_provider.IsReady)
-                return;
-
-            FlowFieldSample sample = _provider.Sample(Position);
             Vector3 desiredVelocity = Vector3.zero;
-            if (sample.HasSurface && sample.Direction.sqrMagnitude > 0.0001f)
+            if (_provider != null
+                && _provider.IsReady
+                && _provider.TrySample(Position, out FlowFieldSample sample)
+                && sample.HasCell
+                && sample.Direction.sqrMagnitude > 0.0001f)
             {
-                Vector3 direction = Vector3.ProjectOnPlane(sample.Direction, sample.SurfaceNormal);
+                bool isVolume = _provider.SpaceMode == FlowFieldSpaceMode.Volume3D;
+                Vector3 direction = isVolume
+                    ? sample.Direction
+                    : Vector3.ProjectOnPlane(sample.Direction, sample.SurfaceNormal);
                 if (direction.sqrMagnitude > 0.0001f)
                 {
                     direction.Normalize();

@@ -13,7 +13,7 @@ namespace Common.TransformPath
         #region Constants
 
         public const string SEGMENTS_PROPERTY = "_segments";
-        public const string PATH_DATA_PROPERTY = "_pathData";
+        public const string PROVIDER_OBJECT_PROPERTY = "_providerObject";
 
         #endregion
 
@@ -57,10 +57,11 @@ namespace Common.TransformPath
                 return null;
 
             SerializedProperty segment = segments.GetArrayElementAtIndex(index);
-            SerializedProperty pathDataProperty = segment.FindPropertyRelative(PATH_DATA_PROPERTY);
-            return pathDataProperty == null
+            SerializedProperty providerProperty = segment.FindPropertyRelative(
+                PROVIDER_OBJECT_PROPERTY);
+            return providerProperty == null
                 ? null
-                : pathDataProperty.objectReferenceValue as PathData;
+                : providerProperty.objectReferenceValue as PathData;
         }
 
         public static List<Transform> GetPathPoints(PathData pathData)

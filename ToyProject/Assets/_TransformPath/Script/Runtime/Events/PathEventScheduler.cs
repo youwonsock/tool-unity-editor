@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using UnityEngine;
 
 namespace Common.TransformPath
 {
@@ -11,11 +12,14 @@ namespace Common.TransformPath
 
         internal struct ScheduledEvent
         {
-            public PathEventSettingSO EventSetting;
-            public PathFollower PathFollower;
+            public PathEventDefinition Definition;
+            public IPathFollower Follower;
+            public ulong PlaybackId;
+            public ulong EventBatchId;
             public float RemainingTime;
             public bool ResumeOnly;
             public int StartFrame;
+            public ulong RegistrationOrder;
         }
 
         #endregion
@@ -26,6 +30,7 @@ namespace Common.TransformPath
         private readonly List<ScheduledEvent> _scheduledEvents =
             new List<ScheduledEvent>();
         private int _revision;
+        private ulong _registrationOrder;
 
         #endregion
 
@@ -47,19 +52,24 @@ namespace Common.TransformPath
         }
 
         public void Schedule(
-            PathEventSettingSO eventSetting,
-            PathFollower pathFollower,
+            PathEventDefinition definition,
+            IPathFollower follower,
             float delay,
             bool resumeOnly,
-            int startFrame)
+            int startFrame,
+            ulong playbackId,
+            ulong eventBatchId)
         {
             _scheduledEvents.Add(new ScheduledEvent
             {
-                EventSetting = eventSetting,
-                PathFollower = pathFollower,
+                Definition = definition,
+                Follower = follower,
+                PlaybackId = playbackId,
+                EventBatchId = eventBatchId,
                 RemainingTime = delay,
                 ResumeOnly = resumeOnly,
                 StartFrame = startFrame,
+                RegistrationOrder = ++_registrationOrder,
             });
         }
 
@@ -81,15 +91,28 @@ namespace Common.TransformPath
 
         public bool TryDequeueDue(int frame, out ScheduledEvent scheduledEvent)
         {
+            int selectedIndex = -1;
             for (int i = 0; i < _scheduledEvents.Count; i++)
             {
                 ScheduledEvent candidate = _scheduledEvents[i];
                 if (candidate.StartFrame >= frame || candidate.RemainingTime > 0f)
                     continue;
+                if (selectedIndex < 0
+                    || candidate.RemainingTime
+                        < _scheduledEvents[selectedIndex].RemainingTime
+                    || (Mathf.Approximately(
+                            candidate.RemainingTime,
+                            _scheduledEvents[selectedIndex].RemainingTime)
+                        && candidate.RegistrationOrder
+                            < _scheduledEvents[selectedIndex].RegistrationOrder))
+                    selectedIndex = i;
+            }
 
-                scheduledEvent = candidate;
+            if (selectedIndex >= 0)
+            {
+                scheduledEvent = _scheduledEvents[selectedIndex];
                 int lastIndex = _scheduledEvents.Count - 1;
-                for (int moveIndex = i; moveIndex < lastIndex; moveIndex++)
+                for (int moveIndex = selectedIndex; moveIndex < lastIndex; moveIndex++)
                     _scheduledEvents[moveIndex] = _scheduledEvents[moveIndex + 1];
                 _scheduledEvents.RemoveAt(lastIndex);
                 return true;

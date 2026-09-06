@@ -1,3 +1,4 @@
 using System.Runtime.CompilerServices;
 
-[assembly: InternalsVisibleTo("Assembly-CSharp-Editor")]
+[assembly: InternalsVisibleTo("Common.FlowField.Editor")]
+[assembly: InternalsVisibleTo("Common.FlowField.Tests")]

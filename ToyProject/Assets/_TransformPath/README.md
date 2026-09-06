@@ -1,6 +1,6 @@
 # TransformPath
 
-Unity의 Transform 제어점으로 경로를 만들고, 동일한 런타임 API로 단일 경로·연결 경로·대기열 이동을 재생하는 시스템입니다. `Common.TransformPath` 2.0은 경로 제공자, 이동 설정, 재생 세션, 이벤트, Queue를 분리해 에디터 작성과 런타임 재생이 같은 계약을 사용하도록 구성했습니다.
+Unity의 Transform 제어점으로 경로를 만들고, 동일한 런타임 API로 단일 경로·연결 경로·대기열 이동을 재생하는 시스템입니다. `Common.TransformPath` 2.0은 경로 제공, 재생 상태·제어, 이벤트, Queue 제약을 역할별 계약과 조합 객체로 연결합니다.
 
 ## 목차
 
@@ -29,9 +29,10 @@ TransformPath는 씬의 Transform을 경로 제어점으로 사용하고, 경로
 
 1. `PathData`가 두 개 이상의 Transform 제어점을 읽어 Linear, B-Spline 근사, Catmull–Rom 보간 경로를 생성합니다.
 2. 경로를 일정한 샘플과 누적 거리 캐시로 변환해 정규화 좌표와 실제 거리 좌표를 모두 제공합니다.
-3. `PathFollower`가 `PathPlaybackRequest.Single`, `Aggregate`, `Sequence` 중 하나를 받아 TimeBased 또는 SpeedBased로 이동합니다.
-4. `PathEventHandler`가 경로상의 이벤트 설정을 검증하고 이동 값, Time.timeScale, 지연 이벤트와 프로젝트 수신기를 처리합니다.
-5. `MultiPathData`는 여러 `PathData`를 순서가 있는 하나의 시퀀스로 제공하고, `QueuedPathManager`는 같은 경로를 따라가는 에이전트의 간격과 진행 한계를 계산합니다.
+3. `PathFollower`가 `PathPlaybackRequest.Single`, `Aggregate`, `Sequence` 중 하나를 받아 재사용 가능한 세션과 새 `PlaybackId`로 TimeBased 또는 SpeedBased 이동을 실행합니다.
+4. `PathRuntimeDriver`가 프레임의 시간·재생 식별자를 고정하고 이벤트 효과, Queue 결과, 경로 전진 순서를 관리합니다.
+5. `PathEventHandler`는 작성용 SO를 불변 `PathEventDefinition`으로 변환해 이동 제어, 시간 배율, 지연 이벤트와 수신기를 처리합니다.
+6. `MultiPathData`는 `IPathProvider` descriptor를 검증한 뒤 하나의 시퀀스로 발행하고, `QueuedPathManager`는 같은 provider를 공유하는 agent의 간격·감속·전진 상한을 계산합니다.
 
 런타임 흐름
 
@@ -40,8 +41,9 @@ Transform 제어점
   → PathData / MultiPathData.Rebuild()
   → IPathProvider 샘플·길이·Revision
   → PathPlaybackRequest
-  → PathFollower / PathPlaybackSession
-  → PathEventHandler, QueuedPathManager
+  → PathFollower / PathPlaybackEngine / PathPlaybackSession
+  → PathRuntimeDriver
+  → PathEventHandler, PathQueueCoordinator, QueuedPathManager
   → actor Transform 갱신
 ```
 
@@ -51,23 +53,27 @@ Transform 제어점
 
 <img src="Docs/Images/transformpath-uml.png" alt="TransformPath 코어 클래스 다이어그램" width="75%">
 
+클래스 다이어그램은 런타임 핵심 흐름과 소유 관계를 보여주며, 세부 계약·DTO·Unity 연결 보조 클래스는 코드 API와 클래스별 역할 설명에서 확인할 수 있습니다.
+
 핵심 관계
 
-- `PathData`는 `IPathMovementProvider`, `IPathEventSource`를 구현하고 곡선 캐시와 초기 `PathMovementSettings`를 소유합니다.
-- `MultiPathData`는 `IPathSequenceProvider`로 여러 `PathData`를 길이 가중 시퀀스로 노출합니다.
-- `PathFollower`는 `PathPlaybackSession`을 소유하고 `PathPlaybackRequest`에 따라 단일·aggregate·sequence 재생을 시작합니다.
-- `PathEventHandler`는 `PathEventSettingSO`를 적용하고 `IPathEventReceiver`에 이벤트 이름과 follower를 전달합니다.
-- `QueuedPathManager`는 `QueuedPathFollower`를 `IQueuedPathAgent`로 등록해 동일한 route provider를 기준으로 상태를 조정합니다.
+- `PathData`는 `IPathMovementProvider`, `IPathEventSource`를 구현하고 곡선·거리 캐시, 이동 설정, 발행된 runtime 이벤트를 같은 Revision으로 관리합니다.
+- `MultiPathData`는 `IPathSequenceProvider`로 provider descriptor를 길이 가중 시퀀스로 노출하며, 후보 입력을 검증한 뒤 일괄 반영합니다.
+- `PathFollower`는 `PathPlaybackEngine`, `PathPlaybackScope`, `PathPlaybackSession`을 조합하고 상태·재생·이동·수명 계약을 구현합니다.
+- `PathEventHandler`는 `PathEventDefinitionFactory`와 `PathEventScheduler`를 연결하고 `IPathPlaybackState`, 제어 계약, `IPathEventReceiver`를 통해 이벤트를 실행합니다.
+- `QueuedPathManager`는 `IQueuedPathAgent` 등록 토큰을 `PathQueueCoordinator`에 전달하며 구체 follower를 직접 제어하지 않습니다.
+- `QueuedPathFollower`는 `PathFollower`를 명령 계약과 `IPathConstraintTarget`으로 연결하고 등록·제약 수명을 관리합니다.
+- `PathTimeScaleCoordinator`는 전역 시간 배율과 fixed delta의 단일 소유권을 관리합니다.
 
 ### 클래스별 역할
 
 - `PathData`: Transform 제어점, 곡선 설정, 이동 설정, 경로 이벤트와 runtime 샘플 캐시를 관리합니다.
-- `MultiPathData`: `PathSegmentConfig` 목록을 검증하고 ordered segment snapshot을 구축합니다.
+- `MultiPathData`: `PathSegmentAuthoring` 또는 `PathSegmentDescriptor` 목록을 검증하고 ordered segment snapshot을 구축합니다.
 - `PathFollower`: 이동 상태와 위치를 갱신하고 `Init`, `StartPlayback`, `Seek`, `PauseMove`, `ResumeMove`, `Release`를 제공합니다.
 - `PathPlaybackSession`: provider Revision과 이벤트 커서, sequence snapshot을 재생 단위로 묶습니다.
-- `PathEventHandler`: 이벤트 효과, 지연 scheduler, receiver 호출과 time-scale 복원을 관리합니다.
-- `QueuedPathManager`: 등록 순서, 선행 에이전트, spacing slowdown, route rebuild block을 계산합니다.
-- `QueuedPathFollower`: 일반 follower를 Queue agent로 연결하고 manager 상태를 이동 제약에 반영합니다.
+- `PathEventHandler`: 불변 이벤트 정의를 `PathEventRuntime`에 전달하고 지연 scheduler, receiver 호출과 `PathTimeScaleCoordinator` 요청을 연결합니다.
+- `QueuedPathManager`: 등록 토큰, 등록 순서, 선행 에이전트, spacing slowdown, route rebuild block을 계산합니다.
+- `QueuedPathFollower`: 일반 follower를 Queue agent로 연결하고 소유권 있는 제약을 내부 follower에 전달합니다.
 
 ## 기능 상세
 
@@ -79,13 +85,14 @@ Transform 제어점에서 경로를 생성하고, 생성된 경로를 시간 기
 
 **핵심 구현**
 
-- `PathData`는 최소 두 개의 유효 제어점을 요구하고, `Rebuild()`에서 곡선 샘플과 누적 거리를 생성합니다.
+- `PathData`는 최소 두 개의 유효 제어점을 요구하고, `Rebuild()`에서 곡선 샘플·누적 거리·이동 설정·runtime 이벤트를 임시로 준비한 뒤 함께 발행합니다.
 - `PathGeometryUtility`는 Linear, cubic B-Spline 근사, Catmull–Rom 보간을 공통 샘플 버퍼로 변환합니다.
 - 누적 거리 캐시로 `Sample(normalizedTime)`과 `SampleDistance(distance)`를 제공하며, `PathBuildSettings.SegmentCount`가 runtime geometry 해상도를 결정합니다.
 - `PathChanged`와 Revision으로 재빌드 결과를 소비자에게 알립니다. Scene View의 `Uniform`, `DeterministicRandom`, `DistanceBased` preview sampling은 에디터 표시 전용입니다.
-- `PathPlaybackRequest.Single(provider, loop)`는 `IPathMovementProvider`의 이동 설정을 사용하고, `Aggregate(provider, movement, loop)`는 해당 재생 세션에만 이동 설정을 덮어씁니다.
+- `PathPlaybackRequest.Single(provider, loop)`는 `IPathMovementProvider`의 이동 설정을 사용하며 provider가 sequence capability를 함께 구현해도 Single 요청으로 처리합니다. `Aggregate(provider, movement, loop)`는 일반 `IPathProvider`와 명시한 이동 설정만 사용합니다.
 - `PathPlaybackRequest.Sequence(provider, loop)`는 `IPathSequenceProvider`의 세그먼트 snapshot을 사용합니다. `PathPlaybackSession`은 provider Revision, 이동 설정, 이벤트 커서를 재생 단위로 보관하고 동일 provider·Revision에서 재사용합니다.
-- `PathFollower`는 `Uninitialized`, `Ready`, `Moving`, `Paused`, `Completed` 상태와 `StateChanged`, `Completed` 이벤트를 제공합니다. `Seek`와 `SeekSegment`는 위치와 이벤트 커서만 변경하며 상태를 바꾸거나 건너뛴 이벤트를 즉시 실행하지 않습니다.
+- `IPathPlaybackState`는 상태판·수신기용 읽기 전용 표면이고, `IPathPlaybackControl`, `IPathMovementControl`, `IPathLifecycle`은 명령 역할을 나눕니다. 모든 명령은 실행 직후의 `PlaybackId`, `StateRevision`, `Changed`를 담은 `PathCommandReceipt`를 반환합니다.
+- `SetSpeed`와 `SetDuration`은 현재 재생 구간에서만 적용하고 provider의 기본값을 바꾸지 않습니다. `Seek`와 `SeekSegment`는 시간 곡선을 이분 탐색으로 역산해 위치와 이벤트 커서만 변경하며 상태·건너뛴 이벤트·완료 알림은 바꾸지 않습니다.
 
 <p align="center">
   <img src="Docs/Images/feature-path-linear.png" alt="Linear 경로와 Transform 제어점" width="48%">
@@ -100,7 +107,8 @@ Transform 제어점에서 경로를 생성하고, 생성된 경로를 시간 기
 
 **핵심 구현**
 
-- `MultiPathData`의 `PathSegmentConfig`는 child `PathData`와 목적 세그먼트의 `PreservePreviousSpeed`만 저장합니다.
+- `MultiPathData`의 `PathSegmentAuthoring`은 provider 참조, Provider/Override 이동 설정 원본과 `PreservePreviousSpeed`를 저장합니다. 런타임 API는 `PathSegmentDescriptor`를 받습니다.
+- 후보 descriptor는 provider 준비 상태·길이·이동 설정·참조 순환을 모두 통과한 뒤 현재 구성과 교체됩니다. 실패한 입력은 기존 발행 캐시와 구독을 건드리지 않습니다.
 - `PathPlaybackRequest.Sequence(provider, loop)`가 ordered segment와 각 provider의 movement settings를 snapshot으로 만들어 재생합니다.
 - `NormalizedTime`과 `CurrentSegmentIndex`는 현재 세그먼트 기준이고, `GlobalNormalizedTime`은 전체 길이에 대한 가중 진행률입니다.
 - 세그먼트 경계는 `[start, end)`를 사용합니다. 자연스러운 전환에서 `PreservePreviousSpeed`가 켜져 있으면 이전 속도를 목적 세그먼트의 SpeedBased 또는 TimeBased 설정으로 변환합니다.
@@ -120,8 +128,9 @@ Transform 제어점에서 경로를 생성하고, 생성된 경로를 시간 기
 
 - `PathData`의 이벤트 엔트리는 `0`부터 `0.995` 사이의 normalized time과 `PathEventSettingSO`를 참조합니다.
 - SpeedBased에서는 목표 속도, `0` Pause, 일시정지 중 양수 값 Resume 신호를 사용합니다. TimeBased에서는 duration 설정과 `9999` Pause 규칙을 사용합니다.
-- time scale 조정과 지연 이벤트는 재사용 scheduler로 처리하며, 경로상 다음 이벤트가 발생하면 취소되는 지연 항목을 지원합니다.
-- `_receiverObject`가 `IPathEventReceiver`이면 `EventName`과 follower만 전달합니다. receiver·listener 예외는 fail-fast로 전파되고 뒤의 dispatch는 실행하지 않습니다.
+- 작성용 SO는 Rebuild 시 `PathEventDefinition`과 지연 이벤트 그래프로 복사되고, 재생 중 SO·곡선·목록을 수정해도 발행 데이터가 바뀌지 않습니다.
+- `PathTimeScaleCoordinator`가 timeScale과 fixedDeltaTime의 원래 쌍을 소유하고, 최신 요청만 보간·복원합니다. 소유자가 아닌 늦은 해제는 무시합니다.
+- `_receiverObject`가 `IPathEventReceiver`이면 `ReceivePathEvent(eventName, IPathPlaybackState)`를 호출합니다. 수신기나 listener에서 새 명령이 실행되면 이전 이벤트의 뒤쪽 효과와 지연 등록을 중단합니다.
 
 <p align="center">
   <img src="Docs/Images/feature-path-events.png" alt="PauseFollower 이벤트로 일시정지된 Normal lane" width="48%">
@@ -136,10 +145,11 @@ Transform 제어점에서 경로를 생성하고, 생성된 경로를 시간 기
 
 **핵심 구현**
 
-- `QueuedPathManager`는 `AgentCount`, `GetAgent`, `Register`, `Unregister`, `TryGetState`, `ConfigureRoute`를 제공합니다.
-- `QueuedPathFollower`는 실제 follower가 이동 중일 때만 등록하며 spacing slowdown, overtake protection, manual block을 별도 제약으로 유지합니다.
-- manager와 모든 follower는 동일한 route provider 인스턴스를 참조해야 합니다.
-- 경로 geometry가 변경되면 모든 follower의 snapshot Revision이 새 Revision에 도달할 때까지 임시 차단합니다. 구조적인 segment 변경은 agent를 정지하고 등록 해제합니다.
+- `QueuedPathManager`는 `AgentCount`, `GetAgent`, `Register`, `Unregister`, `TryGetState`, `ConfigureRoute`를 제공합니다. `Register`는 Manager·등록 번호·`PlaybackId`가 묶인 `PathQueueRegistration`을 반환합니다.
+- `QueuedPathFollower`는 실제 follower가 이동 중일 때만 등록하며 spacing slowdown, overtake protection, manual block을 별도 제약으로 유지합니다. Queue agent 계약에는 구체 follower 참조가 없습니다.
+- manager와 모든 agent는 동일한 route provider 인스턴스를 참조해야 합니다. 유효한 첫 계산 결과 전에는 등록을 차단 상태로 연결합니다.
+- 계산 결과는 등록 토큰·`PlaybackId`·route `Revision`·`FrameId`가 모두 현재와 일치할 때만 적용합니다. 간격 상한은 다음 전진 계산에 직접 적용하며 위치를 뒤로 Seek하지 않습니다.
+- 경로 geometry가 변경되면 모든 agent의 snapshot Revision이 새 Revision에 도달할 때까지 임시 차단합니다. 구조적인 segment 변경은 agent를 정지하고 등록 해제합니다.
 
 <p align="center">
   <img src="Docs/Images/feature-queue-running.png" alt="Queue lane의 간격 유지와 점진 감속" width="48%">
@@ -156,8 +166,8 @@ Transform 제어점에서 경로를 생성하고, 생성된 경로를 시간 기
 
 - `PathDataEditor`는 `Create Path Points`, `Snap to Ground`, 자손 Transform 동기화, 이벤트 정렬과 `Rebuild Runtime Path`를 제공합니다.
 - 선택된 `PathData`의 제어점, 샘플점, 이벤트 위치와 경로를 색상·라벨로 그립니다.
-- `MultiPathDataEditor`는 segment 목록, `Preserve Previous Speed`, 전체 PathData 적용, 모든 경로 동기화와 `Rebuild Sequence`를 제공합니다.
-- Inspector 값 변경만으로 runtime cache가 자동 발행되지는 않으므로 제어점, movement, build settings 변경 후 Rebuild를 실행합니다.
+- `MultiPathDataEditor`는 provider segment 목록, Provider/Override 이동 설정, `Preserve Previous Speed`, 전체 PathData 적용, 모든 경로 동기화와 `Rebuild Sequence`를 제공합니다.
+- Inspector 값 변경만으로 runtime cache가 자동 발행되지는 않으므로 제어점, movement, build settings, 이벤트와 segment 변경 후 Rebuild를 실행합니다. 런타임 descriptor 입력으로 전환한 뒤 작성 데이터로 돌아갈 때는 `UseAuthoringSegments()`를 명시적으로 호출합니다.
 
 <p align="center">
   <img src="Docs/Images/feature-editor-authoring.png" alt="TransformPath Scene View의 제어점·샘플점·이벤트 미리보기" width="48%">

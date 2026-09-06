@@ -1,0 +1,19 @@
+{
+    "name": "Common.FlowField.Editor",
+    "rootNamespace": "Common.FlowField.Editor",
+    "references": [
+        "Common.FlowField.Core",
+        "Common.FlowField.Runtime"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

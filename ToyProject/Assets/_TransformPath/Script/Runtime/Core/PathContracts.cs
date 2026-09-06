@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace Common.TransformPath
 {
@@ -24,13 +25,21 @@ namespace Common.TransformPath
     /// not part of the runtime path contract.
     /// </summary>
     [Serializable]
+    public enum EPathCurveType
+    {
+        Linear = 0,
+        SplineApproximating = 1,
+        SplineInterpolating = 2,
+    }
+
+    [Serializable]
     public readonly struct PathBuildSettings
     {
-        public PathData.ECurveType CurveType { get; }
+        public EPathCurveType CurveType { get; }
         public int SegmentCount { get; }
 
         public PathBuildSettings(
-            PathData.ECurveType curveType = PathData.ECurveType.Linear,
+            EPathCurveType curveType = EPathCurveType.Linear,
             int segmentCount = 500)
         {
             CurveType = curveType;
@@ -139,33 +148,7 @@ namespace Common.TransformPath
         }
     }
 
-    /// <summary>
-    /// Serialized authoring value for one sequence segment.
-    /// </summary>
-    [Serializable]
-    public struct PathSegmentConfig
-    {
-        [SerializeField] private PathData _pathData;
-        [SerializeField] private bool _preservePreviousSpeed;
-
-        public PathData PathData => _pathData;
-        public bool PreservePreviousSpeed => _preservePreviousSpeed;
-
-        public PathSegmentConfig(
-            PathData pathData,
-            bool preservePreviousSpeed = false)
-        {
-            _pathData = pathData;
-            _preservePreviousSpeed = preservePreviousSpeed;
-        }
-
-        public PathSegmentConfig WithPathData(PathData pathData)
-        {
-            return new PathSegmentConfig(pathData, _preservePreviousSpeed);
-        }
-    }
-
-    /// <summary>Legacy-free runtime descriptor used by sequence providers.</summary>
+    /// <summary>Runtime descriptor used by sequence providers.</summary>
     public readonly struct PathSegmentDescriptor
     {
         public IPathProvider Provider { get; }
@@ -183,29 +166,71 @@ namespace Common.TransformPath
         }
     }
 
-    public readonly struct PathQueueState
+    public enum EPathSegmentMovementSource
     {
-        public IQueuedPathAgent Ahead { get; }
-        public float? DistanceToAhead { get; }
-        public bool IsBlocked { get; }
-        public float SpeedMultiplier { get; }
-        public float MaxGlobalNormalizedTime { get; }
-        public int RouteRevision { get; }
+        Provider = 0,
+        Override = 1,
+    }
 
-        public PathQueueState(
-            IQueuedPathAgent ahead,
-            float? distanceToAhead,
-            bool isBlocked,
-            float speedMultiplier,
-            float maxGlobalNormalizedTime,
-            int routeRevision)
+    /// <summary>
+    /// Inspector-facing sequence segment. The provider object is intentionally
+    /// stored as a Unity component while runtime playback consumes the
+    /// interface-only descriptor below.
+    /// </summary>
+    [Serializable]
+    public struct PathSegmentAuthoring
+    {
+        [SerializeField, FormerlySerializedAs("_pathData")]
+        private MonoBehaviour _providerObject;
+        [SerializeField] private EPathSegmentMovementSource _movementSource;
+        [SerializeField] private EPathMoveType _moveType;
+        [SerializeField] private float _moveValue;
+        [SerializeField] private AnimationCurve _timeCurve;
+        [SerializeField] private bool _preservePreviousSpeed;
+
+        public MonoBehaviour ProviderObject => _providerObject;
+        public IPathProvider Provider => _providerObject as IPathProvider;
+        public EPathSegmentMovementSource MovementSource => _movementSource;
+        public EPathMoveType MoveType => _moveType;
+        public float MoveValue => _moveValue;
+        public AnimationCurve TimeCurve => _timeCurve;
+        public bool PreservePreviousSpeed => _preservePreviousSpeed;
+
+        public bool TryResolveMovementSettings(
+            out PathMovementSettings settings,
+            out string error)
         {
-            Ahead = ahead;
-            DistanceToAhead = distanceToAhead;
-            IsBlocked = isBlocked;
-            SpeedMultiplier = speedMultiplier;
-            MaxGlobalNormalizedTime = maxGlobalNormalizedTime;
-            RouteRevision = routeRevision;
+            IPathProvider provider = Provider;
+            if (provider == null)
+            {
+                settings = default(PathMovementSettings);
+                error = "A provider component is required.";
+                return false;
+            }
+
+            if (_movementSource == EPathSegmentMovementSource.Provider)
+            {
+                if (!(provider is IPathMovementProvider movementProvider))
+                {
+                    settings = default(PathMovementSettings);
+                    error = "Provider movement mode requires IPathMovementProvider.";
+                    return false;
+                }
+
+                settings = PathMovementSettingsUtility.Clone(
+                    movementProvider.MovementSettings);
+                error = null;
+                return true;
+            }
+
+            settings = new PathMovementSettings(
+                _moveType,
+                _moveValue,
+                _timeCurve);
+            if (!PathMovementSettingsUtility.TryValidate(settings, out error))
+                return false;
+            settings = PathMovementSettingsUtility.Clone(settings);
+            return true;
         }
     }
 
@@ -234,56 +259,4 @@ namespace Common.TransformPath
         float GetSegmentLength(int index);
     }
 
-    public interface IPathEventSource
-    {
-        int EventCount { get; }
-        PathEventEntry GetEvent(int index);
-    }
-
-    /// <summary>
-    /// The complete runtime follower contract. Single paths and sequences use
-    /// the same start, seek, and lifecycle surface.
-    /// </summary>
-    public interface IPathFollower
-    {
-        bool IsInitialized { get; }
-        IPathProvider CurrentProvider { get; }
-        IPathSequenceProvider CurrentSequence { get; }
-        EPathFollowerState State { get; }
-        bool IsMoving { get; }
-        float NormalizedTime { get; }
-        float GlobalNormalizedTime { get; }
-        int CurrentSegmentIndex { get; }
-        EPathMoveType MoveType { get; }
-        float Speed { get; }
-        float Duration { get; }
-
-        event Action<EPathFollowerState> StateChanged;
-        event Action<int> SegmentChanged;
-        event Action Completed;
-
-        void Init();
-        void Release();
-        void StartPlayback(PathPlaybackRequest request);
-        void StopMove();
-        void PauseMove();
-        void ResumeMove();
-        void Seek(float normalizedTime);
-        void SeekSegment(int segmentIndex, float localNormalizedTime);
-    }
-
-    public interface IQueuedPathAgent
-    {
-        IPathFollower PathFollower { get; }
-        IPathProvider QueueProvider { get; }
-        bool IsMoving { get; }
-        float GlobalNormalizedTime { get; }
-        int SnapshotRevision { get; }
-        void ApplyQueueState(PathQueueState state);
-    }
-
-    public interface IPathEventReceiver
-    {
-        void ReceivePathEvent(string eventName, IPathFollower follower);
-    }
 }

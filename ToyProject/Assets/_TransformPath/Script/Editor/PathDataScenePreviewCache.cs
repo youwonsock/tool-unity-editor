@@ -55,7 +55,7 @@ namespace Common.TransformPath
         private Vector3[] _sampledPoints;
         private float[] _cumulativeDistances;
         private float _pathLength;
-        private PathData.ECurveType _curveType;
+        private EPathCurveType _curveType;
         private int _segmentCount;
         private bool _hasSignature;
 
@@ -88,7 +88,7 @@ namespace Common.TransformPath
                 return false;
             }
 
-            PathData.ECurveType curveType = pathData.CurveType;
+            EPathCurveType curveType = pathData.CurveType;
             int segmentCount = pathData.BuildSegmentCount;
             if (_hasSignature
                 && _curveType == curveType

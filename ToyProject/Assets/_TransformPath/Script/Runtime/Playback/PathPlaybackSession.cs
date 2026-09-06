@@ -45,6 +45,7 @@ namespace Common.TransformPath
         public readonly EPathPlaybackKind Kind;
         public readonly IPathProvider Provider;
         public readonly PathEventCursor EventCursor;
+        public PathEventSourceSnapshot EventSource { get; set; }
         public readonly PathMovementSettings? ProviderMovementSettings;
 
         public PathSequenceSnapshot Snapshot { get; set; }
@@ -88,13 +89,15 @@ namespace Common.TransformPath
             IPathProvider provider,
             PathMovementSettings movementSettings,
             PathMovementSettings? providerMovementSettings,
-            PathSequenceSnapshot snapshot)
+            PathSequenceSnapshot snapshot,
+            PathEventSourceSnapshot eventSource)
         {
             Kind = kind;
             Provider = provider;
             MovementSettings = movementSettings;
             ProviderMovementSettings = providerMovementSettings;
             Snapshot = snapshot;
+            EventSource = eventSource;
             EventCursor = new PathEventCursor();
             ProviderRevision = provider.Revision;
         }
@@ -140,9 +143,9 @@ namespace Common.TransformPath
             PathPlaybackSession current)
         {
             IPathMovementProvider provider = request.Provider as IPathMovementProvider;
-            if (provider == null || request.Provider is IPathSequenceProvider)
+            if (provider == null)
                 throw new InvalidOperationException(
-                    "Single playback requires a non-sequence IPathMovementProvider.");
+                    "Single playback requires an IPathMovementProvider.");
 
             ValidateProvider(provider);
             if (current != null
@@ -157,7 +160,8 @@ namespace Common.TransformPath
                 provider,
                 settings,
                 settings,
-                null);
+                null,
+                PathEventSourceSnapshot.Create(provider as IPathEventSource));
         }
 
         private static PathPlaybackSession CreateAggregate(
@@ -177,26 +181,13 @@ namespace Common.TransformPath
                 overrideSettings);
             PathMovementSettingsUtility.Validate(settings, nameof(request));
 
-            PathMovementSettings? providerSettings = null;
-            IPathMovementProvider movementProvider =
-                request.Provider as IPathMovementProvider;
-            if (movementProvider != null)
-            {
-                PathMovementSettings clonedProviderSettings =
-                    PathMovementSettingsUtility.Clone(
-                        movementProvider.MovementSettings);
-                PathMovementSettingsUtility.Validate(
-                    clonedProviderSettings,
-                    nameof(request.Provider));
-                providerSettings = clonedProviderSettings;
-            }
-
             return new PathPlaybackSession(
                 EPathPlaybackKind.Aggregate,
                 request.Provider,
                 settings,
-                providerSettings,
-                null);
+                null,
+                null,
+                PathEventSourceSnapshot.Create(request.Provider as IPathEventSource));
         }
 
         private static PathPlaybackSession CreateSequence(
@@ -224,7 +215,8 @@ namespace Common.TransformPath
                 provider,
                 default(PathMovementSettings),
                 null,
-                snapshot);
+                snapshot,
+                null);
         }
 
         private static void ValidateProvider(IPathProvider provider)

@@ -1,0 +1,26 @@
+{
+    "name": "Common.FlowField.Tests",
+    "rootNamespace": "Common.FlowField.Tests",
+    "references": [
+        "Common.FlowField.Core",
+        "Common.FlowField.Runtime",
+        "Common.FlowField.Editor",
+        "Common.FlowField.Samples"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

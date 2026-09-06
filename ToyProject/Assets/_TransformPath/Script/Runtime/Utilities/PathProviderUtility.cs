@@ -52,8 +52,11 @@ namespace Common.TransformPath
                 return true;
             }
 
-            error = "A path provider must expose movement settings or sequence segments.";
-            return false;
+            // Geometry-only providers are valid for Aggregate playback and
+            // Queue spacing. Their movement settings are supplied by the
+            // request, so the route descriptor uses a stable placeholder.
+            count = 1;
+            return true;
         }
 
         public static bool TryGetDescriptor(
@@ -81,8 +84,10 @@ namespace Common.TransformPath
 
             IPathMovementProvider movementProvider = provider as IPathMovementProvider;
             descriptor = new PathSegmentDescriptor(
-                movementProvider,
-                movementProvider.MovementSettings,
+                provider,
+                movementProvider == null
+                    ? PathMovementSettings.Speed(1f)
+                    : movementProvider.MovementSettings,
                 false);
             return TryValidateDescriptor(descriptor, index, out error);
         }

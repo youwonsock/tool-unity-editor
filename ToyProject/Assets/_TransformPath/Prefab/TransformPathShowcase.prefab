@@ -172,7 +172,6 @@ MonoBehaviour:
   _playOnStart: 0
   _startupLoop: 0
   _pathEventHandler: {fileID: 4021795820735661241}
-  _animator: {fileID: 0}
 --- !u!114 &5437495982911894610
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -191,8 +190,6 @@ MonoBehaviour:
   _useManagerSpacing: 1
   _enableGradualSlowdown: 1
   _enableOvertakeProtection: 1
-  _animator: {fileID: 0}
-  _speedParamName: Speed
 --- !u!1 &964567102779225824
 GameObject:
   m_ObjectHideFlags: 0
@@ -333,7 +330,6 @@ MonoBehaviour:
   _startupProviderObject: {fileID: 0}
   _startupLoop: 0
   _pathEventHandler: {fileID: 5659340322544956}
-  _animator: {fileID: 0}
 --- !u!114 &7119315875045243401
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -352,8 +348,6 @@ MonoBehaviour:
   _useManagerSpacing: 1
   _enableGradualSlowdown: 1
   _enableOvertakeProtection: 1
-  _animator: {fileID: 0}
-  _speedParamName: Speed
 --- !u!1 &966396877587928619
 GameObject:
   m_ObjectHideFlags: 0
@@ -494,7 +488,6 @@ MonoBehaviour:
   _startupProviderObject: {fileID: 0}
   _startupLoop: 0
   _pathEventHandler: {fileID: 7969805473449115826}
-  _animator: {fileID: 0}
 --- !u!114 &4355684901334086907
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -513,8 +506,6 @@ MonoBehaviour:
   _useManagerSpacing: 1
   _enableGradualSlowdown: 1
   _enableOvertakeProtection: 1
-  _animator: {fileID: 0}
-  _speedParamName: Speed
 --- !u!1 &1207185434881250682
 GameObject:
   m_ObjectHideFlags: 0
@@ -717,7 +708,6 @@ MonoBehaviour:
   _startupProviderObject: {fileID: 0}
   _startupLoop: 0
   _pathEventHandler: {fileID: 3090205978380184557}
-  _animator: {fileID: 0}
 --- !u!114 &2828592278171850358
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -736,8 +726,6 @@ MonoBehaviour:
   _useManagerSpacing: 1
   _enableGradualSlowdown: 1
   _enableOvertakeProtection: 1
-  _animator: {fileID: 0}
-  _speedParamName: Speed
 --- !u!1 &1529576719824187706
 GameObject:
   m_ObjectHideFlags: 0
@@ -1014,7 +1002,6 @@ MonoBehaviour:
   _startupProviderObject: {fileID: 0}
   _startupLoop: 0
   _pathEventHandler: {fileID: 7403141165102534239}
-  _animator: {fileID: 0}
 --- !u!1 &2411843356809523431
 GameObject:
   m_ObjectHideFlags: 0
@@ -1420,9 +1407,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _segments:
-  - _pathData: {fileID: 830505861753064085}
+  - _providerObject: {fileID: 830505861753064085}
+    _movementSource: 0
     _preservePreviousSpeed: 0
-  - _pathData: {fileID: 3101732148213765793}
+  - _providerObject: {fileID: 3101732148213765793}
+    _movementSource: 0
     _preservePreviousSpeed: 1
   _autoLinkPathPoints: 1
   _multiPathLineWidth: 2
@@ -2243,7 +2232,6 @@ MonoBehaviour:
   _startupProviderObject: {fileID: 0}
   _startupLoop: 0
   _pathEventHandler: {fileID: 2108073158229803554}
-  _animator: {fileID: 0}
 --- !u!114 &1548854285891510683
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2262,8 +2250,6 @@ MonoBehaviour:
   _useManagerSpacing: 1
   _enableGradualSlowdown: 1
   _enableOvertakeProtection: 1
-  _animator: {fileID: 0}
-  _speedParamName: Speed
 --- !u!1 &5336906050488433844
 GameObject:
   m_ObjectHideFlags: 0
@@ -2360,7 +2346,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _segments:
-  - _pathData: {fileID: 5616179923128869812}
+  - _providerObject: {fileID: 5616179923128869812}
+    _movementSource: 0
     _preservePreviousSpeed: 0
   _autoLinkPathPoints: 1
   _multiPathLineWidth: 2
@@ -2716,7 +2703,6 @@ MonoBehaviour:
   _startupProviderObject: {fileID: 0}
   _startupLoop: 1
   _pathEventHandler: {fileID: 6109858950784113130}
-  _animator: {fileID: 0}
 --- !u!114 &6109858950784113130
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3128,7 +3114,6 @@ MonoBehaviour:
   _startupProviderObject: {fileID: 0}
   _startupLoop: 0
   _pathEventHandler: {fileID: 1329424909292520726}
-  _animator: {fileID: 0}
 --- !u!114 &3600725696844987565
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3147,8 +3132,6 @@ MonoBehaviour:
   _useManagerSpacing: 1
   _enableGradualSlowdown: 1
   _enableOvertakeProtection: 1
-  _animator: {fileID: 0}
-  _speedParamName: Speed
 --- !u!1 &7924782285320085249
 GameObject:
   m_ObjectHideFlags: 0

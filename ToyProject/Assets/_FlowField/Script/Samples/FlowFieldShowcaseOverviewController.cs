@@ -1,6 +1,5 @@
 using System;
 using UnityEngine;
-using Common.TransformPath.Samples;
 
 namespace Common.FlowField.Samples
 {
@@ -26,7 +25,7 @@ namespace Common.FlowField.Samples
         [SerializeField] private Collider _dynamicObstacle;
         [SerializeField] private GameObject _dynamicObstacleObject;
         [SerializeField] private FlowFieldOverviewBoard _board;
-        [SerializeField] private TransformPathFreeCamera _freeCamera;
+        [SerializeField] private FlowFieldFreeCamera _freeCamera;
         [SerializeField] private Transform _mapBoundsRoot;
         [SerializeField] private Transform _agentRoot;
 
@@ -41,7 +40,9 @@ namespace Common.FlowField.Samples
         private bool _waitingForManager;
         private bool _showcaseStarted;
         private bool _isFaulted;
+        private bool _initializationReported;
         private Exception _fault;
+        private string _lastAction = "Waiting for FlowField and sample agents.";
         private FlowFieldSample _lastSample;
         private FlowFieldClampResult _lastClamp;
         private bool _hasSample;
@@ -52,6 +53,7 @@ namespace Common.FlowField.Samples
         public bool DynamicObstacleEnabled => _dynamicObstacleEnabled;
         public bool DynamicObstacleRegistered => _dynamicObstacleRegistered;
         public bool HasSample => _hasSample;
+        public string LastAction => _lastAction;
         public int ActiveGoalIndex => _sampleController != null ? _sampleController.ActiveGoalIndex : -1;
         public int GoalCount => _sampleController != null ? _sampleController.GoalCount : 0;
         public Vector3 ActiveGoalPosition => _sampleController != null && _sampleController.HasActiveGoal
@@ -67,7 +69,7 @@ namespace Common.FlowField.Samples
         private void Awake()
         {
             if (Application.isPlaying)
-                Init();
+                TryInitializeWhenReady();
         }
 
         public void Init()
@@ -81,10 +83,6 @@ namespace Common.FlowField.Samples
             {
                 if (_manager == null || _sampleController == null || _board == null)
                     throw new InvalidOperationException("FlowField overview requires serialized Manager, Sample Controller, and Board references.");
-                if (!_manager.IsInitialized)
-                    throw new InvalidOperationException("FlowFieldManager must be initialized before the overview controller.");
-                if (!_sampleController.IsInitialized)
-                    throw new InvalidOperationException("FlowFieldSampleController must be initialized before the overview controller.");
                 if (_speedModifier == null || _noiseModifier == null)
                     throw new InvalidOperationException("FlowField overview requires serialized Speed and Noise modifiers.");
                 if (_dynamicObstacle == null || _dynamicObstacleObject == null)
@@ -98,11 +96,11 @@ namespace Common.FlowField.Samples
                 if (!IsFinite(_sampleProbe))
                     throw new ArgumentOutOfRangeException(nameof(_sampleProbe));
 
-                _sampleController.SetAutomaticGoalChanges(false);
                 _dynamicObstacleEnabled = false;
                 _dynamicObstacleRegistered = false;
-                _waitingForManager = !_manager.IsReady;
+                _waitingForManager = true;
                 _isInitialized = true;
+                _lastAction = "Waiting for a published FlowField and initialized sample agents.";
             }
             catch (Exception exception)
             {
@@ -114,19 +112,32 @@ namespace Common.FlowField.Samples
 
         private void Start()
         {
-            ThrowIfUnavailable();
-            if (!_waitingForManager)
-                BeginShowcase();
+            TryBeginShowcaseWhenReady();
         }
 
         private void Update()
         {
-            ThrowIfUnavailable();
+            if (_isFaulted || !_isInitialized)
+                return;
 
             if (_waitingForManager)
             {
-                if (!_manager.IsReady)
+                if (_manager == null || _manager.IsFaulted)
+                {
+                    if (_manager != null && _manager.BakeMode == FlowFieldBakeMode.StaticBaked)
+                        _lastAction = "StaticBaked Asset 설정 불일치. Editor에서 ReBake가 필요합니다.";
+                    else
+                        _lastAction = _manager != null && !string.IsNullOrEmpty(_manager.LastError)
+                            ? $"Manager error: {_manager.LastError}"
+                            : "Waiting for Manager recovery.";
+                    RenderBoard();
                     return;
+                }
+                if (!_manager.IsReady || !_sampleController.IsSimulationReady)
+                {
+                    RenderBoard();
+                    return;
+                }
 
                 _waitingForManager = false;
                 BeginShowcase();
@@ -138,7 +149,12 @@ namespace Common.FlowField.Samples
             if (Input.GetKeyDown(KeyCode.Space))
                 AdvanceGoal();
             if (Input.GetKeyDown(KeyCode.G))
-                _sampleController.ClearGoal();
+            {
+                if (_manager.BakeMode == FlowFieldBakeMode.StaticBaked)
+                    _lastAction = "Goal changes are disabled in StaticBaked mode.";
+                else if (_sampleController.ClearGoal())
+                    _lastAction = "Cleared the runtime Goal and requested a rebuild.";
+            }
             if (Input.GetKeyDown(KeyCode.Alpha1))
                 ApplyMode(ShowcaseMode.Baseline);
             if (Input.GetKeyDown(KeyCode.Alpha2))
@@ -150,7 +166,11 @@ namespace Common.FlowField.Samples
             if (Input.GetKeyDown(KeyCode.O))
                 ApplyMode(ShowcaseMode.SampleAndClamp);
             if (Input.GetKeyDown(KeyCode.R))
-                _manager.RequestRebuild();
+                ExecuteAction(
+                    _manager.RequestRebuild,
+                    _manager.BakeMode == FlowFieldBakeMode.StaticBaked
+                        ? "Reloaded and recomposed the baked Surface2D field."
+                        : "Requested an explicit RuntimeDynamic rebuild.");
             if (Input.GetKeyDown(KeyCode.C))
                 RefreshDiagnostics();
             if (Input.GetKeyDown(KeyCode.F))
@@ -166,8 +186,17 @@ namespace Common.FlowField.Samples
             if (_showcaseStarted)
                 return;
 
+            _sampleController.SetAutomaticGoalChanges(false);
             ApplyMode(ShowcaseMode.Baseline);
-            SetDynamicObstacle(_dynamicObstacleStartsEnabled);
+            if (_manager.BakeMode == FlowFieldBakeMode.StaticBaked)
+            {
+                SetDynamicObstacle(false);
+                _lastAction = "StaticBaked ready. Runtime Goal and obstacle inputs are disabled.";
+            }
+            else
+            {
+                SetDynamicObstacle(_dynamicObstacleStartsEnabled);
+            }
             RefreshDiagnostics();
             FocusCamera();
             _showcaseStarted = true;
@@ -177,7 +206,13 @@ namespace Common.FlowField.Samples
         public void AdvanceGoal()
         {
             ThrowIfUnavailable();
-            _sampleController.AdvanceToNextGoal();
+            if (_manager.BakeMode == FlowFieldBakeMode.StaticBaked)
+            {
+                _lastAction = "Goal changes are disabled in StaticBaked mode.";
+                return;
+            }
+            if (_sampleController.AdvanceToNextGoal())
+                _lastAction = "Advanced to the next runtime Goal and requested a rebuild.";
             RenderBoard();
         }
 
@@ -190,11 +225,26 @@ namespace Common.FlowField.Samples
         {
             ThrowIfUnavailable();
 
+            if (_manager.BakeMode == FlowFieldBakeMode.StaticBaked)
+            {
+                if (_dynamicObstacleRegistered)
+                    UnregisterDynamicObstacleSafely();
+                _dynamicObstacleEnabled = false;
+                _dynamicObstacleObject.SetActive(false);
+                _lastAction = "Dynamic obstacle input is disabled in StaticBaked mode.";
+                RenderBoard();
+                return;
+            }
+
+            bool changed = false;
+
             if (enabled == _dynamicObstacleEnabled)
             {
                 _dynamicObstacleObject.SetActive(enabled);
                 if (enabled && !_dynamicObstacleRegistered && _manager.IsReady)
-                    RegisterDynamicObstacle();
+                    changed = RegisterDynamicObstacle();
+                if (changed)
+                    _manager.RequestRebuild();
                 return;
             }
 
@@ -203,7 +253,7 @@ namespace Common.FlowField.Samples
                 _dynamicObstacleObject.SetActive(true);
                 _dynamicObstacleEnabled = true;
                 if (_manager.IsReady)
-                    RegisterDynamicObstacle();
+                    changed = RegisterDynamicObstacle();
             }
             else
             {
@@ -212,29 +262,40 @@ namespace Common.FlowField.Samples
 
                 _dynamicObstacleEnabled = false;
                 _dynamicObstacleObject.SetActive(false);
+                changed = true;
+            }
+
+            if (changed)
+            {
+                _manager.RequestRebuild();
+                _lastAction = enabled
+                    ? "Enabled the dynamic obstacle and requested a rebuild."
+                    : "Disabled the dynamic obstacle and requested a rebuild.";
             }
 
             RenderBoard();
         }
 
-        private void RegisterDynamicObstacle()
+        private bool RegisterDynamicObstacle()
         {
             if (_dynamicObstacleRegistered)
-                return;
+                return false;
 
             _dynamicObstacleObject.SetActive(true);
-            _manager.RegisterDynamicObstacle(_dynamicObstacle);
+            bool added = _manager.RegisterDynamicObstacle(_dynamicObstacle);
             _dynamicObstacleRegistered = true;
+            return added;
         }
 
-        private void UnregisterDynamicObstacleSafely()
+        private bool UnregisterDynamicObstacleSafely()
         {
             if (!_dynamicObstacleRegistered)
-                return;
+                return false;
 
+            bool removed = false;
             try
             {
-                _manager.UnregisterDynamicObstacle(_dynamicObstacle);
+                removed = _manager.UnregisterDynamicObstacle(_dynamicObstacle);
             }
             catch (InvalidOperationException)
             {
@@ -245,6 +306,7 @@ namespace Common.FlowField.Samples
             {
                 _dynamicObstacleRegistered = false;
             }
+            return removed;
         }
 
         private void ApplyMode(ShowcaseMode mode)
@@ -252,7 +314,14 @@ namespace Common.FlowField.Samples
             ThrowIfUnavailable();
             _speedModifier.gameObject.SetActive(mode == ShowcaseMode.SpeedModifier);
             _noiseModifier.gameObject.SetActive(mode == ShowcaseMode.NoiseModifier);
+            bool changed = _mode != mode;
             _mode = mode;
+
+            if (changed && _manager.IsInitialized && !_manager.IsFaulted)
+            {
+                _manager.RequestRebuild();
+                _lastAction = "Updated Modifier mode and requested a rebuild.";
+            }
 
             if (mode == ShowcaseMode.SampleAndClamp)
                 RefreshDiagnostics();
@@ -260,11 +329,28 @@ namespace Common.FlowField.Samples
 
         private void RefreshDiagnostics()
         {
-            FlowFieldClampResult clamp = _manager.ClampPositionToGrid(_sampleProbe);
-            FlowFieldSample sample = _manager.Sample(clamp.Position);
-            _lastClamp = clamp;
-            _lastSample = sample;
-            _hasSample = true;
+            if (_manager == null || !_manager.IsReady)
+            {
+                _hasSample = false;
+                return;
+            }
+
+            try
+            {
+                FlowFieldClampResult clamp = _manager.ClampPositionToGrid(_sampleProbe);
+                if (!_manager.TrySample(clamp.Position, out FlowFieldSample sample))
+                {
+                    _hasSample = false;
+                    return;
+                }
+                _lastClamp = clamp;
+                _lastSample = sample;
+                _hasSample = true;
+            }
+            catch (InvalidOperationException)
+            {
+                _hasSample = false;
+            }
         }
 
         public void FocusCamera()
@@ -313,13 +399,15 @@ namespace Common.FlowField.Samples
 
             _board.Render(
                 "2.5D FLOWFIELD\n"
-                + $"Ready: {_manager.IsReady}  Revision: {_manager.Revision}\n"
+                + $"Mode: {_manager.BakeMode}  Ready: {_manager.IsReady}  Revision: {_manager.Revision}\n"
+                + $"Sample ready: {_sampleController.IsSimulationReady}  {_sampleController.LastStatus}\n"
                 + $"Agents: {_sampleController.SpawnedAgentCount}/1000  Mode: {_mode}\n"
                 + $"{goalText}\n"
                 + $"West Ramp Gate: {(_dynamicObstacleEnabled ? "ON" : "OFF")}  Registered: {_dynamicObstacleRegistered}\n"
                 + "Ramps: WEST / EAST  Y=0.0 -> Y=2.0 | ON => EAST bypass\n"
                 + $"{sampleText}  {clampText}\n"
-                + "Space: next Goal | M: Gate | F: Focus | RMB+WASD/QE: Camera");
+                + $"{_lastAction}\n"
+                + "Space: next Goal | G: clear Goal | M: Gate | R: rebuild | F: Focus | RMB+WASD/QE: Camera");
         }
 
         public void Release()
@@ -350,6 +438,64 @@ namespace Common.FlowField.Samples
                 throw new InvalidOperationException("FlowFieldShowcaseOverviewController is faulted; call Release before use.", _fault);
             if (!_isInitialized)
                 throw new InvalidOperationException("FlowFieldShowcaseOverviewController is not initialized.");
+        }
+
+        private void ExecuteAction(Action action, string successMessage)
+        {
+            try
+            {
+                action();
+                _lastAction = successMessage;
+                _fault = null;
+            }
+            catch (Exception exception)
+            {
+                _fault = exception;
+                _lastAction = _manager != null && _manager.BakeMode == FlowFieldBakeMode.StaticBaked
+                    ? $"StaticBaked Asset을 다시 Bake해야 합니다. {exception.Message}"
+                    : exception.Message;
+                Debug.LogException(exception, this);
+            }
+            RenderBoard();
+        }
+
+        private void TryInitializeWhenReady()
+        {
+            if (_isFaulted)
+                return;
+
+            try
+            {
+                if (!_isInitialized)
+                    Init();
+                _initializationReported = false;
+            }
+            catch (Exception exception)
+            {
+                if (_initializationReported)
+                    return;
+                _initializationReported = true;
+                _isInitialized = false;
+                _isFaulted = true;
+                _fault = exception;
+                _lastAction = exception.Message;
+                Debug.LogException(exception, this);
+            }
+        }
+
+        private void TryBeginShowcaseWhenReady()
+        {
+            if (_isFaulted || !_isInitialized)
+                return;
+            if (_manager == null || _sampleController == null)
+                return;
+            if (!_manager.IsReady || !_sampleController.IsSimulationReady)
+            {
+                _waitingForManager = true;
+                return;
+            }
+            _waitingForManager = false;
+            BeginShowcase();
         }
 
         private static bool IsFinite(float value)

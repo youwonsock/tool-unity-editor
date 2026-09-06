@@ -60,7 +60,7 @@ namespace Common.TransformPath
 
         public static bool TryBuild(
             IReadOnlyList<Vector3> controlPoints,
-            PathData.ECurveType curveType,
+            EPathCurveType curveType,
             int segmentCount,
             PathGeometryBuildBuffer buffer,
             out PathGeometryResult result,
@@ -102,13 +102,13 @@ namespace Common.TransformPath
 
             switch (curveType)
             {
-                case PathData.ECurveType.Linear:
+                case EPathCurveType.Linear:
                     GenerateLinearPath(buffer, segmentCount);
                     break;
-                case PathData.ECurveType.SplineApproximating:
+                case EPathCurveType.SplineApproximating:
                     GenerateSplinePath(buffer, segmentCount);
                     break;
-                case PathData.ECurveType.SplineInterpolating:
+                case EPathCurveType.SplineInterpolating:
                     GenerateCatmullRomPath(buffer, segmentCount);
                     break;
                 default:

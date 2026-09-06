@@ -12,8 +12,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f0fe3de3355f642409e82b0b8bc89eab, type: 3}
   m_Name: FlowFieldManager_1569603542928883877_StaticBake
   m_EditorClassIdentifier: 
-  _formatVersion: 4
-  _revision: 1
+  _formatVersion: 5
+  _revision: 4
+  _spaceMode: 0
   _gridOriginWorld: {x: -50, y: 2, z: -50}
   _width: 100
   _depth: 100

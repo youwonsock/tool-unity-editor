@@ -306,14 +306,14 @@ namespace Common.TransformPath
             Color color,
             float size)
         {
-            if (preview == null || !preview.IsValid || pathData.EventCount == 0 || size <= 0f)
+            if (preview == null || !preview.IsValid || pathData.AuthoringEventCount == 0 || size <= 0f)
                 return;
 
             Gizmos.color = color;
             GUIStyle labelStyle = GetEventLabelStyle(size);
-            for (int i = 0; i < pathData.EventCount; i++)
+            for (int i = 0; i < pathData.AuthoringEventCount; i++)
             {
-                PathEventEntry entry = pathData.GetEvent(i);
+                PathEventEntry entry = pathData.GetAuthoringEvent(i);
                 if (entry.EventSetting == null)
                     continue;
 
