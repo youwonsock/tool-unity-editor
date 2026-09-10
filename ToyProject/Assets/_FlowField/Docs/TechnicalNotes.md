@@ -8,7 +8,6 @@
 - `Common.FlowField.Runtime`: `FlowFieldManager`, Modifier 컴포넌트와 Unity 수명주기·실행 연결.
 - `Common.FlowField.Editor`: Inspector, Bake 작업, Editor 시각화와 Editor 수명 처리.
 - `Common.FlowField.Samples`: 공개 Provider·Controller를 사용하는 Agent, HUD와 샘플 카메라.
-- `Common.FlowField.Tests`: 기존 Editor 테스트와 FlowField 회귀 검증.
 - Compute Shader: `Assets/_FlowField/Script/Runtime/Core/Solvers/FlowFieldFrontier.compute`. Resources 폴더로 이동하지 않습니다.
 
 프로젝트 기준 Unity 버전은 2023.2.20f1입니다. Collections, Mathematics, URP, UGUI 패키지 버전과 개별 asmdef 참조는 이 문서의 기능 설명과 분리해 프로젝트 설정에서 관리합니다.
@@ -93,4 +92,4 @@ java -jar "C:\Temp\flowfield-doc-tools\plantuml-1.2024.6.jar"   -tpng   -charset
 - 수정 허용 파일 밖의 코드·씬·Prefab·Bake Asset·ProjectSettings와 기존 이미지 `.meta`가 변경되지 않았는지 확인합니다.
 - `git diff --check`를 실행합니다.
 
-이번 작업은 문서와 UML 갱신 범위이므로 Unity PlayMode 재실행, 새 Bake/ReBake, Core 자동 테스트, GPU 일치 검증과 성능 프로파일을 새로 수행하지 않습니다. 이러한 항목은 통과로 기록하지 않습니다.
+이번 정리의 사후 검증은 Unity import/compile, GUID·씬·Prefab 참조와 `git diff --check`로 제한합니다. 새 Bake/ReBake, GPU 일치 검증과 성능 프로파일은 수행하지 않습니다.
