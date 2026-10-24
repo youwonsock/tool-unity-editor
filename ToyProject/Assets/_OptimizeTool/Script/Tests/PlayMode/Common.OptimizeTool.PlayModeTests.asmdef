@@ -1,0 +1,7 @@
+{
+    "name": "Common.OptimizeTool.PlayModeTests",
+    "references": ["Common.OptimizeTool", "Common.OptimizeTool.Samples", "UnityEngine.UI"],
+    "optionalUnityReferences": ["TestAssemblies"],
+    "autoReferenced": false,
+    "defineConstraints": ["UNITY_INCLUDE_TESTS"]
+}

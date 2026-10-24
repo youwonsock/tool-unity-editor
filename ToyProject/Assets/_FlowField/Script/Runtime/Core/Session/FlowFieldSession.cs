@@ -19,14 +19,9 @@ namespace Common.FlowField
         internal FlowFieldCellRect DirtyObstacleRegion = FlowFieldCellRect.Invalid;
         internal FlowFieldCellRect LastComposedRegion = FlowFieldCellRect.Invalid;
         internal Vector3 ResolvedDefaultDirection = Vector3.zero;
-        internal bool SurfaceReady;
+        internal bool SurfaceReady => Surface != null && Surface.IsValid;
         internal bool HasObstacleMask;
         internal bool BaseComposed;
-        internal int LastSurfaceRevision = -1;
-        internal int LastStaticObstacleRevision = -1;
-
-        public void MarkDirty(FlowFieldDirtyFlags flags)
-            => DirtyFlags |= flags;
 
         public void ExpandFinalDirty(FlowFieldCellRect rect)
             => DirtyFinalRegion = FlowFieldCellRect.Union(DirtyFinalRegion, rect);
@@ -34,8 +29,6 @@ namespace Common.FlowField
         public void ExpandObstacleDirty(FlowFieldCellRect rect)
             => DirtyObstacleRegion = FlowFieldCellRect.Union(DirtyObstacleRegion, rect);
 
-        public void Release()
-            => Workspace.Release();
     }
 
     /// <summary>
@@ -55,27 +48,23 @@ namespace Common.FlowField
         private FlowFieldModifierRegistry _modifierRegistry;
         private FlowFieldModifierPipeline _modifierPipeline;
         private IFlowFieldGpuBackend _buildPipeline;
-        private FlowFieldSurfaceData _runtimeSurface;
-        private FlowFieldSurfaceData _committedSurface;
-        private FlowFieldSurfaceData _committedSourceSurface;
-        private FlowFieldGridSpace _committedGrid;
         private FlowFieldStaticBakeSnapshot _loadedStaticBakeSnapshot;
-        private int _loadedStaticBakeRevision = -1;
+
         private FlowFieldSessionRequest _committedRequest;
         private bool _hasCommittedRequest;
         private FlowFieldGridSpace _lastObservedGrid;
         private bool _hasObservedGrid;
         private bool _obstacleProbePending;
-        private int _committedSurfaceRevision = -1;
         private int _requestVersion;
         private int _baseVersion;
         private int _activeBaseVersion = -1;
         private int _activeRequestVersion = -1;
         private bool _hasPendingRequest;
-        private FlowFieldSessionRequest _pendingRequest;
         private FlowFieldSessionRequest _activeRequest;
-        private FlowFieldSessionRequest _lastRequest;
-        private bool _hasLastRequest;
+        // Submit coalesces input here; the pending flag schedules it. Active
+        // and committed requests retain their separate frozen lifetimes.
+        private FlowFieldSessionRequest _latestRequestedInput;
+        private bool _hasLatestRequestedInput;
         private Vector3 _latestDefaultDirection;
         private bool _hasLatestDefaultDirection;
         // Obstacle registration/movement is first treated as a non-versioning
@@ -96,6 +85,7 @@ namespace Common.FlowField
         private Exception _fault;
         private int _revision;
         private bool _disposed;
+        private bool _pumping;
         // PreferGpu is permanently downgraded after a GPU failure for the
         // lifetime of this Session. Release clears the flag; Suspend keeps it
         // so a resume cannot repeatedly rediscover a broken backend.
@@ -113,19 +103,11 @@ namespace Common.FlowField
         // boundary. Runtime sampling reads the compact store directly.
         internal FlowFieldWorkspace CommittedWorkspace => _fieldStore.CreateWorkspaceSnapshot();
         internal FlowFieldReadView CommittedView => _fieldStore.CreateReadView();
-        internal FlowFieldObstaclePipeline ObstaclePipeline => _obstaclePipeline;
         internal FlowFieldGoalTracker GoalTracker => _goalTracker;
-        internal FlowFieldModifierRegistry ModifierRegistry => _modifierRegistry;
-        internal FlowFieldModifierPipeline ModifierPipeline => _modifierPipeline;
-        internal IFlowFieldGpuBackend BuildPipeline => _buildPipeline;
-        internal FlowFieldSurfaceData RuntimeSurface => _runtimeSurface;
-        internal FlowFieldSurfaceData CommittedSurface => _committedSurface;
-        internal FlowFieldSurfaceData CommittedSourceSurface => _committedSourceSurface;
-        internal FlowFieldGridSpace CommittedGrid => _committedGrid;
-        internal int CommittedSurfaceRevision => _committedSurfaceRevision;
+        internal FlowFieldSurfaceData CommittedSurface => _fieldStore.Surface;
+        internal FlowFieldGridSpace CommittedGrid => _fieldStore.Grid;
         internal override FlowFieldSpaceMode SpaceMode => FlowFieldSpaceMode.Surface2D;
         internal override FlowFieldBakeMode BakeMode => _bakeMode;
-        internal FlowFieldSessionSourceKind SourceKind => _sourceKind;
         internal FlowFieldSessionLifecycle Lifecycle => _lifecycle;
         internal Exception Fault => _fault;
         internal override FlowFieldRuntimeState State => RuntimeState;
@@ -153,22 +135,19 @@ namespace Common.FlowField
             && HasCompatibleCommittedSource();
         internal override bool IsRebuilding => _lifecycle == FlowFieldSessionLifecycle.Building;
         internal bool ConfigurationStale => _configurationStale;
+        // Stale publications stay hidden until commit. A validated Submit
+        // clears these unsubmitted flags, allowing that rebuild to be pumped.
+        internal bool RequiresExplicitRebuild => _configurationStale
+            && (_versionedDirtyFlags & FlowFieldDirtyFlags.Grid) != 0;
         internal override int Revision => _revision;
 
         private bool HasCompatibleCommittedSource()
             => !_hasCommittedRequest
-                || !_hasLastRequest
-                || _lastRequest.HasSameSource(_committedRequest);
+                || !_hasLatestRequestedInput
+                || _latestRequestedInput.HasSameSource(_committedRequest);
 
-        internal int RequestVersion => _requestVersion;
-        internal int BaseVersion => _baseVersion;
-        internal bool HasSubmittedRequest => _hasLastRequest;
-        internal bool TryGetLastSubmittedRequest(out FlowFieldSessionRequest request)
-        {
-            request = _lastRequest;
-            return _hasLastRequest;
-        }
-        internal bool HasPendingRequest => _hasPendingRequest || _state.DirtyFlags != FlowFieldDirtyFlags.None;
+        internal bool HasSubmittedRequest => _hasLatestRequestedInput;
+        internal bool HasPendingRequest => _hasPendingRequest;
 
         /// <summary>
         /// Advances a pending Surface2D request at the owning execution
@@ -178,52 +157,57 @@ namespace Common.FlowField
         internal bool Pump()
         {
             if (_disposed
+                || _pumping
                 || _lifecycle == FlowFieldSessionLifecycle.Suspended
                 || _lifecycle == FlowFieldSessionLifecycle.Released
                 || _lifecycle == FlowFieldSessionLifecycle.Faulted
                 || _lifecycle == FlowFieldSessionLifecycle.Building)
                 return false;
-            return _hasPendingRequest ? BuildPending() : false;
+            if (!_hasPendingRequest)
+                return false;
+            _pumping = true;
+            try { return BuildPending(); }
+            finally { _pumping = false; }
         }
         internal bool HasPendingObstacleProbe => _obstacleProbePending;
 
         internal override bool TryGetFieldInfo(out FlowFieldFieldInfo info)
         {
             info = default;
-            if (!IsReady || !_committedGrid.IsValid || _committedSurface == null || !_committedSurface.IsValid)
+            if (!IsReady || !_fieldStore.Grid.IsValid || _fieldStore.Surface == null || !_fieldStore.Surface.IsValid)
                 return false;
 
             bool hasRequestedGoal = false;
             Vector3 requestedGoal = default;
             float influenceRadius = 0f;
-            if (_hasLastRequest)
+            if (_hasLatestRequestedInput)
             {
-                if (_lastRequest.SourceKind == FlowFieldSessionSourceKind.StaticSnapshot)
+                if (_latestRequestedInput.SourceKind == FlowFieldSessionSourceKind.StaticSnapshot)
                 {
-                    FlowFieldStaticBakeSnapshot snapshot = _lastRequest.StaticBakeSnapshot;
+                    FlowFieldStaticBakeSnapshot snapshot = _latestRequestedInput.StaticBakeSnapshot;
                     hasRequestedGoal = snapshot != null && snapshot.HasGoal;
                     requestedGoal = snapshot != null ? snapshot.RequestedGoalWorld : default;
                     influenceRadius = snapshot != null ? snapshot.GoalInfluenceRadius : 0f;
                 }
                 else
                 {
-                    hasRequestedGoal = _lastRequest.Goal.IsValid;
-                    requestedGoal = _lastRequest.Goal.RequestedWorld;
-                    influenceRadius = _lastRequest.Goal.InfluenceRadius;
+                    hasRequestedGoal = _latestRequestedInput.Goal.IsValid;
+                    requestedGoal = _latestRequestedInput.Goal.RequestedWorld;
+                    influenceRadius = _latestRequestedInput.Goal.InfluenceRadius;
                 }
             }
 
             Vector3 resolvedGoal = default;
-            bool hasResolvedGoal = _goalTracker.HasBuiltGoal
-                && _goalTracker.LastBuiltSourceCellIndex >= 0;
+            bool hasResolvedGoal = _fieldStore.HasActiveGoal
+                && _fieldStore.ResolvedGoalIndex >= 0;
             if (hasResolvedGoal)
             {
-                resolvedGoal = _committedSurface.GetCellCenter(_committedGrid, _goalTracker.LastBuiltSourceCellIndex);
+                resolvedGoal = _fieldStore.Surface.GetCellCenter(_fieldStore.Grid, _fieldStore.ResolvedGoalIndex);
             }
 
             info = new FlowFieldFieldInfo(
-                _committedGrid,
-                _committedSurface.BakeBoundsWorld,
+                _fieldStore.Grid,
+                _fieldStore.Surface.BakeBoundsWorld,
                 FlowFieldSpaceMode.Surface2D,
                 _bakeMode,
                 _revision,
@@ -273,6 +257,7 @@ namespace Common.FlowField
                 throw new ObjectDisposedException(nameof(FlowFieldSession));
             if (_lifecycle != FlowFieldSessionLifecycle.Faulted)
                 return;
+            InvalidateCallbacks();
             _fault = null;
             // A retry is a new build attempt, not a re-publication of the
             // field that was available before the fault.  Keep the public
@@ -280,7 +265,6 @@ namespace Common.FlowField
             // also preserves the contract that Faulted/initial retry paths
             // report IsReady=false rather than emitting a transient Ready.
             _configurationStale = true;
-            SetLifecycle(FlowFieldSessionLifecycle.Active);
             _state.DirtyFlags |= FlowFieldDirtyFlags.All;
             _state.DirtyFinalRegion = _state.Grid.IsValid
                 ? FlowFieldCellRect.Full(_state.Grid)
@@ -289,18 +273,19 @@ namespace Common.FlowField
                 ? FlowFieldCellRect.Full(_state.Grid)
                 : FlowFieldCellRect.Invalid;
             _hasPendingRequest = false;
+            SetLifecycle(FlowFieldSessionLifecycle.Active);
         }
 
         internal bool HasSameBaseInputs(in FlowFieldSessionRequest request)
-            => _hasLastRequest && _lastRequest.HasSameBaseInputs(request);
+            => _hasLatestRequestedInput && _latestRequestedInput.HasSameBaseInputs(request);
 
         internal bool HasSameFinalInputs(in FlowFieldSessionRequest request)
-            => _hasLastRequest && _lastRequest.HasSameFinalInputs(request);
+            => _hasLatestRequestedInput && _latestRequestedInput.HasSameFinalInputs(request);
 
         internal FlowFieldDirtyFlags GetInputDirtyFlags(in FlowFieldSessionRequest request)
-            => !_hasLastRequest
+            => !_hasLatestRequestedInput
                 ? FlowFieldDirtyFlags.All
-                : _lastRequest.GetInputDirtyFlags(request);
+                : _latestRequestedInput.GetInputDirtyFlags(request);
 
         /// <summary>
         /// Records the latest authoring grid observed by the Unity adapter.
@@ -390,15 +375,14 @@ namespace Common.FlowField
 
             _fault = null;
             _configurationStale = false;
+            MarkDirty(FlowFieldDirtyFlags.All, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
             SetLifecycle(FlowFieldSessionLifecycle.Active);
-            MarkDirty(FlowFieldDirtyFlags.All, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid, baseChange: true);
         }
 
         internal void MarkDirty(
             FlowFieldDirtyFlags flags,
             FlowFieldCellRect finalRegion,
             FlowFieldCellRect obstacleRegion,
-            bool baseChange,
             bool deferBaseVersion = false,
             bool deferSurfaceVersion = false,
             bool deferGoalVersion = false)
@@ -418,11 +402,9 @@ namespace Common.FlowField
             {
                 flags |= FlowFieldDirtyFlags.FinalRegion;
             }
-            // Keep BaseVersion restricted to actual BFS-affecting flags even
-            // if an adapter supplies an overly broad baseChange hint. Final-
-            // only changes (DefaultDirection, Modifier*, FinalRegion) never
-            // bump it.
-            baseChange = IsBaseDirty(flags);
+            // Only navigation inputs advance BaseVersion; final-only changes
+            // still advance RequestVersion without invalidating the BFS.
+            bool baseChange = IsBaseDirty(flags);
             _state.DirtyFlags |= flags;
             if (finalRegion.IsValid)
                 _state.ExpandFinalDirty(finalRegion);
@@ -465,6 +447,10 @@ namespace Common.FlowField
                     _baseVersion++;
             }
             _versionedDirtyFlags |= flags;
+            // Dirty observations reuse the latest accepted request. Initial
+            // setup has no request yet and must wait for its first Submit.
+            if (_hasLatestRequestedInput)
+                _hasPendingRequest = true;
         }
 
         internal void MarkConfigurationStale()
@@ -472,7 +458,7 @@ namespace Common.FlowField
             if (!IsInitialized || _configurationStale)
                 return;
             _configurationStale = true;
-            MarkDirty(FlowFieldDirtyFlags.All, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid, baseChange: true);
+            MarkDirty(FlowFieldDirtyFlags.All, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
             // RuntimeState is derived from the lifecycle plus readiness. A
             // stale configuration therefore becomes Building immediately,
             // and observers receive the same single transition they would see
@@ -490,8 +476,8 @@ namespace Common.FlowField
                 throw new InvalidOperationException("FlowField request source does not match the active session.");
 
             FlowFieldDirtyFlags inputFlags = FlowFieldDirtyFlags.None;
-            if (_hasLastRequest && !request.HasSameInputs(_lastRequest))
-                inputFlags = _lastRequest.GetInputDirtyFlags(request);
+            if (_hasLatestRequestedInput && !request.HasSameInputs(_latestRequestedInput))
+                inputFlags = _latestRequestedInput.GetInputDirtyFlags(request);
             ObserveDefaultDirection(request.DefaultDirection);
 
             // A staged obstacle probe is valid only for the exact Surface,
@@ -526,8 +512,8 @@ namespace Common.FlowField
             if (request.DirtyObstacleRegion.IsValid)
                 _state.ExpandObstacleDirty(request.DirtyObstacleRegion);
 
-            _lastRequest = request;
-            _hasLastRequest = true;
+            _latestRequestedInput = request;
+            _hasLatestRequestedInput = true;
             if (unversionedFlags != FlowFieldDirtyFlags.None)
             {
                 FlowFieldDirtyFlags deferredObstacleFlags = unversionedFlags
@@ -573,45 +559,24 @@ namespace Common.FlowField
                 }
             }
             _versionedDirtyFlags = FlowFieldDirtyFlags.None;
-            _pendingRequest = request;
             _hasPendingRequest = true;
-            if (_lifecycle == FlowFieldSessionLifecycle.Suspended)
-                return true;
-            if (IsRebuilding)
-                return true;
             return true;
         }
 
-        private FlowFieldModifierRegistryResult RegisterModifierCore(IFlowFieldVectorModifier modifier)
+        internal override bool RegisterModifierCommand(IFlowFieldVectorModifier modifier)
         {
             EnsureModifierServices();
             FlowFieldModifierRegistryResult result = _modifierRegistry.Register(modifier);
             ApplyModifierRegistryResult(result);
-            return result;
+            return result.FinalDirty;
         }
 
-        private FlowFieldModifierRegistryResult UnregisterModifierCore(IFlowFieldVectorModifier modifier)
+        internal override bool UnregisterModifierCommand(IFlowFieldVectorModifier modifier)
         {
             EnsureModifierServices();
             FlowFieldModifierRegistryResult result = _modifierRegistry.Unregister(modifier);
             ApplyModifierRegistryResult(result);
-            return result;
-        }
-
-        private FlowFieldModifierRegistryResult MarkModifierDirtyCore(IFlowFieldVectorModifier modifier)
-        {
-            EnsureModifierServices();
-            FlowFieldModifierRegistryResult result = _modifierRegistry.MarkDirty(modifier);
-            ApplyModifierRegistryResult(result);
-            return result;
-        }
-
-        private FlowFieldModifierRegistryResult MarkModifierAreaDirtyCore(IFlowFieldVectorModifier modifier)
-        {
-            EnsureModifierServices();
-            FlowFieldModifierRegistryResult result = _modifierRegistry.MarkAreaDirty(modifier);
-            ApplyModifierRegistryResult(result);
-            return result;
+            return result.FinalDirty;
         }
 
         internal FlowFieldModifierRegistryResult DetectModifierChanges()
@@ -622,20 +587,23 @@ namespace Common.FlowField
             return result;
         }
 
-        internal override bool RegisterModifierCommand(IFlowFieldVectorModifier modifier)
-            => RegisterModifierCore(modifier).FinalDirty;
-
-        internal override bool UnregisterModifierCommand(IFlowFieldVectorModifier modifier)
-            => UnregisterModifierCore(modifier).FinalDirty;
-
         internal override void NotifyModifierChangedCommand(
             IFlowFieldVectorModifier modifier,
             FlowFieldModifierChange change)
         {
             if ((change & (FlowFieldModifierChange.Value | FlowFieldModifierChange.Priority)) != 0)
-                MarkModifierDirtyCore(modifier);
+            {
+                EnsureModifierServices();
+                FlowFieldModifierRegistryResult result = _modifierRegistry.MarkDirty(modifier, out bool completed);
+                if (!completed)
+                    return;
+                ApplyModifierRegistryResult(result);
+            }
             if ((change & FlowFieldModifierChange.Area) != 0)
-                MarkModifierAreaDirtyCore(modifier);
+            {
+                EnsureModifierServices();
+                ApplyModifierRegistryResult(_modifierRegistry.MarkAreaDirty(modifier));
+            }
         }
 
         internal bool RegisterObstacle(Collider collider, FlowFieldCellRect dirtyRegion)
@@ -651,7 +619,6 @@ namespace Common.FlowField
                 FlowFieldDirtyFlags.DynamicObstacles | FlowFieldDirtyFlags.Escape | FlowFieldDirtyFlags.FinalRegion,
                 dirtyRegion,
                 dirtyRegion,
-                baseChange: true,
                 deferBaseVersion: true);
             return true;
         }
@@ -683,7 +650,6 @@ namespace Common.FlowField
                 FlowFieldDirtyFlags.DynamicObstacles | FlowFieldDirtyFlags.Escape | FlowFieldDirtyFlags.FinalRegion,
                 dirtyRegion,
                 dirtyRegion,
-                baseChange: true,
                 deferBaseVersion: true);
             return true;
         }
@@ -714,7 +680,6 @@ namespace Common.FlowField
                 FlowFieldDirtyFlags.DynamicObstacles | FlowFieldDirtyFlags.Escape | FlowFieldDirtyFlags.FinalRegion,
                 dirtyRegion,
                 dirtyRegion,
-                baseChange: true,
                 deferBaseVersion: true);
         }
 
@@ -788,7 +753,6 @@ namespace Common.FlowField
                     | FlowFieldDirtyFlags.FinalRegion,
                 dirty,
                 dirty,
-                baseChange: true,
                 deferBaseVersion: true);
             return true;
         }
@@ -823,18 +787,11 @@ namespace Common.FlowField
             if (!FlowFieldGridSpace.IsFinite(worldPosition))
                 throw new ArgumentOutOfRangeException(nameof(worldPosition));
 
-            bool useCommitted = IsRebuilding && _fieldStore.IsValid;
-            FlowFieldGridSpace sampleGrid = useCommitted ? _fieldStore.Grid : _state.Grid;
-            FlowFieldSurfaceData sampleSurface = useCommitted ? _fieldStore.Surface : _state.Surface;
+            FlowFieldGridSpace sampleGrid = _fieldStore.Grid;
+            FlowFieldSurfaceData sampleSurface = _fieldStore.Surface;
             if (!sampleGrid.ContainsWorldPosition(worldPosition))
                 throw new ArgumentOutOfRangeException(nameof(worldPosition), "Position is outside the FlowField grid.");
-            FlowFieldSample sample;
-            if (useCommitted)
-            {
-                if (!_fieldStore.TrySample(worldPosition, out sample))
-                    throw new InvalidOperationException("FlowField sampling data is inconsistent.");
-            }
-            else if (!FlowFieldCellSampler.TrySample(sampleGrid, sampleSurface, _state.Workspace, worldPosition, out sample))
+            if (!_fieldStore.TrySample(worldPosition, out FlowFieldSample sample))
                 throw new InvalidOperationException("FlowField sampling data is inconsistent.");
 
             if (sampleGrid.TryWorldToLocal(worldPosition, out int sampleX, out int sampleZ))
@@ -881,9 +838,7 @@ namespace Common.FlowField
                             sample.HasSurface,
                             sample.HasCell);
 
-                    int next = useCommitted
-                        ? _fieldStore.NextCells[sampleIndex]
-                        : latestWorkspace.NextCells[sampleIndex];
+                    int next = _fieldStore.NextCells[sampleIndex];
                     if (next >= 0)
                     {
                         bool nextBlocked = next >= sampleGrid.CellCount
@@ -921,7 +876,7 @@ namespace Common.FlowField
             sample = FlowFieldSample.Stopped;
             if (!IsReady || !FlowFieldGridSpace.IsFinite(worldPosition))
                 return false;
-            FlowFieldGridSpace grid = _committedGrid.IsValid ? _committedGrid : _state.Grid;
+            FlowFieldGridSpace grid = _fieldStore.Grid.IsValid ? _fieldStore.Grid : _state.Grid;
             if (!grid.IsValid || !grid.ContainsWorldPosition(worldPosition))
                 return false;
             try
@@ -945,7 +900,7 @@ namespace Common.FlowField
                 throw new InvalidOperationException("FlowField session is not initialized.");
             if (!FlowFieldGridSpace.IsFinite(worldPosition))
                 throw new ArgumentOutOfRangeException(nameof(worldPosition));
-            FlowFieldGridSpace grid = IsRebuilding && _committedGrid.IsValid ? _committedGrid : _state.Grid;
+            FlowFieldGridSpace grid = IsRebuilding && _fieldStore.Grid.IsValid ? _fieldStore.Grid : _state.Grid;
             if (!grid.IsValid)
                 throw new InvalidOperationException("FlowField grid is not initialized.");
             Vector3 clamped = grid.ClampWorldXZ(worldPosition);
@@ -972,7 +927,7 @@ namespace Common.FlowField
             if (result.FinalDirty)
                 flags |= FlowFieldDirtyFlags.FinalRegion;
             if (flags != FlowFieldDirtyFlags.None)
-                MarkDirty(flags, result.DirtyRegion, FlowFieldCellRect.Invalid, baseChange: false);
+                MarkDirty(flags, result.DirtyRegion, FlowFieldCellRect.Invalid);
         }
 
         private bool BuildPending()
@@ -980,14 +935,16 @@ namespace Common.FlowField
             if (!_hasPendingRequest)
                 return true;
 
-            FlowFieldSessionRequest request = _pendingRequest;
+            int callbackGeneration = _callbackGeneration;
+            FlowFieldSessionRequest request = _latestRequestedInput;
             _hasPendingRequest = false;
             FlowFieldDirtyFlags pending = _state.DirtyFlags;
             _state.DirtyFlags = FlowFieldDirtyFlags.None;
 
             try
             {
-                bool surfaceChanged = PrepareSurface(request, pending);
+                if (!TryPrepareSurface(request, pending, callbackGeneration, out bool surfaceChanged))
+                    return false;
                 if (surfaceChanged)
                     PromoteDeferredSurfaceVersion();
                 else
@@ -1002,18 +959,17 @@ namespace Common.FlowField
                 _state.DirtyFlags = FlowFieldDirtyFlags.None;
                 if (request.SourceKind == FlowFieldSessionSourceKind.StaticSnapshot)
                 {
-                    BuildStaticSnapshot(request, pending);
+                    BuildStaticSnapshot(request, pending, callbackGeneration);
                     return true;
                 }
 
                 BuildSceneBase(request, ref pending, surfaceChanged);
                 if ((pending & FlowFieldDirtyFlags.ModifierArea) != 0)
                 {
-                    bool areaChanged = RebuildModifierAreaData(
-                        request,
-                        out bool modifierAreaChanged,
-                        out FlowFieldCellRect modifierRegion);
-                    if (areaChanged)
+                    if (!RebuildModifierAreaData(request, callbackGeneration, out FlowFieldCellRect modifierRegion))
+                        return false;
+                    bool modifierAreaChanged = modifierRegion.IsValid;
+                    if (modifierAreaChanged)
                     {
                         pending |= FlowFieldDirtyFlags.FinalRegion;
                         _state.ExpandFinalDirty(
@@ -1022,6 +978,7 @@ namespace Common.FlowField
                                 : FlowFieldCellRect.Full(_state.Grid));
                     }
                     if (!modifierAreaChanged
+                        && _state.BaseComposed && _fieldStore.IsValid
                         && (pending & (FlowFieldDirtyFlags.ModifierValue
                             | FlowFieldDirtyFlags.DefaultDirection
                             | FlowFieldDirtyFlags.Grid
@@ -1035,11 +992,15 @@ namespace Common.FlowField
                     }
                 }
                 if ((pending & (FlowFieldDirtyFlags.ModifierValue | FlowFieldDirtyFlags.FinalRegion)) != 0)
-                    ComposeFinal(
+                {
+                    if (!ComposeFinal(
                         request,
+                        callbackGeneration,
                         IsBaseDirty(pending)
                             || (pending & FlowFieldDirtyFlags.DefaultDirection) != 0
-                            || !_state.BaseComposed);
+                            || !_state.BaseComposed))
+                        return false;
+                }
 
                 bool topologyChanged = (pending & (FlowFieldDirtyFlags.Grid
                     | FlowFieldDirtyFlags.StaticObstacles
@@ -1058,17 +1019,20 @@ namespace Common.FlowField
             }
             catch (Exception exception)
             {
-                Fail(exception);
+                if (!_disposed && callbackGeneration == _callbackGeneration)
+                    Fail(exception);
                 return false;
             }
         }
 
-        private bool PrepareSurface(in FlowFieldSessionRequest request, FlowFieldDirtyFlags pending)
+        private bool TryPrepareSurface(in FlowFieldSessionRequest request, FlowFieldDirtyFlags pending,
+            int callbackGeneration, out bool surfaceChanged)
         {
+            surfaceChanged = false;
             if ((pending & FlowFieldDirtyFlags.Grid) == 0
                 && _state.Grid.IsValid
                 && _state.SurfaceReady)
-                return false;
+                return true;
 
             // Any Surface/grid rebuild invalidates an obstacle candidate that
             // was measured against the previous cell heights and bounds.
@@ -1096,16 +1060,29 @@ namespace Common.FlowField
                         string.IsNullOrEmpty(surfaceMismatch) ? obstacleMismatch : surfaceMismatch);
                 }
                 surface = request.StaticBakeSnapshot.Surface;
-                _runtimeSurface = surface;
             }
             else
             {
-                FlowFieldSurfaceData supplied = _surfaceSource.Build(
-                    request.SurfaceSettings,
-                    request.SurfaceName);
+                int requestVersion = _requestVersion;
+                FlowFieldSurfaceData supplied = null;
+                try
+                {
+                    supplied = _surfaceSource.Build(request.SurfaceSettings);
+                }
+                catch (Exception) when (!IsCurrentOperation(callbackGeneration) || requestVersion != _requestVersion)
+                {
+                    // The old source result/exception no longer owns this request.
+                }
+                if (!IsCurrentOperation(callbackGeneration))
+                    return false;
+                if (requestVersion != _requestVersion)
+                {
+                    _state.DirtyFlags |= pending;
+                    _hasPendingRequest = true;
+                    return false;
+                }
                 if (supplied == null)
                     throw new InvalidOperationException("FlowField surface source returned no surface data.");
-                _runtimeSurface = supplied;
                 surface = supplied;
             }
 
@@ -1115,11 +1092,9 @@ namespace Common.FlowField
             bool boundsChanged = !_state.Grid.MatchesBounds(request.SurfaceSettings.Grid);
             FlowFieldSurfaceData previousSurface = _state.Surface;
             bool staticSnapshotChanged = request.SourceKind == FlowFieldSessionSourceKind.StaticSnapshot
-                && (!ReferenceEquals(_loadedStaticBakeSnapshot, request.StaticBakeSnapshot)
-                    || _loadedStaticBakeRevision != request.StaticBakeSnapshot.Revision);
-            bool surfaceChanged = boundsChanged
+                && !ReferenceEquals(_loadedStaticBakeSnapshot, request.StaticBakeSnapshot);
+            surfaceChanged = boundsChanged
                 || !_state.SurfaceReady
-                || previousSurface == null
                 || staticSnapshotChanged
                 || !ReferenceEquals(previousSurface, surface)
                     && !previousSurface.ContentEquals(surface);
@@ -1129,12 +1104,7 @@ namespace Common.FlowField
             // that case so Goal/obstacle-only work does not trigger a
             // committed Surface copy or an unnecessary downstream BFS.
             if (!surfaceChanged)
-            {
-                _runtimeSurface = previousSurface;
-                _state.SurfaceReady = true;
-                _state.LastSurfaceRevision = previousSurface.Revision;
-                return false;
-            }
+                return true;
 
             _state.Grid = request.SurfaceSettings.Grid;
             _lastObservedGrid = _state.Grid;
@@ -1143,8 +1113,7 @@ namespace Common.FlowField
             _state.BaseComposed = false;
             _state.LastComposedRegion = FlowFieldCellRect.Invalid;
             _state.Surface = surface;
-            _state.SurfaceReady = true;
-            _state.LastSurfaceRevision = surface.Revision;
+
             if (boundsChanged)
                 _state.HasObstacleMask = false;
             _state.DirtyFlags |= FlowFieldDirtyFlags.StaticObstacles
@@ -1160,7 +1129,7 @@ namespace Common.FlowField
             return true;
         }
 
-        private void BuildStaticSnapshot(in FlowFieldSessionRequest request, FlowFieldDirtyFlags pending)
+        private void BuildStaticSnapshot(in FlowFieldSessionRequest request, FlowFieldDirtyFlags pending, int callbackGeneration)
         {
             if (request.StaticBakeSnapshot == null)
                 throw new InvalidOperationException("Static Flow Bake Asset is missing or invalid.");
@@ -1168,8 +1137,7 @@ namespace Common.FlowField
             bool reloadSnapshot = !_fieldStore.IsValid
                 || !_state.SurfaceReady
                 || !_state.Grid.MatchesBounds(request.SurfaceSettings.Grid)
-                || !ReferenceEquals(_loadedStaticBakeSnapshot, request.StaticBakeSnapshot)
-                || _loadedStaticBakeRevision != request.StaticBakeSnapshot.Revision;
+                || !ReferenceEquals(_loadedStaticBakeSnapshot, request.StaticBakeSnapshot);
             if (reloadSnapshot)
             {
                 if (!request.StaticBakeSnapshot.HasValidData)
@@ -1180,7 +1148,7 @@ namespace Common.FlowField
                 // snapshot/signature changed.
                 request.StaticBakeSnapshot.CopyToWorkspace(_state.Grid, _state.Workspace);
                 _loadedStaticBakeSnapshot = request.StaticBakeSnapshot;
-                _loadedStaticBakeRevision = request.StaticBakeSnapshot.Revision;
+
                 _state.HasObstacleMask = true;
                 _state.BaseComposed = false;
                 _state.ResolvedDefaultDirection =
@@ -1197,7 +1165,9 @@ namespace Common.FlowField
             FlowFieldCellRect modifierRegion = FlowFieldCellRect.Invalid;
             if ((pending & FlowFieldDirtyFlags.ModifierArea) != 0 || reloadSnapshot)
             {
-                RebuildModifierAreaData(request, out modifierAreaChanged, out modifierRegion);
+                if (!RebuildModifierAreaData(request, callbackGeneration, out modifierRegion))
+                    return;
+                modifierAreaChanged = modifierRegion.IsValid;
                 if (modifierAreaChanged)
                 {
                     pending |= FlowFieldDirtyFlags.FinalRegion;
@@ -1220,14 +1190,8 @@ namespace Common.FlowField
                     | FlowFieldDirtyFlags.ModifierArea
                     | FlowFieldDirtyFlags.ModifierValue
                     | FlowFieldDirtyFlags.DefaultDirection)) != 0;
-            if (rebuildBase)
-            {
-                ComposeFinal(request, rebuildBase: true);
-            }
-            else if (finalDirty)
-            {
-                ComposeFinal(request, rebuildBase: false);
-            }
+            if (finalDirty && !ComposeFinal(request, callbackGeneration, rebuildBase))
+                return;
 
             Commit(
                 request,
@@ -1267,8 +1231,6 @@ namespace Common.FlowField
             bool goalChanged = rebuildGoal && _goalTracker.HasChanged(goal);
             FlowFieldBuildResult prepared = FlowFieldSurfaceBuildPipeline.PrepareBase(
                 new FlowFieldSurfaceBuildRequest(
-                    _state.Grid,
-                    _state.Surface,
                     new FlowFieldObstacleRequest(
                         _state.Grid,
                         _state.Surface,
@@ -1279,11 +1241,8 @@ namespace Common.FlowField
                         request.ObstacleClearance,
                         request.UseUnregisteredObstacleSweep,
                         _state.DirtyObstacleRegion),
-                        goal,
-                        pending,
-                        Mathf.Min(_state.Grid.CellCount, Mathf.Max(64, request.MaxGpuWaves)),
-                        _requestVersion,
-                        surfaceChanged),
+                    goal,
+                    surfaceChanged),
                 _obstaclePipeline,
                 _goalTracker,
                 rebuildStatic,
@@ -1364,7 +1323,7 @@ namespace Common.FlowField
                     _state.DirtyFinalRegion = FlowFieldCellRect.Invalid;
                 }
             }
-            if ((rebuildGoal && prepared.Delta.GoalChanged)
+            if ((rebuildGoal && prepared.GoalChanged)
                 || prepared.ObstacleMaskChanged)
             {
                 pending |= FlowFieldDirtyFlags.FinalRegion;
@@ -1402,40 +1361,68 @@ namespace Common.FlowField
 
         private bool RebuildModifierAreaData(
             in FlowFieldSessionRequest request,
-            out bool changed,
+            int callbackGeneration,
             out FlowFieldCellRect changedRegion)
         {
-            changed = false;
             changedRegion = FlowFieldCellRect.Invalid;
-            if (_modifierPipeline == null)
+            FlowFieldModifierRegistry registry = _modifierRegistry;
+            if (_modifierPipeline == null || registry == null || !IsCurrentOperation(callbackGeneration))
                 return false;
-            return _modifierPipeline.RebuildAreaData(
+            int version = registry.OperationVersion;
+            bool IsCurrentArea() => IsCurrentOperation(callbackGeneration)
+                && ReferenceEquals(_modifierRegistry, registry)
+                && registry.OperationVersion == version;
+            if (_modifierPipeline.RebuildAreaData(
                 new FlowFieldModifierBuildRequest(
                     _state.Grid,
                     _state.Surface,
                     _state.Workspace,
                     request.ObstacleCheckHeight,
-                    request.ObstacleCheckCenterOffset),
-                out changed,
-                out changedRegion);
+                    request.ObstacleCheckCenterOffset,
+                    IsCurrentArea),
+                out changedRegion))
+                return true;
+
+            if (IsCurrentOperation(callbackGeneration))
+            {
+                // Registration/observation changed during the getter. Retry at
+                // the owner boundary using the already prepared navigation data.
+                registry.MarkAllAreasDirty();
+                _state.BaseComposed = false;
+                if (_sourceKind == FlowFieldSessionSourceKind.SceneBuild
+                    && _state.Workspace.HasActiveGoal && _activeBaseVersion != _baseVersion)
+                {
+                    // A canceled pre-BFS mask pass has prepared, but not yet
+                    // solved, this goal. Retry its solve without rebaking.
+                    _goalTracker.Clear();
+                    _state.DirtyFlags |= FlowFieldDirtyFlags.Goal;
+                }
+                MarkDirty(FlowFieldDirtyFlags.ModifierArea | FlowFieldDirtyFlags.FinalRegion,
+                    FlowFieldCellRect.Full(_state.Grid), FlowFieldCellRect.Invalid);
+                if (_lifecycle == FlowFieldSessionLifecycle.Building)
+                    SetLifecycle(FlowFieldSessionLifecycle.Active);
+            }
+            return false;
         }
 
-        private void ComposeFinal(in FlowFieldSessionRequest request, bool rebuildBase = false)
+        private bool ComposeFinal(in FlowFieldSessionRequest request, int callbackGeneration, bool rebuildBase = false)
         {
-            if (_modifierPipeline == null)
-                return;
-            _modifierPipeline.RebuildFinalField(
+            if (_modifierPipeline == null || !IsCurrentOperation(callbackGeneration))
+                return false;
+            if (!_modifierPipeline.RebuildFinalField(
                 new FlowFieldModifierBuildRequest(
                     _state.Grid,
                     _state.Surface,
                     _state.Workspace,
                     request.ObstacleCheckHeight,
-                    request.ObstacleCheckCenterOffset),
+                    request.ObstacleCheckCenterOffset,
+                    () => IsCurrentOperation(callbackGeneration)),
                 _state.ResolvedDefaultDirection,
                 _state.DirtyFinalRegion.IsValid
                     ? _state.DirtyFinalRegion
                     : FlowFieldCellRect.Full(_state.Grid),
-                rebuildBase);
+                rebuildBase))
+                return false;
             _state.LastComposedRegion = rebuildBase
                 ? FlowFieldCellRect.Full(_state.Grid)
                 : _state.DirtyFinalRegion.IsValid
@@ -1443,13 +1430,16 @@ namespace Common.FlowField
                     : FlowFieldCellRect.Full(_state.Grid);
             _state.BaseComposed |= rebuildBase;
             _state.DirtyFinalRegion = FlowFieldCellRect.Invalid;
+            return true;
         }
 
         private bool StartBfs(in FlowFieldSessionRequest request)
         {
+            int callbackGeneration = _callbackGeneration;
             if (!_state.Workspace.HasActiveGoal)
             {
-                ComposeFinal(request, rebuildBase: true);
+                if (!ComposeFinal(request, callbackGeneration, rebuildBase: true))
+                    return false;
                 Commit(request, resultChanged: true, includeBase: true, finalRegion: FlowFieldCellRect.Full(_state.Grid));
                 return true;
             }
@@ -1464,7 +1454,7 @@ namespace Common.FlowField
                 request.Goal.InfluenceRadius,
                 _state.Workspace.ResolvedGoalIndex,
                 Mathf.Min(_state.Grid.CellCount, Mathf.Max(64, request.MaxGpuWaves)),
-                _requestVersion);
+                () => IsCurrentBuild(callbackGeneration));
 
             if (_backendPolicy == FlowFieldBfsBackendPolicy.RequireGpu
                 && (_buildPipeline == null || !_buildPipeline.SupportsGpu))
@@ -1474,14 +1464,17 @@ namespace Common.FlowField
             _activeRequestVersion = _requestVersion;
             _activeRequest = request;
             SetLifecycle(FlowFieldSessionLifecycle.Building);
-            int callbackGeneration = _callbackGeneration;
+            // A subscriber can release, suspend, fault or restart the session.
+            // Never dispatch the old workspace after that ownership changes.
+            if (!IsCurrentBuild(callbackGeneration))
+                return false;
             bool accepted;
             if (_backendPolicy == FlowFieldBfsBackendPolicy.ManagedOnly
                 || _managedBackendForced)
             {
                 accepted = FlowFieldSurfaceBuildPipeline.BuildManaged(bfsRequest);
                 if (accepted)
-                    OnBfsCompleted(bfsRequest);
+                    OnBfsCompleted();
                 return accepted;
             }
 
@@ -1490,45 +1483,53 @@ namespace Common.FlowField
 
             accepted = _buildPipeline.StartBfs(
                 bfsRequest,
-                completed =>
-                {
-                    if (callbackGeneration != _callbackGeneration
-                        || _lifecycle != FlowFieldSessionLifecycle.Building)
-                        return;
-                    try { OnBfsCompleted(completed); }
-                    catch (Exception exception) { Fail(exception); }
-                },
-                (failed, exception) =>
-                {
-                    if (callbackGeneration != _callbackGeneration
-                        || _lifecycle != FlowFieldSessionLifecycle.Building)
-                        return;
-                    try { OnBfsFailed(failed, exception); }
-                    catch (Exception callbackException) { Fail(callbackException); }
-                },
+                _ => RunBfsCallback(callbackGeneration, OnBfsCompleted),
+                (_, exception) => RunBfsCallback(callbackGeneration, () => OnBfsFailed(exception)),
                 allowManagedFallback: _backendPolicy != FlowFieldBfsBackendPolicy.RequireGpu);
+            // Synchronous completion/failure may also restart the session.
+            if (!IsCurrentBuild(callbackGeneration))
+                return accepted;
             if (!accepted)
             {
-                // A RequireGpu backend may synchronously invoke the failure
-                // callback before returning false. In that case the callback
-                // already transitioned the Session to Faulted; avoid
-                // replacing its diagnostic with a second generic exception.
-                if (_lifecycle == FlowFieldSessionLifecycle.Faulted)
-                    return false;
                 throw new InvalidOperationException("FlowField BFS session could not be started.");
             }
             return true;
         }
 
-        private void OnBfsCompleted(FlowFieldBfsRequest request)
+        private bool IsCurrentOperation(int callbackGeneration)
+            => !_disposed && callbackGeneration == _callbackGeneration
+                && (_lifecycle == FlowFieldSessionLifecycle.Active
+                    || _lifecycle == FlowFieldSessionLifecycle.Building);
+
+        private bool IsCurrentBuild(int callbackGeneration)
+            => IsCurrentOperation(callbackGeneration)
+                && _lifecycle == FlowFieldSessionLifecycle.Building;
+
+        private void RunBfsCallback(int callbackGeneration, Action callback)
         {
-            if (_lifecycle != FlowFieldSessionLifecycle.Building)
+            if (!IsCurrentBuild(callbackGeneration))
                 return;
-            if (_buildPipeline is FlowFieldSurfaceBuildPipeline productionPipeline
-                && productionPipeline.GpuDisabled)
-                _managedBackendForced = true;
-            bool baseStale = _activeBaseVersion != _baseVersion;
-            if (baseStale)
+            // Async completions have the same non-recursive execution boundary
+            // as Pump; synchronous backend callbacks preserve its existing guard.
+            bool wasPumping = _pumping;
+            _pumping = true;
+            try { callback(); }
+            catch (Exception exception)
+            {
+                if (IsCurrentBuild(callbackGeneration))
+                    Fail(exception);
+            }
+            finally { _pumping = wasPumping; }
+        }
+
+        /// <summary>
+        /// Shared rejection policy for successful and failed Surface2D completions.
+        /// Final-only inputs remain eligible for recomposition; changed navigation
+        /// inputs restore staging and stay pending for the next owning update.
+        /// </summary>
+        private bool RejectStaleBfsResult()
+        {
+            if (_activeBaseVersion != _baseVersion)
             {
                 bool obstacleStale = HasStaleObstacleInput();
                 RestoreStagingAfterStaleResult(preserveObstacle: !obstacleStale);
@@ -1543,7 +1544,7 @@ namespace Common.FlowField
                 _state.DirtyFlags |= FlowFieldDirtyFlags.Goal | FlowFieldDirtyFlags.FinalRegion;
                 _state.ExpandFinalDirty(FlowFieldCellRect.Full(_state.Grid));
                 SetLifecycle(FlowFieldSessionLifecycle.Active);
-                return;
+                return true;
             }
 
             // A dynamic obstacle can be registered or moved while the GPU
@@ -1556,7 +1557,7 @@ namespace Common.FlowField
             {
                 RestoreStagingAfterStaleResult(preserveObstacle: true);
                 SetLifecycle(FlowFieldSessionLifecycle.Active);
-                return;
+                return true;
             }
 
             // A collider transform can be observed while the GPU is running
@@ -1568,11 +1569,25 @@ namespace Common.FlowField
             {
                 RestoreStagingAfterStaleResult(preserveObstacle: true);
                 SetLifecycle(FlowFieldSessionLifecycle.Active);
-                return;
+                return true;
             }
 
+            return false;
+        }
+
+        private void OnBfsCompleted()
+        {
+            if (_lifecycle != FlowFieldSessionLifecycle.Building)
+                return;
+            int callbackGeneration = _callbackGeneration;
+            if (_buildPipeline is FlowFieldSurfaceBuildPipeline productionPipeline
+                && productionPipeline.GpuDisabled)
+                _managedBackendForced = true;
+            if (RejectStaleBfsResult())
+                return;
+
             bool hasNewRequest = _hasPendingRequest;
-            FlowFieldSessionRequest finalRequest = hasNewRequest ? _pendingRequest : _activeRequest;
+            FlowFieldSessionRequest finalRequest = hasNewRequest ? _latestRequestedInput : _activeRequest;
             FlowFieldDirtyFlags pending = _state.DirtyFlags;
             _hasPendingRequest = false;
 
@@ -1599,53 +1614,28 @@ namespace Common.FlowField
             }
             if ((pending & FlowFieldDirtyFlags.ModifierArea) != 0)
             {
-                RebuildModifierAreaData(finalRequest, out _, out _);
+                if (!RebuildModifierAreaData(finalRequest, callbackGeneration, out _))
+                    return;
             }
-            ComposeFinal(finalRequest, rebuildBase: true);
+            if (!ComposeFinal(finalRequest, callbackGeneration, rebuildBase: true))
+                return;
             Commit(finalRequest, resultChanged: true, includeBase: true, finalRegion: _state.LastComposedRegion);
             // Commit publishes the Building state while the old field remains
             // the sampling source. Transition to Ready only after the field
             // event has returned; editor bake callbacks may dispose this
             // short-lived Session from inside FieldCommitted.
-            if (!_disposed && _lifecycle == FlowFieldSessionLifecycle.Building)
+            if (IsCurrentBuild(callbackGeneration))
                 SetLifecycle(FlowFieldSessionLifecycle.Active);
         }
 
-        private void OnBfsFailed(FlowFieldBfsRequest request, Exception exception)
+        private void OnBfsFailed(Exception exception)
         {
             if (_lifecycle != FlowFieldSessionLifecycle.Building)
                 return;
             if (_backendPolicy == FlowFieldBfsBackendPolicy.PreferGpu)
                 _managedBackendForced = true;
-            if (_activeBaseVersion != _baseVersion)
-            {
-                bool obstacleStale = HasStaleObstacleInput();
-                RestoreStagingAfterStaleResult(preserveObstacle: !obstacleStale);
-                if (obstacleStale)
-                {
-                    _state.HasObstacleMask = false;
-                    _state.DirtyFlags |= FlowFieldDirtyFlags.StaticObstacles
-                        | FlowFieldDirtyFlags.DynamicObstacles
-                        | FlowFieldDirtyFlags.Escape;
-                    _state.ExpandObstacleDirty(FlowFieldCellRect.Full(_state.Grid));
-                }
-                _state.DirtyFlags |= FlowFieldDirtyFlags.Goal | FlowFieldDirtyFlags.FinalRegion;
-                _state.ExpandFinalDirty(FlowFieldCellRect.Full(_state.Grid));
-                SetLifecycle(FlowFieldSessionLifecycle.Active);
+            if (RejectStaleBfsResult())
                 return;
-            }
-            if (IsBaseDirty(_state.DirtyFlags))
-            {
-                RestoreStagingAfterStaleResult(preserveObstacle: true);
-                SetLifecycle(FlowFieldSessionLifecycle.Active);
-                return;
-            }
-            if (_obstacleProbePending)
-            {
-                RestoreStagingAfterStaleResult(preserveObstacle: true);
-                SetLifecycle(FlowFieldSessionLifecycle.Active);
-                return;
-            }
             // A failed base solve cannot be replaced by a final-only compose:
             // unlike the successful callback there is no freshly solved Goal
             // graph to preserve. Requeue the Goal stage whenever the request
@@ -1680,7 +1670,7 @@ namespace Common.FlowField
                 && _fieldStore.Grid.MatchesBounds(_state.Grid)
                 && _fieldStore.Surface != null
                 && _state.Surface != null
-                && SurfacesEqual(_fieldStore.Surface, _state.Surface, _state.Grid);
+                && SurfacesEqual(_fieldStore.Surface, _state.Surface);
             if (sameSignature)
             {
                 if (preserveObstacle)
@@ -1707,44 +1697,36 @@ namespace Common.FlowField
                 throw new InvalidOperationException("Cannot commit a FlowField without a valid staging surface.");
             bool actualChanged = false;
 
-            if (_committedSurface == null
-                || !ReferenceEquals(_committedSourceSurface, _state.Surface)
-                || _committedSurfaceRevision != _state.Surface.Revision
-                || !SurfacesEqual(_committedSurface, _state.Surface, _state.Grid))
-            {
-                _committedSurface = _state.Surface;
-                _committedSourceSurface = _state.Surface;
-                _committedSurfaceRevision = _state.Surface.Revision;
-            }
 
             if (resultChanged)
             {
-                _fieldStore.CommitFromWorkspace(
+                actualChanged = _fieldStore.CommitFromWorkspace(
                     _state.Grid,
                     _state.Surface,
                     _state.Workspace,
                     includeBase,
-                    finalRegion.IsValid ? finalRegion : FlowFieldCellRect.Full(_state.Grid),
-                    out actualChanged);
+                    finalRegion.IsValid ? finalRegion : FlowFieldCellRect.Full(_state.Grid));
             }
-            _committedGrid = _state.Grid;
             _committedRequest = request;
             _hasCommittedRequest = true;
             _configurationStale = false;
-            PublishRuntimeState();
             if (!_hasPendingRequest)
             {
                 _state.DirtyFlags = FlowFieldDirtyFlags.None;
                 _state.DirtyFinalRegion = FlowFieldCellRect.Invalid;
                 _state.DirtyObstacleRegion = FlowFieldCellRect.Invalid;
             }
+            int callbackGeneration = _callbackGeneration;
+            PublishRuntimeState();
+            if (_disposed || callbackGeneration != _callbackGeneration)
+                return;
             if (actualChanged)
             {
                 unchecked
                 {
                     _revision++;
                 }
-                NotifyFieldCommitted(true);
+                NotifyFieldCommitted();
             }
         }
 
@@ -1763,19 +1745,30 @@ namespace Common.FlowField
 
         private static bool SurfacesEqual(
             FlowFieldSurfaceData left,
-            FlowFieldSurfaceData right,
-            FlowFieldGridSpace grid)
+            FlowFieldSurfaceData right)
             => ReferenceEquals(left, right)
                 || left != null
                 && right != null
                 && left.ContentEquals(right);
 
+        private void InvalidateCallbacks()
+        {
+            unchecked { _callbackGeneration++; }
+            _modifierRegistry?.InvalidateOperations();
+        }
+
         private void Fail(Exception exception)
         {
+            // Invalidate any outstanding solve before notifying user code.
+            // Finish old-attempt cleanup before a subscriber can queue a retry.
+            InvalidateCallbacks();
+            int callbackGeneration = _callbackGeneration;
             _fault = exception;
-            SetLifecycle(FlowFieldSessionLifecycle.Faulted);
             _state.DirtyFlags = FlowFieldDirtyFlags.None;
-            NotifyFailed(exception);
+            SetLifecycle(FlowFieldSessionLifecycle.Faulted);
+            if (!_disposed && callbackGeneration == _callbackGeneration
+                && _lifecycle == FlowFieldSessionLifecycle.Faulted)
+                NotifyFailed(exception);
         }
 
         internal void Suspend()
@@ -1786,24 +1779,14 @@ namespace Common.FlowField
                 || _lifecycle == FlowFieldSessionLifecycle.Faulted
                 || _lifecycle == FlowFieldSessionLifecycle.Suspended)
                 return;
-            unchecked
-            {
-                _callbackGeneration++;
-            }
-            InvalidateBaseLifetime();
-            DisposeBackendForSuspend();
-            _buildPipeline = null;
-            _runtimeSurface = null;
-            _committedSurface = null;
-            _committedSourceSurface = null;
-            _committedSurfaceRevision = -1;
-            _committedGrid = default;
+            InvalidateCallbacks();
+            DetachBackend();
             _loadedStaticBakeSnapshot = null;
-            _loadedStaticBakeRevision = -1;
+
             _hasCommittedRequest = false;
             _committedRequest = default;
             _fieldStore.Clear();
-            _state.SurfaceReady = false;
+
             _state.BaseComposed = false;
             _state.LastComposedRegion = FlowFieldCellRect.Invalid;
             _state.HasObstacleMask = false;
@@ -1825,32 +1808,28 @@ namespace Common.FlowField
         {
             if (_disposed)
                 return;
-            unchecked
-            {
-                _callbackGeneration++;
-            }
-            InvalidateBaseLifetime();
-            DisposeBackendForRelease();
+            ReleaseResources();
+        }
+
+        private void ReleaseResources()
+        {
+            InvalidateCallbacks();
+            DetachBackend();
             _modifierPipeline?.Clear();
             _modifierRegistry?.Clear();
             _modifierPipeline = null;
             _modifierRegistry = null;
             _obstaclePipeline.ClearDynamicObstacles();
             _goalTracker.Clear();
-            _runtimeSurface = null;
-            _committedSurface = null;
-            _committedSourceSurface = null;
-            _committedSurfaceRevision = -1;
-            _committedGrid = default;
             _loadedStaticBakeSnapshot = null;
-            _loadedStaticBakeRevision = -1;
+
             _hasCommittedRequest = false;
             _committedRequest = default;
             _fieldStore.Clear();
-            _state.Release();
+            _state.Workspace.Release();
             _state.Grid = default;
             _state.Surface = null;
-            _state.SurfaceReady = false;
+
             _state.HasObstacleMask = false;
             _state.BaseComposed = false;
             _state.LastComposedRegion = FlowFieldCellRect.Invalid;
@@ -1858,12 +1837,10 @@ namespace Common.FlowField
             _state.DirtyFinalRegion = FlowFieldCellRect.Invalid;
             _state.DirtyObstacleRegion = FlowFieldCellRect.Invalid;
             _state.ResolvedDefaultDirection = Vector3.zero;
-            _state.LastSurfaceRevision = -1;
-            _state.LastStaticObstacleRevision = -1;
             _lastObservedGrid = default;
             _hasObservedGrid = false;
             _hasPendingRequest = false;
-            _hasLastRequest = false;
+            _hasLatestRequestedInput = false;
             _obstacleProbePending = false;
             _deferredObstacleVersion = false;
             _deferredSurfaceVersion = false;
@@ -1873,7 +1850,6 @@ namespace Common.FlowField
             _latestDefaultDirection = Vector3.zero;
             _hasLatestDefaultDirection = false;
             _fault = null;
-            ClearAcceptedRequest();
             SetLifecycle(FlowFieldSessionLifecycle.Released);
         }
 
@@ -1881,13 +1857,15 @@ namespace Common.FlowField
         {
             if (_disposed)
                 return;
-            Release();
+            // Disposal is terminal before Released subscribers run, so they
+            // cannot recreate resources or recursively dispose this owner.
+            _disposed = true;
+            ReleaseResources();
             // A directly injected backend is deliberately kept alive across
             // Release so the same Session can be initialized again. Permanent
             // disposal is the ownership boundary where it is finally freed.
             if (_injectedGpuBackend != null)
                 _injectedGpuBackend.Dispose();
-            _disposed = true;
             MarkBaseDisposed();
             SetLifecycle(FlowFieldSessionLifecycle.Released);
         }
@@ -1904,24 +1882,7 @@ namespace Common.FlowField
                 | FlowFieldDirtyFlags.Escape
                 | FlowFieldDirtyFlags.Goal;
 
-        private void DisposeBackendForSuspend()
-        {
-            if (_buildPipeline == null)
-                return;
-            if (ReferenceEquals(_buildPipeline, _injectedGpuBackend))
-            {
-                // Test/custom backends are caller-owned and may be reused by
-                // a later Initialize after Suspend. Their callbacks are
-                // already invalidated by the generation bump above.
-                _buildPipeline = null;
-                return;
-            }
-
-            _buildPipeline.Dispose();
-            _buildPipeline = null;
-        }
-
-        private void DisposeBackendForRelease()
+        private void DetachBackend()
         {
             if (_buildPipeline == null)
                 return;
@@ -2046,35 +2007,6 @@ namespace Common.FlowField
 
         public void CommitObstacleScratch()
             => Array.Copy(ObstacleScratch, Blocked, Blocked.Length);
-
-        internal void CopyFrom(FlowFieldWorkspace source)
-        {
-            if (source == null)
-                throw new ArgumentNullException(nameof(source));
-            if (Capacity <= 0 || source.Capacity != Capacity)
-                throw new ArgumentException("Workspace capacities must match.", nameof(source));
-
-            Array.Copy(source.Blocked, Blocked, Capacity);
-            Array.Copy(source.ObstacleScratch, ObstacleScratch, Capacity);
-            Array.Copy(source.StaticBlocked, StaticBlocked, Capacity);
-            Array.Copy(source.DynamicBlocked, DynamicBlocked, Capacity);
-            Array.Copy(source.EscapeDirections, EscapeDirections, Capacity);
-            Array.Copy(source.GoalDirections, GoalDirections, Capacity);
-            Array.Copy(source.GoalFlags, GoalFlags, Capacity);
-            Array.Copy(source.FinalDirections, FinalDirections, Capacity);
-            Array.Copy(source.FinalSpeedMultipliers, FinalSpeedMultipliers, Capacity);
-            Array.Copy(source.BaseDirections, BaseDirections, Capacity);
-            Array.Copy(source.BaseSpeedMultipliers, BaseSpeedMultipliers, Capacity);
-            Array.Copy(source.ModifierInfluence, ModifierInfluence, Capacity);
-            Array.Copy(source.InfluenceMask, InfluenceMask, Capacity);
-            Array.Copy(source.Costs, Costs, Capacity);
-            Array.Copy(source.Queue, Queue, Capacity);
-            Array.Copy(source.NextCells, NextCells, Capacity);
-            Array.Copy(source.TopologyMasks, TopologyMasks, Capacity);
-            HasBlockedCells = source.HasBlockedCells;
-            ResolvedGoalIndex = source.ResolvedGoalIndex;
-            HasActiveGoal = source.HasActiveGoal;
-        }
 
         public void RebuildCombinedBlocked()
         {

@@ -1,0 +1,4 @@
+{
+  "exitCode": -10,
+  "scope": "Fatal Mono/Burst compiler startup before the NUnit test-run result existed. Stack includes Burst.Compiler.IL.CompilerStatistics.ToString and CompileMethodGroup. Retrying unchanged command; this is not a test pass."
+}

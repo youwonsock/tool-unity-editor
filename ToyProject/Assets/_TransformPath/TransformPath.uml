@@ -1,197 +1,218 @@
 @startuml
-
+!pragma layout elk
 left to right direction
 skinparam classAttributeIconSize 0
 skinparam shadowing false
 skinparam packageStyle rectangle
-skinparam linetype ortho
-skinparam nodesep 28
-skinparam ranksep 36
 hide empty members
 
 package "Provider" {
-  interface IPathProvider {
-    +IsReady
-    +Revision
-    +PathLength
-    +Sample(normalizedTime)
-    +SampleDistance(distance)
-  }
-
-  interface IPathMovementProvider {
-    +MovementSettings
-  }
-
-  interface IPathSequenceProvider {
-    +SegmentCount
-    +GetSegment(index)
-    +GetSegmentLength(index)
-  }
-
-  interface IPathEventSource {
-    +EventCount
-    +GetEvent(index)
-  }
-
-  class PathData {
-    +Init()
-    +Rebuild()
-    +Sample(normalizedTime)
-  }
-
-  class MultiPathData {
-    +Init()
-    +Rebuild()
-    +ConfigureSegments(descriptors)
-  }
+  interface IPathProvider
+  interface IPathMovementProvider
+  interface IPathSequenceProvider
+  interface IPathEventSource
+  class PathData
+  class MultiPathData
+  class PathGeometryUtility <<static>>
 }
 
 package "Playback" {
+  interface IPathPlaybackState
   interface IPathFollower {
-    +State
+    +Init() / Release()
     +StartPlayback(request)
-    +PauseMove()
-    +Seek(time)
-    +SetSpeed(value)
-    +Init()
+    +StopMove() / PauseMove() / ResumeMove()
+    +Seek(progress) / SeekSegment(index, local)
+    +SetSpeed(speed) / SetDuration(duration)
   }
-
+  interface IPathPlaybackIdentity <<internal>>
+  class PathPlaybackRequest <<value>>
+  class PathCommandReceipt <<value>>
   class PathFollower {
-    +Init()
+    -PlaybackId / StateRevision
+    -queue constraint
     +StartPlayback(request)
-    +PauseMove()
-    +ResumeMove()
-    +Seek(time)
+    +StopMove() / Release()
+    -HasReachedSegmentEnd(length)
+    ~PreparePlayback(request) : PathPlaybackSession
+    ~StartPreparedPlayback(request, session)
+    -SeekTo(segment, local)
   }
-
-  class PathPlaybackEngine {
-    +PlaybackId
-    +StateRevision
-  }
-
   class PathPlaybackSession {
     +ProviderRevision
     +MovementSettings
-    +EventCursor
+    +NextEventIndex
+    +EvaluateRefresh()
   }
+  class PathSequenceSnapshot
+  class PathProgressCalculator <<static>>
+}
 
+package "Frame execution" {
+  interface IPathRuntimeTickable <<internal>>
+  interface IPathRuntimeFaultHandler <<internal>>
+  class PathRuntimeDriverBehaviour
   class PathRuntimeDriver {
-    +Register(tickable)
-    +Unregister(tickable)
+    -frame records: List<FrameEntry>
+    -active registration versions
+    +Register(item) / Unregister(item)
     +Tick(delta, unscaledDelta, frame)
   }
 }
 
 package "Events" {
-  class PathEventHandler {
-    +Init()
-    +Release()
-    +HandleEvent(setting)
+  interface IPathEventReceiver
+  interface IPathTimeScaleStore <<internal>>
+  class PathEventSettingSO <<authoring>>
+  class PathEventDefinition <<immutable>> {
+    +FromAuthoring(setting)
+    ~AreSame(left, right)
   }
-
-  class PathEventRuntime {
-    +ResolveIntent(definition, state)
-    +ApplyLifecycle(intent, follower)
+  class PathRuntimeEvent <<value>> {
+    ~SortByPosition(events)
+    ~AreSame(left, right)
   }
-
-  class PathEventScheduler {
-    +Schedule(event, follower)
-    +Advance(delta, frame)
-  }
-
-  class PathTimeScaleCoordinator {
-    +Request(owner, target, duration)
-    +Release(owner)
-  }
-
-  interface IPathEventReceiver {
-    +ReceivePathEvent(name, state)
-  }
+  class PathEventSourceSnapshot
+  class PathEventHandler
+  class PathEventRuntime <<static>>
+  class PathEventDefinitionValidator <<static>>
+  class PathEventScheduler
+  class PathScalarAdjustment
+  class PathTimeScaleCoordinator
+  class UnityPathTimeScaleStore
 }
 
 package "Queue" {
-  interface IQueuedPathAgent {
-    +PlaybackId
-    +QueueProvider
-    +QueueSettings
-    +ApplyQueueState(state)
-    +OnQueueDetached(reason)
-  }
-
-  interface IPathConstraintTarget {
-    +AttachQueueConstraint(registration)
-    +ApplyQueueConstraint(constraint)
-    +ReleaseQueueConstraint(registration)
-  }
-
+  interface IQueuedPathAgent
+  interface IPathConstraintTarget
   class QueuedPathFollower {
-    +StartPlayback(request)
-    +PauseMove()
-    +ResumeMove()
-    +ForceBlock()
+    -nullable manager result
+    -notification revision
+    +StartQueuedPlayback(manager, request)
+    +StartFreePlayback(request)
+    +DetachQueue()
+    -TryRegisterWithManager()
   }
-
+  class PathQueueSession {
+    -registration / constraint owner
+    -hold / resume delay / smoothing
+    +TryAcquire() / Release()
+    +Step()
+  }
   class QueuedPathManager {
-    +AgentCount
-    +Register(agent)
-    +Unregister(registration)
+    -QueueEntry: agent + token + nullable state
+    -frame snapshot / provider identities
+    +Register(agent) / Unregister(token)
     +ConfigureRoute(provider)
+    +Release()
   }
-
-  class PathQueueCoordinator {
-    +GetSpacing(agent)
-    +CalculateSpeedMultiplier(agent, distance, spacing)
+  class PathQueueCoordinator <<static>>
+  class PathQueueRegistration <<value>> {
+    +RegistrationId / PlaybackId
+    +RouteRevision : at acquisition
+  }
+  class PathQueueState <<value>>
+  class PathQueueConstraint <<value>> {
+    +RouteRevision : calculation version
+    +FrameId
   }
 }
 
 IPathProvider <|-- IPathMovementProvider
 IPathProvider <|-- IPathSequenceProvider
-IPathProvider <|.. PathData
 IPathMovementProvider <|.. PathData
 IPathEventSource <|.. PathData
-IPathProvider <|.. MultiPathData
 IPathSequenceProvider <|.. MultiPathData
+MultiPathData o-- IPathProvider : ordered children
+PathData ..> PathGeometryUtility : builds geometry
+PathData ..> PathRuntimeEvent : publishes ordered events
+PathEventDefinition ..> PathEventSettingSO : copies authoring data
+PathRuntimeEvent --> PathEventDefinition
 
+IPathPlaybackState <|-- IPathFollower
 IPathFollower <|.. PathFollower
 IPathFollower <|.. QueuedPathFollower
-PathFollower *-- PathPlaybackEngine
+IPathPlaybackIdentity <|.. PathFollower
+IPathPlaybackIdentity <|.. QueuedPathFollower
+PathFollower ..> PathPlaybackRequest
+PathFollower ..> PathCommandReceipt
 PathFollower *-- PathPlaybackSession
-PathPlaybackSession --> IPathProvider : snapshot
-PathRuntimeDriver ..> PathFollower : frame tick
-PathRuntimeDriver ..> PathEventHandler : ordered step
+PathPlaybackSession --> IPathProvider
+PathPlaybackSession *-- PathSequenceSnapshot
+PathPlaybackSession *-- PathEventSourceSnapshot
+PathSequenceSnapshot *-- PathEventSourceSnapshot
+IPathEventSource <|.. PathEventSourceSnapshot
+PathEventSourceSnapshot ..> PathRuntimeEvent : shared ordering / equality
+PathFollower ..> PathProgressCalculator
 
-PathFollower --> PathEventHandler : dispatches events
-PathEventHandler *-- PathEventRuntime
+PathRuntimeDriverBehaviour *-- PathRuntimeDriver
+PathRuntimeDriver o-- IPathRuntimeTickable : frame records
+PathRuntimeDriver ..> IPathRuntimeFaultHandler : original execution fault
+IPathRuntimeTickable <|.. PathEventHandler
+IPathRuntimeTickable <|.. QueuedPathManager
+IPathRuntimeTickable <|.. QueuedPathFollower
+IPathRuntimeTickable <|.. PathFollower
+IPathRuntimeFaultHandler <|.. PathEventHandler
+IPathRuntimeFaultHandler <|.. QueuedPathManager
+IPathRuntimeFaultHandler <|.. QueuedPathFollower
+IPathRuntimeFaultHandler <|.. PathFollower
+
+PathFollower --> PathEventHandler : crossed events / cleanup
+PathEventHandler ..> PathEventRuntime : intent / lifecycle
+PathEventHandler ..> PathEventDefinitionValidator
 PathEventHandler *-- PathEventScheduler
-PathEventHandler --> IPathFollower : reads and controls
+PathEventHandler *-- PathScalarAdjustment
 PathEventHandler --> IPathEventReceiver : notifies
-PathEventHandler --> PathTimeScaleCoordinator : owns time request
+PathEventHandler --> IPathFollower : commands
+PathEventHandler --> PathTimeScaleCoordinator : shared ownership
+PathTimeScaleCoordinator --> IPathTimeScaleStore
+IPathTimeScaleStore <|.. UnityPathTimeScaleStore
 
 IQueuedPathAgent <|.. QueuedPathFollower
 IPathConstraintTarget <|.. PathFollower
-QueuedPathFollower --> PathFollower : delegates commands
-QueuedPathFollower --> IPathConstraintTarget : delivers constraint
-QueuedPathManager o-- IQueuedPathAgent : registrations
-QueuedPathManager *-- PathQueueCoordinator
-QueuedPathManager --> IPathProvider : shared route
-PathQueueCoordinator --> IQueuedPathAgent : reads progress/settings
+QueuedPathFollower --> PathFollower : delegates playback
+QueuedPathFollower ..> PathPlaybackSession : local prepared candidate
+QueuedPathFollower *-- PathQueueSession
+PathQueueSession --> QueuedPathManager : registration lifetime
+PathQueueSession --> IPathConstraintTarget : constraint ownership
+PathQueueSession --> PathQueueRegistration
+QueuedPathManager o-- IQueuedPathAgent : active entries
+QueuedPathManager ..> PathQueueCoordinator : pure spacing / slowdown math
+QueuedPathManager --> IPathProvider : route structure identities
+QueuedPathManager ..> PathQueueState : publishes per frame
+QueuedPathFollower ..> PathQueueConstraint : applies smoothed result
+QueuedPathFollower --> IPathConstraintTarget
 
-note right of IPathFollower
-State, playback, movement and lifecycle
-roles are split into source contracts;
-the overview keeps their public facade here.
+note bottom of PathRuntimeDriver
+Frame order: EventHandler (-200), QueueManager (-180),
+QueuedFollower (-110), PathFollower (-100).
+Playback ID and registration version reject stale work.
 end note
 
-note bottom of IPathEventSource
-Runtime event definitions and their
-authoring ScriptableObjects are omitted
-from this overview.
+note bottom of QueuedPathManager
+Detach batches survive nested Release calls.
+Registration conditions are checked again after callbacks.
+Geometry refresh preserves registration ownership.
+Each agent snapshot is checked directly against the route revision.
 end note
 
-note bottom of IQueuedPathAgent
-Registration and constraint DTOs are
-carried by the contract but omitted as
-separate nodes for readability.
+note bottom of PathFollower
+Start/Pause/Resume apply animator state before notifications.
+After a callback, check execution identity before continuing.
+Queue completion and invalidation use the same notification guard.
+Constraints must match the current provider revision and frame order.
+Completion checks use the current duration after events.
+Changed Seek/SeekSegment end the old tick and clear its remaining time.
+No-op Seek keeps the tick. PlaybackId is preserved.
+Start reuses a local prepared session; changed providers are revalidated.
 end note
 
+note bottom of QueuedPathFollower
+Moving replacements reconcile the underlying PlaybackId
+with queue ownership before applying constraints.
+Mismatched routes or released managers invalidate participation.
+Paused state is owned by the follower, without a second pause flag.
+Queue commands end the previous notification batch without
+changing the public playback StateRevision.
+end note
 @enduml

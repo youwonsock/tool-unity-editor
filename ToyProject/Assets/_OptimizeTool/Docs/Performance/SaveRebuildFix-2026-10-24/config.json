@@ -1,0 +1,26 @@
+{
+  "cubes": 3600,
+  "subdivisions": 1,
+  "pairedRepeats": 4,
+  "order": [
+    [
+      "baseline",
+      "fixed"
+    ],
+    [
+      "fixed",
+      "baseline"
+    ],
+    [
+      "fixed",
+      "baseline"
+    ],
+    [
+      "baseline",
+      "fixed"
+    ]
+  ],
+  "unityVersion": "2023.2.20f1",
+  "jobWorkerCount": 4,
+  "method": "Exact previous core + batch save + public initial/rebuild fixture and warmup, independent headless Unity processes. Diagnostic probes excluded from final timing."
+}

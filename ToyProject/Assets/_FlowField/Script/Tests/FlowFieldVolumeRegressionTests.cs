@@ -1,0 +1,212 @@
+using System;
+using NUnit.Framework;
+using UnityEngine;
+using Object = UnityEngine.Object;
+
+namespace Common.FlowField.Tests
+{
+    public sealed class FlowFieldVolumeRegressionTests
+    {
+        private FlowFieldVolumeSession _session;
+        private FlowFieldRegressionFixture.EventFailures _eventFailures;
+        private GameObject _area;
+        private GameObject _obstacle;
+        private static readonly FlowFieldGridSpace Grid = FlowFieldGridSpace.FromVolumeCellGrid(Vector3.zero, 3, 3, 3, 1f);
+        private static readonly Vector3 Position = Vector3.one * 0.5f;
+        private static readonly Vector3 Goal = Vector3.one * 2.5f;
+
+        [SetUp]
+        public void SetUp()
+        {
+            _session = new FlowFieldVolumeSession();
+            _eventFailures = new FlowFieldRegressionFixture.EventFailures(_session);
+            _session.Initialize(FlowFieldBakeMode.RuntimeDynamic);
+        }
+
+        [TearDown]
+        public void TearDown()
+        {
+            _session.Dispose();
+            if (_area != null) Object.DestroyImmediate(_area);
+            if (_obstacle != null) Object.DestroyImmediate(_obstacle);
+            _eventFailures?.AssertNone();
+        }
+
+        private static FlowFieldVolumeRequest Request(Vector3? goal = null) => new FlowFieldVolumeRequest(
+            Grid, new Bounds(Vector3.one * 1.5f, Vector3.one * 3f), FlowFieldBakeMode.RuntimeDynamic,
+            1 << FlowFieldRegressionFixture.Layer, 0f, true, goal ?? Goal, 0f, Vector3.forward, 1024, null, null);
+
+        private void Finish()
+        {
+            for (int i = 0; i < 100 && _session.IsRebuilding; i++) _session.Pump(10d);
+            Assert.That(_session.IsFaulted, Is.False, _session.LastError);
+            Assert.That(_session.IsReady, Is.True, _session.LastError);
+            Assert.That(_session.IsRebuilding, Is.False);
+        }
+
+        private FlowFieldRegressionFixture.Modifier Modifier(int priority = 100)
+        {
+            if (_area == null)
+            {
+                _area = new GameObject("Volume modifier regression");
+                _area.layer = FlowFieldRegressionFixture.Layer;
+                var box = _area.AddComponent<BoxCollider>();
+                box.isTrigger = true;
+                box.center = Vector3.one * 1.5f;
+                box.size = Vector3.one * 4f;
+            }
+            return new FlowFieldRegressionFixture.Modifier { InfluenceCollider = _area.GetComponent<Collider>(), Priority = priority };
+        }
+
+        [Test]
+        public void SubmissionWaitsForOwnerAndPublicationRemainsAvailableDuringRebuild()
+        {
+            _session.Submit(Request());
+            Assert.That(_session.TrySample(Position, out _), Is.False);
+            Finish();
+            var before = _session.Sample(Position);
+            int revision = _session.Revision;
+            _session.Submit(Request(new Vector3(0.5f, 2.5f, 2.5f)));
+            Assert.That(_session.IsReady && _session.IsRebuilding, Is.True);
+            Assert.That(_session.Sample(Position).Direction, Is.EqualTo(before.Direction));
+            Assert.That(_session.Revision, Is.EqualTo(revision));
+            Finish();
+        }
+
+        [Test]
+        public void RepeatedVolumeBuildRetainsItsExistingRevisionPolicy()
+        {
+            _session.Submit(Request());
+            Finish();
+            int revision = _session.Revision;
+            int events = 0;
+            _session.FieldCommitted += () => events++;
+            _session.Submit(Request());
+            Finish();
+            Assert.That(_session.Revision, Is.EqualTo(revision + 1));
+            Assert.That(events, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void LatestPendingGoalWinsBeforeBuildStarts()
+        {
+            _session.Submit(Request());
+            var latest = new Vector3(0.5f, 2.5f, 2.5f);
+            _session.Submit(Request(latest));
+            Finish();
+            Assert.That(_session.TryGetFieldInfo(out var info), Is.True);
+            Assert.That(info.ResolvedGoalWorld, Is.EqualTo(latest));
+        }
+
+        [Test]
+        public void ValueChangeAndRemovalRecomposeWithoutChangingNavigation()
+        {
+            var modifier = Modifier();
+            _session.RegisterModifier(modifier);
+            _session.Submit(Request());
+            Finish();
+            var before = _session.Sample(Position);
+            Assert.That(before.SpeedMultiplier, Is.EqualTo(2f));
+            modifier.Speed = 3f;
+            modifier.Revision++;
+            _session.NotifyModifierChangedCommand(modifier, FlowFieldModifierChange.Value);
+            Finish();
+            Assert.That(_session.Sample(Position).SpeedMultiplier, Is.EqualTo(3f));
+            Assert.That(_session.Sample(Position).Direction, Is.EqualTo(before.Direction));
+            _session.UnregisterModifier(modifier);
+            Finish();
+            Assert.That(_session.Sample(Position).SpeedMultiplier, Is.EqualTo(1f));
+        }
+
+        [Test]
+        public void ModifierCannotMoveGoalAnchorOrBlockedCell()
+        {
+            _session.RegisterModifier(Modifier());
+            _session.Submit(Request());
+            Finish();
+            var sample = _session.Sample(Goal);
+            Assert.That(sample.Direction, Is.EqualTo(Vector3.zero));
+            Assert.That(sample.SpeedMultiplier, Is.Zero);
+        }
+
+        [Test]
+        public void DuplicatePriorityAndNonTriggerAreRejectedWithoutRegistering()
+        {
+            var first = Modifier();
+            Assert.That(_session.RegisterModifier(first), Is.True);
+            var duplicate = Modifier();
+            Assert.Throws<InvalidOperationException>(() => _session.RegisterModifier(duplicate));
+            Assert.That(_session.ContainsModifier(duplicate), Is.False);
+            var invalid = Modifier(200);
+            _area.GetComponent<Collider>().isTrigger = false;
+            Assert.Throws<ArgumentException>(() => _session.RegisterModifier(invalid));
+            Assert.That(_session.ContainsModifier(invalid), Is.False);
+        }
+
+        [Test]
+        public void ModifierObservationDetectsValueAndAreaChanges()
+        {
+            var modifier = Modifier();
+            _session.RegisterModifier(modifier);
+            _session.Submit(Request());
+            Finish();
+            modifier.Speed = 4f;
+            modifier.Revision++;
+            _session.DetectModifierChanges();
+            Finish();
+            Assert.That(_session.Sample(Position).SpeedMultiplier, Is.EqualTo(4f));
+            _area.transform.position = Vector3.one * 100f;
+            Physics.SyncTransforms();
+            _session.DetectModifierChanges();
+            Finish();
+            Assert.That(_session.Sample(Position).SpeedMultiplier, Is.EqualTo(1f));
+        }
+
+        [Test]
+        public void NewObstacleStopsPreviousRouteBeforeReplacementPublication()
+        {
+            _session.Submit(Request());
+            Finish();
+            _obstacle = new GameObject("New route obstacle");
+            _obstacle.layer = FlowFieldRegressionFixture.Layer;
+            _obstacle.transform.position = Vector3.one * 1.5f;
+            _obstacle.AddComponent<BoxCollider>();
+            Physics.SyncTransforms();
+            _session.RegisterObstacleCommand(_obstacle.GetComponent<Collider>());
+            var sample = _session.Sample(Position);
+            Assert.That(sample.SpeedMultiplier, Is.Zero);
+        }
+
+        [Test]
+        public void PublicationCallbackCanReleaseAndInitializeNewLifetime()
+        {
+            bool restarted = false;
+            _session.FieldCommitted += () =>
+            {
+                if (restarted) return;
+                restarted = true;
+                _session.Release();
+                _session.Initialize(FlowFieldBakeMode.RuntimeDynamic);
+                _session.Submit(Request(new Vector3(0.5f, 2.5f, 2.5f)));
+            };
+            _session.Submit(Request());
+            Finish();
+            Assert.That(restarted, Is.True);
+            Assert.That(_session.TryGetFieldInfo(out var info), Is.True);
+            Assert.That(info.ResolvedGoalWorld, Is.EqualTo(new Vector3(0.5f, 2.5f, 2.5f)));
+        }
+
+        [Test]
+        public void SuspendDiscardsPendingWorkUntilResumed()
+        {
+            _session.Submit(Request());
+            _session.Suspend();
+            _session.Pump(100d);
+            Assert.That(_session.IsReady, Is.False);
+            Assert.That(_session.State, Is.EqualTo(FlowFieldRuntimeState.Suspended));
+            _session.Resume();
+            _session.Submit(Request());
+            Finish();
+        }
+    }
+}

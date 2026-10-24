@@ -1,0 +1,1379 @@
+{
+  "method": "Paired round medians; bootstrap resamples launches, then blocks within each launch.",
+  "scales": {
+    "225": {
+      "metadata": [
+        {
+          "utc": "2026-10-23T17:49:25.5843940Z",
+          "unityVersion": "2023.2.20f1",
+          "platform": "OSXPlayer",
+          "operatingSystem": "Mac OS X 26.6.2",
+          "cpu": "Apple M4 Pro",
+          "gpu": "Apple M4 Pro",
+          "graphicsApi": "Metal",
+          "graphicsDriver": "Metal",
+          "quality": "High Fidelity",
+          "renderPipeline": "URP-HighFidelity",
+          "scenePath": "Assets/_OptimizeTool/Scene/OptimizeToolGpuBenchmark.unity",
+          "scope": "Prebaked opaque cubes; one orthographic camera; three aligned depth layers; shadows, light/reflection probes, instancing and authoring colliders disabled; no UI or scripted movement during measurement. All four modes use the same camera per scale.",
+          "timingDefinition": "FrameTimingManager CPU total includes waits; GPU is native frame duration including phase gaps, not isolated shader work. Fixed 16-record offset in 32 records sorted by timestamp. Player waits for splash and focus, then 3 real seconds. Warmup uses both 90 frames and the configured minimum seconds; preconditioning uses Original. wall_delta_ms is observed loop duration, not display-present FPS.",
+          "shader": "Universal Render Pipeline/Lit",
+          "runId": "run-01",
+          "buildGuid": "b3c44117ef5d4bb9945b9234535cce3c",
+          "processArchitecture": "Arm64",
+          "processId": 21591,
+          "sourceCubeCount": 225,
+          "scaleCaseIndex": 2,
+          "faceSubdivisions": 64,
+          "orderOffset": 0,
+          "rendererCounts": [
+            225,
+            1,
+            1,
+            1
+          ],
+          "vertexCounts": [
+            5703750,
+            5703750,
+            950625,
+            1901250
+          ],
+          "triangleCounts": [
+            11059200,
+            11059200,
+            1843200,
+            3686400
+          ],
+          "cameraOrthographic": true,
+          "cameraOrthographicSize": 7.593750476837158,
+          "cameraPosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": -50.0
+          },
+          "cameraRotation": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "w": 1.0
+          },
+          "cpuCores": 12,
+          "memoryMb": 24576,
+          "width": 640,
+          "height": 480,
+          "cameraWidth": 1920,
+          "cameraHeight": 1080,
+          "vSyncCount": 0,
+          "targetFrameRate": 60,
+          "warmupFrames": 90,
+          "samplesPerBlock": 240,
+          "rounds": 2,
+          "msaa": 4,
+          "frameTimingHistory": 32,
+          "historyOffset": 16,
+          "renderScale": 1.0,
+          "startupSettleSeconds": 3.0,
+          "minimumWarmupSeconds": 2.0,
+          "preconditionSeconds": 15.0,
+          "gpuRecorderSupported": false,
+          "gpuQueueDrained": true,
+          "offscreen": true,
+          "batchMode": true,
+          "gpuTimingSource": "Metal GPUStartTime/GPUEndTime; explicit single-command-buffer camera scope, identity validated",
+          "splashFinishedBeforeCapture": true,
+          "editor": false,
+          "developmentBuild": true,
+          "frameTimingEnabled": true,
+          "srpBatcher": true,
+          "dynamicBatching": false,
+          "materialInstancing": false,
+          "drawCallsCounterValid": true,
+          "batchesCounterValid": true,
+          "setPassCounterValid": true,
+          "trianglesCounterValid": true,
+          "gpuTimerFrequency": 1000000000,
+          "cpuTimerFrequency": 1000000000
+        },
+        {
+          "utc": "2026-10-23T17:50:46.0914910Z",
+          "unityVersion": "2023.2.20f1",
+          "platform": "OSXPlayer",
+          "operatingSystem": "Mac OS X 26.6.2",
+          "cpu": "Apple M4 Pro",
+          "gpu": "Apple M4 Pro",
+          "graphicsApi": "Metal",
+          "graphicsDriver": "Metal",
+          "quality": "High Fidelity",
+          "renderPipeline": "URP-HighFidelity",
+          "scenePath": "Assets/_OptimizeTool/Scene/OptimizeToolGpuBenchmark.unity",
+          "scope": "Prebaked opaque cubes; one orthographic camera; three aligned depth layers; shadows, light/reflection probes, instancing and authoring colliders disabled; no UI or scripted movement during measurement. All four modes use the same camera per scale.",
+          "timingDefinition": "FrameTimingManager CPU total includes waits; GPU is native frame duration including phase gaps, not isolated shader work. Fixed 16-record offset in 32 records sorted by timestamp. Player waits for splash and focus, then 3 real seconds. Warmup uses both 90 frames and the configured minimum seconds; preconditioning uses Original. wall_delta_ms is observed loop duration, not display-present FPS.",
+          "shader": "Universal Render Pipeline/Lit",
+          "runId": "run-02",
+          "buildGuid": "b3c44117ef5d4bb9945b9234535cce3c",
+          "processArchitecture": "Arm64",
+          "processId": 21811,
+          "sourceCubeCount": 225,
+          "scaleCaseIndex": 2,
+          "faceSubdivisions": 64,
+          "orderOffset": 1,
+          "rendererCounts": [
+            225,
+            1,
+            1,
+            1
+          ],
+          "vertexCounts": [
+            5703750,
+            5703750,
+            950625,
+            1901250
+          ],
+          "triangleCounts": [
+            11059200,
+            11059200,
+            1843200,
+            3686400
+          ],
+          "cameraOrthographic": true,
+          "cameraOrthographicSize": 7.593750476837158,
+          "cameraPosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": -50.0
+          },
+          "cameraRotation": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "w": 1.0
+          },
+          "cpuCores": 12,
+          "memoryMb": 24576,
+          "width": 640,
+          "height": 480,
+          "cameraWidth": 1920,
+          "cameraHeight": 1080,
+          "vSyncCount": 0,
+          "targetFrameRate": 60,
+          "warmupFrames": 90,
+          "samplesPerBlock": 240,
+          "rounds": 2,
+          "msaa": 4,
+          "frameTimingHistory": 32,
+          "historyOffset": 16,
+          "renderScale": 1.0,
+          "startupSettleSeconds": 3.0,
+          "minimumWarmupSeconds": 2.0,
+          "preconditionSeconds": 15.0,
+          "gpuRecorderSupported": false,
+          "gpuQueueDrained": true,
+          "offscreen": true,
+          "batchMode": true,
+          "gpuTimingSource": "Metal GPUStartTime/GPUEndTime; explicit single-command-buffer camera scope, identity validated",
+          "splashFinishedBeforeCapture": true,
+          "editor": false,
+          "developmentBuild": true,
+          "frameTimingEnabled": true,
+          "srpBatcher": true,
+          "dynamicBatching": false,
+          "materialInstancing": false,
+          "drawCallsCounterValid": true,
+          "batchesCounterValid": true,
+          "setPassCounterValid": true,
+          "trianglesCounterValid": true,
+          "gpuTimerFrequency": 1000000000,
+          "cpuTimerFrequency": 1000000000
+        },
+        {
+          "utc": "2026-10-23T17:52:06.1820290Z",
+          "unityVersion": "2023.2.20f1",
+          "platform": "OSXPlayer",
+          "operatingSystem": "Mac OS X 26.6.2",
+          "cpu": "Apple M4 Pro",
+          "gpu": "Apple M4 Pro",
+          "graphicsApi": "Metal",
+          "graphicsDriver": "Metal",
+          "quality": "High Fidelity",
+          "renderPipeline": "URP-HighFidelity",
+          "scenePath": "Assets/_OptimizeTool/Scene/OptimizeToolGpuBenchmark.unity",
+          "scope": "Prebaked opaque cubes; one orthographic camera; three aligned depth layers; shadows, light/reflection probes, instancing and authoring colliders disabled; no UI or scripted movement during measurement. All four modes use the same camera per scale.",
+          "timingDefinition": "FrameTimingManager CPU total includes waits; GPU is native frame duration including phase gaps, not isolated shader work. Fixed 16-record offset in 32 records sorted by timestamp. Player waits for splash and focus, then 3 real seconds. Warmup uses both 90 frames and the configured minimum seconds; preconditioning uses Original. wall_delta_ms is observed loop duration, not display-present FPS.",
+          "shader": "Universal Render Pipeline/Lit",
+          "runId": "run-03",
+          "buildGuid": "b3c44117ef5d4bb9945b9234535cce3c",
+          "processArchitecture": "Arm64",
+          "processId": 22033,
+          "sourceCubeCount": 225,
+          "scaleCaseIndex": 2,
+          "faceSubdivisions": 64,
+          "orderOffset": 2,
+          "rendererCounts": [
+            225,
+            1,
+            1,
+            1
+          ],
+          "vertexCounts": [
+            5703750,
+            5703750,
+            950625,
+            1901250
+          ],
+          "triangleCounts": [
+            11059200,
+            11059200,
+            1843200,
+            3686400
+          ],
+          "cameraOrthographic": true,
+          "cameraOrthographicSize": 7.593750476837158,
+          "cameraPosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": -50.0
+          },
+          "cameraRotation": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "w": 1.0
+          },
+          "cpuCores": 12,
+          "memoryMb": 24576,
+          "width": 640,
+          "height": 480,
+          "cameraWidth": 1920,
+          "cameraHeight": 1080,
+          "vSyncCount": 0,
+          "targetFrameRate": 60,
+          "warmupFrames": 90,
+          "samplesPerBlock": 240,
+          "rounds": 2,
+          "msaa": 4,
+          "frameTimingHistory": 32,
+          "historyOffset": 16,
+          "renderScale": 1.0,
+          "startupSettleSeconds": 3.0,
+          "minimumWarmupSeconds": 2.0,
+          "preconditionSeconds": 15.0,
+          "gpuRecorderSupported": false,
+          "gpuQueueDrained": true,
+          "offscreen": true,
+          "batchMode": true,
+          "gpuTimingSource": "Metal GPUStartTime/GPUEndTime; explicit single-command-buffer camera scope, identity validated",
+          "splashFinishedBeforeCapture": true,
+          "editor": false,
+          "developmentBuild": true,
+          "frameTimingEnabled": true,
+          "srpBatcher": true,
+          "dynamicBatching": false,
+          "materialInstancing": false,
+          "drawCallsCounterValid": true,
+          "batchesCounterValid": true,
+          "setPassCounterValid": true,
+          "trianglesCounterValid": true,
+          "gpuTimerFrequency": 1000000000,
+          "cpuTimerFrequency": 1000000000
+        }
+      ],
+      "runs": 3,
+      "modes": {
+        "Original": {
+          "frames": 1440,
+          "focusedFraction": 1.0,
+          "metrics": {
+            "draw_calls": {
+              "count": 1440,
+              "median": 455.0,
+              "p05": 455.0,
+              "p95": 455.0,
+              "mean": 455.0,
+              "minimum": 455.0,
+              "maximum": 455.0
+            },
+            "batches": {
+              "count": 1440,
+              "median": 455.0,
+              "p05": 455.0,
+              "p95": 455.0,
+              "mean": 455.0,
+              "minimum": 455.0,
+              "maximum": 455.0
+            },
+            "setpass_calls": {
+              "count": 1440,
+              "median": 7.0,
+              "p05": 7.0,
+              "p95": 7.0,
+              "mean": 7.0,
+              "minimum": 7.0,
+              "maximum": 7.0
+            },
+            "cpu_frame_ms": {
+              "count": 1440,
+              "median": 16.6704795,
+              "p05": 16.64578605,
+              "p95": 17.136771149999998,
+              "mean": 16.805587383333332,
+              "minimum": 16.456875,
+              "maximum": 26.937375
+            },
+            "cpu_main_ms": {
+              "count": 1440,
+              "median": 16.394937499999997,
+              "p05": 12.4295476,
+              "p95": 16.63288335,
+              "mean": 15.892468456944444,
+              "minimum": 8.434125,
+              "maximum": 26.917208
+            },
+            "cpu_render_ms": {
+              "count": 0,
+              "median": null,
+              "p05": null,
+              "p95": null,
+              "mean": null,
+              "minimum": null,
+              "maximum": null
+            },
+            "cpu_present_wait_ms": {
+              "count": 1440,
+              "median": 0.258125,
+              "p05": 0.02295625,
+              "p95": 4.624727099999991,
+              "mean": 0.8996250625,
+              "minimum": 0.003166,
+              "maximum": 9.14
+            },
+            "gpu_frame_ms": {
+              "count": 45,
+              "median": 103.91962500034424,
+              "p05": 97.08244167086377,
+              "p95": 119.9316500020359,
+              "mean": 104.86571666640683,
+              "minimum": 95.86037500594102,
+              "maximum": 122.59025000639667
+            },
+            "wall_delta_ms": {
+              "count": 1440,
+              "median": 16.666915267705917,
+              "p05": 16.6662466712296,
+              "p95": 17.129074595868587,
+              "mean": 16.805308701522236,
+              "minimum": 16.651956364512444,
+              "maximum": 26.9397534430027
+            },
+            "metal_gpu_ms": {
+              "count": 1440,
+              "median": 6.120458332588896,
+              "p05": 5.57562083367884,
+              "p95": 7.451543749630218,
+              "mean": 6.208638339107135,
+              "minimum": 5.537375000130851,
+              "maximum": 8.935500000006869
+            }
+          },
+          "gpuValidFraction": 0.03125,
+          "metalGpuValidFraction": 1.0
+        },
+        "Combined": {
+          "frames": 1440,
+          "focusedFraction": 1.0,
+          "metrics": {
+            "draw_calls": {
+              "count": 1440,
+              "median": 7.0,
+              "p05": 7.0,
+              "p95": 7.0,
+              "mean": 7.0,
+              "minimum": 7.0,
+              "maximum": 7.0
+            },
+            "batches": {
+              "count": 1440,
+              "median": 7.0,
+              "p05": 7.0,
+              "p95": 7.0,
+              "mean": 7.0,
+              "minimum": 7.0,
+              "maximum": 7.0
+            },
+            "setpass_calls": {
+              "count": 1440,
+              "median": 7.0,
+              "p05": 7.0,
+              "p95": 7.0,
+              "mean": 7.0,
+              "minimum": 7.0,
+              "maximum": 7.0
+            },
+            "cpu_frame_ms": {
+              "count": 1440,
+              "median": 16.668687499999997,
+              "p05": 16.6457417,
+              "p95": 17.1104747,
+              "mean": 16.793883767361113,
+              "minimum": 15.962375,
+              "maximum": 60.260166
+            },
+            "cpu_main_ms": {
+              "count": 1440,
+              "median": 16.3731875,
+              "p05": 13.87565625,
+              "p95": 16.62850005,
+              "mean": 16.101279054166667,
+              "minimum": 6.353792,
+              "maximum": 60.245168
+            },
+            "cpu_render_ms": {
+              "count": 0,
+              "median": null,
+              "p05": null,
+              "p95": null,
+              "mean": null,
+              "minimum": null,
+              "maximum": null
+            },
+            "cpu_present_wait_ms": {
+              "count": 1440,
+              "median": 0.28347849999999997,
+              "p05": 0.027231250000000002,
+              "p95": 3.1550124999999944,
+              "mean": 0.6782037131944444,
+              "minimum": 0.003833,
+              "maximum": 12.232833
+            },
+            "gpu_frame_ms": {
+              "count": 46,
+              "median": 93.6838124980568,
+              "p05": 87.74010416800593,
+              "p95": 116.0295520830914,
+              "mean": 97.69236231904475,
+              "minimum": 87.35970832276507,
+              "maximum": 131.3833333315415
+            },
+            "wall_delta_ms": {
+              "count": 1440,
+              "median": 16.66683703660965,
+              "p05": 16.66595572605729,
+              "p95": 17.08177477121353,
+              "mean": 16.788547557209515,
+              "minimum": 16.572166234254837,
+              "maximum": 60.29878929257393
+            },
+            "metal_gpu_ms": {
+              "count": 1440,
+              "median": 5.603145833447343,
+              "p05": 4.916770834279305,
+              "p95": 7.446756249919417,
+              "mean": 5.780067187496722,
+              "minimum": 4.74279166701308,
+              "maximum": 9.7801249994518
+            }
+          },
+          "gpuValidFraction": 0.03194444444444444,
+          "metalGpuValidFraction": 1.0
+        },
+        "Backface": {
+          "frames": 1440,
+          "focusedFraction": 1.0,
+          "metrics": {
+            "draw_calls": {
+              "count": 1440,
+              "median": 7.0,
+              "p05": 7.0,
+              "p95": 7.0,
+              "mean": 7.0,
+              "minimum": 7.0,
+              "maximum": 7.0
+            },
+            "batches": {
+              "count": 1440,
+              "median": 7.0,
+              "p05": 7.0,
+              "p95": 7.0,
+              "mean": 7.0,
+              "minimum": 7.0,
+              "maximum": 7.0
+            },
+            "setpass_calls": {
+              "count": 1440,
+              "median": 7.0,
+              "p05": 7.0,
+              "p95": 7.0,
+              "mean": 7.0,
+              "minimum": 7.0,
+              "maximum": 7.0
+            },
+            "cpu_frame_ms": {
+              "count": 1440,
+              "median": 16.671833499999998,
+              "p05": 16.64774375,
+              "p95": 17.0604316,
+              "mean": 16.913643750694444,
+              "minimum": 16.259208,
+              "maximum": 149.668083
+            },
+            "cpu_main_ms": {
+              "count": 1440,
+              "median": 16.208104,
+              "p05": 12.99146985,
+              "p95": 16.641939949999998,
+              "mean": 15.965321952777778,
+              "minimum": 5.07075,
+              "maximum": 149.655542
+            },
+            "cpu_render_ms": {
+              "count": 0,
+              "median": null,
+              "p05": null,
+              "p95": null,
+              "mean": null,
+              "minimum": null,
+              "maximum": null
+            },
+            "cpu_present_wait_ms": {
+              "count": 1440,
+              "median": 0.4451875,
+              "p05": 0.016743150000000002,
+              "p95": 4.04276045,
+              "mean": 0.9340646777777778,
+              "minimum": 0.002958,
+              "maximum": 12.440583
+            },
+            "gpu_frame_ms": {
+              "count": 44,
+              "median": 98.02547916660842,
+              "p05": 57.62189791621495,
+              "p95": 122.74436249899736,
+              "mean": 96.56741287943242,
+              "minimum": 37.1998333321244,
+              "maximum": 130.78333333578485
+            },
+            "wall_delta_ms": {
+              "count": 1440,
+              "median": 16.666999086737633,
+              "p05": 16.666291281580925,
+              "p95": 17.11166864261031,
+              "mean": 16.932475561689998,
+              "minimum": 16.5739506483078,
+              "maximum": 149.69229698181152
+            },
+            "metal_gpu_ms": {
+              "count": 1440,
+              "median": 5.6585208330943715,
+              "p05": 2.585150000413705,
+              "p95": 8.519668750159326,
+              "mean": 5.504942476860227,
+              "minimum": 1.6482916653330904,
+              "maximum": 11.9860000013432
+            }
+          },
+          "gpuValidFraction": 0.030555555555555555,
+          "metalGpuValidFraction": 1.0
+        },
+        "Occlusion": {
+          "frames": 1440,
+          "focusedFraction": 1.0,
+          "metrics": {
+            "draw_calls": {
+              "count": 1440,
+              "median": 7.0,
+              "p05": 7.0,
+              "p95": 7.0,
+              "mean": 7.0,
+              "minimum": 7.0,
+              "maximum": 7.0
+            },
+            "batches": {
+              "count": 1440,
+              "median": 7.0,
+              "p05": 7.0,
+              "p95": 7.0,
+              "mean": 7.0,
+              "minimum": 7.0,
+              "maximum": 7.0
+            },
+            "setpass_calls": {
+              "count": 1440,
+              "median": 7.0,
+              "p05": 7.0,
+              "p95": 7.0,
+              "mean": 7.0,
+              "minimum": 7.0,
+              "maximum": 7.0
+            },
+            "cpu_frame_ms": {
+              "count": 1440,
+              "median": 16.670375,
+              "p05": 16.643364599999998,
+              "p95": 17.160232699999998,
+              "mean": 16.815648639583333,
+              "minimum": 16.508917,
+              "maximum": 29.713583
+            },
+            "cpu_main_ms": {
+              "count": 1440,
+              "median": 16.1872085,
+              "p05": 12.45108755,
+              "p95": 16.635662500000002,
+              "mean": 15.809372743055556,
+              "minimum": 5.764917,
+              "maximum": 29.706
+            },
+            "cpu_render_ms": {
+              "count": 0,
+              "median": null,
+              "p05": null,
+              "p95": null,
+              "mean": null,
+              "minimum": null,
+              "maximum": null
+            },
+            "cpu_present_wait_ms": {
+              "count": 1440,
+              "median": 0.47291649999999996,
+              "p05": 0.02375,
+              "p95": 4.563841699999998,
+              "mean": 0.99199948125,
+              "minimum": 0.002875,
+              "maximum": 11.807958
+            },
+            "gpu_frame_ms": {
+              "count": 45,
+              "median": 89.20758333260892,
+              "p05": 45.78364166991378,
+              "p95": 128.32334166014334,
+              "mean": 89.01962036955713,
+              "minimum": 39.14983333197597,
+              "maximum": 132.5244166637276
+            },
+            "wall_delta_ms": {
+              "count": 1440,
+              "median": 16.66695810854435,
+              "p05": 16.666162759065628,
+              "p95": 17.138374131172895,
+              "mean": 16.811670610008555,
+              "minimum": 16.61841757595539,
+              "maximum": 29.712876304984093
+            },
+            "metal_gpu_ms": {
+              "count": 1440,
+              "median": 4.597479166477569,
+              "p05": 2.033247915642278,
+              "p95": 8.408383334426615,
+              "mean": 5.087237876159634,
+              "minimum": 1.8237916665384546,
+              "maximum": 13.046958332779468
+            }
+          },
+          "gpuValidFraction": 0.03125,
+          "metalGpuValidFraction": 1.0
+        }
+      },
+      "pairedComparisons": {
+        "Combined": {
+          "draw_calls": {
+            "pairs": 6,
+            "medianPercentChange": -98.46153846153847,
+            "bootstrap95PercentCI": [
+              -98.46153846153847,
+              -98.46153846153847
+            ],
+            "minimumPercentChange": -98.46153846153847,
+            "maximumPercentChange": -98.46153846153847
+          },
+          "cpu_frame_ms": {
+            "pairs": 6,
+            "medianPercentChange": -0.002876798655604418,
+            "bootstrap95PercentCI": [
+              -0.21099255703631026,
+              0.005311765076887465
+            ],
+            "minimumPercentChange": -0.4076141260109356,
+            "maximumPercentChange": 0.0056268606169807
+          },
+          "cpu_main_ms": {
+            "pairs": 6,
+            "medianPercentChange": -0.2806405117871613,
+            "bootstrap95PercentCI": [
+              -0.6209522647782739,
+              2.6783954367921248
+            ],
+            "minimumPercentChange": -0.7797155693666569,
+            "maximumPercentChange": 4.382333444086961
+          },
+          "gpu_frame_ms": {
+            "pairs": 6,
+            "medianPercentChange": -9.055169832897636,
+            "bootstrap95PercentCI": [
+              -12.771083202759732,
+              0.2153867668108822
+            ],
+            "minimumPercentChange": -15.192411696846865,
+            "maximumPercentChange": 0.7526793841664325
+          },
+          "wall_delta_ms": {
+            "pairs": 6,
+            "medianPercentChange": -0.00012852153188358528,
+            "bootstrap95PercentCI": [
+              -0.190578515167239,
+              0.00050290858732982
+            ],
+            "minimumPercentChange": -0.3806429455283644,
+            "maximumPercentChange": 0.0005140850359186544
+          },
+          "metal_gpu_ms": {
+            "pairs": 6,
+            "medianPercentChange": -9.311024133392316,
+            "bootstrap95PercentCI": [
+              -15.573034551827291,
+              2.2552358498530656
+            ],
+            "minimumPercentChange": -18.191634616875042,
+            "maximumPercentChange": 4.116118617783493
+          }
+        },
+        "Backface": {
+          "draw_calls": {
+            "pairs": 6,
+            "medianPercentChange": -98.46153846153847,
+            "bootstrap95PercentCI": [
+              -98.46153846153847,
+              -98.46153846153847
+            ],
+            "minimumPercentChange": -98.46153846153847,
+            "maximumPercentChange": -98.46153846153847
+          },
+          "cpu_frame_ms": {
+            "pairs": 6,
+            "medianPercentChange": -0.001561211143430441,
+            "bootstrap95PercentCI": [
+              -0.18571890917375433,
+              0.06005627841471073
+            ],
+            "minimumPercentChange": -0.3616874145875193,
+            "maximumPercentChange": 0.09349258660216186
+          },
+          "cpu_main_ms": {
+            "pairs": 6,
+            "medianPercentChange": -1.2365779887162143,
+            "bootstrap95PercentCI": [
+              -3.9913284960486237,
+              2.1899212284733016
+            ],
+            "minimumPercentChange": -4.16492025511801,
+            "maximumPercentChange": 4.09086444565101
+          },
+          "gpu_frame_ms": {
+            "pairs": 6,
+            "medianPercentChange": -8.250344069597933,
+            "bootstrap95PercentCI": [
+              -16.731555629796297,
+              5.14281773476033
+            ],
+            "minimumPercentChange": -16.89523511914247,
+            "maximumPercentChange": 5.882362392685536
+          },
+          "wall_delta_ms": {
+            "pairs": 6,
+            "medianPercentChange": 0.00036321220617807626,
+            "bootstrap95PercentCI": [
+              -0.19173806293358298,
+              0.024351975962322303
+            ],
+            "minimumPercentChange": -0.3834984773280259,
+            "maximumPercentChange": 0.046982880975954266
+          },
+          "metal_gpu_ms": {
+            "pairs": 6,
+            "medianPercentChange": -5.10190444695014,
+            "bootstrap95PercentCI": [
+              -16.030795255446343,
+              5.648729494868299
+            ],
+            "minimumPercentChange": -19.967411327709527,
+            "maximumPercentChange": 8.443901118006615
+          }
+        },
+        "Occlusion": {
+          "draw_calls": {
+            "pairs": 6,
+            "medianPercentChange": -98.46153846153847,
+            "bootstrap95PercentCI": [
+              -98.46153846153847,
+              -98.46153846153847
+            ],
+            "minimumPercentChange": -98.46153846153847,
+            "maximumPercentChange": -98.46153846153847
+          },
+          "cpu_frame_ms": {
+            "pairs": 6,
+            "medianPercentChange": -0.0006240000996027284,
+            "bootstrap95PercentCI": [
+              -0.04103285908615972,
+              0.007623413793789169
+            ],
+            "minimumPercentChange": -0.07144254680416795,
+            "maximumPercentChange": 0.007999380205458984
+          },
+          "cpu_main_ms": {
+            "pairs": 6,
+            "medianPercentChange": -0.525192099326105,
+            "bootstrap95PercentCI": [
+              -3.0528212515546937,
+              0.7878950985057642
+            ],
+            "minimumPercentChange": -3.530376833232285,
+            "maximumPercentChange": 1.3086329727678425
+          },
+          "gpu_frame_ms": {
+            "pairs": 6,
+            "medianPercentChange": -20.46643740748557,
+            "bootstrap95PercentCI": [
+              -27.311923936825988,
+              -2.2158184321924845
+            ],
+            "minimumPercentChange": -29.404740635848224,
+            "maximumPercentChange": 1.416188057111345
+          },
+          "wall_delta_ms": {
+            "pairs": 6,
+            "medianPercentChange": 0.0002235151330853835,
+            "bootstrap95PercentCI": [
+              -0.06529688434756542,
+              0.0008186253121489351
+            ],
+            "minimumPercentChange": -0.13010203655637875,
+            "maximumPercentChange": 0.0009108245745181875
+          },
+          "metal_gpu_ms": {
+            "pairs": 6,
+            "medianPercentChange": -24.08368450786614,
+            "bootstrap95PercentCI": [
+              -40.5718527829132,
+              4.346781282125018
+            ],
+            "minimumPercentChange": -46.33812570776591,
+            "maximumPercentChange": 12.992079645217558
+          }
+        }
+      },
+      "blockMedians": [
+        {
+          "run": 0,
+          "round": 0,
+          "mode": "Original",
+          "draw_calls": 455.0,
+          "batches": 455.0,
+          "setpass_calls": 7.0,
+          "cpu_frame_ms": 16.6711045,
+          "cpu_main_ms": 16.1778745,
+          "cpu_render_ms": null,
+          "cpu_present_wait_ms": 0.477688,
+          "gpu_frame_ms": 103.03866666799877,
+          "wall_delta_ms": 16.666876152157784,
+          "metal_gpu_ms": 6.085916666961566
+        },
+        {
+          "run": 0,
+          "round": 0,
+          "mode": "Combined",
+          "draw_calls": 7.0,
+          "batches": 7.0,
+          "setpass_calls": 7.0,
+          "cpu_frame_ms": 16.6719375,
+          "cpu_main_ms": 16.335521,
+          "cpu_render_ms": null,
+          "cpu_present_wait_ms": 0.3192705,
+          "gpu_frame_ms": 102.70697917167126,
+          "wall_delta_ms": 16.66695810854435,
+          "metal_gpu_ms": 6.109916666900972
+        },
+        {
+          "run": 0,
+          "round": 0,
+          "mode": "Backface",
+          "draw_calls": 7.0,
+          "batches": 7.0,
+          "setpass_calls": 7.0,
+          "cpu_frame_ms": 16.669479,
+          "cpu_main_ms": 16.224625,
+          "cpu_render_ms": null,
+          "cpu_present_wait_ms": 0.4249585,
+          "gpu_frame_ms": 85.6300416708109,
+          "wall_delta_ms": 16.666879877448082,
+          "metal_gpu_ms": 5.349875000320026
+        },
+        {
+          "run": 0,
+          "round": 0,
+          "mode": "Occlusion",
+          "draw_calls": 7.0,
+          "batches": 7.0,
+          "setpass_calls": 7.0,
+          "cpu_frame_ms": 16.6693335,
+          "cpu_main_ms": 16.3895835,
+          "cpu_render_ms": null,
+          "cpu_present_wait_ms": 0.2603125,
+          "gpu_frame_ms": 97.01314583981002,
+          "wall_delta_ms": 16.666794195771217,
+          "metal_gpu_ms": 5.824312499498774
+        },
+        {
+          "run": 0,
+          "round": 1,
+          "mode": "Original",
+          "draw_calls": 455.0,
+          "batches": 455.0,
+          "setpass_calls": 7.0,
+          "cpu_frame_ms": 16.738625,
+          "cpu_main_ms": 15.424625,
+          "cpu_render_ms": null,
+          "cpu_present_wait_ms": 1.2990415,
+          "gpu_frame_ms": 103.73772916591406,
+          "wall_delta_ms": 16.73133112490177,
+          "metal_gpu_ms": 5.861104166797304
+        },
+        {
+          "run": 0,
+          "round": 1,
+          "mode": "Combined",
+          "draw_calls": 7.0,
+          "batches": 7.0,
+          "setpass_calls": 7.0,
+          "cpu_frame_ms": 16.670396,
+          "cpu_main_ms": 16.1005835,
+          "cpu_render_ms": null,
+          "cpu_present_wait_ms": 0.5760624999999999,
+          "gpu_frame_ms": 104.5185416669483,
+          "wall_delta_ms": 16.66764449328184,
+          "metal_gpu_ms": 6.102354166614532
+        },
+        {
+          "run": 0,
+          "round": 1,
+          "mode": "Backface",
+          "draw_calls": 7.0,
+          "batches": 7.0,
+          "setpass_calls": 7.0,
+          "cpu_frame_ms": 16.6780835,
+          "cpu_main_ms": 16.055625499999998,
+          "cpu_render_ms": null,
+          "cpu_present_wait_ms": 0.597271,
+          "gpu_frame_ms": 109.83995833339577,
+          "wall_delta_ms": 16.667166724801064,
+          "metal_gpu_ms": 6.028354166119243
+        },
+        {
+          "run": 0,
+          "round": 1,
+          "mode": "Occlusion",
+          "draw_calls": 7.0,
+          "batches": 7.0,
+          "setpass_calls": 7.0,
+          "cpu_frame_ms": 16.7266665,
+          "cpu_main_ms": 15.465833,
+          "cpu_render_ms": null,
+          "cpu_present_wait_ms": 1.2459790000000002,
+          "gpu_frame_ms": 77.57600000149978,
+          "wall_delta_ms": 16.709563322365284,
+          "metal_gpu_ms": 4.178583333668939
+        },
+        {
+          "run": 1,
+          "round": 0,
+          "mode": "Original",
+          "draw_calls": 455.0,
+          "batches": 455.0,
+          "setpass_calls": 7.0,
+          "cpu_frame_ms": 16.6679375,
+          "cpu_main_ms": 16.5663335,
+          "cpu_render_ms": null,
+          "cpu_present_wait_ms": 0.089708,
+          "gpu_frame_ms": 103.05491666622402,
+          "wall_delta_ms": 16.666794195771217,
+          "metal_gpu_ms": 5.9305624999979045
+        },
+        {
+          "run": 1,
+          "round": 0,
+          "mode": "Combined",
+          "draw_calls": 7.0,
+          "batches": 7.0,
+          "setpass_calls": 7.0,
+          "cpu_frame_ms": 16.6665415,
+          "cpu_main_ms": 16.539938,
+          "cpu_render_ms": null,
+          "cpu_present_wait_ms": 0.113896,
+          "gpu_frame_ms": 94.75491666580638,
+          "wall_delta_ms": 16.666751354932785,
+          "metal_gpu_ms": 5.162291666238161
+        },
+        {
+          "run": 1,
+          "round": 0,
+          "mode": "Backface",
+          "draw_calls": 7.0,
+          "batches": 7.0,
+          "setpass_calls": 7.0,
+          "cpu_frame_ms": 16.6723745,
+          "cpu_main_ms": 15.9338745,
+          "cpu_render_ms": null,
+          "cpu_present_wait_ms": 0.7327079999999999,
+          "gpu_frame_ms": 97.99137499612698,
+          "wall_delta_ms": 16.6670810431242,
+          "metal_gpu_ms": 6.431333333239309
+        },
+        {
+          "run": 1,
+          "round": 0,
+          "mode": "Occlusion",
+          "draw_calls": 7.0,
+          "batches": 7.0,
+          "setpass_calls": 7.0,
+          "cpu_frame_ms": 16.6691455,
+          "cpu_main_ms": 15.981479499999999,
+          "cpu_render_ms": null,
+          "cpu_present_wait_ms": 0.6715415,
+          "gpu_frame_ms": 80.82791667038691,
+          "wall_delta_ms": 16.666915267705917,
+          "metal_gpu_ms": 3.866395833028946
+        },
+        {
+          "run": 1,
+          "round": 1,
+          "mode": "Original",
+          "draw_calls": 455.0,
+          "batches": 455.0,
+          "setpass_calls": 7.0,
+          "cpu_frame_ms": 16.669,
+          "cpu_main_ms": 16.472417,
+          "cpu_render_ms": null,
+          "cpu_present_wait_ms": 0.182,
+          "gpu_frame_ms": 101.13416667445563,
+          "wall_delta_ms": 16.66683703660965,
+          "metal_gpu_ms": 5.842020833370043
+        },
+        {
+          "run": 1,
+          "round": 1,
+          "mode": "Combined",
+          "draw_calls": 7.0,
+          "batches": 7.0,
+          "setpass_calls": 7.0,
+          "cpu_frame_ms": 16.6666045,
+          "cpu_main_ms": 16.343979,
+          "cpu_render_ms": null,
+          "cpu_present_wait_ms": 0.308,
+          "gpu_frame_ms": 90.9637291688341,
+          "wall_delta_ms": 16.666751354932785,
+          "metal_gpu_ms": 5.204645834055555
+        },
+        {
+          "run": 1,
+          "round": 1,
+          "mode": "Backface",
+          "draw_calls": 7.0,
+          "batches": 7.0,
+          "setpass_calls": 7.0,
+          "cpu_frame_ms": 16.668854500000002,
+          "cpu_main_ms": 16.0713335,
+          "cpu_render_ms": null,
+          "cpu_present_wait_ms": 0.58725,
+          "gpu_frame_ms": 89.41549999781273,
+          "wall_delta_ms": 16.666872426867485,
+          "metal_gpu_ms": 5.530895833544491
+        },
+        {
+          "run": 1,
+          "round": 1,
+          "mode": "Occlusion",
+          "draw_calls": 7.0,
+          "batches": 7.0,
+          "setpass_calls": 7.0,
+          "cpu_frame_ms": 16.669375000000002,
+          "cpu_main_ms": 16.0482085,
+          "cpu_render_ms": null,
+          "cpu_present_wait_ms": 0.5998749999999999,
+          "gpu_frame_ms": 102.56641666455835,
+          "wall_delta_ms": 16.66695810854435,
+          "metal_gpu_ms": 6.601020832931681
+        },
+        {
+          "run": 2,
+          "round": 0,
+          "mode": "Original",
+          "draw_calls": 455.0,
+          "batches": 455.0,
+          "setpass_calls": 7.0,
+          "cpu_frame_ms": 16.668166499999998,
+          "cpu_main_ms": 16.5183955,
+          "cpu_render_ms": null,
+          "cpu_present_wait_ms": 0.13166650000000002,
+          "gpu_frame_ms": 106.9895416530926,
+          "wall_delta_ms": 16.66683703660965,
+          "metal_gpu_ms": 6.347583333081275
+        },
+        {
+          "run": 2,
+          "round": 0,
+          "mode": "Combined",
+          "draw_calls": 7.0,
+          "batches": 7.0,
+          "setpass_calls": 7.0,
+          "cpu_frame_ms": 16.668603500000003,
+          "cpu_main_ms": 16.451999999999998,
+          "cpu_render_ms": null,
+          "cpu_present_wait_ms": 0.20350000000000001,
+          "gpu_frame_ms": 90.73525001258531,
+          "wall_delta_ms": 16.66683703660965,
+          "metal_gpu_ms": 5.192854166125471
+        },
+        {
+          "run": 2,
+          "round": 0,
+          "mode": "Backface",
+          "draw_calls": 7.0,
+          "batches": 7.0,
+          "setpass_calls": 7.0,
+          "cpu_frame_ms": 16.683750000000003,
+          "cpu_main_ms": 15.8304175,
+          "cpu_render_ms": null,
+          "cpu_present_wait_ms": 0.8299165,
+          "gpu_frame_ms": 111.70058333573252,
+          "wall_delta_ms": 16.674667596817017,
+          "metal_gpu_ms": 6.0379374990588985
+        },
+        {
+          "run": 2,
+          "round": 0,
+          "mode": "Occlusion",
+          "draw_calls": 7.0,
+          "batches": 7.0,
+          "setpass_calls": 7.0,
+          "cpu_frame_ms": 16.6675835,
+          "cpu_main_ms": 16.430666,
+          "cpu_render_ms": null,
+          "cpu_present_wait_ms": 0.22183350000000002,
+          "gpu_frame_ms": 86.27127082854713,
+          "wall_delta_ms": 16.66679047048092,
+          "metal_gpu_ms": 5.112291666591773
+        },
+        {
+          "run": 2,
+          "round": 1,
+          "mode": "Original",
+          "draw_calls": 455.0,
+          "batches": 455.0,
+          "setpass_calls": 7.0,
+          "cpu_frame_ms": 16.670041500000004,
+          "cpu_main_ms": 16.493146,
+          "cpu_render_ms": null,
+          "cpu_present_wait_ms": 0.15587499999999999,
+          "gpu_frame_ms": 105.06589583110326,
+          "wall_delta_ms": 16.666829586029053,
+          "metal_gpu_ms": 6.226604165931349
+        },
+        {
+          "run": 2,
+          "round": 1,
+          "mode": "Combined",
+          "draw_calls": 7.0,
+          "batches": 7.0,
+          "setpass_calls": 7.0,
+          "cpu_frame_ms": 16.6709795,
+          "cpu_main_ms": 16.4169165,
+          "cpu_render_ms": null,
+          "cpu_present_wait_ms": 0.231875,
+          "gpu_frame_ms": 94.1918333301146,
+          "wall_delta_ms": 16.666915267705917,
+          "metal_gpu_ms": 5.746416666625009
+        },
+        {
+          "run": 2,
+          "round": 1,
+          "mode": "Backface",
+          "draw_calls": 7.0,
+          "batches": 7.0,
+          "setpass_calls": 7.0,
+          "cpu_frame_ms": 16.669666499999998,
+          "cpu_main_ms": 16.486832999999997,
+          "cpu_render_ms": null,
+          "cpu_present_wait_ms": 0.16791699999999998,
+          "gpu_frame_ms": 87.65870834395173,
+          "wall_delta_ms": 16.666915267705917,
+          "metal_gpu_ms": 4.9833125003715395
+        },
+        {
+          "run": 2,
+          "round": 1,
+          "mode": "Occlusion",
+          "draw_calls": 7.0,
+          "batches": 7.0,
+          "setpass_calls": 7.0,
+          "cpu_frame_ms": 16.671374999999998,
+          "cpu_main_ms": 16.4075,
+          "cpu_render_ms": null,
+          "cpu_present_wait_ms": 0.251708,
+          "gpu_frame_ms": 74.17154166523687,
+          "wall_delta_ms": 16.666981391608715,
+          "metal_gpu_ms": 3.341312500197091
+        }
+      ],
+      "observedSyncIntervals": [
+        1.0
+      ],
+      "observedWidthScales": [
+        1.0
+      ],
+      "observedHeightScales": [
+        1.0
+      ],
+      "clusteredComparisons": {
+        "Combined": {
+          "cpu_frame_ms": {
+            "runs": 3,
+            "pairs": 6,
+            "medianPercentChange": -0.002876798655604418,
+            "bootstrap95PercentCI": [
+              -0.4076141260109356,
+              0.0056268606169807
+            ]
+          },
+          "cpu_main_ms": {
+            "runs": 3,
+            "pairs": 6,
+            "medianPercentChange": -0.2806405117871613,
+            "bootstrap95PercentCI": [
+              -0.7797155693666569,
+              4.382333444086961
+            ]
+          },
+          "gpu_frame_ms": {
+            "runs": 3,
+            "pairs": 6,
+            "medianPercentChange": -9.055169832897636,
+            "bootstrap95PercentCI": [
+              -15.192411696846865,
+              0.7526793841664325
+            ]
+          },
+          "wall_delta_ms": {
+            "runs": 3,
+            "pairs": 6,
+            "medianPercentChange": -0.00012852153188358528,
+            "bootstrap95PercentCI": [
+              -0.3806429455283644,
+              0.0005140850359186544
+            ]
+          },
+          "metal_gpu_ms": {
+            "runs": 3,
+            "pairs": 6,
+            "medianPercentChange": -9.311024133392316,
+            "bootstrap95PercentCI": [
+              -18.191634616875042,
+              4.116118617783493
+            ]
+          }
+        },
+        "Backface": {
+          "cpu_frame_ms": {
+            "runs": 3,
+            "pairs": 6,
+            "medianPercentChange": -0.001561211143430441,
+            "bootstrap95PercentCI": [
+              -0.3616874145875193,
+              0.06005627841471073
+            ]
+          },
+          "cpu_main_ms": {
+            "runs": 3,
+            "pairs": 6,
+            "medianPercentChange": -1.2365779887162143,
+            "bootstrap95PercentCI": [
+              -4.16492025511801,
+              2.1899212284733016
+            ]
+          },
+          "gpu_frame_ms": {
+            "runs": 3,
+            "pairs": 6,
+            "medianPercentChange": -8.250344069597933,
+            "bootstrap95PercentCI": [
+              -16.89523511914247,
+              5.882362392685536
+            ]
+          },
+          "wall_delta_ms": {
+            "runs": 3,
+            "pairs": 6,
+            "medianPercentChange": 0.00036321220617807626,
+            "bootstrap95PercentCI": [
+              -0.3834984773280259,
+              0.046982880975954266
+            ]
+          },
+          "metal_gpu_ms": {
+            "runs": 3,
+            "pairs": 6,
+            "medianPercentChange": -5.10190444695014,
+            "bootstrap95PercentCI": [
+              -19.967411327709527,
+              5.648729494868299
+            ]
+          }
+        },
+        "Occlusion": {
+          "cpu_frame_ms": {
+            "runs": 3,
+            "pairs": 6,
+            "medianPercentChange": -0.0006240000996027284,
+            "bootstrap95PercentCI": [
+              -0.07144254680416795,
+              0.007999380205458984
+            ]
+          },
+          "cpu_main_ms": {
+            "runs": 3,
+            "pairs": 6,
+            "medianPercentChange": -0.525192099326105,
+            "bootstrap95PercentCI": [
+              -3.530376833232285,
+              1.3086329727678425
+            ]
+          },
+          "gpu_frame_ms": {
+            "runs": 3,
+            "pairs": 6,
+            "medianPercentChange": -20.46643740748557,
+            "bootstrap95PercentCI": [
+              -29.404740635848224,
+              1.416188057111345
+            ]
+          },
+          "wall_delta_ms": {
+            "runs": 3,
+            "pairs": 6,
+            "medianPercentChange": 0.0002235151330853835,
+            "bootstrap95PercentCI": [
+              -0.13010203655637875,
+              0.0009108245745181875
+            ]
+          },
+          "metal_gpu_ms": {
+            "runs": 3,
+            "pairs": 6,
+            "medianPercentChange": -24.08368450786614,
+            "bootstrap95PercentCI": [
+              -46.33812570776591,
+              4.346781282125018
+            ]
+          }
+        }
+      }
+    }
+  }
+}

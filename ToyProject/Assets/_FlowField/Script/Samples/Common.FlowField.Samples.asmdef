@@ -3,7 +3,8 @@
     "rootNamespace": "Common.FlowField.Samples",
     "references": [
         "Common.FlowField.Core",
-        "Common.FlowField.Runtime"
+        "Common.FlowField.Runtime",
+        "UnityEngine.UI"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

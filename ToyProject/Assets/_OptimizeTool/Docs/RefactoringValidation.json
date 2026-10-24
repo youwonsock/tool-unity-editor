@@ -1,0 +1,904 @@
+{
+  "clientDate": "2026-10-24",
+  "unity": "2023.2.20f1",
+  "scope": "OptimizeTool refactoring; existing scene, prefab and script identities retained",
+  "tests": {
+    "editmode": {
+      "summary": {
+        "total": 61,
+        "passed": 61,
+        "failed": 0,
+        "skipped": 0
+      },
+      "startUtc": "2026-10-23 15:30:22Z",
+      "endUtc": "2026-10-23 15:30:26Z",
+      "cases": [
+        {
+          "name": "Common.OptimizeTool.Tests.MeshOptimizationTests.ASourceOver65535VerticesUsesUInt32AndSurvivesCombination",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshOptimizationTests.BackfaceCompactionPreservesAllVertexChannelsAndEmptySubmeshes",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshOptimizationTests.BakerStagesEveryInputBeforeSavingOrReplacingAnyFilter",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshOptimizationTests.BakerUsesScalePerInstanceAndUndoRestoresMeshReferences",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshOptimizationTests.BothToolsHaveRealCustomInspectors",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshOptimizationTests.CombinationCreatesMaterialMappedSceneOutputAndUndoRestoresSources",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshOptimizationTests.CustomVectorDoesNotRequireAnUnusedCameraReference",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshOptimizationTests.MirroredNonUniformScalePreservesFrontFaceAndCorrectWinding",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshOptimizationTests.MissingNormalsRequirePermissionAndAreRecalculatedForSingleMaterialOutput",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshOptimizationTests.MixedChannelLayoutsKeepTangentsAndUv2DuringCombination",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshOptimizationTests.OcclusionExpandsTheHitBufferInsteadOfTreatingOwnHitsAsBlockers",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshOptimizationTests.OcclusionIgnoresOwnCollidersButDetectsAnExternalWallAndLayerMask",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshOptimizationTests.OutputCollisionIsRejectedBeforeAnyAssetIsCreated",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshOptimizationTests.PerspectiveUsesTrianglePositionWhileOrthographicUsesCameraForward",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshOptimizationTests.ReadableCopyHandlesUnreadableMeshesWithoutChangingTheSource",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshOptimizationTests.RepeatedChildCollectionDoesNotCombineItsOwnGeneratedOutput",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshOptimizationTests.SmallValidScaleIsNotMistakenForAZeroScaleTransform",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshOptimizationTests.SuccessfulOverwritePreservesGuidAndSupportsUndoAndRedo",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshOptimizationTests.TransactionRollsBackExistingNewAssetsAndSceneChangesOnFailure",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshRefactoringTests.ExistingShowcasePrefabResolvesAllScriptsAndModeReferencesWithoutMigration",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshRefactoringTests.FailureAfterSavingAPrefabRestoresBothAssetsAndTheirGuids(False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshRefactoringTests.FailureAfterSavingAPrefabRestoresBothAssetsAndTheirGuids(True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshRefactoringTests.IncompatibleRendererSettingsFailBeforeSavingOrDisablingSources(\"layer\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshRefactoringTests.IncompatibleRendererSettingsFailBeforeSavingOrDisablingSources(\"shadows\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshRefactoringTests.IncompatibleRendererSettingsFailBeforeSavingOrDisablingSources(\"sorting\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshRefactoringTests.IncompatibleRendererSettingsFailBeforeSavingOrDisablingSources(\"renderingLayers\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshRefactoringTests.IncompatibleRendererSettingsFailBeforeSavingOrDisablingSources(\"probeAnchor\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshRefactoringTests.InMemoryBuildDoesNotRequireSaveSettingsAndOwnsOnlyTransientOutputs",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshRefactoringTests.RollbackContinuesRestoringOtherAssetsWhenOneRestorationFails",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshRefactoringTests.SceneOutputPreservesSupportedSettingsAndUndoRedoRestoresSources",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshRefactoringTests.ShowcaseBuilderRegeneratesRealOutputsInAnIsolatedPrefabAndPreservesAssetGuids",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshRefactoringTests.TypedRequestCopiesTheSourceListAndMatchesTheLegacyComponent",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshRefactoringTests.UnsupportedPerRendererDataFailsBeforeSaving(\"propertyBlock\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshRefactoringTests.UnsupportedPerRendererDataFailsBeforeSaving(\"lightmap\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshRefactoringTests.UnsupportedPerRendererDataFailsBeforeSaving(\"streams\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.MeshRefactoringTests.UnsupportedPerRendererDataFailsBeforeSaving(\"lod\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.PhysicsRecorderCompatibilityTests.ExistingEntryPointsAndSerializedPrefabReferencesRemainAvailable",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.PhysicsRecorderTests.CompletionResultMatchesLegacyApiAndSurvivesReleaseUntilTheNextTake",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.PhysicsRecorderTests.DestroyedOrRenamedHierarchyFailsBeforeWritingAssets",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.PhysicsRecorderTests.DuplicatePathsAndNestedRecordingAreRejected",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.PhysicsRecorderTests.DurationBetweenFixedTicksInterpolatesTheBoundaryPose",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.PhysicsRecorderTests.InitialFinalAndIdlePosesSurviveSavedClipSampling(True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.PhysicsRecorderTests.InitialFinalAndIdlePosesSurviveSavedClipSampling(False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.PhysicsRecorderTests.InitializationFailureRetainsPreviouslyPublishedAssetReferences",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.PhysicsRecorderTests.IntervalStaysAnchoredAndInspectorEditsDoNotChangeActiveRecording",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.PhysicsRecorderTests.OutputConflictAtStopFaultsOnceAndReleaseAllowsRetry",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.PhysicsRecorderTests.OverwritePreservesBothAssetGuidsAndTheClipReference",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.PhysicsRecorderTests.PlaybackStripsInactivePhysicsAndExistingAnimationComponents",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.PhysicsRecorderTests.RecordingMetricsExposeObservationKeysExportPhasesAndOverwriteBackupSize(16)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.PhysicsRecorderTests.RecordingMetricsExposeObservationKeysExportPhasesAndOverwriteBackupSize(128)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.PhysicsRecorderTests.ReleaseDuringRecordingCompletesBothAssetsSynchronously",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.PhysicsRecorderTests.StationaryRecordingRetainsBothBoundaryKeysAndFullDuration",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.PhysicsRecorderTests.UnavailablePrefabImportRollsBackBothOutputAssets(False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.PhysicsRecorderTests.UnavailablePrefabImportRollsBackBothOutputAssets(True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.PhysicsRecordingSessionTests.CompletedTakeCannotBeMutatedThroughTheSessionOrPublishedLists",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.PhysicsRecordingSessionTests.EndpointUsesThePreviousObservationEvenWhenItWasNotStoredAsAKey",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.PhysicsRecordingSessionTests.IdleBoundariesAndInitialFinalPosesAreRetained(True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.PhysicsRecordingSessionTests.IdleBoundariesAndInitialFinalPosesAreRetained(False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.PhysicsRecordingSessionTests.ManualStopAtTheSameTimeReplacesTheBoundaryKey",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.PhysicsRecordingSessionTests.QuaternionSignsStayContinuousAcrossAnIdleSpan",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.PhysicsRecordingSessionTests.SamplingIntervalRemainsAnchoredToTheStartTime",
+          "result": "Passed"
+        }
+      ]
+    },
+    "playmode": {
+      "summary": {
+        "total": 15,
+        "passed": 15,
+        "failed": 0,
+        "skipped": 0
+      },
+      "startUtc": "2026-10-23 15:30:33Z",
+      "endUtc": "2026-10-23 15:30:48Z",
+      "cases": [
+        {
+          "name": "Common.OptimizeTool.Tests.OptimizeToolBenchmarkTests.DiagnosticWriteFailureCannotPreventRestorationOnDisable",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests.CancellingAPendingTakeAfterReleasedFailureDoesNotReuseTheOldError",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests.CompareResetAndModeSwitchingPreserveTheTakeAndSupportRerecording",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests.DisablingBeforeTheFirstPhysicsTickCancelsWithoutLockingControls",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests.DisablingOnlyTheDemoComponentSavesTheTakeAndRestoresControls",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests.DisablingShowcaseSavesTheTakeAndRestoresControls",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests.FractionalDurationComparesAndFreezesAtTheSameClipEndpoint",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests.PhysicsViewAndFocusKeepBothArenasInsideAPortraitCamera",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests.RecordButtonSavesActualPhysicsAndComparesTheGeneratedPrefab",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests.RejectedPlaybackDoesNotLeaveAnActiveOrOrphanedInstance",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.OptimizeToolShowcaseTests.BakedResultsKeepTheRenderedImageFromTheBakeView",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.OptimizeToolShowcaseTests.SampleSwitchesBetweenDistinctRealBakesAtTheSameCameraPose",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.PhysicsRecorderPlaybackTests.AutomaticPhysicsRecordingCreatesAnAutoplayingPhysicsFreePrefab",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.PhysicsRecorderPlaybackTests.DisablingRecorderFinishesSynchronouslyAndCanRestart",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.OptimizeTool.Tests.PhysicsRecorderPlaybackTests.ManualStopThenImmediateRestartDoesNotReusePreviousSampler",
+          "result": "Passed"
+        }
+      ]
+    }
+  },
+  "testExecution": "Unity native batch EditMode and PlayMode NUnit XML; current source matches the recorded native-run manifest. MCP EditMode also passed; MCP PlayMode callbacks were lost during domain reload.",
+  "testedSourceManifest": {
+    "Assets/_OptimizeTool/Script/Common.OptimizeTool.asmdef.meta": "aa48807a6e7e1b1cb620e5f0dc8a144fae1480b8e0171b03d0aa11b073dad57c",
+    "Assets/_OptimizeTool/Script/PhysicsRecordingAssetWriter.cs": "2fb77012b25d35deb9fc44a200dad8e389888fb4d4cc111a89a0887967cc4aa3",
+    "Assets/_OptimizeTool/Script/PhysicsRecordingResult.cs": "03a1537e80ca831027c336d2716d5e245c18dbe3c063d2bdcee25e52a9239aa5",
+    "Assets/_OptimizeTool/Script/MeshRendererSettings.cs.meta": "6d247aa602f9fdf5fb5eeef1bcd98956f510157d5cbf8259beee26051e4953f3",
+    "Assets/_OptimizeTool/Script/MeshSceneOutput.cs.meta": "6e142c7aa5eddd1d3de2f5730620cf3e6a7726e21b1778b2ec44e9d50eebe756",
+    "Assets/_OptimizeTool/Script/AssemblyInfo.cs.meta": "1df32c6d7838df74bb85444811480838b45ea28ef243a7687c302f358d7385cc",
+    "Assets/_OptimizeTool/Script/MeshAssetTransaction.cs.meta": "eb06a12baa5a73d2eb63a9d83eb69e188ff93669a272b9e5162e3e893bc53ad4",
+    "Assets/_OptimizeTool/Script/PhysicsPoseSample.cs": "10c01881b6c584330ba7c03c3965d0b5e1abf0ca8072b55dfaf3603ea3c58e77",
+    "Assets/_OptimizeTool/Script/AssemblyInfo.cs": "023daf5e321201a17d795a8f1aa54e7f136f957b1c02ea0fbce6ba692e45c57e",
+    "Assets/_OptimizeTool/Script/MeshCombiner.cs": "20d1eeec98e72b6670dad37f2ed4591d52923dde16adbd1631262c960f1dd352",
+    "Assets/_OptimizeTool/Script/BackfaceCullMeshBaker.cs.meta": "e3c5aa67ae21e9d0439997118317d18b38705f33a5c428962e611f7d013d87b6",
+    "Assets/_OptimizeTool/Script/MeshSceneOutput.cs": "8c4692fc90fa3eba9b69e05f250f493ebbdbc48864179babfe7ce3ffd11801b5",
+    "Assets/_OptimizeTool/Script/PhysicsRecorder.cs": "6a83c9973f6b9990a3f589a066ba499b54d5bed9fb3a6c41c4d9b4af7823fd62",
+    "Assets/_OptimizeTool/Script/BackfaceCullMeshBaker.cs": "eef87c2358a58546307ea545233055fb0bbdb819c314cd472c65221a565b3c6a",
+    "Assets/_OptimizeTool/Script/MeshBuildResult.cs.meta": "33118e59fb303a39d68e461af95f1483007c14da7b59d0e4e32dccefaccb5676",
+    "Assets/_OptimizeTool/Script/MeshVisibilityQuery.cs": "401a7257624223b399d9a685ee5bade54c038dbed723a92db702d92011bd9b4e",
+    "Assets/_OptimizeTool/Script/PhysicsRecordingSettings.cs.meta": "394dd540debbf4b400a0adcaff621d3eacd9f5aa009202124c5a37e2a59a099e",
+    "Assets/_OptimizeTool/Script/MeshAssetTransaction.cs": "d01e4a7aa90367e6c693fed207fb15e07018779bbba14042766f3f5da3d5410d",
+    "Assets/_OptimizeTool/Script/PhysicsRecordingSession.cs.meta": "ea37c7ea2b582d09ef5e676b5e408c3ecb77366dd678df2135e33e48f4a5eaec",
+    "Assets/_OptimizeTool/Script/Editor.meta": "565f96ed61ca14ef0a5eb5d5e6f0679130c385b60f5de56d92066680b12c0df9",
+    "Assets/_OptimizeTool/Script/MeshVisibilityQuery.cs.meta": "513e411ecb67578215e4383b5fdedc0bcb5e216f8544c6a6922c91c9ba1d3410",
+    "Assets/_OptimizeTool/Script/PhysicsRecordingMetrics.cs": "a70bebeace058319783090576b2b1cde5b23d18e3d9da0e02113cc88006a2ac2",
+    "Assets/_OptimizeTool/Script/PhysicsRecorder.cs.meta": "699858e4a494f8b3d085de9308fb517b9adcf329d5aad0a63afc66c28dda35cf",
+    "Assets/_OptimizeTool/Script/MeshProcessingUtility.cs": "e436b75b152b692d11e20a0e372feb08f0b856d8dffed64397e18efe2d44ae8a",
+    "Assets/_OptimizeTool/Script/PhysicsRecordingAssetWriter.cs.meta": "750b7960e27a6520baf6cbc6cc1b1f2d903a4c425c4f7520be11398e5c69c027",
+    "Assets/_OptimizeTool/Script/MeshCombiner.cs.meta": "8e6c81136dd87dd5719709ad71ca8c461ee9d37a7e836589f26b7401556d419a",
+    "Assets/_OptimizeTool/Script/MeshBuildPipeline.cs": "5d4e01a171d0a88def3c0be90eb29f8366434f49059691bd0637002bd3b76296",
+    "Assets/_OptimizeTool/Script/MeshBuildPipeline.cs.meta": "420c1bfe855b4bb4c05182f546f9671e766ec297ba72da5d0ec43a9634fe991b",
+    "Assets/_OptimizeTool/Script/Samples.meta": "fa4b16e631106c9ccf5e172d380fc93c16a6f53df2d15c755bd7776fbd4dcfbc",
+    "Assets/_OptimizeTool/Script/MeshBuildResult.cs": "b2eae61aefc1732af183af05bc343fc9809dfa2b0a4232b5c49aebc2fae6a12b",
+    "Assets/_OptimizeTool/Script/PhysicsRecordingMetrics.cs.meta": "efe76bd226542874a5a00e3425eaaa471677b8aa223bd40f0d74767e94526172",
+    "Assets/_OptimizeTool/Script/Tests.meta": "27d7ec9ecc1243f513a1018f18e625d56e557283f56161ff8358fb31a1cb584b",
+    "Assets/_OptimizeTool/Script/Common.OptimizeTool.asmdef": "abd889712c1abc03c76dfaac090b06bea0e8b46edc75fc4518b79277d5f317d0",
+    "Assets/_OptimizeTool/Script/MeshProcessingUtility.cs.meta": "c70434a515e01de0585eec585a9950ca0471d9084a7dfbba8e3d1e4b94cffb43",
+    "Assets/_OptimizeTool/Script/PhysicsRecordingResult.cs.meta": "9dc973a8f217c9ee3d2f04a6719e6f6471056630a448135e9d4e72aad872ee8e",
+    "Assets/_OptimizeTool/Script/AssetFileSnapshot.cs.meta": "934bc31c4b4cd150f46a2a71662a143d2e4d94ff98eee34a3ce80363eeeb02c6",
+    "Assets/_OptimizeTool/Script/PhysicsRecordingSettings.cs": "803abb2793058320ed451b6828512254f4f52dca5aac2d76f413ff31c78506c8",
+    "Assets/_OptimizeTool/Script/PhysicsRecordingSession.cs": "bbbea0ed93e1dbc1a5e02d5499d6aebf2153e17603b50e18898eb5e03722813f",
+    "Assets/_OptimizeTool/Script/PhysicsPoseSample.cs.meta": "d6141be8a275d98428a0df963cc3ea552fe20369e217ad755e53bb37962879b3",
+    "Assets/_OptimizeTool/Script/MeshRendererSettings.cs": "ecc712f78f871c93cb41c6c16c0795c8efbf1c05df5787290a79230d0796d68a",
+    "Assets/_OptimizeTool/Script/AssetFileSnapshot.cs": "25ae2c53fa13faa2dd98c56e30b039faeb07fca540e4bba3caf6f3a106d3cd83",
+    "Assets/_OptimizeTool/Script/Tests/Editor.meta": "9800f7d588c0a2cd4de271291c9b3b84c3b1deaae03bc95fd30ac2c78d751f39",
+    "Assets/_OptimizeTool/Script/Tests/PlayMode.meta": "888e6b1ed22d9c79b3cb5a2b4efb1e35e45532e3b527720448c87cfd8ad7cc9d",
+    "Assets/_OptimizeTool/Script/Samples/OptimizeToolPhysicsStatusFormatter.cs": "331429f2c685870e6b658fcb71e2b7698bb682ef94b462f4aad9097d8d1e3c6d",
+    "Assets/_OptimizeTool/Script/Samples/OptimizeToolOverviewController.cs.meta": "c9c50f7c9f38be371f1e0a839124c4534ef5e04840205fe026a0071dd1ee92a7",
+    "Assets/_OptimizeTool/Script/Samples/OptimizeToolPhysicsStatusFormatter.cs.meta": "21e708c1c8f54eab8e9f9918e4b66388f259e17b96ed395f06d40c0404ab3c73",
+    "Assets/_OptimizeTool/Script/Samples/OptimizeToolSampleModes.cs.meta": "5eb070f20420ae5df99a69730aaecb39b6f16f5402b5bcb8fea391323a99f0cd",
+    "Assets/_OptimizeTool/Script/Samples/OptimizeToolComparisonController.cs.meta": "5391fe1df8b96bbb2f01b5006d6d5d39e65784a7afa62579e37361ecf298af8e",
+    "Assets/_OptimizeTool/Script/Samples/OptimizeToolShowcaseUI.cs.meta": "da830f99cf0c06ba9c2a4b87b5268c09e6ddd03d7cf0aa33bc09713ef8c3600b",
+    "Assets/_OptimizeTool/Script/Samples/OptimizeToolOverviewBoard.cs": "426d7cc97d20d0e3641d266f20d302aa4bde00910f323a0028d8a370a6f5d210",
+    "Assets/_OptimizeTool/Script/Samples/OptimizeToolPerformanceBenchmark.cs.meta": "180c27816c67f240e3196dc89ff5f6b9028bfb52f95ebc05ba9a3e74b160b031",
+    "Assets/_OptimizeTool/Script/Samples/Editor.meta": "774d0198f16c09799411aba54683e91f5b356008b472fc3cbe0b03f963888d7f",
+    "Assets/_OptimizeTool/Script/Samples/BenchmarkEnvironmentScope.cs.meta": "09cc93d31d4b3eb1ce7897c3a220f6092e595ba12fcd247aa189bac501a2ad83",
+    "Assets/_OptimizeTool/Script/Samples/OptimizeToolFreeCamera.cs.meta": "027dd3bdc8dff5774c73faf315a010377012d1a21b8670c65986e43a2fbf43d7",
+    "Assets/_OptimizeTool/Script/Samples/OptimizeToolOverviewController.cs": "7bb2cc5e0a1e06927fd74d9aee5993e535a76febbac00df20eb6a8e1ce626f99",
+    "Assets/_OptimizeTool/Script/Samples/OptimizeToolOverviewBoard.cs.meta": "7228cbe0e02c756abc5fbf6346eb95c414604f784841e24688c582c9366833ec",
+    "Assets/_OptimizeTool/Script/Samples/Common.OptimizeTool.Samples.asmdef": "0688cb09f0a71e2fb37983822161f2cfed6527291a58471fe466e0d267195ef7",
+    "Assets/_OptimizeTool/Script/Samples/OptimizeToolPhysicsDemo.cs": "5598524638887fa3079a28993aaef3c5aaefe989ed5cda653aac07956ac38fb1",
+    "Assets/_OptimizeTool/Script/Samples/PhysicsPrefabPlayback.cs.meta": "4040c37e56f95af00f33bfbb46452922e4975dab4d30d2e4b51c8cdac4274b45",
+    "Assets/_OptimizeTool/Script/Samples/OptimizeToolPerformanceBenchmark.cs": "92c891845d618fed5f0b8228189a690ac984798123a1c5fe5edde9c80bff90b8",
+    "Assets/_OptimizeTool/Script/Samples/OptimizeToolComparisonController.cs": "d632faa9b0edd89ba2a2149c1573da4fae3654af95509aab0f07cdd2d9d4b182",
+    "Assets/_OptimizeTool/Script/Samples/OptimizeToolSampleModes.cs": "39787599586cabf9bbb81fce96c17ec5b6c372950466434cd5ba175083b829ee",
+    "Assets/_OptimizeTool/Script/Samples/OptimizeToolPhysicsDemo.cs.meta": "fc16548280654441f2663342fdbbaa19e8fab12b89c2ccc1877733b5333dfbee",
+    "Assets/_OptimizeTool/Script/Samples/OptimizeToolFreeCamera.cs": "8630a39399f3f1c0b4fe663758237a83c568c1d0d7bb2782599102e5e7b06315",
+    "Assets/_OptimizeTool/Script/Samples/PhysicsPrefabPlayback.cs": "2a21c6405c6177d7fabfb30e07e0fd02d2fa88ada4fe7206710a9bfbcc54e66f",
+    "Assets/_OptimizeTool/Script/Samples/OptimizeToolShowcaseUI.cs": "9567d52c06bd57c7d921a1ed21679b04bc7a0b0ccaff7cda62417ccc96309f6a",
+    "Assets/_OptimizeTool/Script/Samples/Common.OptimizeTool.Samples.asmdef.meta": "8c5803279a72f413baea7e2ecbf3dfc1988991b7e057dfb2db115e1a5ef68adc",
+    "Assets/_OptimizeTool/Script/Samples/BenchmarkEnvironmentScope.cs": "2836db610c11ccb8df41c3a28ae5856a484d0316d833d122dc50011bd555818e",
+    "Assets/_OptimizeTool/Script/Editor/Common.OptimizeTool.Editor.asmdef.meta": "c31d023206ba729dae5f5642a6247f6aac2247e57d4bde0b68cfe9dc00ba3870",
+    "Assets/_OptimizeTool/Script/Editor/Common.OptimizeTool.Editor.asmdef": "cfbc5e0ea72c154b044b3337b722f40f0744e91bc51e087cbd0f20d74c786f0a",
+    "Assets/_OptimizeTool/Script/Editor/MeshOptimizationEditors.cs.meta": "aad7b7e7d51799e9d05463bb83d806f0df34c94a6ef01cefd44325b4a3a5a225",
+    "Assets/_OptimizeTool/Script/Editor/MeshOptimizationEditors.cs": "b39b0aabeed197fea6a8cad802af8be614374216a691262ed2613e68a7809d5b",
+    "Assets/_OptimizeTool/Script/Samples/Editor/OptimizeToolShowcaseEditor.cs.meta": "5e7b5e0d8fdefa7ca0296fdd782ee744b32fc3cecc3b1c725bda376b246e61cf",
+    "Assets/_OptimizeTool/Script/Samples/Editor/Common.OptimizeTool.Samples.Editor.asmdef.meta": "54976b0f4b0951a50122955bc558cc4cefdd385f35997a8702374290ba26febf",
+    "Assets/_OptimizeTool/Script/Samples/Editor/Common.OptimizeTool.Samples.Editor.asmdef": "6bb0c44fba99404c833e29d2693f3dc4ae171a6cdd97e17629b87bfcda265605",
+    "Assets/_OptimizeTool/Script/Samples/Editor/OptimizeToolPhysicsDemoBuilder.cs.meta": "af28679758c39beb0875292400ace18de333060f03854a492a93fab9772ca015",
+    "Assets/_OptimizeTool/Script/Samples/Editor/GameViewCaptureScope.cs.meta": "ae314dde05eff06b082a67e4bcdcb47ff089c4694f3720b8037aeaff70815d27",
+    "Assets/_OptimizeTool/Script/Samples/Editor/OptimizeToolShowcaseEditor.cs": "7949f6d1828a7e0c95a0769acc337134e9969060c35d746858fcbd5bfc6ad98b",
+    "Assets/_OptimizeTool/Script/Samples/Editor/OptimizeToolBenchmarkEditor.cs": "7f75245f0da018de58738a357252dc54dd1ae6261b4a37a11e7fb408112de2a3",
+    "Assets/_OptimizeTool/Script/Samples/Editor/GameViewCaptureScope.cs": "f925ff084a13f006ea122c8301108b582307b61021c64b150659d313c4dc3bb3",
+    "Assets/_OptimizeTool/Script/Samples/Editor/OptimizeToolBenchmarkEditor.cs.meta": "a336b7b68f7ac85993bb12d1de203eb43e3963d49e914ac642d7c6cb71ae9260",
+    "Assets/_OptimizeTool/Script/Samples/Editor/OptimizeToolPhysicsDemoBuilder.cs": "0fb1b6d68468d9bdb09cd3412d1e4a907a07a5491991d8186b9107367a9b388d",
+    "Assets/_OptimizeTool/Script/Tests/PlayMode/Common.OptimizeTool.PlayModeTests.asmdef.meta": "09bf5b98783b298ee48d8a8bba542668678c80e8eb1f90956f2eb8f2a16a714c",
+    "Assets/_OptimizeTool/Script/Tests/PlayMode/OptimizeToolBenchmarkTests.cs": "67c50310352a68616fafa1b9d97f2bc84b176045207431233226e84fd9886c8b",
+    "Assets/_OptimizeTool/Script/Tests/PlayMode/OptimizeToolPhysicsDemoTests.cs.meta": "e17a9a76cd2d034fbef0a84d4c3b9c4bec11baaf9b95a022d668bd20050a68f9",
+    "Assets/_OptimizeTool/Script/Tests/PlayMode/OptimizeToolPhysicsDemoTests.cs": "20cc8aa45a77209a33a2c00c82774b982033590735d8096ad4885497853df9f6",
+    "Assets/_OptimizeTool/Script/Tests/PlayMode/PhysicsRecorderPlaybackTests.cs": "977cc3870224ff6f05b503ce3d353f1376c555ffc24427c80cb7e9d467e3182d",
+    "Assets/_OptimizeTool/Script/Tests/PlayMode/Common.OptimizeTool.PlayModeTests.asmdef": "804f923465ba681b694fafe40e4cf48f544948d71be85b4e30ee25b9dbe3b24b",
+    "Assets/_OptimizeTool/Script/Tests/PlayMode/OptimizeToolBenchmarkTests.cs.meta": "7c2122392e5a17614ce905e76b6ebccef5fb3117c2517633bdb2228780c72cb7",
+    "Assets/_OptimizeTool/Script/Tests/PlayMode/OptimizeToolShowcaseTests.cs": "df31b53eafcaa196371751a467994da26c2d117a713fc68458f7bc8e23d77589",
+    "Assets/_OptimizeTool/Script/Tests/PlayMode/PhysicsRecorderPlaybackTests.cs.meta": "58f543940a5d296370ec0568d5504cd98107135370c0ceb417ba0a29b2253c11",
+    "Assets/_OptimizeTool/Script/Tests/PlayMode/OptimizeToolShowcaseTests.cs.meta": "a5ed7d8946f48db8f1031deeede013d9644c27e12c5e8fc202c130e72755e222",
+    "Assets/_OptimizeTool/Script/Tests/Editor/MeshOptimizationTests.cs": "d97b31098a5a9f31712b4ddb335a6b6d564f39055d7c48af0536fd691394bc5c",
+    "Assets/_OptimizeTool/Script/Tests/Editor/PhysicsRecorderTests.cs": "86c88e9f5456e738fdd5d75f9615d62beb1f0b21d008c432c08c8e9b05f4b6be",
+    "Assets/_OptimizeTool/Script/Tests/Editor/Common.OptimizeTool.Tests.asmdef.meta": "6345b8cc4838ca58d06ce46ea583126fb6068b294f862e22ed117ffdab2fe7ae",
+    "Assets/_OptimizeTool/Script/Tests/Editor/PhysicsRecorderCompatibilityTests.cs": "5678af0425138bbf7609c9f8a56689ac54c50a3187c21027850e2e42419b87ff",
+    "Assets/_OptimizeTool/Script/Tests/Editor/MeshRefactoringTests.cs": "68c3e01e7858f60065d5fcf3aacc0eccf8e291244247cdbfbbe90497292ee5aa",
+    "Assets/_OptimizeTool/Script/Tests/Editor/PhysicsRecorderTests.cs.meta": "c902cfb184d5ee6f751b2606c8d078084cb3a223b1d108b276b6076696feb63c",
+    "Assets/_OptimizeTool/Script/Tests/Editor/MeshOptimizationTests.cs.meta": "b7a6e971558e41f0199027d81fe32892478f112ff9fe816f9a69f5acc365eda7",
+    "Assets/_OptimizeTool/Script/Tests/Editor/Common.OptimizeTool.Tests.asmdef": "1549a6fc3884919b76aee0904dcd3af9cfdad77e1565d7af2461255816db7532",
+    "Assets/_OptimizeTool/Script/Tests/Editor/MeshRefactoringTests.cs.meta": "d8daefc268188875e08277d55a35fe5cc354090b2c8fc4f02eebb4264b6c98bf",
+    "Assets/_OptimizeTool/Script/Tests/Editor/PhysicsRecordingSessionTests.cs": "104e09b55aaf5bce0733a88976f68ab0efb37aeff053a1d110433e9f002afaa0",
+    "Assets/_OptimizeTool/Script/Tests/Editor/PhysicsRecordingSessionTests.cs.meta": "f9d414ba57b14581cf7041f0b4a5e3ecbfaab29d66e2fae94025d91b632bc725",
+    "Assets/_OptimizeTool/Script/Tests/Editor/PhysicsRecorderCompatibilityTests.cs.meta": "284bc1582c4cf3dc9f5007017d2ad4dc2408d5493fc0f59eb7e540c37057da95"
+  },
+  "changedSinceNativeTest": [],
+  "referencePreservation": {
+    "protectedFileCount": 96,
+    "changedFiles": [],
+    "sha256Before": {
+      "ToyProject/Assets/_OptimizeTool/Prefab.meta": "7070d1772ef100d96b1fcedd343c6c9a0f45890d9215b73bae0303469704679d",
+      "ToyProject/Assets/_OptimizeTool/Scene.meta": "5b4151f300704580a9c83f1daad4108e78f87176fb77db66c7e06b545058ea96",
+      "ToyProject/Assets/_OptimizeTool/OptimizeTool.uml.meta": "d9a230b69b13dfe15ac2b1cde60e938bc61451dfb6a7f26fb878b1686eb99610",
+      "ToyProject/Assets/_OptimizeTool/Script.meta": "253cbd8e92c1e2a0ecf3fed76dd391d5f060e61413c5b4eb8b05b276cc6eca8f",
+      "ToyProject/Assets/_OptimizeTool/Docs.meta": "a3bc68fbc014b0ef55736a937784fde36991d2067517cd59e8fe001e985bfbc3",
+      "ToyProject/Assets/_OptimizeTool/Settings.meta": "ad14c79177eea145fead2aa42b0293f4afe4f3c902273eab2fa641fb330d6f22",
+      "ToyProject/Assets/_OptimizeTool/README.md.meta": "f00d7a50efca28ee8147499122175fd1e04986d16860e8508432710f712a666d",
+      "ToyProject/Assets/_OptimizeTool/Settings/OptimizeToolCombined.mat.meta": "cf155edd74d097b0b611af9db8d8b1d0a26cedaa1cd98e73cee857121039fa5b",
+      "ToyProject/Assets/_OptimizeTool/Settings/OptimizeToolSource.mat.meta": "717d43fa20a018ff8a5e68d4578a376302d9db556acaf09ea9eccda55c5f3f05",
+      "ToyProject/Assets/_OptimizeTool/Settings/PhysicsDemo.meta": "8b93df3ec8e840d7a9cca38bc07e45af66fb165657644e397dc36e7ec165d359",
+      "ToyProject/Assets/_OptimizeTool/Settings/Generated.meta": "340a08bd4c06654bceb65c0d238766b7a2734f89eda7f753f874214aedcbc1ee",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance.meta": "8777ea4ad22fa0dbaf18e6e29ea5b21cd79629ae82335e0bf87f010ec1c0bf65",
+      "ToyProject/Assets/_OptimizeTool/Docs/Validation.md.meta": "21ac6a9e178895c0034157f1e0ab0f8c865ce823a31b432c9c131810a8e2814c",
+      "ToyProject/Assets/_OptimizeTool/Docs/ValidationResults.json.meta": "72855464a72ccd5cd8ea3e920ac74831c8b71b932d8ac4baf14ee7cab305e51c",
+      "ToyProject/Assets/_OptimizeTool/Docs/Images.meta": "56ec1945f10cfc84281e9bf7f3ae4c622c86e3fd638db8d2889a633aebfb63fc",
+      "ToyProject/Assets/_OptimizeTool/Script/Common.OptimizeTool.asmdef.meta": "aa48807a6e7e1b1cb620e5f0dc8a144fae1480b8e0171b03d0aa11b073dad57c",
+      "ToyProject/Assets/_OptimizeTool/Script/MeshAssetTransaction.cs.meta": "eb06a12baa5a73d2eb63a9d83eb69e188ff93669a272b9e5162e3e893bc53ad4",
+      "ToyProject/Assets/_OptimizeTool/Script/BackfaceCullMeshBaker.cs.meta": "e3c5aa67ae21e9d0439997118317d18b38705f33a5c428962e611f7d013d87b6",
+      "ToyProject/Assets/_OptimizeTool/Script/Editor.meta": "565f96ed61ca14ef0a5eb5d5e6f0679130c385b60f5de56d92066680b12c0df9",
+      "ToyProject/Assets/_OptimizeTool/Script/PhysicsRecorder.cs.meta": "699858e4a494f8b3d085de9308fb517b9adcf329d5aad0a63afc66c28dda35cf",
+      "ToyProject/Assets/_OptimizeTool/Script/MeshCombiner.cs.meta": "8e6c81136dd87dd5719709ad71ca8c461ee9d37a7e836589f26b7401556d419a",
+      "ToyProject/Assets/_OptimizeTool/Script/Samples.meta": "fa4b16e631106c9ccf5e172d380fc93c16a6f53df2d15c755bd7776fbd4dcfbc",
+      "ToyProject/Assets/_OptimizeTool/Script/Tests.meta": "27d7ec9ecc1243f513a1018f18e625d56e557283f56161ff8358fb31a1cb584b",
+      "ToyProject/Assets/_OptimizeTool/Script/MeshProcessingUtility.cs.meta": "c70434a515e01de0585eec585a9950ca0471d9084a7dfbba8e3d1e4b94cffb43",
+      "ToyProject/Assets/_OptimizeTool/Prefab/OptimizeToolShowcase.prefab.meta": "57ef6de94dabafb39291c7b725bdef12ad3f79ef2ed5318bb3a398eb1157d5c6",
+      "ToyProject/Assets/_OptimizeTool/Prefab/OptimizeToolShowcase.prefab": "0e539d3fd36f16dd15dd516e7c0d17d495b2cb431519622c6ea6c4f4a990a293",
+      "ToyProject/Assets/_OptimizeTool/Scene/OptimizeToolSample.unity.meta": "724f86fb89d49c6905136ec5d41cb84f15abb4226dabb125f8ddc2572cad5b9b",
+      "ToyProject/Assets/_OptimizeTool/Scene/OptimizeToolSample.unity": "b30da90cfb80d8cb30f1851ac8cbf481c8bb492c32b697747fb70eca80fb236d",
+      "ToyProject/Assets/_OptimizeTool/Script/Tests/Editor.meta": "9800f7d588c0a2cd4de271291c9b3b84c3b1deaae03bc95fd30ac2c78d751f39",
+      "ToyProject/Assets/_OptimizeTool/Script/Tests/PlayMode.meta": "888e6b1ed22d9c79b3cb5a2b4efb1e35e45532e3b527720448c87cfd8ad7cc9d",
+      "ToyProject/Assets/_OptimizeTool/Script/Samples/OptimizeToolOverviewController.cs.meta": "c9c50f7c9f38be371f1e0a839124c4534ef5e04840205fe026a0071dd1ee92a7",
+      "ToyProject/Assets/_OptimizeTool/Script/Samples/OptimizeToolComparisonController.cs.meta": "5391fe1df8b96bbb2f01b5006d6d5d39e65784a7afa62579e37361ecf298af8e",
+      "ToyProject/Assets/_OptimizeTool/Script/Samples/OptimizeToolShowcaseUI.cs.meta": "da830f99cf0c06ba9c2a4b87b5268c09e6ddd03d7cf0aa33bc09713ef8c3600b",
+      "ToyProject/Assets/_OptimizeTool/Script/Samples/OptimizeToolPerformanceBenchmark.cs.meta": "180c27816c67f240e3196dc89ff5f6b9028bfb52f95ebc05ba9a3e74b160b031",
+      "ToyProject/Assets/_OptimizeTool/Script/Samples/Editor.meta": "774d0198f16c09799411aba54683e91f5b356008b472fc3cbe0b03f963888d7f",
+      "ToyProject/Assets/_OptimizeTool/Script/Samples/OptimizeToolFreeCamera.cs.meta": "027dd3bdc8dff5774c73faf315a010377012d1a21b8670c65986e43a2fbf43d7",
+      "ToyProject/Assets/_OptimizeTool/Script/Samples/OptimizeToolOverviewBoard.cs.meta": "7228cbe0e02c756abc5fbf6346eb95c414604f784841e24688c582c9366833ec",
+      "ToyProject/Assets/_OptimizeTool/Script/Samples/OptimizeToolPhysicsDemo.cs.meta": "fc16548280654441f2663342fdbbaa19e8fab12b89c2ccc1877733b5333dfbee",
+      "ToyProject/Assets/_OptimizeTool/Script/Samples/Common.OptimizeTool.Samples.asmdef.meta": "8c5803279a72f413baea7e2ecbf3dfc1988991b7e057dfb2db115e1a5ef68adc",
+      "ToyProject/Assets/_OptimizeTool/Script/Editor/Common.OptimizeTool.Editor.asmdef.meta": "c31d023206ba729dae5f5642a6247f6aac2247e57d4bde0b68cfe9dc00ba3870",
+      "ToyProject/Assets/_OptimizeTool/Script/Editor/MeshOptimizationEditors.cs.meta": "aad7b7e7d51799e9d05463bb83d806f0df34c94a6ef01cefd44325b4a3a5a225",
+      "ToyProject/Assets/_OptimizeTool/Script/Samples/Editor/OptimizeToolShowcaseEditor.cs.meta": "5e7b5e0d8fdefa7ca0296fdd782ee744b32fc3cecc3b1c725bda376b246e61cf",
+      "ToyProject/Assets/_OptimizeTool/Script/Samples/Editor/Common.OptimizeTool.Samples.Editor.asmdef.meta": "54976b0f4b0951a50122955bc558cc4cefdd385f35997a8702374290ba26febf",
+      "ToyProject/Assets/_OptimizeTool/Script/Samples/Editor/OptimizeToolPhysicsDemoBuilder.cs.meta": "af28679758c39beb0875292400ace18de333060f03854a492a93fab9772ca015",
+      "ToyProject/Assets/_OptimizeTool/Script/Samples/Editor/OptimizeToolBenchmarkEditor.cs.meta": "a336b7b68f7ac85993bb12d1de203eb43e3963d49e914ac642d7c6cb71ae9260",
+      "ToyProject/Assets/_OptimizeTool/Script/Tests/PlayMode/Common.OptimizeTool.PlayModeTests.asmdef.meta": "09bf5b98783b298ee48d8a8bba542668678c80e8eb1f90956f2eb8f2a16a714c",
+      "ToyProject/Assets/_OptimizeTool/Script/Tests/PlayMode/OptimizeToolPhysicsDemoTests.cs.meta": "e17a9a76cd2d034fbef0a84d4c3b9c4bec11baaf9b95a022d668bd20050a68f9",
+      "ToyProject/Assets/_OptimizeTool/Script/Tests/PlayMode/PhysicsRecorderPlaybackTests.cs.meta": "58f543940a5d296370ec0568d5504cd98107135370c0ceb417ba0a29b2253c11",
+      "ToyProject/Assets/_OptimizeTool/Script/Tests/PlayMode/OptimizeToolShowcaseTests.cs.meta": "a5ed7d8946f48db8f1031deeede013d9644c27e12c5e8fc202c130e72755e222",
+      "ToyProject/Assets/_OptimizeTool/Script/Tests/Editor/Common.OptimizeTool.Tests.asmdef.meta": "6345b8cc4838ca58d06ce46ea583126fb6068b294f862e22ed117ffdab2fe7ae",
+      "ToyProject/Assets/_OptimizeTool/Script/Tests/Editor/PhysicsRecorderTests.cs.meta": "c902cfb184d5ee6f751b2606c8d078084cb3a223b1d108b276b6076696feb63c",
+      "ToyProject/Assets/_OptimizeTool/Script/Tests/Editor/MeshOptimizationTests.cs.meta": "b7a6e971558e41f0199027d81fe32892478f112ff9fe816f9a69f5acc365eda7",
+      "ToyProject/Assets/_OptimizeTool/Docs/Images/feature-showcase-original.png.meta": "ffc18ee1222b9e3e2880367a856bd59f5723e894042707eada48dd17622a289c",
+      "ToyProject/Assets/_OptimizeTool/Docs/Images/feature-showcase-backface-preview.png.meta": "4d98bcd22011cbc54d93a661b847ec1031f1a586bfc91059796286900d50199b",
+      "ToyProject/Assets/_OptimizeTool/Docs/Images/feature-editor-generated-assets.png.meta": "faf9513fb862bf77c7fed3a84e930b5579a51b37f685a9ee9b77ac2fe33cc94a",
+      "ToyProject/Assets/_OptimizeTool/Docs/Images/optimizetool-uml.png.meta": "db17f052803516eb5544227f905daaf0446ac551d1dbe8c6a37bd3946565f3cc",
+      "ToyProject/Assets/_OptimizeTool/Docs/Images/feature-showcase-real-original.png.meta": "77ea514b9ea8959f0d5fe12a8dfce350185c204d2251a23ea1e38f7e23bbdbe0",
+      "ToyProject/Assets/_OptimizeTool/Docs/Images/feature-physics-recorder-live-comparison.png.meta": "715f26a650d5ca73fe462c03903fac34f6aea1987aed7ea1e29a7f319a8a6e87",
+      "ToyProject/Assets/_OptimizeTool/Docs/Images/feature-showcase-occlusion-preview.png.meta": "ea4e2794efe9243d8fe3aa2ad5ab5dfbe6d0e7357c7f5bf2552269ff00fe4832",
+      "ToyProject/Assets/_OptimizeTool/Docs/Images/feature-showcase-combined.png.meta": "d6487605bb7a88ed806f68196bb5d3b056b73583e9e0d4ed8fef4ce42273d257",
+      "ToyProject/Assets/_OptimizeTool/Docs/Images/feature-backface-settings.png.meta": "a963a221cbfc5ccaa916c0be4eeefc1c9fde0493849361b5c9236bd9a31fb316",
+      "ToyProject/Assets/_OptimizeTool/Docs/Images/feature-physics-recorder-settings.png.meta": "c3e549524e8225d28cf8eef0f409a3b19997c91fe192085dd7b11e7b737403a1",
+      "ToyProject/Assets/_OptimizeTool/Docs/Images/feature-editor-showcase.png.meta": "827c8f09b671fa19ebb74d393b0ab4fee7517be5c633354e375aa619e3f6413f",
+      "ToyProject/Assets/_OptimizeTool/Docs/Images/feature-showcase-real-occlusion.png.meta": "17a495bba2c076f4ecdc7c896eb1afc4c61789a766ac2a20108f6bfd86328cf8",
+      "ToyProject/Assets/_OptimizeTool/Docs/Images/feature-occlusion-settings.png.meta": "3f922ef0abcb10eae577fa9f795baf8f9684015b1c96c64963c2d80d09a86fd1",
+      "ToyProject/Assets/_OptimizeTool/Docs/Images/feature-showcase-physics-recorded.png.meta": "45471605a93aa688785ccf34b818b16dafbfb3f90db017401e01d355ca93b25f",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance/PerformanceReport.md.meta": "c46547514127d6a725acc95f92f8aa821facb9786bab06a98f58efc3f8100ab6",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance/summary.json.meta": "7944bab86cde427cc5fde9c5d0169ca7f1a4cfaddd325e548ec27a767abe7e7a",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance/run-01.meta": "75696b26e2125e384fb360b4691e8e8124729158ccb0448e52726084c19a4ecd",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance/run-02.meta": "ef64e1a3e8e4d87e5469d3205a35525697b10675f6d472ee3556a60ac63a838b",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance/analyze_benchmark.py.meta": "5cd9cf860af666b8ebecbef4f330f6663a65ff4038b7a68edd3f1e7d68f505ce",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance/run-03.meta": "ad0905fbe09c8098b4f48b92830110535eca291bd98a5d283570bbeb55729c4b",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance/source-assets.json.meta": "57c9e7ff8ae8ed2ff61142707b26afe23a04934cbb67db17226ebf995aeb781d",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance/run-03/metadata.json.meta": "36d17f82f92e26a96afddf97912946c5f395628328fccb3b945d10428307d0bf",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance/run-03/complete.json.meta": "4e54b0e4aecc6f20b427ebbf18c1a19cdab5f6be968c791fd9bd953422f3b2d8",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance/run-03/frames.csv.gz.meta": "02dcfb7bbe1803ef3bb663414be378550879ea905656d5f1229c1e82f38ab7ac",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance/run-02/metadata.json.meta": "a5ce0e267492f1267057f3fcbddb5056e2a25f4d2d87cfdbd546f9319cb19232",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance/run-02/complete.json.meta": "5e1409b990ace8416582bb753ff5bc3cfe3474c1a9490b49ea07a48a6b13a671",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance/run-02/frames.csv.gz.meta": "8ec8ceeaae86e58c6f75eae0014e5f4918882258bcf8d7c465a8e3e870f5ee1b",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance/run-01/metadata.json.meta": "7e3b90174ad534df91f2f2bdef465a5599aef9e3bb9b133e1c2608c959a8d4e3",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance/run-01/complete.json.meta": "c84678714e175d2115ebddcd840ab1afe1b4fa1cee16f3006b0c09045fac5ea8",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance/run-01/frames.csv.gz.meta": "1dbde8ded87ca1373337649ba2193a35f737d99e92424ae0ff0d9cbb69329b8e",
+      "ToyProject/Assets/_OptimizeTool/Settings/Generated/OptimizeToolSampleCombined.asset.meta": "05b7a4f3a79c9c73412954f862c36faec72e8e82d0ebb75a99b89d9457d26249",
+      "ToyProject/Assets/_OptimizeTool/Settings/Generated/OptimizeToolSampleOcclusion.asset.meta": "9566cdf35f555704389e6fa2c7af1807d7c2e0e02ac070bb4cf2901cabaffea5",
+      "ToyProject/Assets/_OptimizeTool/Settings/Generated/PhysicsRecordings.meta": "d44014f432deba2cc941dc22706c2f9c2665d96b898ed8231120e1973d1e6b1c",
+      "ToyProject/Assets/_OptimizeTool/Settings/Generated/OptimizeToolSampleRecorded.prefab.meta": "0c3eb3ccc02f1dfdfec3e31449ca469d3f319c5c8447bf5293fddee44e7779dd",
+      "ToyProject/Assets/_OptimizeTool/Settings/Generated/OptimizeToolSampleRecorded.anim.meta": "5d11c6c9dc6a14a98945aae4edab9a3d49ce7fdc6783ebe66420b3accf5aa9c9",
+      "ToyProject/Assets/_OptimizeTool/Settings/Generated/OptimizeToolSampleRecorded.prefab": "de4c99c7db7187d62d2a3bc5b1e0f28a722b79d6bac05c5bc0eb4ebe0b25fec5",
+      "ToyProject/Assets/_OptimizeTool/Settings/Generated/OptimizeToolSampleBackface.asset.meta": "f4d969da40ceef9c822478760a2be19bc81642ed7be55ae8a430b0c384234f47",
+      "ToyProject/Assets/_OptimizeTool/Settings/PhysicsDemo/PhysicsDemoFloor.mat.meta": "2eacfc3334e99c24a35998d2542424fd11b248502f57b40a0a0eb1d5bb0e80cf",
+      "ToyProject/Assets/_OptimizeTool/Settings/PhysicsDemo/PhysicsDemoRamp.mat.meta": "6abcc835d73bb8318c49b4556b470fceba91021c32e4e06211cc7ac464412db3",
+      "ToyProject/Assets/_OptimizeTool/Settings/PhysicsDemo/PhysicsDemoBody.mat.meta": "c27965bf95384a5d3656748c4e8736ffe5e5b2b8ceef9c89d4b5109394b29ae9",
+      "ToyProject/Assets/_OptimizeTool/Settings/PhysicsDemo/PhysicsDemoSurface.physicMaterial.meta": "6c836d3265aec63999910713b27869b83348337cf6360bf9a9c28f5d1f0ce484",
+      "ToyProject/Assets/_OptimizeTool/Settings/Generated/PhysicsRecordings/OptimizeToolPhysicsTake.prefab": "65db03ee0bdf4bb074622d90558837615a68b1b0b1d755e47bedfe5dd6547388",
+      "ToyProject/Assets/_OptimizeTool/Settings/Generated/PhysicsRecordings/OptimizeToolPhysicsTake.prefab.meta": "1404b9132602647114e253a65fd74c38191e3e234ccd30fea939703f6a350adb",
+      "ToyProject/Assets/_OptimizeTool/Settings/Generated/PhysicsRecordings/OptimizeToolPhysicsTake.anim.meta": "354d279078ec52c77feaddf2a8a75c1040ff7e904f987f4615348a3033efd558"
+    },
+    "coreSerializedFields": {
+      "MeshCombiner.cs": {
+        "before": {
+          "_savePath": "string",
+          "_meshName": "string",
+          "_optimizeMesh": "bool",
+          "_includeInactive": "bool",
+          "_targetCamera": "Camera",
+          "_targetMeshFilterArray": "MeshFilter[]",
+          "_collectChildMeshes": "bool",
+          "_allowReadableCopy": "bool",
+          "_allowNormalRecalculation": "bool",
+          "_overwriteExistingAssets": "bool",
+          "_enableOcclusionCulling": "bool",
+          "_vertexSamplingCount": "int",
+          "_visibilityThreshold": "double",
+          "_cullingLayerMask": "LayerMask",
+          "_enableBackfaceCulling": "bool",
+          "_backfaceCullingAngle": "float",
+          "_combineAllIntoSingleMesh": "bool",
+          "_createSceneOutput": "bool",
+          "_disableSourceRenderers": "bool",
+          "_generatedRoot": "GameObject"
+        },
+        "after": {
+          "_savePath": "string",
+          "_meshName": "string",
+          "_optimizeMesh": "bool",
+          "_includeInactive": "bool",
+          "_targetCamera": "Camera",
+          "_targetMeshFilterArray": "MeshFilter[]",
+          "_collectChildMeshes": "bool",
+          "_allowReadableCopy": "bool",
+          "_allowNormalRecalculation": "bool",
+          "_overwriteExistingAssets": "bool",
+          "_enableOcclusionCulling": "bool",
+          "_vertexSamplingCount": "int",
+          "_visibilityThreshold": "double",
+          "_cullingLayerMask": "LayerMask",
+          "_enableBackfaceCulling": "bool",
+          "_backfaceCullingAngle": "float",
+          "_combineAllIntoSingleMesh": "bool",
+          "_createSceneOutput": "bool",
+          "_disableSourceRenderers": "bool",
+          "_generatedRoot": "GameObject"
+        },
+        "preserved": true
+      },
+      "BackfaceCullMeshBaker.cs": {
+        "before": {
+          "_savePath": "string",
+          "_targetMeshFilterArray": "MeshFilter[]",
+          "_collectChildMeshes": "bool",
+          "_allowReadableCopy": "bool",
+          "_allowNormalRecalculation": "bool",
+          "_overwriteExistingAssets": "bool",
+          "_targetCamera": "Camera",
+          "_backfaceCullingAngle": "float",
+          "_useCustomVector": "bool",
+          "_customCameraVector": "Vector3"
+        },
+        "after": {
+          "_savePath": "string",
+          "_targetMeshFilterArray": "MeshFilter[]",
+          "_collectChildMeshes": "bool",
+          "_allowReadableCopy": "bool",
+          "_allowNormalRecalculation": "bool",
+          "_overwriteExistingAssets": "bool",
+          "_targetCamera": "Camera",
+          "_backfaceCullingAngle": "float",
+          "_useCustomVector": "bool",
+          "_customCameraVector": "Vector3"
+        },
+        "preserved": true
+      },
+      "PhysicsRecorder.cs": {
+        "before": {
+          "_root": "Transform",
+          "_recordInterval": "float",
+          "_recordOnlyIfMoved": "bool",
+          "_positionThreshold": "float",
+          "_rotationThreshold": "float",
+          "_savePath": "string",
+          "_animationFileName": "string",
+          "_overwriteExistingAssets": "bool"
+        },
+        "after": {
+          "_root": "Transform",
+          "_recordInterval": "float",
+          "_recordOnlyIfMoved": "bool",
+          "_positionThreshold": "float",
+          "_rotationThreshold": "float",
+          "_savePath": "string",
+          "_animationFileName": "string",
+          "_overwriteExistingAssets": "bool"
+        },
+        "preserved": true
+      }
+    },
+    "serializedFields": {
+      "MeshCombiner.cs": {
+        "before": {
+          "_savePath": "string",
+          "_meshName": "string",
+          "_optimizeMesh": "bool",
+          "_includeInactive": "bool",
+          "_targetCamera": "Camera",
+          "_targetMeshFilterArray": "MeshFilter[]",
+          "_collectChildMeshes": "bool",
+          "_allowReadableCopy": "bool",
+          "_allowNormalRecalculation": "bool",
+          "_overwriteExistingAssets": "bool",
+          "_enableOcclusionCulling": "bool",
+          "_vertexSamplingCount": "int",
+          "_visibilityThreshold": "double",
+          "_cullingLayerMask": "LayerMask",
+          "_enableBackfaceCulling": "bool",
+          "_backfaceCullingAngle": "float",
+          "_combineAllIntoSingleMesh": "bool",
+          "_createSceneOutput": "bool",
+          "_disableSourceRenderers": "bool",
+          "_generatedRoot": "GameObject"
+        },
+        "after": {
+          "_savePath": "string",
+          "_meshName": "string",
+          "_optimizeMesh": "bool",
+          "_includeInactive": "bool",
+          "_targetCamera": "Camera",
+          "_targetMeshFilterArray": "MeshFilter[]",
+          "_collectChildMeshes": "bool",
+          "_allowReadableCopy": "bool",
+          "_allowNormalRecalculation": "bool",
+          "_overwriteExistingAssets": "bool",
+          "_enableOcclusionCulling": "bool",
+          "_vertexSamplingCount": "int",
+          "_visibilityThreshold": "double",
+          "_cullingLayerMask": "LayerMask",
+          "_enableBackfaceCulling": "bool",
+          "_backfaceCullingAngle": "float",
+          "_combineAllIntoSingleMesh": "bool",
+          "_createSceneOutput": "bool",
+          "_disableSourceRenderers": "bool",
+          "_generatedRoot": "GameObject"
+        },
+        "preserved": true
+      },
+      "PhysicsRecorder.cs": {
+        "before": {
+          "_root": "Transform",
+          "_recordInterval": "float",
+          "_recordOnlyIfMoved": "bool",
+          "_positionThreshold": "float",
+          "_rotationThreshold": "float",
+          "_savePath": "string",
+          "_animationFileName": "string",
+          "_overwriteExistingAssets": "bool"
+        },
+        "after": {
+          "_root": "Transform",
+          "_recordInterval": "float",
+          "_recordOnlyIfMoved": "bool",
+          "_positionThreshold": "float",
+          "_rotationThreshold": "float",
+          "_savePath": "string",
+          "_animationFileName": "string",
+          "_overwriteExistingAssets": "bool"
+        },
+        "preserved": true
+      },
+      "BackfaceCullMeshBaker.cs": {
+        "before": {
+          "_savePath": "string",
+          "_targetMeshFilterArray": "MeshFilter[]",
+          "_collectChildMeshes": "bool",
+          "_allowReadableCopy": "bool",
+          "_allowNormalRecalculation": "bool",
+          "_overwriteExistingAssets": "bool",
+          "_targetCamera": "Camera",
+          "_backfaceCullingAngle": "float",
+          "_useCustomVector": "bool",
+          "_customCameraVector": "Vector3"
+        },
+        "after": {
+          "_savePath": "string",
+          "_targetMeshFilterArray": "MeshFilter[]",
+          "_collectChildMeshes": "bool",
+          "_allowReadableCopy": "bool",
+          "_allowNormalRecalculation": "bool",
+          "_overwriteExistingAssets": "bool",
+          "_targetCamera": "Camera",
+          "_backfaceCullingAngle": "float",
+          "_useCustomVector": "bool",
+          "_customCameraVector": "Vector3"
+        },
+        "preserved": true
+      },
+      "Samples/OptimizeToolOverviewBoard.cs": {
+        "before": {
+          "_text": "Text"
+        },
+        "after": {
+          "_text": "Text"
+        },
+        "preserved": true
+      },
+      "Samples/OptimizeToolOverviewController.cs": {
+        "before": {
+          "_featureGroups": "GameObject[]",
+          "_featureNames": "string[]",
+          "_board": "OptimizeToolOverviewBoard",
+          "_freeCamera": "OptimizeToolFreeCamera",
+          "_bakeView": "Transform",
+          "_physicsDemo": "OptimizeToolPhysicsDemo"
+        },
+        "after": {
+          "_featureGroups": "GameObject[]",
+          "_featureNames": "string[]",
+          "_board": "OptimizeToolOverviewBoard",
+          "_freeCamera": "OptimizeToolFreeCamera",
+          "_bakeView": "Transform",
+          "_physicsDemo": "OptimizeToolPhysicsDemo"
+        },
+        "preserved": true
+      },
+      "Samples/OptimizeToolPhysicsDemo.cs": {
+        "before": {
+          "_demoRoot": "GameObject",
+          "_sourceRoot": "Transform",
+          "_replayAnchor": "Transform",
+          "_view": "Transform",
+          "_recorder": "PhysicsRecorder",
+          "_savedPrefab": "GameObject",
+          "_duration": "float",
+          "_releaseDelay": "float"
+        },
+        "after": {
+          "_demoRoot": "GameObject",
+          "_sourceRoot": "Transform",
+          "_replayAnchor": "Transform",
+          "_view": "Transform",
+          "_recorder": "PhysicsRecorder",
+          "_savedPrefab": "GameObject",
+          "_duration": "float",
+          "_releaseDelay": "float"
+        },
+        "preserved": true
+      },
+      "Samples/OptimizeToolComparisonController.cs": {
+        "before": {
+          "_originalGroup": "GameObject",
+          "_optimizedGroup": "GameObject",
+          "_toggleInterval": "float",
+          "_startWithOptimized": "bool"
+        },
+        "after": {
+          "_originalGroup": "GameObject",
+          "_optimizedGroup": "GameObject",
+          "_toggleInterval": "float",
+          "_startWithOptimized": "bool"
+        },
+        "preserved": true
+      },
+      "Samples/OptimizeToolFreeCamera.cs": {
+        "before": {
+          "_fieldOfView": "float",
+          "_nearClipPlane": "float",
+          "_farClipPlane": "float",
+          "_lookSensitivity": "float",
+          "_moveSpeed": "float",
+          "_minMoveSpeed": "float",
+          "_maxMoveSpeed": "float",
+          "_scrollSpeedStep": "float",
+          "_fastMoveMultiplier": "float",
+          "_minPitch": "float",
+          "_maxPitch": "float",
+          "_focusOffsetDirection": "Vector3",
+          "_focusPadding": "float",
+          "_minimumFocusDistance": "float"
+        },
+        "after": {
+          "_fieldOfView": "float",
+          "_nearClipPlane": "float",
+          "_farClipPlane": "float",
+          "_lookSensitivity": "float",
+          "_moveSpeed": "float",
+          "_minMoveSpeed": "float",
+          "_maxMoveSpeed": "float",
+          "_scrollSpeedStep": "float",
+          "_fastMoveMultiplier": "float",
+          "_minPitch": "float",
+          "_maxPitch": "float",
+          "_focusOffsetDirection": "Vector3",
+          "_focusPadding": "float",
+          "_minimumFocusDistance": "float"
+        },
+        "preserved": true
+      }
+    },
+    "allExistingSerializedFieldsPreserved": true
+  },
+  "benchmarkSmoke": {
+    "complete": {
+      "samples": 960,
+      "status": "complete"
+    },
+    "uniqueTimestamps": 960,
+    "samplesByMode": {
+      "0": 240,
+      "1": 240,
+      "2": 240,
+      "3": 240
+    },
+    "drawCallsByMode": {
+      "0": [
+        26
+      ],
+      "1": [
+        10
+      ],
+      "2": [
+        10
+      ],
+      "3": [
+        10
+      ]
+    },
+    "gpuValidSamples": 960,
+    "stateRestoration": {
+      "before": {
+        "selection": 7,
+        "maximized": false,
+        "vsync": 1,
+        "target": -1,
+        "interval": 1,
+        "background": true
+      },
+      "during": {
+        "selection": 3,
+        "maximized": true,
+        "vsync": 0,
+        "target": -1,
+        "interval": 1,
+        "background": true
+      },
+      "after": {
+        "selection": 7,
+        "maximized": false,
+        "vsync": 1,
+        "target": -1,
+        "interval": 1,
+        "background": true
+      },
+      "restored": true
+    },
+    "interruptedDiagnostic": "Capture interrupted; incomplete data must not be used.",
+    "interruptedRunComplete": false,
+    "purpose": "Integration smoke only; not a new performance comparison.",
+    "benchmarksRemainingAfterStop": 0
+  }
+}

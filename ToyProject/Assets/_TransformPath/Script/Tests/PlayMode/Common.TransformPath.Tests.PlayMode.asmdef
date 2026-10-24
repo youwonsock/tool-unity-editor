@@ -1,0 +1,11 @@
+{
+    "name": "Common.TransformPath.Tests.PlayMode",
+    "rootNamespace": "Common.TransformPath.Tests.PlayMode",
+    "references": [
+        "Common.TransformPath.Runtime",
+        "Common.TransformPath.Samples"
+    ],
+    "optionalUnityReferences": ["TestAssemblies"],
+    "autoReferenced": false,
+    "defineConstraints": ["UNITY_INCLUDE_TESTS"]
+}

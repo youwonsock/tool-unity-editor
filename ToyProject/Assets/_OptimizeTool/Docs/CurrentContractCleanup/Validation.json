@@ -1,0 +1,86 @@
+{
+  "date": "2026-10-24",
+  "unityVersion": "2023.2.20f1",
+  "urp": "16.0.6",
+  "tests": {
+    "EditMode": {
+      "id": "2",
+      "testcasecount": "103",
+      "result": "Passed",
+      "total": "103",
+      "passed": "103",
+      "failed": "0",
+      "inconclusive": "0",
+      "skipped": "0",
+      "asserts": "0",
+      "engine-version": "3.5.0.0",
+      "clr-version": "4.0.30319.42000",
+      "start-time": "2026-10-24 09:25:19Z",
+      "end-time": "2026-10-24 09:25:26Z",
+      "duration": "6.1397101"
+    },
+    "PlayMode": {
+      "id": "2",
+      "testcasecount": "38",
+      "result": "Passed",
+      "total": "38",
+      "passed": "38",
+      "failed": "0",
+      "inconclusive": "0",
+      "skipped": "0",
+      "asserts": "0",
+      "engine-version": "3.5.0.0",
+      "clr-version": "4.0.30319.42000",
+      "start-time": "2026-10-24 09:25:34Z",
+      "end-time": "2026-10-24 09:26:19Z",
+      "duration": "44.6381897"
+    },
+    "FinalPhysicsPlayMode": {
+      "id": "2",
+      "testcasecount": "22",
+      "result": "Passed",
+      "total": "22",
+      "passed": "22",
+      "failed": "0",
+      "inconclusive": "0",
+      "skipped": "0",
+      "asserts": "0",
+      "engine-version": "3.5.0.0",
+      "clr-version": "4.0.30319.42000",
+      "start-time": "2026-10-24 09:30:35Z",
+      "end-time": "2026-10-24 09:31:11Z",
+      "duration": "36.3632459"
+    }
+  },
+  "python": {
+    "passed": 10,
+    "failed": 0,
+    "command": "python3 -m unittest discover -s ToyProject/Assets/_OptimizeTool/Docs/Performance -p 'test_*.py'"
+  },
+  "api": {
+    "assembly": "Common.OptimizeTool",
+    "beforePublicEntries": 128,
+    "afterPublicEntries": 116,
+    "removed": 12,
+    "added": 0,
+    "serializedBefore": 47,
+    "serializedAfter": 47,
+    "serializedDifference": 0,
+    "baselineSourceMatches": "All root core C# files at task start match the preserved API baseline source."
+  },
+  "scope": "Full EditMode 103 and PlayMode 38 passed; final status-text changes and strengthened missing-reference assertions were then verified by all 22 PhysicsDemo PlayMode cases. All current OptimizeTool source files match the final isolated test snapshot. No new Player build or performance capture in this cleanup.",
+  "nativeStartupFailure": {
+    "exitCode": -10,
+    "testResultsWritten": false,
+    "preservedLog": "NativeStartupFailure.log.gz",
+    "retry": "Same Unity command and flags succeeded; no Burst-disable flag or product workaround added."
+  },
+  "preservation": "Preservation.json: 951 existing protected files checked; 949 byte-identical, one expected test-meta rename with unchanged GUID/bytes and one current-field prefab serialization change.",
+  "retainedEngineFeatures": [
+    "PhysicsRecorder and sample UI resource/session lifecycles",
+    "Unity Animation legacy clip format",
+    "LegacyRuntime.ttf built-in UI font",
+    "Unity 2023.2 internal Game View adapter"
+  ],
+  "productionLegacyCompatibilityCode": "Removed legacy mesh initialization/fault lifecycle, material projection, recorder result aliases/old-result republishing, missing-reference playback, v1 capture/resume defaults, generic render-pipeline reflection fallbacks."
+}

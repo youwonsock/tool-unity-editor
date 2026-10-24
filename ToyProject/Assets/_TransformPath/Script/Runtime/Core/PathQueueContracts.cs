@@ -1,41 +1,15 @@
 namespace Common.TransformPath
 {
-    public readonly struct PathQueueAgentSettings
-    {
-        public float ActorSpacing { get; }
-        public bool UseManagerSpacing { get; }
-        public bool EnableGradualSlowdown { get; }
-        public bool EnableOvertakeProtection { get; }
-
-        public PathQueueAgentSettings(
-            float actorSpacing,
-            bool useManagerSpacing,
-            bool enableGradualSlowdown,
-            bool enableOvertakeProtection)
-        {
-            ActorSpacing = actorSpacing;
-            UseManagerSpacing = useManagerSpacing;
-            EnableGradualSlowdown = enableGradualSlowdown;
-            EnableOvertakeProtection = enableOvertakeProtection;
-        }
-    }
-
     public readonly struct PathQueueRegistration
     {
         private readonly object _owner;
         public ulong RegistrationId { get; }
         public ulong PlaybackId { get; }
+        // Revision at acquisition; ownership survives geometry-only changes.
+        // Each PathQueueConstraint carries the revision of its own calculation.
         public int RouteRevision { get; }
 
         internal object Owner => _owner;
-
-        public PathQueueRegistration(
-            ulong registrationId,
-            ulong playbackId,
-            int routeRevision)
-            : this(null, registrationId, playbackId, routeRevision)
-        {
-        }
 
         internal PathQueueRegistration(
             object owner,
@@ -50,6 +24,12 @@ namespace Common.TransformPath
         }
 
         public bool IsValid => RegistrationId != 0;
+
+        internal bool Matches(PathQueueRegistration other)
+        {
+            return IsValid && other.IsValid && BelongsTo(other.Owner)
+                && RegistrationId == other.RegistrationId && PlaybackId == other.PlaybackId;
+        }
 
         internal bool BelongsTo(object owner)
         {
@@ -68,6 +48,7 @@ namespace Common.TransformPath
         ProviderInvalid,
         ManagerReleased,
         Replaced,
+        ConstraintViolation,
     }
 
     public readonly struct PathQueueConstraint
@@ -114,8 +95,8 @@ namespace Common.TransformPath
             float speedMultiplier,
             float maxGlobalNormalizedTime,
             int routeRevision,
-            ulong playbackId = 0,
-            int frameId = 0)
+            ulong playbackId,
+            int frameId)
         {
             Ahead = ahead;
             DistanceToAhead = distanceToAhead;

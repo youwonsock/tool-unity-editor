@@ -277,8 +277,7 @@ namespace Common.FlowField.Editor
                         FlowFieldDirtyFlags.All,
                         FlowFieldCellRect.Full(settings.Grid),
                         FlowFieldCellRect.Full(settings.Grid),
-                        Mathf.Min(settings.Grid.CellCount, Mathf.Max(64, manager.MaxGpuWaves)),
-                        $"{manager.name}_StaticBakeSurface"));
+                        Mathf.Min(settings.Grid.CellCount, Mathf.Max(64, manager.MaxGpuWaves))));
                     if (!accepted && !session.IsFaulted)
                         throw new InvalidOperationException("Static Flow Bake session could not be started.");
                     if (session.IsFaulted)
@@ -381,7 +380,7 @@ namespace Common.FlowField.Editor
                 }
             }
 
-            void Complete(bool changed)
+            void Complete()
             {
                 int undoGroup = -1;
                 string assetPath = null;
@@ -515,7 +514,7 @@ namespace Common.FlowField.Editor
                 }
             }
 
-            void Complete(bool changed)
+            void Complete()
             {
                 string assetPath = null;
                 FlowFieldVolumeBakeData asset = null;

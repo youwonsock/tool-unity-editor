@@ -459,7 +459,7 @@ namespace Common.TransformPath
                 error = $"Path event definitions are invalid: {exception.Message}";
                 return false;
             }
-            bool eventsChanged = !AreSameEvents(_publishedEvents, nextEvents);
+            bool eventsChanged = !PathRuntimeEvent.AreSame(_publishedEvents, nextEvents);
 
             // Publish only after the complete temporary result passed validation.
             _cachedPathPoints = geometry.Points;
@@ -518,84 +518,13 @@ namespace Common.TransformPath
             for (int i = 0; i < _pathEvents.Count; i++)
             {
                 PathEventEntry entry = _pathEvents[i];
-                result[i] = PathEventDefinitionFactory.Create(entry);
+                result[i] = new PathRuntimeEvent(
+                    entry.NormalizedTime,
+                    PathEventDefinition.FromAuthoring(entry.EventSetting));
             }
 
-            // Runtime dispatch assumes non-decreasing positions. Equal-time
-            // events retain the order authored in the Inspector.
-            for (int sortIndex = 1; sortIndex < result.Length; sortIndex++)
-            {
-                PathRuntimeEvent current = result[sortIndex];
-                int previousIndex = sortIndex - 1;
-                while (previousIndex >= 0
-                    && result[previousIndex].NormalizedTime > current.NormalizedTime)
-                {
-                    result[previousIndex + 1] = result[previousIndex];
-                    previousIndex--;
-                }
-                result[previousIndex + 1] = current;
-            }
+            PathRuntimeEvent.SortByPosition(result);
             return result;
-        }
-
-        private static bool AreSameEvents(
-            IReadOnlyList<PathRuntimeEvent> left,
-            IReadOnlyList<PathRuntimeEvent> right)
-        {
-            if (ReferenceEquals(left, right))
-                return true;
-            if (left == null || right == null || left.Count != right.Count)
-                return false;
-            for (int i = 0; i < left.Count; i++)
-            {
-                if (!Mathf.Approximately(left[i].NormalizedTime, right[i].NormalizedTime)
-                    || !AreSameEventDefinitions(left[i].Definition, right[i].Definition))
-                    return false;
-            }
-            return true;
-        }
-
-        private static bool AreSameEventDefinitions(
-            PathEventDefinition left,
-            PathEventDefinition right)
-        {
-            if (ReferenceEquals(left, right))
-                return true;
-            if (left == null || right == null
-                || left.EventName != right.EventName
-                || left.UseModifyPathMoveSpeed != right.UseModifyPathMoveSpeed
-                || !Mathf.Approximately(left.MoveSpeedTargetValue, right.MoveSpeedTargetValue)
-                || !Mathf.Approximately(left.MoveSpeedAdjustDuration, right.MoveSpeedAdjustDuration)
-                || !PathMovementSettingsUtility.AreSameCurve(
-                    left.MoveSpeedAdjustCurve,
-                    right.MoveSpeedAdjustCurve)
-                || left.UseModifyPathMoveDuration != right.UseModifyPathMoveDuration
-                || !Mathf.Approximately(left.MoveDurationTargetValue, right.MoveDurationTargetValue)
-                || !Mathf.Approximately(left.MoveDurationAdjustDuration, right.MoveDurationAdjustDuration)
-                || !PathMovementSettingsUtility.AreSameCurve(
-                    left.MoveDurationAdjustCurve,
-                    right.MoveDurationAdjustCurve)
-                || left.UseTimeScaleAdjust != right.UseTimeScaleAdjust
-                || !Mathf.Approximately(left.TimeScaleAdjustValue, right.TimeScaleAdjustValue)
-                || !Mathf.Approximately(left.TimeScaleAdjustDuration, right.TimeScaleAdjustDuration)
-                || !PathMovementSettingsUtility.AreSameCurve(
-                    left.TimeScaleAdjustCurve,
-                    right.TimeScaleAdjustCurve))
-                return false;
-
-            IReadOnlyList<PathDelayedEventDefinition> leftDelayed = left.DelayedEvents;
-            IReadOnlyList<PathDelayedEventDefinition> rightDelayed = right.DelayedEvents;
-            if (leftDelayed.Count != rightDelayed.Count)
-                return false;
-            for (int i = 0; i < leftDelayed.Count; i++)
-            {
-                if (!Mathf.Approximately(leftDelayed[i].Delay, rightDelayed[i].Delay)
-                    || !AreSameEventDefinitions(
-                        leftDelayed[i].Definition,
-                        rightDelayed[i].Definition))
-                    return false;
-            }
-            return true;
         }
 
         private PathMovementSettings GetAuthoringMovementSettings()

@@ -1,0 +1,2951 @@
+{
+  "method": "Four AB/BA/BA/AB paired launches per profile; four balanced mode-order rounds per launch. Bootstrap resamples launch pairs and matched rounds. Lower is better.",
+  "regressionMargin": {
+    "percent": 5,
+    "absoluteMilliseconds": 0.1
+  },
+  "runtime": {
+    "cpu": {
+      "totalFrames": 30720,
+      "modes": {
+        "Original": {
+          "draw_calls": {
+            "before": {
+              "median": 7205.0,
+              "p05": 7205.0,
+              "p95": 7205.0,
+              "minimum": 7205.0,
+              "maximum": 7205.0
+            },
+            "after": {
+              "median": 7205.0,
+              "p05": 7205.0,
+              "p95": 7205.0,
+              "minimum": 7205.0,
+              "maximum": 7205.0
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 0.0,
+              "bootstrap95PercentCI": [
+                0.0,
+                0.0
+              ],
+              "medianAbsoluteChange": 0.0,
+              "bootstrap95AbsoluteCI": [
+                0.0,
+                0.0
+              ],
+              "perLaunchMedianPercentChanges": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "classification": "unchanged"
+            }
+          },
+          "cpu_frame_ms": {
+            "before": {
+              "median": 6.9896455,
+              "p05": 4.30477115,
+              "p95": 8.8025473,
+              "minimum": 3.999708,
+              "maximum": 10.398125
+            },
+            "after": {
+              "median": 7.1031665,
+              "p05": 4.389162799999999,
+              "p95": 8.90633575,
+              "minimum": 3.992167,
+              "maximum": 23.145
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 0.1671250479036268,
+              "bootstrap95PercentCI": [
+                -2.0598533991541323,
+                2.7802938820111978
+              ],
+              "medianAbsoluteChange": 0.007521000000000555,
+              "bootstrap95AbsoluteCI": [
+                -0.15388525000000008,
+                0.208584000000001
+              ],
+              "perLaunchMedianPercentChanges": [
+                2.088001868734146,
+                -1.999505431108417,
+                0.22987804565725578,
+                0.08307613703071315
+              ],
+              "classification": "material regression excluded within the declared margin"
+            }
+          },
+          "metal_gpu_ms": {
+            "before": {
+              "median": 3.1402708336827345,
+              "p05": 0.7158333319239318,
+              "p95": 5.0642104131839005,
+              "minimum": 0.7050000058370642,
+              "maximum": 6.129499997769017
+            },
+            "after": {
+              "median": 3.394249997654697,
+              "p05": 0.7168291656853398,
+              "p95": 5.196854161840747,
+              "minimum": 0.7086249970598146,
+              "maximum": 6.838624998636078
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 2.119237770949489,
+              "bootstrap95PercentCI": [
+                -2.335927578211061,
+                5.991249284956113
+              ],
+              "medianAbsoluteChange": 0.047416666347999126,
+              "bootstrap95AbsoluteCI": [
+                -0.09297916403738782,
+                0.22162499953992665
+              ],
+              "perLaunchMedianPercentChanges": [
+                5.067226942454051,
+                1.4382853718520217,
+                -0.19804036795545432,
+                1.2366823125676607
+              ],
+              "classification": "inconclusive; no equivalence claim"
+            }
+          },
+          "cpu_main_ms": {
+            "before": {
+              "median": 6.9876045,
+              "p05": 4.30254195,
+              "p95": 8.80000175,
+              "minimum": 3.997916,
+              "maximum": 10.3965
+            },
+            "after": {
+              "median": 7.101,
+              "p05": 4.387451749999999,
+              "p95": 8.9041795,
+              "minimum": 3.990625,
+              "maximum": 23.140125
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 0.16765820323483283,
+              "bootstrap95PercentCI": [
+                -2.064641687419322,
+                2.779566572218317
+              ],
+              "medianAbsoluteChange": 0.007541999999999938,
+              "bootstrap95AbsoluteCI": [
+                -0.15373949999999947,
+                0.2084785
+              ],
+              "perLaunchMedianPercentChanges": [
+                2.097062317822962,
+                -1.9981742692734006,
+                0.23801388754804975,
+                0.07594098988283893
+              ],
+              "classification": "material regression excluded within the declared margin"
+            }
+          },
+          "wall_delta_ms": {
+            "before": {
+              "median": 6.914331810548902,
+              "p05": 4.304578574374318,
+              "p95": 8.794928807765245,
+              "minimum": 3.9995391853153706,
+              "maximum": 10.103875771164894
+            },
+            "after": {
+              "median": 7.104811491444707,
+              "p05": 4.391492647118866,
+              "p95": 8.900095708668232,
+              "minimum": 3.9921202696859837,
+              "maximum": 23.13895896077156
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 0.44007403525465616,
+              "bootstrap95PercentCI": [
+                -1.0228196352127739,
+                2.734972734272789
+              ],
+              "medianAbsoluteChange": 0.03337219823151827,
+              "bootstrap95AbsoluteCI": [
+                -0.07742701563984156,
+                0.20505976863205433
+              ],
+              "perLaunchMedianPercentChanges": [
+                1.9854789597782863,
+                -0.20613506766807288,
+                -0.0793264212861744,
+                0.16870924867575798
+              ],
+              "classification": "material regression excluded within the declared margin"
+            }
+          }
+        },
+        "Combined": {
+          "draw_calls": {
+            "before": {
+              "median": 7.0,
+              "p05": 7.0,
+              "p95": 7.0,
+              "minimum": 7.0,
+              "maximum": 7.0
+            },
+            "after": {
+              "median": 7.0,
+              "p05": 7.0,
+              "p95": 7.0,
+              "minimum": 7.0,
+              "maximum": 7.0
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 0.0,
+              "bootstrap95PercentCI": [
+                0.0,
+                0.0
+              ],
+              "medianAbsoluteChange": 0.0,
+              "bootstrap95AbsoluteCI": [
+                0.0,
+                0.0
+              ],
+              "perLaunchMedianPercentChanges": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "classification": "unchanged"
+            }
+          },
+          "cpu_frame_ms": {
+            "before": {
+              "median": 3.4008955,
+              "p05": 1.0942919500000001,
+              "p95": 5.0205649,
+              "minimum": 0.979375,
+              "maximum": 6.510125
+            },
+            "after": {
+              "median": 3.3604795,
+              "p05": 1.0920399,
+              "p95": 5.0067003,
+              "minimum": 0.985458,
+              "maximum": 5.802459
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 0.8188406728190656,
+              "bootstrap95PercentCI": [
+                -4.150733680367347,
+                3.817138100275752
+              ],
+              "medianAbsoluteChange": 0.029749750000000352,
+              "bootstrap95AbsoluteCI": [
+                -0.09041650000000034,
+                0.13756250000000003
+              ],
+              "perLaunchMedianPercentChanges": [
+                -6.7456771732983425,
+                3.1758820916599984,
+                1.6775581757718205,
+                -0.002836009500550851
+              ],
+              "classification": "material regression excluded within the declared margin"
+            },
+            "relativeToOriginalControl": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 0.044413223619182984,
+              "bootstrap95PercentCI": [
+                -8.523812416595028,
+                4.185342560480376
+              ],
+              "medianAbsoluteChange": 0.00027955549689549775,
+              "bootstrap95AbsoluteCI": [
+                -0.050001946491317256,
+                0.01994241597652391
+              ],
+              "perLaunchMedianPercentChanges": [
+                -8.523812416595028,
+                3.9940043422202143,
+                2.430456700641037,
+                -0.15088322566805812
+              ]
+            }
+          },
+          "metal_gpu_ms": {
+            "before": {
+              "median": 2.626583333039889,
+              "p05": 0.6240000002435409,
+              "p95": 4.23235416492389,
+              "minimum": 0.6168750041979365,
+              "maximum": 5.605124999419786
+            },
+            "after": {
+              "median": 2.5081874991883524,
+              "p05": 0.6231250008568168,
+              "p95": 4.147518753234181,
+              "minimum": 0.6178333351272158,
+              "maximum": 4.813125000509899
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 0.3998643404103386,
+              "bootstrap95PercentCI": [
+                -4.868487130412613,
+                3.0862209234601146
+              ],
+              "medianAbsoluteChange": 0.010270832717651501,
+              "bootstrap95AbsoluteCI": [
+                -0.05019791205995716,
+                0.08777083712629974
+              ],
+              "perLaunchMedianPercentChanges": [
+                -9.044519737774598,
+                1.5284053064760217,
+                2.867508304558408,
+                -0.18613211346994452
+              ],
+              "classification": "material regression excluded within the declared margin"
+            },
+            "relativeToOriginalControl": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": -1.7799224740218333,
+              "bootstrap95PercentCI": [
+                -14.083351078405371,
+                3.111902666843158
+              ],
+              "medianAbsoluteChange": -0.015373741753372416,
+              "bootstrap95AbsoluteCI": [
+                -0.13262310590799437,
+                0.02216358649718453
+              ],
+              "perLaunchMedianPercentChanges": [
+                -13.24823303161179,
+                -1.3296492006738272,
+                1.6791175362376787,
+                -1.7799224740218333
+              ]
+            }
+          },
+          "cpu_main_ms": {
+            "before": {
+              "median": 3.399208,
+              "p05": 1.093458,
+              "p95": 5.0178423,
+              "minimum": 0.978416,
+              "maximum": 6.505958
+            },
+            "after": {
+              "median": 3.354562,
+              "p05": 1.09108095,
+              "p95": 5.00450415,
+              "minimum": 0.984416,
+              "maximum": 5.800167
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 0.8241312761265496,
+              "bootstrap95PercentCI": [
+                -4.167897231718665,
+                3.7374921606944556
+              ],
+              "medianAbsoluteChange": 0.02992700000000026,
+              "bootstrap95AbsoluteCI": [
+                -0.09064649999999963,
+                0.1346259999999999
+              ],
+              "perLaunchMedianPercentChanges": [
+                -6.755317112976877,
+                3.133025653564414,
+                1.6762237730216234,
+                -0.017023825106293744
+              ],
+              "classification": "material regression excluded within the declared margin"
+            }
+          },
+          "wall_delta_ms": {
+            "before": {
+              "median": 3.403270267881453,
+              "p05": 1.0947874339763075,
+              "p95": 5.081850010901689,
+              "minimum": 0.9791241027414799,
+              "maximum": 6.505038123577833
+            },
+            "after": {
+              "median": 3.385834745131433,
+              "p05": 1.0931178694590926,
+              "p95": 5.006936797872186,
+              "minimum": 0.9857142576947808,
+              "maximum": 5.80228865146637
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 0.07480208519345943,
+              "bootstrap95PercentCI": [
+                -4.789233535979742,
+                5.448370995362795
+              ],
+              "medianAbsoluteChange": 0.0019469298422336578,
+              "bootstrap95AbsoluteCI": [
+                -0.0980017357505858,
+                0.19596086349338293
+              ],
+              "perLaunchMedianPercentChanges": [
+                -6.484250028324418,
+                3.7628693939820157,
+                1.4795692108769687,
+                -0.04424854117592858
+              ],
+              "classification": "inconclusive; no equivalence claim"
+            }
+          }
+        },
+        "Backface": {
+          "draw_calls": {
+            "before": {
+              "median": 7.0,
+              "p05": 7.0,
+              "p95": 7.0,
+              "minimum": 7.0,
+              "maximum": 7.0
+            },
+            "after": {
+              "median": 7.0,
+              "p05": 7.0,
+              "p95": 7.0,
+              "minimum": 7.0,
+              "maximum": 7.0
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 0.0,
+              "bootstrap95PercentCI": [
+                0.0,
+                0.0
+              ],
+              "medianAbsoluteChange": 0.0,
+              "bootstrap95AbsoluteCI": [
+                0.0,
+                0.0
+              ],
+              "perLaunchMedianPercentChanges": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "classification": "unchanged"
+            }
+          },
+          "cpu_frame_ms": {
+            "before": {
+              "median": 3.4984585,
+              "p05": 1.0014149,
+              "p95": 5.01787465,
+              "minimum": 0.98125,
+              "maximum": 6.495334
+            },
+            "after": {
+              "median": 3.4059999999999997,
+              "p05": 1.0028319,
+              "p95": 5.035216349999994,
+              "minimum": 0.982,
+              "maximum": 6.215292
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": -0.2839184769871106,
+              "bootstrap95PercentCI": [
+                -2.3159646109580545,
+                1.3238548198434952
+              ],
+              "medianAbsoluteChange": -0.00917649999999981,
+              "bootstrap95AbsoluteCI": [
+                -0.08770800000000012,
+                0.04789549999999987
+              ],
+              "perLaunchMedianPercentChanges": [
+                -1.0478720167536426,
+                -2.1804601980499716,
+                0.9761597658222543,
+                0.10937082971397838
+              ],
+              "classification": "material regression excluded within the declared margin"
+            },
+            "relativeToOriginalControl": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": -0.78357613207094,
+              "bootstrap95PercentCI": [
+                -3.6837870657295158,
+                1.77811410418508
+              ],
+              "medianAbsoluteChange": -0.0034292768402198887,
+              "bootstrap95AbsoluteCI": [
+                -0.018365455504608053,
+                0.007564160843065465
+              ],
+              "perLaunchMedianPercentChanges": [
+                -3.6721852048232027,
+                -0.8483066291415098,
+                0.8223764954749524,
+                -0.03863591380084408
+              ]
+            }
+          },
+          "metal_gpu_ms": {
+            "before": {
+              "median": 2.6820000020961743,
+              "p05": 0.6109166712121805,
+              "p95": 4.205864577670582,
+              "minimum": 0.6050833326298743,
+              "maximum": 4.952041665092111
+            },
+            "after": {
+              "median": 2.626520836201962,
+              "p05": 0.6084166670916602,
+              "p95": 4.246122918630135,
+              "minimum": 0.6027499985066243,
+              "maximum": 5.269916669931263
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": -0.23143874391881591,
+              "bootstrap95PercentCI": [
+                -0.974571109536404,
+                1.1416494097290508
+              ],
+              "medianAbsoluteChange": -0.002427083018119447,
+              "bootstrap95AbsoluteCI": [
+                -0.027562495233723894,
+                0.03252083479310386
+              ],
+              "perLaunchMedianPercentChanges": [
+                -0.0874621435222267,
+                -0.2684259704205716,
+                0.6516698252836073,
+                -0.3956614058861718
+              ],
+              "classification": "material regression excluded within the declared margin"
+            },
+            "relativeToOriginalControl": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": -1.9327144837408994,
+              "bootstrap95PercentCI": [
+                -8.31997726670821,
+                3.0060360224577587
+              ],
+              "medianAbsoluteChange": -0.01528532572279312,
+              "bootstrap95AbsoluteCI": [
+                -0.06393264544407073,
+                0.02095874263164621
+              ],
+              "perLaunchMedianPercentChanges": [
+                -5.7149721075932245,
+                -0.15432916426802445,
+                1.3258838247906801,
+                -2.0524218236912803
+              ]
+            }
+          },
+          "cpu_main_ms": {
+            "before": {
+              "median": 3.496708,
+              "p05": 1.00053895,
+              "p95": 5.01550835,
+              "minimum": 0.980583,
+              "maximum": 6.492292
+            },
+            "after": {
+              "median": 3.4038335,
+              "p05": 1.00179195,
+              "p95": 5.028275599999992,
+              "minimum": 0.981208,
+              "maximum": 6.213
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": -0.33954068119981806,
+              "bootstrap95PercentCI": [
+                -2.319591543523436,
+                1.3230659286747826
+              ],
+              "medianAbsoluteChange": -0.011103749999999857,
+              "bootstrap95AbsoluteCI": [
+                -0.08781199999999956,
+                0.047843499999999706
+              ],
+              "perLaunchMedianPercentChanges": [
+                -1.0538603305750294,
+                -2.1689654379669854,
+                0.9277356085597599,
+                0.10470830741657888
+              ],
+              "classification": "material regression excluded within the declared margin"
+            }
+          },
+          "wall_delta_ms": {
+            "before": {
+              "median": 3.4972081193700433,
+              "p05": 1.00190932280384,
+              "p95": 5.010918714106083,
+              "minimum": 0.981547636911273,
+              "maximum": 5.8139171451330185
+            },
+            "after": {
+              "median": 3.40789754409343,
+              "p05": 1.003663893789053,
+              "p95": 5.091160326264799,
+              "minimum": 0.9825397282838821,
+              "maximum": 6.214335095137358
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 0.08955479317142578,
+              "bootstrap95PercentCI": [
+                -2.2374011707377517,
+                1.7214262767329291
+              ],
+              "medianAbsoluteChange": 0.0009814102668315172,
+              "bootstrap95AbsoluteCI": [
+                -0.08368404814973474,
+                0.06347789894789457
+              ],
+              "perLaunchMedianPercentChanges": [
+                -1.0176220250635637,
+                0.28590043029990686,
+                0.1709172611575882,
+                0.08955479317142578
+              ],
+              "classification": "material regression excluded within the declared margin"
+            }
+          }
+        },
+        "Occlusion": {
+          "draw_calls": {
+            "before": {
+              "median": 7.0,
+              "p05": 7.0,
+              "p95": 7.0,
+              "minimum": 7.0,
+              "maximum": 7.0
+            },
+            "after": {
+              "median": 7.0,
+              "p05": 7.0,
+              "p95": 7.0,
+              "minimum": 7.0,
+              "maximum": 7.0
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 0.0,
+              "bootstrap95PercentCI": [
+                0.0,
+                0.0
+              ],
+              "medianAbsoluteChange": 0.0,
+              "bootstrap95AbsoluteCI": [
+                0.0,
+                0.0
+              ],
+              "perLaunchMedianPercentChanges": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "classification": "unchanged"
+            }
+          },
+          "cpu_frame_ms": {
+            "before": {
+              "median": 3.412,
+              "p05": 1.0025,
+              "p95": 4.99415,
+              "minimum": 0.963,
+              "maximum": 5.798708
+            },
+            "after": {
+              "median": 3.4045625,
+              "p05": 1.00745685,
+              "p95": 5.09781905,
+              "minimum": 0.983708,
+              "maximum": 6.494542
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 0.15432484625145237,
+              "bootstrap95PercentCI": [
+                -0.9607201086956341,
+                8.37618452949387
+              ],
+              "medianAbsoluteChange": 0.004604249999999865,
+              "bootstrap95AbsoluteCI": [
+                -0.03535449999999951,
+                0.18647950000000013
+              ],
+              "perLaunchMedianPercentChanges": [
+                8.401696305021877,
+                0.15432484625145237,
+                -0.5444420016408436,
+                0.0670970850618291
+              ],
+              "classification": "inconclusive; no equivalence claim"
+            },
+            "relativeToOriginalControl": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 0.6397716396111419,
+              "bootstrap95PercentCI": [
+                -3.98505757015184,
+                5.082285637606887
+              ],
+              "medianAbsoluteChange": 0.0029830837307722735,
+              "bootstrap95AbsoluteCI": [
+                -0.020523211755620552,
+                0.019743564826503468
+              ],
+              "perLaunchMedianPercentChanges": [
+                6.149842233603486,
+                0.6345309227424156,
+                -0.3693444178403449,
+                -0.0996337713614126
+              ]
+            }
+          },
+          "metal_gpu_ms": {
+            "before": {
+              "median": 2.6095208304468542,
+              "p05": 0.608333335549105,
+              "p95": 4.149354168839635,
+              "minimum": 0.6028750067343935,
+              "maximum": 4.9259166698902845
+            },
+            "after": {
+              "median": 2.608062502986286,
+              "p05": 0.6052479126083199,
+              "p95": 4.252850002376363,
+              "minimum": 0.6004583337926306,
+              "maximum": 5.55966667161556
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": -0.030727210368086677,
+              "bootstrap95PercentCI": [
+                -0.8297055925272523,
+                4.256185941024581
+              ],
+              "medianAbsoluteChange": 0.002124997990904376,
+              "bootstrap95AbsoluteCI": [
+                -0.020062501789652742,
+                0.11642708159342874
+              ],
+              "perLaunchMedianPercentChanges": [
+                10.38957605726294,
+                3.7204053491439737,
+                1.0631419942302822,
+                -0.5890508079903656
+              ],
+              "classification": "material regression excluded within the declared margin"
+            },
+            "relativeToOriginalControl": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": -2.340990111085101,
+              "bootstrap95PercentCI": [
+                -8.508342946701008,
+                7.762944306623528
+              ],
+              "medianAbsoluteChange": -0.01943276504051017,
+              "bootstrap95AbsoluteCI": [
+                -0.0645138994772807,
+                0.05646764701770814
+              ],
+              "perLaunchMedianPercentChanges": [
+                4.988531073338332,
+                -0.9261783407382649,
+                1.8602065900796383,
+                -2.340990111085101
+              ]
+            }
+          },
+          "cpu_main_ms": {
+            "before": {
+              "median": 3.409729,
+              "p05": 1.00170175,
+              "p95": 4.990991999999999,
+              "minimum": 0.961833,
+              "maximum": 5.7965
+            },
+            "after": {
+              "median": 3.403,
+              "p05": 1.00644645,
+              "p95": 5.0961333,
+              "minimum": 0.982917,
+              "maximum": 6.492625
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 0.1653461727374017,
+              "bootstrap95PercentCI": [
+                -0.9398397081528898,
+                8.390501738207657
+              ],
+              "medianAbsoluteChange": 0.004833250000000122,
+              "bootstrap95AbsoluteCI": [
+                -0.0345629999999999,
+                0.1870307499999999
+              ],
+              "perLaunchMedianPercentChanges": [
+                8.41417865933709,
+                0.1653461727374017,
+                -0.5305735301813774,
+                0.06716919706251656
+              ],
+              "classification": "inconclusive; no equivalence claim"
+            }
+          },
+          "wall_delta_ms": {
+            "before": {
+              "median": 3.4083120990544558,
+              "p05": 1.0019110923167318,
+              "p95": 4.993502050638199,
+              "minimum": 0.9624575031921268,
+              "maximum": 5.797548219561577
+            },
+            "after": {
+              "median": 3.4040638711303473,
+              "p05": 1.086256350390613,
+              "p95": 5.096700135618448,
+              "minimum": 0.9838364785537124,
+              "maximum": 6.495167035609484
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 0.43876435396906777,
+              "bootstrap95PercentCI": [
+                -2.072235041729198,
+                7.855706049742905
+              ],
+              "medianAbsoluteChange": 0.014276825822889805,
+              "bootstrap95AbsoluteCI": [
+                -0.07650221232324839,
+                0.17218681750819087
+              ],
+              "perLaunchMedianPercentChanges": [
+                6.961931684983135,
+                0.39048063986693027,
+                -0.361187421841902,
+                0.09525033498949398
+              ],
+              "classification": "inconclusive; no equivalence claim"
+            }
+          }
+        }
+      },
+      "memory": {
+        "before": {
+          "median": 308.7734375,
+          "p05": 307.153125,
+          "p95": 335.64140625,
+          "minimum": 306.890625,
+          "maximum": 340.359375
+        },
+        "after": {
+          "median": 309.3671875,
+          "p05": 307.83125,
+          "p95": 335.56640625,
+          "minimum": 307.671875,
+          "maximum": 340.078125
+        },
+        "comparison": {
+          "launchPairs": 4,
+          "blockPairs": 4,
+          "medianPercentChange": 0.09946483228272518,
+          "bootstrap95PercentCI": [
+            -0.08263324610935374,
+            0.44043942692248983
+          ],
+          "medianAbsoluteChange": 0.3046875,
+          "bootstrap95AbsoluteCI": [
+            -0.28125,
+            1.359375
+          ],
+          "perLaunchMedianPercentChanges": [
+            0.44043942692248983,
+            0.25456952293672064,
+            -0.05563985837127028,
+            -0.08263324610935374
+          ]
+        }
+      }
+    },
+    "gpu": {
+      "totalFrames": 30720,
+      "modes": {
+        "Original": {
+          "draw_calls": {
+            "before": {
+              "median": 455.0,
+              "p05": 455.0,
+              "p95": 455.0,
+              "minimum": 455.0,
+              "maximum": 455.0
+            },
+            "after": {
+              "median": 455.0,
+              "p05": 455.0,
+              "p95": 455.0,
+              "minimum": 455.0,
+              "maximum": 455.0
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 0.0,
+              "bootstrap95PercentCI": [
+                0.0,
+                0.0
+              ],
+              "medianAbsoluteChange": 0.0,
+              "bootstrap95AbsoluteCI": [
+                0.0,
+                0.0
+              ],
+              "perLaunchMedianPercentChanges": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "classification": "unchanged"
+            }
+          },
+          "cpu_frame_ms": {
+            "before": {
+              "median": 6.494437,
+              "p05": 6.1883268000000005,
+              "p95": 7.3918402500000004,
+              "minimum": 6.079667,
+              "maximum": 8.501083
+            },
+            "after": {
+              "median": 6.509812,
+              "p05": 6.3019979,
+              "p95": 8.00812915,
+              "minimum": 6.091541,
+              "maximum": 14.92075
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 1.496930845659994,
+              "bootstrap95PercentCI": [
+                0.004965127215866838,
+                15.557853814821687
+              ],
+              "medianAbsoluteChange": 0.09585425000000036,
+              "bootstrap95AbsoluteCI": [
+                0.0003229999999994071,
+                0.9962602499999993
+              ],
+              "perLaunchMedianPercentChanges": [
+                15.57072360452989,
+                9.360102170242024,
+                0.7896935490846135,
+                0.004965127215866838
+              ],
+              "classification": "inconclusive; no equivalence claim"
+            }
+          },
+          "metal_gpu_ms": {
+            "before": {
+              "median": 5.798083333502291,
+              "p05": 5.492870829402818,
+              "p95": 6.6051500023604595,
+              "minimum": 5.45974999840837,
+              "maximum": 7.29183333896799
+            },
+            "after": {
+              "median": 5.837749995407648,
+              "p05": 5.517704167141346,
+              "p95": 7.154656253624125,
+              "minimum": 5.457374994875863,
+              "maximum": 8.171624998794869
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 1.2724558974769873,
+              "bootstrap95PercentCI": [
+                0.16626619671606946,
+                14.03880514942094
+              ],
+              "medianAbsoluteChange": 0.07207291491795331,
+              "bootstrap95AbsoluteCI": [
+                0.009729170415084809,
+                0.7964773447383605
+              ],
+              "perLaunchMedianPercentChanges": [
+                15.336492950690417,
+                5.800818719597934,
+                0.5763453097835769,
+                0.24418880066184867
+              ],
+              "classification": "inconclusive; no equivalence claim"
+            }
+          },
+          "cpu_main_ms": {
+            "before": {
+              "median": 6.493416,
+              "p05": 6.1870747,
+              "p95": 7.3906753,
+              "minimum": 6.078416,
+              "maximum": 8.499875
+            },
+            "after": {
+              "median": 6.508875,
+              "p05": 6.300958,
+              "p95": 8.00637465,
+              "minimum": 6.09,
+              "maximum": 14.916458
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 1.495015169899594,
+              "bootstrap95PercentCI": [
+                0.0078549417916296,
+                15.563217999115864
+              ],
+              "medianAbsoluteChange": 0.09571849999999937,
+              "bootstrap95AbsoluteCI": [
+                0.0005107499999996712,
+                0.9962494999999998
+              ],
+              "perLaunchMedianPercentChanges": [
+                15.573672897210633,
+                9.364455023414731,
+                0.7890223779475458,
+                0.0078549417916296
+              ],
+              "classification": "inconclusive; no equivalence claim"
+            }
+          },
+          "wall_delta_ms": {
+            "before": {
+              "median": 6.494228262454271,
+              "p05": 6.186791229993105,
+              "p95": 7.3905348079279065,
+              "minimum": 6.041170563548803,
+              "maximum": 8.50058812648058
+            },
+            "after": {
+              "median": 6.50908425450325,
+              "p05": 6.301903119310737,
+              "p95": 8.007123414427042,
+              "minimum": 6.090171635150909,
+              "maximum": 14.91629146039486
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 1.5078513606865962,
+              "bootstrap95PercentCI": [
+                -0.007414217609758023,
+                14.735705018761225
+              ],
+              "medianAbsoluteChange": 0.09655242320150137,
+              "bootstrap95AbsoluteCI": [
+                -0.00048172660171985626,
+                0.9427490876987576
+              ],
+              "perLaunchMedianPercentChanges": [
+                14.735705018761225,
+                9.262738672384852,
+                0.784552076056666,
+                -0.011391441947150582
+              ],
+              "classification": "inconclusive; no equivalence claim"
+            }
+          }
+        },
+        "Combined": {
+          "draw_calls": {
+            "before": {
+              "median": 7.0,
+              "p05": 7.0,
+              "p95": 7.0,
+              "minimum": 7.0,
+              "maximum": 7.0
+            },
+            "after": {
+              "median": 7.0,
+              "p05": 7.0,
+              "p95": 7.0,
+              "minimum": 7.0,
+              "maximum": 7.0
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 0.0,
+              "bootstrap95PercentCI": [
+                0.0,
+                0.0
+              ],
+              "medianAbsoluteChange": 0.0,
+              "bootstrap95AbsoluteCI": [
+                0.0,
+                0.0
+              ],
+              "perLaunchMedianPercentChanges": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "classification": "unchanged"
+            }
+          },
+          "cpu_frame_ms": {
+            "before": {
+              "median": 5.3054585,
+              "p05": 5.1154604,
+              "p95": 6.3999767499999995,
+              "minimum": 4.991416,
+              "maximum": 7.00925
+            },
+            "after": {
+              "median": 5.4017505,
+              "p05": 5.192625,
+              "p95": 6.9998253,
+              "minimum": 5.082917,
+              "maximum": 10.007625
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 0.803743534980006,
+              "bootstrap95PercentCI": [
+                0.01532320216641736,
+                7.556343458364867
+              ],
+              "medianAbsoluteChange": 0.04208374999999975,
+              "bootstrap95AbsoluteCI": [
+                0.0008125000000003268,
+                0.39320850000000007
+              ],
+              "perLaunchMedianPercentChanges": [
+                5.009144164966905,
+                5.635191783114923,
+                0.06029781377951959,
+                0.019845313895366923
+              ],
+              "classification": "inconclusive; no equivalence claim"
+            },
+            "relativeToOriginalControl": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": -0.7979407290525986,
+              "bootstrap95PercentCI": [
+                -7.9204463583185,
+                1.3901709893555214
+              ],
+              "medianAbsoluteChange": -0.006597975157688729,
+              "bootstrap95AbsoluteCI": [
+                -0.06612709940661565,
+                0.011310240778438785
+              ],
+              "perLaunchMedianPercentChanges": [
+                -9.762203821322752,
+                -3.2653164011858804,
+                -0.7186858069720359,
+                0.6271245439802176
+              ]
+            }
+          },
+          "metal_gpu_ms": {
+            "before": {
+              "median": 4.764604163938202,
+              "p05": 4.633329163698363,
+              "p95": 5.826256252476014,
+              "minimum": 4.56579167075688,
+              "maximum": 6.41012499545468
+            },
+            "after": {
+              "median": 4.793020831129979,
+              "p05": 4.6608687483967515,
+              "p95": 6.274508336355211,
+              "minimum": 4.583249996358063,
+              "maximum": 6.720124998537358
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 0.7131895958247592,
+              "bootstrap95PercentCI": [
+                -0.08172265278761781,
+                3.099053516756778
+              ],
+              "medianAbsoluteChange": 0.03435416510910727,
+              "bootstrap95AbsoluteCI": [
+                -0.003905988523911172,
+                0.14783333426748868
+              ],
+              "perLaunchMedianPercentChanges": [
+                3.4441248563954585,
+                2.4618411495375803,
+                0.08283705860782087,
+                0.05801025266531368
+              ],
+              "classification": "material regression excluded within the declared margin"
+            },
+            "relativeToOriginalControl": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": -1.5338842557071963,
+              "bootstrap95PercentCI": [
+                -11.366267623261649,
+                0.923539208512203
+              ],
+              "medianAbsoluteChange": -0.012676790326533183,
+              "bootstrap95AbsoluteCI": [
+                -0.0983125643975108,
+                0.007528666503014536
+              ],
+              "perLaunchMedianPercentChanges": [
+                -11.539780187951443,
+                -2.491374871814833,
+                -0.48626398965124773,
+                -0.3590442644172298
+              ]
+            }
+          },
+          "cpu_main_ms": {
+            "before": {
+              "median": 5.304417,
+              "p05": 5.11434375,
+              "p95": 6.39863125,
+              "minimum": 4.99075,
+              "maximum": 7.007125
+            },
+            "after": {
+              "median": 5.400709,
+              "p05": 5.191708,
+              "p95": 6.99809135,
+              "minimum": 5.08225,
+              "maximum": 10.005375
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 0.8089437365793262,
+              "bootstrap95PercentCI": [
+                0.015335162423979476,
+                7.536354949663493
+              ],
+              "medianAbsoluteChange": 0.04236450000000058,
+              "bootstrap95AbsoluteCI": [
+                0.0008129999999999526,
+                0.3921040000000007
+              ],
+              "perLaunchMedianPercentChanges": [
+                4.981815766022546,
+                5.620401673072173,
+                0.06266151189210367,
+                0.020640615292305542
+              ],
+              "classification": "inconclusive; no equivalence claim"
+            }
+          },
+          "wall_delta_ms": {
+            "before": {
+              "median": 5.306207574903965,
+              "p05": 5.179818160831928,
+              "p95": 6.3998807687312365,
+              "minimum": 5.003961268812418,
+              "maximum": 7.008666172623634
+            },
+            "after": {
+              "median": 5.401314469054341,
+              "p05": 5.192534369416535,
+              "p95": 6.996461236849427,
+              "minimum": 5.083581432700157,
+              "maximum": 10.006703436374664
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 0.2497553950830289,
+              "bootstrap95PercentCI": [
+                -0.00915503866982803,
+                7.364847746241532
+              ],
+              "medianAbsoluteChange": 0.013146549463272095,
+              "bootstrap95AbsoluteCI": [
+                -0.0004854518920183182,
+                0.391269801184535
+              ],
+              "perLaunchMedianPercentChanges": [
+                4.617300920104473,
+                5.551746816196401,
+                0.1398913192407092,
+                0.036701293135610324
+              ],
+              "classification": "inconclusive; no equivalence claim"
+            }
+          }
+        },
+        "Backface": {
+          "draw_calls": {
+            "before": {
+              "median": 7.0,
+              "p05": 7.0,
+              "p95": 7.0,
+              "minimum": 7.0,
+              "maximum": 7.0
+            },
+            "after": {
+              "median": 7.0,
+              "p05": 7.0,
+              "p95": 7.0,
+              "minimum": 7.0,
+              "maximum": 7.0
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 0.0,
+              "bootstrap95PercentCI": [
+                0.0,
+                0.0
+              ],
+              "medianAbsoluteChange": 0.0,
+              "bootstrap95AbsoluteCI": [
+                0.0,
+                0.0
+              ],
+              "perLaunchMedianPercentChanges": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "classification": "unchanged"
+            }
+          },
+          "cpu_frame_ms": {
+            "before": {
+              "median": 2.200375,
+              "p05": 2.090583,
+              "p95": 2.7218461499999997,
+              "minimum": 1.993583,
+              "maximum": 3.622042
+            },
+            "after": {
+              "median": 2.210167,
+              "p05": 2.0926649,
+              "p95": 3.5105021,
+              "minimum": 1.999791,
+              "maximum": 4.501
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 0.05257515093411991,
+              "bootstrap95PercentCI": [
+                -0.04256946278514695,
+                11.428226205778625
+              ],
+              "medianAbsoluteChange": 0.0011565000000000047,
+              "bootstrap95AbsoluteCI": [
+                -0.0009372500000000006,
+                0.24943800000000027
+              ],
+              "perLaunchMedianPercentChanges": [
+                9.636446525001052,
+                9.100670876274597,
+                0.05257515093411991,
+                -0.050629709239491394
+              ],
+              "classification": "inconclusive; no equivalence claim"
+            },
+            "relativeToOriginalControl": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 0.046022826955327556,
+              "bootstrap95PercentCI": [
+                -4.668619723723344,
+                2.7382505553339653
+              ],
+              "medianAbsoluteChange": 0.00015579950847954827,
+              "bootstrap95AbsoluteCI": [
+                -0.0156280181269019,
+                0.009023009598420118
+              ],
+              "perLaunchMedianPercentChanges": [
+                -3.306050853119235,
+                1.267053724878353,
+                -0.08558688423642713,
+                0.005448443945865744
+              ]
+            }
+          },
+          "metal_gpu_ms": {
+            "before": {
+              "median": 1.6655208310112357,
+              "p05": 1.6397500003222376,
+              "p95": 1.9182583338988477,
+              "minimum": 1.6191250033443794,
+              "maximum": 2.949000001535751
+            },
+            "after": {
+              "median": 1.67012499878183,
+              "p05": 1.6459562513773562,
+              "p95": 2.8387812490109354,
+              "minimum": 1.6271249987767078,
+              "maximum": 3.387374999874737
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 0.1945923405871519,
+              "bootstrap95PercentCI": [
+                -0.188382635946871,
+                1.2682754866305546
+              ],
+              "medianAbsoluteChange": 0.0032395837479270995,
+              "bootstrap95AbsoluteCI": [
+                -0.003145833034068346,
+                0.02099999983329326
+              ],
+              "perLaunchMedianPercentChanges": [
+                1.3375861206855633,
+                0.118814213783347,
+                0.1945923405871519,
+                -0.14542070712615374
+              ],
+              "classification": "material regression excluded within the declared margin"
+            },
+            "relativeToOriginalControl": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": -1.1171707996783797,
+              "bootstrap95PercentCI": [
+                -11.471542935380112,
+                -0.2796512469851187
+              ],
+              "medianAbsoluteChange": -0.003299919657155259,
+              "bootstrap95AbsoluteCI": [
+                -0.033412949332449114,
+                -0.0008028513385861524
+              ],
+              "perLaunchMedianPercentChanges": [
+                -12.166039296945435,
+                -5.0560730853975775,
+                -0.7292491020261582,
+                -0.2796512469851187
+              ]
+            }
+          },
+          "cpu_main_ms": {
+            "before": {
+              "median": 2.1995,
+              "p05": 2.089625,
+              "p95": 2.71930835,
+              "minimum": 1.99275,
+              "maximum": 3.617833
+            },
+            "after": {
+              "median": 2.2092915,
+              "p05": 2.0917919499999997,
+              "p95": 3.5081806,
+              "minimum": 1.998875,
+              "maximum": 4.498
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 0.05020987446670011,
+              "bootstrap95PercentCI": [
+                -0.043549896719830006,
+                11.411954285244242
+              ],
+              "medianAbsoluteChange": 0.0011039999999999939,
+              "bootstrap95AbsoluteCI": [
+                -0.0009585000000000843,
+                0.24894800000000017
+              ],
+              "perLaunchMedianPercentChanges": [
+                9.626296379004973,
+                9.07934059948099,
+                0.05020987446670011,
+                -0.04873965408863645
+              ],
+              "classification": "inconclusive; no equivalence claim"
+            }
+          },
+          "wall_delta_ms": {
+            "before": {
+              "median": 2.2004605270922184,
+              "p05": 2.090792846865952,
+              "p95": 2.711411111522465,
+              "minimum": 1.9937925972044468,
+              "maximum": 3.6167516373097897
+            },
+            "after": {
+              "median": 2.210292615927756,
+              "p05": 2.0934147527441382,
+              "p95": 3.511688916478306,
+              "minimum": 2.0748369861394167,
+              "maximum": 4.503748379647732
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 0.055575624432013804,
+              "bootstrap95PercentCI": [
+                -0.04254973880244983,
+                11.4176537148291
+              ],
+              "medianAbsoluteChange": 0.0012223608791828156,
+              "bootstrap95AbsoluteCI": [
+                -0.0009371433407068253,
+                0.2492099883966148
+              ],
+              "perLaunchMedianPercentChanges": [
+                10.313241772382188,
+                9.090360151378295,
+                0.055575624432013804,
+                -0.04254973880244983
+              ],
+              "classification": "inconclusive; no equivalence claim"
+            }
+          }
+        },
+        "Occlusion": {
+          "draw_calls": {
+            "before": {
+              "median": 7.0,
+              "p05": 7.0,
+              "p95": 7.0,
+              "minimum": 7.0,
+              "maximum": 7.0
+            },
+            "after": {
+              "median": 7.0,
+              "p05": 7.0,
+              "p95": 7.0,
+              "minimum": 7.0,
+              "maximum": 7.0
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 0.0,
+              "bootstrap95PercentCI": [
+                0.0,
+                0.0
+              ],
+              "medianAbsoluteChange": 0.0,
+              "bootstrap95AbsoluteCI": [
+                0.0,
+                0.0
+              ],
+              "perLaunchMedianPercentChanges": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "classification": "unchanged"
+            }
+          },
+          "cpu_frame_ms": {
+            "before": {
+              "median": 2.3081875,
+              "p05": 2.282958,
+              "p95": 2.79683305,
+              "minimum": 2.180541,
+              "maximum": 3.708291
+            },
+            "after": {
+              "median": 2.4004165,
+              "p05": 2.288458,
+              "p95": 3.68871395,
+              "minimum": 2.17825,
+              "maximum": 5.096667
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 2.1148705235053855,
+              "bootstrap95PercentCI": [
+                -0.25699524834723597,
+                12.347113451196146
+              ],
+              "medianAbsoluteChange": 0.048906000000000116,
+              "bootstrap95AbsoluteCI": [
+                -0.005937500000000373,
+                0.2845829999999996
+              ],
+              "perLaunchMedianPercentChanges": [
+                10.085519175064938,
+                8.369991274775824,
+                0.18321198462275534,
+                -1.8572813600960303
+              ],
+              "classification": "inconclusive; no equivalence claim"
+            },
+            "relativeToOriginalControl": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": -0.4324841675767188,
+              "bootstrap95PercentCI": [
+                -5.808807155176993,
+                0.6787300348254366
+              ],
+              "medianAbsoluteChange": -0.0015751102780403592,
+              "bootstrap95AbsoluteCI": [
+                -0.020921949768043346,
+                0.002442185130864194
+              ],
+              "perLaunchMedianPercentChanges": [
+                -4.569897023610331,
+                -0.20117653431603877,
+                -0.5301127174093423,
+                -1.2733363842559353
+              ]
+            }
+          },
+          "metal_gpu_ms": {
+            "before": {
+              "median": 1.8132499972125515,
+              "p05": 1.7901250030263327,
+              "p95": 2.162927081008091,
+              "minimum": 1.7668750006123446,
+              "maximum": 3.1283749995054677
+            },
+            "after": {
+              "median": 1.8232708353025373,
+              "p05": 1.7961645840841811,
+              "p95": 2.886399997805711,
+              "minimum": 1.7773750005289912,
+              "maximum": 3.4843333341996185
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 0.4419953339338645,
+              "bootstrap95PercentCI": [
+                -0.09362168545770655,
+                1.8034692923430073
+              ],
+              "medianAbsoluteChange": 0.008000000889296643,
+              "bootstrap95AbsoluteCI": [
+                -0.0016979156498564407,
+                0.03268750515417196
+              ],
+              "perLaunchMedianPercentChanges": [
+                1.7538499917292394,
+                1.3588035840428003,
+                -0.09362168545770655,
+                -0.05227042207047172
+              ],
+              "classification": "material regression excluded within the declared margin"
+            },
+            "relativeToOriginalControl": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": -1.3507670893300128,
+              "bootstrap95PercentCI": [
+                -11.284715768250528,
+                -0.23197840353453847
+              ],
+              "medianAbsoluteChange": -0.004250762038072425,
+              "bootstrap95AbsoluteCI": [
+                -0.03592888421104894,
+                -0.0007215315979189896
+              ],
+              "perLaunchMedianPercentChanges": [
+                -11.79705010726016,
+                -4.040547327803634,
+                -0.6378356966133758,
+                -0.6357223945073931
+              ]
+            }
+          },
+          "cpu_main_ms": {
+            "before": {
+              "median": 2.30725,
+              "p05": 2.282084,
+              "p95": 2.7945648999999997,
+              "minimum": 2.1795,
+              "maximum": 3.706916
+            },
+            "after": {
+              "median": 2.3993539999999998,
+              "p05": 2.2876639500000002,
+              "p95": 3.68726875,
+              "minimum": 2.177333,
+              "maximum": 5.094375
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 2.105729663030176,
+              "bootstrap95PercentCI": [
+                -0.2543601032421905,
+                12.327037036152788
+              ],
+              "medianAbsoluteChange": 0.04867700000000008,
+              "bootstrap95AbsoluteCI": [
+                -0.005874500000000005,
+                0.283979
+              ],
+              "perLaunchMedianPercentChanges": [
+                10.064905816977976,
+                8.352463350153648,
+                0.18644483422518565,
+                -1.854835314921538
+              ],
+              "classification": "inconclusive; no equivalence claim"
+            }
+          },
+          "wall_delta_ms": {
+            "before": {
+              "median": 2.308436087332666,
+              "p05": 2.2833738126792014,
+              "p95": 2.795538178179412,
+              "minimum": 2.1828727331012487,
+              "maximum": 3.7087940145283937
+            },
+            "after": {
+              "median": 2.39979091566056,
+              "p05": 2.288336167111993,
+              "p95": 3.6108676227740935,
+              "minimum": 2.1781674586236477,
+              "maximum": 5.096003413200378
+            },
+            "comparison": {
+              "launchPairs": 4,
+              "blockPairs": 16,
+              "medianPercentChange": 2.0212058878321337,
+              "bootstrap95PercentCI": [
+                -0.2315343589915142,
+                12.242922794363631
+              ],
+              "medianAbsoluteChange": 0.046770437620580196,
+              "bootstrap95AbsoluteCI": [
+                -0.005349982529878616,
+                0.2822456881403923
+              ],
+              "perLaunchMedianPercentChanges": [
+                8.50270695653993,
+                8.24778707222681,
+                0.09095004029871512,
+                -1.905881168873802
+              ],
+              "classification": "inconclusive; no equivalence claim"
+            }
+          }
+        }
+      },
+      "memory": {
+        "before": {
+          "median": 876.390625,
+          "p05": 876.259375,
+          "p95": 876.68125,
+          "minimum": 876.25,
+          "maximum": 876.71875
+        },
+        "after": {
+          "median": 876.6328125,
+          "p05": 876.5296875,
+          "p95": 876.65625,
+          "minimum": 876.515625,
+          "maximum": 876.65625
+        },
+        "comparison": {
+          "launchPairs": 4,
+          "blockPairs": 4,
+          "medianPercentChange": 0.02585324984599735,
+          "bootstrap95PercentCI": [
+            -0.007128854036708709,
+            0.033877754796374226
+          ],
+          "medianAbsoluteChange": 0.2265625,
+          "bootstrap95AbsoluteCI": [
+            -0.0625,
+            0.296875
+          ],
+          "perLaunchMedianPercentChanges": [
+            0.021392662316821465,
+            -0.007128854036708709,
+            0.033877754796374226,
+            0.030313837375173236
+          ]
+        }
+      }
+    }
+  },
+  "bake": {
+    "cpu": {
+      "totalMs": {
+        "before": {
+          "median": 1137.7248,
+          "p05": 1109.63247,
+          "p95": 1177.05617,
+          "minimum": 1107.8874,
+          "maximum": 1180.7846
+        },
+        "after": {
+          "median": 918.8244,
+          "p05": 892.4492050000001,
+          "p95": 964.242655,
+          "minimum": 890.5807000000001,
+          "maximum": 969.4717
+        },
+        "comparison": {
+          "launchPairs": 4,
+          "blockPairs": 4,
+          "medianPercentChange": -18.818200640122512,
+          "bootstrap95PercentCI": [
+            -24.5772090862296,
+            -13.4030065710234
+          ],
+          "medianAbsoluteChange": -213.08350000000002,
+          "bootstrap95AbsoluteCI": [
+            -290.20389999999986,
+            -150.04950000000008
+          ],
+          "perLaunchMedianPercentChanges": [
+            -19.146255079466854,
+            -24.5772090862296,
+            -13.4030065710234,
+            -18.490146200778167
+          ]
+        },
+        "unit": "ms"
+      },
+      "buildMs": {
+        "before": {
+          "median": 721.0718,
+          "p05": 681.984105,
+          "p95": 762.7754550000001,
+          "minimum": 680.2296,
+          "maximum": 764.9916000000001
+        },
+        "after": {
+          "median": 406.424,
+          "p05": 394.54224000000005,
+          "p95": 484.38204,
+          "minimum": 394.21950000000004,
+          "maximum": 496.36530000000005
+        },
+        "comparison": {
+          "launchPairs": 4,
+          "blockPairs": 4,
+          "medianPercentChange": -42.380475174260845,
+          "bootstrap95PercentCI": [
+            -44.4858309719064,
+            -35.11493459536026
+          ],
+          "medianAbsoluteChange": -290.78265,
+          "bootstrap95AbsoluteCI": [
+            -333.7404,
+            -268.6263
+          ],
+          "perLaunchMedianPercentChanges": [
+            -35.11493459536026,
+            -44.4858309719064,
+            -42.7148382710702,
+            -42.04611207745149
+          ]
+        },
+        "unit": "ms"
+      },
+      "saveMs": {
+        "before": {
+          "median": 353.4995,
+          "p05": 352.38754,
+          "p95": 357.361295,
+          "minimum": 352.2427,
+          "maximum": 357.9914
+        },
+        "after": {
+          "median": 397.99725,
+          "p05": 391.18872000000005,
+          "p95": 466.151555,
+          "minimum": 391.1505,
+          "maximum": 477.0155
+        },
+        "comparison": {
+          "launchPairs": 4,
+          "blockPairs": 4,
+          "medianPercentChange": 11.915378234373753,
+          "bootstrap95PercentCI": [
+            10.559859261422089,
+            35.42239484310106
+          ],
+          "medianAbsoluteChange": 42.397400000000005,
+          "bootstrap95AbsoluteCI": [
+            37.35980000000001,
+            124.77279999999996
+          ],
+          "perLaunchMedianPercentChanges": [
+            13.01645793725772,
+            10.559859261422089,
+            35.42239484310106,
+            10.814298531489786
+          ]
+        },
+        "unit": "ms"
+      },
+      "workflowInitialMs": {
+        "before": {
+          "median": 345.96000000000004,
+          "p05": 339.12752,
+          "p95": 355.858855,
+          "minimum": 338.8016,
+          "maximum": 356.7259
+        },
+        "after": {
+          "median": 357.15005,
+          "p05": 312.91857500000003,
+          "p95": 364.11081,
+          "minimum": 305.285,
+          "maximum": 365.16720000000004
+        },
+        "comparison": {
+          "launchPairs": 4,
+          "blockPairs": 4,
+          "medianPercentChange": 2.7600696008940218,
+          "bootstrap95PercentCI": [
+            -13.010734427216065,
+            7.095195416430089
+          ],
+          "medianAbsoluteChange": 9.386300000000006,
+          "bootstrap95AbsoluteCI": [
+            -45.66059999999999,
+            24.192800000000034
+          ],
+          "perLaunchMedianPercentChanges": [
+            -13.010734427216065,
+            7.095195416430089,
+            0.39209376162483434,
+            5.128045440163209
+          ]
+        },
+        "unit": "ms"
+      },
+      "workflowRebuildMs": {
+        "before": {
+          "median": 258.19915000000003,
+          "p05": 256.050155,
+          "p95": 263.055565,
+          "minimum": 255.6896,
+          "maximum": 263.89390000000003
+        },
+        "after": {
+          "median": 269.86435,
+          "p05": 265.26326,
+          "p95": 284.08761,
+          "minimum": 265.2065,
+          "maximum": 285.8424
+        },
+        "comparison": {
+          "launchPairs": 4,
+          "blockPairs": 4,
+          "medianPercentChange": 3.8030754625984597,
+          "bootstrap95PercentCI": [
+            2.8183349141518654,
+            10.751577045975225
+          ],
+          "medianAbsoluteChange": 9.88339999999998,
+          "bootstrap95AbsoluteCI": [
+            7.279899999999998,
+            27.7491
+          ],
+          "perLaunchMedianPercentChanges": [
+            3.884098874585562,
+            10.751577045975225,
+            2.8183349141518654,
+            3.7220520506113575
+          ]
+        },
+        "unit": "ms"
+      },
+      "processPeakRssBytes": {
+        "before": {
+          "median": 1735.859375,
+          "p05": 1727.0625,
+          "p95": 1747.578125,
+          "minimum": 1725.65625,
+          "maximum": 1749.5
+        },
+        "after": {
+          "median": 1665.9140625,
+          "p05": 1655.790625,
+          "p95": 1706.6375,
+          "minimum": 1655.171875,
+          "maximum": 1712.65625
+        },
+        "comparison": {
+          "launchPairs": 4,
+          "blockPairs": 4,
+          "medianPercentChange": -3.889335187178439,
+          "bootstrap95PercentCI": [
+            -4.36501503935448,
+            -2.1059588453843925
+          ],
+          "medianAbsoluteChange": -67.3203125,
+          "bootstrap95AbsoluteCI": [
+            -75.734375,
+            -36.84375
+          ],
+          "perLaunchMedianPercentChanges": [
+            -2.1059588453843925,
+            -3.69417353438658,
+            -4.084496839970297,
+            -4.36501503935448
+          ]
+        },
+        "unit": "MiB"
+      },
+      "bakeSampledPeakRssBytes": {
+        "before": {
+          "median": 1735.859375,
+          "p05": 1726.85,
+          "p95": 1747.03359375,
+          "minimum": 1725.40625,
+          "maximum": 1748.859375
+        },
+        "after": {
+          "median": 1661.7421875,
+          "p05": 1647.5265625,
+          "p95": 1699.39921875,
+          "minimum": 1646.921875,
+          "maximum": 1704.140625
+        },
+        "comparison": {
+          "launchPairs": 4,
+          "blockPairs": 4,
+          "medianPercentChange": -4.121460555974915,
+          "bootstrap95PercentCI": [
+            -4.845914158606657,
+            -2.557023774424405
+          ],
+          "medianAbsoluteChange": -71.3203125,
+          "bootstrap95AbsoluteCI": [
+            -84.078125,
+            -44.71875
+          ],
+          "perLaunchMedianPercentChanges": [
+            -2.557023774424405,
+            -3.69417353438658,
+            -4.54874757756325,
+            -4.845914158606657
+          ]
+        },
+        "unit": "MiB"
+      },
+      "unityAllocatedAtStart": {
+        "before": {
+          "median": 217.09300327301025,
+          "p05": 216.13019046783447,
+          "p95": 219.85953936576843,
+          "minimum": 216.1262559890747,
+          "maximum": 220.18177795410156
+        },
+        "after": {
+          "median": 216.4697504043579,
+          "p05": 214.8456693649292,
+          "p95": 218.20891804695128,
+          "minimum": 214.56216144561768,
+          "maximum": 218.5127353668213
+        },
+        "comparison": {
+          "launchPairs": 4,
+          "blockPairs": 4,
+          "medianPercentChange": -0.7305001567382285,
+          "bootstrap95PercentCI": [
+            -0.7580293895293133,
+            0.16704614483837865
+          ],
+          "medianAbsoluteChange": -1.5858154296875,
+          "bootstrap95AbsoluteCI": [
+            -1.6690425872802734,
+            0.36103057861328125
+          ],
+          "perLaunchMedianPercentChanges": [
+            -0.7580293895293133,
+            -0.7357418979570207,
+            -0.7252584155194364,
+            0.16704614483837865
+          ]
+        },
+        "unit": "MiB"
+      },
+      "unityAllocatedAfterBuild": {
+        "before": {
+          "median": 249.39878940582275,
+          "p05": 248.21743335723878,
+          "p95": 252.50362129211425,
+          "minimum": 248.12126636505127,
+          "maximum": 252.93922519683838
+        },
+        "after": {
+          "median": 242.1570062637329,
+          "p05": 240.53713512420654,
+          "p95": 243.939537858963,
+          "minimum": 240.25336170196533,
+          "maximum": 244.25201606750488
+        },
+        "comparison": {
+          "launchPairs": 4,
+          "blockPairs": 4,
+          "medianPercentChange": -3.2880510333746726,
+          "bootstrap95PercentCI": [
+            -3.4345045228050597,
+            -2.399003697544644
+          ],
+          "medianAbsoluteChange": -8.199516296386719,
+          "bootstrap95AbsoluteCI": [
+            -8.687209129333496,
+            -5.9524383544921875
+          ],
+          "perLaunchMedianPercentChanges": [
+            -3.4345045228050597,
+            -3.4205404999077205,
+            -3.155561566841625,
+            -2.399003697544644
+          ]
+        },
+        "unit": "MiB"
+      },
+      "Combined": {
+        "before": {
+          "median": 166.34300000000002,
+          "p05": 150.570795,
+          "p95": 183.855835,
+          "minimum": 149.4537,
+          "maximum": 185.2801
+        },
+        "after": {
+          "median": 95.6536,
+          "p05": 90.34820500000001,
+          "p95": 103.10261,
+          "minimum": 90.1897,
+          "maximum": 103.6394
+        },
+        "comparison": {
+          "launchPairs": 4,
+          "blockPairs": 4,
+          "medianPercentChange": -42.46116982790325,
+          "bootstrap95PercentCI": [
+            -44.06339374816832,
+            -39.65375229920704
+          ],
+          "medianAbsoluteChange": -70.6894,
+          "bootstrap95AbsoluteCI": [
+            -81.64070000000001,
+            -59.263999999999996
+          ],
+          "perLaunchMedianPercentChanges": [
+            -44.06339374816832,
+            -43.077737008277154,
+            -41.84460264752934,
+            -39.65375229920704
+          ]
+        }
+      },
+      "Backface": {
+        "before": {
+          "median": 230.51215000000002,
+          "p05": 211.57598000000002,
+          "p95": 271.596855,
+          "minimum": 209.4764,
+          "maximum": 277.605
+        },
+        "after": {
+          "median": 107.74195,
+          "p05": 105.496525,
+          "p95": 174.44482999999997,
+          "minimum": 105.3601,
+          "maximum": 185.9561
+        },
+        "comparison": {
+          "launchPairs": 4,
+          "blockPairs": 4,
+          "medianPercentChange": -50.35832135805084,
+          "bootstrap95PercentCI": [
+            -55.26445512473759,
+            -33.01413879433008
+          ],
+          "medianAbsoluteChange": -109.18780000000001,
+          "bootstrap95AbsoluteCI": [
+            -131.2811,
+            -91.64890000000003
+          ],
+          "perLaunchMedianPercentChanges": [
+            -33.01413879433008,
+            -55.26445512473759,
+            -47.863196044996,
+            -52.85344667110567
+          ]
+        }
+      },
+      "Occlusion": {
+        "before": {
+          "median": 316.17295,
+          "p05": 302.631035,
+          "p95": 334.945425,
+          "minimum": 301.8509,
+          "maximum": 336.6486
+        },
+        "after": {
+          "median": 202.46765,
+          "p05": 196.05856,
+          "p95": 209.377815,
+          "minimum": 195.6424,
+          "maximum": 209.8824
+        },
+        "comparison": {
+          "launchPairs": 4,
+          "blockPairs": 4,
+          "medianPercentChange": -36.5176856359882,
+          "bootstrap95PercentCI": [
+            -39.856763464200554,
+            -31.582612475231986
+          ],
+          "medianAbsoluteChange": -117.70060000000001,
+          "bootstrap95AbsoluteCI": [
+            -129.6517,
+            -95.33240000000004
+          ],
+          "perLaunchMedianPercentChanges": [
+            -31.582612475231986,
+            -37.655347445377764,
+            -39.856763464200554,
+            -35.38002382659864
+          ]
+        }
+      },
+      "buildOnlySampledPeakMiB": {
+        "before": {
+          "median": 1625.3203125,
+          "p05": 1590.696875,
+          "p95": 1651.74921875,
+          "minimum": 1586.796875,
+          "maximum": 1654.203125
+        },
+        "after": {
+          "median": 1417.015625,
+          "p05": 1415.253125,
+          "p95": 1534.25859375,
+          "minimum": 1415.234375,
+          "maximum": 1554.65625
+        },
+        "comparison": {
+          "launchPairs": 4,
+          "blockPairs": 4,
+          "medianPercentChange": -11.418588079440688,
+          "bootstrap95PercentCI": [
+            -13.591612447768597,
+            -6.017814468824678
+          ],
+          "medianAbsoluteChange": -182.78125,
+          "bootstrap95AbsoluteCI": [
+            -222.609375,
+            -99.546875
+          ],
+          "perLaunchMedianPercentChanges": [
+            -6.017814468824678,
+            -13.591612447768597,
+            -10.595243956476786,
+            -12.241932202404593
+          ]
+        },
+        "unit": "MiB, approximately 10 ms RSS sampling"
+      },
+      "saveSampledPeakMiB": {
+        "before": {
+          "median": 1705.125,
+          "p05": 1696.709375,
+          "p95": 1715.36015625,
+          "minimum": 1695.3125,
+          "maximum": 1717.078125
+        },
+        "after": {
+          "median": 1597.3671875,
+          "p05": 1591.19375,
+          "p95": 1664.51484375,
+          "minimum": 1590.265625,
+          "maximum": 1676.203125
+        },
+        "comparison": {
+          "launchPairs": 4,
+          "blockPairs": 4,
+          "medianPercentChange": -6.034644750372481,
+          "bootstrap95PercentCI": [
+            -6.76346647123488,
+            -2.380497392918568
+          ],
+          "medianAbsoluteChange": -102.6015625,
+          "bootstrap95AbsoluteCI": [
+            -115.359375,
+            -40.875
+          ],
+          "perLaunchMedianPercentChanges": [
+            -2.380497392918568,
+            -6.76346647123488,
+            -5.723502304147465,
+            -6.345787196597497
+          ]
+        },
+        "unit": "MiB, approximately 10 ms RSS sampling"
+      }
+    },
+    "gpu": {
+      "totalMs": {
+        "before": {
+          "median": 32519.001750000003,
+          "p05": 31805.483460000003,
+          "p95": 33076.46004,
+          "minimum": 31681.3182,
+          "maximum": 33173.0853
+        },
+        "after": {
+          "median": 31043.167,
+          "p05": 30372.537470000003,
+          "p95": 31458.095535000004,
+          "minimum": 30294.418700000002,
+          "maximum": 31491.090600000003
+        },
+        "comparison": {
+          "launchPairs": 4,
+          "blockPairs": 4,
+          "medianPercentChange": -4.432434247052846,
+          "bootstrap95PercentCI": [
+            -6.869267141200142,
+            -2.733812067201169
+          ],
+          "medianAbsoluteChange": -1459.9788999999982,
+          "bootstrap95AbsoluteCI": [
+            -2234.498199999998,
+            -866.1077000000005
+          ],
+          "perLaunchMedianPercentChanges": [
+            -5.733448615947689,
+            -6.869267141200142,
+            -2.733812067201169,
+            -3.131419878158004
+          ]
+        },
+        "unit": "ms"
+      },
+      "buildMs": {
+        "before": {
+          "median": 11093.1312,
+          "p05": 11039.824055000001,
+          "p95": 11171.298295,
+          "minimum": 11038.16,
+          "maximum": 11177.349400000001
+        },
+        "after": {
+          "median": 10170.101050000001,
+          "p05": 10003.971005000001,
+          "p95": 10303.13541,
+          "minimum": 9994.9472,
+          "maximum": 10306.318800000001
+        },
+        "comparison": {
+          "launchPairs": 4,
+          "blockPairs": 4,
+          "medianPercentChange": -8.3493894004399,
+          "bootstrap95PercentCI": [
+            -9.541879737995341,
+            -7.649383447101021
+          ],
+          "medianAbsoluteChange": -927.0423499999997,
+          "bootstrap95AbsoluteCI": [
+            -1054.3065000000006,
+            -851.9125000000004
+          ],
+          "perLaunchMedianPercentChanges": [
+            -7.792818930756518,
+            -8.905959870123281,
+            -9.541879737995341,
+            -7.649383447101021
+          ]
+        },
+        "unit": "ms"
+      },
+      "saveMs": {
+        "before": {
+          "median": 21361.3724,
+          "p05": 20681.28946,
+          "p95": 21855.303555,
+          "minimum": 20570.7379,
+          "maximum": 21933.0048
+        },
+        "after": {
+          "median": 20830.56015,
+          "p05": 20263.909300000003,
+          "p95": 21098.714799999998,
+          "minimum": 20176.6258,
+          "maximum": 21133.3225
+        },
+        "comparison": {
+          "launchPairs": 4,
+          "blockPairs": 4,
+          "medianPercentChange": -2.75827338191717,
+          "bootstrap95PercentCI": [
+            -5.782726604694988,
+            0.9128398840763108
+          ],
+          "medianAbsoluteChange": -602.4130499999992,
+          "bootstrap95AbsoluteCI": [
+            -1238.3706999999995,
+            187.77790000000095
+          ],
+          "perLaunchMedianPercentChanges": [
+            -4.6979440774115755,
+            -5.782726604694988,
+            0.9128398840763108,
+            -0.8186026864227647
+          ]
+        },
+        "unit": "ms"
+      },
+      "workflowInitialMs": {
+        "before": {
+          "median": 18121.230150000003,
+          "p05": 17565.10795,
+          "p95": 18628.688065,
+          "minimum": 17472.937,
+          "maximum": 18712.2712
+        },
+        "after": {
+          "median": 17080.80655,
+          "p05": 17025.272835,
+          "p95": 17326.77622,
+          "minimum": 17017.5033,
+          "maximum": 17368.1521
+        },
+        "comparison": {
+          "launchPairs": 4,
+          "blockPairs": 4,
+          "medianPercentChange": -5.12114984765355,
+          "bootstrap95PercentCI": [
+            -8.657197636169355,
+            -2.3100684218113954
+          ],
+          "medianAbsoluteChange": -928.4024500000014,
+          "bootstrap95AbsoluteCI": [
+            -1619.9582999999984,
+            -403.6368000000002
+          ],
+          "perLaunchMedianPercentChanges": [
+            -3.9765665731025135,
+            -2.3100684218113954,
+            -6.265733122204587,
+            -8.657197636169355
+          ]
+        },
+        "unit": "ms"
+      },
+      "workflowRebuildMs": {
+        "before": {
+          "median": 12446.49295,
+          "p05": 11818.974165000001,
+          "p95": 13598.4999,
+          "minimum": 11755.194000000001,
+          "maximum": 13754.836800000001
+        },
+        "after": {
+          "median": 11610.753550000001,
+          "p05": 11349.045735000002,
+          "p95": 11693.579205000002,
+          "minimum": 11307.270900000001,
+          "maximum": 11703.786600000001
+        },
+        "comparison": {
+          "launchPairs": 4,
+          "blockPairs": 4,
+          "medianPercentChange": -6.6677062800996,
+          "bootstrap95PercentCI": [
+            -14.911483355440458,
+            -3.8104271184295158
+          ],
+          "medianAbsoluteChange": -835.7393999999995,
+          "bootstrap95AbsoluteCI": [
+            -2051.0501999999997,
+            -447.9231
+          ],
+          "perLaunchMedianPercentChanges": [
+            -4.471593864799994,
+            -3.8104271184295158,
+            -14.911483355440458,
+            -8.863818695399207
+          ]
+        },
+        "unit": "ms"
+      },
+      "processPeakRssBytes": {
+        "before": {
+          "median": 7621.6015625,
+          "p05": 7096.521875,
+          "p95": 8198.06640625,
+          "minimum": 7005.921875,
+          "maximum": 8297.734375
+        },
+        "after": {
+          "median": 7532.4375,
+          "p05": 7513.31328125,
+          "p95": 7538.46640625,
+          "minimum": 7510.390625,
+          "maximum": 7539.078125
+        },
+        "comparison": {
+          "launchPairs": 4,
+          "blockPairs": 4,
+          "medianPercentChange": -1.330903479118234,
+          "bootstrap95PercentCI": [
+            -9.14293246462231,
+            7.551870181252918
+          ],
+          "medianAbsoluteChange": -101.46875,
+          "bootstrap95AbsoluteCI": [
+            -758.65625,
+            529.078125
+          ],
+          "perLaunchMedianPercentChanges": [
+            7.551870181252918,
+            -9.14293246462231,
+            -1.051875121911161,
+            -1.6099318363253068
+          ]
+        },
+        "unit": "MiB"
+      },
+      "bakeSampledPeakRssBytes": {
+        "before": {
+          "median": 7595.59375,
+          "p05": 7078.6390625,
+          "p95": 8171.07890625,
+          "minimum": 6994.0625,
+          "maximum": 8265.984375
+        },
+        "after": {
+          "median": 7520.1328125,
+          "p05": 7469.49765625,
+          "p95": 7534.23125,
+          "minimum": 7462.28125,
+          "maximum": 7535.0
+        },
+        "comparison": {
+          "launchPairs": 4,
+          "blockPairs": 4,
+          "medianPercentChange": -0.9904091419390804,
+          "bootstrap95PercentCI": [
+            -9.723017713785598,
+            7.734238863321563
+          ],
+          "medianAbsoluteChange": -75.4609375,
+          "bootstrap95AbsoluteCI": [
+            -803.703125,
+            540.9375
+          ],
+          "perLaunchMedianPercentChanges": [
+            7.734238863321563,
+            -9.723017713785598,
+            -0.37088644755285394,
+            -1.6099318363253068
+          ]
+        },
+        "unit": "MiB"
+      },
+      "unityAllocatedAtStart": {
+        "before": {
+          "median": 207.22738885879517,
+          "p05": 205.65556111335755,
+          "p95": 207.54616827964782,
+          "minimum": 205.3789587020874,
+          "maximum": 207.6016445159912
+        },
+        "after": {
+          "median": 207.73048305511475,
+          "p05": 199.96622519493104,
+          "p95": 209.40116901397704,
+          "minimum": 198.62934684753418,
+          "maximum": 209.66271114349365
+        },
+        "comparison": {
+          "launchPairs": 4,
+          "blockPairs": 4,
+          "medianPercentChange": 0.15340185561741881,
+          "bootstrap95PercentCI": [
+            -4.1511273707877,
+            2.085779608815752
+          ],
+          "medianAbsoluteChange": 0.3181734085083008,
+          "bootstrap95AbsoluteCI": [
+            -8.602456092834473,
+            4.28375244140625
+          ],
+          "perLaunchMedianPercentChanges": [
+            -4.1511273707877,
+            0.15388949349575132,
+            2.085779608815752,
+            0.1529142177390863
+          ]
+        },
+        "unit": "MiB"
+      },
+      "unityAllocatedAfterBuild": {
+        "before": {
+          "median": 1878.901915550232,
+          "p05": 1877.2906099319457,
+          "p95": 1879.1938119888305,
+          "minimum": 1877.0154790878296,
+          "maximum": 1879.2361059188843
+        },
+        "after": {
+          "median": 1281.3760328292847,
+          "p05": 1273.728314781189,
+          "p95": 1283.060164833069,
+          "minimum": 1272.4133977890015,
+          "maximum": 1283.322684288025
+        },
+        "comparison": {
+          "launchPairs": 4,
+          "blockPairs": 4,
+          "medianPercentChange": -31.80698379141562,
+          "bootstrap95PercentCI": [
+            -32.28076373034854,
+            -31.62961634649495
+          ],
+          "medianAbsoluteChange": -597.666862487793,
+          "bootstrap95AbsoluteCI": [
+            -606.5407485961914,
+            -593.6927947998047
+          ],
+          "perLaunchMedianPercentChanges": [
+            -32.28076373034854,
+            -31.81043052603716,
+            -31.62961634649495,
+            -31.803537056794084
+          ]
+        },
+        "unit": "MiB"
+      },
+      "Combined": {
+        "before": {
+          "median": 4316.952950000001,
+          "p05": 4188.7075350000005,
+          "p95": 4407.79896,
+          "minimum": 4168.6767,
+          "maximum": 4421.2299
+        },
+        "after": {
+          "median": 3923.69995,
+          "p05": 3846.81373,
+          "p95": 4031.3777600000003,
+          "minimum": 3841.1758,
+          "maximum": 4042.4495
+        },
+        "comparison": {
+          "launchPairs": 4,
+          "blockPairs": 4,
+          "medianPercentChange": -8.211770038637784,
+          "bootstrap95PercentCI": [
+            -10.456156110698867,
+            -7.753625829444721
+          ],
+          "medianAbsoluteChange": -356.1790500000002,
+          "bootstrap95AbsoluteCI": [
+            -452.92830000000004,
+            -327.5009
+          ],
+          "perLaunchMedianPercentChanges": [
+            -8.56730838629315,
+            -7.856231690982418,
+            -10.456156110698867,
+            -7.753625829444721
+          ]
+        }
+      },
+      "Backface": {
+        "before": {
+          "median": 5240.4474,
+          "p05": 5187.644965,
+          "p95": 5305.458045,
+          "minimum": 5184.9799,
+          "maximum": 5310.2775
+        },
+        "after": {
+          "median": 5020.75805,
+          "p05": 4919.172775,
+          "p95": 5061.455105,
+          "minimum": 4904.6692,
+          "maximum": 5065.2137
+        },
+        "comparison": {
+          "launchPairs": 4,
+          "blockPairs": 4,
+          "medianPercentChange": -4.720232054694962,
+          "bootstrap95PercentCI": [
+            -5.817357002529533,
+            -3.1250914180528166
+          ],
+          "medianAbsoluteChange": -246.62239999999974,
+          "bootstrap95AbsoluteCI": [
+            -308.91780000000017,
+            -162.59060000000045
+          ],
+          "perLaunchMedianPercentChanges": [
+            -3.1250914180528166,
+            -5.817357002529533,
+            -5.406206106989919,
+            -4.034258002400004
+          ]
+        }
+      },
+      "Occlusion": {
+        "before": {
+          "median": 1554.74145,
+          "p05": 1535.444265,
+          "p95": 1558.55461,
+          "minimum": 1532.3262,
+          "maximum": 1558.9402
+        },
+        "after": {
+          "median": 1217.88535,
+          "p05": 1211.4173150000001,
+          "p95": 1246.8539899999998,
+          "minimum": 1211.2616,
+          "maximum": 1250.9804
+        },
+        "comparison": {
+          "launchPairs": 4,
+          "blockPairs": 4,
+          "medianPercentChange": -21.088685891493686,
+          "bootstrap95PercentCI": [
+            -22.23565086075784,
+            -19.621894439469912
+          ],
+          "medianAbsoluteChange": -325.35344999999995,
+          "bootstrap95AbsoluteCI": [
+            -346.6405,
+            -305.3892000000001
+          ],
+          "perLaunchMedianPercentChanges": [
+            -21.22461381278494,
+            -22.23565086075784,
+            -20.95275797020243,
+            -19.621894439469912
+          ]
+        }
+      },
+      "buildOnlySampledPeakMiB": {
+        "before": {
+          "median": 4399.9453125,
+          "p05": 4338.59765625,
+          "p95": 4470.0453125,
+          "minimum": 4337.4375,
+          "maximum": 4472.75
+        },
+        "after": {
+          "median": 3640.3046875,
+          "p05": 3632.84609375,
+          "p95": 3697.86015625,
+          "minimum": 3631.671875,
+          "maximum": 3707.875
+        },
+        "comparison": {
+          "launchPairs": 4,
+          "blockPairs": 4,
+          "medianPercentChange": -16.686132494367072,
+          "bootstrap95PercentCI": [
+            -18.26398972999137,
+            -16.240367361762875
+          ],
+          "medianAbsoluteChange": -735.3203125,
+          "bootstrap95AbsoluteCI": [
+            -813.609375,
+            -705.671875
+          ],
+          "perLaunchMedianPercentChanges": [
+            -17.100776926946516,
+            -18.26398972999137,
+            -16.271488061787633,
+            -16.240367361762875
+          ]
+        },
+        "unit": "MiB, approximately 10 ms RSS sampling"
+      },
+      "saveSampledPeakMiB": {
+        "before": {
+          "median": 7595.59375,
+          "p05": 7078.6390625,
+          "p95": 7740.02265625,
+          "minimum": 6994.0625,
+          "maximum": 7758.859375
+        },
+        "after": {
+          "median": 7199.1796875,
+          "p05": 7104.41484375,
+          "p95": 7233.7140625,
+          "minimum": 7089.140625,
+          "maximum": 7238.359375
+        },
+        "comparison": {
+          "launchPairs": 4,
+          "blockPairs": 4,
+          "medianPercentChange": -5.998423840587625,
+          "bootstrap95PercentCI": [
+            -7.107600787003565,
+            3.492918100174247
+          ],
+          "medianAbsoluteChange": -455.5390625,
+          "bootstrap95AbsoluteCI": [
+            -551.46875,
+            244.296875
+          ],
+          "perLaunchMedianPercentChanges": [
+            3.492918100174247,
+            -7.107600787003565,
+            -6.202321244723031,
+            -5.794526436452219
+          ]
+        },
+        "unit": "MiB, approximately 10 ms RSS sampling"
+      }
+    }
+  },
+  "conditions": {
+    "cpu": {
+      "sourceCubeCount": 3600,
+      "faceSubdivisions": 1,
+      "unityVersion": "2023.2.20f1",
+      "cpu": "Apple M4 Pro",
+      "gpu": "Apple M4 Pro",
+      "processArchitecture": "Arm64",
+      "graphicsApi": "Metal",
+      "quality": "High Fidelity",
+      "renderPipeline": "URP-HighFidelity",
+      "msaa": 4,
+      "renderScale": 1.0,
+      "srpBatcher": true,
+      "dynamicBatching": false,
+      "shader": "Universal Render Pipeline/Lit",
+      "materialInstancing": false,
+      "cameraWidth": 1920,
+      "cameraHeight": 1080,
+      "cameraPosition": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": -50.0
+      },
+      "cameraRotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "cameraOrthographic": true,
+      "cameraOrthographicSize": 30.375001907348633,
+      "targetFrameRate": -1,
+      "vSyncCount": 0,
+      "warmupFrames": 90,
+      "minimumWarmupSeconds": 2.0,
+      "preconditionSeconds": 10.0,
+      "rounds": 4,
+      "samplesPerBlock": 240,
+      "historyOffset": 16,
+      "gpuQueueDrained": true,
+      "offscreen": true,
+      "batchMode": true
+    },
+    "gpu": {
+      "sourceCubeCount": 225,
+      "faceSubdivisions": 64,
+      "unityVersion": "2023.2.20f1",
+      "cpu": "Apple M4 Pro",
+      "gpu": "Apple M4 Pro",
+      "processArchitecture": "Arm64",
+      "graphicsApi": "Metal",
+      "quality": "High Fidelity",
+      "renderPipeline": "URP-HighFidelity",
+      "msaa": 4,
+      "renderScale": 1.0,
+      "srpBatcher": true,
+      "dynamicBatching": false,
+      "shader": "Universal Render Pipeline/Lit",
+      "materialInstancing": false,
+      "cameraWidth": 1920,
+      "cameraHeight": 1080,
+      "cameraPosition": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": -50.0
+      },
+      "cameraRotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "cameraOrthographic": true,
+      "cameraOrthographicSize": 7.593750476837158,
+      "targetFrameRate": -1,
+      "vSyncCount": 0,
+      "warmupFrames": 90,
+      "minimumWarmupSeconds": 2.0,
+      "preconditionSeconds": 10.0,
+      "rounds": 4,
+      "samplesPerBlock": 240,
+      "historyOffset": 16,
+      "gpuQueueDrained": true,
+      "offscreen": true,
+      "batchMode": true
+    }
+  }
+}

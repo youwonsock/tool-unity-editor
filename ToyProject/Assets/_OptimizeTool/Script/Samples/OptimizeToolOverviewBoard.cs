@@ -13,11 +13,10 @@ namespace Common.OptimizeTool.Samples
         [SerializeField] private Text _text;
 
         private bool _isInitialized;
-        private bool _isFaulted;
         private Exception _fault;
 
         public bool IsInitialized => _isInitialized;
-        public bool IsFaulted => _isFaulted;
+        public bool IsFaulted => _fault != null;
 
         private void Awake()
         {
@@ -29,7 +28,7 @@ namespace Common.OptimizeTool.Samples
         {
             if (_isInitialized)
                 throw new InvalidOperationException("OptimizeToolOverviewBoard is already initialized.");
-            if (_isFaulted)
+            if (IsFaulted)
                 throw new InvalidOperationException("OptimizeToolOverviewBoard is faulted; call Release before Init.", _fault);
             try
             {
@@ -40,7 +39,6 @@ namespace Common.OptimizeTool.Samples
             catch (Exception exception)
             {
                 _fault = exception;
-                _isFaulted = true;
                 throw;
             }
         }
@@ -49,25 +47,24 @@ namespace Common.OptimizeTool.Samples
         {
             if (value == null)
                 throw new ArgumentNullException(nameof(value));
-            if (_isFaulted)
+            if (IsFaulted)
                 throw new InvalidOperationException("OptimizeToolOverviewBoard is faulted; call Release before use.", _fault);
             if (!_isInitialized)
                 throw new InvalidOperationException("OptimizeToolOverviewBoard is not initialized.");
-            _text.text = value;
+            if (_text.text != value) _text.text = value;
         }
 
         public void Release()
         {
-            if (!_isInitialized && !_isFaulted)
+            if (!_isInitialized && !IsFaulted)
                 throw new InvalidOperationException("OptimizeToolOverviewBoard has not been initialized.");
             _isInitialized = false;
-            _isFaulted = false;
             _fault = null;
         }
 
         private void OnDestroy()
         {
-            if (_isInitialized || _isFaulted)
+            if (_isInitialized || IsFaulted)
                 Release();
         }
     }

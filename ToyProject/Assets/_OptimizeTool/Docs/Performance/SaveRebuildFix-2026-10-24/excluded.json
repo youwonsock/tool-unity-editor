@@ -1,0 +1,9 @@
+{
+  "reason": "Independent Unity batch test/compile processes were observed concurrently (PhysicsRecorder EditMode/PlayMode and FlowField EditMode). All captures from this initial series are excluded as one series, independent of timings. Runner was interrupted; last launch incomplete. Final series waits for other batch Editors and records overlap once per second; any overlapping pair is rejected in full.",
+  "observedPids": [
+    84587,
+    86048,
+    87522
+  ],
+  "folder": "excluded-concurrent-batch"
+}

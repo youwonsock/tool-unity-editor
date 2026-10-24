@@ -1,0 +1,60 @@
+{
+  "pid": 87961,
+  "cubes": 3600,
+  "subdivisions": 1,
+  "unityVersion": "2023.2.20f1",
+  "scope": "Core bake: three pipeline modes retained through fresh batch save. Also measures public MeshCombiner initial bake and overwrite/rebuild with scene output and source disabling. Timings exclude startup, input construction and cleanup; process/RSS peaks cover all stages.",
+  "fixtureMs": 257.9853,
+  "totalMs": 787.5438,
+  "buildMs": 520.4399000000001,
+  "saveMs": 174.3105,
+  "workflowInitialMs": 296.7137,
+  "workflowRebuildMs": 182.4643,
+  "unityAllocatedAtStart": 232026347,
+  "unityAllocatedAfterBuild": 259136579,
+  "unityReservedAtStart": 529274152,
+  "modes": [
+    {
+      "mode": 1,
+      "vertices": 86400,
+      "culled": 0,
+      "triangles": 43200,
+      "milliseconds": 105.9691
+    },
+    {
+      "mode": 2,
+      "vertices": 14400,
+      "culled": 0,
+      "triangles": 7200,
+      "milliseconds": 185.5126
+    },
+    {
+      "mode": 3,
+      "vertices": 28800,
+      "culled": 2400,
+      "triangles": 14400,
+      "milliseconds": 228.7121
+    }
+  ],
+  "variant": "fixed",
+  "pair": 1,
+  "processPeakRssBytes": 1776762880,
+  "bakeSampledPeakRssBytes": 1775796224,
+  "bakeFirstObservedRssBytes": 1416282112,
+  "sampleCount": 125,
+  "samplingIntervalSeconds": 0.01,
+  "telemetryBefore": {
+    "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+    "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=21823587)\t6%; charging; 3:02 remaining present: true"
+  },
+  "telemetryAfter": {
+    "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+    "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=21823587)\t6%; charging; 2:57 remaining present: true"
+  },
+  "sourceHashes": {
+    "MeshAssetTransaction.cs": "becfd33c9ffee7b4ae4cec84b6daac983d0aac45e56ae10e50f0834752c0a42a",
+    "MeshSceneOutput.cs": "61514a07e46a8e0fb0e7a237476b7790e75e5ffb76a9e43a5d460a2ca2161271",
+    "MeshCombiner.cs": "39ad7c53a2be6809766d3e93840b20db535efed0a3195329dcbe8140177c2fca"
+  },
+  "concurrentBatchEditors": []
+}

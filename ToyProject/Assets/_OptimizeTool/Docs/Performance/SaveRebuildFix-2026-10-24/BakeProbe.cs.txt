@@ -1,0 +1,22 @@
+#if UNITY_EDITOR
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+namespace Common.OptimizeTool {
+ public static class BakeProbe {
+  [Serializable] public sealed class Stat { public string name; public int calls,gc0,gc1,gc2; public double milliseconds; public long bytes; }
+  [Serializable] public sealed class Report { public Stat[] rows; }
+  static readonly Dictionary<string,Stat> stats=new Dictionary<string,Stat>();
+  public static string Phase="";
+  public static void Reset(){stats.Clear();Phase="";}
+  public static Report Export(){var a=new Stat[stats.Count];stats.Values.CopyTo(a,0);return new Report{rows=a};}
+  public static void Bytes(string name,long bytes){var key=Phase+"/"+name;if(!stats.TryGetValue(key,out var row)){row=new Stat{name=key};stats.Add(key,row);}row.bytes+=bytes;}
+  public static Scope Measure(string name){var key=Phase+"/"+name;if(!stats.TryGetValue(key,out var row)){row=new Stat{name=key};stats.Add(key,row);}return new Scope(row);}
+  public struct Scope:IDisposable {
+   Stat row;long start;int g0,g1,g2;
+   public Scope(Stat row){this.row=row;start=Stopwatch.GetTimestamp();g0=GC.CollectionCount(0);g1=GC.CollectionCount(1);g2=GC.CollectionCount(2);}
+   public void Dispose(){row.calls++;row.milliseconds+=(Stopwatch.GetTimestamp()-start)*1000d/Stopwatch.Frequency;row.gc0+=GC.CollectionCount(0)-g0;row.gc1+=GC.CollectionCount(1)-g1;row.gc2+=GC.CollectionCount(2)-g2;}
+  }
+ }
+}
+#endif

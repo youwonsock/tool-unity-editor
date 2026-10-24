@@ -26,3 +26,13 @@ ToyProject/.vs/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Reproducible high-density GPU benchmark fixtures and compiled native timer
+ToyProject/Assets/_OptimizeTool/Settings/Generated/GpuBenchmark/
+ToyProject/Assets/_OptimizeTool/Settings/Generated/GpuBenchmark.meta
+ToyProject/Assets/_OptimizeTool/Scene/OptimizeToolGpuBenchmark.unity
+ToyProject/Assets/_OptimizeTool/Scene/OptimizeToolGpuBenchmark.unity.meta
+ToyProject/Assets/_OptimizeTool/Plugins/macOS/OptimizeToolGpuTimer.bundle
+ToyProject/Assets/_OptimizeTool/Plugins/macOS/OptimizeToolGpuTimer.bundle.meta
+ToyProject/Assets/_OptimizeTool/Plugins.meta
+ToyProject/Assets/_OptimizeTool/Plugins/macOS.meta

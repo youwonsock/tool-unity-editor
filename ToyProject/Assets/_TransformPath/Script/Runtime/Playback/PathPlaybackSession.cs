@@ -3,6 +3,17 @@ using UnityEngine;
 
 namespace Common.TransformPath
 {
+    internal enum EPathSnapshotRefreshDecision
+    {
+        Unchanged,
+        Refresh,
+        StopInvalidProvider,
+        StopMovementChanged,
+        StopEventsChanged,
+        StopSequenceChanged,
+    }
+
+
     /// <summary>Playback cache and request preparation for one follower.</summary>
     internal sealed class PathPlaybackSession
     {
@@ -13,40 +24,12 @@ namespace Common.TransformPath
         #endregion
 
 
-        #region Inner Classes / Structs
-
-        internal sealed class PathEventCursor
-        {
-            public int NextIndex;
-
-            public void Reset(IPathEventSource source, float progress)
-            {
-                NextIndex = 0;
-                if (source == null)
-                    return;
-
-                while (NextIndex < source.EventCount
-                    && source.GetEvent(NextIndex).NormalizedTime
-                        <= progress + PROGRESS_EPSILON)
-                    NextIndex++;
-            }
-
-            public bool HasNext(IPathEventSource source)
-            {
-                return source != null && NextIndex < source.EventCount;
-            }
-        }
-
-        #endregion
-
-
         #region Member Variables
 
         public readonly EPathPlaybackKind Kind;
         public readonly IPathProvider Provider;
-        public readonly PathEventCursor EventCursor;
+        public int NextEventIndex { get; set; }
         public PathEventSourceSnapshot EventSource { get; set; }
-        public readonly PathMovementSettings? ProviderMovementSettings;
 
         public PathSequenceSnapshot Snapshot { get; set; }
         public int ProviderRevision { get; set; }
@@ -65,6 +48,52 @@ namespace Common.TransformPath
 
 
         #region Public Methods
+
+        public void ResetEventCursor(IPathEventSource source, float progress)
+        {
+            NextEventIndex = 0;
+            if (source == null)
+                return;
+            while (NextEventIndex < source.EventCount
+                && source.GetEvent(NextEventIndex).NormalizedTime <= progress + PROGRESS_EPSILON)
+                NextEventIndex++;
+        }
+
+        public EPathSnapshotRefreshDecision EvaluateRefresh(
+            out PathSequenceSnapshot nextSequence,
+            out PathEventSourceSnapshot nextEvents)
+        {
+            nextSequence = null;
+            nextEvents = null;
+            if (!Provider.IsReady)
+                return EPathSnapshotRefreshDecision.StopInvalidProvider;
+            if (Provider.Revision == ProviderRevision)
+                return EPathSnapshotRefreshDecision.Unchanged;
+
+            if (Sequence != null)
+            {
+                if (Sequence.SegmentCount != Snapshot.Count
+                    || !PathSequenceSnapshot.TryCreate(Sequence, out nextSequence, out _)
+                    || !nextSequence.HasSamePlaybackDefinition(Snapshot))
+                    return EPathSnapshotRefreshDecision.StopSequenceChanged;
+                return EPathSnapshotRefreshDecision.Refresh;
+            }
+
+            if (Kind == EPathPlaybackKind.Single)
+            {
+                if (!(Provider is IPathMovementProvider movementProvider)
+                    || !PathMovementSettingsUtility.AreSame(
+                        MovementSettings, movementProvider.MovementSettings))
+                    return EPathSnapshotRefreshDecision.StopMovementChanged;
+            }
+
+            // Compare the same stable ordering used when playback was prepared.
+            // Return this candidate so a successful refresh does not copy it twice.
+            nextEvents = PathEventSourceSnapshot.Create(Provider as IPathEventSource);
+            if (!EventSource.HasSameContent(nextEvents))
+                return EPathSnapshotRefreshDecision.StopEventsChanged;
+            return EPathSnapshotRefreshDecision.Refresh;
+        }
 
         internal static PathPlaybackSession CreateOrReuse(
             PathPlaybackRequest request,
@@ -88,17 +117,14 @@ namespace Common.TransformPath
             EPathPlaybackKind kind,
             IPathProvider provider,
             PathMovementSettings movementSettings,
-            PathMovementSettings? providerMovementSettings,
             PathSequenceSnapshot snapshot,
             PathEventSourceSnapshot eventSource)
         {
             Kind = kind;
             Provider = provider;
             MovementSettings = movementSettings;
-            ProviderMovementSettings = providerMovementSettings;
             Snapshot = snapshot;
             EventSource = eventSource;
-            EventCursor = new PathEventCursor();
             ProviderRevision = provider.Revision;
         }
 
@@ -111,8 +137,7 @@ namespace Common.TransformPath
         {
             return Kind == EPathPlaybackKind.Single
                 && ReferenceEquals(Provider, provider)
-                && ProviderRevision == providerRevision
-                && ProviderMovementSettings.HasValue;
+                && ProviderRevision == providerRevision;
         }
 
         private bool CanReuseAggregate(
@@ -159,7 +184,6 @@ namespace Common.TransformPath
                 EPathPlaybackKind.Single,
                 provider,
                 settings,
-                settings,
                 null,
                 PathEventSourceSnapshot.Create(provider as IPathEventSource));
         }
@@ -185,7 +209,6 @@ namespace Common.TransformPath
                 EPathPlaybackKind.Aggregate,
                 request.Provider,
                 settings,
-                null,
                 null,
                 PathEventSourceSnapshot.Create(request.Provider as IPathEventSource));
         }
@@ -214,7 +237,6 @@ namespace Common.TransformPath
                 EPathPlaybackKind.Sequence,
                 provider,
                 default(PathMovementSettings),
-                null,
                 snapshot,
                 null);
         }
@@ -226,6 +248,7 @@ namespace Common.TransformPath
             if (!PathProviderUtility.TryValidateReady(provider, out string error))
                 throw new InvalidOperationException(error);
         }
+
 
         #endregion
     }

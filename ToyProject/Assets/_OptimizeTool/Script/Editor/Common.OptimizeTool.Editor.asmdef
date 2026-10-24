@@ -1,0 +1,11 @@
+{
+    "name": "Common.OptimizeTool.Editor",
+    "rootNamespace": "Common.OptimizeTool.Editor",
+    "references": [
+        "Common.OptimizeTool"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "autoReferenced": true
+}

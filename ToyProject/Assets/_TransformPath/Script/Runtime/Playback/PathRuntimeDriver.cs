@@ -4,6 +4,7 @@ namespace Common.TransformPath
 {
     internal interface IPathRuntimeTickable
     {
+        int RuntimeOrder { get; }
         ulong PlaybackId { get; }
         void Tick(float deltaTime, float unscaledDeltaTime, int frameId);
     }
@@ -20,33 +21,52 @@ namespace Common.TransformPath
     /// </summary>
     internal sealed class PathRuntimeDriver
     {
+        private readonly struct FrameEntry
+        {
+            public readonly IPathRuntimeTickable Item;
+            public readonly ulong PlaybackId;
+            public readonly ulong RegistrationVersion;
+
+            public FrameEntry(IPathRuntimeTickable item, ulong playbackId, ulong registrationVersion)
+            {
+                Item = item;
+                PlaybackId = playbackId;
+                RegistrationVersion = registrationVersion;
+            }
+        }
+
         private readonly List<IPathRuntimeTickable> _items = new List<IPathRuntimeTickable>(32);
-        private readonly List<IPathRuntimeTickable> _frameItems = new List<IPathRuntimeTickable>(32);
-        private readonly List<ulong> _framePlaybackIds = new List<ulong>(32);
-        private readonly List<int> _frameRegistrationVersions = new List<int>(32);
-        private readonly Dictionary<IPathRuntimeTickable, int> _registrationVersions =
-            new Dictionary<IPathRuntimeTickable, int>(32);
+        private readonly List<FrameEntry> _frameEntries = new List<FrameEntry>(32);
+        // Only active registrations are retained. A driver-wide counter keeps
+        // remove/re-register distinguishable even when PlaybackId is unchanged.
+        private readonly Dictionary<IPathRuntimeTickable, ulong> _registrationVersions =
+            new Dictionary<IPathRuntimeTickable, ulong>(32);
+        private ulong _nextRegistrationVersion;
 
         public Exception LastException { get; private set; }
 
         public void Register(IPathRuntimeTickable item)
         {
-            if (item != null && !_items.Contains(item))
+            if (item != null && !_registrationVersions.ContainsKey(item))
             {
-                _items.Add(item);
-                _registrationVersions.TryGetValue(item, out int version);
-                _registrationVersions[item] = version + 1;
+                int insertIndex = _items.Count;
+                for (int i = 0; i < _items.Count; i++)
+                {
+                    if (_items[i].RuntimeOrder > item.RuntimeOrder)
+                    {
+                        insertIndex = i;
+                        break;
+                    }
+                }
+                _items.Insert(insertIndex, item);
+                _registrationVersions.Add(item, ++_nextRegistrationVersion);
             }
         }
 
         public void Unregister(IPathRuntimeTickable item)
         {
-            if (item != null)
-            {
+            if (item != null && _registrationVersions.Remove(item))
                 _items.Remove(item);
-                _registrationVersions.TryGetValue(item, out int version);
-                _registrationVersions[item] = version + 1;
-            }
         }
 
         public void Tick(
@@ -54,29 +74,25 @@ namespace Common.TransformPath
             float unscaledDeltaTime,
             int frameId)
         {
-            _frameItems.Clear();
-            _framePlaybackIds.Clear();
-            _frameRegistrationVersions.Clear();
+            _frameEntries.Clear();
             LastException = null;
             for (int i = 0; i < _items.Count; i++)
             {
                 IPathRuntimeTickable item = _items[i];
-                _frameItems.Add(item);
-                _framePlaybackIds.Add(item.PlaybackId);
-                _frameRegistrationVersions.Add(_registrationVersions[item]);
+                _frameEntries.Add(new FrameEntry(item, item.PlaybackId, _registrationVersions[item]));
             }
 
-            for (int i = 0; i < _frameItems.Count; i++)
+            for (int i = 0; i < _frameEntries.Count; i++)
             {
-                IPathRuntimeTickable item = _frameItems[i];
+                FrameEntry frameEntry = _frameEntries[i];
+                IPathRuntimeTickable item = frameEntry.Item;
                 // An earlier callback may have removed an item from the
                 // driver.  The frame snapshot still owns its reference, so
                 // check membership before invoking it.
                 if (item == null
-                    || !_items.Contains(item)
-                    || !_registrationVersions.TryGetValue(item, out int registrationVersion)
-                    || registrationVersion != _frameRegistrationVersions[i]
-                    || item.PlaybackId != _framePlaybackIds[i])
+                    || !_registrationVersions.TryGetValue(item, out ulong registrationVersion)
+                    || registrationVersion != frameEntry.RegistrationVersion
+                    || item.PlaybackId != frameEntry.PlaybackId)
                     continue;
                 try
                 {
@@ -91,7 +107,7 @@ namespace Common.TransformPath
                         try
                         {
                             faultHandler.HandleRuntimeFault(
-                                _framePlaybackIds[i],
+                                frameEntry.PlaybackId,
                                 exception);
                         }
                         catch (Exception)

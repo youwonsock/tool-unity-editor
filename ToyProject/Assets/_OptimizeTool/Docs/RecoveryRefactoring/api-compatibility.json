@@ -1,0 +1,24 @@
+{
+  "publicMembersChecked": 353,
+  "missingPublicMembers": [],
+  "serializedFieldsChecked": 159,
+  "missingSerializedFields": [],
+  "assemblies": {
+    "Common.OptimizeTool": {
+      "baselineSha256": "05d3f3f232115534379c5ba28f2a4f3741c0896328797eecfa5f58aebcce89a0",
+      "verifiedSha256": "1e86d28d78ddb2e4c69adbd4cf662831a8f23263c236bee8a8da5816a79585b0"
+    },
+    "Common.OptimizeTool.Samples": {
+      "baselineSha256": "3f559e081f742b5bd3d2a3435a0a68eacc66b8d5f52ab9b96bf6d360d8789ad3",
+      "verifiedSha256": "3d5d1e145648babd7efabc4cb3c90906a892484a5fcde54c1bef802b3bb06407"
+    },
+    "Common.OptimizeTool.Editor": {
+      "baselineSha256": "59779a5c0d90809c4fe7f72ab304724a799a71121b0a30e07e9a9c8ba8890f30",
+      "verifiedSha256": "9dc70f99ef751301739b43f43e7d22c469262eaacd4a5ed64d19fb6e1e0e9bc2"
+    },
+    "Common.OptimizeTool.Samples.Editor": {
+      "baselineSha256": "0d4d6c030f85ce229a168e07825234d03bc70b51f5ee5db3745fbb00da33d24b",
+      "verifiedSha256": "1931ad1975d413d477d089b8c08075cea8e7bb93e88a2427e55bb045933446ef"
+    }
+  }
+}

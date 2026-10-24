@@ -1,0 +1,215 @@
+{
+  "launchPairs": 4,
+  "order": [
+    [
+      "baseline",
+      "fixed"
+    ],
+    [
+      "fixed",
+      "baseline"
+    ],
+    [
+      "fixed",
+      "baseline"
+    ],
+    [
+      "baseline",
+      "fixed"
+    ]
+  ],
+  "bootstrapReplicates": 10000,
+  "seed": 20261024,
+  "method": "Paired launch ratios; one independent fresh-process observation per metric per launch. Resample matched pairs, report median of ratios. Percentile intervals do not capture unmeasured systematic workstation effects.",
+  "metrics": {
+    "saveMs": {
+      "baseline": [
+        396.6236,
+        363.4538,
+        360.8077,
+        441.6328
+      ],
+      "fixed": [
+        174.3105,
+        179.8211,
+        172.9777,
+        182.6006
+      ],
+      "baselineMedian": 380.0387,
+      "fixedMedian": 177.0658,
+      "pairedMedianPercent": -54.05480327460535,
+      "bootstrap95PercentCI": [
+        -58.65329749058495,
+        -50.524358254061454
+      ],
+      "pairedChanges": [
+        -56.05140490883549,
+        -50.524358254061454,
+        -52.0582016403752,
+        -58.65329749058495
+      ]
+    },
+    "workflowInitialMs": {
+      "baseline": [
+        306.3494,
+        518.7092,
+        302.5772,
+        333.2006
+      ],
+      "fixed": [
+        296.7137,
+        306.78790000000004,
+        503.27020000000005,
+        299.9787
+      ],
+      "baselineMedian": 319.775,
+      "fixedMedian": 303.3833,
+      "pairedMedianPercent": -6.557935202623865,
+      "bootstrap95PercentCI": [
+        -40.85551210581959,
+        66.32786607847518
+      ],
+      "pairedChanges": [
+        -3.1453301361125563,
+        -40.85551210581959,
+        66.32786607847518,
+        -9.970540269135174
+      ]
+    },
+    "workflowRebuildMs": {
+      "baseline": [
+        267.8331,
+        708.5594,
+        267.0117,
+        265.1961
+      ],
+      "fixed": [
+        182.4643,
+        179.9973,
+        182.82000000000002,
+        179.0782
+      ],
+      "baselineMedian": 267.42240000000004,
+      "fixedMedian": 181.2308,
+      "pairedMedianPercent": -32.17358509291894,
+      "bootstrap95PercentCI": [
+        -74.59672400083889,
+        -31.53109021065369
+      ],
+      "pairedChanges": [
+        -31.8738796661055,
+        -74.59672400083889,
+        -31.53109021065369,
+        -32.47329051973238
+      ]
+    },
+    "totalMs": {
+      "baseline": [
+        1021.0228000000001,
+        880.361,
+        877.0214000000001,
+        974.9841
+      ],
+      "fixed": [
+        787.5438,
+        725.9209000000001,
+        610.9968,
+        699.5853000000001
+      ],
+      "baselineMedian": 927.67255,
+      "fixedMedian": 712.7531000000001,
+      "pairedMedianPercent": -25.55682975141012,
+      "bootstrap95PercentCI": [
+        -30.33273760480646,
+        -17.54281482255574
+      ],
+      "pairedChanges": [
+        -22.86716809849888,
+        -17.54281482255574,
+        -30.33273760480646,
+        -28.24649140432136
+      ]
+    },
+    "buildMs": {
+      "baseline": [
+        542.0465,
+        484.2945,
+        478.28970000000004,
+        408.4558
+      ],
+      "fixed": [
+        520.4399000000001,
+        511.9648,
+        402.9286,
+        484.44300000000004
+      ],
+      "baselineMedian": 481.2921,
+      "fixedMedian": 498.20390000000003,
+      "pairedMedianPercent": 0.8637060168048605,
+      "bootstrap95PercentCI": [
+        -15.756371086393873,
+        18.603530663538148
+      ],
+      "pairedChanges": [
+        -3.986115582334715,
+        5.713527615944436,
+        -15.756371086393873,
+        18.603530663538148
+      ]
+    },
+    "processPeakRssBytes": {
+      "baseline": [
+        1800159232,
+        1778089984,
+        1766883328,
+        1735524352
+      ],
+      "fixed": [
+        1776762880,
+        1767686144,
+        1747992576,
+        1761099776
+      ],
+      "baselineMedian": 1772486656.0,
+      "fixedMedian": 1764392960.0,
+      "pairedMedianPercent": -0.8271349870207778,
+      "bootstrap95PercentCI": [
+        -1.2996823605435415,
+        1.4736424741333742
+      ],
+      "pairedChanges": [
+        -1.2996823605435415,
+        -0.585113244752411,
+        -1.0691567292891446,
+        1.4736424741333742
+      ]
+    },
+    "bakeSampledPeakRssBytes": {
+      "baseline": [
+        1791213568,
+        1778089984,
+        1758380032,
+        1735524352
+      ],
+      "fixed": [
+        1775796224,
+        1766834176,
+        1746796544,
+        1760378880
+      ],
+      "baselineMedian": 1768235008.0,
+      "fixedMedian": 1763606528.0,
+      "pairedMedianPercent": -0.6458935516139575,
+      "bootstrap95PercentCI": [
+        -0.8607205905220128,
+        1.432104825919489
+      ],
+      "pairedChanges": [
+        -0.8607205905220128,
+        -0.6330280301494517,
+        -0.6587590730784632,
+        1.432104825919489
+      ]
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "ToyProject/Assets/_OptimizeTool/Settings/Generated/OptimizeToolSampleOcclusion.asset": "5316d25c552f7fc407290f76da3061fcdc2b1eb1ec487d49d8c0c36817a13ae4",
+  "ToyProject/Assets/_OptimizeTool/Settings/Generated/OptimizeToolSampleBackface.asset": "dfbfc28427c584f97fd5ff0cf770ff43c36a48ddebfcff09f596ea4cce9c57cd",
+  "ToyProject/Assets/_OptimizeTool/Settings/Generated/OptimizeToolSampleCombined.asset": "0a76a27c791e031cc5b5363f987827b57b6a93bfc7b9133a8f2c65ec2ed2b7da",
+  "ToyProject/Assets/_OptimizeTool/Settings/OptimizeToolCombined.mat": "27a1a0d99789153b099228ec393c814b5cf2fe44f38c6afd924fd7fbe5739184",
+  "ToyProject/Assets/_OptimizeTool/Settings/OptimizeToolSource.mat": "14260f0a79bbe6763fe7cddb7f7b4232cf6c79b000772ee7335a59747eda4cfb",
+  "ToyProject/Assets/Settings/URP-HighFidelity-Renderer.asset": "8456d044aadd1418d4ed8553b9428c9708c205b220b8849f61382edd1b389055",
+  "ToyProject/Assets/Settings/URP-HighFidelity.asset": "b748370d168e2543b645c8c5d2e829d77b80a4e149630abdff9ab7a0ea456379",
+  "ToyProject/ProjectSettings/QualitySettings.asset": "4c8a55dc9d5dc3aafa8946e928a6622161049b1901f36ea54eefb508382f1494",
+  "ToyProject/Assets/_OptimizeTool/Prefab/OptimizeToolShowcase.prefab": "0e539d3fd36f16dd15dd516e7c0d17d495b2cb431519622c6ea6c4f4a990a293"
+}

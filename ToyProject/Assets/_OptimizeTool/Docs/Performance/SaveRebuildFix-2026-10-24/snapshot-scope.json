@@ -1,0 +1,70 @@
+{
+  "measuredProductionDelta": [
+    "MeshSceneOutput.cs",
+    "MeshAssetTransaction.cs"
+  ],
+  "workspaceChangesObservedAtFinalReview": [
+    {
+      "path": "Assets/_OptimizeTool/README.md",
+      "beforeSha256": "d0fc74814343dab41ba27978f718e3a0ae1fa9c28e80b4cd9585f5e97378c382",
+      "afterSha256": "eadb85bf1fd47926fe0911c42c450b377f273b7092f279147489857b2a7f0276",
+      "scope": "Concurrent changes outside this task; left in place"
+    },
+    {
+      "path": "Assets/_OptimizeTool/Docs/PhysicsRecorderRegressionValidation.md",
+      "beforeSha256": "13524cb1aab681a09e20f6bc15bc304bb9a12f0ac7228f1debd407d62963ae85",
+      "afterSha256": "acc5957e1d8aaae67059f7612f50235e93d0a8de7555cb0befde0adb16b05ac3",
+      "scope": "Concurrent changes outside this task; left in place"
+    },
+    {
+      "path": "Assets/_OptimizeTool/Script/MeshSceneOutput.cs",
+      "beforeSha256": "f744fcd3b1a8c860a3e858d701bb25b119479e524dabb44e9542fea1aff65eaa",
+      "afterSha256": "61514a07e46a8e0fb0e7a237476b7790e75e5ffb76a9e43a5d460a2ca2161271",
+      "scope": "This task"
+    },
+    {
+      "path": "Assets/_OptimizeTool/Script/MeshAssetTransaction.cs",
+      "beforeSha256": "d01e4a7aa90367e6c693fed207fb15e07018779bbba14042766f3f5da3d5410d",
+      "afterSha256": "becfd33c9ffee7b4ae4cec84b6daac983d0aac45e56ae10e50f0834752c0a42a",
+      "scope": "This task"
+    },
+    {
+      "path": "Assets/_OptimizeTool/Prefab/OptimizeToolShowcase.prefab",
+      "beforeSha256": "0e539d3fd36f16dd15dd516e7c0d17d495b2cb431519622c6ea6c4f4a990a293",
+      "afterSha256": "1ea277dd2a51209fa3f1ac42fa5e83e918196964ce0f794e22d09c8ea2cea510",
+      "scope": "Concurrent changes outside this task; left in place"
+    },
+    {
+      "path": "Assets/_OptimizeTool/Script/Samples/OptimizeToolComparisonController.cs.meta",
+      "beforeSha256": "5391fe1df8b96bbb2f01b5006d6d5d39e65784a7afa62579e37361ecf298af8e",
+      "afterSha256": null,
+      "scope": "Concurrent changes outside this task; left in place"
+    },
+    {
+      "path": "Assets/_OptimizeTool/Script/Samples/OptimizeToolComparisonController.cs",
+      "beforeSha256": "3d77614dddaef3755f717edb80de02197b3aea52015e1e2016813fce11ac3621",
+      "afterSha256": null,
+      "scope": "Concurrent changes outside this task; left in place"
+    },
+    {
+      "path": "Assets/_OptimizeTool/Script/Samples/Editor/OptimizeToolShowcaseEditor.cs",
+      "beforeSha256": "7949f6d1828a7e0c95a0769acc337134e9969060c35d746858fcbd5bfc6ad98b",
+      "afterSha256": "70c737c0702ec7c5951ec3377623857a34684e751505dccb31ed78c76d1a25d5",
+      "scope": "Concurrent changes outside this task; left in place"
+    },
+    {
+      "path": "Assets/_OptimizeTool/Script/Tests/Editor/MeshRefactoringTests.cs",
+      "beforeSha256": "d44fda0f100167dcb071a170d14a1e6da152cf825d9d5e10d728cf3d36188f6c",
+      "afterSha256": "62dd5b9a1885e027a3e47e793d46b90df9ffbe67edd1a5ae513a21ba71261418",
+      "scope": "This task"
+    },
+    {
+      "path": "Assets/_OptimizeTool/Docs/Performance/PerformanceReport.md",
+      "beforeSha256": "84a0674ddeb57852aa4ca34348303cf447a9778bbec5de91b5bc38929a7032c2",
+      "afterSha256": "0bbcaeeb0ac4928f9ea1b46fdaa77ba9c3f9a04a58a567174679623c6c8b4fa2",
+      "scope": "This task"
+    }
+  ],
+  "APIComparisonScope": "Frozen baseline and fixed source snapshots; concurrent legacy comparison controller removal occurred after measurements and is not included in the 357-member equality comparison.",
+  "integration": "Current OptimizeTool source plus prefab copied to isolated test project for an additional post-measurement integration run."
+}

@@ -72,10 +72,7 @@ namespace Common.FlowField
         private bool _hasExplicitGoal;
         private Vector3 _explicitGoalWorld;
         private bool _requiresActivationRebuild;
-        private bool _callbacksAttached;
         private FlowFieldSessionBase _attachedSession;
-        private bool _hasSubmittedVolumeRequest;
-        private FlowFieldVolumeRequest _lastVolumeRequest;
         [NonSerialized] private int _bakeInputGeneration;
         [NonSerialized] private int _lastBakeInputHash;
         [NonSerialized] private bool _hasBakeInputHash;
@@ -89,7 +86,7 @@ namespace Common.FlowField
                 // attached to the accepted session until Release; otherwise
                 // an Inspector edit would make the façade query the other
                 // mode's still-uninitialized session.
-                if (_attachedSession != null && _attachedSession.IsInitialized)
+                if (_attachedSession != null && (_attachedSession.IsInitialized || _attachedSession.IsFaulted))
                     return _attachedSession;
                 return _spaceMode == FlowFieldSpaceMode.Volume3D
                     ? (FlowFieldSessionBase)_volumeSession
@@ -103,14 +100,14 @@ namespace Common.FlowField
         public bool IsReady => ActiveSession.IsReady;
         public bool IsRebuilding => ActiveSession.IsRebuilding;
         public string LastError => ActiveSession.LastError;
-        public FlowFieldBakeMode BakeMode => IsInitialized
+        public FlowFieldBakeMode BakeMode => IsInitialized || IsFaulted
             ? ActiveSession.BakeMode
             : _bakeMode;
         // Once a session has accepted a mode, expose that accepted mode until
         // Release.  Inspector edits made while initialized are authoring
         // input only and must not make Provider queries describe a session
         // that is still running in the previous space.
-        public FlowFieldSpaceMode SpaceMode => IsInitialized
+        public FlowFieldSpaceMode SpaceMode => IsInitialized || IsFaulted
             ? ActiveSession.SpaceMode
             : _spaceMode;
         public int Revision => ActiveSession.Revision;
@@ -120,9 +117,6 @@ namespace Common.FlowField
         public bool TryGetFieldInfo(out FlowFieldFieldInfo info)
             => ActiveSession.TryGetFieldInfo(out info);
 
-        internal FlowFieldSession Session => _session;
-        internal FlowFieldBakeMode CurrentBakeMode => BakeMode;
-        internal FlowFieldSpaceMode CurrentSpaceMode => _spaceMode;
         internal FlowFieldVolumeSession VolumeSession => _volumeSession;
         internal FlowFieldStaticBakeData StaticBakeData => _staticBakeData;
         internal FlowFieldVolumeBakeData VolumeStaticBakeData => _volumeStaticBakeData;
@@ -135,7 +129,6 @@ namespace Common.FlowField
         internal float ObstacleCheckCenterOffset => _obstacleCheckCenterOffset;
         internal float ObstacleClearance => _obstacleClearance;
         internal Vector3 DefaultFlowDirection => _defaultFlowDirection;
-        internal bool EnableUnregisteredObstacleSweep => _enableUnregisteredObstacleSweep;
         internal int CaptureBakeInputGeneration()
         {
             int hash = ComputeBakeInputHash();
@@ -147,7 +140,6 @@ namespace Common.FlowField
             }
             return _bakeInputGeneration;
         }
-        internal bool ShowField => _showField;
         internal FlowFieldVolumeGizmoMode VolumeGizmoMode => _volumeGizmoMode;
         internal bool ShowVolumeCells => _showVolumeCells;
         internal bool ShowVolumeVectors => _showVolumeVectors;
@@ -221,35 +213,23 @@ namespace Common.FlowField
             InvalidateEditorPreview();
             FlowFieldEditorVisualizationBridge.Register(this);
 #endif
-            if (!Application.isPlaying)
+            if (!Application.isPlaying || !_requiresActivationRebuild)
                 return;
 
-            if (_spaceMode == FlowFieldSpaceMode.Volume3D)
-            {
-                if (_requiresActivationRebuild && _volumeSession.IsInitialized)
-                {
-                    _requiresActivationRebuild = false;
-                    _volumeSession.Resume();
-                    RequestRebuild();
-                }
+            FlowFieldSessionBase owner = ActiveSession;
+            if (!owner.IsInitialized)
                 return;
-            }
-
-            if (_requiresActivationRebuild && _session.IsInitialized)
+            int version = BeginLifecycleOperation();
+            _requiresActivationRebuild = false;
+            if (owner.SpaceMode == FlowFieldSpaceMode.Volume3D)
             {
-                _requiresActivationRebuild = false;
-                if (_session.IsFaulted)
-                {
-                    _session.RetryFault();
-                    AttachSessionCallbacks();
-                    ReattachActiveModifiers();
-                }
-                else
-                {
-                    InitializeSession();
-                }
-                RequestRebuild();
+                _volumeSession.Resume();
+                if (!OwnsLifecycleOperation(owner, version))
+                    return;
             }
+            else if (!InitializeSession(version))
+                return;
+            RequestRebuild();
         }
 
         private void OnValidate()
@@ -259,10 +239,10 @@ namespace Common.FlowField
             InvalidateEditorPreview();
             FlowFieldEditorVisualizationBridge.RequestRefresh(this);
 #endif
-            if (!Application.isPlaying || !IsInitialized)
+            if (!Application.isPlaying || !IsInitialized || _spaceMode != SpaceMode)
                 return;
 
-            if (_spaceMode == FlowFieldSpaceMode.Volume3D)
+            if (SpaceMode == FlowFieldSpaceMode.Volume3D)
             {
                 if (!_volumeSession.IsInitialized || _volumeSession.IsFaulted)
                     return;
@@ -322,7 +302,6 @@ namespace Common.FlowField
                         changedFlags,
                         FlowFieldCellRect.Invalid,
                         FlowFieldCellRect.Invalid,
-                        baseChange: true,
                         deferBaseVersion: hasObstacleChange && !hasGridChange,
                         deferGoalVersion: hasGoalChange && !hasGridChange);
                 }
@@ -347,14 +326,14 @@ namespace Common.FlowField
             }
 
             if ((_session.DirtyFlags & finalFlags) != finalFlags)
-                _session.MarkDirty(finalFlags, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid, baseChange: false);
+                _session.MarkDirty(finalFlags, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
         }
 
         private void LateUpdate()
         {
             if (!Application.isPlaying || !IsInitialized || IsFaulted)
                 return;
-            if (_spaceMode == FlowFieldSpaceMode.Volume3D)
+            if (SpaceMode == FlowFieldSpaceMode.Volume3D)
             {
                 try
                 {
@@ -417,12 +396,16 @@ namespace Common.FlowField
         {
             if (!Application.isPlaying || !IsInitialized || IsFaulted)
                 return;
-            if (_spaceMode == FlowFieldSpaceMode.Volume3D)
+            if (SpaceMode == FlowFieldSpaceMode.Volume3D)
                 return;
-            if (_session.ConfigurationStale || _session.IsRebuilding)
+            if (_session.RequiresExplicitRebuild || _session.IsRebuilding)
                 return;
-            if (_session.HasPendingRequest)
+            if (_session.HasPendingRequest
+                && TryCreateCurrentSessionRequest(out FlowFieldSessionRequest request))
+            {
+                _session.Submit(request);
                 _session.Pump();
+            }
         }
 
         private void OnDisable()
@@ -432,8 +415,9 @@ namespace Common.FlowField
 #endif
             if (!Application.isPlaying)
                 return;
+            BeginLifecycleOperation();
             _requiresActivationRebuild = true;
-            if (_spaceMode == FlowFieldSpaceMode.Volume3D)
+            if (SpaceMode == FlowFieldSpaceMode.Volume3D)
                 _volumeSession.Suspend();
             else
                 _session.Suspend();
@@ -442,19 +426,21 @@ namespace Common.FlowField
 
         private void OnDestroy()
         {
+            BeginLifecycleOperation();
 #if UNITY_EDITOR
             ReleaseEditorPreview();
             FlowFieldEditorVisualizationBridge.Unregister(this);
 #endif
             DetachSessionCallbacks();
-            DetachVolumeSessionCallbacks();
             _session.DisposePermanently();
             _volumeSession.Dispose();
         }
 
         public void Init()
         {
-            if (_spaceMode == FlowFieldSpaceMode.Volume3D)
+            if (IsInitialized && _spaceMode != SpaceMode)
+                throw new InvalidOperationException("FlowField Space Mode cannot change during an active Init session. Release and Init again.");
+            if (SpaceMode == FlowFieldSpaceMode.Volume3D)
             {
                 if (_volumeSession.IsFaulted)
                     throw new InvalidOperationException(
@@ -464,17 +450,22 @@ namespace Common.FlowField
                     && _volumeSession.State != FlowFieldRuntimeState.Released)
                     return;
                 ValidateConfiguration();
+                int version = BeginLifecycleOperation();
                 // Attach before Initialize so consumers observe the complete
                 // lifecycle, including the first Uninitialized → Suspended →
                 // Ready transition and any immediate fault.
-                AttachVolumeSessionCallbacks();
+                AttachSessionCallbacks(_volumeSession);
                 _volumeSession.Initialize(_bakeMode, _frontierComputeShader);
+                if (!OwnsLifecycleOperation(_volumeSession, version))
+                    return;
                 _requiresActivationRebuild = !isActiveAndEnabled;
                 if (_requiresActivationRebuild)
                     _volumeSession.Suspend();
+                if (!OwnsLifecycleOperation(_volumeSession, version))
+                    return;
                 RequestRebuild();
-                _volumeSession.AttachRuntimeScheduler();
-                ReattachActiveModifiers();
+                if (OwnsLifecycleOperation(_volumeSession, version))
+                    ReattachActiveModifiers();
                 return;
             }
 
@@ -488,14 +479,17 @@ namespace Common.FlowField
                     _session.Fault);
 
             ValidateConfiguration();
-            InitializeSession();
+            int surfaceVersion = BeginLifecycleOperation();
+            if (!InitializeSession(surfaceVersion))
+                return;
             _requiresActivationRebuild = !isActiveAndEnabled;
             if (_requiresActivationRebuild)
                 _session.Suspend();
-            RequestRebuild();
+            if (OwnsLifecycleOperation(_session, surfaceVersion))
+                RequestRebuild();
         }
 
-        private void InitializeSession()
+        private bool InitializeSession(int version)
         {
             FlowFieldSessionSourceKind sourceKind = BakeMode == FlowFieldBakeMode.StaticBaked
                 ? FlowFieldSessionSourceKind.StaticSnapshot
@@ -504,31 +498,41 @@ namespace Common.FlowField
                 ? FlowFieldBfsBackendPolicy.PreferGpu
                 : FlowFieldBfsBackendPolicy.ManagedOnly;
             ComputeShader shader = _frontierComputeShader;
-            AttachSessionCallbacks();
+            AttachSessionCallbacks(_session);
             // Attach before Initialize so consumers observe the initial
             // Uninitialized → Building transition as well as later Ready and
             // Faulted transitions. Reattaching Modifiers remains after the
             // Session has created its registry.
             _session.Initialize(_bakeMode, sourceKind, policy, shader);
+            if (!OwnsLifecycleOperation(_session, version))
+                return false;
             ReattachActiveModifiers();
+            return OwnsLifecycleOperation(_session, version);
         }
 
         public void RequestRebuild()
         {
-            if (_spaceMode == FlowFieldSpaceMode.Volume3D)
+            int version = _lifecycleVersion;
+            if (SpaceMode == FlowFieldSpaceMode.Volume3D)
             {
                 bool retryingVolumeFault = _volumeSession.IsFaulted;
                 if (retryingVolumeFault)
+                {
                     _volumeSession.RetryFault();
+                    if (!OwnsLifecycleOperation(_volumeSession, version))
+                        return;
+                }
                 try
                 {
                     ThrowIfLifecycleUnavailable();
                     ValidateConfiguration(validateStaticGoal: false);
                     QueueVolumeRequest(force: true);
+                    if (OwnsLifecycleOperation(_volumeSession, version))
+                        _volumeSession.AttachRuntimeScheduler();
                 }
                 catch (Exception exception)
                 {
-                    if (retryingVolumeFault && !_volumeSession.IsFaulted)
+                    if (retryingVolumeFault && OwnsLifecycleOperation(_volumeSession, version))
                         _volumeSession.ReportFault(exception);
                     throw;
                 }
@@ -537,7 +541,11 @@ namespace Common.FlowField
 
             bool retryingFault = _session.IsFaulted;
             if (retryingFault)
+            {
                 _session.RetryFault();
+                if (!OwnsLifecycleOperation(_session, version))
+                    return;
+            }
             try
             {
                 ThrowIfLifecycleUnavailable();
@@ -551,7 +559,6 @@ namespace Common.FlowField
 
                 FlowFieldSurfaceBakeSettings settings = CreateSurfaceBakeSettings();
                 int maxWaves = Mathf.Min(settings.Grid.CellCount, Mathf.Max(64, _maxGpuWaves));
-                bool accepted;
                 FlowFieldSessionRequest submittedRequest;
                 if (BakeMode == FlowFieldBakeMode.StaticBaked)
                 {
@@ -566,8 +573,7 @@ namespace Common.FlowField
                         _obstacleClearance,
                         _defaultFlowDirection,
                         FlowFieldDirtyFlags.None,
-                        maxWaves,
-                        $"{name}_RuntimeSurface");
+                        maxWaves);
                 }
                 else
                 {
@@ -584,26 +590,23 @@ namespace Common.FlowField
                         FlowFieldDirtyFlags.None,
                         _session.DirtyFinalRegion,
                         _session.DirtyObstacleRegion,
-                        maxWaves,
-                        $"{name}_RuntimeSurface");
+                        maxWaves);
                 }
-                accepted = _session.Submit(submittedRequest);
+                _session.Submit(submittedRequest);
 
                 // A backend can fail synchronously (for example a RequireGpu
                 // probe or an injected test backend). Treat that exactly like
                 // a rejected request even when the backend reported that it
                 // accepted a callback before transitioning the Session.
-                if (_session.IsFaulted)
+                if (version == _lifecycleVersion && ReferenceEquals(_attachedSession, _session) && _session.IsFaulted)
                     throw new InvalidOperationException($"{nameof(FlowFieldManager)} rebuild failed.", _session.Fault);
-                if (accepted)
-                    _session.AcceptBuildRequest(FlowFieldBuildRequest.FromSurface(submittedRequest));
             }
             catch (Exception exception)
             {
                 // If a retry fails during validation or request submission,
                 // retain a diagnosable Faulted state instead of leaving an
                 // initialized but unusable Session with no LastError.
-                if (retryingFault && !_session.IsFaulted)
+                if (retryingFault && OwnsLifecycleOperation(_session, version))
                     _session.ReportFault(exception);
                 throw;
             }
@@ -611,12 +614,14 @@ namespace Common.FlowField
 
         public void Release()
         {
-            if (_spaceMode == FlowFieldSpaceMode.Volume3D)
+            if (SpaceMode == FlowFieldSpaceMode.Volume3D)
             {
                 if (!_volumeSession.IsInitialized && !_volumeSession.IsFaulted)
                     return;
+                BeginLifecycleOperation();
                 DetachActiveModifiers();
                 _volumeSession.Release();
+                DetachReleasedSession(_volumeSession);
                 _refreshTimer = 0f;
 #if UNITY_EDITOR
                 FlowFieldEditorVisualizationBridge.RequestRefresh(this);
@@ -628,14 +633,16 @@ namespace Common.FlowField
                 || _session.Lifecycle == FlowFieldSessionLifecycle.Released)
                 && !_session.IsFaulted)
                 return;
+            BeginLifecycleOperation();
             DetachActiveModifiers();
             _session.Release();
+            DetachReleasedSession(_session);
             _refreshTimer = 0f;
         }
 
         private void ThrowIfLifecycleUnavailable()
         {
-            if (_spaceMode == FlowFieldSpaceMode.Volume3D)
+            if (SpaceMode == FlowFieldSpaceMode.Volume3D)
             {
                 if (_volumeSession.IsFaulted)
                     throw new InvalidOperationException($"{nameof(FlowFieldManager)} is faulted.",
@@ -653,7 +660,7 @@ namespace Common.FlowField
         private void ThrowIfAvailableForInput()
         {
             ThrowIfLifecycleUnavailable();
-            if (_spaceMode != FlowFieldSpaceMode.Volume3D && _session.ConfigurationStale)
+            if (SpaceMode != FlowFieldSpaceMode.Volume3D && _session.ConfigurationStale)
                 throw new InvalidOperationException($"{nameof(FlowFieldManager)} configuration is stale. Call RequestRebuild() before use.");
         }
 
@@ -663,7 +670,7 @@ namespace Common.FlowField
             // StaticBaked ignores runtime Goal/obstacle input. It must remain
             // a valid no-op even while an unrelated serialized setting is
             // awaiting an explicit rebuild.
-            if (_spaceMode != FlowFieldSpaceMode.Volume3D
+            if (SpaceMode != FlowFieldSpaceMode.Volume3D
                 && BakeMode != FlowFieldBakeMode.StaticBaked
                 && _session.ConfigurationStale)
                 throw new InvalidOperationException($"{nameof(FlowFieldManager)} configuration is stale. Call RequestRebuild() before use.");
@@ -804,7 +811,7 @@ namespace Common.FlowField
                 return;
             FlowFieldGridSpace current = CreateGridSpace();
             if (_session.ObserveGrid(current))
-                _session.MarkDirty(FlowFieldDirtyFlags.Grid, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid, true);
+                _session.MarkDirty(FlowFieldDirtyFlags.Grid, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
         }
 
         private void DetectGoalChange()
@@ -828,7 +835,6 @@ namespace Common.FlowField
                     FlowFieldDirtyFlags.Goal,
                     FlowFieldCellRect.Invalid,
                     FlowFieldCellRect.Invalid,
-                    baseChange: true,
                     deferGoalVersion: true);
 #if UNITY_EDITOR
                 InvalidateEditorPreview();
@@ -838,7 +844,7 @@ namespace Common.FlowField
 
         private void MarkGoalDirty()
         {
-            if (_spaceMode == FlowFieldSpaceMode.Volume3D)
+            if (SpaceMode == FlowFieldSpaceMode.Volume3D)
             {
                 if (_volumeSession.IsInitialized)
                     QueueVolumeRequest(force: true);
@@ -852,7 +858,6 @@ namespace Common.FlowField
                 FlowFieldDirtyFlags.Goal,
                 FlowFieldCellRect.Invalid,
                 FlowFieldCellRect.Invalid,
-                baseChange: true,
                 deferGoalVersion: true);
 #if UNITY_EDITOR
             InvalidateEditorPreview();
@@ -899,19 +904,13 @@ namespace Common.FlowField
             if (!_volumeSession.IsInitialized || _volumeSession.IsFaulted)
                 return;
             FlowFieldVolumeRequest request = CreateVolumeRequest();
-            if (!force && _hasSubmittedVolumeRequest && _lastVolumeRequest.HasSameInputs(request))
+            if (!force
+                && _volumeSession.TryGetLatestRequestedInput(out FlowFieldVolumeRequest latest)
+                && latest.HasSameInputs(request))
                 return;
-            bool accepted = _volumeSession.Submit(request);
-            if (!accepted)
-                return;
-
-            _volumeSession.AcceptBuildRequest(FlowFieldBuildRequest.FromVolume(request));
-            // Cache only an accepted request. A rejected request must remain
-            // retryable after the caller changes the invalid input or issues
-            // an explicit rebuild; otherwise the rejected value would look
-            // current and suppress the retry forever.
-            _lastVolumeRequest = request;
-            _hasSubmittedVolumeRequest = true;
+            // The session owns the accepted input, including a newer input
+            // submitted from its synchronous state-change callback.
+            _volumeSession.Submit(request);
         }
 
         /// <summary>
@@ -1070,7 +1069,7 @@ namespace Common.FlowField
             ThrowIfInputAllowedForMode();
             if (BakeMode == FlowFieldBakeMode.StaticBaked)
                 throw new InvalidOperationException("Cell regeneration is not allowed in StaticBaked mode.");
-            if (_spaceMode == FlowFieldSpaceMode.Volume3D)
+            if (SpaceMode == FlowFieldSpaceMode.Volume3D)
             {
                 QueueVolumeRequest(force: true);
                 return;
@@ -1079,7 +1078,6 @@ namespace Common.FlowField
                 FlowFieldDirtyFlags.Grid,
                 FlowFieldCellRect.Invalid,
                 FlowFieldCellRect.Invalid,
-                baseChange: true,
                 deferSurfaceVersion: true);
 #if UNITY_EDITOR
             InvalidateEditorPreview();
@@ -1088,7 +1086,7 @@ namespace Common.FlowField
 
         internal void MarkConfigurationStale()
         {
-            if (_spaceMode == FlowFieldSpaceMode.Volume3D)
+            if (SpaceMode == FlowFieldSpaceMode.Volume3D)
             {
                 if (_volumeSession.IsInitialized)
                     QueueVolumeRequest(force: true);
@@ -1147,8 +1145,7 @@ namespace Common.FlowField
                         _obstacleClearance,
                         _defaultFlowDirection,
                         FlowFieldDirtyFlags.None,
-                        maxWaves,
-                        $"{name}_RuntimeSurface");
+                        maxWaves);
                 }
                 else
                 {
@@ -1164,8 +1161,7 @@ namespace Common.FlowField
                         FlowFieldDirtyFlags.None,
                         FlowFieldCellRect.Invalid,
                         FlowFieldCellRect.Invalid,
-                        maxWaves,
-                        $"{name}_RuntimeSurface");
+                        maxWaves);
                 }
 
                 return true;
@@ -1201,7 +1197,6 @@ namespace Common.FlowField
                     FlowFieldDirtyFlags.Grid,
                     FlowFieldCellRect.Invalid,
                     FlowFieldCellRect.Invalid,
-                    baseChange: true,
                     deferSurfaceVersion: true);
             }
 #if UNITY_EDITOR
@@ -1335,53 +1330,40 @@ namespace Common.FlowField
 #endif
         }
 
-        internal void NotifySurfaceBakeChanged()
-        {
-            if (_spaceMode == FlowFieldSpaceMode.Volume3D)
-            {
-                if (_volumeSession.IsInitialized)
-                    QueueVolumeRequest(force: true);
-#if UNITY_EDITOR
-                InvalidateEditorPreview();
-#endif
-                return;
-            }
-            if (_session.IsInitialized)
-                _session.MarkDirty(FlowFieldDirtyFlags.All, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid, true);
-#if UNITY_EDITOR
-            InvalidateEditorPreview();
-#endif
-        }
-
         #endregion
 
-        private void AttachSessionCallbacks()
+        // This is the facade's synchronous initialization/activation attempt,
+        // not the Volume build generation (which also changes on valid commits).
+        private int _lifecycleVersion;
+
+        private int BeginLifecycleOperation()
         {
-            if (_callbacksAttached)
+            unchecked { return ++_lifecycleVersion; }
+        }
+
+        private bool OwnsLifecycleOperation(FlowFieldSessionBase owner, int version)
+            => version == _lifecycleVersion && ReferenceEquals(_attachedSession, owner) && owner.IsInitialized;
+
+        private void AttachSessionCallbacks(FlowFieldSessionBase session)
+        {
+            if (ReferenceEquals(_attachedSession, session))
                 return;
-            _attachedSession = ActiveSession;
+            DetachSessionCallbacks();
+            _attachedSession = session;
             _attachedSession.FieldCommitted += OnSessionFieldCommitted;
             _attachedSession.Failed += OnSessionFailed;
             _attachedSession.StateChanged += OnSessionStateChanged;
             _attachedSession.EventFailed += OnSessionEventFailed;
-            _callbacksAttached = true;
         }
 
-        private void AttachVolumeSessionCallbacks()
-            => AttachSessionCallbacks();
+        private void DetachReleasedSession(FlowFieldSessionBase session)
+        {
+            if (ReferenceEquals(_attachedSession, session)
+                && session.State == FlowFieldRuntimeState.Released)
+                DetachSessionCallbacks();
+        }
 
         private void DetachSessionCallbacks()
-        {
-            if (!_callbacksAttached)
-                return;
-            DetachAttachedSession();
-            _callbacksAttached = false;
-        }
-
-        private void DetachVolumeSessionCallbacks()
-            => DetachSessionCallbacks();
-
-        private void DetachAttachedSession()
         {
             if (_attachedSession == null)
                 return;
@@ -1392,11 +1374,8 @@ namespace Common.FlowField
             _attachedSession = null;
         }
 
-        private void OnSessionFieldCommitted(bool changed)
-        {
-            if (changed)
-                FieldChanged?.Invoke();
-        }
+        private void OnSessionFieldCommitted()
+            => FieldChanged?.Invoke();
 
         private void OnSessionFailed(Exception exception)
         {

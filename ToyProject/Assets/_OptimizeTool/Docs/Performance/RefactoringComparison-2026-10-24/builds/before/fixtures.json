@@ -1,0 +1,46 @@
+{
+    "outputs": [
+        {
+            "path": "Assets/_OptimizeTool/Settings/Generated/ScaleBenchmark/Cubes-3600-Mode-1.asset",
+            "sha256": "40dd6153e82dafd4f72d30d255699108ad03e25c6eb52ca41e0d9cc400d2c753",
+            "vertices": 86400,
+            "renderers": 1,
+            "triangles": 43200
+        },
+        {
+            "path": "Assets/_OptimizeTool/Settings/Generated/ScaleBenchmark/Cubes-3600-Mode-2.asset",
+            "sha256": "4d97d5b66e511e626eabfa789668afde3bddd5b685914292e16ac84ec5dd367c",
+            "vertices": 14400,
+            "renderers": 1,
+            "triangles": 7200
+        },
+        {
+            "path": "Assets/_OptimizeTool/Settings/Generated/ScaleBenchmark/Cubes-3600-Mode-3.asset",
+            "sha256": "dd0cdefc3143c5734a424c9879ebf121308412fff4f4faa0d77a905da0fada1f",
+            "vertices": 28800,
+            "renderers": 1,
+            "triangles": 14400
+        },
+        {
+            "path": "Assets/_OptimizeTool/Settings/Generated/GpuBenchmark/Cubes-225-Mode-1.asset",
+            "sha256": "45bb5cfeb61de87ca93d062eafd2d1faa78239b7423f2ee2a453756ffaeb41eb",
+            "vertices": 5703750,
+            "renderers": 1,
+            "triangles": 11059200
+        },
+        {
+            "path": "Assets/_OptimizeTool/Settings/Generated/GpuBenchmark/Cubes-225-Mode-2.asset",
+            "sha256": "81671eda4b2b7081e5dceca667400ea069e83cf9116b9cf359910c168f3930ed",
+            "vertices": 950625,
+            "renderers": 1,
+            "triangles": 1843200
+        },
+        {
+            "path": "Assets/_OptimizeTool/Settings/Generated/GpuBenchmark/Cubes-225-Mode-3.asset",
+            "sha256": "ac8d2cb8414dc44d1f5746ade74c8959dbc5ce27cf3829b2aa56d00fa343af8b",
+            "vertices": 1901250,
+            "renderers": 1,
+            "triangles": 3686400
+        }
+    ]
+}

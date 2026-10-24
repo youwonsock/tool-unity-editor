@@ -74,6 +74,13 @@ namespace Common.OptimizeTool.Samples
                 ReleaseLookMode();
         }
 
+        public void SetPose(Vector3 position, Quaternion rotation)
+        {
+            ReleaseLookMode();
+            transform.SetPositionAndRotation(position, rotation);
+            SyncAnglesFromTransform();
+        }
+
         public void FocusOnBounds(Bounds bounds)
         {
             if (_camera == null)
@@ -89,7 +96,8 @@ namespace Common.OptimizeTool.Samples
                 : new Vector3(0f, 0.6f, -0.8f);
             float radius = Mathf.Max(bounds.extents.magnitude, 1f);
             float halfFovRadians = Mathf.Max(_camera.fieldOfView, 1f) * 0.5f * Mathf.Deg2Rad;
-            float distance = radius / Mathf.Tan(halfFovRadians) + Mathf.Max(_focusPadding, 0f);
+            float limitingHalfAngle = Mathf.Atan(Mathf.Tan(halfFovRadians) * Mathf.Min(1f, _camera.aspect));
+            float distance = radius / Mathf.Sin(limitingHalfAngle) + Mathf.Max(_focusPadding, 0f);
             distance = Mathf.Max(distance, _minimumFocusDistance);
 
             Vector3 target = bounds.center;

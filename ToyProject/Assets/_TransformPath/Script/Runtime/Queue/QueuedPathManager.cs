@@ -29,6 +29,7 @@ namespace Common.TransformPath
             public int RegistrationSequence;
             public float Progress;
             public PathQueueRegistration Registration;
+            public PathQueueState? State;
 
             public void Set(
                 IQueuedPathAgent agent,
@@ -39,6 +40,7 @@ namespace Common.TransformPath
                 RegistrationSequence = registrationSequence;
                 Progress = 0f;
                 Registration = registration;
+                State = null;
             }
 
             public void Clear()
@@ -47,6 +49,7 @@ namespace Common.TransformPath
                 RegistrationSequence = 0;
                 Progress = 0f;
                 Registration = default(PathQueueRegistration);
+                State = null;
             }
         }
 
@@ -92,18 +95,15 @@ namespace Common.TransformPath
         private readonly List<QueueEntry> _entryPool = new List<QueueEntry>(100);
         private readonly List<QueueEntry> _detachedEntries = new List<QueueEntry>(100);
         private readonly Dictionary<IQueuedPathAgent, int> _indices = new Dictionary<IQueuedPathAgent, int>(100);
-        private readonly Dictionary<IQueuedPathAgent, PathQueueState> _states = new Dictionary<IQueuedPathAgent, PathQueueState>(100);
-        private readonly List<PathSegmentDescriptor> _routeStructure = new List<PathSegmentDescriptor>();
+        private readonly List<IPathProvider> _routeStructure = new List<IPathProvider>();
 
         private IPathProvider _routeProvider;
         private bool _isInitialized;
-        private bool _awaitingFollowerSnapshots;
         private bool _configurationErrorReported;
         private int _observedRouteRevision = -1;
         private int _routeRevision;
         private int _registrationSequence;
         private ulong _registrationId;
-        private PathQueueCoordinator _coordinator;
         private bool _runtimeDriverRegistered;
         private bool _isStopping;
 
@@ -113,6 +113,7 @@ namespace Common.TransformPath
         #region Properties
 
         public bool IsInitialized => _isInitialized;
+        int IPathRuntimeTickable.RuntimeOrder => -180;
         ulong IPathRuntimeTickable.PlaybackId => 0UL;
         public IPathProvider RouteProvider => _routeProvider;
         public int RouteRevision => _routeRevision;
@@ -202,7 +203,6 @@ namespace Common.TransformPath
             _isInitialized = false;
             _observedRouteRevision = -1;
             _routeRevision = 0;
-            _awaitingFollowerSnapshots = false;
             if (firstException != null)
                 throw firstException;
         }
@@ -262,6 +262,8 @@ namespace Common.TransformPath
 
             if (_routeProvider.Revision != _observedRouteRevision)
                 RefreshRouteRevision();
+            if (!_isInitialized || _routeProvider == null)
+                return;
 
             for (int i = 0; i < _entries.Count; i++)
                 _entries[i].Progress = Mathf.Clamp01(_entries[i].Agent.GlobalNormalizedTime);
@@ -283,26 +285,38 @@ namespace Common.TransformPath
             }
 
             float routeLength = Mathf.Max(_routeProvider.PathLength, 0.001f);
-            PathQueueCoordinator coordinator = GetCoordinator();
+            // Keep one frame's settings stable when an agent callback edits
+            // the manager. The next tick consumes those changes.
+            float defaultSpacing = _defaultSpacing;
+            bool enableGradualSlowdown = _enableGradualSlowdown;
+            float slowdownStartDistance = _slowdownStartDistance;
+            float minSpeedMultiplier = _minSpeedMultiplier;
+            AnimationCurve slowdownCurve = _slowdownCurve;
             for (int i = 0; i < _frameEntries.Count; i++)
             {
                 QueueFrameEntry frameEntry = _frameEntries[i];
+                if (!TryGetCurrentEntry(frameEntry, out _))
+                    continue;
                 IQueuedPathAgent agent = frameEntry.Agent;
                 IQueuedPathAgent ahead = i == 0 ? null : _frameEntries[i - 1].Agent;
                 float progress = frameEntry.Progress;
                 float? distance = ahead == null
                     ? (float?)null
                     : Mathf.Max(0f, (_frameEntries[i - 1].Progress - progress) * routeLength);
-                float spacing = coordinator.GetSpacing(agent);
-                bool revisionBlocked = _awaitingFollowerSnapshots && agent.SnapshotRevision != _routeRevision;
+                PathQueueAgentSettings settings = agent.QueueSettings;
+                float spacing = PathQueueCoordinator.GetSpacing(settings, defaultSpacing);
+                bool revisionBlocked = agent.SnapshotRevision != _routeRevision;
                 bool spacingBlocked = distance.HasValue && distance.Value <= spacing;
                 bool blocked = revisionBlocked || spacingBlocked;
-                float multiplier = coordinator.CalculateSpeedMultiplier(
-                    agent,
+                float multiplier = PathQueueCoordinator.CalculateSpeedMultiplier(
+                    enableGradualSlowdown && settings.EnableGradualSlowdown,
                     distance,
-                    spacing);
+                    spacing,
+                    slowdownStartDistance,
+                    minSpeedMultiplier,
+                    slowdownCurve);
                 float maxProgress = ahead == null
-                    || !agent.QueueSettings.EnableOvertakeProtection
+                    || !settings.EnableOvertakeProtection
                     ? 1f
                     : Mathf.Clamp01(_frameEntries[i - 1].Progress - spacing / routeLength);
 
@@ -313,14 +327,15 @@ namespace Common.TransformPath
                     multiplier,
                     maxProgress,
                     _routeRevision,
-                    agent.PlaybackId,
+                    frameEntry.Registration.PlaybackId,
                     frameId);
-                _states[agent] = state;
+                // An earlier agent callback may detach or replace this
+                // registration. Contract getters can also invoke user code.
+                if (!TryGetCurrentEntry(frameEntry, out QueueEntry current))
+                    continue;
+                current.State = state;
                 agent.ApplyQueueState(frameEntry.Registration, state);
             }
-
-            if (_awaitingFollowerSnapshots && AllSnapshotsCurrent())
-                _awaitingFollowerSnapshots = false;
         }
 
         void IPathRuntimeFaultHandler.HandleRuntimeFault(
@@ -356,6 +371,7 @@ namespace Common.TransformPath
                 return;
 
             Exception firstException = null;
+            IPathProvider previousProvider = _routeProvider;
             if (_routeProvider != null)
             {
                 _routeProvider.PathChanged -= HandleRouteChanged;
@@ -368,12 +384,19 @@ namespace Common.TransformPath
                     firstException = exception;
                 }
             }
+            // A detach callback can release or reconfigure the manager. Do not
+            // overwrite that newer command with this pending route change.
+            if (!ReferenceEquals(_routeProvider, previousProvider))
+            {
+                if (firstException != null)
+                    throw firstException;
+                return;
+            }
             _routeProvider = provider;
             _routeProvider.PathChanged += HandleRouteChanged;
             _routeRevision = provider.Revision;
             _observedRouteRevision = provider.Revision;
             CaptureRouteStructure();
-            _awaitingFollowerSnapshots = false;
             if (firstException != null)
                 throw firstException;
         }
@@ -387,20 +410,16 @@ namespace Common.TransformPath
 
         public PathQueueRegistration Register(IQueuedPathAgent agent)
         {
-            if (!_isInitialized)
-                throw new InvalidOperationException("QueuedPathManager is not initialized.");
-            if (_isStopping)
-                throw new InvalidOperationException("QueuedPathManager is releasing its registrations.");
-            if (agent == null)
-                throw new ArgumentNullException(nameof(agent));
-            if (_routeProvider == null || !ReferenceEquals(agent.QueueProvider, _routeProvider))
-                throw new InvalidOperationException("Queue agent and manager must use the same route provider instance.");
+            ValidateRegistration(agent);
             // A registration created from a callback can arrive after the
             // provider raised PathChanged but before this manager's next
             // driver frame.  Consume that revision first so the token and
             // the next calculation carry the same route identity.
             if (_routeProvider.Revision != _observedRouteRevision)
+            {
                 RefreshRouteRevision();
+                ValidateRegistration(agent);
+            }
             if (_indices.TryGetValue(agent, out int existingIndex))
             {
                 PathQueueRegistration existing =
@@ -412,6 +431,7 @@ namespace Common.TransformPath
                 agent.OnQueueDetached(
                     existing,
                     EPathQueueDetachReason.Replaced);
+                ValidateRegistration(agent);
                 if (_indices.TryGetValue(agent, out int reentrantIndex))
                     return _entries[reentrantIndex].Registration;
             }
@@ -429,6 +449,13 @@ namespace Common.TransformPath
 
         public bool Unregister(PathQueueRegistration registration)
         {
+            return Unregister(registration, EPathQueueDetachReason.Explicit);
+        }
+
+        internal bool Unregister(
+            PathQueueRegistration registration,
+            EPathQueueDetachReason reason)
+        {
             if (!registration.IsValid)
                 return false;
             int index = FindRegistrationIndex(registration);
@@ -443,7 +470,7 @@ namespace Common.TransformPath
             // mistaken for the registration being detached.
             removedAgent.OnQueueDetached(
                 removedRegistration,
-                EPathQueueDetachReason.Explicit);
+                reason);
             return true;
         }
 
@@ -456,28 +483,39 @@ namespace Common.TransformPath
 
         public bool TryGetState(PathQueueRegistration registration, out PathQueueState state)
         {
-            if (registration.IsValid)
-            {
-                int index = FindRegistrationIndex(registration);
-                if (index >= 0 && _states.TryGetValue(_entries[index].Agent, out state))
-                    return true;
-            }
-            state = default(PathQueueState);
-            return false;
+            return TryGetStateAt(FindRegistrationIndex(registration), out state);
         }
 
         public bool TryGetState(IQueuedPathAgent agent, out PathQueueState state)
         {
-            if (agent != null && _states.TryGetValue(agent, out state))
-                return true;
-            state = default(PathQueueState);
-            return false;
+            return TryGetStateAt(
+                agent != null && _indices.TryGetValue(agent, out int index) ? index : -1,
+                out state);
         }
 
         #endregion
 
 
         #region Private Methods
+
+        private void ValidateRegistration(IQueuedPathAgent agent)
+        {
+            if (!_isInitialized)
+                throw new InvalidOperationException("QueuedPathManager is not initialized.");
+            if (_isStopping)
+                throw new InvalidOperationException("QueuedPathManager is releasing its registrations.");
+            if (agent == null)
+                throw new ArgumentNullException(nameof(agent));
+            if (_routeProvider == null || !ReferenceEquals(agent.QueueProvider, _routeProvider))
+                throw new InvalidOperationException("Queue agent and manager must use the same route provider instance.");
+        }
+
+        private bool TryGetStateAt(int index, out PathQueueState state)
+        {
+            PathQueueState? current = index >= 0 ? _entries[index].State : null;
+            state = current.GetValueOrDefault();
+            return current.HasValue;
+        }
 
         private void HandleRouteChanged()
         {
@@ -488,19 +526,16 @@ namespace Common.TransformPath
 
         private void RefreshRouteRevision()
         {
+            IPathProvider provider = _routeProvider;
             bool sameStructure = IsSameRouteStructure();
             _routeRevision = _routeProvider.Revision;
             _observedRouteRevision = _routeProvider.Revision;
             if (!sameStructure)
             {
                 StopAllAgents();
+                if (!ReferenceEquals(_routeProvider, provider))
+                    return;
                 CaptureRouteStructure();
-                _awaitingFollowerSnapshots = false;
-            }
-            else
-            {
-                CaptureRouteStructure();
-                _awaitingFollowerSnapshots = true;
             }
         }
 
@@ -522,7 +557,7 @@ namespace Common.TransformPath
                     out _)
                     || !ReferenceEquals(
                         descriptor.Provider,
-                        _routeStructure[i].Provider))
+                        _routeStructure[i]))
                     return false;
             }
             return true;
@@ -545,51 +580,21 @@ namespace Common.TransformPath
                         out PathSegmentDescriptor descriptor,
                         out string descriptorError))
                     throw new InvalidOperationException(descriptorError);
-                _routeStructure.Add(new PathSegmentDescriptor(
-                    descriptor.Provider,
-                    PathMovementSettingsUtility.Clone(descriptor.MovementSettings),
-                    descriptor.PreservePreviousSpeed));
+                _routeStructure.Add(descriptor.Provider);
             }
-        }
-
-        private bool AllSnapshotsCurrent()
-        {
-            for (int i = 0; i < _entries.Count; i++)
-            {
-                if (_entries[i].Agent.SnapshotRevision != _routeRevision)
-                    return false;
-            }
-            return true;
-        }
-
-        private PathQueueCoordinator GetCoordinator()
-        {
-            if (_coordinator == null)
-                _coordinator = new PathQueueCoordinator(
-                    _defaultSpacing,
-                    _enableGradualSlowdown,
-                    _slowdownStartDistance,
-                    _minSpeedMultiplier,
-                    _slowdownCurve);
-            else
-            {
-                _coordinator.DefaultSpacing = _defaultSpacing;
-                _coordinator.EnableGradualSlowdown = _enableGradualSlowdown;
-                _coordinator.SlowdownStartDistance = _slowdownStartDistance;
-                _coordinator.MinSpeedMultiplier = _minSpeedMultiplier;
-                _coordinator.SlowdownCurve = _slowdownCurve;
-            }
-            return _coordinator;
         }
 
         private void StopAllAgents(
             EPathQueueDetachReason reason = EPathQueueDetachReason.ManagerReleased)
         {
+            // The outer batch already owns every removed registration. A nested
+            // Release/ConfigureRoute must not clear its pending notifications.
+            if (_isStopping)
+                return;
             _detachedEntries.Clear();
             _detachedEntries.AddRange(_entries);
             _entries.Clear();
             _indices.Clear();
-            _states.Clear();
             Exception firstException = null;
             _isStopping = true;
             try
@@ -637,15 +642,29 @@ namespace Common.TransformPath
             return entry;
         }
 
+        private bool TryGetCurrentEntry(QueueFrameEntry frameEntry, out QueueEntry entry)
+        {
+            if (_indices.TryGetValue(frameEntry.Agent, out int index))
+            {
+                QueueEntry current = _entries[index];
+                if (current.Registration.Matches(frameEntry.Registration)
+                    && frameEntry.Agent.PlaybackId == frameEntry.Registration.PlaybackId)
+                {
+                    entry = current;
+                    return true;
+                }
+            }
+            entry = null;
+            return false;
+        }
+
         private int FindRegistrationIndex(PathQueueRegistration registration)
         {
             if (!registration.BelongsTo(this))
                 return -1;
             for (int i = 0; i < _entries.Count; i++)
             {
-                if (_entries[i].Registration.BelongsTo(this)
-                    && _entries[i].Registration.RegistrationId == registration.RegistrationId
-                    && _entries[i].Registration.PlaybackId == registration.PlaybackId)
+                if (_entries[i].Registration.Matches(registration))
                     return i;
             }
             return -1;
@@ -655,14 +674,12 @@ namespace Common.TransformPath
         {
             QueueEntry removedEntry = _entries[index];
             IQueuedPathAgent agent = removedEntry.Agent;
-            int last = _entries.Count - 1;
-            if (index != last)
-                _entries[index] = _entries[last];
-            _entries.RemoveAt(last);
+            // GetAgent exposes queue order between driver frames as well. Keep the
+            // remaining order stable when a sale transition removes the head.
+            _entries.RemoveAt(index);
             _indices.Remove(agent);
-            _states.Remove(agent);
-            if (index != last)
-                _indices[_entries[index].Agent] = index;
+            for (int i = index; i < _entries.Count; i++)
+                _indices[_entries[i].Agent] = i;
             RecycleEntry(removedEntry);
         }
 

@@ -1,0 +1,11 @@
+{
+  "measurementUsedFrozenAfterSnapshot": true,
+  "laterWorkspaceDifferences": [
+    "Assets/_OptimizeTool/Script/Samples/OptimizeToolOverviewController.cs",
+    "Assets/_OptimizeTool/Script/Samples/OptimizeToolPhysicsDemo.cs",
+    "Assets/_OptimizeTool/Script/Samples/OptimizeToolShowcaseUI.cs"
+  ],
+  "laterDifferencesNotReferencedByEitherMeasuredScene": true,
+  "meshBuildAndMeasurementHotPathHashesStillMatch": true,
+  "workspaceChangesPreserved": true
+}

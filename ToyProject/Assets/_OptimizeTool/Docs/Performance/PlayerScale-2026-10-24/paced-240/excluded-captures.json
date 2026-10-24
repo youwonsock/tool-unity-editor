@@ -1,0 +1,9 @@
+[
+  {
+    "folder": "cubes-3600-run-03-1792772893396239000",
+    "reason": "Player lost focus",
+    "samples": 7680,
+    "focusedSamples": 267,
+    "rawCsvSha256": "b426036aca4ff1b95970093c8f8d7d962a871cb81e6c65342e45f92b3ff6ba61"
+  }
+]

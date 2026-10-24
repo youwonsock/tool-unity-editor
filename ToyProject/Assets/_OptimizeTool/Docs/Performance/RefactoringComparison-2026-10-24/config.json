@@ -1,0 +1,59 @@
+{
+  "variants": [
+    "before",
+    "after"
+  ],
+  "runtimeProfiles": {
+    "cpu": {
+      "cubes": 3600,
+      "subdivisions": 1,
+      "mode": "offscreen-drained",
+      "fps": -1
+    },
+    "gpu": {
+      "cubes": 225,
+      "subdivisions": 64,
+      "mode": "offscreen-drained",
+      "fps": -1
+    }
+  },
+  "pairedLaunches": 4,
+  "roundsPerLaunch": 4,
+  "warmupSeconds": 2,
+  "preconditionSeconds": 10,
+  "orders": [
+    0,
+    4,
+    0,
+    4
+  ],
+  "pairOrders": [
+    [
+      "before",
+      "after"
+    ],
+    [
+      "after",
+      "before"
+    ],
+    [
+      "after",
+      "before"
+    ],
+    [
+      "before",
+      "after"
+    ]
+  ],
+  "bakeRepeats": 4,
+  "materialRegressionRule": {
+    "relativePercent": 5,
+    "absoluteMilliseconds": 0.1
+  },
+  "baseline": "All production source/meta files match the immediate pre-refactor hash manifest; test files excluded from both measurement projects.",
+  "protocolRevision": "Windowed trials rejected for focus failure before any valid capture; both profiles now use the same offscreen/drained scope and require at least 99% positive CPU frame timings.",
+  "runtimeMemoryScope": "/usr/bin/time -l native Player lifetime maximum RSS; same capture harness in both versions; last paired run includes PNG capture before sampling.",
+  "bakeTimeScope": "Core calculation and fresh batch save, plus separately timed public initial bake and overwrite/rebuild with scene output; input construction and process startup excluded.",
+  "bakeMemoryScope": "Exact OS process peak covers startup, fixture construction, core/save, public initial/rebuild and cleanup; phase RSS is sampled at about 10 ms.",
+  "familywiseCorrection": false
+}

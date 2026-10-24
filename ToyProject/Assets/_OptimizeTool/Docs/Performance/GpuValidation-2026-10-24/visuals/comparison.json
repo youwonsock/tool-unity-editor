@@ -1,0 +1,83 @@
+{
+  "cubes-225": {
+    "buildGuid": "b3c44117ef5d4bb9945b9234535cce3c",
+    "resolution": [
+      1920,
+      1080
+    ],
+    "modes": {
+      "1": {
+        "meanNormalizedRgbError": 0.0,
+        "foregroundNormalizedRgbError": 0.0,
+        "changedPixels": 0,
+        "identicalPixels": true
+      },
+      "2": {
+        "meanNormalizedRgbError": 0.0,
+        "foregroundNormalizedRgbError": 0.0,
+        "changedPixels": 0,
+        "identicalPixels": true
+      },
+      "3": {
+        "meanNormalizedRgbError": 0.0,
+        "foregroundNormalizedRgbError": 0.0,
+        "changedPixels": 0,
+        "identicalPixels": true
+      }
+    }
+  },
+  "cubes-36": {
+    "buildGuid": "b3c44117ef5d4bb9945b9234535cce3c",
+    "resolution": [
+      1920,
+      1080
+    ],
+    "modes": {
+      "1": {
+        "meanNormalizedRgbError": 0.0,
+        "foregroundNormalizedRgbError": 0.0,
+        "changedPixels": 0,
+        "identicalPixels": true
+      },
+      "2": {
+        "meanNormalizedRgbError": 0.0,
+        "foregroundNormalizedRgbError": 0.0,
+        "changedPixels": 0,
+        "identicalPixels": true
+      },
+      "3": {
+        "meanNormalizedRgbError": 0.0,
+        "foregroundNormalizedRgbError": 0.0,
+        "changedPixels": 0,
+        "identicalPixels": true
+      }
+    }
+  },
+  "cubes-9": {
+    "buildGuid": "b3c44117ef5d4bb9945b9234535cce3c",
+    "resolution": [
+      1920,
+      1080
+    ],
+    "modes": {
+      "1": {
+        "meanNormalizedRgbError": 0.0,
+        "foregroundNormalizedRgbError": 0.0,
+        "changedPixels": 0,
+        "identicalPixels": true
+      },
+      "2": {
+        "meanNormalizedRgbError": 0.0,
+        "foregroundNormalizedRgbError": 0.0,
+        "changedPixels": 0,
+        "identicalPixels": true
+      },
+      "3": {
+        "meanNormalizedRgbError": 0.0,
+        "foregroundNormalizedRgbError": 0.0,
+        "changedPixels": 0,
+        "identicalPixels": true
+      }
+    }
+  }
+}

@@ -1,0 +1,115 @@
+{
+  "app": "/private/tmp/optimizetool-player-20261024/Build/OptimizeToolBenchmark.app",
+  "architecture": "Mach-O universal binary with 2 architectures: [x86_64:Mach-O 64-bit executable x86_64] [arm64:Mach-O 64-bit executable arm64]\n/private/tmp/optimizetool-player-20261024/Build/OptimizeToolBenchmark.app/Contents/MacOS/ToyProject (for architecture x86_64):\tMach-O 64-bit executable x86_64\n/private/tmp/optimizetool-player-20261024/Build/OptimizeToolBenchmark.app/Contents/MacOS/ToyProject (for architecture arm64):\tMach-O 64-bit executable arm64",
+  "executableSha256": "7b31b53d58b39eddbbc8dcebebf3b2918b341fe40d89e5480c43522de430e103",
+  "rounds": 8,
+  "repeats": 3,
+  "cubes": [
+    3600
+  ],
+  "targetFrameRate": 240,
+  "runs": [
+    {
+      "samples": 7680,
+      "modes": {
+        "0": {
+          "draw_calls": 7206.0,
+          "cpu_frame_ms": 4.1665835,
+          "gpu_frame_ms": 3.099583333096234
+        },
+        "1": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 4.166542,
+          "gpu_frame_ms": 2.7871458332811017
+        },
+        "2": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 4.166583,
+          "gpu_frame_ms": 2.7422916668911057
+        },
+        "3": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 4.1665,
+          "gpu_frame_ms": 2.731937499902415
+        }
+      },
+      "buildGuid": "b202b34b528a44918ff1b7a98e6d0e9b",
+      "syncIntervals": [
+        "1"
+      ],
+      "folder": "/private/tmp/optimizetool-player-20261024/stable-paced240/cubes-3600/run-01",
+      "cubes": 3600,
+      "repeat": 1,
+      "elapsedSeconds": 51.93431782722473,
+      "archivedFolder": "cubes-3600/run-01"
+    },
+    {
+      "samples": 7680,
+      "modes": {
+        "0": {
+          "draw_calls": 7206.0,
+          "cpu_frame_ms": 4.166625,
+          "gpu_frame_ms": 1.7144375001407752
+        },
+        "1": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 4.166708,
+          "gpu_frame_ms": 2.7931458330385794
+        },
+        "2": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 4.166625,
+          "gpu_frame_ms": 2.735437499723048
+        },
+        "3": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 4.166375,
+          "gpu_frame_ms": 2.742749999924854
+        }
+      },
+      "buildGuid": "b202b34b528a44918ff1b7a98e6d0e9b",
+      "syncIntervals": [
+        "1"
+      ],
+      "folder": "/private/tmp/optimizetool-player-20261024/stable-paced240/cubes-3600/run-02",
+      "cubes": 3600,
+      "repeat": 2,
+      "elapsedSeconds": 51.79686999320984,
+      "archivedFolder": "cubes-3600/run-02"
+    },
+    {
+      "samples": 7680,
+      "modes": {
+        "0": {
+          "draw_calls": 7206.0,
+          "cpu_frame_ms": 4.166708,
+          "gpu_frame_ms": 2.2935208335184143
+        },
+        "1": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 4.167083,
+          "gpu_frame_ms": 1.814083333556482
+        },
+        "2": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 4.167,
+          "gpu_frame_ms": 1.7437708338547964
+        },
+        "3": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 4.167459,
+          "gpu_frame_ms": 1.4132083333606715
+        }
+      },
+      "buildGuid": "b202b34b528a44918ff1b7a98e6d0e9b",
+      "syncIntervals": [
+        "1"
+      ],
+      "folder": "/private/tmp/optimizetool-player-20261024/stable-paced240/cubes-3600/run-03",
+      "cubes": 3600,
+      "repeat": 3,
+      "elapsedSeconds": 51.90205407142639,
+      "archivedFolder": "cubes-3600/run-03"
+    }
+  ]
+}

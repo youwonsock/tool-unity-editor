@@ -1,0 +1,55 @@
+{
+  "pid": 65634,
+  "cubes": 3600,
+  "subdivisions": 1,
+  "unityVersion": "2023.2.20f1",
+  "scope": "Core bake: three pipeline modes retained through fresh batch save. Also measures public MeshCombiner initial bake and overwrite/rebuild with scene output and source disabling. Timings exclude startup, input construction and cleanup; process/RSS peaks cover all stages.",
+  "fixtureMs": 216.87570000000002,
+  "totalMs": 969.4717,
+  "buildMs": 396.3711,
+  "saveMs": 477.0155,
+  "workflowInitialMs": 358.12460000000004,
+  "workflowRebuildMs": 265.5849,
+  "unityAllocatedAtStart": 226966597,
+  "unityAllocatedAfterBuild": 253907629,
+  "unityReservedAtStart": 527279320,
+  "modes": [
+    {
+      "mode": 1,
+      "vertices": 86400,
+      "culled": 0,
+      "triangles": 43200,
+      "milliseconds": 91.2464
+    },
+    {
+      "mode": 2,
+      "vertices": 14400,
+      "culled": 0,
+      "triangles": 7200,
+      "milliseconds": 109.2143
+    },
+    {
+      "mode": 3,
+      "vertices": 28800,
+      "culled": 2400,
+      "triangles": 14400,
+      "milliseconds": 195.6424
+    }
+  ],
+  "variant": "after",
+  "profile": "cpu",
+  "pair": 2,
+  "processPeakRssBytes": 1735573504,
+  "bakeSampledPeakRssBytes": 1726922752,
+  "bakeFirstObservedRssBytes": 1302315008,
+  "sampleCount": 159,
+  "samplingIntervalSeconds": 0.01,
+  "telemetryBefore": {
+    "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+    "power": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=21823587)\t54%; discharging; 0:59 remaining present: true"
+  },
+  "telemetryAfter": {
+    "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+    "power": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=21823587)\t54%; discharging; 0:59 remaining present: true"
+  }
+}

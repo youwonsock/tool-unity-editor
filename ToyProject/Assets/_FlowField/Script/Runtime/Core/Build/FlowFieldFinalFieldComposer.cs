@@ -6,14 +6,16 @@ namespace Common.FlowField
 {
     internal static class FlowFieldFinalFieldComposer
     {
-        public static void Compose(
+        public static bool Compose(
             FlowFieldGridSpace grid,
             FlowFieldSurfaceData surface,
             FlowFieldWorkspace workspace,
             Vector3 defaultDirection,
-            IReadOnlyList<FlowFieldModifierLayer> modifierLayers
-            )
+            IReadOnlyList<FlowFieldModifierLayer> modifierLayers,
+            Func<bool> isCurrent = null)
         {
+            if (isCurrent?.Invoke() == false)
+                return false;
             ValidateWorkspace(grid, surface, workspace);
             if (modifierLayers == null)
                 throw new ArgumentNullException(nameof(modifierLayers));
@@ -22,27 +24,32 @@ namespace Common.FlowField
                 throw new ArgumentOutOfRangeException(nameof(defaultDirection));
 
             BuildBaseField(grid, surface, workspace, defaultDirection);
-            ApplyModifiers(
+            return ApplyModifiers(
                 grid,
                 surface,
                 workspace,
-                modifierLayers);
+                modifierLayers,
+                isCurrent);
         }
 
-        public static void ApplyModifiers(
-            FlowFieldGridSpace grid,
-            FlowFieldSurfaceData surface,
-            FlowFieldWorkspace workspace,
-            IReadOnlyList<FlowFieldModifierLayer> modifierLayers)
-            => ApplyModifiers(grid, surface, workspace, modifierLayers, FlowFieldCellRect.Full(grid));
-
-        public static void ApplyModifiers(
+        public static bool ApplyModifiers(
             FlowFieldGridSpace grid,
             FlowFieldSurfaceData surface,
             FlowFieldWorkspace workspace,
             IReadOnlyList<FlowFieldModifierLayer> modifierLayers,
-            FlowFieldCellRect dirtyRegion)
+            Func<bool> isCurrent = null)
+            => ApplyModifiers(grid, surface, workspace, modifierLayers, FlowFieldCellRect.Full(grid), isCurrent);
+
+        public static bool ApplyModifiers(
+            FlowFieldGridSpace grid,
+            FlowFieldSurfaceData surface,
+            FlowFieldWorkspace workspace,
+            IReadOnlyList<FlowFieldModifierLayer> modifierLayers,
+            FlowFieldCellRect dirtyRegion,
+            Func<bool> isCurrent = null)
         {
+            if (isCurrent?.Invoke() == false)
+                return false;
             ValidateWorkspace(grid, surface, workspace);
             if (modifierLayers == null)
                 throw new ArgumentNullException(nameof(modifierLayers));
@@ -51,7 +58,7 @@ namespace Common.FlowField
                 dirtyRegion = FlowFieldCellRect.Full(grid);
             ClearFinalRegionFromBase(grid, workspace, dirtyRegion);
             if (modifierLayers.Count == 0)
-                return;
+                return true;
 
             for (int layerIndex = 0; layerIndex < modifierLayers.Count; layerIndex++)
             {
@@ -61,20 +68,23 @@ namespace Common.FlowField
                 if (modifier == null || influenceMask == null || influenceMask.Length != grid.CellCount)
                     throw new ArgumentException("Modifier layer data is inconsistent.");
 
-                if (layer.InfluenceIndices != null)
-                    ApplyModifierIndices(grid, surface, workspace, modifier, layer.InfluenceIndices, dirtyRegion);
-                else
-                    ApplyModifierLayer(grid, surface, workspace, modifier, influenceMask, dirtyRegion);
+                bool completed = layer.InfluenceIndices != null
+                    ? ApplyModifierIndices(grid, surface, workspace, modifier, layer.InfluenceIndices, dirtyRegion, isCurrent)
+                    : ApplyModifierLayer(grid, surface, workspace, modifier, influenceMask, dirtyRegion, isCurrent);
+                if (!completed)
+                    return false;
             }
+            return true;
         }
 
-        private static void ApplyModifierIndices(
+        private static bool ApplyModifierIndices(
             FlowFieldGridSpace grid,
             FlowFieldSurfaceData surface,
             FlowFieldWorkspace workspace,
             IFlowFieldModifierSnapshot modifier,
             IReadOnlyList<int> indices,
-            FlowFieldCellRect dirtyRegion)
+            FlowFieldCellRect dirtyRegion,
+            Func<bool> isCurrent = null)
         {
             if (indices == null)
                 throw new ArgumentNullException(nameof(indices));
@@ -86,17 +96,22 @@ namespace Common.FlowField
                 grid.FromFlatIndex(index, out int x, out int z);
                 if (x >= dirtyRegion.MinX && x <= dirtyRegion.MaxX
                     && z >= dirtyRegion.MinZ && z <= dirtyRegion.MaxZ)
-                    ApplyModifierToCell(grid, surface, workspace, modifier, index);
+                {
+                    if (!ApplyModifierToCell(grid, surface, workspace, modifier, index, isCurrent))
+                        return false;
+                }
             }
+            return true;
         }
 
-        private static void ApplyModifierLayer(
+        private static bool ApplyModifierLayer(
             FlowFieldGridSpace grid,
             FlowFieldSurfaceData surface,
             FlowFieldWorkspace workspace,
             IFlowFieldModifierSnapshot modifier,
             bool[] influenceMask,
-            FlowFieldCellRect dirtyRegion)
+            FlowFieldCellRect dirtyRegion,
+            Func<bool> isCurrent = null)
         {
             for (int index = 0; index < grid.CellCount; index++)
             {
@@ -105,23 +120,27 @@ namespace Common.FlowField
                 grid.FromFlatIndex(index, out int x, out int z);
                 if (x >= dirtyRegion.MinX && x <= dirtyRegion.MaxX
                     && z >= dirtyRegion.MinZ && z <= dirtyRegion.MaxZ)
-                    ApplyModifierToCell(grid, surface, workspace, modifier, index);
+                {
+                    if (!ApplyModifierToCell(grid, surface, workspace, modifier, index, isCurrent))
+                        return false;
+                }
             }
+            return true;
         }
 
-        private static void ApplyModifierToCell(
+        private static bool ApplyModifierToCell(
             FlowFieldGridSpace grid,
             FlowFieldSurfaceData surface,
             FlowFieldWorkspace workspace,
             IFlowFieldModifierSnapshot modifier,
-            int index)
+            int index,
+            Func<bool> isCurrent)
         {
             if (!surface.IsSurfaceValid(index)
                 || workspace.Blocked[index]
                 || (workspace.GoalFlags[index] & (FlowFieldGoalFlags.Anchor | FlowFieldGoalFlags.Unreachable)) != 0)
-                return;
+                return true;
 
-            workspace.ModifierInfluence[index] = true;
             grid.FromFlatIndex(index, out int cellX, out int cellZ);
             Vector3 surfaceNormal = surface.GetSurfaceNormal(index);
             var context = new FlowFieldVectorModifierContext(
@@ -137,10 +156,16 @@ namespace Common.FlowField
                 workspace.FinalDirections[index],
                 workspace.FinalSpeedMultipliers[index]);
             FlowFieldVectorState candidate = modifier.Modify(in current, in context);
+            // User code may have released or restarted the owner and its arrays.
+            // Validate ownership before validating the returned value or writing.
+            if (isCurrent?.Invoke() == false)
+                return false;
             FlowFieldVectorUtility.ValidateModifierOutput(in candidate, surfaceNormal);
 
+            workspace.ModifierInfluence[index] = true;
             workspace.FinalDirections[index] = candidate.Direction;
             workspace.FinalSpeedMultipliers[index] = candidate.SpeedMultiplier;
+            return true;
         }
 
         private static void BuildBaseField(
@@ -211,19 +236,22 @@ namespace Common.FlowField
             }
         }
 
-        internal static void ComposeRegion(
+        internal static bool ComposeRegion(
             FlowFieldGridSpace grid,
             FlowFieldSurfaceData surface,
             FlowFieldWorkspace workspace,
             IReadOnlyList<FlowFieldModifierLayer> modifierLayers,
-            FlowFieldCellRect dirtyRegion)
+            FlowFieldCellRect dirtyRegion,
+            Func<bool> isCurrent = null)
         {
+            if (isCurrent?.Invoke() == false)
+                return false;
             ValidateWorkspace(grid, surface, workspace);
             if (modifierLayers == null)
                 throw new ArgumentNullException(nameof(modifierLayers));
             if (!dirtyRegion.IsValid)
                 dirtyRegion = FlowFieldCellRect.Full(grid);
-            ApplyModifiers(grid, surface, workspace, modifierLayers, dirtyRegion);
+            return ApplyModifiers(grid, surface, workspace, modifierLayers, dirtyRegion, isCurrent);
         }
 
         private static void ClearFinalRegionFromBase(
@@ -268,47 +296,11 @@ namespace Common.FlowField
     }
 
     /// <summary>
-    /// Direct cell sampler for the committed field. A position is resolved to
-    /// its owning cell; no interpolation can leak a direction across a wall.
+    /// Samples the latest staging escape direction for the safety overlay.
+    /// Ordinary public samples are read from the committed FieldStore.
     /// </summary>
     internal static class FlowFieldCellSampler
     {
-        internal static bool TrySample(
-            FlowFieldGridSpace grid,
-            FlowFieldSurfaceData surface,
-            FlowFieldWorkspace workspace,
-            Vector3 worldPosition,
-            out FlowFieldSample sample)
-        {
-            sample = FlowFieldSample.Stopped;
-            if (!grid.IsValid
-                || surface == null
-                || !surface.IsValid
-                || workspace == null
-                || workspace.Capacity != grid.CellCount
-                || !grid.TryWorldToLocal(worldPosition, out int x, out int z))
-                return false;
-
-            int index = grid.ToFlatIndex(x, z);
-            if (!surface.IsSurfaceValid(index))
-                return true;
-
-            Vector3 normal = FlowFieldVectorUtility.ValidateSurfaceNormal(surface.GetSurfaceNormal(index));
-            Vector3 direction = workspace.FinalDirections[index];
-            if (direction.sqrMagnitude > FlowFieldVectorUtility.DIRECTION_EPSILON_SQR)
-                direction = Vector3.ProjectOnPlane(direction, normal).normalized;
-            else
-                direction = Vector3.zero;
-
-            sample = new FlowFieldSample(
-                direction,
-                workspace.FinalSpeedMultipliers[index],
-                normal,
-                true,
-                true);
-            return true;
-        }
-
         internal static bool TrySampleEscape(
             FlowFieldGridSpace grid,
             FlowFieldSurfaceData surface,

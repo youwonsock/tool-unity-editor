@@ -1,0 +1,12 @@
+{
+    "name": "Common.OptimizeTool.Samples.Editor",
+    "rootNamespace": "Common.OptimizeTool.Samples.Editor",
+    "references": [
+        "Common.OptimizeTool",
+        "Common.OptimizeTool.Samples"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "autoReferenced": true
+}

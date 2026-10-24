@@ -1,0 +1,1966 @@
+{
+  "dateKst": "2026-10-24",
+  "unityVersion": "2023.2.20f1",
+  "environment": "macOS; isolated Unity project containing identical TransformPath C#/asmdef, API baseline and original scene/prefab/settings/samples; graphical EditMode and batchmode PlayMode",
+  "sourceSha256": "90c69cd8a6dc2bf72bbf3631dd2dcc2bc9f75593b911ac8a4185cbb6ffba464a",
+  "sourceHashAlgorithm": "SHA256 of sorted relative path + NUL + file SHA256 + newline",
+  "sourceFilesCompared": 67,
+  "sourceDifferences": [],
+  "structure": {
+    "before": {
+      "files": 37,
+      "lines": 8418,
+      "classes": 36,
+      "interfaces": 16
+    },
+    "after": {
+      "files": 37,
+      "lines": 8327,
+      "classes": 36,
+      "interfaces": 16
+    },
+    "statelessTypesMadeStatic": [
+      "PathEventRuntime",
+      "PathQueueCoordinator"
+    ],
+    "removedState": [
+      "PathEventHandler._preparedEvents",
+      "PathEventHandler._eventRuntime",
+      "PathEventScheduler._revision",
+      "QueuedPathManager._coordinator",
+      "PathQueueCoordinator copied settings properties"
+    ]
+  },
+  "publicApi": {
+    "symbols": 727,
+    "serializedFieldEntries": 66,
+    "manifestSha256": "c88746f163553619e2ee478dfbd49c91f4b1ae7102e6a929dd0c7effb63b2a72",
+    "baselineUnchanged": true,
+    "reflectionComparisonPassed": true
+  },
+  "preservation": {
+    "protectedBaselineFiles": 141,
+    "protectedChanged": [],
+    "existingMetaFiles": 122,
+    "metaPathsGuidAndBytesPreserved": true,
+    "fileMoves": [],
+    "namespaceChanges": [],
+    "formerlySerializedAsChanges": [],
+    "asmdefFilesCompared": 5,
+    "asmdefChanges": [],
+    "scenePrefabSettingsSamplesFilesCompared": 19,
+    "originalImageFilesAndMetaCompared": 26,
+    "imageChanges": [],
+    "duplicateGuids": {}
+  },
+  "tests": {
+    "beforeCompatibility": {
+      "total": 20,
+      "passed": 18,
+      "failed": 2,
+      "skipped": 0,
+      "result": "Failed(Child)",
+      "startUtc": "2026-10-23 16:25:32Z",
+      "durationSeconds": 0.1006215,
+      "xmlSha256": "bc10ac1f04ff363fde21a4cfeb9fb220d6d21c24ecce15432d009dac5ea24efc",
+      "cases": [
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Single\",False,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Single\",True,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Single\",False,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Single\",True,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Aggregate\",False,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Aggregate\",True,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Aggregate\",False,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Aggregate\",True,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Sequence\",False,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Sequence\",True,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Sequence\",False,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Sequence\",True,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.PauseCallbackReplacementKeepsNewPlaybackQueueState(False)",
+          "result": "Failed",
+          "failure": "  Expected: False\n  But was:  True\n"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.PauseCallbackReplacementKeepsNewPlaybackQueueState(True)",
+          "result": "Failed",
+          "failure": "  Expected: True\n  But was:  False\n"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.PauseFromFacadeOrUnderlyingKeepsQueueAndNotifications(False,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.PauseFromFacadeOrUnderlyingKeepsQueueAndNotifications(False,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.PauseFromFacadeOrUnderlyingKeepsQueueAndNotifications(True,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.PauseFromFacadeOrUnderlyingKeepsQueueAndNotifications(True,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.RepeatedPreparationKeepsEqualTimeOrderAndCancelsPreviousDelays(False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.RepeatedPreparationKeepsEqualTimeOrderAndCancelsPreviousDelays(True)",
+          "result": "Passed"
+        }
+      ]
+    },
+    "graphicalEditMode": {
+      "total": 129,
+      "passed": 129,
+      "failed": 0,
+      "skipped": 0,
+      "result": "Passed",
+      "startUtc": "2026-10-23 16:33:41Z",
+      "durationSeconds": 11.5491021,
+      "xmlSha256": "d437585c2a52d2d2f37db745109c3e22f3e4384bad705c225fd8c1da05d8e68a",
+      "cases": [
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Single\",False,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Single\",True,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Single\",False,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Single\",True,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Aggregate\",False,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Aggregate\",True,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Aggregate\",False,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Aggregate\",True,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Sequence\",False,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Sequence\",True,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Sequence\",False,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Sequence\",True,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.ManagerSettingChangesFromAgentCallbackApplyOnNextFrame",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.PauseCallbackReplacementKeepsNewPlaybackQueueState(False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.PauseCallbackReplacementKeepsNewPlaybackQueueState(True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.PauseFromFacadeOrUnderlyingKeepsQueueAndNotifications(False,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.PauseFromFacadeOrUnderlyingKeepsQueueAndNotifications(False,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.PauseFromFacadeOrUnderlyingKeepsQueueAndNotifications(True,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.PauseFromFacadeOrUnderlyingKeepsQueueAndNotifications(True,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.ReleasedFacadeKeepsPauseFallbackForExternallyRestartedFollower",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.RepeatedPreparationKeepsEqualTimeOrderAndCancelsPreviousDelays(False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.RepeatedPreparationKeepsEqualTimeOrderAndCancelsPreviousDelays(True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathEditorUiTests.AutomaticJointLinkingFollowsEitherEndpointAndCanBeDisabled",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathEditorUiTests.DisabledGroupDoesNotSynchronize",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathEditorUiTests.GroupMemberMoveUndoRedoRestoresAllMembers",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathEditorUiTests.InspectorGroupAlignmentSupportsUndoRedo",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathEditorUiTests.InspectorGroupListEditsAreTrackedWithoutHierarchyChanges",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathEditorUiTests.JointMoveUndoRedoRestoresBothEndpoints",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathEditorUiTests.MultiPathInspectorForceSyncAndRebuildButtonsExecute",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathEditorUiTests.RegistryInspectorValidateAndAlignButtonsExecute",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathEditorUiTests.WaypointGroupSyncFollowsAnyMemberAndRebuildsGeometry",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPerformanceProbes.DriverAndQueueSteadyState(100)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPerformanceProbes.DriverAndQueueSteadyState(500)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPerformanceProbes.DriverAndQueueSteadyState(1000)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPerformanceProbes.LinearGeometryRebuild(4)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPerformanceProbes.LinearGeometryRebuild(16)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPerformanceProbes.LinearGeometryRebuild(64)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPerformanceProbes.TimeCurveInverseWithQueueCap",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.AlreadyDisabledCharacterControllerIsNotEnabledOnStop",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.CharacterControllerIsSuppressedUntilPlaybackEnds(\"stop\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.CharacterControllerIsSuppressedUntilPlaybackEnds(\"release\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.CharacterControllerIsSuppressedUntilPlaybackEnds(\"complete\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.JointSynchronizationFollowsThePointWithLargestMovement",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.LegacySegmentFieldAliasAndShowcaseScriptReferencesArePreserved",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.PausingFromStartCallbackKeepsControllerSuppressedUntilStop",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.ProgressBeyondQueueCapReportsInvalidationAndStops",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.ProgressCapPreventsPrematureCompletionAndLoop(TimeBased,False,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.ProgressCapPreventsPrematureCompletionAndLoop(TimeBased,True,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.ProgressCapPreventsPrematureCompletionAndLoop(SpeedBased,False,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.ProgressCapPreventsPrematureCompletionAndLoop(SpeedBased,True,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.ProgressCapPreventsPrematureCompletionAndLoop(TimeBased,False,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.ProgressCapPreventsPrematureCompletionAndLoop(TimeBased,True,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.QueueAndFreeTransitionsPreserveCorrectRegistrationAndCompletion",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.QueueReleasesOnlyAfterDelayAndExtraSpacingThenSmoothsSpeed",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.RemovingHeadPreservesOrderBeforeNextManagerTick",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.ResumeEventAppliesItsTargetMovementValue(SpeedBased)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.ResumeEventAppliesItsTargetMovementValue(TimeBased)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.ReversedRegistrationStillAppliesFirstQueueResultBeforeMovement",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.SequenceCannotCrossCappedBoundaryAndFinishesAfterCapIsReleased",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.StopCallbackStartingNewPlaybackKeepsControllerSuppressed",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.WaypointGroupFollowsMovedMemberWithoutChangingRotation",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.YOnlyAlignmentPreservesOtherAxesAndRotationCanRemainFixed",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.AggregatePathDataRefreshKeepsOverrideAndPlaybackIdentity",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.CurveSeekRoundTripsDistanceProgress(0.1f)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.CurveSeekRoundTripsDistanceProgress(0.5f)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.CurveSeekRoundTripsDistanceProgress(0.9f)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.DistanceStepConsumesOnlyTimeNeededToReachConstraint",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.EventDefinitionChangeStopsWithoutDispatchingNewEvents(\"Single\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.EventDefinitionChangeStopsWithoutDispatchingNewEvents(\"Aggregate\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.EventDefinitionChangeStopsWithoutDispatchingNewEvents(\"Sequence\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.GeometryRefreshPreservesLocalProgressAndDefersWhilePaused(\"Single\",False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.GeometryRefreshPreservesLocalProgressAndDefersWhilePaused(\"Single\",True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.GeometryRefreshPreservesLocalProgressAndDefersWhilePaused(\"Aggregate\",False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.GeometryRefreshPreservesLocalProgressAndDefersWhilePaused(\"Aggregate\",True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.GeometryRefreshPreservesLocalProgressAndDefersWhilePaused(\"Sequence\",False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.GeometryRefreshPreservesLocalProgressAndDefersWhilePaused(\"Sequence\",True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.InvalidatedQueueCallbackCanAcquireNewRegistration",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.InvalidProviderStopsAndRestoresController(\"Single\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.InvalidProviderStopsAndRestoresController(\"Aggregate\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.InvalidProviderStopsAndRestoresController(\"Sequence\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.MovementChangeOnlyStopsPlaybackThatConsumesProviderSettings(\"Single\",False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.MovementChangeOnlyStopsPlaybackThatConsumesProviderSettings(\"Aggregate\",True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.MovementChangeOnlyStopsPlaybackThatConsumesProviderSettings(\"Sequence\",True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.QueueHoldPolicyManualAndExternalHoldsKeepDelay(False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.QueueHoldPolicyManualAndExternalHoldsKeepDelay(True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.QueueHoldPolicyWaitsForBothDelayAndSpacing",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.ScalarAdjustmentUsesGameTimeAndCannotAddressReplacement(TimeBased)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.ScalarAdjustmentUsesGameTimeAndCannotAddressReplacement(SpeedBased)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.SequenceCarriesFrameTimeAndHonorsPauseFromBoundaryCallback(False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.SequenceCarriesFrameTimeAndHonorsPauseFromBoundaryCallback(True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.SequenceProviderReplacementStopsBeforeUsingNewRoute",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.SequenceStopsWhenItsEffectiveDescriptorMovementChanges(False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.SequenceStopsWhenItsEffectiveDescriptorMovementChanges(True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.TimeStepConsumesOnlyTimeNeededToReachConstraint",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.AggregateAndSequenceSeekAgreeInLastSegment",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.AggregatePlaybackMovesThroughLastSegmentAndCompletesOnce(TimeBased)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.AggregatePlaybackMovesThroughLastSegmentAndCompletesOnce(SpeedBased)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.CallbackFailureDisposesEffectsAndRestoresCharacterController",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.DriverDefersPlaybackReplacedByAnEarlierTick",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.DriverDefersReregistrationEvenWhenPlaybackIdIsUnchanged",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.DriverKeepsPeerOrderIgnoresDuplicatesAndDefersNewItems",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.DriverReportsOriginalFaultAndContinuesOtherItems",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.DriverSkipsAnItemRemovedByAnEarlierTick",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.MultiPathBoundaryBelongsToTheNextSegment(0.0f,0.0f)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.MultiPathBoundaryBelongsToTheNextSegment(9.99f,9.99f)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.MultiPathBoundaryBelongsToTheNextSegment(10.0f,100.0f)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.MultiPathBoundaryBelongsToTheNextSegment(10.01f,100.01f)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.MultiPathBoundaryBelongsToTheNextSegment(20.0f,110.0f)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.MultiPathBoundaryBelongsToTheNextSegment(29.99f,119.99f)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.MultiPathBoundaryBelongsToTheNextSegment(30.0f,120.0f)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.MultiPathSamplesEverySegmentAndClampsOutsideTheRoute(1)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.MultiPathSamplesEverySegmentAndClampsOutsideTheRoute(2)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.MultiPathSamplesEverySegmentAndClampsOutsideTheRoute(3)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.MultiPathSamplesEverySegmentAndClampsOutsideTheRoute(5)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.NestedMultiPathSamplesChildLastSegment",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.PlaybackScopeClearsEffectsAndDelayedEventsOnEveryExit(\"stop\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.PlaybackScopeClearsEffectsAndDelayedEventsOnEveryExit(\"release\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.PlaybackScopeClearsEffectsAndDelayedEventsOnEveryExit(\"complete\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.PlaybackScopeClearsEffectsAndDelayedEventsOnEveryExit(\"replace\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.StopCallbackCanStartNewPlaybackAndInstallNewEffects",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathSimplificationTests.DestroyedUnderlyingFollowerKeepsLegacyReadDefaults",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathSimplificationTests.LegacyInterfacesKeepAssignmentAndCommandBehavior(False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathSimplificationTests.LegacyInterfacesKeepAssignmentAndCommandBehavior(True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathSimplificationTests.PlaybackIdentityIncreasesAcrossReplacementStopAndRelease",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathSimplificationTests.PublicApiAndSerializedFieldsMatchBaseline",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathSimplificationTests.QueueCallbackPauseInterruptsOldMovingNotification",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathSimplificationTests.QueueCallbackSnapshotSurvivesListenerRemoval",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathSimplificationTests.QueueInitReleaseCyclesDoNotDuplicatePublicNotifications",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathSimplificationTests.StoppingOlderFollowerDoesNotReleaseNewerTimeScaleOwner",
+          "result": "Passed"
+        }
+      ],
+      "compilerErrors": [],
+      "processExitCode": 0
+    },
+    "playMode": {
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "result": "Passed",
+      "startUtc": "2026-10-23 16:34:42Z",
+      "durationSeconds": 3.6115263,
+      "xmlSha256": "5de37ec74ab7a5eba9675f13b569e90897ec0d45003bb85296fbe37ff9542b2f",
+      "cases": [
+        {
+          "name": "Common.TransformPath.Tests.PlayMode.TransformPathPortPlayModeTests.AggregateMultiPathTraversesLastSegmentInActualFrames",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.PlayMode.TransformPathPortPlayModeTests.AggregateRefreshPreservesOverrideAndPausedPoseAcrossActualFrames",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.PlayMode.TransformPathPortPlayModeTests.DisablingActorRestoresCharacterControllerDuringActualPlayback",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.PlayMode.TransformPathPortPlayModeTests.ExistingShowcaseRunsAllLanesAndQueuePauseResume",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.PlayMode.TransformPathPortPlayModeTests.MixedSequenceLoopPauseAndCompletionKeepBoundaryNotifications",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.PlayMode.TransformPathPortPlayModeTests.NaturalCompletionRestoresCharacterControllerAndFinalPosition",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.PlayMode.TransformPathPortPlayModeTests.PauseCallbackReplacementRetainsRegistrationAndMovesAcrossFrames",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.PlayMode.TransformPathPortPlayModeTests.QueueFacadeKeepsIdentityAndSingleNotificationsAcrossEnableCycles",
+          "result": "Passed"
+        }
+      ],
+      "compilerErrors": [],
+      "processExitCode": 0
+    }
+  },
+  "diagnostics": {
+    "expandedBaseline": {
+      "total": 22,
+      "passed": 19,
+      "failed": 3,
+      "skipped": 0,
+      "result": "Failed(Child)",
+      "startUtc": "2026-10-23 16:29:25Z",
+      "durationSeconds": 0.0776164,
+      "xmlSha256": "9c76fcf2498339f9e439d95913c97d9bfe9af4964a4d879b35f1d705d477987d",
+      "cases": [
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Single\",False,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Single\",True,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Single\",False,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Single\",True,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Aggregate\",False,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Aggregate\",True,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Aggregate\",False,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Aggregate\",True,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Sequence\",False,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Sequence\",True,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Sequence\",False,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Sequence\",True,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.ManagerSettingChangesFromAgentCallbackApplyOnNextFrame",
+          "result": "Failed",
+          "failure": "  Expected: 0\n  But was:  1.19209291E-08f\n"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.PauseCallbackReplacementKeepsNewPlaybackQueueState(False)",
+          "result": "Failed",
+          "failure": "  Expected: False\n  But was:  True\n"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.PauseCallbackReplacementKeepsNewPlaybackQueueState(True)",
+          "result": "Failed",
+          "failure": "  Expected: True\n  But was:  False\n"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.PauseFromFacadeOrUnderlyingKeepsQueueAndNotifications(False,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.PauseFromFacadeOrUnderlyingKeepsQueueAndNotifications(False,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.PauseFromFacadeOrUnderlyingKeepsQueueAndNotifications(True,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.PauseFromFacadeOrUnderlyingKeepsQueueAndNotifications(True,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.ReleasedFacadeKeepsPauseFallbackForExternallyRestartedFollower",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.RepeatedPreparationKeepsEqualTimeOrderAndCancelsPreviousDelays(False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.RepeatedPreparationKeepsEqualTimeOrderAndCancelsPreviousDelays(True)",
+          "result": "Passed"
+        }
+      ]
+    },
+    "initialEditMode": {
+      "total": 129,
+      "passed": 128,
+      "failed": 1,
+      "skipped": 0,
+      "result": "Failed(Child)",
+      "startUtc": "2026-10-23 16:30:18Z",
+      "durationSeconds": 11.5363912,
+      "xmlSha256": "e0f0783cfb21a20e7f9c15095716afcb039378e2816fe2ec67aa02279ef0090f",
+      "cases": [
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Single\",False,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Single\",True,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Single\",False,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Single\",True,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Aggregate\",False,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Aggregate\",True,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Aggregate\",False,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Aggregate\",True,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Sequence\",False,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Sequence\",True,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Sequence\",False,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Sequence\",True,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.ManagerSettingChangesFromAgentCallbackApplyOnNextFrame",
+          "result": "Failed",
+          "failure": "  Expected: 0\n  But was:  1.19209291E-08f\n"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.PauseCallbackReplacementKeepsNewPlaybackQueueState(False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.PauseCallbackReplacementKeepsNewPlaybackQueueState(True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.PauseFromFacadeOrUnderlyingKeepsQueueAndNotifications(False,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.PauseFromFacadeOrUnderlyingKeepsQueueAndNotifications(False,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.PauseFromFacadeOrUnderlyingKeepsQueueAndNotifications(True,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.PauseFromFacadeOrUnderlyingKeepsQueueAndNotifications(True,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.ReleasedFacadeKeepsPauseFallbackForExternallyRestartedFollower",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.RepeatedPreparationKeepsEqualTimeOrderAndCancelsPreviousDelays(False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.RepeatedPreparationKeepsEqualTimeOrderAndCancelsPreviousDelays(True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathEditorUiTests.AutomaticJointLinkingFollowsEitherEndpointAndCanBeDisabled",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathEditorUiTests.DisabledGroupDoesNotSynchronize",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathEditorUiTests.GroupMemberMoveUndoRedoRestoresAllMembers",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathEditorUiTests.InspectorGroupAlignmentSupportsUndoRedo",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathEditorUiTests.InspectorGroupListEditsAreTrackedWithoutHierarchyChanges",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathEditorUiTests.JointMoveUndoRedoRestoresBothEndpoints",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathEditorUiTests.MultiPathInspectorForceSyncAndRebuildButtonsExecute",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathEditorUiTests.RegistryInspectorValidateAndAlignButtonsExecute",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathEditorUiTests.WaypointGroupSyncFollowsAnyMemberAndRebuildsGeometry",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPerformanceProbes.DriverAndQueueSteadyState(100)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPerformanceProbes.DriverAndQueueSteadyState(500)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPerformanceProbes.DriverAndQueueSteadyState(1000)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPerformanceProbes.LinearGeometryRebuild(4)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPerformanceProbes.LinearGeometryRebuild(16)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPerformanceProbes.LinearGeometryRebuild(64)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPerformanceProbes.TimeCurveInverseWithQueueCap",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.AlreadyDisabledCharacterControllerIsNotEnabledOnStop",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.CharacterControllerIsSuppressedUntilPlaybackEnds(\"stop\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.CharacterControllerIsSuppressedUntilPlaybackEnds(\"release\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.CharacterControllerIsSuppressedUntilPlaybackEnds(\"complete\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.JointSynchronizationFollowsThePointWithLargestMovement",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.LegacySegmentFieldAliasAndShowcaseScriptReferencesArePreserved",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.PausingFromStartCallbackKeepsControllerSuppressedUntilStop",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.ProgressBeyondQueueCapReportsInvalidationAndStops",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.ProgressCapPreventsPrematureCompletionAndLoop(TimeBased,False,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.ProgressCapPreventsPrematureCompletionAndLoop(TimeBased,True,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.ProgressCapPreventsPrematureCompletionAndLoop(SpeedBased,False,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.ProgressCapPreventsPrematureCompletionAndLoop(SpeedBased,True,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.ProgressCapPreventsPrematureCompletionAndLoop(TimeBased,False,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.ProgressCapPreventsPrematureCompletionAndLoop(TimeBased,True,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.QueueAndFreeTransitionsPreserveCorrectRegistrationAndCompletion",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.QueueReleasesOnlyAfterDelayAndExtraSpacingThenSmoothsSpeed",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.RemovingHeadPreservesOrderBeforeNextManagerTick",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.ResumeEventAppliesItsTargetMovementValue(SpeedBased)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.ResumeEventAppliesItsTargetMovementValue(TimeBased)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.ReversedRegistrationStillAppliesFirstQueueResultBeforeMovement",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.SequenceCannotCrossCappedBoundaryAndFinishesAfterCapIsReleased",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.StopCallbackStartingNewPlaybackKeepsControllerSuppressed",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.WaypointGroupFollowsMovedMemberWithoutChangingRotation",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.YOnlyAlignmentPreservesOtherAxesAndRotationCanRemainFixed",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.AggregatePathDataRefreshKeepsOverrideAndPlaybackIdentity",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.CurveSeekRoundTripsDistanceProgress(0.1f)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.CurveSeekRoundTripsDistanceProgress(0.5f)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.CurveSeekRoundTripsDistanceProgress(0.9f)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.DistanceStepConsumesOnlyTimeNeededToReachConstraint",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.EventDefinitionChangeStopsWithoutDispatchingNewEvents(\"Single\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.EventDefinitionChangeStopsWithoutDispatchingNewEvents(\"Aggregate\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.EventDefinitionChangeStopsWithoutDispatchingNewEvents(\"Sequence\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.GeometryRefreshPreservesLocalProgressAndDefersWhilePaused(\"Single\",False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.GeometryRefreshPreservesLocalProgressAndDefersWhilePaused(\"Single\",True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.GeometryRefreshPreservesLocalProgressAndDefersWhilePaused(\"Aggregate\",False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.GeometryRefreshPreservesLocalProgressAndDefersWhilePaused(\"Aggregate\",True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.GeometryRefreshPreservesLocalProgressAndDefersWhilePaused(\"Sequence\",False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.GeometryRefreshPreservesLocalProgressAndDefersWhilePaused(\"Sequence\",True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.InvalidatedQueueCallbackCanAcquireNewRegistration",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.InvalidProviderStopsAndRestoresController(\"Single\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.InvalidProviderStopsAndRestoresController(\"Aggregate\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.InvalidProviderStopsAndRestoresController(\"Sequence\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.MovementChangeOnlyStopsPlaybackThatConsumesProviderSettings(\"Single\",False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.MovementChangeOnlyStopsPlaybackThatConsumesProviderSettings(\"Aggregate\",True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.MovementChangeOnlyStopsPlaybackThatConsumesProviderSettings(\"Sequence\",True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.QueueHoldPolicyManualAndExternalHoldsKeepDelay(False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.QueueHoldPolicyManualAndExternalHoldsKeepDelay(True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.QueueHoldPolicyWaitsForBothDelayAndSpacing",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.ScalarAdjustmentUsesGameTimeAndCannotAddressReplacement(TimeBased)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.ScalarAdjustmentUsesGameTimeAndCannotAddressReplacement(SpeedBased)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.SequenceCarriesFrameTimeAndHonorsPauseFromBoundaryCallback(False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.SequenceCarriesFrameTimeAndHonorsPauseFromBoundaryCallback(True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.SequenceProviderReplacementStopsBeforeUsingNewRoute",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.SequenceStopsWhenItsEffectiveDescriptorMovementChanges(False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.SequenceStopsWhenItsEffectiveDescriptorMovementChanges(True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.TimeStepConsumesOnlyTimeNeededToReachConstraint",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.AggregateAndSequenceSeekAgreeInLastSegment",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.AggregatePlaybackMovesThroughLastSegmentAndCompletesOnce(TimeBased)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.AggregatePlaybackMovesThroughLastSegmentAndCompletesOnce(SpeedBased)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.CallbackFailureDisposesEffectsAndRestoresCharacterController",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.DriverDefersPlaybackReplacedByAnEarlierTick",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.DriverDefersReregistrationEvenWhenPlaybackIdIsUnchanged",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.DriverKeepsPeerOrderIgnoresDuplicatesAndDefersNewItems",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.DriverReportsOriginalFaultAndContinuesOtherItems",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.DriverSkipsAnItemRemovedByAnEarlierTick",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.MultiPathBoundaryBelongsToTheNextSegment(0.0f,0.0f)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.MultiPathBoundaryBelongsToTheNextSegment(9.99f,9.99f)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.MultiPathBoundaryBelongsToTheNextSegment(10.0f,100.0f)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.MultiPathBoundaryBelongsToTheNextSegment(10.01f,100.01f)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.MultiPathBoundaryBelongsToTheNextSegment(20.0f,110.0f)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.MultiPathBoundaryBelongsToTheNextSegment(29.99f,119.99f)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.MultiPathBoundaryBelongsToTheNextSegment(30.0f,120.0f)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.MultiPathSamplesEverySegmentAndClampsOutsideTheRoute(1)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.MultiPathSamplesEverySegmentAndClampsOutsideTheRoute(2)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.MultiPathSamplesEverySegmentAndClampsOutsideTheRoute(3)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.MultiPathSamplesEverySegmentAndClampsOutsideTheRoute(5)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.NestedMultiPathSamplesChildLastSegment",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.PlaybackScopeClearsEffectsAndDelayedEventsOnEveryExit(\"stop\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.PlaybackScopeClearsEffectsAndDelayedEventsOnEveryExit(\"release\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.PlaybackScopeClearsEffectsAndDelayedEventsOnEveryExit(\"complete\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.PlaybackScopeClearsEffectsAndDelayedEventsOnEveryExit(\"replace\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.StopCallbackCanStartNewPlaybackAndInstallNewEffects",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathSimplificationTests.DestroyedUnderlyingFollowerKeepsLegacyReadDefaults",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathSimplificationTests.LegacyInterfacesKeepAssignmentAndCommandBehavior(False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathSimplificationTests.LegacyInterfacesKeepAssignmentAndCommandBehavior(True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathSimplificationTests.PlaybackIdentityIncreasesAcrossReplacementStopAndRelease",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathSimplificationTests.PublicApiAndSerializedFieldsMatchBaseline",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathSimplificationTests.QueueCallbackPauseInterruptsOldMovingNotification",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathSimplificationTests.QueueCallbackSnapshotSurvivesListenerRemoval",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathSimplificationTests.QueueInitReleaseCyclesDoNotDuplicatePublicNotifications",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathSimplificationTests.StoppingOlderFollowerDoesNotReleaseNewerTimeScaleOwner",
+          "result": "Passed"
+        }
+      ]
+    },
+    "intermediateEditMode": {
+      "total": 129,
+      "passed": 129,
+      "failed": 0,
+      "skipped": 0,
+      "result": "Passed",
+      "startUtc": "2026-10-23 16:31:32Z",
+      "durationSeconds": 13.857076,
+      "xmlSha256": "b2e918cb39fe5e9bf7fd1f6506d86fd2ff7ff3575d4a4d6dc5e6a0e7d0588f5c",
+      "cases": [
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Single\",False,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Single\",True,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Single\",False,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Single\",True,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Aggregate\",False,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Aggregate\",True,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Aggregate\",False,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Aggregate\",True,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Sequence\",False,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Sequence\",True,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Sequence\",False,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.BoundaryKeepsEventTransitionAndCompletionOrder(\"Sequence\",True,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.ManagerSettingChangesFromAgentCallbackApplyOnNextFrame",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.PauseCallbackReplacementKeepsNewPlaybackQueueState(False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.PauseCallbackReplacementKeepsNewPlaybackQueueState(True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.PauseFromFacadeOrUnderlyingKeepsQueueAndNotifications(False,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.PauseFromFacadeOrUnderlyingKeepsQueueAndNotifications(False,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.PauseFromFacadeOrUnderlyingKeepsQueueAndNotifications(True,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.PauseFromFacadeOrUnderlyingKeepsQueueAndNotifications(True,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.ReleasedFacadeKeepsPauseFallbackForExternallyRestartedFollower",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.RepeatedPreparationKeepsEqualTimeOrderAndCancelsPreviousDelays(False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.RepeatedPreparationKeepsEqualTimeOrderAndCancelsPreviousDelays(True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathEditorUiTests.AutomaticJointLinkingFollowsEitherEndpointAndCanBeDisabled",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathEditorUiTests.DisabledGroupDoesNotSynchronize",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathEditorUiTests.GroupMemberMoveUndoRedoRestoresAllMembers",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathEditorUiTests.InspectorGroupAlignmentSupportsUndoRedo",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathEditorUiTests.InspectorGroupListEditsAreTrackedWithoutHierarchyChanges",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathEditorUiTests.JointMoveUndoRedoRestoresBothEndpoints",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathEditorUiTests.MultiPathInspectorForceSyncAndRebuildButtonsExecute",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathEditorUiTests.RegistryInspectorValidateAndAlignButtonsExecute",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathEditorUiTests.WaypointGroupSyncFollowsAnyMemberAndRebuildsGeometry",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPerformanceProbes.DriverAndQueueSteadyState(100)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPerformanceProbes.DriverAndQueueSteadyState(500)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPerformanceProbes.DriverAndQueueSteadyState(1000)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPerformanceProbes.LinearGeometryRebuild(4)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPerformanceProbes.LinearGeometryRebuild(16)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPerformanceProbes.LinearGeometryRebuild(64)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPerformanceProbes.TimeCurveInverseWithQueueCap",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.AlreadyDisabledCharacterControllerIsNotEnabledOnStop",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.CharacterControllerIsSuppressedUntilPlaybackEnds(\"stop\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.CharacterControllerIsSuppressedUntilPlaybackEnds(\"release\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.CharacterControllerIsSuppressedUntilPlaybackEnds(\"complete\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.JointSynchronizationFollowsThePointWithLargestMovement",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.LegacySegmentFieldAliasAndShowcaseScriptReferencesArePreserved",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.PausingFromStartCallbackKeepsControllerSuppressedUntilStop",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.ProgressBeyondQueueCapReportsInvalidationAndStops",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.ProgressCapPreventsPrematureCompletionAndLoop(TimeBased,False,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.ProgressCapPreventsPrematureCompletionAndLoop(TimeBased,True,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.ProgressCapPreventsPrematureCompletionAndLoop(SpeedBased,False,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.ProgressCapPreventsPrematureCompletionAndLoop(SpeedBased,True,False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.ProgressCapPreventsPrematureCompletionAndLoop(TimeBased,False,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.ProgressCapPreventsPrematureCompletionAndLoop(TimeBased,True,True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.QueueAndFreeTransitionsPreserveCorrectRegistrationAndCompletion",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.QueueReleasesOnlyAfterDelayAndExtraSpacingThenSmoothsSpeed",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.RemovingHeadPreservesOrderBeforeNextManagerTick",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.ResumeEventAppliesItsTargetMovementValue(SpeedBased)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.ResumeEventAppliesItsTargetMovementValue(TimeBased)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.ReversedRegistrationStillAppliesFirstQueueResultBeforeMovement",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.SequenceCannotCrossCappedBoundaryAndFinishesAfterCapIsReleased",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.StopCallbackStartingNewPlaybackKeepsControllerSuppressed",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.WaypointGroupFollowsMovedMemberWithoutChangingRotation",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathPortRegressionTests.YOnlyAlignmentPreservesOtherAxesAndRotationCanRemainFixed",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.AggregatePathDataRefreshKeepsOverrideAndPlaybackIdentity",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.CurveSeekRoundTripsDistanceProgress(0.1f)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.CurveSeekRoundTripsDistanceProgress(0.5f)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.CurveSeekRoundTripsDistanceProgress(0.9f)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.DistanceStepConsumesOnlyTimeNeededToReachConstraint",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.EventDefinitionChangeStopsWithoutDispatchingNewEvents(\"Single\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.EventDefinitionChangeStopsWithoutDispatchingNewEvents(\"Aggregate\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.EventDefinitionChangeStopsWithoutDispatchingNewEvents(\"Sequence\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.GeometryRefreshPreservesLocalProgressAndDefersWhilePaused(\"Single\",False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.GeometryRefreshPreservesLocalProgressAndDefersWhilePaused(\"Single\",True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.GeometryRefreshPreservesLocalProgressAndDefersWhilePaused(\"Aggregate\",False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.GeometryRefreshPreservesLocalProgressAndDefersWhilePaused(\"Aggregate\",True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.GeometryRefreshPreservesLocalProgressAndDefersWhilePaused(\"Sequence\",False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.GeometryRefreshPreservesLocalProgressAndDefersWhilePaused(\"Sequence\",True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.InvalidatedQueueCallbackCanAcquireNewRegistration",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.InvalidProviderStopsAndRestoresController(\"Single\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.InvalidProviderStopsAndRestoresController(\"Aggregate\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.InvalidProviderStopsAndRestoresController(\"Sequence\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.MovementChangeOnlyStopsPlaybackThatConsumesProviderSettings(\"Single\",False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.MovementChangeOnlyStopsPlaybackThatConsumesProviderSettings(\"Aggregate\",True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.MovementChangeOnlyStopsPlaybackThatConsumesProviderSettings(\"Sequence\",True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.QueueHoldPolicyManualAndExternalHoldsKeepDelay(False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.QueueHoldPolicyManualAndExternalHoldsKeepDelay(True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.QueueHoldPolicyWaitsForBothDelayAndSpacing",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.ScalarAdjustmentUsesGameTimeAndCannotAddressReplacement(TimeBased)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.ScalarAdjustmentUsesGameTimeAndCannotAddressReplacement(SpeedBased)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.SequenceCarriesFrameTimeAndHonorsPauseFromBoundaryCallback(False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.SequenceCarriesFrameTimeAndHonorsPauseFromBoundaryCallback(True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.SequenceProviderReplacementStopsBeforeUsingNewRoute",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.SequenceStopsWhenItsEffectiveDescriptorMovementChanges(False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.SequenceStopsWhenItsEffectiveDescriptorMovementChanges(True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRefactoringTests.TimeStepConsumesOnlyTimeNeededToReachConstraint",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.AggregateAndSequenceSeekAgreeInLastSegment",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.AggregatePlaybackMovesThroughLastSegmentAndCompletesOnce(TimeBased)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.AggregatePlaybackMovesThroughLastSegmentAndCompletesOnce(SpeedBased)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.CallbackFailureDisposesEffectsAndRestoresCharacterController",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.DriverDefersPlaybackReplacedByAnEarlierTick",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.DriverDefersReregistrationEvenWhenPlaybackIdIsUnchanged",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.DriverKeepsPeerOrderIgnoresDuplicatesAndDefersNewItems",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.DriverReportsOriginalFaultAndContinuesOtherItems",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.DriverSkipsAnItemRemovedByAnEarlierTick",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.MultiPathBoundaryBelongsToTheNextSegment(0.0f,0.0f)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.MultiPathBoundaryBelongsToTheNextSegment(9.99f,9.99f)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.MultiPathBoundaryBelongsToTheNextSegment(10.0f,100.0f)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.MultiPathBoundaryBelongsToTheNextSegment(10.01f,100.01f)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.MultiPathBoundaryBelongsToTheNextSegment(20.0f,110.0f)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.MultiPathBoundaryBelongsToTheNextSegment(29.99f,119.99f)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.MultiPathBoundaryBelongsToTheNextSegment(30.0f,120.0f)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.MultiPathSamplesEverySegmentAndClampsOutsideTheRoute(1)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.MultiPathSamplesEverySegmentAndClampsOutsideTheRoute(2)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.MultiPathSamplesEverySegmentAndClampsOutsideTheRoute(3)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.MultiPathSamplesEverySegmentAndClampsOutsideTheRoute(5)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.NestedMultiPathSamplesChildLastSegment",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.PlaybackScopeClearsEffectsAndDelayedEventsOnEveryExit(\"stop\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.PlaybackScopeClearsEffectsAndDelayedEventsOnEveryExit(\"release\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.PlaybackScopeClearsEffectsAndDelayedEventsOnEveryExit(\"complete\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.PlaybackScopeClearsEffectsAndDelayedEventsOnEveryExit(\"replace\")",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathRuntimeImprovementTests.StopCallbackCanStartNewPlaybackAndInstallNewEffects",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathSimplificationTests.DestroyedUnderlyingFollowerKeepsLegacyReadDefaults",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathSimplificationTests.LegacyInterfacesKeepAssignmentAndCommandBehavior(False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathSimplificationTests.LegacyInterfacesKeepAssignmentAndCommandBehavior(True)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathSimplificationTests.PlaybackIdentityIncreasesAcrossReplacementStopAndRelease",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathSimplificationTests.PublicApiAndSerializedFieldsMatchBaseline",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathSimplificationTests.QueueCallbackPauseInterruptsOldMovingNotification",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathSimplificationTests.QueueCallbackSnapshotSurvivesListenerRemoval",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathSimplificationTests.QueueInitReleaseCyclesDoNotDuplicatePublicNotifications",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathSimplificationTests.StoppingOlderFollowerDoesNotReleaseNewerTimeScaleOwner",
+          "result": "Passed"
+        }
+      ]
+    },
+    "intermediatePlayMode": {
+      "total": 8,
+      "passed": 7,
+      "failed": 1,
+      "skipped": 0,
+      "result": "Failed(Child)",
+      "startUtc": "2026-10-23 16:32:07Z",
+      "durationSeconds": 3.6091327,
+      "xmlSha256": "9c53f13a596d9f51ec817c6575dff495df3f9da6a8b29194cd189fa921ee8290",
+      "cases": [
+        {
+          "name": "Common.TransformPath.Tests.PlayMode.TransformPathPortPlayModeTests.AggregateMultiPathTraversesLastSegmentInActualFrames",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.PlayMode.TransformPathPortPlayModeTests.AggregateRefreshPreservesOverrideAndPausedPoseAcrossActualFrames",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.PlayMode.TransformPathPortPlayModeTests.DisablingActorRestoresCharacterControllerDuringActualPlayback",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.PlayMode.TransformPathPortPlayModeTests.ExistingShowcaseRunsAllLanesAndQueuePauseResume",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.PlayMode.TransformPathPortPlayModeTests.MixedSequenceLoopPauseAndCompletionKeepBoundaryNotifications",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.PlayMode.TransformPathPortPlayModeTests.NaturalCompletionRestoresCharacterControllerAndFinalPosition",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.PlayMode.TransformPathPortPlayModeTests.PauseCallbackReplacementRetainsRegistrationAndMovesAcrossFrames",
+          "result": "Failed",
+          "failure": "  Expected: greater than 0.0f\n  But was:  0.0f\n"
+        },
+        {
+          "name": "Common.TransformPath.Tests.PlayMode.TransformPathPortPlayModeTests.QueueFacadeKeepsIdentityAndSingleNotificationsAcrossEnableCycles",
+          "result": "Passed"
+        }
+      ]
+    },
+    "pauseMotionDiagnostic": {
+      "total": 2,
+      "passed": 1,
+      "failed": 1,
+      "skipped": 0,
+      "result": "Failed(Child)",
+      "startUtc": "2026-10-23 16:33:09Z",
+      "durationSeconds": 0.0556835,
+      "xmlSha256": "641cdb360bfeb470b94d4835ab3236aad97a7e3fe7ef845dc825d242519b767f",
+      "cases": [
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.PauseCallbackReplacementKeepsNewPlaybackQueueState(False)",
+          "result": "Passed"
+        },
+        {
+          "name": "Common.TransformPath.Tests.TransformPathDeduplicationTests.PauseCallbackReplacementKeepsNewPlaybackQueueState(True)",
+          "result": "Failed",
+          "failure": "  Expected: greater than 0.0f\n  But was:  0.0f\n"
+        }
+      ]
+    },
+    "notes": [
+      "Original 20-case baseline had 18 passes and 2 Queue Pause reentrancy failures.",
+      "Expanded baseline and first full EditMode also failed an exact-zero test assertion for a 1.19e-8 float result; the test now uses a 1e-5 tolerance.",
+      "After duplicate Pause cleanup, PlayMode and a focused EditMode diagnostic exposed a retained ExternalPause flag in a replacement queued playback. Moving-state handling now clears it; direct underlying Resume is also covered."
+    ]
+  },
+  "limitations": [
+    "Tests ran in a source-identical isolated module project while the main editor was using another module.",
+    "Graphical UI tests ran; no additional manual screen walkthrough was performed.",
+    "No Player/device, whole-project integration or new performance improvement benchmark was run; Editor performance probes report allocated bytes unavailable."
+  ]
+}

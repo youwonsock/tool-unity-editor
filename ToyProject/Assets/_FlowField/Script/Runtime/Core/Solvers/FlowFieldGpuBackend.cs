@@ -3,9 +3,11 @@ using System;
 namespace Common.FlowField
 {
     /// <summary>
-    /// Mode-neutral asynchronous GPU/managed BFS boundary.  The backend owns
+    /// Surface2D asynchronous GPU/managed BFS boundary. The backend owns
     /// the solver and its native resources; callers only own the request
     /// lifetime and decide how a completed result is committed.
+    /// A backend must check request.IsCurrent before writing staging arrays
+    /// or starting a fallback for a delayed result.
     /// </summary>
     internal interface IFlowFieldGpuBackend : IDisposable
     {

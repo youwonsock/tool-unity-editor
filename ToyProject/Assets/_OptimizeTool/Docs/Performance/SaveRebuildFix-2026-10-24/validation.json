@@ -1,0 +1,102 @@
+{
+  "EditMode": {
+    "id": "2",
+    "testcasecount": "99",
+    "result": "Passed",
+    "total": "99",
+    "passed": "99",
+    "failed": "0",
+    "inconclusive": "0",
+    "skipped": "0",
+    "asserts": "0",
+    "engine-version": "3.5.0.0",
+    "clr-version": "4.0.30319.42000",
+    "start-time": "2026-10-24 08:38:13Z",
+    "end-time": "2026-10-24 08:38:19Z",
+    "duration": "6.0044732"
+  },
+  "PlayMode": {
+    "id": "2",
+    "testcasecount": "38",
+    "result": "Passed",
+    "total": "38",
+    "passed": "38",
+    "failed": "0",
+    "inconclusive": "0",
+    "skipped": "0",
+    "asserts": "0",
+    "engine-version": "3.5.0.0",
+    "clr-version": "4.0.30319.42000",
+    "start-time": "2026-10-24 08:39:05Z",
+    "end-time": "2026-10-24 08:39:49Z",
+    "duration": "44.334512"
+  },
+  "CaptureIntegrityPythonTests": {
+    "passed": 8,
+    "failed": 0
+  },
+  "API": {
+    "publicBefore": 357,
+    "publicAfter": 357,
+    "serializedFieldsBefore": 170,
+    "serializedFieldsAfter": 170,
+    "removed": 0,
+    "added": 0,
+    "excluded": "Isolated RefactoringComparisonHarness and its nested diagnostic records",
+    "scope": "Frozen production snapshots used for paired timing; later concurrent legacy comparison-controller removal is recorded in snapshot-scope.json and excluded from the equality claim."
+  },
+  "equivalence": {
+    "fresh3600MeshesByteIdentical": true,
+    "initialAndRebuildUndoRedo3600": "Both independent verification launches exit 0; initial Undo re-enables all 3600 originals, redo restores disabled sources, one result renderer and all original ledger flags."
+  },
+  "scope": "The performance fixes are inside UNITY_EDITOR in MeshAssetTransaction and MeshSceneOutput only. No Player rebuild or fresh Draw/CPU/GPU frame-time measurements in this fix. Old Player comparison is retained separately.",
+  "artifactPackagingRecovery": {
+    "issue": "Verification DLL snapshots briefly imported as plugins while placed under Assets. Moved into api-assemblies.zip and removed active DLLs; no production API or source changes required.",
+    "mainEditorAfterRefresh": {
+      "compiling": false,
+      "readyForTools": true,
+      "consoleErrors": 0,
+      "consoleWarnings": 0,
+      "playMode": false,
+      "activeScene": "Assets/_OptimizeTool/Scene/OptimizeToolSample.unity"
+    }
+  },
+  "productionSourceMatchesTestedSnapshot": {
+    "MeshSceneOutput.cs": true,
+    "MeshAssetTransaction.cs": true,
+    "Tests/Editor/MeshRefactoringTests.cs": true
+  },
+  "IntegrationEditMode": {
+    "id": "2",
+    "testcasecount": "99",
+    "result": "Passed",
+    "total": "99",
+    "passed": "99",
+    "failed": "0",
+    "inconclusive": "0",
+    "skipped": "0",
+    "asserts": "0",
+    "engine-version": "3.5.0.0",
+    "clr-version": "4.0.30319.42000",
+    "start-time": "2026-10-24 08:59:46Z",
+    "end-time": "2026-10-24 08:59:52Z",
+    "duration": "6.219266"
+  },
+  "integrationScope": "Additional isolated tests use the current OptimizeTool scripts and Showcase prefab after concurrent legacy controller cleanup. Source and prefab snapshot archived separately. Timings and 357-member API equality use the earlier frozen baseline/fixed snapshots.",
+  "IntegrationPlayMode": {
+    "id": "2",
+    "testcasecount": "38",
+    "result": "Passed",
+    "total": "38",
+    "passed": "38",
+    "failed": "0",
+    "inconclusive": "0",
+    "skipped": "0",
+    "asserts": "0",
+    "engine-version": "3.5.0.0",
+    "clr-version": "4.0.30319.42000",
+    "start-time": "2026-10-24 09:00:32Z",
+    "end-time": "2026-10-24 09:01:17Z",
+    "duration": "44.6152991"
+  }
+}

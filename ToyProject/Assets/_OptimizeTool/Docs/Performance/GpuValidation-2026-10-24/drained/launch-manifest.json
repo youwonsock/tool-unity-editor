@@ -1,0 +1,160 @@
+{
+  "app": "/private/tmp/optimizetool-gpu-20261024/Build/OptimizeToolBenchmark.app",
+  "architecture": "Mach-O universal binary with 2 architectures: [x86_64:Mach-O 64-bit executable x86_64] [arm64:Mach-O 64-bit executable arm64]\n/private/tmp/optimizetool-gpu-20261024/Build/OptimizeToolBenchmark.app/Contents/MacOS/ToyProject (for architecture x86_64):\tMach-O 64-bit executable x86_64\n/private/tmp/optimizetool-gpu-20261024/Build/OptimizeToolBenchmark.app/Contents/MacOS/ToyProject (for architecture arm64):\tMach-O 64-bit executable arm64",
+  "executableSha256": "139f3c17c4884a31ac5ced3d0f951752451411589c179b02e52a02c9275d776a",
+  "rounds": 8,
+  "repeats": 3,
+  "cubes": [
+    225
+  ],
+  "targetFrameRate": -1,
+  "runs": [
+    {
+      "samples": 7680,
+      "modes": {
+        "0": {
+          "draw_calls": 455.0,
+          "cpu_frame_ms": 8.2823545,
+          "metal_gpu_ms": 6.934312499652151,
+          "wall_delta_ms": 8.28681280836463
+        },
+        "1": {
+          "draw_calls": 7.0,
+          "cpu_frame_ms": 7.104063,
+          "metal_gpu_ms": 5.906166666136414,
+          "wall_delta_ms": 7.102791918441653
+        },
+        "2": {
+          "draw_calls": 7.0,
+          "cpu_frame_ms": 2.5865205,
+          "metal_gpu_ms": 1.7605624998395797,
+          "wall_delta_ms": 2.58922902867198
+        },
+        "3": {
+          "draw_calls": 7.0,
+          "cpu_frame_ms": 2.7992084999999998,
+          "metal_gpu_ms": 1.994020833990362,
+          "wall_delta_ms": 2.8017290169373155
+        }
+      },
+      "buildGuid": "b3c44117ef5d4bb9945b9234535cce3c",
+      "gpuMetric": "metal_gpu_ms",
+      "syncIntervals": [
+        "1"
+      ],
+      "telemetryBefore": {
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=21823587)\t76%; charging; 2:34 remaining present: true"
+      },
+      "telemetryAfter": {
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=21823587)\t76%; charging; 2:14 remaining present: true"
+      },
+      "folder": "/private/tmp/optimizetool-gpu-20261024/metal-drained/cubes-225/run-01",
+      "cubes": 225,
+      "repeat": 1,
+      "elapsedSeconds": 131.68270897865295,
+      "archivedFolder": "cubes-225/run-01"
+    },
+    {
+      "samples": 7680,
+      "modes": {
+        "0": {
+          "draw_calls": 455.0,
+          "cpu_frame_ms": 6.6957915,
+          "metal_gpu_ms": 5.790312500721484,
+          "wall_delta_ms": 6.6941892728209496
+        },
+        "1": {
+          "draw_calls": 7.0,
+          "cpu_frame_ms": 5.5815625,
+          "metal_gpu_ms": 4.847166666877456,
+          "wall_delta_ms": 5.520103499293327
+        },
+        "2": {
+          "draw_calls": 7.0,
+          "cpu_frame_ms": 2.3289584999999997,
+          "metal_gpu_ms": 1.6729791659599869,
+          "wall_delta_ms": 2.3189341882243752
+        },
+        "3": {
+          "draw_calls": 7.0,
+          "cpu_frame_ms": 2.5094165,
+          "metal_gpu_ms": 1.840124999944237,
+          "wall_delta_ms": 2.5103563675656915
+        }
+      },
+      "buildGuid": "b3c44117ef5d4bb9945b9234535cce3c",
+      "gpuMetric": "metal_gpu_ms",
+      "syncIntervals": [
+        "1"
+      ],
+      "telemetryBefore": {
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=21823587)\t76%; charging; 2:14 remaining present: true"
+      },
+      "telemetryAfter": {
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=21823587)\t76%; charging; 1:54 remaining present: true"
+      },
+      "folder": "/private/tmp/optimizetool-gpu-20261024/metal-drained/cubes-225/run-02",
+      "cubes": 225,
+      "repeat": 2,
+      "elapsedSeconds": 125.70222592353821,
+      "archivedFolder": "cubes-225/run-02"
+    },
+    {
+      "samples": 7680,
+      "modes": {
+        "0": {
+          "draw_calls": 455.0,
+          "cpu_frame_ms": 6.515,
+          "metal_gpu_ms": 5.86514583301323,
+          "wall_delta_ms": 6.514455657452345
+        },
+        "1": {
+          "draw_calls": 7.0,
+          "cpu_frame_ms": 5.4003125,
+          "metal_gpu_ms": 4.822395832889015,
+          "wall_delta_ms": 5.40114426985383
+        },
+        "2": {
+          "draw_calls": 7.0,
+          "cpu_frame_ms": 2.2169795,
+          "metal_gpu_ms": 1.6740000010031508,
+          "wall_delta_ms": 2.2188988514244556
+        },
+        "3": {
+          "draw_calls": 7.0,
+          "cpu_frame_ms": 2.4189160000000003,
+          "metal_gpu_ms": 1.8367291668255348,
+          "wall_delta_ms": 2.423274563625455
+        }
+      },
+      "buildGuid": "b3c44117ef5d4bb9945b9234535cce3c",
+      "gpuMetric": "metal_gpu_ms",
+      "syncIntervals": [
+        "1"
+      ],
+      "telemetryBefore": {
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=21823587)\t78%; charging; 1:36 remaining present: true"
+      },
+      "telemetryAfter": {
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=21823587)\t79%; charging; 1:23 remaining present: true"
+      },
+      "folder": "/private/tmp/optimizetool-gpu-20261024/metal-drained/cubes-225/run-03",
+      "cubes": 225,
+      "repeat": 3,
+      "elapsedSeconds": 123.96688580513,
+      "archivedFolder": "cubes-225/run-03"
+    }
+  ],
+  "warmupSeconds": 2.0,
+  "preconditionSeconds": 15.0,
+  "rotateOrders": true,
+  "cooldownSeconds": 5.0,
+  "gpuQueueDrained": true,
+  "offscreen": true
+}

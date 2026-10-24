@@ -1,0 +1,39 @@
+{
+    "pid": 85381,
+    "cubes": 3600,
+    "subdivisions": 1,
+    "unityVersion": "2023.2.20f1",
+    "scope": "Core bake: three pipeline modes retained through fresh batch save. Also measures public MeshCombiner initial bake and overwrite/rebuild with scene output and source disabling. Timings exclude startup, input construction and cleanup; process/RSS peaks cover all stages.",
+    "fixtureMs": 328.7618,
+    "totalMs": 1721.0245,
+    "buildMs": 997.8623,
+    "saveMs": 493.1607,
+    "workflowInitialMs": 898.6191,
+    "workflowRebuildMs": 599.8867,
+    "unityAllocatedAtStart": 226716150,
+    "unityAllocatedAfterBuild": 253626958,
+    "unityReservedAtStart": 517913192,
+    "modes": [
+        {
+            "mode": 1,
+            "vertices": 86400,
+            "culled": 0,
+            "triangles": 43200,
+            "milliseconds": 265.9843
+        },
+        {
+            "mode": 2,
+            "vertices": 14400,
+            "culled": 0,
+            "triangles": 7200,
+            "milliseconds": 294.1941
+        },
+        {
+            "mode": 3,
+            "vertices": 28800,
+            "culled": 2400,
+            "triangles": 14400,
+            "milliseconds": 437.2241
+        }
+    ]
+}

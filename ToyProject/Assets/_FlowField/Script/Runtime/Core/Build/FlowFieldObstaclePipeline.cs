@@ -43,16 +43,13 @@ namespace Common.FlowField
     {
         public bool MaskChanged { get; }
         public FlowFieldCellRect DirtyRegion { get; }
-        public int ExcludedColliderCount { get; }
 
         public FlowFieldObstacleResult(
             bool maskChanged,
-            FlowFieldCellRect dirtyRegion,
-            int excludedColliderCount = 0)
+            FlowFieldCellRect dirtyRegion)
         {
             MaskChanged = maskChanged;
             DirtyRegion = dirtyRegion;
-            ExcludedColliderCount = excludedColliderCount;
         }
     }
 
@@ -149,7 +146,6 @@ namespace Common.FlowField
             bool staticChanged = false;
             bool dynamicChanged = false;
             FlowFieldCellRect dynamicDirty = FlowFieldCellRect.Invalid;
-            int excludedColliderCount = 0;
             if (rebuildStatic)
             {
                 staticChanged = BuildStaticScratch(
@@ -161,8 +157,7 @@ namespace Common.FlowField
                     request.CenterOffset,
                     request.Clearance,
                     ref _overlapBuffer,
-                    ref _targetOverlapBuffer,
-                    out excludedColliderCount);
+                    ref _targetOverlapBuffer);
             }
 
             if (!rebuildDynamic)
@@ -176,8 +171,7 @@ namespace Common.FlowField
                     out FlowFieldCellRect effectiveMaskDirtyWithoutDynamic);
                 return new FlowFieldObstacleResult(
                     effectiveMaskChangedWithoutDynamic,
-                    effectiveMaskDirtyWithoutDynamic,
-                    excludedColliderCount);
+                    effectiveMaskDirtyWithoutDynamic);
             }
 
             if (consumeStagedDynamicProbe)
@@ -251,8 +245,7 @@ namespace Common.FlowField
                 out FlowFieldCellRect effectiveMaskDirty);
             return new FlowFieldObstacleResult(
                 effectiveMaskChanged,
-                effectiveMaskDirty,
-                excludedColliderCount);
+                effectiveMaskDirty);
         }
 
         private static bool CompareEffectiveMask(
@@ -379,10 +372,8 @@ namespace Common.FlowField
             float centerOffset,
             float clearance,
             ref Collider[] overlapBuffer,
-            ref Collider[] targetOverlapBuffer,
-            out int excludedColliderCount)
+            ref Collider[] targetOverlapBuffer)
         {
-            excludedColliderCount = 0;
             if (!grid.IsValid)
                 throw new ArgumentException("Static obstacle composition requires a valid grid.", nameof(grid));
             if (workspace == null)
@@ -400,7 +391,7 @@ namespace Common.FlowField
                     workspace.ObstacleScratch,
                     ref overlapBuffer,
                     ref targetOverlapBuffer,
-                    out excludedColliderCount,
+                    out _,
                     syncTransformsBeforeQuery: true))
                 throw new InvalidOperationException("Static obstacle mask 생성에 실패했습니다.");
             bool changed = !FlowFieldObstacleMaskBuilder.AreEqual(
@@ -580,23 +571,6 @@ namespace Common.FlowField
             workspace.RebuildCombinedBlocked();
             hasWalkable = FlowFieldSolver.BuildEscapeDirections(grid, surface, workspace);
             return true;
-        }
-
-        internal void CommitPreviewAndBuildEscape(
-            FlowFieldGridSpace grid,
-            FlowFieldSurfaceData surface,
-            FlowFieldWorkspace workspace)
-        {
-            if (!grid.IsValid)
-                throw new ArgumentException("Obstacle preview commit requires a valid grid.", nameof(grid));
-            if (!surface.IsValid)
-                throw new ArgumentException("Obstacle preview commit requires a valid surface bake.", nameof(surface));
-            if (workspace == null)
-                throw new ArgumentNullException(nameof(workspace));
-            if (workspace.Capacity != grid.CellCount)
-                throw new ArgumentException("Obstacle preview workspace capacity must match the grid.", nameof(workspace));
-            workspace.CommitObstacleScratch();
-            FlowFieldSolver.BuildEscapeDirections(grid, surface, workspace);
         }
 
         private static void ValidateRequest(in FlowFieldObstacleRequest request)

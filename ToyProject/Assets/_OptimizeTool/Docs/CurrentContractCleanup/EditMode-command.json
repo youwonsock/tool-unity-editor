@@ -1,0 +1,18 @@
+[
+  "/Applications/Unity/Hub/Editor/2023.2.20f1/Unity.app/Contents/MacOS/Unity",
+  "-batchmode",
+  "-nographics",
+  "-job-worker-count",
+  "4",
+  "-projectPath",
+  "/tmp/optimizetool-savefix-20261024-172439/Project",
+  "-runTests",
+  "-testPlatform",
+  "EditMode",
+  "-assemblyNames",
+  "Common.OptimizeTool.Tests",
+  "-testResults",
+  "/tmp/optimizetool-legacy-cleanup-20261024-180706/EditMode.xml",
+  "-logFile",
+  "/tmp/optimizetool-legacy-cleanup-20261024-180706/EditMode.log"
+]

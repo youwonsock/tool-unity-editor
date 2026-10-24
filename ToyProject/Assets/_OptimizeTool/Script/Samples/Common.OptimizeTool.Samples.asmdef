@@ -1,0 +1,11 @@
+{
+    "name": "Common.OptimizeTool.Samples",
+    "rootNamespace": "Common.OptimizeTool.Samples",
+    "references": [
+        "Common.OptimizeTool",
+        "UnityEngine.UI",
+        "Unity.RenderPipelines.Universal.Runtime"
+    ],
+    "includePlatforms": [],
+    "autoReferenced": true
+}

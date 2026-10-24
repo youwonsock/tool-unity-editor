@@ -1,0 +1,75 @@
+{
+  "date": "2026-10-24T06:34:58.861123+00:00",
+  "scope": "Common.OptimizeTool and Common.OptimizeTool.Samples; isolated Unity project",
+  "unityVersion": "2023.2.20f1",
+  "tests": {
+    "EditMode": {
+      "result": "Passed",
+      "total": "92",
+      "passed": "92",
+      "failed": "0",
+      "duration": "7.1650667"
+    },
+    "PlayMode": {
+      "result": "Passed",
+      "total": "36",
+      "passed": "36",
+      "failed": "0",
+      "duration": "45.3998513"
+    },
+    "Python": {
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "command": "python3 -B -m unittest discover -s ToyProject/Assets/_OptimizeTool/Docs/Performance -p 'test_capture_validation.py'"
+    }
+  },
+  "preservation": {
+    "protectedFileCount": 454,
+    "changedProtectedFiles": [],
+    "publicApiCheckedAgainstPreviousBuild": 353,
+    "missingPublicApi": 0,
+    "serializedFieldsChecked": 159,
+    "missingSerializedFields": 0
+  },
+  "regressions": [
+    "A+B to A rebuild restores removed source",
+    "originally disabled sources remain disabled",
+    "ownership survives Undo/Redo and prefab instantiation",
+    "failed rebuild restores old mesh, output and ownership",
+    "cancel, disable, destroy and output failure restore workload/camera/settings exactly once",
+    "scale case/mode/custom camera restored on cancellation",
+    "stale completion, failed capture, duplicate capture ID, hash mismatch and nonfinite timing rejected"
+  ],
+  "limitations": [
+    "Player capture is an end-to-end smoke test, not a new performance study.",
+    "Legacy outputs without an ownership ledger cannot reconstruct original source visibility.",
+    "Historical capture format remains readable but has no v2 payload fingerprints.",
+    "No pointer-input validation was requested or performed."
+  ],
+  "historicalCaptureCompatibility": {
+    "accepted": 24,
+    "imageOnlyFoldersWithoutCsv": 3
+  },
+  "build": {
+    "status": "Succeeded",
+    "outputPath": "/var/folders/4m/v7xw547n4wj7kgvjblgr8ry00000gn/T/optimizetool-refactor-iehkdrz1/Build/OptimizeToolBenchmark.app",
+    "error": "",
+    "errors": 0,
+    "warnings": 0,
+    "durationSeconds": 19.9579652
+  },
+  "playerSmoke": {
+    "samples": 960,
+    "sourceCubes": 9,
+    "schemaVersion": 2,
+    "gpuSource": "Metal command-buffer timestamps",
+    "captureValidated": true,
+    "offlineAnalysisSucceeded": true,
+    "reuseCheck": {
+      "exitCode": 1,
+      "previousResultsIntact": true,
+      "previousCaptureNotMarkedFailed": true
+    }
+  }
+}

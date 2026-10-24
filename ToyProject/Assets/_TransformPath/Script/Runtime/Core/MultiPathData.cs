@@ -507,7 +507,7 @@ namespace Common.TransformPath
         {
             if (distance >= _pathLength)
                 return _segmentLengths.Length - 1;
-            return PathGeometryUtility.FindSegmentIndex(
+            return PathGeometryUtility.FindSegmentStartIndex(
                 _segmentStartDistances,
                 distance);
         }

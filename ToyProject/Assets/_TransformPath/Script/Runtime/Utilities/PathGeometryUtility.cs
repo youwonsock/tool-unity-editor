@@ -168,6 +168,29 @@ namespace Common.TransformPath
             return left;
         }
 
+        /// <summary>
+        /// Finds the last segment whose start is at or before the distance.
+        /// Unlike point cumulative distances, this array has no terminal endpoint.
+        /// </summary>
+        public static int FindSegmentStartIndex(float[] starts, float targetDistance)
+        {
+            if (starts == null || starts.Length == 0)
+                return 0;
+
+            int low = 0;
+            int high = starts.Length - 1;
+            while (low < high)
+            {
+                int middle = low + (high - low + 1) / 2;
+                if (starts[middle] <= targetDistance)
+                    low = middle;
+                else
+                    high = middle - 1;
+            }
+
+            return low;
+        }
+
         public static bool IsSameResult(
             Vector3[] leftPoints,
             float leftLength,

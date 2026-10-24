@@ -1,0 +1,70 @@
+{
+  "cpu-before": {
+    "1": {
+      "meanAbs255": 0.0,
+      "maxAbs255": 0,
+      "differentPixelFraction": 0.0
+    },
+    "2": {
+      "meanAbs255": 0.0,
+      "maxAbs255": 0,
+      "differentPixelFraction": 0.0
+    },
+    "3": {
+      "meanAbs255": 0.0,
+      "maxAbs255": 0,
+      "differentPixelFraction": 0.0
+    }
+  },
+  "cpu-after": {
+    "1": {
+      "meanAbs255": 0.0,
+      "maxAbs255": 0,
+      "differentPixelFraction": 0.0
+    },
+    "2": {
+      "meanAbs255": 0.0,
+      "maxAbs255": 0,
+      "differentPixelFraction": 0.0
+    },
+    "3": {
+      "meanAbs255": 0.0,
+      "maxAbs255": 0,
+      "differentPixelFraction": 0.0
+    }
+  },
+  "gpu-before": {
+    "1": {
+      "meanAbs255": 0.0,
+      "maxAbs255": 0,
+      "differentPixelFraction": 0.0
+    },
+    "2": {
+      "meanAbs255": 0.0,
+      "maxAbs255": 0,
+      "differentPixelFraction": 0.0
+    },
+    "3": {
+      "meanAbs255": 0.0,
+      "maxAbs255": 0,
+      "differentPixelFraction": 0.0
+    }
+  },
+  "gpu-after": {
+    "1": {
+      "meanAbs255": 0.0,
+      "maxAbs255": 0,
+      "differentPixelFraction": 0.0
+    },
+    "2": {
+      "meanAbs255": 0.0,
+      "maxAbs255": 0,
+      "differentPixelFraction": 0.0
+    },
+    "3": {
+      "meanAbs255": 0.0,
+      "maxAbs255": 0,
+      "differentPixelFraction": 0.0
+    }
+  }
+}

@@ -1,0 +1,118 @@
+{
+  "cpu": {
+    "0": {
+      "size": [
+        1080,
+        1920,
+        3
+      ],
+      "meanAbs255": 0.0,
+      "maxAbs255": 0,
+      "differentPixelFraction": 0.0,
+      "hashes": [
+        "e8f3277ea13f250331a65f650425c720349953433c48bbbf11be88b6e91bf7f3",
+        "e8f3277ea13f250331a65f650425c720349953433c48bbbf11be88b6e91bf7f3"
+      ]
+    },
+    "1": {
+      "size": [
+        1080,
+        1920,
+        3
+      ],
+      "meanAbs255": 0.0,
+      "maxAbs255": 0,
+      "differentPixelFraction": 0.0,
+      "hashes": [
+        "e8f3277ea13f250331a65f650425c720349953433c48bbbf11be88b6e91bf7f3",
+        "e8f3277ea13f250331a65f650425c720349953433c48bbbf11be88b6e91bf7f3"
+      ]
+    },
+    "2": {
+      "size": [
+        1080,
+        1920,
+        3
+      ],
+      "meanAbs255": 0.0,
+      "maxAbs255": 0,
+      "differentPixelFraction": 0.0,
+      "hashes": [
+        "e8f3277ea13f250331a65f650425c720349953433c48bbbf11be88b6e91bf7f3",
+        "e8f3277ea13f250331a65f650425c720349953433c48bbbf11be88b6e91bf7f3"
+      ]
+    },
+    "3": {
+      "size": [
+        1080,
+        1920,
+        3
+      ],
+      "meanAbs255": 0.0,
+      "maxAbs255": 0,
+      "differentPixelFraction": 0.0,
+      "hashes": [
+        "e8f3277ea13f250331a65f650425c720349953433c48bbbf11be88b6e91bf7f3",
+        "e8f3277ea13f250331a65f650425c720349953433c48bbbf11be88b6e91bf7f3"
+      ]
+    }
+  },
+  "gpu": {
+    "0": {
+      "size": [
+        1080,
+        1920,
+        3
+      ],
+      "meanAbs255": 0.0,
+      "maxAbs255": 0,
+      "differentPixelFraction": 0.0,
+      "hashes": [
+        "344730dd2167e4a57f0e7497a9f9640fb3cd5554cbe652f2620ecf94e2f6cd3b",
+        "344730dd2167e4a57f0e7497a9f9640fb3cd5554cbe652f2620ecf94e2f6cd3b"
+      ]
+    },
+    "1": {
+      "size": [
+        1080,
+        1920,
+        3
+      ],
+      "meanAbs255": 0.0,
+      "maxAbs255": 0,
+      "differentPixelFraction": 0.0,
+      "hashes": [
+        "344730dd2167e4a57f0e7497a9f9640fb3cd5554cbe652f2620ecf94e2f6cd3b",
+        "344730dd2167e4a57f0e7497a9f9640fb3cd5554cbe652f2620ecf94e2f6cd3b"
+      ]
+    },
+    "2": {
+      "size": [
+        1080,
+        1920,
+        3
+      ],
+      "meanAbs255": 0.0,
+      "maxAbs255": 0,
+      "differentPixelFraction": 0.0,
+      "hashes": [
+        "344730dd2167e4a57f0e7497a9f9640fb3cd5554cbe652f2620ecf94e2f6cd3b",
+        "344730dd2167e4a57f0e7497a9f9640fb3cd5554cbe652f2620ecf94e2f6cd3b"
+      ]
+    },
+    "3": {
+      "size": [
+        1080,
+        1920,
+        3
+      ],
+      "meanAbs255": 0.0,
+      "maxAbs255": 0,
+      "differentPixelFraction": 0.0,
+      "hashes": [
+        "344730dd2167e4a57f0e7497a9f9640fb3cd5554cbe652f2620ecf94e2f6cd3b",
+        "344730dd2167e4a57f0e7497a9f9640fb3cd5554cbe652f2620ecf94e2f6cd3b"
+      ]
+    }
+  }
+}

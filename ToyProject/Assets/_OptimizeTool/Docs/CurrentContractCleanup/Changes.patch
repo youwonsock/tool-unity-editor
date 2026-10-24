@@ -1,0 +1,909 @@
+--- before/BackfaceCullMeshBaker.cs
++++ after/BackfaceCullMeshBaker.cs
+@@ -21,20 +21,6 @@
+         [Header("Custom Vector")]
+         [SerializeField] private bool _useCustomVector;
+         [SerializeField] private Vector3 _customCameraVector;
+-        private bool _isInitialized;
+-        private Exception _fault;
+-        public bool IsInitialized => _isInitialized;
+-        public bool IsFaulted => _fault != null;
+-
+-        public void Init()
+-        {
+-            if (_isInitialized) throw new InvalidOperationException("Baker is already initialized.");
+-            if (IsFaulted) throw new InvalidOperationException("Call Release before Init.", _fault);
+-            try { ValidateSettings(); _isInitialized = true; }
+-            catch (Exception exception) { _fault = exception; throw; }
+-        }
+-
+-        public void Release() { _isInitialized = false; _fault = null; }
+ 
+         private void ValidateSettings()
+         {
+@@ -50,12 +36,6 @@
+ 
+         /// <summary>Stage every result before changing any asset or MeshFilter.</summary>
+         public Mesh[] BakeBackFaceCullingMesh()
+-        {
+-            try { return BakeAndSave(); }
+-            catch (Exception error) { _fault = error; throw; }
+-        }
+-
+-        private Mesh[] BakeAndSave()
+         {
+             ValidateSettings();
+             MeshFilter[] filters = _collectChildMeshes ? GetComponentsInChildren<MeshFilter>() : _targetMeshFilterArray;
+@@ -87,8 +67,6 @@
+                         PrefabUtility.RecordPrefabInstancePropertyModifications(filters[i]);
+                     }
+                 });
+-                _isInitialized = true;
+-                _fault = null;
+                 return saved;
+             }
+             finally { foreach (Mesh mesh in staged) if (mesh != null) DestroyImmediate(mesh); }
+--- before/MeshBuildResult.cs
++++ after/MeshBuildResult.cs
+@@ -2,7 +2,6 @@
+ using System;
+ using System.Collections.Generic;
+ using System.Collections.ObjectModel;
+-using System.Linq;
+ using UnityEngine;
+ using Object = UnityEngine.Object;
+ 
+@@ -26,8 +25,6 @@
+         private bool _disposed;
+         public ReadOnlyCollection<MeshBuildPart> Parts { get; }
+         public ReadOnlyCollection<Mesh> Meshes { get; }
+-        // Compatibility projection; arrays are copied so callers cannot change the build's material mapping.
+-        public ReadOnlyCollection<Material[]> Materials => _parts.Select(p => p.Materials).ToList().AsReadOnly();
+         public ReadOnlyCollection<MeshRenderer> SourceRenderers { get; }
+         public ReadOnlyCollection<string> Warnings { get; }
+         public MeshRendererSettings RendererSettings { get; internal set; }
+--- before/MeshCombiner.cs
++++ after/MeshCombiner.cs
+@@ -34,39 +34,15 @@
+         [SerializeField] private bool _disableSourceRenderers = true;
+         [SerializeField, HideInInspector] private GameObject _generatedRoot;
+         [SerializeField, HideInInspector] private List<MeshSourceRendererState> _sourceRendererStates = new List<MeshSourceRendererState>();
+-        private bool _isInitialized;
+-        private Exception _fault;
+-        public bool IsInitialized => _isInitialized;
+-        public bool IsFaulted => _fault != null;
+         public IReadOnlyList<string> LastBuildWarnings { get; private set; } = Array.Empty<string>();
+-
+-        public void Init()
+-        {
+-            if (_isInitialized) throw new InvalidOperationException("MeshCombiner is already initialized.");
+-            if (IsFaulted) throw new InvalidOperationException("Call Release before Init.", _fault);
+-            try { ValidateSettings(); _isInitialized = true; }
+-            catch (Exception exception) { _fault = exception; throw; }
+-        }
+-
+-        public void Release() { _isInitialized = false; _fault = null; }
+-
+-        private void ValidateSettings()
+-        {
+-            MeshProcessingUtility.RequireEditMode();
+-            MeshAssetTransaction.ValidateFolder(_savePath);
+-            MeshAssetTransaction.ValidateFileName(_meshName);
+-            MeshBuildPipeline.Validate(CaptureBuildRequest());
+-        }
+ 
+         /// <summary>Creates in-memory results only. Dispose the result after saving or inspecting it.</summary>
+         public MeshBuildResult BuildMeshes()
+         {
+-            try
+-            {
+-                var result = MeshBuildPipeline.Build(CaptureBuildRequest());
+-                LastBuildWarnings = result.Warnings; _fault = null; return result;
+-            }
+-            catch (Exception error) { _fault = error; throw; }
++            LastBuildWarnings = Array.Empty<string>();
++            var result = MeshBuildPipeline.Build(CaptureBuildRequest());
++            LastBuildWarnings = result.Warnings;
++            return result;
+         }
+ 
+         private MeshBuildRequest CaptureBuildRequest()
+@@ -90,20 +66,12 @@
+ 
+         public Mesh[] CombineAndSaveMeshes()
+         {
+-            try { return CombineAndSave(); }
+-            catch (Exception error) { _fault = error; throw; }
+-        }
+-
+-        private Mesh[] CombineAndSave()
+-        {
+             var save = new MeshSaveOptions(_savePath, _meshName, _overwriteExistingAssets);
+             using (MeshBuildResult result = BuildMeshes())
+             {
+                 List<string> paths = save.CreatePaths(result.Meshes.Count, _combineAllIntoSingleMesh);
+                 Mesh[] saved = MeshAssetTransaction.Save(result.Meshes, paths, save.Overwrite,
+                     "Combine meshes", meshes => { if (_createSceneOutput) CreateSceneOutput(meshes, result); });
+-                _isInitialized = true;
+-                _fault = null;
+                 return saved;
+             }
+         }
+@@ -113,8 +81,7 @@
+             Undo.RegisterCompleteObjectUndo(this, "Assign combined result");
+             // Undo can serialize the owner while Destroy/RegisterCreatedObjectUndo runs.
+             // Keep its old ledger intact until every scene operation has completed.
+-            var nextStates = _sourceRendererStates == null ? new List<MeshSourceRendererState>()
+-                : new List<MeshSourceRendererState>(_sourceRendererStates);
++            var nextStates = new List<MeshSourceRendererState>(_sourceRendererStates);
+             _generatedRoot = MeshSceneOutput.Replace(transform, _meshName, _generatedRoot, meshes, result,
+                 _disableSourceRenderers, nextStates);
+             _sourceRendererStates = nextStates;
+--- before/MeshSceneOutput.cs
++++ after/MeshSceneOutput.cs
+@@ -17,23 +17,19 @@
+     internal static class MeshSceneOutput
+     {
+         internal static GameObject Replace(Transform parent, string name, GameObject previous,
+-            Mesh[] meshes, MeshBuildResult result, bool disableSources, List<MeshSourceRendererState> sourceStates = null)
++            Mesh[] meshes, MeshBuildResult result, bool disableSources, List<MeshSourceRendererState> sourceStates)
+         {
+             var previousStates = new Dictionary<Renderer, MeshSourceRendererState>();
+             var nextSources = disableSources ? new HashSet<Renderer>(result.SourceRenderers) : null;
+             // Sources retained by this output remain disabled. Preserve their original state
+             // without a temporary enable/disable pair or redundant renderer Undo records.
+-            // Legacy outputs have no ledger: never guess their original visibility.
+-            if (sourceStates != null)
+-            {
+-                foreach (MeshSourceRendererState state in sourceStates)
+-                    if (state.Renderer != null)
+-                    {
+-                        previousStates[state.Renderer] = state;
+-                        if (nextSources == null || !nextSources.Contains(state.Renderer)) SetEnabled(state.Renderer, state.Enabled);
+-                    }
+-                sourceStates.Clear();
+-            }
++            foreach (MeshSourceRendererState state in sourceStates)
++                if (state.Renderer != null)
++                {
++                    previousStates[state.Renderer] = state;
++                    if (nextSources == null || !nextSources.Contains(state.Renderer)) SetEnabled(state.Renderer, state.Enabled);
++                }
++            sourceStates.Clear();
+             if (previous != null) Undo.DestroyObjectImmediate(previous);
+             var root = new GameObject(name + " Results");
+             Undo.RegisterCreatedObjectUndo(root, "Create combined result");
+@@ -51,8 +47,8 @@
+             if (disableSources)
+                 foreach (Renderer renderer in result.SourceRenderers)
+                 {
+-                    if (previousStates.TryGetValue(renderer, out MeshSourceRendererState state)) sourceStates?.Add(state);
+-                    else sourceStates?.Add(new MeshSourceRendererState { Renderer = renderer, Enabled = renderer.enabled });
++                    if (previousStates.TryGetValue(renderer, out MeshSourceRendererState state)) sourceStates.Add(state);
++                    else sourceStates.Add(new MeshSourceRendererState { Renderer = renderer, Enabled = renderer.enabled });
+                     SetEnabled(renderer, false);
+                 }
+             return root;
+--- before/PhysicsRecorder.cs
++++ after/PhysicsRecorder.cs
+@@ -50,10 +50,7 @@
+         public bool IsFaulted => _fault != null;
+         public bool IsRecording => _phase == RecordingPhase.Recording;
+         public bool IsSaving => _phase == RecordingPhase.Saving;
+-        public bool IsSaveCompleted => Result?.Succeeded == true;
+         public Exception LastError => _fault;
+-        public AnimationClip ResultClip => Result?.Clip;
+-        public GameObject ResultPrefab => Result?.Prefab;
+         public PhysicsRecordingResult Result { get; private set; }
+ 
+         private void Awake()
+@@ -320,10 +317,8 @@
+             _phase = RecordingPhase.Idle;
+             _recordingVersion++;
+             _fault = exception;
+-            // Init can fail after Release while the previous successful assets are still published.
+-            // Keep those legacy references; active recordings clear Result before collecting data.
+             Result = new PhysicsRecordingResult(_session?.Elapsed ?? 0f, PhysicsRecordingStopReason.Faulted,
+-                ResultClip, ResultPrefab, exception,
++                null, null, exception,
+                 _measurements?.Snapshot(_session?.Take));
+         }
+ 
+--- before/Samples/Editor/GameViewCaptureScope.cs
++++ after/Samples/Editor/GameViewCaptureScope.cs
+@@ -6,7 +6,7 @@
+ 
+ namespace Common.OptimizeTool.Samples.Editor
+ {
+-    /// <summary>Version-dependent Game View access stays in this editor adapter.</summary>
++    /// <summary>Accesses Unity 2023.2's internal Game View API and restores the captured view settings.</summary>
+     internal sealed class GameViewCaptureScope : IDisposable
+     {
+         private readonly EditorWindow _view;
+--- before/Samples/OptimizeToolPerformanceBenchmark.cs
++++ after/Samples/OptimizeToolPerformanceBenchmark.cs
+@@ -5,6 +5,7 @@
+ using Unity.Profiling;
+ using UnityEngine;
+ using UnityEngine.Rendering;
++using UnityEngine.Rendering.Universal;
+ 
+ namespace Common.OptimizeTool.Samples
+ {
+@@ -336,7 +337,8 @@
+             Material material = _scale != null ? _scale.Material : _controller.transform
+                 .Find(OptimizeToolSampleModes.All[OptimizeToolSampleModes.Original].Group).GetComponentInChildren<MeshRenderer>().sharedMaterial;
+             Camera camera = _scale != null ? _scale.Camera : Camera.main;
+-            RenderPipelineAsset pipeline = GraphicsSettings.currentRenderPipeline;
++            var pipeline = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset
++                ?? throw new InvalidOperationException("OptimizeTool benchmarks require the project's Universal Render Pipeline asset.");
+             return new Metadata
+             {
+                 utc = DateTime.UtcNow.ToString("o"), runId = Path.GetFileName(_output), buildGuid = Application.buildGUID,
+@@ -356,9 +358,9 @@
+                 gpu = SystemInfo.graphicsDeviceName, graphicsApi = SystemInfo.graphicsDeviceType.ToString(), graphicsDriver = SystemInfo.graphicsDeviceVersion,
+                 gpuTimerFrequency = FrameTimingManager.GetGpuTimerFrequency(), cpuTimerFrequency = FrameTimingManager.GetCpuTimerFrequency(),
+                 width = Screen.width, height = Screen.height, cameraWidth = camera.pixelWidth, cameraHeight = camera.pixelHeight,
+-                quality = QualitySettings.names[QualitySettings.GetQualityLevel()], renderPipeline = pipeline == null ? "Built-in" : pipeline.name,
+-                srpBatcher = GraphicsSettings.useScriptableRenderPipelineBatching, msaa = PipelineProperty(pipeline, "msaaSampleCount", 0),
+-                renderScale = PipelineProperty(pipeline, "renderScale", 1f), dynamicBatching = PipelineProperty(pipeline, "supportsDynamicBatching", false),
++                quality = QualitySettings.names[QualitySettings.GetQualityLevel()], renderPipeline = pipeline.name,
++                srpBatcher = GraphicsSettings.useScriptableRenderPipelineBatching, msaa = pipeline.msaaSampleCount,
++                renderScale = pipeline.renderScale, dynamicBatching = pipeline.supportsDynamicBatching,
+                 vSyncCount = QualitySettings.vSyncCount, targetFrameRate = Application.targetFrameRate,
+                 warmupFrames = WarmupFrames, samplesPerBlock = SamplesPerBlock, rounds = _rounds, frameTimingHistory = TimingHistory, historyOffset = HistoryOffset,
+                 startupSettleSeconds = Application.isEditor ? 0 : StartupSettleSeconds, minimumWarmupSeconds = _warmupSeconds,
+@@ -376,13 +378,6 @@
+             };
+         }
+ 
+-        private static T PipelineProperty<T>(RenderPipelineAsset pipeline, string name, T fallback)
+-        {
+-            if (pipeline == null) return fallback;
+-            var property = pipeline.GetType().GetProperty(name);
+-            return property == null ? fallback : (T)property.GetValue(pipeline);
+-        }
+-
+         public void Cancel()
+         {
+             if (_finished) return;
+--- before/Samples/OptimizeToolPhysicsDemo.cs
++++ after/Samples/OptimizeToolPhysicsDemo.cs
+@@ -182,8 +182,8 @@
+             try { CreatePlayback(); }
+             catch (Exception exception) { Fail(exception); return; }
+             Elapsed = 0f;
+-            MaxPositionError = HasRecordingReference ? 0f : float.NaN;
+-            MaxRotationError = HasRecordingReference ? 0f : float.NaN;
++            MaxPositionError = 0f;
++            MaxRotationError = 0f;
+             ComparisonSampleCount = 0;
+             SetState(DemoState.Comparing);
+             _routine = StartCoroutine(ComparePhysics());
+@@ -220,38 +220,35 @@
+ 
+         private void SampleComparison(float time)
+         {
+-            if (HasRecordingReference)
+-            {
+-                // Audit every captured physics observation, even if a render frame skips several ticks.
+-                // This reads raw observations, never the exported curves used by the right-hand side.
+-                while (ComparisonSampleCount < _recordingReference.ObservationCount
+-                    && _recordingReference.TimeAt(ComparisonSampleCount) <= time)
++            // Audit every captured physics observation, even if a render frame skips several ticks.
++            // This reads raw observations, never the exported curves used by the right-hand side.
++            while (ComparisonSampleCount < _recordingReference.ObservationCount
++                && _recordingReference.TimeAt(ComparisonSampleCount) <= time)
++            {
++                float observedTime = _recordingReference.TimeAt(ComparisonSampleCount);
++                _playback.Sample(observedTime);
++                for (int i = 0; i < _referencePlayback.Length; i++)
+                 {
+-                    float observedTime = _recordingReference.TimeAt(ComparisonSampleCount);
+-                    _playback.Sample(observedTime);
+-                    for (int i = 0; i < _referencePlayback.Length; i++)
+-                    {
+-                        PhysicsPoseSample pose = _recordingReference.Observation(i, ComparisonSampleCount);
+-                        MaxPositionError = Mathf.Max(MaxPositionError,
+-                            Vector3.Distance(pose.Position, _referencePlayback[i].localPosition));
+-                        MaxRotationError = Mathf.Max(MaxRotationError,
+-                            PhysicsPoseSample.RotationDifference(pose.Rotation, _referencePlayback[i].localRotation));
+-                    }
+-                    ComparisonSampleCount++;
++                    PhysicsPoseSample pose = _recordingReference.Observation(i, ComparisonSampleCount);
++                    MaxPositionError = Mathf.Max(MaxPositionError,
++                        Vector3.Distance(pose.Position, _referencePlayback[i].localPosition));
++                    MaxRotationError = Mathf.Max(MaxRotationError,
++                        PhysicsPoseSample.RotationDifference(pose.Rotation, _referencePlayback[i].localRotation));
+                 }
+-                _recordingReference.SampleFrame(time, _referencePoses);
+-                for (int i = 0; i < _referenceSource.Length; i++)
+-                {
+-                    PhysicsPoseSample pose = _referencePoses[i];
+-                    _referenceSource[i].SetLocalPositionAndRotation(pose.Position, pose.Rotation);
+-                }
+-                foreach (Rigidbody body in _bodies)
+-                {
+-                    body.position = body.transform.position;
+-                    body.rotation = body.transform.rotation;
+-                }
+-                Physics.SyncTransforms();
+-            }
++                ComparisonSampleCount++;
++            }
++            _recordingReference.SampleFrame(time, _referencePoses);
++            for (int i = 0; i < _referenceSource.Length; i++)
++            {
++                PhysicsPoseSample pose = _referencePoses[i];
++                _referenceSource[i].SetLocalPositionAndRotation(pose.Position, pose.Rotation);
++            }
++            foreach (Rigidbody body in _bodies)
++            {
++                body.position = body.transform.position;
++                body.rotation = body.transform.rotation;
++            }
++            Physics.SyncTransforms();
+             _playback.Sample(time);
+         }
+ 
+@@ -304,7 +301,8 @@
+             try
+             {
+                 LoadRecordingReference();
+-                if (!HasRecordingReference) return; // Legacy takes still support Prefab-only playback.
++                if (!HasRecordingReference)
++                    throw new InvalidOperationException("Recording reference is required; RECORD a new take before comparing.");
+                 _recordingReference.Validate(_savedPrefab.GetComponent<Animation>().clip);
+                 _referenceSource = new Transform[_recordingReference.TrackCount];
+                 _referencePlayback = new Transform[_referenceSource.Length];
+--- before/Samples/OptimizeToolPhysicsStatusFormatter.cs
++++ after/Samples/OptimizeToolPhysicsStatusFormatter.cs
+@@ -6,7 +6,9 @@
+     {
+         public static string Format(OptimizeToolPhysicsDemo demo)
+         {
+-            string saved = demo.SavedPrefab == null ? "No recording yet" : "Saved recording ready";
++            bool comparable = demo.SavedPrefab != null && demo.HasRecordingReference;
++            string saved = demo.SavedPrefab == null ? "No recording yet"
++                : demo.HasRecordingReference ? "Saved recording ready" : "Recording reference missing: RECORD a new take.";
+             bool recording = demo.State == OptimizeToolPhysicsDemo.DemoState.Recording;
+             bool failed = demo.State == OptimizeToolPhysicsDemo.DemoState.Error;
+             bool recordingFailed = failed && demo.FailedDuringRecording;
+@@ -15,23 +17,23 @@
+                 : failed ? (recordingFailed ? "LEFT   RECORDING FAILED  physics held" : "LEFT   PLAYBACK FAILED   physics held")
+                 : demo.HasRecordingReference ? "LEFT   RECORDED ORIGINAL  physics held" : "LEFT   REFERENCE MISSING  physics held";
+             string comparison = recording ? "Capturing original physics observations...\n"
+-                : failed ? (demo.SavedPrefab != null
++                : failed ? (demo.SavedPrefab == null ? "No saved take available: RECORD to retry.\n"
++                    : comparable
+                     ? "Previous saved take available: COMPARE or RECORD again.\n"
+-                    : "No saved take available: RECORD to retry.\n")
+-                : demo.HasRecordingReference
++                    : "RECORD a new take before comparing.\n")
++                : comparable
+                 ? $"Peak recorded-pose delta: {demo.MaxPositionError:0.000000} m / {demo.MaxRotationError:0.000} deg\n"
+                     + $"Checked {demo.ComparisonSampleCount} / {demo.RecordingReference.ObservationCount} original physics observations.\n"
+-                : "Recorded-pose delta unavailable: RECORD a new take.\n"
+-                    + "Legacy Prefab playback remains available.\n";
++                : "RECORD a take to create its required comparison reference.\n";
+             AnimationClip clip = demo.SavedPrefab != null ? demo.SavedPrefab.GetComponent<Animation>()?.clip : null;
+             float duration = recording || recordingFailed || clip == null ? demo.Duration : clip.length;
+             return $"{demo.State.ToString().ToUpperInvariant()}   {demo.Elapsed:0.00} / {duration:0.00} s\n"
+                 + source + "\nRIGHT  RECORDED PREFAB    0 Rigidbodies\n\n"
+                 + (!string.IsNullOrEmpty(demo.LastError) ? (recordingFailed ? "Recording failed: " : "Playback failed: ") + demo.LastError : saved) + "\n"
+                 + $"RECORD: still for {demo.ReleaseDelay:0.0} s, then real physics.\n"
+-                + (demo.HasRecordingReference
++                + (comparable
+                     ? "COMPARE: original observations and Prefab at the same time.\n"
+-                    : "COMPARE: play the saved Prefab without physics.\n")
++                    : "COMPARE requires the saved take and its recording reference.\n")
+                 + comparison
+                 + (Application.isEditor
+                     ? failed ? (recordingFailed ? "The failed attempt was not saved." : "Playback did not change the saved take.") : "Saved Prefabs replay without physics calculations."
+--- before/Tests/Editor/MeshRefactoringTests.cs
++++ after/Tests/Editor/MeshRefactoringTests.cs
+@@ -78,16 +78,16 @@
+         }
+ 
+         [Test]
+-        public void TypedRequestCopiesTheSourceListAndMatchesTheLegacyComponent()
++        public void TypedRequestCopiesTheSourceListAndMatchesTheComponent()
+         {
+             MeshFilter source = Source("Source"); var inputs = new[] { source };
+             var request = new MeshBuildRequest(inputs, Matrix4x4.identity, singleMesh: true);
+             inputs[0] = null;
+             using (MeshBuildResult typed = MeshBuildPipeline.Build(request))
+-            using (MeshBuildResult legacy = Combiner(source).BuildMeshes())
+-            {
+-                CollectionAssert.AreEqual(legacy.Meshes[0].vertices, typed.Meshes[0].vertices);
+-                CollectionAssert.AreEqual(legacy.Meshes[0].triangles, typed.Meshes[0].triangles);
++            using (MeshBuildResult component = Combiner(source).BuildMeshes())
++            {
++                CollectionAssert.AreEqual(component.Meshes[0].vertices, typed.Meshes[0].vertices);
++                CollectionAssert.AreEqual(component.Meshes[0].triangles, typed.Meshes[0].triangles);
+             }
+         }
+ 
+@@ -342,16 +342,14 @@
+         }
+ 
+         [Test]
+-        public void DirectBuildCanRecoverAfterFailureWithoutChangingLegacyInitializationApi()
++        public void DirectBuildCanRetryCorrectedSettingsAfterFailure()
+         {
+             MeshFilter source = Source("Source"); MeshCombiner component = Combiner(source);
+             Set(component, "_targetMeshFilterArray", new MeshFilter[] { null });
+-            Assert.Throws<ArgumentException>(() => component.BuildMeshes()); Assert.IsTrue(component.IsFaulted);
++            Assert.Throws<ArgumentException>(() => component.BuildMeshes());
+             Set(component, "_targetMeshFilterArray", new[] { source });
+-            using (component.BuildMeshes()) Assert.IsFalse(component.IsFaulted);
+-            Assert.IsFalse(component.IsInitialized);
+-            component.Init(); Assert.IsTrue(component.IsInitialized);
+-            component.Release(); Assert.IsFalse(component.IsInitialized);
++            using (MeshBuildResult result = component.BuildMeshes()) Assert.AreEqual(1, result.Parts.Count);
++            Assert.AreEqual(1, component.CombineAndSaveMeshes().Length);
+         }
+ 
+         [Test]
+@@ -447,7 +445,7 @@
+         }
+ 
+         [Test]
+-        public void ExistingShowcasePrefabResolvesAllScriptsAndModeReferencesWithoutMigration()
++        public void ShowcasePrefabResolvesAllScriptsAndCurrentModeReferences()
+         {
+             const string path = "Assets/_OptimizeTool/Prefab/OptimizeToolShowcase.prefab";
+             GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+--- before/Tests/Editor/PhysicsRecorderTests.cs
++++ after/Tests/Editor/PhysicsRecorderTests.cs
+@@ -69,7 +69,7 @@
+             Observe(0.7f, 2f, 80f);
+             Observe(0.8f, 2f, 80f);
+             AssertSaved(0.8f);
+-            _playback = Object.Instantiate(_recorder.ResultPrefab);
++            _playback = Object.Instantiate(_recorder.Result?.Prefab);
+             AssertPose(0f, 0f, 20f);
+             AssertPose(0.15f, 0f, 20f);
+             AssertPose(0.25f, 0.5f, 30f);
+@@ -78,7 +78,7 @@
+             AssertPose(0.75f, 2f, 80f);
+             AssertPose(0.8f, 2f, 80f);
+             Assert.That(_body.localPosition.x, Is.EqualTo(2f), "Saving must not rewind the source.");
+-            Assert.That(_recorder.ResultPrefab.transform.Find("Body").localPosition.x, Is.EqualTo(0f));
++            Assert.That(_recorder.Result?.Prefab.transform.Find("Body").localPosition.x, Is.EqualTo(0f));
+         }
+ 
+         [Test]
+@@ -95,7 +95,7 @@
+                 Assert.AreEqual(0, collection.Count, name);
+             }
+             Assert.AreSame(result, _recorder.Result);
+-            Assert.IsTrue(_recorder.IsSaveCompleted);
++            Assert.IsTrue((_recorder.Result?.Succeeded ?? false));
+         }
+ 
+         [Test]
+@@ -104,7 +104,7 @@
+             CreateFixture();
+             _recorder.StartRecording(0.1f);
+             Frame(0.1f);
+-            string path = AssetDatabase.GetAssetPath(_recorder.ResultClip);
++            string path = AssetDatabase.GetAssetPath(_recorder.Result?.Clip);
+             byte[] contents = File.ReadAllBytes(path), meta = File.ReadAllBytes(path + ".meta");
+             var snapshot = new AssetFileSnapshot(path);
+             Assert.AreEqual(contents.LongLength, snapshot.ContentBytes);
+@@ -159,8 +159,8 @@
+             AssertSaved(0.12f);
+             float[] times = Array.ConvertAll(PositionCurve().keys, k => k.time);
+             Assert.That(times, Has.Some.EqualTo(0.06f).Within(0.00001f));
+-            Assert.That(AssetDatabase.GetAssetPath(_recorder.ResultClip), Is.EqualTo(_folder + "/Recorded.anim"));
+-            Assert.That(_recorder.ResultClip.frameRate, Is.EqualTo(1f / 0.03f).Within(0.001f));
++            Assert.That(AssetDatabase.GetAssetPath(_recorder.Result?.Clip), Is.EqualTo(_folder + "/Recorded.anim"));
++            Assert.That(_recorder.Result?.Clip.frameRate, Is.EqualTo(1f / 0.03f).Within(0.001f));
+         }
+ 
+         [Test]
+@@ -184,7 +184,7 @@
+             _recorder.StartRecording(0.1f);
+             Frame(0.1f);
+             AssertSaved(0.1f);
+-            GameObject prefab = _recorder.ResultPrefab;
++            GameObject prefab = _recorder.Result?.Prefab;
+             Assert.That(prefab.GetComponentsInChildren<Rigidbody>(true), Is.Empty);
+             Assert.That(prefab.GetComponentsInChildren<Collider>(true), Is.Empty);
+             Assert.That(prefab.GetComponentsInChildren<Joint>(true), Is.Empty);
+@@ -206,19 +206,19 @@
+             CreateFixture();
+             _recorder.StartRecording(0.1f);
+             Observe(0.1f, 1f);
+-            string clipPath = AssetDatabase.GetAssetPath(_recorder.ResultClip);
+-            string prefabPath = AssetDatabase.GetAssetPath(_recorder.ResultPrefab);
++            string clipPath = AssetDatabase.GetAssetPath(_recorder.Result?.Clip);
++            string prefabPath = AssetDatabase.GetAssetPath(_recorder.Result?.Prefab);
+             string clipGuid = AssetDatabase.AssetPathToGUID(clipPath);
+             string prefabGuid = AssetDatabase.AssetPathToGUID(prefabPath);
+-            AnimationClip originalReference = _recorder.ResultClip;
++            AnimationClip originalReference = _recorder.Result?.Clip;
+             Set("_overwriteExistingAssets", true);
+             _recorder.StartRecording(0.2f);
+             Observe(0.2f, 4f);
+             AssertSaved(0.2f);
+             Assert.That(AssetDatabase.AssetPathToGUID(clipPath), Is.EqualTo(clipGuid));
+             Assert.That(AssetDatabase.AssetPathToGUID(prefabPath), Is.EqualTo(prefabGuid));
+-            Assert.That(_recorder.ResultClip, Is.SameAs(originalReference));
+-            Assert.That(_recorder.ResultPrefab.GetComponent<Animation>().clip, Is.SameAs(originalReference));
++            Assert.That(_recorder.Result?.Clip, Is.SameAs(originalReference));
++            Assert.That(_recorder.Result?.Prefab.GetComponent<Animation>().clip, Is.SameAs(originalReference));
+         }
+ 
+         [Test]
+@@ -235,7 +235,7 @@
+             Assert.Throws<InvalidOperationException>(() => _recorder.StopRecording());
+             Assert.That(_recorder.IsRecording, Is.False);
+             Assert.That(_recorder.IsSaving, Is.False);
+-            Assert.That(_recorder.IsSaveCompleted, Is.False);
++            Assert.That((_recorder.Result?.Succeeded ?? false), Is.False);
+             Assert.That(_recorder.IsFaulted, Is.True);
+             Assert.That(_recorder.LastError, Is.Not.Null);
+             Assert.That(_recorder.Result.Error, Is.SameAs(_recorder.LastError));
+@@ -289,7 +289,7 @@
+         }
+ 
+         [Test]
+-        public void CompletionResultMatchesLegacyApiAndSurvivesReleaseUntilTheNextTake()
++        public void CompletionResultSurvivesReleaseUntilTheNextTake()
+         {
+             CreateFixture();
+             _recorder.StartRecording(1f);
+@@ -300,11 +300,11 @@
+             Assert.That(result.StopReason, Is.EqualTo(PhysicsRecordingStopReason.Stopped));
+             _recorder.Release();
+             Assert.That(_recorder.Result, Is.SameAs(result));
+-            Assert.That(_recorder.IsSaveCompleted, Is.True);
++            Assert.That((_recorder.Result?.Succeeded ?? false), Is.True);
+             _recorder.Init();
+             _recorder.StartRecording(0.2f, "Next");
+             Assert.That(_recorder.Result, Is.Null);
+-            Assert.That(_recorder.IsSaveCompleted, Is.False);
++            Assert.That((_recorder.Result?.Succeeded ?? false), Is.False);
+             Observe(0.2f, 3f);
+             AssertSaved(0.2f);
+             Assert.That(_recorder.Result.StopReason, Is.EqualTo(PhysicsRecordingStopReason.DurationReached));
+@@ -338,10 +338,10 @@
+             AssetDatabase.StartAssetEditing();
+             try { Assert.Throws<InvalidOperationException>(() => _recorder.StopRecording()); }
+             finally { AssetDatabase.StopAssetEditing(); }
+-            Assert.That(_recorder.IsSaveCompleted, Is.False);
++            Assert.That((_recorder.Result?.Succeeded ?? false), Is.False);
+             Assert.That(_recorder.IsFaulted, Is.True);
+-            Assert.That(_recorder.ResultClip, Is.Null);
+-            Assert.That(_recorder.ResultPrefab, Is.Null);
++            Assert.That(_recorder.Result?.Clip, Is.Null);
++            Assert.That(_recorder.Result?.Prefab, Is.Null);
+             if (overwrite)
+             {
+                 AssetDatabase.ImportAsset(clipPath, ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
+@@ -387,8 +387,8 @@
+             Assert.Greater(metrics.AssetSaveMilliseconds, 0d);
+             Assert.GreaterOrEqual(metrics.TotalExportMilliseconds, metrics.AssetSaveMilliseconds);
+             TestContext.WriteLine(FormattableString.Invariant($"RECORDING_METRICS transforms={metrics.TransformCount} observations={metrics.ObservationCount} poses={metrics.StoredPoseCount} hierarchy_ms={metrics.HierarchyValidationMilliseconds:F4} sampling_ms={metrics.SamplingMilliseconds:F4} curves_ms={metrics.CurveBuildMilliseconds:F4} prefab_ms={metrics.PrefabBuildMilliseconds:F4} save_ms={metrics.AssetSaveMilliseconds:F4} export_ms={metrics.TotalExportMilliseconds:F4}"));
+-            string path = AssetDatabase.GetAssetPath(_recorder.ResultClip);
+-            string prefabPath = AssetDatabase.GetAssetPath(_recorder.ResultPrefab);
++            string path = AssetDatabase.GetAssetPath(_recorder.Result?.Clip);
++            string prefabPath = AssetDatabase.GetAssetPath(_recorder.Result?.Prefab);
+             long bytes = new FileInfo(path).Length + new FileInfo(prefabPath).Length
+                 + new FileInfo(AssetDatabase.GetAssetPath(_recorder.Result.Reference)).Length;
+             Set("_overwriteExistingAssets", true);
+@@ -423,7 +423,7 @@
+             Assert.Less(PositionCurve().length, reference.ObservationCount);
+             AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
+             reference = AssetDatabase.LoadAssetAtPath<PhysicsRecordingReference>(path);
+-            Assert.AreSame(_recorder.ResultClip, reference.Clip);
++            Assert.AreSame(_recorder.Result?.Clip, reference.Clip);
+             Assert.That(reference.Sample(1, 0.06f).Position.x, Is.EqualTo(0.3f).Within(0.00001f));
+             Set("_overwriteExistingAssets", true);
+             _recorder.StartRecording(0.2f);
+@@ -433,20 +433,24 @@
+         }
+ 
+         [Test]
+-        public void InitializationFailureRetainsPreviouslyPublishedAssetReferences()
+-        {
+-            CreateFixture();
+-            _recorder.StartRecording(0.1f);
+-            Frame(0.1f);
+-            AnimationClip clip = _recorder.ResultClip;
+-            GameObject prefab = _recorder.ResultPrefab;
++        public void InitializationFailurePublishesOnlyItsFailureAndLeavesSavedAssetsIntact()
++        {
++            CreateFixture();
++            _recorder.StartRecording(0.1f);
++            Frame(0.1f);
++            AnimationClip clip = _recorder.Result?.Clip;
++            GameObject prefab = _recorder.Result?.Prefab;
++            PhysicsRecordingResult previous = _recorder.Result;
++            string clipPath = AssetDatabase.GetAssetPath(clip), prefabPath = AssetDatabase.GetAssetPath(prefab);
+             _recorder.Release();
+             Set("_recordInterval", 0f);
+             Assert.Throws<ArgumentOutOfRangeException>(_recorder.Init);
+             Assert.IsTrue(_recorder.IsFaulted);
+-            Assert.IsFalse(_recorder.IsSaveCompleted);
+-            Assert.AreSame(clip, _recorder.ResultClip);
+-            Assert.AreSame(prefab, _recorder.ResultPrefab);
++            Assert.IsFalse((_recorder.Result?.Succeeded ?? false));
++            Assert.IsNull(_recorder.Result.Clip); Assert.IsNull(_recorder.Result.Prefab);
++            Assert.IsTrue(previous.Succeeded);
++            Assert.AreSame(clip, AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath));
++            Assert.AreSame(prefab, AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath));
+             Assert.AreSame(_recorder.LastError, _recorder.Result.Error);
+         }
+ 
+@@ -465,12 +469,12 @@
+             catch (TargetInvocationException exception) { throw exception.InnerException; }
+         }
+ 
+-        private AnimationCurve PositionCurve() => AnimationUtility.GetEditorCurve(_recorder.ResultClip,
++        private AnimationCurve PositionCurve() => AnimationUtility.GetEditorCurve(_recorder.Result?.Clip,
+             EditorCurveBinding.FloatCurve("Body", typeof(Transform), "m_LocalPosition.x"));
+ 
+         private void AssertPose(float time, float x, float yaw)
+         {
+-            _recorder.ResultClip.SampleAnimation(_playback, time);
++            _recorder.Result?.Clip.SampleAnimation(_playback, time);
+             Transform body = _playback.transform.Find("Body");
+             Assert.That(body.localPosition.x, Is.EqualTo(x).Within(0.001f), $"position at {time}");
+             Assert.That(Quaternion.Angle(body.localRotation, Quaternion.Euler(0f, yaw, 0f)), Is.LessThan(0.05f), $"rotation at {time}");
+@@ -478,16 +482,16 @@
+ 
+         private void AssertSaved(float duration)
+         {
+-            Assert.That(_recorder.IsSaveCompleted, Is.True, _recorder.LastError?.ToString());
++            Assert.That((_recorder.Result?.Succeeded ?? false), Is.True, _recorder.LastError?.ToString());
+             Assert.That(_recorder.IsSaving, Is.False);
+             Assert.That(_recorder.IsRecording, Is.False);
+             Assert.That(_recorder.IsFaulted, Is.False);
+-            Assert.That(_recorder.ResultClip, Is.Not.Null);
+-            Assert.That(_recorder.ResultPrefab, Is.Not.Null);
+-            Assert.That(_recorder.ResultClip.length, Is.EqualTo(duration).Within(0.0001f));
+-            Assert.That(_recorder.ResultClip.legacy, Is.True);
+-            Animation animation = _recorder.ResultPrefab.GetComponent<Animation>();
+-            Assert.That(animation.clip, Is.EqualTo(_recorder.ResultClip));
++            Assert.That(_recorder.Result?.Clip, Is.Not.Null);
++            Assert.That(_recorder.Result?.Prefab, Is.Not.Null);
++            Assert.That(_recorder.Result?.Clip.length, Is.EqualTo(duration).Within(0.0001f));
++            Assert.That(_recorder.Result?.Clip.legacy, Is.True);
++            Animation animation = _recorder.Result?.Prefab.GetComponent<Animation>();
++            Assert.That(animation.clip, Is.EqualTo(_recorder.Result?.Clip));
+             Assert.That(animation.playAutomatically, Is.True);
+         }
+     }
+--- before/Tests/PlayMode/OptimizeToolPhysicsDemoTests.cs
++++ after/Tests/PlayMode/OptimizeToolPhysicsDemoTests.cs
+@@ -228,7 +228,7 @@
+             Assert.IsTrue(bodies.Where((b, i) => Vector3.Distance(b.transform.localPosition, initial[i]) > 0.1f).Any());
+             double deadline = Time.realtimeSinceStartupAsDouble + 15d;
+             while (_demo.IsBusy && Time.realtimeSinceStartupAsDouble < deadline) yield return null;
+-            Assert.IsTrue(_demo.Recorder.IsSaveCompleted, _demo.LastError);
++            Assert.IsTrue((_demo.Recorder.Result?.Succeeded ?? false), _demo.LastError);
+             Assert.NotNull(_demo.Playback);
+             Assert.AreEqual(_folder + "/TestTake.prefab", AssetDatabase.GetAssetPath(_demo.SavedPrefab));
+             Assert.IsEmpty(_demo.Playback.GetComponentsInChildren<Rigidbody>(true));
+@@ -316,25 +316,26 @@
+         }
+ 
+         [UnityTest]
+-        public IEnumerator MissingReferenceKeepsLegacyPlaybackAndMarksTheDeltaUnavailable()
++        public IEnumerator MissingReferenceRejectsPlaybackWithoutChangingTheSavedTake()
+         {
+             Set(_demo, "_duration", 0.3f);
+             Set(_demo, "_releaseDelay", 0.1f);
+             _demo.Record();
+-            double deadline = Time.realtimeSinceStartupAsDouble + 10d;
+-            while (_demo.IsBusy && Time.realtimeSinceStartupAsDouble < deadline) yield return null;
++            yield return WaitForFinished();
+             _demo.ResetDemo();
++            string prefabPath = AssetDatabase.GetAssetPath(_demo.SavedPrefab);
++            byte[] before = File.ReadAllBytes(prefabPath);
+             AssetDatabase.DeleteAsset(AssetDatabase.GetAssetPath(_demo.RecordingReference));
++            LogAssert.Expect(LogType.Exception, new System.Text.RegularExpressions.Regex("Recording reference is required"));
+             _demo.Compare();
+-            deadline = Time.realtimeSinceStartupAsDouble + 10d;
+-            while (_demo.State == Samples.OptimizeToolPhysicsDemo.DemoState.Comparing
+-                && Time.realtimeSinceStartupAsDouble < deadline) yield return null;
+-            Assert.AreEqual(Samples.OptimizeToolPhysicsDemo.DemoState.Finished, _demo.State, _demo.LastError);
+-            Assert.NotNull(_demo.Playback);
+-            Assert.IsFalse(_demo.HasRecordingReference);
+-            Assert.IsTrue(float.IsNaN(_demo.MaxPositionError));
++            yield return null;
++            Assert.AreEqual(Samples.OptimizeToolPhysicsDemo.DemoState.Error, _demo.State);
++            Assert.IsNull(_demo.Playback); Assert.IsFalse(_demo.HasRecordingReference);
+             Assert.AreEqual(0, _demo.ComparisonSampleCount);
+-            StringAssert.Contains("unavailable", _demo.GetStatusText());
++            StringAssert.Contains("RECORD a new take", _demo.GetStatusText());
++            StringAssert.DoesNotContain("COMPARE or RECORD", _demo.GetStatusText());
++            StringAssert.DoesNotContain("Saved recording ready", _demo.GetStatusText());
++            CollectionAssert.AreEqual(before, File.ReadAllBytes(prefabPath));
+             Assert.IsTrue(_demo.SourceRoot.GetComponentsInChildren<Rigidbody>().All(b => b.isKinematic));
+             LogAssert.NoUnexpectedReceived();
+         }
+@@ -409,7 +410,7 @@
+             _demo.Record();
+             deadline = Time.realtimeSinceStartupAsDouble + 10d;
+             while (_demo.IsBusy && Time.realtimeSinceStartupAsDouble < deadline) yield return null;
+-            Assert.IsTrue(_demo.Recorder.IsSaveCompleted, _demo.LastError);
++            Assert.IsTrue((_demo.Recorder.Result?.Succeeded ?? false), _demo.LastError);
+             Assert.AreEqual(guid, AssetDatabase.AssetPathToGUID(path));
+             Assert.NotNull(_demo.Playback);
+             LogAssert.NoUnexpectedReceived();
+@@ -432,9 +433,9 @@
+             StringAssert.Contains("0.00 / 0.87 s", _demo.GetStatusText());
+             StringAssert.Contains("Capturing original physics observations", _demo.GetStatusText());
+             yield return WaitForFinished();
+-            Assert.IsTrue(_demo.Recorder.IsSaveCompleted, _demo.LastError);
++            Assert.IsTrue((_demo.Recorder.Result?.Succeeded ?? false), _demo.LastError);
+             Assert.That(_demo.RecordingReference.Duration, Is.EqualTo(0.87f).Within(0.0001f));
+-            Assert.AreSame(_demo.Recorder.ResultClip, _demo.RecordingReference.Clip);
++            Assert.AreSame(_demo.Recorder.Result?.Clip, _demo.RecordingReference.Clip);
+             for (int i = 0; i < paths.Length; i++)
+                 Assert.AreEqual(guids[i], AssetDatabase.AssetPathToGUID(paths[i]));
+             Assert.IsFalse(before[0].SequenceEqual(File.ReadAllBytes(paths[0])));
+@@ -490,7 +491,7 @@
+             Assert.IsTrue(ButtonNamed("RECORD").interactable);
+             Assert.AreEqual(overwrite, ButtonNamed("COMPARE").interactable);
+             Assert.IsTrue(ButtonNamed("RESET").interactable);
+-            Assert.IsFalse(_demo.Recorder.IsSaveCompleted);
++            Assert.IsFalse((_demo.Recorder.Result?.Succeeded ?? false));
+             Assert.IsTrue(_demo.CanRecord);
+             Assert.IsTrue(_demo.SourceRoot.GetComponentsInChildren<Rigidbody>().All(b => b.isKinematic));
+             for (int i = 0; i < paths.Length; i++)
+@@ -517,15 +518,15 @@
+             _demo.Record();
+             yield return WaitForFinished();
+             Assert.IsFalse(_demo.Recorder.IsFaulted);
+-            Assert.IsTrue(_demo.Recorder.IsSaveCompleted, _demo.LastError);
++            Assert.IsTrue((_demo.Recorder.Result?.Succeeded ?? false), _demo.LastError);
+             Assert.IsNull(_demo.LastError);
+             Assert.That(_demo.RecordingReference.Duration, Is.EqualTo(0.65f).Within(0.0001f));
+-            Assert.AreSame(_demo.Recorder.ResultClip, _demo.RecordingReference.Clip);
+-            LogAssert.NoUnexpectedReceived();
+-        }
+-
+-        [UnityTest]
+-        public IEnumerator LegacyPlaybackSurvivesResetAndModeSwitchingAndCanUpgradeByRerecording()
++            Assert.AreSame(_demo.Recorder.Result?.Clip, _demo.RecordingReference.Clip);
++            LogAssert.NoUnexpectedReceived();
++        }
++
++        [UnityTest]
++        public IEnumerator MissingReferenceStaysRejectedAcrossResetAndModesUntilANewTakeIsRecorded()
+         {
+             Set(_demo, "_duration", 0.6f);
+             Set(_demo, "_releaseDelay", 0.1f);
+@@ -536,29 +537,24 @@
+             AssetDatabase.DeleteAsset(paths[2]);
+             byte[][] bytes = paths.Take(2).Select(File.ReadAllBytes).ToArray();
+             Set(_demo, "_duration", 0.8f);
++            LogAssert.Expect(LogType.Exception, new System.Text.RegularExpressions.Regex("Recording reference is required"));
+             _demo.ResetDemo();
++            LogAssert.Expect(LogType.Exception, new System.Text.RegularExpressions.Regex("Recording reference is required"));
+             _demo.Compare();
+-            yield return new WaitForSeconds(0.3f);
+-            Assert.IsFalse(_demo.HasRecordingReference);
+-            Assert.IsTrue(float.IsNaN(_demo.MaxPositionError));
+-            _demo.ResetDemo();
++            Assert.IsNull(_demo.Playback);
+             _overview.SelectFeature(0);
+             yield return null;
++            LogAssert.Expect(LogType.Exception, new System.Text.RegularExpressions.Regex("Recording reference is required"));
+             _overview.SelectFeature(4);
+             yield return null;
+-            _demo.Compare();
+-            yield return WaitForFinished();
+-            Assert.IsFalse(_demo.HasRecordingReference);
++            Assert.AreEqual(Samples.OptimizeToolPhysicsDemo.DemoState.Error, _demo.State);
++            Assert.IsFalse(_demo.HasRecordingReference); Assert.IsNull(_demo.Playback);
+             Assert.AreEqual(0, _demo.ComparisonSampleCount);
+-            StringAssert.Contains("unavailable", _demo.GetStatusText());
+-            StringAssert.Contains("0.60 / 0.60 s", _demo.GetStatusText());
+-            StringAssert.Contains("COMPARE: play the saved Prefab without physics", _demo.GetStatusText());
+-            StringAssert.DoesNotContain("original observations and Prefab at the same time", _demo.GetStatusText());
+-            for (int i = 0; i < 2; i++) Assert.AreEqual(bytes[i], File.ReadAllBytes(paths[i]));
++            StringAssert.DoesNotContain("Prefab playback remains available", _demo.GetStatusText());
++            for (int i = 0; i < 2; i++) CollectionAssert.AreEqual(bytes[i], File.ReadAllBytes(paths[i]));
+             _demo.Record();
+             yield return WaitForFinished();
+             Assert.IsTrue(_demo.HasRecordingReference);
+-            Assert.IsFalse(float.IsNaN(_demo.MaxPositionError));
+             Assert.AreEqual(_demo.RecordingReference.ObservationCount, _demo.ComparisonSampleCount);
+             for (int i = 0; i < 2; i++) Assert.AreEqual(guids[i], AssetDatabase.AssetPathToGUID(paths[i]));
+             LogAssert.NoUnexpectedReceived();
+@@ -600,9 +596,9 @@
+             if (componentOnly) _demo.enabled = false;
+             else _overview.gameObject.SetActive(false);
+             Assert.IsFalse(_demo.Recorder.IsRecording, "Disabling must finish even if the recorder remains enabled.");
+-            Assert.IsTrue(_demo.Recorder.IsSaveCompleted, _demo.LastError);
+-            Assert.AreSame(_demo.Recorder.ResultPrefab, _demo.SavedPrefab);
+-            Assert.That(_demo.Elapsed, Is.EqualTo(_demo.Recorder.ResultClip.length).Within(0.0001f));
++            Assert.IsTrue((_demo.Recorder.Result?.Succeeded ?? false), _demo.LastError);
++            Assert.AreSame(_demo.Recorder.Result?.Prefab, _demo.SavedPrefab);
++            Assert.That(_demo.Elapsed, Is.EqualTo(_demo.Recorder.Result?.Clip.length).Within(0.0001f));
+             Assert.IsFalse(_demo.IsBusy);
+             Assert.IsFalse(_demo.CanRecord);
+             Assert.IsFalse(_demo.CanCompare);
+@@ -626,7 +622,7 @@
+             _demo.Record();
+             deadline = Time.realtimeSinceStartupAsDouble + 10d;
+             while (_demo.IsBusy && Time.realtimeSinceStartupAsDouble < deadline) yield return null;
+-            Assert.IsTrue(_demo.Recorder.IsSaveCompleted, _demo.LastError);
++            Assert.IsTrue((_demo.Recorder.Result?.Succeeded ?? false), _demo.LastError);
+             Assert.NotNull(_demo.Playback);
+             LogAssert.NoUnexpectedReceived();
+         }
+@@ -638,7 +634,7 @@
+             _demo.enabled = false;
+             Assert.IsFalse(_demo.IsBusy);
+             Assert.IsFalse(_demo.Recorder.IsRecording);
+-            Assert.IsFalse(_demo.Recorder.IsSaveCompleted);
++            Assert.IsFalse((_demo.Recorder.Result?.Succeeded ?? false));
+             Assert.IsNull(_demo.SavedPrefab);
+             _demo.enabled = true;
+             _demo.ResetDemo();
+--- before/Tests/PlayMode/PhysicsRecorderPlaybackTests.cs
++++ after/Tests/PlayMode/PhysicsRecorderPlaybackTests.cs
+@@ -63,7 +63,7 @@
+             while (_recorder.IsRecording && Time.realtimeSinceStartupAsDouble < deadline) yield return null;
+             AssertSaved(0.13f);
+             Assert.That(PhysicsRecorderCallbackProbe.AwakeCount, Is.EqualTo(awakeCount), "Saving must not awaken gameplay clones.");
+-            _playback = Object.Instantiate(_recorder.ResultPrefab);
++            _playback = Object.Instantiate(_recorder.Result?.Prefab);
+             Assert.That(_playback.GetComponentInChildren<Rigidbody>(), Is.Null);
+             Assert.That(_playback.GetComponentInChildren<PhysicsRecorderCallbackProbe>(), Is.Null);
+             Animation animation = _playback.GetComponent<Animation>();
+@@ -73,7 +73,7 @@
+             yield return new WaitForSeconds(0.06f);
+             Assert.That(body.localPosition.y, Is.LessThan(5f));
+             yield return new WaitForSeconds(0.2f);
+-            AnimationCurve y = AnimationUtility.GetEditorCurve(_recorder.ResultClip,
++            AnimationCurve y = AnimationUtility.GetEditorCurve(_recorder.Result?.Clip,
+                 EditorCurveBinding.FloatCurve("Body", typeof(Transform), "m_LocalPosition.y"));
+             Assert.That(body.localPosition.y, Is.EqualTo(y.Evaluate(0.13f)).Within(0.002f));
+         }
+@@ -84,9 +84,9 @@
+             _recorder.StartRecording(5f);
+             yield return new WaitForFixedUpdate();
+             _host.SetActive(false);
+-            Assert.That(_recorder.IsSaveCompleted, Is.True);
++            Assert.That((_recorder.Result?.Succeeded ?? false), Is.True);
+             Assert.That(_recorder.Result.StopReason, Is.EqualTo(PhysicsRecordingStopReason.Disabled));
+-            Assert.That(_recorder.ResultPrefab, Is.Not.Null);
++            Assert.That(_recorder.Result?.Prefab, Is.Not.Null);
+             _host.SetActive(true);
+             Set("_animationFileName", "Restarted");
+             _recorder.StartRecording(0.05f);
+@@ -101,7 +101,7 @@
+             _recorder.StartRecording(5f);
+             yield return new WaitForFixedUpdate();
+             _recorder.StopRecording();
+-            Assert.That(_recorder.IsSaveCompleted, Is.True);
++            Assert.That((_recorder.Result?.Succeeded ?? false), Is.True);
+             Set("_animationFileName", "Restarted");
+             _recorder.StartRecording(0.05f);
+             double deadline = Time.realtimeSinceStartupAsDouble + 10d;
+@@ -114,13 +114,13 @@
+ 
+         private void AssertSaved(float duration)
+         {
+-            Assert.That(_recorder.IsSaveCompleted, Is.True, _recorder.LastError?.ToString());
++            Assert.That((_recorder.Result?.Succeeded ?? false), Is.True, _recorder.LastError?.ToString());
+             Assert.That(_recorder.IsSaving, Is.False);
+             Assert.That(_recorder.IsRecording, Is.False);
+             Assert.That(_recorder.IsFaulted, Is.False);
+-            Assert.That(_recorder.ResultClip, Is.Not.Null);
+-            Assert.That(_recorder.ResultPrefab, Is.Not.Null);
+-            Assert.That(_recorder.ResultClip.length, Is.EqualTo(duration).Within(0.0001f));
++            Assert.That(_recorder.Result?.Clip, Is.Not.Null);
++            Assert.That(_recorder.Result?.Prefab, Is.Not.Null);
++            Assert.That(_recorder.Result?.Clip.length, Is.EqualTo(duration).Within(0.0001f));
+         }
+     }
+ 

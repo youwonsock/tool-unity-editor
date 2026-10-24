@@ -14,9 +14,9 @@ namespace Common.TransformPath
     /// Pure event intent and lifecycle execution used by the Unity event
     /// bridge. It has no scheduler, component, or ScriptableObject ownership.
     /// </summary>
-    internal sealed class PathEventRuntime
+    internal static class PathEventRuntime
     {
-        public EPathEventIntent ResolveIntent(
+        public static EPathEventIntent ResolveIntent(
             PathEventDefinition definition,
             IPathPlaybackState playback,
             bool resumeOnly)
@@ -31,7 +31,7 @@ namespace Common.TransformPath
                 resumeOnly);
         }
 
-        public EPathEventIntent ResolveIntent(
+        public static EPathEventIntent ResolveIntent(
             PathEventDefinition definition,
             EPathMoveType moveType,
             EPathFollowerState state,
@@ -63,7 +63,7 @@ namespace Common.TransformPath
             return EPathEventIntent.None;
         }
 
-        public PathCommandReceipt ApplyLifecycle(
+        public static PathCommandReceipt ApplyLifecycle(
             EPathEventIntent intent,
             IPathFollower follower)
         {

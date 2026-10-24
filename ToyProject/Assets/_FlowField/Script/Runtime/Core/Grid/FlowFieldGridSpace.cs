@@ -819,23 +819,6 @@ namespace Common.FlowField
             };
         }
 
-        public bool Overlaps(FlowFieldCellRect other)
-        {
-            if (!IsValid || !other.IsValid)
-                return false;
-
-            return MinX <= other.MaxX
-                && MaxX >= other.MinX
-                && MinY <= other.MaxY
-                && MaxY >= other.MinY
-                && MinZ <= other.MaxZ
-                && MaxZ >= other.MinZ;
-        }
-
-        public int CellCountEstimate => IsValid
-            ? (MaxX - MinX + 1) * (MaxY - MinY + 1) * (MaxZ - MinZ + 1)
-            : 0;
-
         public static FlowFieldCellRect FromBounds(
             FlowFieldGridSpace grid,
             Bounds worldBounds,

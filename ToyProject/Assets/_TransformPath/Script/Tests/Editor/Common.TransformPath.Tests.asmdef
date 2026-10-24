@@ -1,0 +1,12 @@
+{
+    "name": "Common.TransformPath.Tests",
+    "rootNamespace": "Common.TransformPath.Tests",
+    "references": [
+        "Common.TransformPath.Runtime",
+        "Common.TransformPath.Editor"
+    ],
+    "includePlatforms": ["Editor"],
+    "optionalUnityReferences": ["TestAssemblies"],
+    "autoReferenced": false,
+    "defineConstraints": ["UNITY_INCLUDE_TESTS"]
+}

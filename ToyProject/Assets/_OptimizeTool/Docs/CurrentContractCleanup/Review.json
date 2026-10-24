@@ -1,0 +1,70 @@
+{
+  "tests": {
+    "editmode": {
+      "total": "103",
+      "passed": "103",
+      "failed": "0",
+      "skipped": "0",
+      "result": "Passed",
+      "lifecycleTests": [
+        "Common.OptimizeTool.Tests.PhysicsDemoReloadLifecycleTests.DestroyedDisabledOwnerLeavesNoPreviewOrListenersAfterRecompilation",
+        "Common.OptimizeTool.Tests.PhysicsDemoReloadLifecycleTests.DisabledResetAndRepeatedRecompilationDoNotLeavePreviewsOrDuplicateListeners"
+      ]
+    },
+    "playmode": {
+      "total": "38",
+      "passed": "38",
+      "failed": "0",
+      "skipped": "0",
+      "result": "Passed",
+      "lifecycleTests": [
+        "Common.OptimizeTool.Tests.PhysicsDemoDestroyTests.DestroyingComparingDemoDetachesPlaybackAndAllOwnedCallbacks",
+        "Common.OptimizeTool.Tests.PhysicsDemoDestroyTests.DestroyingDisabledDemoDetachesPlaybackAndAllOwnedCallbacks"
+      ]
+    }
+  },
+  "pythonTests": {
+    "total": 10,
+    "passed": 10
+  },
+  "testedSourceFilesMatched": 147,
+  "cloneSourcesMatched": true,
+  "temporaryProjectRemoved": true,
+  "protectedFilesUnchanged": 180,
+  "prefabObjectIdsUnchanged": 169,
+  "changedPrefabObjects": [
+    "3611871496242918267"
+  ],
+  "readmeMissingLocalLinks": [],
+  "actualPointerValidation": {
+    "acceptedPointerClicks": 5,
+    "buttons": [
+      "PHYSICS Button",
+      "COMPARE Button",
+      "RECORD Button",
+      "RESET Button",
+      "COMPARE Button"
+    ],
+    "missingReferenceRejected": true,
+    "errorGuidesRecordOnly": true,
+    "newTakeSavedThreeAssets": true,
+    "auditedObservations": 42,
+    "resetReady": true,
+    "expectedExceptionMessages": [
+      "InvalidOperationException: Recording reference is required; RECORD a new take before comparing."
+    ],
+    "unexpectedWarningsOrErrors": [],
+    "interruptedFirstSessionExcluded": true,
+    "undeliveredRetryExcluded": true
+  },
+  "editor": {
+    "playing": false,
+    "dirty": false,
+    "compiling": false,
+    "gameMaximized": false,
+    "removedObservers": 1,
+    "optionsEnabled": true,
+    "options": "DisableDomainReload, DisableSceneReload"
+  },
+  "knownIntermediateFailure": "One first-save UI assertion failed after changing the no-saved-take wording. The current formatter restores that case while requiring RECORD when a prefab lacks its reference."
+}

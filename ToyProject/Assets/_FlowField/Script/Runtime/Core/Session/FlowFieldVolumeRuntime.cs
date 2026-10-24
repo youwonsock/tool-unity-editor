@@ -1,8 +1,11 @@
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using UnityEngine;
+using BuildContext = Common.FlowField.FlowFieldVolumeBuildContext;
+using VolumeFieldData = Common.FlowField.FlowFieldVolumeFieldData;
+using BuildPhase = Common.FlowField.FlowFieldVolumeBuildPhase;
+using static Common.FlowField.FlowFieldVolumeNavigation;
 
 namespace Common.FlowField
 {
@@ -97,38 +100,22 @@ namespace Common.FlowField
 
     internal sealed class FlowFieldVolumeSession : FlowFieldSessionBase, IFlowFieldBuildOperation
     {
-        private const int CellsPerStep = 64;
-        private const int ArrayElementsPerStep = 4096;
+        private const int CellsPerStep = FlowFieldVolumeNavigation.CellsPerStep;
+        private const int ArrayElementsPerStep = FlowFieldVolumeNavigation.ArrayElementsPerStep;
         private const double DefaultBudgetMilliseconds = 2.0;
         private const long MemoryBudgetBytes = 512L * 1024L * 1024L;
-        private const int Unreachable = int.MaxValue;
-        private const int MaxUncertainBounds = 64;
-        private const int MaxObstacleSweepColliders = 65536;
-
-        private readonly List<Collider> _dynamicObstacles = new List<Collider>(16);
-        // Unity overloads Collider equality after destruction. Keep the last
-        // bounds beside the reference so a destroyed registered collider can
-        // still invalidate its former cells.
-        private readonly List<Bounds> _dynamicObstacleBounds = new List<Bounds>(16);
-        private readonly Dictionary<Collider, Bounds> _dynamicBounds = new Dictionary<Collider, Bounds>();
-        private readonly Dictionary<Collider, Bounds> _observedObstacleBounds = new Dictionary<Collider, Bounds>(64);
-        private readonly Dictionary<Collider, ObstacleObservation> _observedObstacleStates
-            = new Dictionary<Collider, ObstacleObservation>(64);
-        private readonly HashSet<Collider> _seenObstacleColliders = new HashSet<Collider>();
-        private Collider[] _obstacleSweepBuffer = new Collider[512];
+        private const int Unreachable = FlowFieldVolumeNavigation.Unreachable;
+        private readonly FlowFieldVolumeObstacleTracker _obstacles;
         private Collider[] _registeredObstacleOverlapBuffer;
-        private readonly List<IFlowFieldVectorModifier> _modifiers = new List<IFlowFieldVectorModifier>(16);
-        private readonly Dictionary<IFlowFieldVectorModifier, ModifierObservation> _modifierObservations
-            = new Dictionary<IFlowFieldVectorModifier, ModifierObservation>(16);
-        private readonly List<Bounds> _uncertainBounds = new List<Bounds>(8);
-        private SafetyCellState[] _safetyStates;
-        private int _safetyEpoch;
+        private readonly FlowFieldVolumeModifierRegistry _modifierRegistry = new FlowFieldVolumeModifierRegistry();
+        private readonly FlowFieldVolumeSafetyState _safety = new FlowFieldVolumeSafetyState();
 
         private FlowFieldComputeSolver _computeSolver;
         private bool _gpuDisabled;
         private VolumeFieldData _committed;
         private BuildContext _build;
-        private FlowFieldVolumeRequest _pendingRequest;
+        // The latest accepted input is also the next build input when pending.
+        // A running BuildContext and published FieldData retain their own inputs.
         private bool _hasPendingRequest;
         private FlowFieldVolumeRequest _latestRequestedInput;
         private bool _hasLatestRequestedInput;
@@ -142,12 +129,14 @@ namespace Common.FlowField
         private int _revision;
         private int _generation;
         private static long _nextVisualizationResultId;
-        private long _registrationOrder;
         private bool _disposed;
+        private bool _pumping;
         private bool _runtimeScheduled;
         private long _buildReservationBytes;
         private long _committedReservationBytes;
-        private long _safetyReservationBytes;
+
+        internal FlowFieldVolumeSession()
+            => _obstacles = new FlowFieldVolumeObstacleTracker(MarkObstacleRegionDirty);
 
         internal override FlowFieldSpaceMode SpaceMode => FlowFieldSpaceMode.Volume3D;
         internal override FlowFieldBakeMode BakeMode => _bakeMode;
@@ -160,7 +149,7 @@ namespace Common.FlowField
         internal bool IsWaitingForExternalCompletion
             => _build != null && _build.GpuPending;
         internal bool IsBuilding
-            => IsRebuilding || HasPendingRequest;
+            => CanPump && (IsRebuilding || HasPendingRequest);
         internal override bool IsReady => (_state == FlowFieldRuntimeState.Building
                 || _state == FlowFieldRuntimeState.Ready)
             && _committed != null
@@ -174,12 +163,11 @@ namespace Common.FlowField
                 return checked(
                     _buildReservationBytes
                     + _committedReservationBytes
-                    + _safetyReservationBytes
+                    + _safety.SnapshotBytes
                     + (_computeSolver?.AllocatedBytes ?? 0L)
                     + EstimateAuxiliaryBytes());
             }
         }
-        internal long MemoryBudget => MemoryBudgetBytes;
         internal FlowFieldGridSpace Grid => _committed?.Grid ?? _build?.Request.Grid ?? default;
         internal bool HasPendingRequest => _hasPendingRequest || _build != null;
         internal bool TryGetLatestRequestedInput(out FlowFieldVolumeRequest request)
@@ -189,7 +177,7 @@ namespace Common.FlowField
         }
 
         internal bool ContainsModifier(IFlowFieldVectorModifier modifier)
-            => modifier != null && _modifiers.Contains(modifier);
+            => _modifierRegistry.Contains(modifier);
 
         internal float BuildProgress
         {
@@ -219,15 +207,12 @@ namespace Common.FlowField
             _fault = null;
             _gpuDisabled = false;
             _hasLatestRequestedInput = false;
-            _pendingRequest = default;
+            _latestRequestedInput = default;
             _hasPendingRequest = false;
-            _safetyStates = null;
-            _safetyEpoch = 0;
-            _uncertainBounds.Clear();
+            _safety.Reset();
             _suspendedByLifecycle = false;
             _buildReservationBytes = 0;
             _committedReservationBytes = 0;
-            _safetyReservationBytes = 0;
             _computeSolver?.Dispose();
             _computeSolver = null;
             if (computeShader != null)
@@ -243,8 +228,7 @@ namespace Common.FlowField
                     _computeSolver = null;
                 }
             }
-            _generation++;
-            InvalidateBaseLifetime();
+            InvalidateBuildGeneration();
             SetState(FlowFieldRuntimeState.Suspended);
         }
 
@@ -270,15 +254,13 @@ namespace Common.FlowField
             _hasLatestRequestedInput = true;
             if (_build != null && !_build.Request.HasSameGrid(request))
             {
-                _generation++;
+                InvalidateBuildGeneration();
                 // A grid/signature change invalidates the private staging
                 // arrays immediately. If an async GPU solve belongs to the
                 // discarded build, its late callback is ignored and the new
                 // request falls back to managed BFS until the solver is
                 // recreated by the next Init.
-                _build.Dispose();
-                _build = null;
-                _buildReservationBytes = 0;
+                DiscardBuild();
                 if (_computeSolver?.IsRunning == true)
                     _gpuDisabled = true;
             }
@@ -286,8 +268,7 @@ namespace Common.FlowField
                 && _committed.Request.HasSameGrid(request)
                 && (_committed.Request.ObstacleLayer.value != request.ObstacleLayer.value
                     || Mathf.Abs(_committed.Request.ObstacleClearance - request.ObstacleClearance) > 0.0001f))
-                _uncertainBounds.Add(request.WorldBounds);
-            _pendingRequest = request;
+                _safety.InvalidateRegion(request.WorldBounds);
             _hasPendingRequest = true;
             if (!IsFaulted && (_state != FlowFieldRuntimeState.Suspended || !_suspendedByLifecycle))
                 SetState(FlowFieldRuntimeState.Building);
@@ -295,9 +276,6 @@ namespace Common.FlowField
         }
 
         internal void Pump(double budgetMilliseconds = DefaultBudgetMilliseconds)
-            => PumpInternal(budgetMilliseconds);
-
-        internal void PumpInternal(double budgetMilliseconds = DefaultBudgetMilliseconds)
         {
             if (budgetMilliseconds <= 0d)
                 budgetMilliseconds = DefaultBudgetMilliseconds;
@@ -310,13 +288,18 @@ namespace Common.FlowField
 
         private void PumpInternal(in FlowFieldBuildBudget budget)
         {
-            if (_disposed || IsFaulted || _state == FlowFieldRuntimeState.Suspended
-                || _state == FlowFieldRuntimeState.Released)
+            if (_pumping || !CanPump)
                 return;
 
-            DetectDynamicObstacleChanges();
+            _pumping = true;
+            int pumpGeneration = _generation;
+            BuildContext activeBuild = _build;
             try
             {
+                if (!_obstacles.DetectRegisteredChanges()
+                    || !CanContinuePump(pumpGeneration, activeBuild))
+                    return;
+
                 while (!budget.IsExpired)
                 {
                     if (_build == null)
@@ -328,9 +311,10 @@ namespace Common.FlowField
                             return;
                         }
 
-                        FlowFieldVolumeRequest request = _pendingRequest;
+                        FlowFieldVolumeRequest request = _latestRequestedInput;
                         _hasPendingRequest = false;
-                        FlowFieldModifierWorkItem[] modifierSnapshots = CaptureModifierSnapshots();
+                        if (!TryCaptureModifiers(pumpGeneration, out FlowFieldModifierWorkItem[] modifierSnapshots))
+                            return;
                         long reservation = EstimateBuildBytes(request.Grid.CellCount, modifierSnapshots.Length);
                         if (!CanReserveForBuild(request, reservation))
                             throw new InvalidOperationException(
@@ -339,22 +323,23 @@ namespace Common.FlowField
                                 + $"(required {EstimateRequiredBytes(request, reservation) / (1024d * 1024d):0.0} MiB).");
                         _build = new BuildContext(
                             request,
-                            _generation,
-                            _safetyEpoch,
+                            pumpGeneration,
+                            _safety.Epoch,
                             modifierSnapshots);
                         _buildReservationBytes = reservation;
                     }
 
-                    if (!StepBuild(_build, budget))
+                    activeBuild = _build;
+                    if (!StepBuild(activeBuild, budget))
                         return;
 
-                    BuildContext completedBuild = _build;
+                    BuildContext completedBuild = activeBuild;
                     bool commitCallbackChangedGeneration = CommitBuild(completedBuild);
                     if (ReferenceEquals(_build, completedBuild))
                     {
-                        completedBuild.Dispose();
-                        _build = null;
+                        DiscardBuild();
                     }
+                    activeBuild = null;
                     // CommitBuild normally clears _build before invoking
                     // user callbacks. A callback is nevertheless allowed to
                     // Release and immediately Init/submit a new build. In
@@ -365,12 +350,12 @@ namespace Common.FlowField
                     // Commit callbacks are allowed to Release, Suspend or
                     // submit a new request. Never let the normal completion
                     // path overwrite that lifecycle decision with Ready.
-                    if (_disposed
-                        || _state == FlowFieldRuntimeState.Released
-                        || _state == FlowFieldRuntimeState.Suspended
-                        || _state == FlowFieldRuntimeState.Faulted
-                        || !IsInitialized)
+                    if (!CanPump)
                         return;
+                    // A successful grid replacement can advance the generation
+                    // itself. Only that completed transition may be adopted;
+                    // callback-driven changes have already returned above.
+                    pumpGeneration = _generation;
                     if (_hasPendingRequest)
                         continue;
                     if (_state == FlowFieldRuntimeState.Building)
@@ -384,22 +369,84 @@ namespace Common.FlowField
                 // only the private staging build. The latest coalesced request
                 // remains pending and must continue without Faulting the
                 // provider or publishing the stale result.
-                _build?.Dispose();
-                _build = null;
-                _buildReservationBytes = 0;
+                if (!CanContinuePump(pumpGeneration, activeBuild))
+                    return;
+                DiscardBuild();
                 if (_hasPendingRequest)
                     SetState(FlowFieldRuntimeState.Building);
             }
             catch (Exception exception)
             {
-                _build?.Dispose();
-                _build = null;
-                _buildReservationBytes = 0;
-                _hasPendingRequest = false;
-                _fault = exception;
-                SetState(FlowFieldRuntimeState.Faulted);
-            NotifyFailed(exception);
+                // An exception thrown after Release/Init, Suspend or Cancel
+                // still belongs to the old operation. It must not discard a
+                // newer request or overwrite the chosen lifecycle state.
+                if (CanContinuePump(pumpGeneration, activeBuild))
+                    ReportFault(exception);
             }
+            finally
+            {
+                _pumping = false;
+            }
+        }
+
+        private bool CanPump => !_disposed
+            && (_state == FlowFieldRuntimeState.Building || _state == FlowFieldRuntimeState.Ready);
+
+        private bool CanContinuePump(int generation, BuildContext build)
+            => CanPump && _generation == generation && ReferenceEquals(_build, build);
+
+        private void EnsureCurrentBuild(BuildContext build)
+        {
+            if (build == null || !CanContinuePump(build.Generation, build))
+                throw new OperationCanceledException("FlowField volume build is no longer current.");
+        }
+
+        private bool TryCaptureModifiers(int generation, out FlowFieldModifierWorkItem[] snapshots)
+        {
+            int captureVersion = _modifierRegistry.CaptureVersion;
+            try
+            {
+                snapshots = _modifierRegistry.CaptureSnapshots();
+            }
+            catch (Exception) when (!CanContinuePump(generation, null)
+                || captureVersion != _modifierRegistry.CaptureVersion)
+            {
+                snapshots = null;
+            }
+
+            if (!CanContinuePump(generation, null))
+                return false;
+            if (captureVersion == _modifierRegistry.CaptureVersion)
+                return true;
+
+            // Registration may change before the first BuildContext exists.
+            // QueueCurrentRequest then has no build/publication to fall back
+            // to. Retry the newest accepted input at the next owner boundary.
+            if (_hasLatestRequestedInput)
+                _hasPendingRequest = true;
+            return false;
+        }
+
+        private void InvalidateBuildGeneration()
+        {
+            unchecked { _generation++; }
+            _obstacles.InvalidateObservations();
+            _modifierRegistry.InvalidateCaptures();
+        }
+
+        private void DiscardBuild()
+        {
+            BuildContext previous = _build;
+            _build = null;
+            _buildReservationBytes = 0;
+            previous?.Dispose();
+        }
+
+        private void CancelCurrentBuild()
+        {
+            InvalidateBuildGeneration();
+            DiscardBuild();
+            _hasPendingRequest = false;
         }
 
         internal override bool TrySample(Vector3 worldPosition, out FlowFieldSample sample)
@@ -422,7 +469,7 @@ namespace Common.FlowField
 
             int index = field.Grid.ToFlatIndex(x, y, z);
             Vector3 center = field.Grid.LocalToWorldCenter(x, y, z);
-            if (IsLatestCellUnknown(field, index, center))
+            if (_safety.IsLatestCellUnknown(field, index, center))
             {
                 sample = new FlowFieldSample(Vector3.zero, 0f, Vector3.zero, false, true);
                 return true;
@@ -430,7 +477,7 @@ namespace Common.FlowField
 
             if (field.Blocked[index])
             {
-                if (IsEscapePathUnsafe(field, index))
+                if (_safety.IsEscapePathUnsafe(field, index))
                 {
                     sample = new FlowFieldSample(Vector3.zero, 0f, Vector3.zero, false, true);
                     return true;
@@ -440,19 +487,19 @@ namespace Common.FlowField
                 return true;
             }
 
-            if (IsLatestCellBlocked(field, index, center))
+            if (_safety.IsLatestCellBlocked(field, index))
             {
                 sample = new FlowFieldSample(Vector3.zero, 0f, Vector3.zero, false, true);
                 return true;
             }
 
             int next = field.NextCells[index];
-            if (next >= 0 && IsLatestPathUnsafe(field, index, next))
+            if (next >= 0 && _safety.IsLatestPathUnsafe(field, index, next))
             {
                 sample = new FlowFieldSample(Vector3.zero, 0f, Vector3.zero, false, true);
                 return true;
             }
-            if (next == -1 && IsDefaultDirectionPathUnsafe(field, index))
+            if (next == -1 && _safety.IsDefaultDirectionPathUnsafe(field, index))
             {
                 sample = new FlowFieldSample(Vector3.zero, 0f, Vector3.zero, false, true);
                 return true;
@@ -492,20 +539,7 @@ namespace Common.FlowField
         internal bool RegisterDynamicObstacle(Collider collider)
         {
             ThrowIfInputAvailable();
-            if (ReferenceEquals(collider, null))
-                throw new ArgumentNullException(nameof(collider));
-            if (collider == null)
-                throw new InvalidOperationException("Cannot register a destroyed Collider.");
-            if (FindDynamicObstacleIndex(collider) >= 0)
-                return false;
-            Bounds current = collider.bounds;
-            _observedObstacleBounds.Remove(collider);
-            _observedObstacleStates.Remove(collider);
-            _dynamicObstacles.Add(collider);
-            _dynamicObstacleBounds.Add(current);
-            _dynamicBounds[collider] = current;
-            MarkObstacleRegionDirty(current);
-            return true;
+            return _obstacles.Register(collider);
         }
 
         internal override bool RegisterObstacleCommand(Collider collider)
@@ -514,21 +548,7 @@ namespace Common.FlowField
         internal bool UnregisterDynamicObstacle(Collider collider)
         {
             ThrowIfInputAvailable();
-            if (ReferenceEquals(collider, null))
-                throw new ArgumentNullException(nameof(collider));
-            int obstacleIndex = FindDynamicObstacleIndex(collider);
-            if (obstacleIndex < 0)
-                return false;
-            Bounds previous = _dynamicObstacleBounds[obstacleIndex];
-            _dynamicBounds.Remove(collider);
-            _observedObstacleBounds.Remove(collider);
-            _observedObstacleStates.Remove(collider);
-            _dynamicObstacles.RemoveAt(obstacleIndex);
-            _dynamicObstacleBounds.RemoveAt(obstacleIndex);
-            if (FlowFieldGridSpace.IsFinite(previous.center)
-                && FlowFieldGridSpace.IsFinite(previous.size))
-                MarkObstacleRegionDirty(previous);
-            return true;
+            return _obstacles.Unregister(collider);
         }
 
         internal override bool UnregisterObstacleCommand(Collider collider)
@@ -538,21 +558,14 @@ namespace Common.FlowField
         {
             if (!FlowFieldGridSpace.IsFinite(bounds.center) || !FlowFieldGridSpace.IsFinite(bounds.size))
                 throw new ArgumentOutOfRangeException(nameof(bounds));
-            Bounds expanded = bounds;
-            FlowFieldVolumeRequest request = _hasLatestRequestedInput
-                ? _latestRequestedInput
-                : _pendingRequest;
+            FlowFieldVolumeRequest request = _latestRequestedInput;
             float margin = request.Grid.IsValid
                 ? request.Grid.CellSize + request.ObstacleClearance
                 : 1f;
-            expanded.Expand(Vector3.one * (margin * 2f));
-            _safetyEpoch++;
-            AddUncertainBounds(expanded);
+            _safety.MarkDirty(bounds, margin);
             if (_hasPendingRequest)
                 return;
-            if (_hasLatestRequestedInput)
-                _pendingRequest = _latestRequestedInput;
-            _hasPendingRequest = _hasLatestRequestedInput && _pendingRequest.Grid.IsValid;
+            _hasPendingRequest = _hasLatestRequestedInput && request.Grid.IsValid;
             if (_hasPendingRequest)
                 SetState(FlowFieldRuntimeState.Building);
         }
@@ -569,158 +582,26 @@ namespace Common.FlowField
                 return;
             FlowFieldVolumeRequest request = _hasLatestRequestedInput
                 ? _latestRequestedInput
-                : _build?.Request ?? _committed?.Request ?? _pendingRequest;
+                : _build?.Request ?? _committed?.Request ?? _latestRequestedInput;
             if (!request.Grid.IsValid
                 || !FlowFieldGridSpace.IsFinite(request.WorldBounds.center)
                 || !FlowFieldGridSpace.IsFinite(request.WorldBounds.size))
                 return;
 
-            Physics.SyncTransforms();
-            Bounds sweepBounds = request.WorldBounds;
-            float sweepMargin = request.Grid.CellSize + request.ObstacleClearance;
-            sweepBounds.Expand(Vector3.one * (sweepMargin * 2f));
-            int count = SweepObstacles(sweepBounds, request.ObstacleLayer, out bool complete);
-            if (!complete)
-            {
-                // A saturated query cannot prove that an old collider was
-                // removed. Keep the prior observations and conservatively
-                // hold the complete swept area Unknown until a full query is
-                // available.
-                MarkObstacleRegionDirty(sweepBounds);
-                return;
-            }
-
-            _seenObstacleColliders.Clear();
-            for (int index = 0; index < count; index++)
-            {
-                Collider collider = _obstacleSweepBuffer[index];
-                if (collider == null || FindDynamicObstacleIndex(collider) >= 0)
-                    continue;
-                _seenObstacleColliders.Add(collider);
-                Bounds current = collider.bounds;
-                ObstacleObservation currentState = ObstacleObservation.From(collider);
-                if (!_observedObstacleBounds.TryGetValue(collider, out Bounds previous))
-                {
-                    _observedObstacleBounds[collider] = current;
-                    _observedObstacleStates[collider] = currentState;
-                    MarkObstacleRegionDirty(current);
-                    continue;
-                }
-                if (!_observedObstacleStates.TryGetValue(collider, out ObstacleObservation previousState)
-                    || !previousState.Equals(currentState))
-                {
-                    MarkObstacleRegionDirty(previousState.Bounds.size.sqrMagnitude > 0f
-                        ? previousState.Bounds
-                        : previous);
-                    MarkObstacleRegionDirty(current);
-                    _observedObstacleBounds[collider] = current;
-                    _observedObstacleStates[collider] = currentState;
-                }
-            }
-
-            if (_observedObstacleBounds.Count == 0)
-                return;
-            List<Collider> removed = null;
-            foreach (KeyValuePair<Collider, Bounds> pair in _observedObstacleBounds)
-            {
-                if (_seenObstacleColliders.Contains(pair.Key))
-                    continue;
-                if (removed == null)
-                    removed = new List<Collider>();
-                removed.Add(pair.Key);
-                if (_observedObstacleStates.TryGetValue(pair.Key, out ObstacleObservation removedState))
-                    MarkObstacleRegionDirty(removedState.Bounds);
-                else
-                    MarkObstacleRegionDirty(pair.Value);
-            }
-            if (removed == null)
-                return;
-            for (int index = 0; index < removed.Count; index++)
-            {
-                _observedObstacleBounds.Remove(removed[index]);
-                _observedObstacleStates.Remove(removed[index]);
-            }
-        }
-
-        private int SweepObstacles(Bounds bounds, LayerMask obstacleLayer, out bool complete)
-        {
-            while (true)
-            {
-                int count = Physics.OverlapBoxNonAlloc(
-                    bounds.center,
-                    bounds.extents,
-                    _obstacleSweepBuffer,
-                    Quaternion.identity,
-                    obstacleLayer,
-                    QueryTriggerInteraction.Ignore);
-                if (count < _obstacleSweepBuffer.Length)
-                {
-                    complete = true;
-                    return count;
-                }
-                if (_obstacleSweepBuffer.Length >= MaxObstacleSweepColliders)
-                {
-                    complete = false;
-                    return count;
-                }
-                int nextCapacity = Math.Min(
-                    MaxObstacleSweepColliders,
-                    _obstacleSweepBuffer.Length * 2);
-                _obstacleSweepBuffer = new Collider[nextCapacity];
-            }
+            _obstacles.DetectUnregisteredChanges(in request);
         }
 
         internal void DetectModifierChanges()
         {
-            bool changed = false;
-            for (int index = _modifiers.Count - 1; index >= 0; index--)
-            {
-                IFlowFieldVectorModifier modifier = _modifiers[index];
-                if (IsMissingModifier(modifier))
-                {
-                    _modifierObservations.Remove(modifier);
-                    _modifiers.RemoveAt(index);
-                    changed = true;
-                    continue;
-                }
-
-                ModifierObservation current = ModifierObservation.From(modifier);
-                if (!_modifierObservations.TryGetValue(modifier, out ModifierObservation previous)
-                    || !previous.Equals(current))
-                {
-                    _modifierObservations[modifier] = current;
-                    changed = true;
-                }
-            }
-
-            if (changed)
-            {
-                SortModifiers();
-                ValidateModifierPriorities();
+            if (_modifierRegistry.DetectChanges())
                 QueueCurrentRequest();
-            }
         }
 
         internal bool RegisterModifier(IFlowFieldVectorModifier modifier)
         {
             ThrowIfInputAvailable();
-            if (modifier == null)
-                throw new ArgumentNullException(nameof(modifier));
-            if (modifier.InfluenceCollider == null)
-                throw new InvalidOperationException("Influence Collider is required.");
-            if (!modifier.InfluenceCollider.isTrigger)
-                throw new ArgumentException(FlowFieldModifierMaskBuilder.TriggerRequiredMessage, nameof(modifier));
-            if (modifier.InfluenceCollider is MeshCollider meshCollider && !meshCollider.convex)
-                throw new ArgumentException(FlowFieldModifierMaskBuilder.ConvexMeshRequiredMessage, nameof(modifier));
-            if (_modifiers.Contains(modifier))
+            if (!_modifierRegistry.Register(modifier))
                 return false;
-            for (int index = 0; index < _modifiers.Count; index++)
-                if (_modifiers[index] != null && _modifiers[index].Priority == modifier.Priority)
-                    throw new InvalidOperationException(
-                        $"Vector modifier priority {modifier.Priority} is duplicated.");
-            _modifiers.Add(modifier);
-            _modifierObservations[modifier] = ModifierObservation.From(modifier);
-            SortModifiers();
             QueueCurrentRequest();
             return true;
         }
@@ -731,9 +612,8 @@ namespace Common.FlowField
         internal bool UnregisterModifier(IFlowFieldVectorModifier modifier)
         {
             ThrowIfInputAvailable();
-            if (!_modifiers.Remove(modifier))
+            if (!_modifierRegistry.Unregister(modifier))
                 return false;
-            _modifierObservations.Remove(modifier);
             QueueCurrentRequest();
             return true;
         }
@@ -741,65 +621,14 @@ namespace Common.FlowField
         internal override bool UnregisterModifierCommand(IFlowFieldVectorModifier modifier)
             => UnregisterModifier(modifier);
 
-        internal void MarkModifierDirty(IFlowFieldVectorModifier modifier)
-        {
-            ThrowIfInputAvailable();
-            ValidateModifierChange(modifier, FlowFieldModifierChange.Value | FlowFieldModifierChange.Priority);
-            QueueCurrentRequest();
-        }
-
-        internal void MarkModifierAreaDirty(IFlowFieldVectorModifier modifier)
-        {
-            ThrowIfInputAvailable();
-            ValidateModifierChange(modifier, FlowFieldModifierChange.Area);
-            QueueCurrentRequest();
-        }
-
         internal override void NotifyModifierChangedCommand(
             IFlowFieldVectorModifier modifier,
             FlowFieldModifierChange change)
         {
             ThrowIfInputAvailable();
-            ValidateModifierChange(modifier, change);
-            if (change != FlowFieldModifierChange.None)
+            if (_modifierRegistry.ValidateModifierChange(modifier, change)
+                && change != FlowFieldModifierChange.None)
                 QueueCurrentRequest();
-        }
-
-        internal void ValidateModifierChange(
-            IFlowFieldVectorModifier modifier,
-            FlowFieldModifierChange change)
-        {
-            ThrowIfInputAvailable();
-            if (modifier == null || !_modifiers.Contains(modifier))
-                throw new InvalidOperationException("Modifier is not registered.");
-            if ((change & (FlowFieldModifierChange.Value
-                | FlowFieldModifierChange.Area
-                | FlowFieldModifierChange.Priority)) == 0)
-                return;
-
-            Collider collider = modifier.InfluenceCollider;
-            if (collider == null)
-                throw new InvalidOperationException("Influence Collider is required.");
-            if (!collider.isTrigger)
-                throw new ArgumentException(
-                    FlowFieldModifierMaskBuilder.TriggerRequiredMessage,
-                    nameof(modifier));
-            if (collider is MeshCollider meshCollider && !meshCollider.convex)
-                throw new ArgumentException(
-                    FlowFieldModifierMaskBuilder.ConvexMeshRequiredMessage,
-                    nameof(modifier));
-            if ((change & FlowFieldModifierChange.Priority) != 0)
-            {
-                for (int index = 0; index < _modifiers.Count; index++)
-                {
-                    IFlowFieldVectorModifier other = _modifiers[index];
-                    if (!ReferenceEquals(other, modifier)
-                        && other != null
-                        && other.Priority == modifier.Priority)
-                        throw new InvalidOperationException(
-                            $"Vector modifier priority {modifier.Priority} is duplicated.");
-                }
-            }
         }
 
         internal void Suspend()
@@ -807,12 +636,7 @@ namespace Common.FlowField
             if (!IsInitialized)
                 return;
             _suspendedByLifecycle = true;
-            _generation++;
-            InvalidateBaseLifetime();
-            _build?.Dispose();
-            _build = null;
-            _buildReservationBytes = 0;
-            _hasPendingRequest = false;
+            CancelCurrentBuild();
             SetState(FlowFieldRuntimeState.Suspended);
         }
 
@@ -828,18 +652,13 @@ namespace Common.FlowField
         {
             if (!IsInitialized && !IsFaulted)
                 return;
-            _generation++;
-            _build?.Dispose();
-            _build = null;
-            _buildReservationBytes = 0;
-            _hasPendingRequest = false;
+            CancelCurrentBuild();
             _committed = null;
             _committedReservationBytes = 0;
-            _safetyStates = null;
-            _safetyReservationBytes = 0;
+            _safety.ClearSnapshot();
             _hasLatestRequestedInput = false;
             _suspendedByLifecycle = false;
-            _uncertainBounds.Clear();
+            _safety.ClearRegions();
             if (_runtimeScheduled)
             {
                 FlowFieldBuildScheduler.Unregister(this);
@@ -847,16 +666,9 @@ namespace Common.FlowField
             }
             _computeSolver?.Dispose();
             _computeSolver = null;
-            _dynamicObstacles.Clear();
-            _dynamicObstacleBounds.Clear();
-            _dynamicBounds.Clear();
-            _observedObstacleBounds.Clear();
-            _seenObstacleColliders.Clear();
+            _obstacles.Clear();
             _registeredObstacleOverlapBuffer = null;
-            _modifiers.Clear();
-            _modifierObservations.Clear();
-            _observedObstacleStates.Clear();
-            ClearAcceptedRequest();
+            _modifierRegistry.Clear();
             SetState(FlowFieldRuntimeState.Released);
         }
 
@@ -875,20 +687,13 @@ namespace Common.FlowField
         {
             if (!IsInitialized || IsFaulted)
                 return;
-            _generation++;
-            _build?.Dispose();
-            _build = null;
-            _buildReservationBytes = 0;
-            _hasPendingRequest = false;
-            _fault = exception ?? new InvalidOperationException("FlowField volume session failed.");
+            CancelCurrentBuild();
+            Exception failure = exception ?? new InvalidOperationException("FlowField volume session failed.");
+            _fault = failure;
+            int generation = _generation;
             SetState(FlowFieldRuntimeState.Faulted);
-            NotifyFailed(_fault);
-        }
-
-        internal void SetSpaceMode(FlowFieldSpaceMode mode)
-        {
-            if (mode != FlowFieldSpaceMode.Volume3D)
-                throw new ArgumentException("The volume session only supports Volume3D.", nameof(mode));
+            if (!_disposed && _generation == generation)
+                NotifyFailed(failure);
         }
 
         internal void ForceManagedBackend()
@@ -1034,15 +839,12 @@ namespace Common.FlowField
                 field.Request.BakeMode,
                 field.Request.StaticBakeData,
                 field.Request.StaticBakeRevision,
-                _generation,
                 field.ResultId);
             view = FlowFieldReadView.CreateVolume(
                 source,
-                _revision,
                 field.Blocked,
                 field.FinalDirections,
-                field.FinalSpeeds,
-                true);
+                field.FinalSpeeds);
             return view.IsValid;
         }
 
@@ -1064,7 +866,6 @@ namespace Common.FlowField
                     _latestRequestedInput.BakeMode,
                     _latestRequestedInput.StaticBakeData,
                     _latestRequestedInput.StaticBakeRevision,
-                    _generation,
                     _committed != null ? _committed.ResultId : 0L);
                 return source.IsValid;
             }
@@ -1077,7 +878,6 @@ namespace Common.FlowField
                 _committed.Request.BakeMode,
                 _committed.Request.StaticBakeData,
                 _committed.Request.StaticBakeRevision,
-                _generation,
                 _committed.ResultId);
             return source.IsValid;
         }
@@ -1086,6 +886,7 @@ namespace Common.FlowField
         {
             while (!budget.IsExpired)
             {
+                EnsureCurrentBuild(build);
                 switch (build.Phase)
                 {
                     case BuildPhase.Allocate:
@@ -1156,8 +957,7 @@ namespace Common.FlowField
                         return true;
                 }
 
-                if (build.Generation != _generation)
-                    throw new OperationCanceledException("FlowField volume build generation is stale.");
+                EnsureCurrentBuild(build);
             }
             return false;
         }
@@ -1248,9 +1048,9 @@ namespace Common.FlowField
 
         private bool IntersectsRegisteredObstacle(Vector3 center, Vector3 halfExtents)
         {
-            for (int index = 0; index < _dynamicObstacles.Count; index++)
+            for (int index = 0; index < _obstacles.RegisteredCount; index++)
             {
-                Collider collider = _dynamicObstacles[index];
+                Collider collider = _obstacles.GetRegisteredObstacle(index);
                 if (collider == null || collider.isTrigger)
                     continue;
                 int layerMask = 1 << collider.gameObject.layer;
@@ -1270,150 +1070,6 @@ namespace Common.FlowField
                         ref _registeredObstacleOverlapBuffer))
                     return true;
             }
-            return false;
-        }
-
-        private bool StepTopology(BuildContext build)
-        {
-            int end = Math.Min(build.Cursor + CellsPerStep, build.Count);
-            for (; build.Cursor < end; build.Cursor++)
-            {
-                int index = build.Cursor;
-                if (build.Blocked[index])
-                {
-                    build.Next[index] = -2;
-                    build.GoalFlags[index] = FlowFieldGoalFlags.None;
-                    build.Directions[index] = Vector3.zero;
-                    build.Speeds[index] = 0f;
-                    continue;
-                }
-
-                build.Request.Grid.FromFlatIndex(index, out int x, out int y, out int z);
-                uint mask = 0u;
-                for (int direction = 0; direction < FlowFieldNeighborUtility.VolumeCount; direction++)
-                {
-                    if (CanTraverse(build, index, x, y, z, direction, out _))
-                        mask |= 1u << direction;
-                }
-                build.Topology[index] = mask;
-            }
-            return build.Cursor >= build.Count;
-        }
-
-        private bool StepGoal(BuildContext build)
-        {
-            switch (build.GoalStage)
-            {
-                case 0:
-                {
-                    int end = Math.Min(build.Cursor + ArrayElementsPerStep, build.Count);
-                    for (; build.Cursor < end; build.Cursor++)
-                        build.Influence[build.Cursor] = false;
-                    if (build.Cursor < build.Count)
-                        return false;
-
-                    build.Cursor = 0;
-                    build.GoalIndex = -1;
-                    build.Head = 0;
-                    build.Tail = 0;
-                    if (!build.Request.HasGoal)
-                    {
-                        build.GoalStage = 4;
-                        return true;
-                    }
-
-                    Vector3 clamped = build.Request.Grid.ClampWorldXYZ(build.Request.GoalWorld);
-                    build.Request.Grid.TryWorldToLocalClamped(clamped, out int x, out int y, out int z);
-                    build.RequestedGoalIndex = build.Request.Grid.ToFlatIndex(x, y, z);
-                    if (!build.Blocked[build.RequestedGoalIndex])
-                    {
-                        build.GoalIndex = build.RequestedGoalIndex;
-                        build.GoalStage = 2;
-                        build.Cursor = 0;
-                    }
-                    else
-                    {
-                        build.NearestGoalDistance = long.MaxValue;
-                        build.GoalStage = 1;
-                    }
-                    break;
-                }
-                case 1:
-                {
-                    build.Request.Grid.FromFlatIndex(
-                        build.RequestedGoalIndex,
-                        out int requestedX,
-                        out int requestedY,
-                        out int requestedZ);
-                    int end = Math.Min(build.Cursor + ArrayElementsPerStep, build.Count);
-                    for (; build.Cursor < end; build.Cursor++)
-                    {
-                        int index = build.Cursor;
-                        if (build.Blocked[index])
-                            continue;
-                        build.Request.Grid.FromFlatIndex(index, out int x, out int y, out int z);
-                        long dx = x - requestedX;
-                        long dy = y - requestedY;
-                        long dz = z - requestedZ;
-                        long distance = dx * dx + dy * dy + dz * dz;
-                        if (distance < build.NearestGoalDistance
-                            || distance == build.NearestGoalDistance
-                                && (build.GoalIndex < 0 || index < build.GoalIndex))
-                        {
-                            build.NearestGoalDistance = distance;
-                            build.GoalIndex = index;
-                        }
-                    }
-                    if (build.Cursor < build.Count)
-                        return false;
-                    build.Cursor = 0;
-                    build.GoalStage = build.GoalIndex >= 0 ? 2 : 4;
-                    break;
-                }
-                case 2:
-                {
-                    if (build.GoalIndex < 0)
-                    {
-                        build.GoalStage = 4;
-                        return true;
-                    }
-
-                    build.Request.Grid.FromFlatIndex(
-                        build.GoalIndex,
-                        out int goalX,
-                        out int goalY,
-                        out int goalZ);
-                    build.GoalRadiusSqr = (double)build.Request.GoalInfluenceRadius
-                        * build.Request.GoalInfluenceRadius;
-                    int end = Math.Min(build.Cursor + ArrayElementsPerStep, build.Count);
-                    for (; build.Cursor < end; build.Cursor++)
-                    {
-                        int index = build.Cursor;
-                        if (build.Blocked[index])
-                            continue;
-                        build.Request.Grid.FromFlatIndex(index, out int x, out int y, out int z);
-                        long dx = x - goalX;
-                        long dy = y - goalY;
-                        long dz = z - goalZ;
-                        double distanceSqr = (double)(dx * dx + dy * dy + dz * dz)
-                            * build.Request.Grid.CellSize
-                            * build.Request.Grid.CellSize;
-                        build.Influence[index] = build.Request.GoalInfluenceRadius <= 0f
-                            || distanceSqr <= build.GoalRadiusSqr;
-                    }
-                    if (build.Cursor < build.Count)
-                        return false;
-
-                    build.Influence[build.GoalIndex] = true;
-                    build.Costs[build.GoalIndex] = 0;
-                    build.Queue[build.Tail++] = build.GoalIndex;
-                    build.GoalStage = 4;
-                    return true;
-                }
-                default:
-                    return true;
-            }
-
             return false;
         }
 
@@ -1445,29 +1101,7 @@ namespace Common.FlowField
                 && !StepGpuFallbackReset(build))
                 return false;
 
-            int processed = 0;
-            while (build.Head < build.Tail && processed++ < CellsPerStep)
-            {
-                int current = build.Queue[build.Head++];
-                build.Request.Grid.FromFlatIndex(current, out int x, out int y, out int z);
-                int currentCost = build.Costs[current];
-                for (int direction = 0; direction < FlowFieldNeighborUtility.VolumeCount; direction++)
-                {
-                    if ((build.Topology[current] & (1u << direction)) == 0u)
-                        continue;
-                    if (!TryNeighbor(build.Request.Grid, x, y, z, direction, out int neighbor))
-                        continue;
-                    if (!build.Influence[neighbor])
-                        continue;
-                    int candidate = currentCost + 1;
-                    if (candidate < build.Costs[neighbor])
-                    {
-                        build.Costs[neighbor] = candidate;
-                        build.Queue[build.Tail++] = neighbor;
-                    }
-                }
-            }
-            return build.Head >= build.Tail;
+            return FlowFieldVolumeNavigation.StepManagedBfs(build);
         }
 
         private bool TryStartGpuBfs(BuildContext build)
@@ -1496,8 +1130,7 @@ namespace Common.FlowField
                 build.Influence,
                 build.Topology,
                 build.GoalIndex,
-                build.Request.MaxGpuWaves,
-                build.Generation);
+                build.Request.MaxGpuWaves);
             build.GpuPending = true;
             bool accepted;
             try
@@ -1569,7 +1202,7 @@ namespace Common.FlowField
                 build.Count);
             try
             {
-                ApplyGpuResult(
+                FlowFieldVolumeGpuResultValidator.Apply(
                     build,
                     build.GpuResult,
                     build.GpuValidationCursor,
@@ -1600,240 +1233,6 @@ namespace Common.FlowField
                 ?? new InvalidOperationException("Volume3D GPU result validation failed.");
             build.GpuFallbackResetCursor = 0;
             build.Cursor = 0;
-        }
-
-        private static void ApplyGpuResult(
-            BuildContext build,
-            Unity.Collections.NativeArray<GpuFlowCell> result,
-            int start,
-            int end)
-        {
-            Vector3 defaultDirection = FlowFieldVectorUtility.NormalizeDefaultDirection(
-                build.Request.DefaultDirection);
-            for (int index = start; index < end; index++)
-            {
-                GpuFlowCell cell = result[index];
-                if (cell.NextCell < -3 || cell.NextCell >= build.Count
-                    || !FlowFieldGridSpace.IsFinite(cell.Direction))
-                    throw new InvalidOperationException("Volume3D GPU result contains an invalid cell.");
-                if (cell.NextCell == -2 && !build.Blocked[index]
-                    || cell.NextCell == -1 && (build.Blocked[index] || build.Influence[index])
-                    || cell.NextCell == -3 && (build.Blocked[index] || !build.Influence[index]))
-                    throw new InvalidOperationException("Volume3D GPU result contains an inconsistent sentinel.");
-                if (cell.NextCell < 0
-                    && cell.Direction.sqrMagnitude > FlowFieldVectorUtility.DIRECTION_EPSILON_SQR)
-                    throw new InvalidOperationException("Volume3D GPU sentinel cells must have zero direction.");
-
-                if (cell.NextCell >= 0)
-                {
-                    if (build.Blocked[index] || !build.Influence[index])
-                        throw new InvalidOperationException("Volume3D GPU directed a blocked or out-of-influence cell.");
-                    if (cell.NextCell == index)
-                    {
-                        if (index != build.GoalIndex
-                            || cell.Direction.sqrMagnitude > FlowFieldVectorUtility.DIRECTION_EPSILON_SQR)
-                            throw new InvalidOperationException("Volume3D GPU produced a non-goal anchor.");
-                    }
-                    else
-                    {
-                        build.Request.Grid.FromFlatIndex(index, out int x, out int y, out int z);
-                        build.Request.Grid.FromFlatIndex(cell.NextCell, out int nx, out int ny, out int nz);
-                        int direction = FlowFieldNeighborUtility.FindDirectionIndex(nx - x, ny - y, nz - z);
-                        if (direction < 0
-                            || (build.Topology[index] & (1u << direction)) == 0u
-                            || !CanTraverse(
-                                build,
-                                index,
-                                x,
-                                y,
-                                z,
-                                direction,
-                                out int traversable)
-                            || traversable != cell.NextCell
-                            || !build.Influence[cell.NextCell])
-                            throw new InvalidOperationException("Volume3D GPU produced a non-topological NextCell.");
-                        if (cell.Direction.sqrMagnitude <= FlowFieldVectorUtility.DIRECTION_EPSILON_SQR
-                            || Mathf.Abs(cell.Direction.magnitude - 1f) > 0.001f)
-                            throw new InvalidOperationException("Volume3D GPU produced an invalid direction.");
-                        Vector3 expected = DirectionBetweenCells(
-                            build.Request.Grid,
-                            index,
-                            cell.NextCell);
-                        if ((cell.Direction - expected).sqrMagnitude > 1e-10f)
-                            throw new InvalidOperationException("Volume3D GPU direction differs from the deterministic CPU direction.");
-                    }
-                }
-
-                build.Next[index] = cell.NextCell;
-                build.Directions[index] = cell.NextCell == -1
-                    ? defaultDirection
-                    : cell.NextCell >= 0
-                        ? cell.NextCell == index
-                            ? Vector3.zero
-                            : DirectionBetweenCells(
-                                build.Request.Grid,
-                                index,
-                                cell.NextCell)
-                        : Vector3.zero;
-                build.Speeds[index] = build.Directions[index].sqrMagnitude > 0.00000001f ? 1f : 0f;
-                build.GoalFlags[index] = cell.NextCell >= 0
-                    ? FlowFieldGoalFlags.Directed
-                    : cell.NextCell == -3
-                        ? FlowFieldGoalFlags.Unreachable
-                        : FlowFieldGoalFlags.None;
-                if (cell.NextCell == index)
-                    build.GoalFlags[index] |= FlowFieldGoalFlags.Anchor;
-            }
-        }
-
-        private static bool StepGpuFallbackReset(BuildContext build)
-        {
-            int end = Math.Min(
-                build.GpuFallbackResetCursor + ArrayElementsPerStep,
-                build.Count);
-            for (; build.GpuFallbackResetCursor < end; build.GpuFallbackResetCursor++)
-                build.Costs[build.GpuFallbackResetCursor] = Unreachable;
-
-            if (build.GpuFallbackResetCursor < build.Count)
-                return false;
-
-            build.Head = 0;
-            build.Tail = 0;
-            if (build.GoalIndex >= 0)
-            {
-                build.Costs[build.GoalIndex] = 0;
-                build.Queue[build.Tail++] = build.GoalIndex;
-            }
-            build.GpuFailed = null;
-            build.GpuFallbackResetCursor = 0;
-            build.Cursor = 0;
-            return true;
-        }
-
-        private bool StepDirections(BuildContext build)
-        {
-            int end = Math.Min(build.Cursor + ArrayElementsPerStep, build.Count);
-            Vector3 defaultDirection = FlowFieldVectorUtility.NormalizeDefaultDirection(build.Request.DefaultDirection);
-            for (; build.Cursor < end; build.Cursor++)
-            {
-                int index = build.Cursor;
-                if (build.Blocked[index])
-                {
-                    build.Next[index] = -2;
-                    build.GoalFlags[index] = FlowFieldGoalFlags.None;
-                    build.Directions[index] = Vector3.zero;
-                    build.Speeds[index] = 0f;
-                    continue;
-                }
-
-                // The Goal itself is the only anchor. A cell whose successor
-                // happens to be the Goal remains an ordinary directed cell.
-                // StepTopology runs before Goal resolution, so this check
-                // deliberately lives here instead of in topology creation.
-                if (build.GoalIndex == index)
-                {
-                    build.Next[index] = index;
-                    build.GoalFlags[index] = FlowFieldGoalFlags.Directed
-                        | FlowFieldGoalFlags.Anchor;
-                    build.Directions[index] = Vector3.zero;
-                    build.Speeds[index] = 0f;
-                    continue;
-                }
-
-                Vector3 direction = defaultDirection;
-                int next = -1;
-                bool goalCellIsUnreachable = build.GoalIndex >= 0
-                    && build.Influence[index]
-                    && build.Costs[index] == Unreachable;
-                if (build.GoalIndex >= 0
-                    && build.Influence[index]
-                    && build.Costs[index] != Unreachable)
-                {
-                    build.Request.Grid.FromFlatIndex(index, out int x, out int y, out int z);
-                    int bestScore = int.MinValue;
-                    for (int candidateDirection = 0; candidateDirection < FlowFieldNeighborUtility.VolumeCount; candidateDirection++)
-                    {
-                        if ((build.Topology[index] & (1u << candidateDirection)) == 0u
-                            || !TryNeighbor(build.Request.Grid, x, y, z, candidateDirection, out int neighbor)
-                            || build.Costs[neighbor] != build.Costs[index] - 1)
-                            continue;
-                        int score = AlignmentScore(x, y, z, build.Request.Grid, build.GoalIndex, candidateDirection);
-                        if (next < 0 || score > bestScore || score == bestScore && neighbor < next)
-                        {
-                            next = neighbor;
-                            bestScore = score;
-                        }
-                    }
-
-                    if (next >= 0)
-                        direction = DirectionBetweenCells(build.Request.Grid, index, next);
-                    else
-                    {
-                        goalCellIsUnreachable = true;
-                        direction = Vector3.zero;
-                        next = -3;
-                    }
-                }
-
-                if (goalCellIsUnreachable)
-                {
-                    direction = Vector3.zero;
-                    next = -3;
-                }
-
-                build.Next[index] = next;
-                build.GoalFlags[index] = next >= 0
-                    ? FlowFieldGoalFlags.Directed
-                    : build.GoalIndex >= 0 && build.Influence[index]
-                        ? FlowFieldGoalFlags.Unreachable
-                        : FlowFieldGoalFlags.None;
-                build.Directions[index] = direction;
-                build.Speeds[index] = direction.sqrMagnitude > 0.00000001f ? 1f : 0f;
-            }
-            return build.Cursor >= build.Count;
-        }
-
-        private bool StepEscape(BuildContext build)
-        {
-            if (build.EscapeStage == 0)
-            {
-                int end = Math.Min(build.Cursor + ArrayElementsPerStep, build.Count);
-                for (; build.Cursor < end; build.Cursor++)
-                {
-                    int index = build.Cursor;
-                    build.Costs[index] = build.Blocked[index] ? Unreachable : 0;
-                    build.EscapeDirections[index] = Vector3.zero;
-                    if (!build.Blocked[index])
-                        build.Queue[build.EscapeTail++] = index;
-                }
-                if (build.Cursor < build.Count)
-                    return false;
-                build.Cursor = 0;
-                build.EscapeStage = 1;
-            }
-
-            int processed = 0;
-            while (build.EscapeHead < build.EscapeTail && processed++ < CellsPerStep)
-            {
-                int current = build.Queue[build.EscapeHead++];
-                build.Request.Grid.FromFlatIndex(current, out int x, out int y, out int z);
-                int nextCost = build.Costs[current] + 1;
-                for (int face = 0; face < FlowFieldNeighborUtility.VolumeFaceDirections.Length; face++)
-                {
-                    int direction = FlowFieldNeighborUtility.VolumeFaceDirections[face];
-                    if (!TryNeighbor(build.Request.Grid, x, y, z, direction, out int neighbor)
-                        || !build.Blocked[neighbor]
-                        || build.Costs[neighbor] != Unreachable)
-                        continue;
-                    build.Costs[neighbor] = nextCost;
-                    build.EscapeDirections[neighbor] = DirectionBetweenCells(
-                        build.Request.Grid,
-                        neighbor,
-                        current);
-                    build.Queue[build.EscapeTail++] = neighbor;
-                }
-            }
-            return build.EscapeHead >= build.EscapeTail;
         }
 
         private bool StepModifiers(BuildContext build)
@@ -1884,6 +1283,7 @@ namespace Common.FlowField
                         build.Request.Grid,
                         (build.GoalFlags[index] & FlowFieldGoalFlags.Directed) != 0);
                     FlowFieldVectorState candidate = modifier.Snapshot.Modify(in current, in context);
+                    EnsureCurrentBuild(build);
                     FlowFieldVectorUtility.ValidateVolumeModifierOutput(candidate);
                     current = candidate;
                 }
@@ -1895,7 +1295,7 @@ namespace Common.FlowField
 
         private bool CommitBuild(BuildContext build)
         {
-            if (build == null || build.Generation != _generation || !ReferenceEquals(_build, build))
+            if (build == null || !CanContinuePump(build.Generation, build))
                 return false;
 
             VolumeFieldData next = new VolumeFieldData(
@@ -1913,399 +1313,45 @@ namespace Common.FlowField
                 Interlocked.Increment(ref _nextVisualizationResultId));
 
             bool gridChanged = _committed != null && !_committed.Request.HasSameGrid(build.Request);
-            bool safetyChangedDuringBuild = build.SafetyEpoch != _safetyEpoch;
+            bool safetyChangedDuringBuild = build.SafetyEpoch != _safety.Epoch;
             // Allocate and populate the replacement safety snapshot before
             // publishing any field reference. If allocation or initialization
             // fails, the previous publication remains intact.
-            SafetyCellState[] nextSafety = new SafetyCellState[build.Count];
-            for (int index = 0; index < build.Count; index++)
-                nextSafety[index] = build.Blocked[index]
-                    ? SafetyCellState.Blocked
-                    : SafetyCellState.Clear;
-            if (safetyChangedDuringBuild)
-            {
-                for (int index = 0; index < build.Count; index++)
-                {
-                    build.Request.Grid.FromFlatIndex(index, out int x, out int y, out int z);
-                    if (IntersectsUncertainBounds(
-                            build.Request.Grid,
-                            build.Request.Grid.LocalToWorldCenter(x, y, z)))
-                        nextSafety[index] = SafetyCellState.Unknown;
-                }
-            }
+            FlowFieldVolumeSafetyState.Snapshot nextSafety = _safety.PrepareSnapshot(
+                build.Request.Grid, build.Blocked, build.SafetyEpoch);
 
             _committed = next;
             _revision++;
             _committedReservationBytes = EstimateCommittedBytes(build.Count);
-            _safetyStates = nextSafety;
-            _safetyReservationBytes = EstimateSafetyBytes(build.Count);
+            _safety.PublishSnapshot(in nextSafety);
             if (!_hasPendingRequest && !safetyChangedDuringBuild)
-                _uncertainBounds.Clear();
+                _safety.ClearRegions();
             _build = null;
             _buildReservationBytes = 0;
             if (gridChanged)
-                _generation++;
+                InvalidateBuildGeneration();
 
             // Publish only after every private reference, revision and
             // lifecycle field has been made internally consistent. A
             // listener may Release, Suspend or submit another request.
             int callbackGeneration = _generation;
-                NotifyFieldCommitted(true);
+            NotifyFieldCommitted();
             return _generation != callbackGeneration;
         }
 
         private void QueueCurrentRequest()
         {
-            if (_hasPendingRequest)
-            {
-                // Preserve a newer Goal/obstacle request that was already
-                // coalesced while a modifier change is being observed.
-                Submit(_pendingRequest);
+            // Before the first BuildContext exists, interrupted capture owns
+            // the retry. Otherwise the latest input must win over the older
+            // active or published input, even after pending work was canceled.
+            if (!_hasPendingRequest && _committed == null && _build == null)
                 return;
-            }
-            if (_committed != null)
-            {
-                if (_hasLatestRequestedInput)
-                {
-                    Submit(_latestRequestedInput);
-                    return;
-                }
+            if (_hasLatestRequestedInput)
+                Submit(_latestRequestedInput);
+            else if (_committed != null)
                 Submit(_committed.Request);
-                return;
-            }
-            if (_build != null)
-            {
-                // A modifier can be registered while the very first build is
-                // still staging. Queue the same immutable request so the
-                // completed snapshot is followed by a composition using the
-                // newly captured modifier list.
-                Submit(_hasLatestRequestedInput ? _latestRequestedInput : _build.Request);
-                return;
-            }
-        }
-
-        private void DetectDynamicObstacleChanges()
-        {
-            for (int i = _dynamicObstacles.Count - 1; i >= 0; i--)
-            {
-                Collider collider = _dynamicObstacles[i];
-                if (collider == null)
-                {
-                    Bounds removedBounds = _dynamicObstacleBounds[i];
-                    if (FlowFieldGridSpace.IsFinite(removedBounds.center)
-                        && FlowFieldGridSpace.IsFinite(removedBounds.size))
-                        MarkObstacleRegionDirty(removedBounds);
-                    _dynamicObstacles.RemoveAt(i);
-                    _dynamicObstacleBounds.RemoveAt(i);
-                    _dynamicBounds.Remove(collider);
-                    _observedObstacleBounds.Remove(collider);
-                    _observedObstacleStates.Remove(collider);
-                    continue;
-                }
-                Bounds current = collider.bounds;
-                Bounds previous = _dynamicObstacleBounds[i];
-                if ((current.center - previous.center).sqrMagnitude > 0.00000001f
-                    || (current.size - previous.size).sqrMagnitude > 0.00000001f)
-                {
-                    if (FlowFieldGridSpace.IsFinite(previous.center)
-                        && FlowFieldGridSpace.IsFinite(previous.size))
-                        MarkObstacleRegionDirty(previous);
-                    _dynamicObstacleBounds[i] = current;
-                    _dynamicBounds[collider] = current;
-                    MarkObstacleRegionDirty(current);
-                }
-            }
-        }
-
-        private int FindDynamicObstacleIndex(Collider collider)
-        {
-            for (int index = 0; index < _dynamicObstacles.Count; index++)
-                if (ReferenceEquals(_dynamicObstacles[index], collider))
-                    return index;
-            return -1;
-        }
-
-        private bool IsLatestCellUnknown(VolumeFieldData field, int index, Vector3 center)
-        {
-            if (field == null || field.Request.BakeMode == FlowFieldBakeMode.StaticBaked)
-                return false;
-            if (IntersectsUncertainBounds(field.Grid, center))
-                return true;
-            return _safetyStates != null
-                && _safetyStates.Length == field.Grid.CellCount
-                && _safetyStates[index] == SafetyCellState.Unknown;
-        }
-
-        private bool IsLatestCellBlocked(VolumeFieldData field, int index, Vector3 center)
-        {
-            if (field == null || field.Request.BakeMode == FlowFieldBakeMode.StaticBaked)
-                return false;
-            return _safetyStates != null
-                && _safetyStates.Length == field.Grid.CellCount
-                && _safetyStates[index] == SafetyCellState.Blocked;
-        }
-
-        private bool IsLatestPathUnsafe(VolumeFieldData field, int current, int next)
-        {
-            if (IsLatestCellUnsafe(field, current)
-                || IsLatestCellUnsafe(field, next))
-                return true;
-            field.Grid.FromFlatIndex(current, out int x0, out int y0, out int z0);
-            field.Grid.FromFlatIndex(next, out int x1, out int y1, out int z1);
-            for (int x = Math.Min(x0, x1); x <= Math.Max(x0, x1); x++)
-            for (int y = Math.Min(y0, y1); y <= Math.Max(y0, y1); y++)
-            for (int z = Math.Min(z0, z1); z <= Math.Max(z0, z1); z++)
-            {
-                if (x == x0 && y == y0 && z == z0 || x == x1 && y == y1 && z == z1)
-                    continue;
-                int intermediate = field.Grid.ToFlatIndex(x, y, z);
-                if (IsLatestCellUnsafe(field, intermediate))
-                    return true;
-            }
-            return IsLatestCellUnsafe(field, next);
-        }
-
-        private bool IsLatestCellUnsafe(VolumeFieldData field, int index)
-        {
-            Vector3 center = CellCenter(field.Grid, index);
-            return IsLatestCellUnknown(field, index, center)
-                || IsLatestCellBlocked(field, index, center);
-        }
-
-        private bool IsEscapePathUnsafe(VolumeFieldData field, int index)
-        {
-            Vector3 direction = field.EscapeDirections[index];
-            if (direction.sqrMagnitude <= FlowFieldVectorUtility.DIRECTION_EPSILON_SQR)
-                return false;
-            field.Grid.FromFlatIndex(index, out int x, out int y, out int z);
-            int dx = direction.x > 0.001f ? 1 : direction.x < -0.001f ? -1 : 0;
-            int dy = direction.y > 0.001f ? 1 : direction.y < -0.001f ? -1 : 0;
-            int dz = direction.z > 0.001f ? 1 : direction.z < -0.001f ? -1 : 0;
-            if (!field.Grid.IsLocalInBounds(x + dx, y + dy, z + dz))
-                return true;
-            int neighbor = field.Grid.ToFlatIndex(x + dx, y + dy, z + dz);
-            return IsLatestCellUnsafe(field, neighbor);
-        }
-
-        private bool IsDefaultDirectionPathUnsafe(VolumeFieldData field, int index)
-        {
-            Vector3 direction = FlowFieldVectorUtility.NormalizeDefaultDirection(field.Request.DefaultDirection);
-            field.Grid.FromFlatIndex(index, out int x, out int y, out int z);
-            int sx = direction.x > 0.000001f ? 1 : direction.x < -0.000001f ? -1 : 0;
-            int sy = direction.y > 0.000001f ? 1 : direction.y < -0.000001f ? -1 : 0;
-            int sz = direction.z > 0.000001f ? 1 : direction.z < -0.000001f ? -1 : 0;
-            int axisCount = (sx != 0 ? 1 : 0) + (sy != 0 ? 1 : 0) + (sz != 0 ? 1 : 0);
-            if (axisCount == 0)
-                return true;
-
-            int axisMaskLimit = 1 << axisCount;
-            for (int mask = 1; mask < axisMaskLimit; mask++)
-            {
-                int targetX = x;
-                int targetY = y;
-                int targetZ = z;
-                int bit = 0;
-                if (sx != 0)
-                {
-                    if ((mask & (1 << bit)) != 0)
-                        targetX += sx;
-                    bit++;
-                }
-                if (sy != 0)
-                {
-                    if ((mask & (1 << bit)) != 0)
-                        targetY += sy;
-                    bit++;
-                }
-                if (sz != 0 && (mask & (1 << bit)) != 0)
-                    targetZ += sz;
-                if (!field.Grid.IsLocalInBounds(targetX, targetY, targetZ))
-                    return true;
-                int target = field.Grid.ToFlatIndex(targetX, targetY, targetZ);
-                if (IsLatestCellUnsafe(field, target))
-                    return true;
-            }
-            return false;
-        }
-
-        private bool IntersectsUncertainBounds(FlowFieldGridSpace grid, Vector3 center)
-        {
-            Bounds cell = new Bounds(center, Vector3.one * grid.CellSize);
-            for (int i = 0; i < _uncertainBounds.Count; i++)
-                if (_uncertainBounds[i].Intersects(cell))
-                    return true;
-            return false;
-        }
-
-        private void AddUncertainBounds(Bounds bounds)
-        {
-            for (int index = 0; index < _uncertainBounds.Count; index++)
-            {
-                if (!_uncertainBounds[index].Intersects(bounds))
-                    continue;
-                _uncertainBounds[index] = UnionBounds(_uncertainBounds[index], bounds);
-                return;
-            }
-
-            if (_uncertainBounds.Count < MaxUncertainBounds)
-            {
-                _uncertainBounds.Add(bounds);
-                return;
-            }
-
-            // Once the bounded dirty-list is full, retaining a conservative
-            // union is safer than evicting an area and treating it as clear.
-            _uncertainBounds[0] = UnionBounds(_uncertainBounds[0], bounds);
-        }
-
-        private static Bounds UnionBounds(Bounds left, Bounds right)
-        {
-            left.Encapsulate(right.min);
-            left.Encapsulate(right.max);
-            return left;
-        }
-
-        private static int FindNearestUnblocked(BuildContext build, int requested)
-        {
-            if (!build.Blocked[requested])
-                return requested;
-            build.Request.Grid.FromFlatIndex(requested, out int rx, out int ry, out int rz);
-            int best = -1;
-            long bestDistance = long.MaxValue;
-            for (int index = 0; index < build.Count; index++)
-            {
-                if (build.Blocked[index])
-                    continue;
-                build.Request.Grid.FromFlatIndex(index, out int x, out int y, out int z);
-                long dx = x - rx;
-                long dy = y - ry;
-                long dz = z - rz;
-                long distance = dx * dx + dy * dy + dz * dz;
-                if (distance < bestDistance || distance == bestDistance && index < best)
-                {
-                    best = index;
-                    bestDistance = distance;
-                }
-            }
-            return best;
-        }
-
-        private static bool CanTraverse(
-            BuildContext build,
-            int current,
-            int x,
-            int y,
-            int z,
-            int direction,
-            out int neighbor)
-        {
-            neighbor = -1;
-            int nx = x + FlowFieldNeighborUtility.DeltaX[direction];
-            int ny = y + FlowFieldNeighborUtility.DeltaY[direction];
-            int nz = z + FlowFieldNeighborUtility.DeltaZ[direction];
-            if (!build.Request.Grid.IsLocalInBounds(nx, ny, nz))
-                return false;
-            neighbor = build.Request.Grid.ToFlatIndex(nx, ny, nz);
-            if (build.Blocked[neighbor])
-                return false;
-            if (!FlowFieldNeighborUtility.IsDiagonal(direction))
-                return true;
-
-            int dx = FlowFieldNeighborUtility.DeltaX[direction];
-            int dy = FlowFieldNeighborUtility.DeltaY[direction];
-            int dz = FlowFieldNeighborUtility.DeltaZ[direction];
-            int maxXStep = dx == 0 ? 0 : 1;
-            int maxYStep = dy == 0 ? 0 : 1;
-            int maxZStep = dz == 0 ? 0 : 1;
-            for (int sx = 0; sx <= maxXStep; sx++)
-            for (int sy = 0; sy <= maxYStep; sy++)
-            for (int sz = 0; sz <= maxZStep; sz++)
-            {
-                if (sx == 0 && sy == 0 && sz == 0
-                    || sx == maxXStep && sy == maxYStep && sz == maxZStep)
-                    continue;
-                int ix = x + (sx == 1 ? dx : 0);
-                int iy = y + (sy == 1 ? dy : 0);
-                int iz = z + (sz == 1 ? dz : 0);
-                if (ix == x && iy == y && iz == z)
-                    continue;
-                if (!build.Request.Grid.IsLocalInBounds(ix, iy, iz)
-                    || build.Blocked[build.Request.Grid.ToFlatIndex(ix, iy, iz)])
-                    return false;
-            }
-            return true;
-        }
-
-        private static bool TryNeighbor(
-            FlowFieldGridSpace grid,
-            int x,
-            int y,
-            int z,
-            int direction,
-            out int index)
-        {
-            int nx = x + FlowFieldNeighborUtility.DeltaX[direction];
-            int ny = y + FlowFieldNeighborUtility.DeltaY[direction];
-            int nz = z + FlowFieldNeighborUtility.DeltaZ[direction];
-            if (!grid.IsLocalInBounds(nx, ny, nz))
-            {
-                index = -1;
-                return false;
-            }
-            index = grid.ToFlatIndex(nx, ny, nz);
-            return true;
-        }
-
-        private static Vector3 FindEscapeDirection(BuildContext build, int index)
-        {
-            build.Request.Grid.FromFlatIndex(index, out int x, out int y, out int z);
-            int best = -1;
-            for (int face = 0; face < FlowFieldNeighborUtility.VolumeFaceDirections.Length; face++)
-            {
-                int direction = FlowFieldNeighborUtility.VolumeFaceDirections[face];
-                if (!TryNeighbor(build.Request.Grid, x, y, z, direction, out int neighbor)
-                    || build.Blocked[neighbor])
-                    continue;
-                best = neighbor;
-                break;
-            }
-            return best >= 0
-                ? (CellCenter(build.Request.Grid, best) - CellCenter(build.Request.Grid, index)).normalized
-                : Vector3.zero;
-        }
-
-        private static int AlignmentScore(
-            int x,
-            int y,
-            int z,
-            FlowFieldGridSpace grid,
-            int goalIndex,
-            int direction)
-        {
-            grid.FromFlatIndex(goalIndex, out int gx, out int gy, out int gz);
-            int dx = gx - x;
-            int dy = gy - y;
-            int dz = gz - z;
-            int sx = FlowFieldNeighborUtility.DeltaX[direction];
-            int sy = FlowFieldNeighborUtility.DeltaY[direction];
-            int sz = FlowFieldNeighborUtility.DeltaZ[direction];
-            return 2 * (sx * dx + sy * dy + sz * dz) - (sx * sx + sy * sy + sz * sz);
-        }
-
-        private static Vector3 CellCenter(FlowFieldGridSpace grid, int index)
-        {
-            grid.FromFlatIndex(index, out int x, out int y, out int z);
-            return grid.LocalToWorldCenter(x, y, z);
-        }
-
-        private static Vector3 DirectionBetweenCells(
-            FlowFieldGridSpace grid,
-            int fromIndex,
-            int toIndex)
-        {
-            grid.FromFlatIndex(fromIndex, out int fromX, out int fromY, out int fromZ);
-            grid.FromFlatIndex(toIndex, out int toX, out int toY, out int toZ);
-            return new Vector3(toX - fromX, toY - fromY, toZ - fromZ).normalized;
+            else if (_build != null)
+                Submit(_build.Request);
         }
 
         private static Vector3 ObstacleHalfExtents(float cellSize, float clearance)
@@ -2316,39 +1362,6 @@ namespace Common.FlowField
             // configured clearance for actual intersections.
             float half = Mathf.Max(0.000001f, cellSize * 0.5f + clearance - 0.0001f);
             return Vector3.one * half;
-        }
-
-        private void SortModifiers()
-            => _modifiers.Sort((left, right) => left.Priority.CompareTo(right.Priority));
-
-        private void ValidateModifierPriorities()
-        {
-            for (int index = 1; index < _modifiers.Count; index++)
-                if (_modifiers[index - 1].Priority == _modifiers[index].Priority)
-                    throw new InvalidOperationException(
-                        $"Vector modifier priority {_modifiers[index].Priority} is duplicated.");
-        }
-
-        private FlowFieldModifierWorkItem[] CaptureModifierSnapshots()
-        {
-            if (_modifiers.Count == 0)
-                return Array.Empty<FlowFieldModifierWorkItem>();
-
-            FlowFieldModifierWorkItem[] snapshots = new FlowFieldModifierWorkItem[_modifiers.Count];
-            for (int index = 0; index < _modifiers.Count; index++)
-            {
-                IFlowFieldVectorModifier modifier = _modifiers[index];
-                IFlowFieldModifierSnapshot snapshot = modifier.CaptureSnapshot();
-                if (snapshot == null)
-                    throw new InvalidOperationException(
-                        $"FlowField modifier '{modifier.GetType().Name}' returned a null snapshot.");
-                snapshots[index] = new FlowFieldModifierWorkItem(
-                    snapshot,
-                    modifier.InfluenceCollider,
-                    modifier.Priority,
-                    modifier.Revision);
-            }
-            return snapshots;
         }
 
         private void SetState(FlowFieldRuntimeState state)
@@ -2397,7 +1410,7 @@ namespace Common.FlowField
                 throw new InvalidOperationException(
                     "RuntimeDynamic Volume3D requests cannot carry a static bake asset.");
 
-            long buildReservation = EstimateBuildBytes(request.Grid.CellCount, _modifiers.Count);
+            long buildReservation = EstimateBuildBytes(request.Grid.CellCount, _modifierRegistry.Count);
             long estimate = EstimateRequiredBytes(request, buildReservation);
             if (estimate > MemoryBudgetBytes)
                 throw new InvalidOperationException(
@@ -2436,7 +1449,7 @@ namespace Common.FlowField
                 possibleGpu = Math.Max(possibleGpu, candidateGpu);
             }
 
-            long replacementSafetyReservation = EstimateSafetyBytes(request.Grid.CellCount);
+            long replacementSafetyReservation = FlowFieldVolumeSafetyState.EstimateSnapshotBytes(request.Grid.CellCount);
             return checked(
                 current
                 + replacementBuildReservation
@@ -2470,81 +1483,15 @@ namespace Common.FlowField
             return checked(60L * count + 32L * 9L + 32L);
         }
 
-        private static long EstimateSafetyBytes(int count)
-            => count <= 0 ? 0 : checked(count + 32L);
-
         private long EstimateAuxiliaryBytes()
         {
             long bytes = 64L;
-            if (_obstacleSweepBuffer != null)
-                bytes = checked(bytes + 8L * _obstacleSweepBuffer.Length);
+            bytes = checked(bytes + _obstacles.SweepBufferBytes);
             if (_registeredObstacleOverlapBuffer != null)
                 bytes = checked(bytes + 8L * _registeredObstacleOverlapBuffer.Length);
-            bytes = checked(bytes + 8L * _modifiers.Count);
-            bytes = checked(bytes + 32L * _uncertainBounds.Count);
+            bytes = checked(bytes + 8L * _modifierRegistry.Count);
+            bytes = checked(bytes + 32L * _safety.UncertainRegionCount);
             return bytes;
-        }
-
-        private static bool IsMissingModifier(IFlowFieldVectorModifier modifier)
-            => modifier == null
-                || modifier is UnityEngine.Object unityObject && unityObject == null;
-
-        private readonly struct ModifierObservation : IEquatable<ModifierObservation>
-        {
-            private readonly Collider _collider;
-            private readonly int _revision;
-            private readonly int _priority;
-            private readonly Bounds _bounds;
-            private readonly bool _enabled;
-            private readonly bool _active;
-            private readonly bool _trigger;
-
-            private ModifierObservation(
-                Collider collider,
-                int revision,
-                int priority,
-                Bounds bounds,
-                bool enabled,
-                bool active,
-                bool trigger)
-            {
-                _collider = collider;
-                _revision = revision;
-                _priority = priority;
-                _bounds = bounds;
-                _enabled = enabled;
-                _active = active;
-                _trigger = trigger;
-            }
-
-            internal static ModifierObservation From(IFlowFieldVectorModifier modifier)
-            {
-                Collider collider = modifier?.InfluenceCollider;
-                return new ModifierObservation(
-                    collider,
-                    modifier?.Revision ?? 0,
-                    modifier?.Priority ?? 0,
-                    collider != null ? collider.bounds : default,
-                    collider != null && collider.enabled,
-                    collider != null && collider.gameObject.activeInHierarchy,
-                    collider != null && collider.isTrigger);
-            }
-
-            public bool Equals(ModifierObservation other)
-                => _collider == other._collider
-                    && _revision == other._revision
-                    && _priority == other._priority
-                    && _enabled == other._enabled
-                    && _active == other._active
-                    && _trigger == other._trigger
-                    && (_bounds.center - other._bounds.center).sqrMagnitude <= 0.00000001f
-                    && (_bounds.size - other._bounds.size).sqrMagnitude <= 0.00000001f;
-
-            public override bool Equals(object obj)
-                => obj is ModifierObservation other && Equals(other);
-
-            public override int GetHashCode()
-                => 0;
         }
 
         public override void Dispose()
@@ -2557,45 +1504,20 @@ namespace Common.FlowField
                 FlowFieldBuildScheduler.Unregister(this);
                 _runtimeScheduled = false;
             }
-            _build?.Dispose();
-            _build = null;
-            _buildReservationBytes = 0;
+            CancelCurrentBuild();
+            _hasLatestRequestedInput = false;
             _committed = null;
             _committedReservationBytes = 0;
-            _safetyStates = null;
-            _safetyReservationBytes = 0;
+            _safety.ClearSnapshot();
             _computeSolver?.Dispose();
             _computeSolver = null;
-            _dynamicObstacles.Clear();
-            _dynamicObstacleBounds.Clear();
-            _dynamicBounds.Clear();
+            _obstacles.Clear();
             _registeredObstacleOverlapBuffer = null;
-            _observedObstacleBounds.Clear();
-            _observedObstacleStates.Clear();
-            _seenObstacleColliders.Clear();
-            _modifiers.Clear();
-            _modifierObservations.Clear();
-            _uncertainBounds.Clear();
-            ClearAcceptedRequest();
+            _modifierRegistry.Clear();
+            _safety.ClearRegions();
             _state = FlowFieldRuntimeState.Released;
             MarkBaseDisposed();
         }
-
-        FlowFieldBuildOwner IFlowFieldBuildOperation.Owner
-            => FlowFieldBuildOwner.Runtime;
-
-        FlowFieldBuildOperationState IFlowFieldBuildOperation.OperationState
-            => _disposed
-                ? FlowFieldBuildOperationState.Cancelled
-                : IsFaulted
-                    ? FlowFieldBuildOperationState.Faulted
-                    : IsWaitingForExternalCompletion
-                        ? FlowFieldBuildOperationState.Waiting
-                        : IsBuilding
-                            ? FlowFieldBuildOperationState.Running
-                            : _committed != null
-                                ? FlowFieldBuildOperationState.Completed
-                                : FlowFieldBuildOperationState.Pending;
 
         bool IFlowFieldBuildOperation.IsWaitingForExternalCompletion
             => IsWaitingForExternalCompletion;
@@ -2603,210 +1525,16 @@ namespace Common.FlowField
         bool IFlowFieldBuildOperation.IsBuilding
             => IsBuilding;
 
-        float IFlowFieldBuildOperation.Progress
-            => BuildProgress;
-
-        Exception IFlowFieldBuildOperation.Failure
-            => _fault;
-
         void IFlowFieldBuildOperation.PumpInternal(in FlowFieldBuildBudget budget)
             => PumpInternal(in budget);
 
-        void IFlowFieldBuildOperation.Cancel()
+        internal void Cancel()
         {
             if (_disposed)
                 return;
-            _generation++;
-            _build?.Dispose();
-            _build = null;
-            _buildReservationBytes = 0;
-            _hasPendingRequest = false;
+            CancelCurrentBuild();
         }
 
-        void IFlowFieldBuildOperation.DisposeOperation()
-            => Dispose();
-
-        private enum BuildPhase
-        {
-            Allocate,
-            StaticData,
-            Obstacles,
-            Topology,
-            Goal,
-            Bfs,
-            Directions,
-            Escape,
-            Modifiers,
-            Complete,
-        }
-
-        private enum SafetyCellState : byte
-        {
-            Unknown = 0,
-            Clear = 1,
-            Blocked = 2,
-        }
-
-        private readonly struct ObstacleObservation : IEquatable<ObstacleObservation>
-        {
-            internal readonly Bounds Bounds;
-            private readonly bool _enabled;
-            private readonly bool _active;
-            private readonly bool _trigger;
-            private readonly int _layer;
-
-            private ObstacleObservation(
-                Bounds bounds,
-                bool enabled,
-                bool active,
-                bool trigger,
-                int layer)
-            {
-                Bounds = bounds;
-                _enabled = enabled;
-                _active = active;
-                _trigger = trigger;
-                _layer = layer;
-            }
-
-            internal static ObstacleObservation From(Collider collider)
-                => new ObstacleObservation(
-                    collider != null ? collider.bounds : default,
-                    collider != null && collider.enabled,
-                    collider != null && collider.gameObject.activeInHierarchy,
-                    collider != null && collider.isTrigger,
-                    collider != null ? collider.gameObject.layer : -1);
-
-            public bool Equals(ObstacleObservation other)
-                => _enabled == other._enabled
-                    && _active == other._active
-                    && _trigger == other._trigger
-                    && _layer == other._layer
-                    && (Bounds.center - other.Bounds.center).sqrMagnitude <= 0.00000001f
-                    && (Bounds.size - other.Bounds.size).sqrMagnitude <= 0.00000001f;
-
-            public override bool Equals(object obj)
-                => obj is ObstacleObservation other && Equals(other);
-
-            public override int GetHashCode() => 0;
-        }
-
-        private sealed class BuildContext
-        {
-            internal readonly FlowFieldVolumeRequest Request;
-            internal readonly int Generation;
-            internal readonly int SafetyEpoch;
-            internal readonly int Count;
-            internal bool[] Blocked;
-            internal uint[] Topology;
-            internal FlowFieldGoalFlags[] GoalFlags;
-            internal int[] Next;
-            internal Vector3[] Directions;
-            internal float[] Speeds;
-            internal Vector3[] FinalDirections;
-            internal float[] FinalSpeeds;
-            internal Vector3[] EscapeDirections;
-            internal int[] Costs;
-            internal int[] Queue;
-            internal bool[] Influence;
-            internal readonly FlowFieldModifierWorkItem[] Modifiers;
-            internal BuildPhase Phase;
-            internal int Cursor;
-            internal int Head;
-            internal int Tail;
-            internal int GoalIndex = -1;
-            internal int RequestedGoalIndex = -1;
-            internal long NearestGoalDistance = long.MaxValue;
-            internal int GoalStage;
-            internal double GoalRadiusSqr;
-            internal int EscapeStage;
-            internal int EscapeHead;
-            internal int EscapeTail;
-            internal bool GpuAttempted;
-            internal bool GpuPending;
-            internal Exception GpuFailed;
-            internal Unity.Collections.NativeArray<GpuFlowCell> GpuResult;
-            internal bool GpuResultPending;
-            internal int GpuValidationCursor;
-            internal int GpuFallbackResetCursor;
-            internal int AllocationStage;
-
-            internal BuildContext(
-                in FlowFieldVolumeRequest request,
-                int generation,
-                int safetyEpoch,
-                FlowFieldModifierWorkItem[] modifiers)
-            {
-                Request = request;
-                Generation = generation;
-                SafetyEpoch = safetyEpoch;
-                Count = request.Grid.CellCount;
-                Modifiers = modifiers ?? Array.Empty<FlowFieldModifierWorkItem>();
-                Phase = BuildPhase.Allocate;
-            }
-
-            internal void Dispose()
-            {
-                // Managed staging arrays are reclaimed by the runtime once no
-                // build references them. The GPU readback NativeArray belongs
-                // to FlowFieldComputeSolver and is intentionally not disposed
-                // here; its callback storage must remain valid until the
-                // solver consumes or releases it.
-                GpuResult = default;
-                GpuResultPending = false;
-                GpuPending = false;
-            }
-        }
-
-        private sealed class VolumeFieldData
-        {
-            internal readonly FlowFieldVolumeRequest Request;
-            internal readonly FlowFieldGridSpace Grid;
-            internal readonly bool[] Blocked;
-            internal readonly uint[] Topology;
-            internal readonly FlowFieldGoalFlags[] GoalFlags;
-            internal readonly int GoalIndex;
-            internal readonly int[] NextCells;
-            internal readonly Vector3[] BaseDirections;
-            internal readonly float[] BaseSpeeds;
-            internal readonly Vector3[] FinalDirections;
-            internal readonly float[] FinalSpeeds;
-            internal readonly Vector3[] EscapeDirections;
-            internal readonly long ResultId;
-
-            internal VolumeFieldData(
-                in FlowFieldVolumeRequest request,
-                bool[] blocked,
-                uint[] topology,
-                FlowFieldGoalFlags[] goalFlags,
-                int[] nextCells,
-                Vector3[] baseDirections,
-                float[] baseSpeeds,
-                Vector3[] finalDirections,
-                float[] finalSpeeds,
-                Vector3[] escapeDirections,
-                int goalIndex,
-                long resultId)
-            {
-                Request = request;
-                Grid = request.Grid;
-                // The solver/StaticBake payload has already resolved and
-                // validated the goal. Do not infer it again from an Anchor;
-                // an accidental non-goal anchor must never change the
-                // published goal identity.
-                GoalIndex = request.HasGoal ? goalIndex : -1;
-                Blocked = blocked;
-                Topology = topology;
-                GoalFlags = goalFlags;
-                NextCells = nextCells;
-                BaseDirections = baseDirections;
-                BaseSpeeds = baseSpeeds;
-                FinalDirections = finalDirections;
-                FinalSpeeds = finalSpeeds;
-                EscapeDirections = escapeDirections;
-                ResultId = resultId;
-            }
-        }
     }
 
 }

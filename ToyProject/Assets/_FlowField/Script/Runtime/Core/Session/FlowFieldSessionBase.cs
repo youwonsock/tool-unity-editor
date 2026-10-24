@@ -5,27 +5,17 @@ namespace Common.FlowField
 {
     /// <summary>
     /// Common execution boundary for the Surface2D and Volume3D sessions.
-    /// Mode-specific sessions own their arrays and algorithms; this base owns
-    /// the event boundary and generation tokens shared by both pipelines.
+    /// Mode-specific sessions own their requests, versions and result data.
+    /// This base exposes the shared commands and isolates subscriber failures.
     /// </summary>
     internal abstract class FlowFieldSessionBase : IDisposable
     {
         private bool _baseDisposed;
-        private long _lifetimeGeneration;
-        private long _publishedResultId;
-        private FlowFieldBuildRequest _latestAcceptedRequest;
-        private bool _hasLatestAcceptedRequest;
 
-        internal event Action<bool> FieldCommitted;
+        internal event Action FieldCommitted;
         internal event Action<Exception> Failed;
         internal event Action<FlowFieldRuntimeState> StateChanged;
         internal event Action<Exception> EventFailed;
-
-        internal long LifetimeGeneration => _lifetimeGeneration;
-        internal long PublishedResultId => _publishedResultId;
-        internal bool IsBaseDisposed => _baseDisposed;
-        internal bool HasLatestAcceptedRequest => _hasLatestAcceptedRequest;
-        internal FlowFieldBuildRequest LatestAcceptedRequest => _latestAcceptedRequest;
 
         internal abstract FlowFieldSpaceMode SpaceMode { get; }
         internal abstract FlowFieldBakeMode BakeMode { get; }
@@ -54,35 +44,12 @@ namespace Common.FlowField
         internal abstract bool UnregisterObstacleCommand(Collider collider);
         internal abstract void NotifyObstacleRegionDirtyCommand(Bounds worldBounds);
 
-        internal void AcceptBuildRequest(in FlowFieldBuildRequest request)
+        protected void NotifyFieldCommitted()
         {
             if (_baseDisposed)
-                throw new ObjectDisposedException(GetType().Name);
-            _latestAcceptedRequest = request;
-            _hasLatestAcceptedRequest = true;
-        }
-
-        protected void ClearAcceptedRequest()
-            => _hasLatestAcceptedRequest = false;
-
-        protected void InvalidateBaseLifetime()
-        {
-            unchecked
-            {
-                _lifetimeGeneration++;
-            }
-        }
-
-        protected void NotifyFieldCommitted(bool changed)
-        {
-            if (_baseDisposed || !changed)
                 return;
 
-            unchecked
-            {
-                _publishedResultId++;
-            }
-            InvokeUserEvent(() => FieldCommitted?.Invoke(true));
+            InvokeUserEvent(() => FieldCommitted?.Invoke());
         }
 
         protected void NotifyFailed(Exception exception)
@@ -104,7 +71,6 @@ namespace Common.FlowField
             if (_baseDisposed)
                 return;
             _baseDisposed = true;
-            InvalidateBaseLifetime();
             FieldCommitted = null;
             Failed = null;
             StateChanged = null;

@@ -19,7 +19,6 @@ namespace Common.FlowField
         [System.NonSerialized] private int _revision;
         [System.NonSerialized] private bool _validationSnapshotInitialized;
         [System.NonSerialized] private bool _isInitialized;
-        [System.NonSerialized] private bool _isFaulted;
         [System.NonSerialized] private bool _isChanging;
         [System.NonSerialized] private Exception _fault;
 
@@ -28,7 +27,7 @@ namespace Common.FlowField
         public int Priority => _priority;
         public int Revision => _revision;
         public bool IsInitialized => _isInitialized;
-        public bool IsFaulted => _isFaulted;
+        public bool IsFaulted => _fault != null;
 
         protected abstract int DefaultPriority { get; }
         protected abstract int ModifierValueHash { get; }
@@ -64,7 +63,7 @@ namespace Common.FlowField
 
         private void OnDestroy()
         {
-            if (_isInitialized || _isFaulted)
+            if (_isInitialized || IsFaulted)
                 Release();
         }
 
@@ -320,7 +319,7 @@ namespace Common.FlowField
         {
             if (_isInitialized)
                 throw new InvalidOperationException("FlowFieldVectorModifierVolume is already initialized.");
-            if (_isFaulted)
+            if (IsFaulted)
                 throw new InvalidOperationException("FlowFieldVectorModifierVolume is faulted; call Release before Init.", _fault);
 
             try
@@ -334,7 +333,6 @@ namespace Common.FlowField
             catch (Exception exception)
             {
                 _isInitialized = false;
-                _isFaulted = true;
                 if (_fault == null)
                     _fault = exception;
                 throw;
@@ -343,12 +341,11 @@ namespace Common.FlowField
 
         public void Release()
         {
-            if (!_isInitialized && !_isFaulted)
+            if (!_isInitialized && !IsFaulted)
                 return;
 
             UnregisterFromCurrentManager();
             _isInitialized = false;
-            _isFaulted = false;
             _fault = null;
         }
 
@@ -435,7 +432,7 @@ namespace Common.FlowField
 
         private void ThrowIfFaulted()
         {
-            if (_isFaulted)
+            if (IsFaulted)
                 throw new InvalidOperationException("FlowFieldVectorModifierVolume is faulted. Call Release before use.", _fault);
         }
 

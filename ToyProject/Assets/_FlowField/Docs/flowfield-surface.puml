@@ -1,0 +1,47 @@
+@startuml flowfield-surface
+skinparam shadowing false
+skinparam defaultFontName SansSerif
+skinparam defaultFontSize 14
+skinparam sequenceMessageAlign center
+skinparam ParticipantPadding 10
+skinparam BoxPadding 6
+hide footbox
+title Surface2D - request, composition and publication
+
+participant "Manager" as M
+participant "Session" as S
+participant "Surface / base\nservices" as B
+participant "GPU backend\n/ Solver" as G
+participant "ModifierRegistry\n/ ModifierPipeline" as F
+participant "FieldStore" as P
+
+M -> S : Submit latest request
+note over M,S : Submit records input; it does not enter a nested build.
+M -> S : FixedUpdate: Pump
+S -> B : Prepare or reuse immutable Surface
+alt RuntimeDynamic
+  S -> B : Prepare obstacles, topology and Goal
+  S -> F : Update dirty influence areas\nand compose staging as required
+  opt Active Goal and navigation changed
+    alt GPU accepted
+      S -> G : Start BFS with captured input
+      G --> S : Async result / fallback completion
+    else Managed path
+      S -> B : Solve the same captured navigation input
+      B --> S : BFS / directions complete
+    end
+    S -> F : Recompose with current accepted final inputs
+  end
+else StaticBaked
+  S -> B : Load validated v5 navigation snapshot
+  S -> F : Update dirty areas and compose final values
+end
+note over S,F : Getter / CaptureSnapshot / Modify calls check ownership on return.\nCancelled work cannot publish into a replacement lifetime.
+S -> P : Commit complete arrays, Surface and resolved Goal
+P --> S : Effective result changed?
+S --> M : FieldChanged when publication changes
+M -> S : Provider.TrySample(position)
+S -> P : Read committed final values
+note over S,P : Session also applies current obstacle / escape / topology safety.\nFinal-only changes reuse navigation and skip an unnecessary BFS.
+S --> M : Sample or stopped / unavailable result
+@enduml

@@ -166,8 +166,6 @@ namespace Common.FlowField
         private FlowFieldGoalSolveInput _lastObservedRequest;
         private bool _missingWalkableWarningIssued;
 
-        internal bool HasBuiltGoal => _lastBuiltHadGoal;
-        internal int LastBuiltSourceCellIndex => _lastBuiltSourceCellIndex;
 
         internal bool MatchesLastBuild(in FlowFieldGoalSolveInput request)
             => _hasBuiltRequest

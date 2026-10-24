@@ -1,0 +1,55 @@
+{
+  "pid": 75946,
+  "cubes": 225,
+  "subdivisions": 64,
+  "unityVersion": "2023.2.20f1",
+  "scope": "Core bake: three pipeline modes retained through fresh batch save. Also measures public MeshCombiner initial bake and overwrite/rebuild with scene output and source disabling. Timings exclude startup, input construction and cleanup; process/RSS peaks cover all stages.",
+  "fixtureMs": 377.2633,
+  "totalMs": 31491.090600000003,
+  "buildMs": 10285.0962,
+  "saveMs": 21133.3225,
+  "workflowInitialMs": 17092.3129,
+  "workflowRebuildMs": 11585.7698,
+  "unityAllocatedAtStart": 218018975,
+  "unityAllocatedAfterBuild": 1343826223,
+  "unityReservedAtStart": 518523496,
+  "modes": [
+    {
+      "mode": 1,
+      "vertices": 5703750,
+      "culled": 0,
+      "triangles": 11059200,
+      "milliseconds": 3968.6379
+    },
+    {
+      "mode": 2,
+      "vertices": 950625,
+      "culled": 0,
+      "triangles": 1843200,
+      "milliseconds": 5065.2137
+    },
+    {
+      "mode": 3,
+      "vertices": 1901250,
+      "culled": 150,
+      "triangles": 3686400,
+      "milliseconds": 1250.9804
+    }
+  ],
+  "variant": "after",
+  "profile": "gpu",
+  "pair": 3,
+  "processPeakRssBytes": 7875215360,
+  "bakeSampledPeakRssBytes": 7875215360,
+  "bakeFirstObservedRssBytes": 1380089856,
+  "sampleCount": 4473,
+  "samplingIntervalSeconds": 0.01,
+  "telemetryBefore": {
+    "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+    "power": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=21823587)\t46%; discharging; 0:50 remaining present: true"
+  },
+  "telemetryAfter": {
+    "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+    "power": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=21823587)\t45%; discharging; 0:54 remaining present: true"
+  }
+}

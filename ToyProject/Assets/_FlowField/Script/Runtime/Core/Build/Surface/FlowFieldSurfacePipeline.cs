@@ -6,15 +6,6 @@ namespace Common.FlowField
 {
     internal delegate bool FlowFieldSurfaceBakeProgress(int row, int rowCount);
 
-    internal static class FlowFieldSurfacePipeline
-    {
-        internal static bool TryValidate(in FlowFieldSurfaceBakeSettings settings, out string reason)
-        {
-            reason = settings.IsValid ? string.Empty : "Bake Bounds, Cell Size 또는 Ground 설정이 유효하지 않습니다.";
-            return settings.IsValid;
-        }
-    }
-
     internal readonly struct FlowFieldSurfaceBakeSettings
     {
         public FlowFieldGridSpace Grid { get; }
@@ -174,21 +165,6 @@ namespace Common.FlowField
             }
 
             return true;
-        }
-
-        private static void BuildNeighborMasks(
-            in FlowFieldSurfaceBakeSettings settings,
-            FlowFieldSurfaceBakeResult result)
-        {
-            FlowFieldGridSpace grid = settings.Grid;
-            for (int z = 0; z < grid.Depth; z++)
-            {
-                for (int x = 0; x < grid.Width; x++)
-                {
-                    int index = grid.ToFlatIndex(x, z);
-                    BuildNeighborMask(settings, result, index, x, z);
-                }
-            }
         }
 
         internal static void BuildNeighborMask(

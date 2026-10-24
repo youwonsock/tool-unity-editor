@@ -1,0 +1,243 @@
+// Copy into Script/Samples/Editor in isolated before/after projects only.
+#if UNITY_EDITOR
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Security.Cryptography;
+using UnityEditor;
+using UnityEditor.Build;
+using UnityEditor.Build.Reporting;
+using UnityEditor.SceneManagement;
+using UnityEngine;
+using UnityEngine.Profiling;
+using UnityEngine.Rendering;
+using UnityEngine.SceneManagement;
+using Object = UnityEngine.Object;
+
+namespace Common.OptimizeTool.Samples.Editor
+{
+    public static class RefactoringComparisonHarness
+    {
+        [Serializable] private sealed class BuildResult
+        {
+            public string profile, status, output;
+            public int errors, warnings;
+            public double seconds;
+        }
+        [Serializable] private sealed class MeshSummary
+        {
+            public string path, sha256;
+            public int vertices, renderers;
+            public long triangles;
+        }
+        [Serializable] private sealed class FixtureSummary { public MeshSummary[] outputs; }
+        [Serializable] private sealed class BakeResult
+        {
+            public int pid, cubes, subdivisions;
+            public string unityVersion, scope;
+            public double fixtureMs, totalMs, buildMs, saveMs, workflowInitialMs, workflowRebuildMs;
+            public long unityAllocatedAtStart, unityAllocatedAfterBuild, unityReservedAtStart;
+            public ModeResult[] modes;
+        }
+        [Serializable] private sealed class ModeResult
+        {
+            public int mode, vertices, culled;
+            public long triangles;
+            public double milliseconds;
+        }
+        [Serializable] private sealed class Phase { public string phase; public int pid; }
+
+        private static string Argument(string name)
+        {
+            string[] args = Environment.GetCommandLineArgs(); int index = Array.IndexOf(args, name);
+            if (index < 0 || index + 1 >= args.Length) throw new ArgumentException(name);
+            return args[index + 1];
+        }
+        private static string Output => Path.GetFullPath(Argument("--ab-output"));
+        private static void Write(string name, object value)
+        {
+            Directory.CreateDirectory(Output);
+            File.WriteAllText(Path.Combine(Output, name), JsonUtility.ToJson(value, true));
+        }
+        private static void SetPhase(string phase) => Write("phase.json", new Phase { phase = phase, pid = Process.GetCurrentProcess().Id });
+        private static string Hash(string path)
+        {
+            using (var sha = SHA256.Create()) using (var stream = File.OpenRead(path))
+                return BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", "").ToLowerInvariant();
+        }
+
+        public static void BuildPlayers()
+        {
+            if (!Application.isBatchMode) throw new InvalidOperationException("Use an isolated batch project.");
+            OptimizeToolScaleBuilder.BuildAt(OptimizeToolScaleBuilder.ScenePath, OptimizeToolScaleBuilder.OutputFolder, new[] { 20 });
+            OptimizeToolScaleBuilder.BuildAt(OptimizeToolScaleBuilder.GpuScenePath, OptimizeToolScaleBuilder.GpuOutputFolder, new[] { 5 }, 64);
+            var meshes = new List<MeshSummary>();
+            foreach (string profile in new[] { "cpu", "gpu" })
+            {
+                string folder = profile == "cpu" ? OptimizeToolScaleBuilder.OutputFolder : OptimizeToolScaleBuilder.GpuOutputFolder;
+                int cubes = profile == "cpu" ? 3600 : 225;
+                for (int mode = 1; mode < 4; mode++)
+                {
+                    string path = $"{folder}/Cubes-{cubes}-Mode-{mode}.asset";
+                    Mesh mesh = AssetDatabase.LoadAssetAtPath<Mesh>(path);
+                    long triangles = 0;
+                    for (int s = 0; s < mesh.subMeshCount; s++) triangles += (long)mesh.GetIndexCount(s) / 3;
+                    meshes.Add(new MeshSummary { path = path, sha256 = Hash(path), vertices = mesh.vertexCount, triangles = triangles, renderers = 1 });
+                }
+            }
+            Write("fixtures.json", new FixtureSummary { outputs = meshes.ToArray() });
+            PlayerSettings.SetArchitecture(NamedBuildTarget.Standalone, 1);
+            OptimizeToolMetalPluginBuilder.Build();
+            foreach (string profile in new[] { "cpu", "gpu" })
+            {
+                string path = Path.Combine(Output, profile + ".app");
+                BuildReport report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
+                {
+                    scenes = new[] { profile == "cpu" ? OptimizeToolScaleBuilder.ScenePath : OptimizeToolScaleBuilder.GpuScenePath },
+                    locationPathName = path, target = BuildTarget.StandaloneOSX, options = BuildOptions.Development
+                });
+                Write("build-" + profile + ".json", new BuildResult { profile = profile, output = path,
+                    status = report.summary.result.ToString(), errors = report.summary.totalErrors,
+                    warnings = report.summary.totalWarnings, seconds = report.summary.totalTime.TotalSeconds });
+                if (report.summary.result != UnityEditor.Build.Reporting.BuildResult.Succeeded) throw new InvalidOperationException("Build failed: " + profile);
+            }
+        }
+
+        public static void Bake()
+        {
+            int cubes = int.Parse(Argument("--ab-cubes")), subdivisions = int.Parse(Argument("--ab-subdivisions"));
+            int side = (int)Math.Sqrt(cubes / 9);
+            if (side * side * 9 != cubes) throw new ArgumentException("Expected 9 * side squared cubes.");
+            var watch = Stopwatch.StartNew();
+            Scene scene = EditorSceneManager.NewPreviewScene();
+            var results = new List<MeshBuildResult>();
+            Mesh dense = null;
+            var stats = new BakeResult { pid = Process.GetCurrentProcess().Id, cubes = cubes, subdivisions = subdivisions,
+                unityVersion = Application.unityVersion, scope = "Core bake: three pipeline modes retained through fresh batch save. Also measures public MeshCombiner initial bake and overwrite/rebuild with scene output and source disabling. Timings exclude startup, input construction and cleanup; process/RSS peaks cover all stages." };
+            try
+            {
+                Camera camera = Create(scene, "Bake Camera", typeof(Camera)).GetComponent<Camera>();
+                camera.orthographic = true; camera.transform.position = new Vector3(0f, 0f, -50f);
+                camera.orthographicSize = Mathf.Max(side * 2.2f / 2f, side * 5f / (2f * (16f / 9f))) * 1.08f;
+                camera.enabled = false;
+                Material material = AssetDatabase.LoadAssetAtPath<Material>("Assets/_OptimizeTool/Settings/OptimizeToolSource.mat");
+                if (subdivisions > 1) dense = OptimizeToolBenchmarkGeometry.CreateCube(subdivisions);
+                var sources = new List<MeshFilter>(cubes);
+                for (int row = 0; row < side; row++) for (int col = 0; col < side; col++)
+                for (int depth = 0; depth < 3; depth++) for (int lane = 0; lane < 3; lane++)
+                {
+                    GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    SceneManager.MoveGameObjectToScene(cube, scene);
+                    cube.transform.position = new Vector3((col - (side - 1) * 0.5f) * 5f + (lane - 1) * 1.5f,
+                        (row - (side - 1) * 0.5f) * 2.2f, depth * 2f);
+                    MeshRenderer renderer = cube.GetComponent<MeshRenderer>(); renderer.sharedMaterial = material;
+                    renderer.shadowCastingMode = ShadowCastingMode.Off; renderer.receiveShadows = false;
+                    renderer.lightProbeUsage = LightProbeUsage.Off; renderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
+                    MeshFilter filter = cube.GetComponent<MeshFilter>(); if (dense != null) filter.sharedMesh = dense;
+                    sources.Add(filter);
+                }
+                Physics.SyncTransforms();
+                // Warm one source so assembly/JIT initialization is outside the measured workload.
+                using (MeshBuildPipeline.Build(new MeshBuildRequest(new[] { sources[0] }, Matrix4x4.identity, camera,
+                    allowReadableCopy: true, singleMesh: true))) { }
+                GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
+                stats.fixtureMs = watch.Elapsed.TotalMilliseconds;
+                stats.unityAllocatedAtStart = Profiler.GetTotalAllocatedMemoryLong();
+                stats.unityReservedAtStart = Profiler.GetTotalReservedMemoryLong();
+                SetPhase("baking"); watch.Restart();
+                var modes = new List<ModeResult>();
+                for (int mode = 1; mode < 4; mode++)
+                {
+                    long started = Stopwatch.GetTimestamp();
+                    MeshBuildResult result = MeshBuildPipeline.Build(new MeshBuildRequest(sources, Matrix4x4.identity, camera,
+                        allowReadableCopy: true, singleMesh: true, backfaces: mode == 2, backfaceAngle: 89f,
+                        occlusion: mode == 3, samplingCount: 24));
+                    double ms = (Stopwatch.GetTimestamp() - started) * 1000d / Stopwatch.Frequency;
+                    results.Add(result); Mesh mesh = result.Meshes[0]; long triangles = 0;
+                    for (int s = 0; s < mesh.subMeshCount; s++) triangles += (long)mesh.GetIndexCount(s) / 3;
+                    modes.Add(new ModeResult { mode = mode, milliseconds = ms, vertices = mesh.vertexCount, triangles = triangles, culled = result.CulledObjectCount });
+                }
+                stats.buildMs = watch.Elapsed.TotalMilliseconds;
+                stats.unityAllocatedAfterBuild = Profiler.GetTotalAllocatedMemoryLong();
+                string folder = "Assets/__ABMeasuredOutput";
+                if (AssetDatabase.IsValidFolder(folder)) AssetDatabase.DeleteAsset(folder);
+                AssetDatabase.CreateFolder("Assets", "__ABMeasuredOutput");
+                long saveStarted = Stopwatch.GetTimestamp();
+                MeshAssetTransaction.Save(results.Select(r => r.Meshes[0]).ToArray(),
+                    new[] { folder + "/Combined.asset", folder + "/Backface.asset", folder + "/Occlusion.asset" }, false, "Measured bake");
+                stats.saveMs = (Stopwatch.GetTimestamp() - saveStarted) * 1000d / Stopwatch.Frequency;
+                stats.totalMs = watch.Elapsed.TotalMilliseconds; stats.modes = modes.ToArray();
+                // Separate untimed equivalence run only; final timed runs use the original harness.
+                var summaries = new List<MeshSummary>();
+                foreach (string path in new[] { folder + "/Combined.asset", folder + "/Backface.asset", folder + "/Occlusion.asset" })
+                {
+                    string hash = Hash(path);
+                    AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
+                    if (hash != Hash(path)) throw new InvalidOperationException("Import changed saved geometry");
+                    Mesh disk = AssetDatabase.LoadAssetAtPath<Mesh>(path);
+                    if (disk.isReadable) throw new InvalidOperationException("Saved mesh must keep its readability contract");
+                    summaries.Add(new MeshSummary { path = path, sha256 = hash, vertices = disk.vertexCount,
+                        triangles = (long)disk.GetIndexCount(0) / 3, renderers = 1 });
+                }
+                Write("fixtures.json", new FixtureSummary { outputs = summaries.ToArray() });
+                // Public Inspector API workload, including scene application and overwrite backups.
+                // Release core outputs first; the RSS monitor deliberately covers the whole workload.
+                foreach (MeshBuildResult result in results) result.Dispose();
+                results.Clear(); AssetDatabase.DeleteAsset(folder);
+                GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
+                var combiner = Create(scene, "Measured Combiner").AddComponent<MeshCombiner>();
+                string workflowFolder = "Assets/__ABWorkflowOutput";
+                if (AssetDatabase.IsValidFolder(workflowFolder)) AssetDatabase.DeleteAsset(workflowFolder);
+                AssetDatabase.CreateFolder("Assets", "__ABWorkflowOutput");
+                var serialized = new SerializedObject(combiner);
+                serialized.FindProperty("_savePath").stringValue = workflowFolder;
+                serialized.FindProperty("_meshName").stringValue = "Combined";
+                serialized.FindProperty("_allowReadableCopy").boolValue = true;
+                serialized.FindProperty("_combineAllIntoSingleMesh").boolValue = true;
+                serialized.FindProperty("_createSceneOutput").boolValue = true;
+                serialized.FindProperty("_disableSourceRenderers").boolValue = true;
+                serialized.FindProperty("_overwriteExistingAssets").boolValue = true;
+                var targets = serialized.FindProperty("_targetMeshFilterArray"); targets.arraySize = sources.Count;
+                for (int i = 0; i < sources.Count; i++) targets.GetArrayElementAtIndex(i).objectReferenceValue = sources[i];
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+                watch.Restart(); Mesh initial = combiner.CombineAndSaveMeshes()[0];
+                stats.workflowInitialMs = watch.Elapsed.TotalMilliseconds;
+                int vertices = initial.vertexCount;
+                watch.Restart(); Mesh rebuilt = combiner.CombineAndSaveMeshes()[0];
+                stats.workflowRebuildMs = watch.Elapsed.TotalMilliseconds;
+                if (rebuilt.vertexCount != vertices || sources.Any(f => f.GetComponent<MeshRenderer>().enabled)
+                    || combiner.GetComponentsInChildren<MeshRenderer>(true).Length != 1)
+                    throw new InvalidOperationException("Public bake/rebuild failed its geometry or renderer-state contract.");
+                Undo.PerformUndo();
+                if (sources.Any(f => f.GetComponent<MeshRenderer>().enabled)) throw new InvalidOperationException("Undo rebuild changed retained states");
+                Undo.PerformUndo();
+                if (sources.Any(f => !f.GetComponent<MeshRenderer>().enabled) || combiner.GetComponentsInChildren<MeshRenderer>(true).Length != 0)
+                    throw new InvalidOperationException("Undo initial did not restore all sources");
+                Undo.PerformRedo(); Undo.PerformRedo();
+                if (sources.Any(f => f.GetComponent<MeshRenderer>().enabled) || combiner.GetComponentsInChildren<MeshRenderer>(true).Length != 1)
+                    throw new InvalidOperationException("Redo failed the 3600-source contract");
+                var states = new SerializedObject(combiner).FindProperty("_sourceRendererStates");
+                if (states.arraySize != cubes) throw new InvalidOperationException("Ownership ledger lost entries on redo");
+                for (int i = 0; i < cubes; i++)
+                    if (!states.GetArrayElementAtIndex(i).FindPropertyRelative("Enabled").boolValue)
+                        throw new InvalidOperationException("Ownership ledger lost original states on redo");
+                SetPhase("complete"); Write("bake.json", stats);
+            }
+            catch (Exception error) { SetPhase("failed"); File.WriteAllText(Path.Combine(Output, "error.txt"), error.ToString()); throw; }
+            finally
+            {
+                foreach (MeshBuildResult result in results) result.Dispose();
+                if (dense != null) Object.DestroyImmediate(dense);
+                EditorSceneManager.ClosePreviewScene(scene);
+                if (AssetDatabase.IsValidFolder("Assets/__ABWorkflowOutput")) AssetDatabase.DeleteAsset("Assets/__ABWorkflowOutput");
+                if (AssetDatabase.IsValidFolder("Assets/__ABMeasuredOutput")) AssetDatabase.DeleteAsset("Assets/__ABMeasuredOutput");
+            }
+        }
+
+        private static GameObject Create(Scene scene, string name, params Type[] types)
+        { var obj = new GameObject(name, types); SceneManager.MoveGameObjectToScene(obj, scene); return obj; }
+    }
+}
+#endif

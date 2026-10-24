@@ -11,34 +11,11 @@ namespace Common.TransformPath
     [DefaultExecutionOrder(-200)]
     public sealed class PathEventHandler : MonoBehaviour, IPathRuntimeTickable, IPathRuntimeFaultHandler
     {
-        private struct ScalarAdjustment
-        {
-            public bool Active;
-            public IPathFollower Follower;
-            public float StartValue;
-            public float TargetValue;
-            public float Duration;
-            public float Elapsed;
-            public AnimationCurve Curve;
-            public int StartFrame;
-            public ulong PlaybackId;
-            public EMoveControlChannel Channel;
-        }
-
-        private enum EMoveControlChannel
-        {
-            None,
-            Speed,
-            Duration,
-        }
-
         private readonly PathEventScheduler _scheduler = new PathEventScheduler();
-        private readonly PathEventRuntime _eventRuntime = new PathEventRuntime();
-        private readonly List<PathRuntimeEvent> _preparedEvents = new List<PathRuntimeEvent>();
         private IPathEventReceiver _receiver;
         private IPathFollower _boundFollower;
         private bool _isInitialized;
-        private ScalarAdjustment _scalarAdjustment;
+        private readonly PathScalarAdjustment _scalarAdjustment = new PathScalarAdjustment();
         private ulong _eventBatchId;
         private Action<string> _onEventDispatched;
         private Delegate[] _onEventDispatchedInvocationList;
@@ -48,6 +25,7 @@ namespace Common.TransformPath
         [SerializeField] private MonoBehaviour _receiverObject;
 
         public bool IsInitialized => _isInitialized;
+        int IPathRuntimeTickable.RuntimeOrder => -200;
         public bool IsControllingSpeed => _scalarAdjustment.Active;
         public ulong PlaybackId => _boundFollower == null
             ? 0UL
@@ -153,7 +131,7 @@ namespace Common.TransformPath
             int frame = frameId;
             _currentFrameId = frame;
             UpdateTimeScale(unscaledDeltaTime, frame);
-            UpdateScalar(deltaTime, frame);
+            _scalarAdjustment.Tick(deltaTime, frame);
             _scheduler.Advance(deltaTime, frame);
 
             while (_scheduler.TryDequeueDue(frame, out PathEventScheduler.ScheduledEvent item))
@@ -208,13 +186,7 @@ namespace Common.TransformPath
             IPathFollower target = _boundFollower ?? follower;
             ValidateForPlayback(target, source, moveType);
             _boundFollower = target;
-            _preparedEvents.Clear();
-            if (source == null)
-                return;
-
-            for (int i = 0; i < source.EventCount; i++)
-                _preparedEvents.Add(source.GetEvent(i));
-            _scheduler.EnsureCapacity(_preparedEvents.Count);
+            _scheduler.EnsureCapacity(source?.EventCount ?? 0);
         }
 
         internal void PrepareForSequence(
@@ -226,19 +198,16 @@ namespace Common.TransformPath
             IPathFollower target = _boundFollower ?? follower;
             ValidateForSequence(target, snapshot);
             _boundFollower = target;
-            _preparedEvents.Clear();
             if (snapshot == null)
                 return;
 
+            int eventCount = 0;
             for (int i = 0; i < snapshot.Count; i++)
             {
                 IPathEventSource source = snapshot.GetEventSource(i);
-                if (source == null)
-                    continue;
-                for (int eventIndex = 0; eventIndex < source.EventCount; eventIndex++)
-                    _preparedEvents.Add(source.GetEvent(eventIndex));
+                eventCount += source?.EventCount ?? 0;
             }
-            _scheduler.EnsureCapacity(_preparedEvents.Count);
+            _scheduler.EnsureCapacity(eventCount);
         }
 
         internal void ValidateForPlayback(
@@ -252,7 +221,7 @@ namespace Common.TransformPath
             for (int i = 0; i < source.EventCount; i++)
             {
                 PathRuntimeEvent pathEvent = source.GetEvent(i);
-                ValidateDefinition(
+                PathEventDefinitionValidator.ValidateDefinition(
                     pathEvent.Definition,
                     follower,
                     false,
@@ -278,7 +247,7 @@ namespace Common.TransformPath
                 for (int eventIndex = 0; eventIndex < source.EventCount; eventIndex++)
                 {
                     PathRuntimeEvent pathEvent = source.GetEvent(eventIndex);
-                    ValidateDefinition(
+                    PathEventDefinitionValidator.ValidateDefinition(
                         pathEvent.Definition,
                         follower,
                         false,
@@ -296,13 +265,13 @@ namespace Common.TransformPath
 
         internal void CancelMovementAdjustments()
         {
-            _scalarAdjustment = default(ScalarAdjustment);
+            _scalarAdjustment.Cancel();
         }
 
         internal void CancelPlaybackEffects(ulong playbackId)
         {
             _scheduler.Clear();
-            _scalarAdjustment = default(ScalarAdjustment);
+            _scalarAdjustment.Cancel();
             PathTimeScaleCoordinator.Shared.Release(
                 GetOwnerId(_boundFollower, playbackId));
         }
@@ -311,7 +280,7 @@ namespace Common.TransformPath
         {
             if (setting == null)
                 throw new ArgumentNullException(nameof(setting));
-            HandleEvent(PathEventDefinitionFactory.Create(setting), _boundFollower);
+            HandleEvent(PathEventDefinition.FromAuthoring(setting), _boundFollower);
         }
 
         internal void HandleEvent(
@@ -327,7 +296,7 @@ namespace Common.TransformPath
                 throw new ArgumentNullException(nameof(follower));
 
             _boundFollower = follower;
-            ValidateDefinition(definition, follower, resumeOnly, new HashSet<PathEventDefinition>());
+            PathEventDefinitionValidator.ValidateDefinition(definition, follower, resumeOnly, new HashSet<PathEventDefinition>());
             _scheduler.Clear();
             ulong playbackId = follower.PlaybackId;
             try
@@ -369,7 +338,7 @@ namespace Common.TransformPath
             if (eventBatchId != _eventBatchId)
                 return;
 
-            EPathEventIntent intent = _eventRuntime.ResolveIntent(
+            EPathEventIntent intent = PathEventRuntime.ResolveIntent(
                 definition,
                 follower,
                 resumeOnly);
@@ -383,8 +352,8 @@ namespace Common.TransformPath
                 return;
 
             if (intent == EPathEventIntent.Pause)
-                _scalarAdjustment = default(ScalarAdjustment);
-            PathCommandReceipt lifecycleReceipt = _eventRuntime.ApplyLifecycle(
+                _scalarAdjustment.Cancel();
+            PathCommandReceipt lifecycleReceipt = PathEventRuntime.ApplyLifecycle(
                 intent,
                 follower);
             if (lifecycleReceipt.PlaybackId != expectedPlaybackId
@@ -399,15 +368,16 @@ namespace Common.TransformPath
                 || eventBatchId != _eventBatchId)
                 return;
 
-            if (intent == EPathEventIntent.ChangeValue)
+            if (intent == EPathEventIntent.ChangeValue
+                || intent == EPathEventIntent.Resume)
             {
                 if (definition.UseModifyPathMoveSpeed)
-                    StartScalar(follower, EMoveControlChannel.Speed,
+                    StartScalar(follower, EPathMoveControlChannel.Speed,
                         definition.MoveSpeedTargetValue,
                         definition.MoveSpeedAdjustDuration,
                         definition.MoveSpeedAdjustCurve);
                 else if (definition.UseModifyPathMoveDuration)
-                    StartScalar(follower, EMoveControlChannel.Duration,
+                    StartScalar(follower, EPathMoveControlChannel.Duration,
                         definition.MoveDurationTargetValue,
                         definition.MoveDurationAdjustDuration,
                         definition.MoveDurationAdjustCurve);
@@ -496,74 +466,11 @@ namespace Common.TransformPath
             }
         }
 
-        private void StartScalar(
-            IPathFollower follower,
-            EMoveControlChannel channel,
-            float target,
-            float duration,
-            AnimationCurve curve)
+        private void StartScalar(IPathFollower follower, EPathMoveControlChannel channel,
+            float target, float duration, AnimationCurve curve)
         {
-            if (duration <= 0f)
-            {
-                if (channel == EMoveControlChannel.Speed)
-                    follower.SetSpeed(target);
-                else
-                    follower.SetDuration(target);
-                return;
-            }
-
-            _scalarAdjustment = new ScalarAdjustment
-            {
-                Active = true,
-                Follower = follower,
-                StartValue = channel == EMoveControlChannel.Speed ? follower.Speed : follower.Duration,
-                TargetValue = target,
-                Duration = duration,
-                Curve = curve,
-                StartFrame = _currentFrameId > 0 ? _currentFrameId : Time.frameCount,
-                PlaybackId = follower.PlaybackId,
-                Channel = channel,
-            };
-        }
-
-        private void UpdateScalar(float deltaTime, int frame)
-        {
-            if (!_scalarAdjustment.Active
-                || _scalarAdjustment.Follower == null
-                || _scalarAdjustment.StartFrame >= frame
-                || deltaTime <= 0f)
-                return;
-            if (_scalarAdjustment.Follower.PlaybackId != _scalarAdjustment.PlaybackId)
-            {
-                _scalarAdjustment = default(ScalarAdjustment);
-                return;
-            }
-
-            _scalarAdjustment.Elapsed += deltaTime;
-            float t = EvaluateAdjustment(
-                _scalarAdjustment.Elapsed,
-                _scalarAdjustment.Duration,
-                _scalarAdjustment.Curve);
-            float value = Mathf.Lerp(_scalarAdjustment.StartValue, _scalarAdjustment.TargetValue, t);
-            PathCommandReceipt receipt = _scalarAdjustment.Channel == EMoveControlChannel.Speed
-                ? _scalarAdjustment.Follower.SetSpeed(value)
-                : _scalarAdjustment.Follower.SetDuration(value);
-            if (receipt.PlaybackId != _scalarAdjustment.PlaybackId
-                || _scalarAdjustment.Follower.PlaybackId != _scalarAdjustment.PlaybackId
-                || receipt.StateRevision != _scalarAdjustment.Follower.StateRevision)
-            {
-                _scalarAdjustment = default(ScalarAdjustment);
-                return;
-            }
-
-            if (_scalarAdjustment.Elapsed >= _scalarAdjustment.Duration)
-            {
-                if (_scalarAdjustment.Channel == EMoveControlChannel.Speed)
-                    _scalarAdjustment.Follower.SetSpeed(_scalarAdjustment.TargetValue);
-                else
-                    _scalarAdjustment.Follower.SetDuration(_scalarAdjustment.TargetValue);
-                _scalarAdjustment = default(ScalarAdjustment);
-            }
+            _scalarAdjustment.Start(follower, channel, target, duration, curve,
+                _currentFrameId > 0 ? _currentFrameId : Time.frameCount);
         }
 
         private void StartTimeScale(
@@ -581,185 +488,6 @@ namespace Common.TransformPath
         private void UpdateTimeScale(float unscaledDeltaTime, int frame)
         {
             PathTimeScaleCoordinator.Shared.Tick(unscaledDeltaTime, frame);
-        }
-
-        private static float EvaluateAdjustment(float elapsed, float duration, AnimationCurve curve)
-        {
-            if (duration <= 0f)
-                return 1f;
-            return Mathf.Clamp01(curve == null
-                ? elapsed / duration
-                : curve.Evaluate(Mathf.Clamp01(elapsed / duration)));
-        }
-
-        private static void ValidateDefinition(
-            PathEventDefinition definition,
-            IPathPlaybackState follower,
-            bool resumeOnly,
-            HashSet<PathEventDefinition> stack,
-            EPathMoveType? moveTypeOverride = null,
-            EPathFollowerState? stateOverride = null)
-        {
-            if (definition == null)
-                throw new ArgumentNullException(nameof(definition));
-            if (!stack.Add(definition))
-                throw new ArgumentException("Delayed path event settings cannot contain a cycle.");
-
-            if (definition.UseTimeScaleAdjust)
-            {
-                if (!PathValueUtility.IsInRange(
-                         definition.TimeScaleAdjustValue,
-                         0f,
-                         PathMovementSettingsUtility.MAX_VALUE)
-                    || definition.TimeScaleAdjustDuration <= 0f)
-                    throw new ArgumentOutOfRangeException(nameof(definition));
-                ValidateAdjustment(definition.TimeScaleAdjustDuration, definition.TimeScaleAdjustCurve);
-            }
-
-            PathEventRuntime runtime = new PathEventRuntime();
-            EPathEventIntent intent = runtime.ResolveIntent(
-                definition,
-                moveTypeOverride ?? follower.MoveType,
-                stateOverride ?? follower.State,
-                resumeOnly);
-            ValidateMovementIntent(
-                definition,
-                moveTypeOverride ?? follower.MoveType,
-                intent);
-            if (intent == EPathEventIntent.Pause)
-            {
-                if (definition.DelayedEvents.Count != 1
-                    || definition.DelayedEvents[0].Delay <= 0f
-                    || definition.DelayedEvents[0].Definition == null)
-                    throw new ArgumentException("A pause requires exactly one delayed Resume event.");
-                EPathEventIntent resumeIntent = runtime.ResolveIntent(
-                    definition.DelayedEvents[0].Definition,
-                    moveTypeOverride ?? follower.MoveType,
-                    stateOverride ?? follower.State,
-                    true);
-                if (resumeIntent != EPathEventIntent.Resume
-                    || definition.DelayedEvents[0].Definition.DelayedEvents.Count != 0)
-                    throw new ArgumentException("A pause delayed event must be a terminal Resume event.");
-            }
-            else if (intent == EPathEventIntent.Resume
-                && definition.DelayedEvents.Count != 0)
-            {
-                throw new ArgumentException("A Resume event cannot enqueue delayed events.");
-            }
-
-            for (int i = 0; i < definition.DelayedEvents.Count; i++)
-            {
-                PathDelayedEventDefinition delayed = definition.DelayedEvents[i];
-                if (!PathValueUtility.IsNonNegativeFinite(delayed.Delay))
-                    throw new ArgumentOutOfRangeException(nameof(delayed.Delay));
-                ValidateDefinition(
-                    delayed.Definition,
-                    follower,
-                    intent == EPathEventIntent.Pause && i == 0,
-                    stack,
-                    moveTypeOverride,
-                    stateOverride);
-            }
-
-            stack.Remove(definition);
-        }
-
-        private static void ValidateMovementIntent(
-            PathEventDefinition definition,
-            EPathMoveType moveType,
-            EPathEventIntent intent)
-        {
-            if (intent == EPathEventIntent.None)
-                return;
-
-            switch (moveType)
-            {
-                case EPathMoveType.SpeedBased:
-                    if (!definition.UseModifyPathMoveSpeed)
-                        return;
-                    if (!PathValueUtility.IsInRange(
-                            definition.MoveSpeedTargetValue,
-                            0f,
-                            PathMovementSettingsUtility.MAX_VALUE))
-                        throw new ArgumentOutOfRangeException(
-                            nameof(definition.MoveSpeedTargetValue));
-                    ValidateNonNegativeDuration(
-                        definition.MoveSpeedAdjustDuration,
-                        nameof(definition.MoveSpeedAdjustDuration));
-                    if (intent == EPathEventIntent.Pause
-                        && (!Mathf.Approximately(definition.MoveSpeedTargetValue, 0f)
-                            || definition.MoveSpeedAdjustDuration > 0f))
-                        throw new ArgumentException(
-                            "A zero-speed pause must be applied immediately.");
-                    if (intent == EPathEventIntent.Resume
-                        && (definition.MoveSpeedTargetValue <= 0f
-                            || definition.MoveSpeedAdjustDuration > 0f))
-                        throw new ArgumentException(
-                            "A Resume event must use an immediate positive speed target.");
-                    if (intent == EPathEventIntent.ChangeValue
-                        && definition.MoveSpeedTargetValue <= 0f)
-                        throw new ArgumentOutOfRangeException(
-                            nameof(definition.MoveSpeedTargetValue));
-                    if (intent == EPathEventIntent.ChangeValue)
-                        ValidateAdjustment(
-                            definition.MoveSpeedAdjustDuration,
-                            definition.MoveSpeedAdjustCurve);
-                    return;
-
-                case EPathMoveType.TimeBased:
-                    if (!definition.UseModifyPathMoveDuration)
-                        return;
-                    if (!PathValueUtility.IsInRange(
-                            definition.MoveDurationTargetValue,
-                            PathMovementSettingsUtility.MIN_VALUE,
-                            PathMovementSettingsUtility.MAX_VALUE))
-                        throw new ArgumentOutOfRangeException(
-                            nameof(definition.MoveDurationTargetValue));
-                    ValidateNonNegativeDuration(
-                        definition.MoveDurationAdjustDuration,
-                        nameof(definition.MoveDurationAdjustDuration));
-                    if (intent == EPathEventIntent.Pause
-                        && (!Mathf.Approximately(
-                                definition.MoveDurationTargetValue,
-                                PathMovementSettingsUtility.MAX_VALUE)
-                            || definition.MoveDurationAdjustDuration > 0f))
-                        throw new ArgumentException(
-                            "A Duration value of 9999 must be applied as an immediate pause.");
-                    if (intent == EPathEventIntent.Resume
-                        && (definition.MoveDurationTargetValue
-                                >= PathMovementSettingsUtility.MAX_VALUE
-                            || definition.MoveDurationAdjustDuration > 0f))
-                        throw new ArgumentException(
-                            "A Resume event must use an immediate Duration target below 9999.");
-                    if (intent == EPathEventIntent.ChangeValue
-                        && definition.MoveDurationTargetValue
-                            >= PathMovementSettingsUtility.MAX_VALUE)
-                        throw new ArgumentOutOfRangeException(
-                            nameof(definition.MoveDurationTargetValue));
-                    if (intent == EPathEventIntent.ChangeValue)
-                        ValidateAdjustment(
-                            definition.MoveDurationAdjustDuration,
-                            definition.MoveDurationAdjustCurve);
-                    return;
-            }
-        }
-
-        private static void ValidateNonNegativeDuration(
-            float duration,
-            string parameterName)
-        {
-            if (!PathValueUtility.IsNonNegativeFinite(duration))
-                throw new ArgumentOutOfRangeException(parameterName);
-        }
-
-        private static void ValidateAdjustment(float duration, AnimationCurve curve)
-        {
-            if (!PathValueUtility.IsNonNegativeFinite(duration))
-                throw new ArgumentOutOfRangeException(nameof(duration));
-            if (duration <= 0f)
-                return;
-            if (curve == null || curve.length == 0)
-                throw new ArgumentException("An adjustment requires a non-empty curve.");
         }
 
         private static ulong GetOwnerId(

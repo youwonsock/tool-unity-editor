@@ -6,8 +6,8 @@ namespace Common.FlowField
 {
     /// <summary>
     /// Unity-independent cooperative scheduler. It does not create or find
-    /// GameObjects; a Runtime or Editor owner invokes PumpAll at its normal
-    /// update boundary.
+    /// GameObjects; the runtime driver invokes PumpAll at its update boundary.
+    /// Isolated Editor sessions are pumped directly by their owner.
     /// </summary>
     internal static class FlowFieldBuildScheduler
     {
@@ -45,9 +45,7 @@ namespace Common.FlowField
             _cursor %= Operations.Count;
         }
 
-        internal static void PumpAll(
-            double budgetMilliseconds,
-            FlowFieldBuildOwner owner = FlowFieldBuildOwner.Runtime)
+        internal static void PumpAll(double budgetMilliseconds)
         {
             if (_pumping || Operations.Count == 0 || budgetMilliseconds <= 0d)
                 return;
@@ -66,7 +64,6 @@ namespace Common.FlowField
                     _cursor = (_cursor + 1) % Math.Max(1, Operations.Count);
 
                     if (operation == null
-                        || operation.Owner != owner
                         || operation.IsWaitingForExternalCompletion)
                     {
                         visitedWithoutWork++;
@@ -96,11 +93,5 @@ namespace Common.FlowField
             }
         }
 
-        internal static void ClearForTests()
-        {
-            Operations.Clear();
-            _cursor = 0;
-            _pumping = false;
-        }
     }
 }

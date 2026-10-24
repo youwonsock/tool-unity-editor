@@ -19,6 +19,43 @@ namespace Common.TransformPath
             NormalizedTime = normalizedTime;
             Definition = definition;
         }
+
+        internal static bool AreSame(PathRuntimeEvent left, PathRuntimeEvent right)
+        {
+            return Mathf.Approximately(left.NormalizedTime, right.NormalizedTime)
+                && PathEventDefinition.AreSame(left.Definition, right.Definition);
+        }
+
+        internal static bool AreSame(
+            IReadOnlyList<PathRuntimeEvent> left,
+            IReadOnlyList<PathRuntimeEvent> right)
+        {
+            if (ReferenceEquals(left, right))
+                return true;
+            if (left == null || right == null || left.Count != right.Count)
+                return false;
+            for (int i = 0; i < left.Count; i++)
+                if (!AreSame(left[i], right[i]))
+                    return false;
+            return true;
+        }
+
+        internal static void SortByPosition(PathRuntimeEvent[] events)
+        {
+            // Preserve authoring order for events at the same position.
+            for (int i = 1; i < events.Length; i++)
+            {
+                PathRuntimeEvent current = events[i];
+                int previous = i - 1;
+                while (previous >= 0 && events[previous].NormalizedTime > current.NormalizedTime)
+                {
+                    events[previous + 1] = events[previous];
+                    previous--;
+                }
+                events[previous + 1] = current;
+            }
+        }
+
     }
 
     public readonly struct PathDelayedEventDefinition
@@ -51,9 +88,9 @@ namespace Common.TransformPath
         public float TimeScaleAdjustValue { get; }
         public float TimeScaleAdjustDuration { get; }
         private readonly AnimationCurve _timeScaleAdjustCurve;
-        internal AnimationCurve MoveSpeedAdjustCurve => CloneCurve(_moveSpeedAdjustCurve);
-        internal AnimationCurve MoveDurationAdjustCurve => CloneCurve(_moveDurationAdjustCurve);
-        internal AnimationCurve TimeScaleAdjustCurve => CloneCurve(_timeScaleAdjustCurve);
+        internal AnimationCurve MoveSpeedAdjustCurve => PathMovementSettingsUtility.CloneCurve(_moveSpeedAdjustCurve);
+        internal AnimationCurve MoveDurationAdjustCurve => PathMovementSettingsUtility.CloneCurve(_moveDurationAdjustCurve);
+        internal AnimationCurve TimeScaleAdjustCurve => PathMovementSettingsUtility.CloneCurve(_timeScaleAdjustCurve);
         public IReadOnlyList<PathDelayedEventDefinition> DelayedEvents => _delayedEventsView;
 
         public PathEventDefinition(
@@ -76,15 +113,15 @@ namespace Common.TransformPath
             UseModifyPathMoveSpeed = useModifyPathMoveSpeed;
             MoveSpeedTargetValue = moveSpeedTargetValue;
             MoveSpeedAdjustDuration = moveSpeedAdjustDuration;
-            _moveSpeedAdjustCurve = CloneCurve(moveSpeedAdjustCurve);
+            _moveSpeedAdjustCurve = PathMovementSettingsUtility.CloneCurve(moveSpeedAdjustCurve);
             UseModifyPathMoveDuration = useModifyPathMoveDuration;
             MoveDurationTargetValue = moveDurationTargetValue;
             MoveDurationAdjustDuration = moveDurationAdjustDuration;
-            _moveDurationAdjustCurve = CloneCurve(moveDurationAdjustCurve);
+            _moveDurationAdjustCurve = PathMovementSettingsUtility.CloneCurve(moveDurationAdjustCurve);
             UseTimeScaleAdjust = useTimeScaleAdjust;
             TimeScaleAdjustValue = timeScaleAdjustValue;
             TimeScaleAdjustDuration = timeScaleAdjustDuration;
-            _timeScaleAdjustCurve = CloneCurve(timeScaleAdjustCurve);
+            _timeScaleAdjustCurve = PathMovementSettingsUtility.CloneCurve(timeScaleAdjustCurve);
 
             if (delayedEvents == null || delayedEvents.Count == 0)
             {
@@ -145,13 +182,44 @@ namespace Common.TransformPath
                 delayed);
         }
 
-        private static AnimationCurve CloneCurve(AnimationCurve source)
+        internal static bool AreSame(
+            PathEventDefinition left,
+            PathEventDefinition right)
         {
-            return source == null ? null : new AnimationCurve(source.keys)
+            if (ReferenceEquals(left, right))
+                return true;
+            if (left == null || right == null
+                || left.EventName != right.EventName
+                || left.UseModifyPathMoveSpeed != right.UseModifyPathMoveSpeed
+                || !Mathf.Approximately(left.MoveSpeedTargetValue, right.MoveSpeedTargetValue)
+                || !Mathf.Approximately(left.MoveSpeedAdjustDuration, right.MoveSpeedAdjustDuration)
+                || !PathMovementSettingsUtility.AreSameCurve(
+                    left._moveSpeedAdjustCurve,
+                    right._moveSpeedAdjustCurve)
+                || left.UseModifyPathMoveDuration != right.UseModifyPathMoveDuration
+                || !Mathf.Approximately(left.MoveDurationTargetValue, right.MoveDurationTargetValue)
+                || !Mathf.Approximately(left.MoveDurationAdjustDuration, right.MoveDurationAdjustDuration)
+                || !PathMovementSettingsUtility.AreSameCurve(
+                    left._moveDurationAdjustCurve,
+                    right._moveDurationAdjustCurve)
+                || left.UseTimeScaleAdjust != right.UseTimeScaleAdjust
+                || !Mathf.Approximately(left.TimeScaleAdjustValue, right.TimeScaleAdjustValue)
+                || !Mathf.Approximately(left.TimeScaleAdjustDuration, right.TimeScaleAdjustDuration)
+                || !PathMovementSettingsUtility.AreSameCurve(
+                    left._timeScaleAdjustCurve,
+                    right._timeScaleAdjustCurve)
+                || left.DelayedEvents.Count != right.DelayedEvents.Count)
+                return false;
+
+            for (int i = 0; i < left.DelayedEvents.Count; i++)
             {
-                preWrapMode = source.preWrapMode,
-                postWrapMode = source.postWrapMode,
-            };
+                PathDelayedEventDefinition leftDelayed = left.DelayedEvents[i];
+                PathDelayedEventDefinition rightDelayed = right.DelayedEvents[i];
+                if (!Mathf.Approximately(leftDelayed.Delay, rightDelayed.Delay)
+                    || !AreSame(leftDelayed.Definition, rightDelayed.Definition))
+                    return false;
+            }
+            return true;
         }
 
     }
@@ -188,95 +256,20 @@ namespace Common.TransformPath
             for (int i = 0; i < events.Length; i++)
                 events[i] = source.GetEvent(i);
 
-            // Providers publish an ordered event stream. Normalize external
-            // implementations as well while preserving equal-position order.
-            for (int sortIndex = 1; sortIndex < events.Length; sortIndex++)
-            {
-                PathRuntimeEvent current = events[sortIndex];
-                int previousIndex = sortIndex - 1;
-                while (previousIndex >= 0
-                    && events[previousIndex].NormalizedTime > current.NormalizedTime)
-                {
-                    events[previousIndex + 1] = events[previousIndex];
-                    previousIndex--;
-                }
-                events[previousIndex + 1] = current;
-            }
+            PathRuntimeEvent.SortByPosition(events);
             return new PathEventSourceSnapshot(events);
         }
 
         public bool Matches(IPathEventSource source)
         {
-            if (source == null)
-                return _events.Length == 0;
-            if (source.EventCount != _events.Length)
-                return false;
-            for (int i = 0; i < _events.Length; i++)
-            {
-                PathRuntimeEvent candidate = source.GetEvent(i);
-                if (!AreSame(candidate, _events[i]))
-                    return false;
-            }
-            return true;
+            return HasSameContent(Create(source));
         }
 
         internal bool HasSameContent(PathEventSourceSnapshot other)
         {
-            if (other == null || other._events.Length != _events.Length)
-                return false;
-            for (int i = 0; i < _events.Length; i++)
-            {
-                if (!AreSame(_events[i], other._events[i]))
-                    return false;
-            }
-            return true;
+            return other != null && PathRuntimeEvent.AreSame(_events, other._events);
         }
 
-        private static bool AreSame(PathRuntimeEvent left, PathRuntimeEvent right)
-        {
-            return Mathf.Approximately(left.NormalizedTime, right.NormalizedTime)
-                && AreSame(left.Definition, right.Definition);
-        }
-
-        private static bool AreSame(
-            PathEventDefinition left,
-            PathEventDefinition right)
-        {
-            if (ReferenceEquals(left, right))
-                return true;
-            if (left == null || right == null
-                || left.EventName != right.EventName
-                || left.UseModifyPathMoveSpeed != right.UseModifyPathMoveSpeed
-                || !Mathf.Approximately(left.MoveSpeedTargetValue, right.MoveSpeedTargetValue)
-                || !Mathf.Approximately(left.MoveSpeedAdjustDuration, right.MoveSpeedAdjustDuration)
-                || !PathMovementSettingsUtility.AreSameCurve(
-                    left.MoveSpeedAdjustCurve,
-                    right.MoveSpeedAdjustCurve)
-                || left.UseModifyPathMoveDuration != right.UseModifyPathMoveDuration
-                || !Mathf.Approximately(left.MoveDurationTargetValue, right.MoveDurationTargetValue)
-                || !Mathf.Approximately(left.MoveDurationAdjustDuration, right.MoveDurationAdjustDuration)
-                || !PathMovementSettingsUtility.AreSameCurve(
-                    left.MoveDurationAdjustCurve,
-                    right.MoveDurationAdjustCurve)
-                || left.UseTimeScaleAdjust != right.UseTimeScaleAdjust
-                || !Mathf.Approximately(left.TimeScaleAdjustValue, right.TimeScaleAdjustValue)
-                || !Mathf.Approximately(left.TimeScaleAdjustDuration, right.TimeScaleAdjustDuration)
-                || !PathMovementSettingsUtility.AreSameCurve(
-                    left.TimeScaleAdjustCurve,
-                    right.TimeScaleAdjustCurve)
-                || left.DelayedEvents.Count != right.DelayedEvents.Count)
-                return false;
-
-            for (int i = 0; i < left.DelayedEvents.Count; i++)
-            {
-                PathDelayedEventDefinition leftDelayed = left.DelayedEvents[i];
-                PathDelayedEventDefinition rightDelayed = right.DelayedEvents[i];
-                if (!Mathf.Approximately(leftDelayed.Delay, rightDelayed.Delay)
-                    || !AreSame(leftDelayed.Definition, rightDelayed.Definition))
-                    return false;
-            }
-            return true;
-        }
     }
 
     public interface IPathEventSource

@@ -1,0 +1,258 @@
+{
+  "date": "2026-10-23",
+  "unityVersion": "2023.2.20f1",
+  "platform": "OSXEditor",
+  "scope": [
+    "Common.OptimizeTool.Tests.MeshOptimizationTests",
+    "Common.OptimizeTool.Tests.OptimizeToolShowcaseTests"
+  ],
+  "editMode": {
+    "mode": "EditMode",
+    "summary": {
+      "total": 19,
+      "passed": 19,
+      "failed": 0,
+      "skipped": 0,
+      "durationSeconds": 1.9338603,
+      "resultState": "Passed"
+    },
+    "results": [
+      {
+        "name": "ASourceOver65535VerticesUsesUInt32AndSurvivesCombination",
+        "fullName": "Common.OptimizeTool.Tests.MeshOptimizationTests.ASourceOver65535VerticesUsesUInt32AndSurvivesCombination",
+        "state": "Passed",
+        "durationSeconds": 0.060984,
+        "message": null,
+        "stackTrace": null,
+        "output": ""
+      },
+      {
+        "name": "BackfaceCompactionPreservesAllVertexChannelsAndEmptySubmeshes",
+        "fullName": "Common.OptimizeTool.Tests.MeshOptimizationTests.BackfaceCompactionPreservesAllVertexChannelsAndEmptySubmeshes",
+        "state": "Passed",
+        "durationSeconds": 0.0024581,
+        "message": null,
+        "stackTrace": null,
+        "output": ""
+      },
+      {
+        "name": "BakerStagesEveryInputBeforeSavingOrReplacingAnyFilter",
+        "fullName": "Common.OptimizeTool.Tests.MeshOptimizationTests.BakerStagesEveryInputBeforeSavingOrReplacingAnyFilter",
+        "state": "Passed",
+        "durationSeconds": 0.0023341,
+        "message": null,
+        "stackTrace": null,
+        "output": ""
+      },
+      {
+        "name": "BakerUsesScalePerInstanceAndUndoRestoresMeshReferences",
+        "fullName": "Common.OptimizeTool.Tests.MeshOptimizationTests.BakerUsesScalePerInstanceAndUndoRestoresMeshReferences",
+        "state": "Passed",
+        "durationSeconds": 0.204563,
+        "message": null,
+        "stackTrace": null,
+        "output": ""
+      },
+      {
+        "name": "BothToolsHaveRealCustomInspectors",
+        "fullName": "Common.OptimizeTool.Tests.MeshOptimizationTests.BothToolsHaveRealCustomInspectors",
+        "state": "Passed",
+        "durationSeconds": 0.0016855,
+        "message": null,
+        "stackTrace": null,
+        "output": ""
+      },
+      {
+        "name": "CombinationCreatesMaterialMappedSceneOutputAndUndoRestoresSources",
+        "fullName": "Common.OptimizeTool.Tests.MeshOptimizationTests.CombinationCreatesMaterialMappedSceneOutputAndUndoRestoresSources",
+        "state": "Passed",
+        "durationSeconds": 0.1017028,
+        "message": null,
+        "stackTrace": null,
+        "output": ""
+      },
+      {
+        "name": "CustomVectorDoesNotRequireAnUnusedCameraReference",
+        "fullName": "Common.OptimizeTool.Tests.MeshOptimizationTests.CustomVectorDoesNotRequireAnUnusedCameraReference",
+        "state": "Passed",
+        "durationSeconds": 0.1031574,
+        "message": null,
+        "stackTrace": null,
+        "output": ""
+      },
+      {
+        "name": "MirroredNonUniformScalePreservesFrontFaceAndCorrectWinding",
+        "fullName": "Common.OptimizeTool.Tests.MeshOptimizationTests.MirroredNonUniformScalePreservesFrontFaceAndCorrectWinding",
+        "state": "Passed",
+        "durationSeconds": 0.0008751,
+        "message": null,
+        "stackTrace": null,
+        "output": ""
+      },
+      {
+        "name": "MissingNormalsRequirePermissionAndAreRecalculatedForSingleMaterialOutput",
+        "fullName": "Common.OptimizeTool.Tests.MeshOptimizationTests.MissingNormalsRequirePermissionAndAreRecalculatedForSingleMaterialOutput",
+        "state": "Passed",
+        "durationSeconds": 0.0006677,
+        "message": null,
+        "stackTrace": null,
+        "output": ""
+      },
+      {
+        "name": "MixedChannelLayoutsKeepTangentsAndUv2DuringCombination",
+        "fullName": "Common.OptimizeTool.Tests.MeshOptimizationTests.MixedChannelLayoutsKeepTangentsAndUv2DuringCombination",
+        "state": "Passed",
+        "durationSeconds": 0.0016596,
+        "message": null,
+        "stackTrace": null,
+        "output": ""
+      },
+      {
+        "name": "OcclusionExpandsTheHitBufferInsteadOfTreatingOwnHitsAsBlockers",
+        "fullName": "Common.OptimizeTool.Tests.MeshOptimizationTests.OcclusionExpandsTheHitBufferInsteadOfTreatingOwnHitsAsBlockers",
+        "state": "Passed",
+        "durationSeconds": 0.0013382,
+        "message": null,
+        "stackTrace": null,
+        "output": ""
+      },
+      {
+        "name": "OcclusionIgnoresOwnCollidersButDetectsAnExternalWallAndLayerMask",
+        "fullName": "Common.OptimizeTool.Tests.MeshOptimizationTests.OcclusionIgnoresOwnCollidersButDetectsAnExternalWallAndLayerMask",
+        "state": "Passed",
+        "durationSeconds": 0.0006435,
+        "message": null,
+        "stackTrace": null,
+        "output": ""
+      },
+      {
+        "name": "OutputCollisionIsRejectedBeforeAnyAssetIsCreated",
+        "fullName": "Common.OptimizeTool.Tests.MeshOptimizationTests.OutputCollisionIsRejectedBeforeAnyAssetIsCreated",
+        "state": "Passed",
+        "durationSeconds": 0.0005855,
+        "message": null,
+        "stackTrace": null,
+        "output": ""
+      },
+      {
+        "name": "PerspectiveUsesTrianglePositionWhileOrthographicUsesCameraForward",
+        "fullName": "Common.OptimizeTool.Tests.MeshOptimizationTests.PerspectiveUsesTrianglePositionWhileOrthographicUsesCameraForward",
+        "state": "Passed",
+        "durationSeconds": 0.0003516,
+        "message": null,
+        "stackTrace": null,
+        "output": ""
+      },
+      {
+        "name": "ReadableCopyHandlesUnreadableMeshesWithoutChangingTheSource",
+        "fullName": "Common.OptimizeTool.Tests.MeshOptimizationTests.ReadableCopyHandlesUnreadableMeshesWithoutChangingTheSource",
+        "state": "Passed",
+        "durationSeconds": 0.0004411,
+        "message": null,
+        "stackTrace": null,
+        "output": ""
+      },
+      {
+        "name": "RepeatedChildCollectionDoesNotCombineItsOwnGeneratedOutput",
+        "fullName": "Common.OptimizeTool.Tests.MeshOptimizationTests.RepeatedChildCollectionDoesNotCombineItsOwnGeneratedOutput",
+        "state": "Passed",
+        "durationSeconds": 0.1282063,
+        "message": null,
+        "stackTrace": null,
+        "output": ""
+      },
+      {
+        "name": "SmallValidScaleIsNotMistakenForAZeroScaleTransform",
+        "fullName": "Common.OptimizeTool.Tests.MeshOptimizationTests.SmallValidScaleIsNotMistakenForAZeroScaleTransform",
+        "state": "Passed",
+        "durationSeconds": 0.0006904,
+        "message": null,
+        "stackTrace": null,
+        "output": ""
+      },
+      {
+        "name": "SuccessfulOverwritePreservesGuidAndSupportsUndoAndRedo",
+        "fullName": "Common.OptimizeTool.Tests.MeshOptimizationTests.SuccessfulOverwritePreservesGuidAndSupportsUndoAndRedo",
+        "state": "Passed",
+        "durationSeconds": 0.1286869,
+        "message": null,
+        "stackTrace": null,
+        "output": ""
+      },
+      {
+        "name": "TransactionRollsBackExistingNewAssetsAndSceneChangesOnFailure",
+        "fullName": "Common.OptimizeTool.Tests.MeshOptimizationTests.TransactionRollsBackExistingNewAssetsAndSceneChangesOnFailure",
+        "state": "Passed",
+        "durationSeconds": 0.1911833,
+        "message": null,
+        "stackTrace": null,
+        "output": "Main Object Name 'Original Asset Name' does not match filename 'Existing'\nMain Object Name 'Original Asset Name' does not match filename 'Existing'\n"
+      }
+    ]
+  },
+  "playMode": {
+    "mode": "PlayMode",
+    "summary": {
+      "total": 2,
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "durationSeconds": 0.7317564,
+      "resultState": "Passed"
+    },
+    "results": [
+      {
+        "name": "BakedResultsKeepTheRenderedImageFromTheBakeView",
+        "fullName": "Common.OptimizeTool.Tests.OptimizeToolShowcaseTests.BakedResultsKeepTheRenderedImageFromTheBakeView",
+        "state": "Passed",
+        "durationSeconds": 0.4223054,
+        "message": null,
+        "stackTrace": null,
+        "output": ""
+      },
+      {
+        "name": "SampleSwitchesBetweenDistinctRealBakesAtTheSameCameraPose",
+        "fullName": "Common.OptimizeTool.Tests.OptimizeToolShowcaseTests.SampleSwitchesBetweenDistinctRealBakesAtTheSameCameraPose",
+        "state": "Passed",
+        "durationSeconds": 0.2811323,
+        "message": null,
+        "stackTrace": null,
+        "output": ""
+      }
+    ]
+  },
+  "generatedAssetsUnchangedDuringPlay": true,
+  "renderComparison": {
+    "resolution": [
+      512,
+      256
+    ],
+    "maximumAllowedMeanNormalizedRgbError": 0.005
+  },
+  "sampleMetrics": [
+    {
+      "mode": "Original",
+      "renderers": 9,
+      "vertices": 216,
+      "triangles": 108
+    },
+    {
+      "mode": "Combined",
+      "renderers": 1,
+      "vertices": 216,
+      "triangles": 108
+    },
+    {
+      "mode": "Backface",
+      "renderers": 1,
+      "vertices": 60,
+      "triangles": 30
+    },
+    {
+      "mode": "Occlusion",
+      "renderers": 1,
+      "vertices": 72,
+      "triangles": 36
+    }
+  ]
+}

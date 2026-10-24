@@ -9,7 +9,7 @@ namespace Common.FlowField
     /// this store contains only data needed for sampling, diagnostics and a
     /// subsequent final-only composition.
     /// </summary>
-    internal sealed class FlowFieldFieldStore : IDisposable
+    internal sealed class FlowFieldFieldStore
     {
         internal FlowFieldGridSpace Grid { get; private set; }
         internal FlowFieldSurfaceData Surface { get; private set; }
@@ -28,24 +28,12 @@ namespace Common.FlowField
         private float[] _finalSpeeds;
         private bool[] _modifierInfluence;
 
-        internal bool[] Blocked => _blocked;
-        internal byte[] TopologyMasks => _topologyMasks;
-        internal FlowFieldGoalFlags[] GoalFlags => _goalFlags;
         internal int[] NextCells => _nextCells;
-        internal Vector3[] BaseDirections => _baseDirections;
-        internal float[] BaseSpeeds => _baseSpeeds;
-        internal Vector3[] FinalDirections => _finalDirections;
-        internal float[] FinalSpeeds => _finalSpeeds;
-        internal bool[] ModifierInfluence => _modifierInfluence;
 
         internal FlowFieldReadView CreateReadView()
             => FlowFieldReadView.CreateSurface(
                 Grid,
                 Surface,
-                HasActiveGoal,
-                ResolvedGoalIndex,
-                0,
-                0L,
                 _blocked,
                 _goalFlags,
                 _finalDirections,
@@ -57,8 +45,7 @@ namespace Common.FlowField
             FlowFieldSurfaceData surface,
             FlowFieldWorkspace workspace,
             bool includeBase,
-            FlowFieldCellRect region,
-            out bool changed)
+            FlowFieldCellRect region)
         {
             if (workspace == null || !grid.IsValid || surface == null || !surface.IsValid
                 || workspace.Capacity != grid.CellCount)
@@ -76,8 +63,6 @@ namespace Common.FlowField
             if (full)
             {
                 Resize(grid.CellCount);
-                Grid = grid;
-                Surface = surface;
                 region = FlowFieldCellRect.Full(grid);
                 includeBase = true;
             }
@@ -118,12 +103,15 @@ namespace Common.FlowField
                 _modifierInfluence[i] = workspace.ModifierInfluence[i];
             }
 
+            // Equal geometry may arrive in a new immutable snapshot. Keep
+            // published identity/revision aligned without inventing a cell change.
+            Grid = grid;
+            Surface = surface;
             bool oldGoal = HasActiveGoal;
             int oldIndex = ResolvedGoalIndex;
             HasActiveGoal = workspace.HasActiveGoal;
             ResolvedGoalIndex = workspace.ResolvedGoalIndex;
             any |= oldGoal != HasActiveGoal || oldIndex != ResolvedGoalIndex;
-            changed = any;
             return any;
         }
 
@@ -210,7 +198,7 @@ namespace Common.FlowField
             return true;
         }
 
-        internal void Resize(int count)
+        private void Resize(int count)
         {
             if (count <= 0)
                 throw new ArgumentOutOfRangeException(nameof(count));
@@ -243,6 +231,5 @@ namespace Common.FlowField
             ResolvedGoalIndex = -1;
         }
 
-        public void Dispose() => Clear();
     }
 }

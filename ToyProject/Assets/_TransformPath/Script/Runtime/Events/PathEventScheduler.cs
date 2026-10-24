@@ -29,7 +29,6 @@ namespace Common.TransformPath
 
         private readonly List<ScheduledEvent> _scheduledEvents =
             new List<ScheduledEvent>();
-        private int _revision;
         private ulong _registrationOrder;
 
         #endregion
@@ -38,7 +37,6 @@ namespace Common.TransformPath
         #region Properties
 
         public int Count => _scheduledEvents.Count;
-        public int Revision => _revision;
 
         #endregion
 
@@ -125,7 +123,6 @@ namespace Common.TransformPath
         public void Clear()
         {
             _scheduledEvents.Clear();
-            _revision++;
         }
 
         #endregion

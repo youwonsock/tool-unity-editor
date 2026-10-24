@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace Common.FlowField
@@ -29,8 +28,6 @@ namespace Common.FlowField
 
     /// <summary>
     /// Selects where the immutable navigation/base field comes from.
-    /// RuntimeDynamic is deliberately zero so managers serialized before the
-    /// mode was introduced keep their existing runtime behaviour.
     /// </summary>
     public enum FlowFieldBakeMode
     {

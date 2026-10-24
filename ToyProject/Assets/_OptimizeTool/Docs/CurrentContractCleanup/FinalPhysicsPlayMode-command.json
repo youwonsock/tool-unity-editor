@@ -1,0 +1,19 @@
+[
+  "/Applications/Unity/Hub/Editor/2023.2.20f1/Unity.app/Contents/MacOS/Unity",
+  "-batchmode",
+  "-job-worker-count",
+  "4",
+  "-projectPath",
+  "/tmp/optimizetool-savefix-20261024-172439/Project",
+  "-runTests",
+  "-testPlatform",
+  "PlayMode",
+  "-assemblyNames",
+  "Common.OptimizeTool.PlayModeTests",
+  "-testResults",
+  "/tmp/optimizetool-legacy-cleanup-20261024-180706/FinalPhysicsPlayMode.xml",
+  "-logFile",
+  "/tmp/optimizetool-legacy-cleanup-20261024-180706/FinalPhysicsPlayMode.log",
+  "-testFilter",
+  "Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests"
+]

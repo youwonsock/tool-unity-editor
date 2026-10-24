@@ -1,0 +1,55 @@
+{
+  "pid": 73747,
+  "cubes": 225,
+  "subdivisions": 64,
+  "unityVersion": "2023.2.20f1",
+  "scope": "Core bake: three pipeline modes retained through fresh batch save. Also measures public MeshCombiner initial bake and overwrite/rebuild with scene output and source disabling. Timings exclude startup, input construction and cleanup; process/RSS peaks cover all stages.",
+  "fixtureMs": 300.6102,
+  "totalMs": 32509.086600000002,
+  "buildMs": 11137.0087,
+  "saveMs": 21307.7483,
+  "workflowInitialMs": 18712.2712,
+  "workflowRebuildMs": 12712.5908,
+  "unityAllocatedAtStart": 217686102,
+  "unityAllocatedAfterBuild": 1970521879,
+  "unityReservedAtStart": 526793800,
+  "modes": [
+    {
+      "mode": 1,
+      "vertices": 5703750,
+      "culled": 0,
+      "triangles": 11059200,
+      "milliseconds": 4302.2156
+    },
+    {
+      "mode": 2,
+      "vertices": 950625,
+      "culled": 0,
+      "triangles": 1843200,
+      "milliseconds": 5278.1478
+    },
+    {
+      "mode": 3,
+      "vertices": 1901250,
+      "culled": 150,
+      "triangles": 3686400,
+      "milliseconds": 1556.3696
+    }
+  ],
+  "variant": "before",
+  "profile": "gpu",
+  "pair": 3,
+  "processPeakRssBytes": 8004075520,
+  "bakeSampledPeakRssBytes": 8004075520,
+  "bakeFirstObservedRssBytes": 1404207104,
+  "sampleCount": 4782,
+  "samplingIntervalSeconds": 0.01,
+  "telemetryBefore": {
+    "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+    "power": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=21823587)\t47%; discharging; 1:01 remaining present: true"
+  },
+  "telemetryAfter": {
+    "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+    "power": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=21823587)\t46%; discharging; 0:50 remaining present: true"
+  }
+}

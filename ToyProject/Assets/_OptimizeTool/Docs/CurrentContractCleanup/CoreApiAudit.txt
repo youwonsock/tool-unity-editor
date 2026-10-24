@@ -1,0 +1,14 @@
+Public API: before=128, after=116, removed=12, added=0
+Common.OptimizeTool.BackfaceCullMeshBaker :: System.Boolean get_IsFaulted()
+Common.OptimizeTool.BackfaceCullMeshBaker :: System.Boolean get_IsInitialized()
+Common.OptimizeTool.BackfaceCullMeshBaker :: System.Void Init()
+Common.OptimizeTool.BackfaceCullMeshBaker :: System.Void Release()
+Common.OptimizeTool.MeshBuildResult :: System.Collections.ObjectModel.ReadOnlyCollection`1<UnityEngine.Material[]> get_Materials()
+Common.OptimizeTool.MeshCombiner :: System.Boolean get_IsFaulted()
+Common.OptimizeTool.MeshCombiner :: System.Boolean get_IsInitialized()
+Common.OptimizeTool.MeshCombiner :: System.Void Init()
+Common.OptimizeTool.MeshCombiner :: System.Void Release()
+Common.OptimizeTool.PhysicsRecorder :: System.Boolean get_IsSaveCompleted()
+Common.OptimizeTool.PhysicsRecorder :: UnityEngine.AnimationClip get_ResultClip()
+Common.OptimizeTool.PhysicsRecorder :: UnityEngine.GameObject get_ResultPrefab()
+Serialized fields: before=47, after=47, removed=0, added=0

@@ -1,0 +1,4 @@
+{
+  "reason": "Previously rejected capture: /private/tmp/optimizetool-savefix-20261024-172439/bake/pair-02/baseline/validated.json",
+  "policy": "Rerun the entire matched pair regardless of performance values."
+}

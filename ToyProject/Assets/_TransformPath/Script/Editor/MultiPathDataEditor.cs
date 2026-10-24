@@ -17,9 +17,6 @@ namespace Common.TransformPath
         private const float PATH_COLOR_SATURATION = 0.72f;
         private const float PATH_COLOR_VALUE = 1f;
         private const float SEGMENT_ROW_PADDING = 4f;
-        private static readonly HashSet<string> DUPLICATE_WARNINGS =
-            new HashSet<string>();
-
         private const string SEGMENTS_PROPERTY = "_segments";
         private const string PROVIDER_OBJECT_PROPERTY = "_providerObject";
         private const string MOVEMENT_SOURCE_PROPERTY = "_movementSource";
@@ -658,37 +655,10 @@ namespace Common.TransformPath
                     continue;
                 }
 
-                int syncCount = 0;
-                for (int i = 1; i < pathDatas.Count; i++)
-                {
-                    PathData previous = pathDatas[i - 1];
-                    PathData current = pathDatas[i];
-                    if (previous == null || current == null)
-                        continue;
-                    if (previous == current)
-                    {
-                        WarnDuplicateLink(multiPathData, i);
-                        continue;
-                    }
-
-                    List<Transform> previousPoints = PathEditorSerializationUtility.GetPathPoints(
-                        previous);
-                    List<Transform> currentPoints = PathEditorSerializationUtility.GetPathPoints(
-                        current);
-                    if (previousPoints.Count == 0 || currentPoints.Count == 0)
-                        continue;
-                    Transform previousEnd = previousPoints[previousPoints.Count - 1];
-                    Transform currentStart = currentPoints[0];
-                    if (previousEnd == null || currentStart == null)
-                        continue;
-
-                    PathEditorUndoUtility.Record(currentStart, "Sync Path Points");
-                    currentStart.position = previousEnd.position;
-                    PathEditorUndoUtility.MarkDirty(currentStart);
-                    PathEditorUndoUtility.MarkDirty(current);
-                    syncCount++;
-                }
-
+                int syncCount = PathLinkEditorUtility.SyncAllJoints(
+                    multiPathData,
+                    EPathLinkSyncMode.AlignStartToEnd,
+                    PathLinkEditorUtility.POSITION_SYNC_EPSILON_SQR);
                 Debug.Log(
                     $"MultiPathData: {syncCount}개의 경로 연결점을 동기화했습니다.",
                     multiPathData);
@@ -733,18 +703,6 @@ namespace Common.TransformPath
                 multiPathData.Rebuild();
                 PathEditorUndoUtility.MarkDirty(multiPathData);
             }
-        }
-
-        private static void WarnDuplicateLink(
-            MultiPathData multiPathData,
-            int segmentIndex)
-        {
-            string key = $"{multiPathData.GetInstanceID()}:{segmentIndex}";
-            if (!DUPLICATE_WARNINGS.Add(key))
-                return;
-            Debug.LogWarning(
-                $"MultiPathData: segment {segmentIndex - 1}와 {segmentIndex}가 동일한 PathData를 참조해 자동 연결을 건너뜁니다.",
-                multiPathData);
         }
 
         #endregion

@@ -1,0 +1,223 @@
+--- before/MeshSceneOutput.cs
++++ after/MeshSceneOutput.cs
+@@ -19,12 +19,19 @@
+         internal static GameObject Replace(Transform parent, string name, GameObject previous,
+             Mesh[] meshes, MeshBuildResult result, bool disableSources, List<MeshSourceRendererState> sourceStates = null)
+         {
+-            // Restore only states this tool captured. Legacy outputs have no ownership ledger;
+-            // never guess which disabled renderers belonged to them.
++            var previousStates = new Dictionary<Renderer, MeshSourceRendererState>();
++            var nextSources = disableSources ? new HashSet<Renderer>(result.SourceRenderers) : null;
++            // Sources retained by this output remain disabled. Preserve their original state
++            // without a temporary enable/disable pair or redundant renderer Undo records.
++            // Legacy outputs have no ledger: never guess their original visibility.
+             if (sourceStates != null)
+             {
+                 foreach (MeshSourceRendererState state in sourceStates)
+-                    if (state.Renderer != null) SetEnabled(state.Renderer, state.Enabled);
++                    if (state.Renderer != null)
++                    {
++                        previousStates[state.Renderer] = state;
++                        if (nextSources == null || !nextSources.Contains(state.Renderer)) SetEnabled(state.Renderer, state.Enabled);
++                    }
+                 sourceStates.Clear();
+             }
+             if (previous != null) Undo.DestroyObjectImmediate(previous);
+@@ -44,7 +51,8 @@
+             if (disableSources)
+                 foreach (Renderer renderer in result.SourceRenderers)
+                 {
+-                    sourceStates?.Add(new MeshSourceRendererState { Renderer = renderer, Enabled = renderer.enabled });
++                    if (previousStates.TryGetValue(renderer, out MeshSourceRendererState state)) sourceStates?.Add(state);
++                    else sourceStates?.Add(new MeshSourceRendererState { Renderer = renderer, Enabled = renderer.enabled });
+                     SetEnabled(renderer, false);
+                 }
+             return root;
+@@ -52,6 +60,7 @@
+ 
+         private static void SetEnabled(Renderer renderer, bool enabled)
+         {
++            if (renderer.enabled == enabled) return;
+             Undo.RegisterCompleteObjectUndo(renderer, "Restore source renderer state");
+             renderer.enabled = enabled;
+             PrefabUtility.RecordPrefabInstancePropertyModifications(renderer);
+--- before/MeshAssetTransaction.cs
++++ after/MeshAssetTransaction.cs
+@@ -86,6 +86,7 @@
+             var backups = new Mesh[staged.Count];
+             var saved = new Mesh[staged.Count];
+             var created = new List<string>();
++            var ensuredFolders = new HashSet<string>(StringComparer.Ordinal);
+             Undo.IncrementCurrentGroup();
+             int group = Undo.GetCurrentGroup();
+             Undo.SetCurrentGroupName(undoName);
+@@ -100,29 +101,35 @@
+                     }
+                 for (int i = 0; i < staged.Count; i++)
+                 {
+-                    EnsureFolder(Path.GetDirectoryName(normalized[i]).Replace('\\', '/'));
++                    string folder = Path.GetDirectoryName(normalized[i]).Replace('\\', '/');
++                    if (ensuredFolders.Add(folder)) EnsureFolder(folder);
+                     if (existing[i] != null)
+                     {
+                         Undo.RegisterCompleteObjectUndo(existing[i], undoName);
+                         EditorUtility.CopySerialized(staged[i], existing[i]);
+                         saved[i] = existing[i];
++                        PrepareMesh(saved[i], normalized[i]);
++                        EditorUtility.SetDirty(saved[i]);
+                     }
+                     else
+                     {
++                        // CreateAsset writes immediately. Finalize metadata first, so a new asset
++                        // without an apply callback needs only one geometry serialization.
+                         saved[i] = Object.Instantiate(staged[i]);
+                         // Track before CreateAsset so rollback also handles a partial CreateAsset failure.
+-                        created.Add(normalized[i]);
+-                        try { AssetDatabase.CreateAsset(saved[i], normalized[i]); }
++                        try
++                        {
++                            PrepareMesh(saved[i], normalized[i]);
++                            created.Add(normalized[i]);
++                            AssetDatabase.CreateAsset(saved[i], normalized[i]);
++                        }
+                         catch { if (!AssetDatabase.Contains(saved[i])) Object.DestroyImmediate(saved[i]); throw; }
+                         if (AssetDatabase.LoadAssetAtPath<Mesh>(normalized[i]) != saved[i])
+                             throw new IOException($"Failed to create '{normalized[i]}'.");
++                        // Preserve the public callback's ability to mutate the saved Mesh and have
++                        // those changes committed. It sees complete geometry on disk as before.
++                        if (apply != null) EditorUtility.SetDirty(saved[i]);
+                     }
+-                    saved[i].name = Path.GetFileNameWithoutExtension(normalized[i]);
+-                    // Keep the serialized geometry intact; do not UploadMeshData(true) before saving.
+-                    var serialized = new SerializedObject(saved[i]);
+-                    SerializedProperty readable = serialized.FindProperty("m_IsReadable");
+-                    if (readable != null) { readable.boolValue = false; serialized.ApplyModifiedPropertiesWithoutUndo(); }
+-                    EditorUtility.SetDirty(saved[i]);
+                 }
+                 apply?.Invoke(saved);
+                 foreach (Mesh mesh in saved) AssetDatabase.SaveAssetIfDirty(mesh);
+@@ -160,6 +167,16 @@
+             finally { foreach (Mesh backup in backups) if (backup != null) Object.DestroyImmediate(backup); }
+         }
+ 
++        private static void PrepareMesh(Mesh mesh, string path)
++        {
++            mesh.name = Path.GetFileNameWithoutExtension(path);
++            // Keep CPU geometry for serialization; UploadMeshData(true) can discard it.
++            var serialized = new SerializedObject(mesh);
++            SerializedProperty readable = serialized.FindProperty("m_IsReadable");
++            if (readable != null && readable.boolValue)
++            { readable.boolValue = false; serialized.ApplyModifiedPropertiesWithoutUndo(); }
++        }
++
+         private static void EnsureFolder(string path)
+         {
+             string current = "Assets";
+--- before/Tests/Editor/MeshRefactoringTests.cs
++++ after/Tests/Editor/MeshRefactoringTests.cs
+@@ -183,6 +183,105 @@
+             combiner.CombineAndSaveMeshes();
+             Assert.IsTrue(a.GetComponent<MeshRenderer>().enabled);
+             Assert.IsFalse(b.GetComponent<MeshRenderer>().enabled);
++        }
++
++        [TestCase(false)]
++        [TestCase(true)]
++        public void RepeatedRebuildUndoRedoPreservesOriginsAndManualRendererChanges(bool manuallyEnable)
++        {
++            MeshFilter a = Source("A"), b = Source("B");
++            Renderer ar = a.GetComponent<Renderer>(), br = b.GetComponent<Renderer>();
++            br.enabled = false;
++            MeshCombiner combiner = Combiner(a, b);
++            Set(combiner, "_overwriteExistingAssets", true);
++            Mesh original = combiner.CombineAndSaveMeshes()[0];
++            string guid = AssetDatabase.AssetPathToGUID(_folder + "/Combined.asset");
++            for (int i = 0; i < 3; i++)
++            {
++                ar.enabled = manuallyEnable;
++                Assert.AreSame(original, combiner.CombineAndSaveMeshes()[0]);
++                Assert.IsFalse(ar.enabled); Assert.IsFalse(br.enabled);
++                Undo.PerformUndo(); Assert.AreEqual(manuallyEnable, ar.enabled); Assert.IsFalse(br.enabled);
++                Undo.PerformRedo(); Assert.IsFalse(ar.enabled); Assert.IsFalse(br.enabled);
++                var ledger = new SerializedObject(combiner).FindProperty("_sourceRendererStates");
++                Assert.AreEqual(2, ledger.arraySize);
++                Assert.IsTrue(ledger.GetArrayElementAtIndex(0).FindPropertyRelative("Enabled").boolValue);
++                Assert.IsFalse(ledger.GetArrayElementAtIndex(1).FindPropertyRelative("Enabled").boolValue);
++            }
++            Set(combiner, "_disableSourceRenderers", false);
++            combiner.CombineAndSaveMeshes();
++            Assert.IsTrue(ar.enabled); Assert.IsFalse(br.enabled);
++            Undo.PerformUndo(); Assert.IsFalse(ar.enabled); Assert.IsFalse(br.enabled);
++            Undo.PerformRedo(); Assert.IsTrue(ar.enabled); Assert.IsFalse(br.enabled);
++            Assert.AreEqual(guid, AssetDatabase.AssetPathToGUID(_folder + "/Combined.asset"));
++        }
++
++        [Test]
++        public void FailedMixedRebuildRestoresRetainedRemovedAndNewSourceStates()
++        {
++            MeshFilter a = Source("A"), b = Source("B"), c = Source("C");
++            MeshCombiner combiner = Combiner(a, b);
++            Mesh original = combiner.CombineAndSaveMeshes()[0];
++            Set(combiner, "_targetMeshFilterArray", new[] { a, c });
++            using (MeshBuildResult result = combiner.BuildMeshes())
++                Assert.Throws<InvalidOperationException>(() => MeshAssetTransaction.Save(result.Meshes,
++                    new[] { _folder + "/Combined.asset" }, true, "Fail mixed rebuild", saved =>
++                    {
++                        typeof(MeshCombiner).GetMethod("CreateSceneOutput", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
++                            .Invoke(combiner, new object[] { saved, result });
++                        Assert.IsFalse(a.GetComponent<Renderer>().enabled);
++                        Assert.IsTrue(b.GetComponent<Renderer>().enabled);
++                        Assert.IsFalse(c.GetComponent<Renderer>().enabled);
++                        throw new InvalidOperationException("Interrupted after mixed scene replacement");
++                    }));
++            Assert.IsFalse(a.GetComponent<Renderer>().enabled);
++            Assert.IsFalse(b.GetComponent<Renderer>().enabled);
++            Assert.IsTrue(c.GetComponent<Renderer>().enabled);
++            Assert.AreSame(original, combiner.GetComponentInChildren<MeshFilter>().sharedMesh);
++            var ledger = new SerializedObject(combiner).FindProperty("_sourceRendererStates");
++            Assert.AreEqual(2, ledger.arraySize);
++            Assert.AreSame(b.GetComponent<Renderer>(), ledger.GetArrayElementAtIndex(1).FindPropertyRelative("Renderer").objectReferenceValue);
++            Set(combiner, "_targetMeshFilterArray", new[] { a, b });
++            Set(combiner, "_overwriteExistingAssets", true);
++            Set(combiner, "_disableSourceRenderers", false);
++            combiner.CombineAndSaveMeshes();
++            Assert.IsTrue(a.GetComponent<Renderer>().enabled); Assert.IsTrue(b.GetComponent<Renderer>().enabled);
++        }
++
++        [TestCase(false)]
++        [TestCase(true)]
++        public void FreshSavePersistsCompleteGeometryAndCallbackMutationsWithoutChangingStagedMesh(bool withCallback)
++        {
++            Mesh staged = Source("Staged").sharedMesh;
++            staged.uv = new[] { Vector2.zero, Vector2.right, Vector2.up };
++            staged.colors = new[] { Color.red, Color.green, Color.blue };
++            staged.tangents = Enumerable.Repeat(new Vector4(1, 0, 0, 1), 3).ToArray();
++            Vector3[] vertices = staged.vertices, normals = staged.normals;
++            var changedBounds = new Bounds(Vector3.one, Vector3.one * 8);
++            string path = _folder + "/Saved.asset";
++            Action<Mesh[]> callback = withCallback ? saved =>
++            {
++                // Callers may import or inspect the on-disk asset while the transaction applies.
++                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
++                Mesh disk = AssetDatabase.LoadAssetAtPath<Mesh>(path);
++                Assert.AreEqual(3, disk.vertexCount); Assert.AreEqual(3u, disk.GetIndexCount(0));
++                Assert.AreEqual("Saved", disk.name); Assert.IsFalse(disk.isReadable);
++                CollectionAssert.AreEqual(vertices, disk.vertices);
++                saved[0].name = "Callback name"; saved[0].bounds = changedBounds;
++            } : (Action<Mesh[]>)null;
++            MeshAssetTransaction.Save(new[] { staged }, new[] { path }, false, "Save complete mesh", callback);
++            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
++            Mesh loaded = AssetDatabase.LoadAssetAtPath<Mesh>(path);
++            Assert.IsFalse(loaded.isReadable);
++            Assert.AreEqual(withCallback ? "Callback name" : "Saved", loaded.name);
++            CollectionAssert.AreEqual(vertices, loaded.vertices);
++            CollectionAssert.AreEqual(normals, loaded.normals);
++            CollectionAssert.AreEqual(staged.triangles, loaded.triangles);
++            CollectionAssert.AreEqual(staged.uv, loaded.uv);
++            CollectionAssert.AreEqual(staged.colors, loaded.colors);
++            CollectionAssert.AreEqual(staged.tangents, loaded.tangents);
++            Assert.AreEqual(withCallback ? changedBounds : staged.bounds, loaded.bounds);
++            Assert.AreEqual("Staged", staged.name); Assert.IsTrue(staged.isReadable);
+         }
+ 
+         [Test]

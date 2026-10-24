@@ -1,0 +1,321 @@
+{
+  "app": "/private/tmp/optimizetool-player-20261024/Build/OptimizeToolBenchmark.app",
+  "architecture": "Mach-O universal binary with 2 architectures: [x86_64:Mach-O 64-bit executable x86_64] [arm64:Mach-O 64-bit executable arm64]\n/private/tmp/optimizetool-player-20261024/Build/OptimizeToolBenchmark.app/Contents/MacOS/ToyProject (for architecture x86_64):\tMach-O 64-bit executable x86_64\n/private/tmp/optimizetool-player-20261024/Build/OptimizeToolBenchmark.app/Contents/MacOS/ToyProject (for architecture arm64):\tMach-O 64-bit executable arm64",
+  "executableSha256": "7b31b53d58b39eddbbc8dcebebf3b2918b341fe40d89e5480c43522de430e103",
+  "rounds": 8,
+  "repeats": 3,
+  "cubes": [
+    225,
+    900,
+    3600
+  ],
+  "targetFrameRate": -1,
+  "runs": [
+    {
+      "samples": 7680,
+      "modes": {
+        "0": {
+          "draw_calls": 456.0,
+          "cpu_frame_ms": 0.55425,
+          "gpu_frame_ms": 1.2403541663843498
+        },
+        "1": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 0.5409375000000001,
+          "gpu_frame_ms": 1.2788750000254367
+        },
+        "2": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 0.5415625,
+          "gpu_frame_ms": 1.276625000173226
+        },
+        "3": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 0.54075,
+          "gpu_frame_ms": 1.279208333016868
+        }
+      },
+      "buildGuid": "b202b34b528a44918ff1b7a98e6d0e9b",
+      "syncIntervals": [
+        "1"
+      ],
+      "folder": "/private/tmp/optimizetool-player-20261024/stable-uncapped/cubes-225/run-01",
+      "cubes": 225,
+      "repeat": 1,
+      "elapsedSeconds": 21.049884796142578,
+      "archivedFolder": "cubes-225/run-01"
+    },
+    {
+      "samples": 7680,
+      "modes": {
+        "0": {
+          "draw_calls": 1806.0,
+          "cpu_frame_ms": 0.700333,
+          "gpu_frame_ms": 0.6992708331381436
+        },
+        "1": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 0.5695,
+          "gpu_frame_ms": 1.3397291663750366
+        },
+        "2": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 0.567958,
+          "gpu_frame_ms": 1.3511249999282882
+        },
+        "3": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 0.5659795,
+          "gpu_frame_ms": 1.3375624998843705
+        }
+      },
+      "buildGuid": "b202b34b528a44918ff1b7a98e6d0e9b",
+      "syncIntervals": [
+        "1"
+      ],
+      "folder": "/private/tmp/optimizetool-player-20261024/stable-uncapped/cubes-900/run-01",
+      "cubes": 900,
+      "repeat": 1,
+      "elapsedSeconds": 21.714032888412476,
+      "archivedFolder": "cubes-900/run-01"
+    },
+    {
+      "samples": 7680,
+      "modes": {
+        "0": {
+          "draw_calls": 7206.0,
+          "cpu_frame_ms": 2.2003335,
+          "gpu_frame_ms": 1.7059374999917054
+        },
+        "1": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 0.6084585,
+          "gpu_frame_ms": 1.4232291664484364
+        },
+        "2": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 0.6024164999999999,
+          "gpu_frame_ms": 1.4086458336350915
+        },
+        "3": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 0.5997705,
+          "gpu_frame_ms": 1.4121666663413635
+        }
+      },
+      "buildGuid": "b202b34b528a44918ff1b7a98e6d0e9b",
+      "syncIntervals": [
+        "1"
+      ],
+      "folder": "/private/tmp/optimizetool-player-20261024/stable-uncapped/cubes-3600/run-01",
+      "cubes": 3600,
+      "repeat": 1,
+      "elapsedSeconds": 24.304338932037354,
+      "archivedFolder": "cubes-3600/run-01"
+    },
+    {
+      "samples": 7680,
+      "modes": {
+        "0": {
+          "draw_calls": 1806.0,
+          "cpu_frame_ms": 0.7044585,
+          "gpu_frame_ms": 0.7666666665500088
+        },
+        "1": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 0.5669165,
+          "gpu_frame_ms": 1.3673958333129121
+        },
+        "2": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 0.561417,
+          "gpu_frame_ms": 1.3444999999592255
+        },
+        "3": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 0.562125,
+          "gpu_frame_ms": 1.3495416665136872
+        }
+      },
+      "buildGuid": "b202b34b528a44918ff1b7a98e6d0e9b",
+      "syncIntervals": [
+        "1"
+      ],
+      "folder": "/private/tmp/optimizetool-player-20261024/stable-uncapped/cubes-900/run-02",
+      "cubes": 900,
+      "repeat": 2,
+      "elapsedSeconds": 21.588719129562378,
+      "archivedFolder": "cubes-900/run-02"
+    },
+    {
+      "samples": 7680,
+      "modes": {
+        "0": {
+          "draw_calls": 7206.0,
+          "cpu_frame_ms": 2.203,
+          "gpu_frame_ms": 1.707124999484222
+        },
+        "1": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 0.6106875,
+          "gpu_frame_ms": 1.4573124994967657
+        },
+        "2": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 0.6023545,
+          "gpu_frame_ms": 1.422083333181945
+        },
+        "3": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 0.6000620000000001,
+          "gpu_frame_ms": 1.4092708329371817
+        }
+      },
+      "buildGuid": "b202b34b528a44918ff1b7a98e6d0e9b",
+      "syncIntervals": [
+        "1"
+      ],
+      "folder": "/private/tmp/optimizetool-player-20261024/stable-uncapped/cubes-3600/run-02",
+      "cubes": 3600,
+      "repeat": 2,
+      "elapsedSeconds": 25.58111810684204,
+      "archivedFolder": "cubes-3600/run-02"
+    },
+    {
+      "samples": 7680,
+      "modes": {
+        "0": {
+          "draw_calls": 456.0,
+          "cpu_frame_ms": 0.5507085,
+          "gpu_frame_ms": 1.405187499585736
+        },
+        "1": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 0.54275,
+          "gpu_frame_ms": 1.5047708329802845
+        },
+        "2": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 0.5449790000000001,
+          "gpu_frame_ms": 1.491458333475748
+        },
+        "3": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 0.5410835,
+          "gpu_frame_ms": 1.3816666669299593
+        }
+      },
+      "buildGuid": "b202b34b528a44918ff1b7a98e6d0e9b",
+      "syncIntervals": [
+        "1"
+      ],
+      "folder": "/private/tmp/optimizetool-player-20261024/stable-uncapped/cubes-225/run-02",
+      "cubes": 225,
+      "repeat": 2,
+      "elapsedSeconds": 27.2617027759552,
+      "archivedFolder": "cubes-225/run-02"
+    },
+    {
+      "samples": 7680,
+      "modes": {
+        "0": {
+          "draw_calls": 7206.0,
+          "cpu_frame_ms": 2.395125,
+          "gpu_frame_ms": 1.2866249999206048
+        },
+        "1": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 0.716958,
+          "gpu_frame_ms": 2.1155416670808336
+        },
+        "2": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 0.6675420000000001,
+          "gpu_frame_ms": 1.9890833332283364
+        },
+        "3": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 0.7003539999999999,
+          "gpu_frame_ms": 2.1521874996324186
+        }
+      },
+      "buildGuid": "b202b34b528a44918ff1b7a98e6d0e9b",
+      "syncIntervals": [
+        "1"
+      ],
+      "folder": "/private/tmp/optimizetool-player-20261024/stable-uncapped/cubes-3600/run-03",
+      "cubes": 3600,
+      "repeat": 3,
+      "elapsedSeconds": 27.639060020446777,
+      "archivedFolder": "cubes-3600/run-03"
+    },
+    {
+      "samples": 7680,
+      "modes": {
+        "0": {
+          "draw_calls": 456.0,
+          "cpu_frame_ms": 0.553042,
+          "gpu_frame_ms": 1.2291041666685487
+        },
+        "1": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 0.540729,
+          "gpu_frame_ms": 1.299624999774096
+        },
+        "2": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 0.5408335,
+          "gpu_frame_ms": 1.3129999997545383
+        },
+        "3": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 0.5406875,
+          "gpu_frame_ms": 1.3211458331170434
+        }
+      },
+      "buildGuid": "b202b34b528a44918ff1b7a98e6d0e9b",
+      "syncIntervals": [
+        "1"
+      ],
+      "folder": "/private/tmp/optimizetool-player-20261024/stable-uncapped/cubes-225/run-03",
+      "cubes": 225,
+      "repeat": 3,
+      "elapsedSeconds": 20.643630027770996,
+      "archivedFolder": "cubes-225/run-03"
+    },
+    {
+      "samples": 7680,
+      "modes": {
+        "0": {
+          "draw_calls": 1806.0,
+          "cpu_frame_ms": 0.700834,
+          "gpu_frame_ms": 0.6145833331174799
+        },
+        "1": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 0.566875,
+          "gpu_frame_ms": 1.3462083334161434
+        },
+        "2": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 0.565896,
+          "gpu_frame_ms": 1.3632499994855607
+        },
+        "3": {
+          "draw_calls": 8.0,
+          "cpu_frame_ms": 0.5642294999999999,
+          "gpu_frame_ms": 1.3550208336710057
+        }
+      },
+      "buildGuid": "b202b34b528a44918ff1b7a98e6d0e9b",
+      "syncIntervals": [
+        "1"
+      ],
+      "folder": "/private/tmp/optimizetool-player-20261024/stable-uncapped/cubes-900/run-03",
+      "cubes": 900,
+      "repeat": 3,
+      "elapsedSeconds": 21.567873001098633,
+      "archivedFolder": "cubes-900/run-03"
+    }
+  ]
+}

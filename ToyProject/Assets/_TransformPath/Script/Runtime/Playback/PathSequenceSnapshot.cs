@@ -137,18 +137,7 @@ namespace Common.TransformPath
                 return _descriptors.Length - 1;
 
             float distance = Mathf.Clamp01(globalProgress) * _totalLength;
-            int low = 0;
-            int high = _starts.Length - 1;
-            while (low < high)
-            {
-                int middle = (low + high + 1) / 2;
-                if (_starts[middle] <= distance)
-                    low = middle;
-                else
-                    high = middle - 1;
-            }
-
-            return low;
+            return PathGeometryUtility.FindSegmentStartIndex(_starts, distance);
         }
 
         public float GetLocalProgress(int index, float globalProgress)
@@ -159,7 +148,7 @@ namespace Common.TransformPath
                 : Mathf.Clamp01((distance - _starts[index]) / _lengths[index]);
         }
 
-        public bool HasSameStructure(PathSequenceSnapshot other)
+        public bool HasSamePlaybackDefinition(PathSequenceSnapshot other)
         {
             if (other == null || other.Count != Count)
                 return false;

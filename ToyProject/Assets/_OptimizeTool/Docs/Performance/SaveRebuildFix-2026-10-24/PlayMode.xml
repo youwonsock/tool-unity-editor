@@ -1,0 +1,383 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="38" result="Passed" total="38" passed="38" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-24 08:39:05Z" end-time="2026-10-24 08:39:49Z" duration="44.334512">
+  <test-suite type="TestSuite" id="1064" name="ToyProject" fullname="ToyProject" runstate="Runnable" testcasecount="46" result="Passed" start-time="2026-10-24 08:39:05Z" end-time="2026-10-24 08:39:49Z" duration="44.334512" total="38" passed="38" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="PlayMode" />
+    </properties>
+    <test-suite type="Assembly" id="1109" name="Common.OptimizeTool.PlayModeTests.dll" fullname="/private/tmp/optimizetool-savefix-20261024-172439/Project/Library/ScriptAssemblies/Common.OptimizeTool.PlayModeTests.dll" runstate="Runnable" testcasecount="38" result="Passed" start-time="2026-10-24 08:39:05Z" end-time="2026-10-24 08:39:49Z" duration="44.331090" total="38" passed="38" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="84289" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="PlayMode" />
+      </properties>
+      <test-suite type="TestSuite" id="1110" name="Common" fullname="Common" runstate="Runnable" testcasecount="38" result="Passed" start-time="2026-10-24 08:39:05Z" end-time="2026-10-24 08:39:49Z" duration="44.324072" total="38" passed="38" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties>
+          <property name="platform" value="PlayMode" />
+        </properties>
+        <test-suite type="TestSuite" id="1111" name="OptimizeTool" fullname="Common.OptimizeTool" runstate="Runnable" testcasecount="38" result="Passed" start-time="2026-10-24 08:39:05Z" end-time="2026-10-24 08:39:49Z" duration="44.323362" total="38" passed="38" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties>
+            <property name="platform" value="PlayMode" />
+          </properties>
+          <test-suite type="TestSuite" id="1112" name="Tests" fullname="Common.OptimizeTool.Tests" runstate="Runnable" testcasecount="38" result="Passed" start-time="2026-10-24 08:39:05Z" end-time="2026-10-24 08:39:49Z" duration="44.323092" total="38" passed="38" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties>
+              <property name="platform" value="PlayMode" />
+            </properties>
+            <test-suite type="TestFixture" id="1065" name="OptimizeToolBenchmarkTests" fullname="Common.OptimizeTool.Tests.OptimizeToolBenchmarkTests" classname="Common.OptimizeTool.Tests.OptimizeToolBenchmarkTests" runstate="Runnable" testcasecount="7" result="Passed" start-time="2026-10-24 08:39:05Z" end-time="2026-10-24 08:39:07Z" duration="1.857178" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties>
+                <property name="platform" value="PlayMode" />
+              </properties>
+              <test-case id="1068" name="CancelRestoresWorkloadCameraAndSettings" fullname="Common.OptimizeTool.Tests.OptimizeToolBenchmarkTests.CancelRestoresWorkloadCameraAndSettings" methodname="CancelRestoresWorkloadCameraAndSettings" classname="Common.OptimizeTool.Tests.OptimizeToolBenchmarkTests" runstate="Runnable" seed="380579401" result="Passed" start-time="2026-10-24 08:39:05Z" end-time="2026-10-24 08:39:05Z" duration="0.223919" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1070" name="DestroyRestoresWorkloadCameraAndSettings" fullname="Common.OptimizeTool.Tests.OptimizeToolBenchmarkTests.DestroyRestoresWorkloadCameraAndSettings" methodname="DestroyRestoresWorkloadCameraAndSettings" classname="Common.OptimizeTool.Tests.OptimizeToolBenchmarkTests" runstate="Runnable" seed="1753107181" result="Passed" start-time="2026-10-24 08:39:05Z" end-time="2026-10-24 08:39:06Z" duration="0.114289" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1067" name="DiagnosticWriteFailureCannotPreventRestorationOnDisable" fullname="Common.OptimizeTool.Tests.OptimizeToolBenchmarkTests.DiagnosticWriteFailureCannotPreventRestorationOnDisable" methodname="DiagnosticWriteFailureCannotPreventRestorationOnDisable" classname="Common.OptimizeTool.Tests.OptimizeToolBenchmarkTests" runstate="Runnable" seed="1845234221" result="Passed" start-time="2026-10-24 08:39:06Z" end-time="2026-10-24 08:39:06Z" duration="0.003565" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[Unable to write benchmark diagnostic: The file '/var/folders/4m/v7xw547n4wj7kgvjblgr8ry00000gn/T/OptimizeToolCleanup-da96388943f14a68bfc974b69a4980a9/error.txt' already exists.
+]]></output>
+              </test-case>
+              <test-case id="1069" name="DisableRestoresWorkloadCameraAndSettings" fullname="Common.OptimizeTool.Tests.OptimizeToolBenchmarkTests.DisableRestoresWorkloadCameraAndSettings" methodname="DisableRestoresWorkloadCameraAndSettings" classname="Common.OptimizeTool.Tests.OptimizeToolBenchmarkTests" runstate="Runnable" seed="376640106" result="Passed" start-time="2026-10-24 08:39:06Z" end-time="2026-10-24 08:39:06Z" duration="0.112559" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1071" name="OutputFailureRestoresWorkloadCameraAndSettings" fullname="Common.OptimizeTool.Tests.OptimizeToolBenchmarkTests.OutputFailureRestoresWorkloadCameraAndSettings" methodname="OutputFailureRestoresWorkloadCameraAndSettings" classname="Common.OptimizeTool.Tests.OptimizeToolBenchmarkTests" runstate="Runnable" seed="1830938047" result="Passed" start-time="2026-10-24 08:39:06Z" end-time="2026-10-24 08:39:07Z" duration="1.120015" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[IOException: The file '/var/folders/4m/v7xw547n4wj7kgvjblgr8ry00000gn/T/OptimizeToolRestore-328bdc01bfcf4582b8cd70784b21f771/metadata.json' already exists.
+]]></output>
+              </test-case>
+              <test-case id="1066" name="PendingGpuDrainCannotRunAfterCancellation" fullname="Common.OptimizeTool.Tests.OptimizeToolBenchmarkTests.PendingGpuDrainCannotRunAfterCancellation" methodname="PendingGpuDrainCannotRunAfterCancellation" classname="Common.OptimizeTool.Tests.OptimizeToolBenchmarkTests" runstate="Runnable" seed="1806104369" result="Passed" start-time="2026-10-24 08:39:07Z" end-time="2026-10-24 08:39:07Z" duration="0.000819" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1072" name="ScaleCancellationRestoresCaseModeAndCustomCamera" fullname="Common.OptimizeTool.Tests.OptimizeToolBenchmarkTests.ScaleCancellationRestoresCaseModeAndCustomCamera" methodname="ScaleCancellationRestoresCaseModeAndCustomCamera" classname="Common.OptimizeTool.Tests.OptimizeToolBenchmarkTests" runstate="Runnable" seed="205230171" result="Passed" start-time="2026-10-24 08:39:07Z" end-time="2026-10-24 08:39:07Z" duration="0.274597" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1073" name="OptimizeToolPhysicsDemoTests" fullname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests" classname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests" runstate="Runnable" testcasecount="22" result="Passed" start-time="2026-10-24 08:39:07Z" end-time="2026-10-24 08:39:44Z" duration="37.094451" total="22" passed="22" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties>
+                <property name="platform" value="PlayMode" />
+              </properties>
+              <test-case id="1093" name="CancellingAPendingTakeAfterReleasedFailureDoesNotReuseTheOldError" fullname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests.CancellingAPendingTakeAfterReleasedFailureDoesNotReuseTheOldError" methodname="CancellingAPendingTakeAfterReleasedFailureDoesNotReuseTheOldError" classname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests" runstate="Runnable" seed="482631238" result="Passed" start-time="2026-10-24 08:39:07Z" end-time="2026-10-24 08:39:07Z" duration="0.182385" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1084" name="CompareResetAndModeSwitchingPreserveTheTakeAndSupportRerecording" fullname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests.CompareResetAndModeSwitchingPreserveTheTakeAndSupportRerecording" methodname="CompareResetAndModeSwitchingPreserveTheTakeAndSupportRerecording" classname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests" runstate="Runnable" seed="654459724" result="Passed" start-time="2026-10-24 08:39:07Z" end-time="2026-10-24 08:39:09Z" duration="2.276357" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1075" name="DeletedPlaybackDuringComparisonReportsFailureAndCanRetry" fullname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests.DeletedPlaybackDuringComparisonReportsFailureAndCanRetry" methodname="DeletedPlaybackDuringComparisonReportsFailureAndCanRetry" classname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests" runstate="Runnable" seed="1076740686" result="Passed" start-time="2026-10-24 08:39:09Z" end-time="2026-10-24 08:39:11Z" duration="1.722753" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[InvalidOperationException: The playback instance is unavailable; compare again.
+]]></output>
+              </test-case>
+              <test-case id="1091" name="DisablingBeforeTheFirstPhysicsTickCancelsWithoutLockingControls" fullname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests.DisablingBeforeTheFirstPhysicsTickCancelsWithoutLockingControls" methodname="DisablingBeforeTheFirstPhysicsTickCancelsWithoutLockingControls" classname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests" runstate="Runnable" seed="2002547804" result="Passed" start-time="2026-10-24 08:39:11Z" end-time="2026-10-24 08:39:11Z" duration="0.166119" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1076" name="DisablingComparisonBeforeItsFirstTickRestoresReadyAndAllowsReplay" fullname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests.DisablingComparisonBeforeItsFirstTickRestoresReadyAndAllowsReplay" methodname="DisablingComparisonBeforeItsFirstTickRestoresReadyAndAllowsReplay" classname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests" runstate="Runnable" seed="634911293" result="Passed" start-time="2026-10-24 08:39:11Z" end-time="2026-10-24 08:39:12Z" duration="0.835200" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1090" name="DisablingOnlyTheDemoComponentSavesTheTakeAndRestoresControls" fullname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests.DisablingOnlyTheDemoComponentSavesTheTakeAndRestoresControls" methodname="DisablingOnlyTheDemoComponentSavesTheTakeAndRestoresControls" classname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests" runstate="Runnable" seed="707886302" result="Passed" start-time="2026-10-24 08:39:12Z" end-time="2026-10-24 08:39:14Z" duration="1.530032" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1089" name="DisablingShowcaseSavesTheTakeAndRestoresControls" fullname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests.DisablingShowcaseSavesTheTakeAndRestoresControls" methodname="DisablingShowcaseSavesTheTakeAndRestoresControls" classname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests" runstate="Runnable" seed="516560664" result="Passed" start-time="2026-10-24 08:39:14Z" end-time="2026-10-24 08:39:15Z" duration="1.533043" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1079" name="EmptyErrorDoesNotDisplayARecordingFailureInTheReadyPanel" fullname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests.EmptyErrorDoesNotDisplayARecordingFailureInTheReadyPanel" methodname="EmptyErrorDoesNotDisplayARecordingFailureInTheReadyPanel" classname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests" runstate="Runnable" seed="374011845" result="Passed" start-time="2026-10-24 08:39:15Z" end-time="2026-10-24 08:39:16Z" duration="0.306926" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1087" name="FailedFirstSaveRemovesPartialAssetsAndSupportsRerecord" fullname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests.FailedFirstSaveRemovesPartialAssetsAndSupportsRerecord" methodname="FailedFirstSaveRemovesPartialAssetsAndSupportsRerecord" classname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests" runstate="Runnable" seed="1296458721" result="Passed" start-time="2026-10-24 08:39:16Z" end-time="2026-10-24 08:39:17Z" duration="1.723724" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[InvalidOperationException: Unable to save and link both recording assets.
+]]></output>
+              </test-case>
+              <test-case id="1086" name="FailedOverwriteRestoresTheTakeAndSupportsCompareAndRerecord" fullname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests.FailedOverwriteRestoresTheTakeAndSupportsCompareAndRerecord" methodname="FailedOverwriteRestoresTheTakeAndSupportsCompareAndRerecord" classname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests" runstate="Runnable" seed="658931781" result="Passed" start-time="2026-10-24 08:39:17Z" end-time="2026-10-24 08:39:21Z" duration="3.419793" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[InvalidOperationException: Unable to save and link both recording assets.
+]]></output>
+              </test-case>
+              <test-case id="1092" name="FractionalDurationComparesAndFreezesAtTheSameClipEndpoint" fullname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests.FractionalDurationComparesAndFreezesAtTheSameClipEndpoint" methodname="FractionalDurationComparesAndFreezesAtTheSameClipEndpoint" classname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests" runstate="Runnable" seed="1291617492" result="Passed" start-time="2026-10-24 08:39:21Z" end-time="2026-10-24 08:39:22Z" duration="1.299823" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[Physics endpoint: middle delta=0 m, endpoint delta=0 m, peak=0.00196075439 m
+]]></output>
+              </test-case>
+              <test-case id="1077" name="InvalidPlaybackIsRejectedWithoutRunningClonedGameplayCallbacks" fullname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests.InvalidPlaybackIsRejectedWithoutRunningClonedGameplayCallbacks" methodname="InvalidPlaybackIsRejectedWithoutRunningClonedGameplayCallbacks" classname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests" runstate="Runnable" seed="1928336369" result="Passed" start-time="2026-10-24 08:39:22Z" end-time="2026-10-24 08:39:22Z" duration="0.163067" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[InvalidOperationException: The saved recording must have no physics or Animator components.
+]]></output>
+              </test-case>
+              <test-case id="1088" name="LegacyPlaybackSurvivesResetAndModeSwitchingAndCanUpgradeByRerecording" fullname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests.LegacyPlaybackSurvivesResetAndModeSwitchingAndCanUpgradeByRerecording" methodname="LegacyPlaybackSurvivesResetAndModeSwitchingAndCanUpgradeByRerecording" classname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests" runstate="Runnable" seed="1008456836" result="Passed" start-time="2026-10-24 08:39:22Z" end-time="2026-10-24 08:39:26Z" duration="4.064404" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1082" name="MissingReferenceKeepsLegacyPlaybackAndMarksTheDeltaUnavailable" fullname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests.MissingReferenceKeepsLegacyPlaybackAndMarksTheDeltaUnavailable" methodname="MissingReferenceKeepsLegacyPlaybackAndMarksTheDeltaUnavailable" classname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests" runstate="Runnable" seed="466192100" result="Passed" start-time="2026-10-24 08:39:26Z" end-time="2026-10-24 08:39:27Z" duration="0.888304" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1095" name="PhysicsViewAndFocusKeepBothArenasInsideAPortraitCamera" fullname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests.PhysicsViewAndFocusKeepBothArenasInsideAPortraitCamera" methodname="PhysicsViewAndFocusKeepBothArenasInsideAPortraitCamera" classname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests" runstate="Runnable" seed="1445660437" result="Passed" start-time="2026-10-24 08:39:27Z" end-time="2026-10-24 08:39:27Z" duration="0.165167" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1074" name="RebindingTheExistingPanelPreservesExternalListenersAndDoesNotDuplicateControls" fullname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests.RebindingTheExistingPanelPreservesExternalListenersAndDoesNotDuplicateControls" methodname="RebindingTheExistingPanelPreservesExternalListenersAndDoesNotDuplicateControls" classname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests" runstate="Runnable" seed="1984631293" result="Passed" start-time="2026-10-24 08:39:27Z" end-time="2026-10-24 08:39:27Z" duration="0.165384" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1080" name="RecordButtonSavesActualPhysicsAndComparesTheGeneratedPrefab" fullname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests.RecordButtonSavesActualPhysicsAndComparesTheGeneratedPrefab" methodname="RecordButtonSavesActualPhysicsAndComparesTheGeneratedPrefab" classname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests" runstate="Runnable" seed="1779422548" result="Passed" start-time="2026-10-24 08:39:27Z" end-time="2026-10-24 08:39:34Z" duration="6.645119" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1081" name="RecordedReferenceIsIndependentOfNewPhysicsSettingsAndDetectsAnAlteredClip" fullname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests.RecordedReferenceIsIndependentOfNewPhysicsSettingsAndDetectsAnAlteredClip" methodname="RecordedReferenceIsIndependentOfNewPhysicsSettingsAndDetectsAnAlteredClip" classname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests" runstate="Runnable" seed="1877815688" result="Passed" start-time="2026-10-24 08:39:34Z" end-time="2026-10-24 08:39:38Z" duration="3.741568" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1094" name="RejectedPlaybackDoesNotLeaveAnActiveOrOrphanedInstance" fullname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests.RejectedPlaybackDoesNotLeaveAnActiveOrOrphanedInstance" methodname="RejectedPlaybackDoesNotLeaveAnActiveOrOrphanedInstance" classname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests" runstate="Runnable" seed="1452374614" result="Passed" start-time="2026-10-24 08:39:38Z" end-time="2026-10-24 08:39:38Z" duration="0.170488" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[InvalidOperationException: The recording hierarchy differs from this demo; record a new take.
+]]></output>
+              </test-case>
+              <test-case id="1085" name="RerecordingReplacesAllThreeAssetsAndClearsThePreviousComparisonStatus" fullname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests.RerecordingReplacesAllThreeAssetsAndClearsThePreviousComparisonStatus" methodname="RerecordingReplacesAllThreeAssetsAndClearsThePreviousComparisonStatus" classname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests" runstate="Runnable" seed="886311565" result="Passed" start-time="2026-10-24 08:39:38Z" end-time="2026-10-24 08:39:41Z" duration="3.080778" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1083" name="SceneReloadLoadsTheSavedReferenceWithoutStartingANewRecording" fullname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests.SceneReloadLoadsTheSavedReferenceWithoutStartingANewRecording" methodname="SceneReloadLoadsTheSavedReferenceWithoutStartingANewRecording" classname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests" runstate="Runnable" seed="494538514" result="Passed" start-time="2026-10-24 08:39:41Z" end-time="2026-10-24 08:39:43Z" duration="2.189138" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1078" name="TwoDimensionalPhysicsAndDamagedReferenceDoNotEnterComparison" fullname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests.TwoDimensionalPhysicsAndDamagedReferenceDoNotEnterComparison" methodname="TwoDimensionalPhysicsAndDamagedReferenceDoNotEnterComparison" classname="Common.OptimizeTool.Tests.OptimizeToolPhysicsDemoTests" runstate="Runnable" seed="204772685" result="Passed" start-time="2026-10-24 08:39:43Z" end-time="2026-10-24 08:39:44Z" duration="0.820736" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[InvalidOperationException: The saved recording must have no physics or Animator components.
+InvalidOperationException: The recording reference observation times must start at zero and increase.
+]]></output>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1096" name="OptimizeToolScaleRenderTests" fullname="Common.OptimizeTool.Tests.OptimizeToolScaleRenderTests" classname="Common.OptimizeTool.Tests.OptimizeToolScaleRenderTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-24 08:39:44Z" end-time="2026-10-24 08:39:48Z" duration="3.982205" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties>
+                <property name="platform" value="PlayMode" />
+              </properties>
+              <test-case id="1097" name="AllScalesUseRealBakesAndKeepTheOriginalRenderedImage" fullname="Common.OptimizeTool.Tests.OptimizeToolScaleRenderTests.AllScalesUseRealBakesAndKeepTheOriginalRenderedImage" methodname="AllScalesUseRealBakesAndKeepTheOriginalRenderedImage" classname="Common.OptimizeTool.Tests.OptimizeToolScaleRenderTests" runstate="Runnable" seed="1331460567" result="Passed" start-time="2026-10-24 08:39:44Z" end-time="2026-10-24 08:39:45Z" duration="0.490562" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1098" name="DenseGpuBakesKeepTheOriginalRenderedImage" fullname="Common.OptimizeTool.Tests.OptimizeToolScaleRenderTests.DenseGpuBakesKeepTheOriginalRenderedImage" methodname="DenseGpuBakesKeepTheOriginalRenderedImage" classname="Common.OptimizeTool.Tests.OptimizeToolScaleRenderTests" runstate="Runnable" seed="542364414" result="Passed" start-time="2026-10-24 08:39:45Z" end-time="2026-10-24 08:39:48Z" duration="3.490711" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1099" name="OptimizeToolShowcaseTests" fullname="Common.OptimizeTool.Tests.OptimizeToolShowcaseTests" classname="Common.OptimizeTool.Tests.OptimizeToolShowcaseTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-24 08:39:48Z" end-time="2026-10-24 08:39:48Z" duration="0.267287" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties>
+                <property name="platform" value="PlayMode" />
+              </properties>
+              <test-case id="1101" name="BakedResultsKeepTheRenderedImageFromTheBakeView" fullname="Common.OptimizeTool.Tests.OptimizeToolShowcaseTests.BakedResultsKeepTheRenderedImageFromTheBakeView" methodname="BakedResultsKeepTheRenderedImageFromTheBakeView" classname="Common.OptimizeTool.Tests.OptimizeToolShowcaseTests" runstate="Runnable" seed="1811242990" result="Passed" start-time="2026-10-24 08:39:48Z" end-time="2026-10-24 08:39:48Z" duration="0.152307" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1100" name="SampleSwitchesBetweenDistinctRealBakesAtTheSameCameraPose" fullname="Common.OptimizeTool.Tests.OptimizeToolShowcaseTests.SampleSwitchesBetweenDistinctRealBakesAtTheSameCameraPose" methodname="SampleSwitchesBetweenDistinctRealBakesAtTheSameCameraPose" classname="Common.OptimizeTool.Tests.OptimizeToolShowcaseTests" runstate="Runnable" seed="240247275" result="Passed" start-time="2026-10-24 08:39:48Z" end-time="2026-10-24 08:39:48Z" duration="0.114210" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1102" name="PhysicsDemoDestroyTests" fullname="Common.OptimizeTool.Tests.PhysicsDemoDestroyTests" classname="Common.OptimizeTool.Tests.PhysicsDemoDestroyTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-24 08:39:48Z" end-time="2026-10-24 08:39:49Z" duration="0.281459" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties>
+                <property name="platform" value="PlayMode" />
+              </properties>
+              <test-case id="1103" name="DestroyingComparingDemoDetachesPlaybackAndAllOwnedCallbacks" fullname="Common.OptimizeTool.Tests.PhysicsDemoDestroyTests.DestroyingComparingDemoDetachesPlaybackAndAllOwnedCallbacks" methodname="DestroyingComparingDemoDetachesPlaybackAndAllOwnedCallbacks" classname="Common.OptimizeTool.Tests.PhysicsDemoDestroyTests" runstate="Runnable" seed="2092518246" result="Passed" start-time="2026-10-24 08:39:48Z" end-time="2026-10-24 08:39:49Z" duration="0.149452" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1104" name="DestroyingDisabledDemoDetachesPlaybackAndAllOwnedCallbacks" fullname="Common.OptimizeTool.Tests.PhysicsDemoDestroyTests.DestroyingDisabledDemoDetachesPlaybackAndAllOwnedCallbacks" methodname="DestroyingDisabledDemoDetachesPlaybackAndAllOwnedCallbacks" classname="Common.OptimizeTool.Tests.PhysicsDemoDestroyTests" runstate="Runnable" seed="431558234" result="Passed" start-time="2026-10-24 08:39:49Z" end-time="2026-10-24 08:39:49Z" duration="0.131382" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1105" name="PhysicsRecorderPlaybackTests" fullname="Common.OptimizeTool.Tests.PhysicsRecorderPlaybackTests" classname="Common.OptimizeTool.Tests.PhysicsRecorderPlaybackTests" runstate="Runnable" testcasecount="3" result="Passed" start-time="2026-10-24 08:39:49Z" end-time="2026-10-24 08:39:49Z" duration="0.838860" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties>
+                <property name="platform" value="PlayMode" />
+              </properties>
+              <test-case id="1106" name="AutomaticPhysicsRecordingCreatesAnAutoplayingPhysicsFreePrefab" fullname="Common.OptimizeTool.Tests.PhysicsRecorderPlaybackTests.AutomaticPhysicsRecordingCreatesAnAutoplayingPhysicsFreePrefab" methodname="AutomaticPhysicsRecordingCreatesAnAutoplayingPhysicsFreePrefab" classname="Common.OptimizeTool.Tests.PhysicsRecorderPlaybackTests" runstate="Runnable" seed="1450989656" result="Passed" start-time="2026-10-24 08:39:49Z" end-time="2026-10-24 08:39:49Z" duration="0.498169" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1107" name="DisablingRecorderFinishesSynchronouslyAndCanRestart" fullname="Common.OptimizeTool.Tests.PhysicsRecorderPlaybackTests.DisablingRecorderFinishesSynchronouslyAndCanRestart" methodname="DisablingRecorderFinishesSynchronouslyAndCanRestart" classname="Common.OptimizeTool.Tests.PhysicsRecorderPlaybackTests" runstate="Runnable" seed="1756707141" result="Passed" start-time="2026-10-24 08:39:49Z" end-time="2026-10-24 08:39:49Z" duration="0.173613" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1108" name="ManualStopThenImmediateRestartDoesNotReusePreviousSampler" fullname="Common.OptimizeTool.Tests.PhysicsRecorderPlaybackTests.ManualStopThenImmediateRestartDoesNotReusePreviousSampler" methodname="ManualStopThenImmediateRestartDoesNotReusePreviousSampler" classname="Common.OptimizeTool.Tests.PhysicsRecorderPlaybackTests" runstate="Runnable" seed="582793659" result="Passed" start-time="2026-10-24 08:39:49Z" end-time="2026-10-24 08:39:49Z" duration="0.166296" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="platform" value="PlayMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

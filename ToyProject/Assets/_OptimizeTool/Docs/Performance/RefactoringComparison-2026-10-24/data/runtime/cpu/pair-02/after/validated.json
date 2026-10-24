@@ -1,0 +1,57 @@
+{
+  "samples": 3840,
+  "modes": {
+    "0": {
+      "draw_calls": 7205.0,
+      "cpu_frame_ms": 7.503396,
+      "metal_gpu_ms": 3.8791249935457017,
+      "wall_delta_ms": 7.60389375500381
+    },
+    "1": {
+      "draw_calls": 7.0,
+      "cpu_frame_ms": 3.785354,
+      "metal_gpu_ms": 2.8660416683123913,
+      "wall_delta_ms": 3.78293648827821
+    },
+    "2": {
+      "draw_calls": 7.0,
+      "cpu_frame_ms": 3.613271,
+      "metal_gpu_ms": 2.8504375004558824,
+      "wall_delta_ms": 3.65577160846442
+    },
+    "3": {
+      "draw_calls": 7.0,
+      "cpu_frame_ms": 3.6013539999999997,
+      "metal_gpu_ms": 2.799208330543479,
+      "wall_delta_ms": 3.6027069436386228
+    }
+  },
+  "buildGuid": "2c9e7f580b3e40a58b9b4d5b2f8c8f07",
+  "gpuMetric": "metal_gpu_ms",
+  "syncIntervals": [
+    "1"
+  ],
+  "variant": "after",
+  "profile": "cpu",
+  "pair": 1,
+  "elapsedSeconds": 71.67947041700245,
+  "telemetryBefore": {
+    "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+    "power": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=21823587)\t74%; discharging; 0:52 remaining present: true"
+  },
+  "telemetryAfter": {
+    "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+    "power": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=21823587)\t72%; discharging; 0:50 remaining present: true"
+  },
+  "loadAverage": [
+    3.25244140625,
+    3.96484375,
+    4.68115234375
+  ],
+  "cpuTimingValidFraction": 1.0,
+  "processPeakRssBytes": 322617344,
+  "sampledPeakRssBytes": 322093056,
+  "rssSampleCount": 3016,
+  "rssSamplingIntervalSeconds": 0.02,
+  "rssMonitoredPid": 59322
+}

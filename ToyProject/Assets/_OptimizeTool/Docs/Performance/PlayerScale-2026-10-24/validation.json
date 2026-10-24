@@ -1,0 +1,228 @@
+{
+  "EditMode": {
+    "total": 62,
+    "passed": 62,
+    "failed": 0,
+    "skipped": 0
+  },
+  "PlayMode": {
+    "total": 16,
+    "passed": 16,
+    "failed": 0,
+    "skipped": 0
+  },
+  "scope": {
+    "EditMode": "Common.OptimizeTool.Tests",
+    "PlayMode": "Common.OptimizeTool.PlayModeTests",
+    "project": "Isolated project snapshot; real Metal graphics (no -nographics)"
+  },
+  "visuals": {
+    "cubes-225": {
+      "buildGuid": "b202b34b528a44918ff1b7a98e6d0e9b",
+      "resolution": [
+        1920,
+        1080
+      ],
+      "modes": {
+        "1": {
+          "meanNormalizedRgbError": 0.0,
+          "foregroundNormalizedRgbError": 0.0,
+          "changedPixels": 0,
+          "identicalPixels": true
+        },
+        "2": {
+          "meanNormalizedRgbError": 0.0,
+          "foregroundNormalizedRgbError": 0.0,
+          "changedPixels": 0,
+          "identicalPixels": true
+        },
+        "3": {
+          "meanNormalizedRgbError": 0.0,
+          "foregroundNormalizedRgbError": 0.0,
+          "changedPixels": 0,
+          "identicalPixels": true
+        }
+      }
+    },
+    "cubes-3600": {
+      "buildGuid": "b202b34b528a44918ff1b7a98e6d0e9b",
+      "resolution": [
+        1920,
+        1080
+      ],
+      "modes": {
+        "1": {
+          "meanNormalizedRgbError": 0.0,
+          "foregroundNormalizedRgbError": 0.0,
+          "changedPixels": 0,
+          "identicalPixels": true
+        },
+        "2": {
+          "meanNormalizedRgbError": 0.0,
+          "foregroundNormalizedRgbError": 0.0,
+          "changedPixels": 0,
+          "identicalPixels": true
+        },
+        "3": {
+          "meanNormalizedRgbError": 0.0,
+          "foregroundNormalizedRgbError": 0.0,
+          "changedPixels": 0,
+          "identicalPixels": true
+        }
+      }
+    },
+    "cubes-900": {
+      "buildGuid": "b202b34b528a44918ff1b7a98e6d0e9b",
+      "resolution": [
+        1920,
+        1080
+      ],
+      "modes": {
+        "1": {
+          "meanNormalizedRgbError": 0.0,
+          "foregroundNormalizedRgbError": 0.0,
+          "changedPixels": 0,
+          "identicalPixels": true
+        },
+        "2": {
+          "meanNormalizedRgbError": 0.0,
+          "foregroundNormalizedRgbError": 0.0,
+          "changedPixels": 0,
+          "identicalPixels": true
+        },
+        "3": {
+          "meanNormalizedRgbError": 0.0,
+          "foregroundNormalizedRgbError": 0.0,
+          "changedPixels": 0,
+          "identicalPixels": true
+        }
+      }
+    }
+  },
+  "existingAssetPreservation": {
+    "checkedFiles": 120,
+    "changedFiles": [],
+    "originalSha256": {
+      "ToyProject/Assets/_OptimizeTool/Prefab.meta": "7070d1772ef100d96b1fcedd343c6c9a0f45890d9215b73bae0303469704679d",
+      "ToyProject/Assets/_OptimizeTool/Scene.meta": "5b4151f300704580a9c83f1daad4108e78f87176fb77db66c7e06b545058ea96",
+      "ToyProject/Assets/_OptimizeTool/OptimizeTool.uml.meta": "d9a230b69b13dfe15ac2b1cde60e938bc61451dfb6a7f26fb878b1686eb99610",
+      "ToyProject/Assets/_OptimizeTool/Script.meta": "253cbd8e92c1e2a0ecf3fed76dd391d5f060e61413c5b4eb8b05b276cc6eca8f",
+      "ToyProject/Assets/_OptimizeTool/Docs.meta": "a3bc68fbc014b0ef55736a937784fde36991d2067517cd59e8fe001e985bfbc3",
+      "ToyProject/Assets/_OptimizeTool/Settings.meta": "ad14c79177eea145fead2aa42b0293f4afe4f3c902273eab2fa641fb330d6f22",
+      "ToyProject/Assets/_OptimizeTool/README.md.meta": "f00d7a50efca28ee8147499122175fd1e04986d16860e8508432710f712a666d",
+      "ToyProject/Assets/_OptimizeTool/Settings/OptimizeToolCombined.mat.meta": "cf155edd74d097b0b611af9db8d8b1d0a26cedaa1cd98e73cee857121039fa5b",
+      "ToyProject/Assets/_OptimizeTool/Settings/OptimizeToolSource.mat.meta": "717d43fa20a018ff8a5e68d4578a376302d9db556acaf09ea9eccda55c5f3f05",
+      "ToyProject/Assets/_OptimizeTool/Settings/PhysicsDemo.meta": "8b93df3ec8e840d7a9cca38bc07e45af66fb165657644e397dc36e7ec165d359",
+      "ToyProject/Assets/_OptimizeTool/Settings/Generated.meta": "340a08bd4c06654bceb65c0d238766b7a2734f89eda7f753f874214aedcbc1ee",
+      "ToyProject/Assets/_OptimizeTool/Docs/RefactoringValidation.json.meta": "427a4552b1c78985dab86cb3917aa9718ae87f9126d675f18062ffe73b5c5671",
+      "ToyProject/Assets/_OptimizeTool/Docs/PhysicsRecorderRefactoring.md.meta": "fd9a02b349f8ee2fabe9e3250cfd9876272ddee7057f27b5df966f17356096e8",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance.meta": "8777ea4ad22fa0dbaf18e6e29ea5b21cd79629ae82335e0bf87f010ec1c0bf65",
+      "ToyProject/Assets/_OptimizeTool/Docs/Validation.md.meta": "21ac6a9e178895c0034157f1e0ab0f8c865ce823a31b432c9c131810a8e2814c",
+      "ToyProject/Assets/_OptimizeTool/Docs/ValidationResults.json.meta": "72855464a72ccd5cd8ea3e920ac74831c8b71b932d8ac4baf14ee7cab305e51c",
+      "ToyProject/Assets/_OptimizeTool/Docs/Images.meta": "56ec1945f10cfc84281e9bf7f3ae4c622c86e3fd638db8d2889a633aebfb63fc",
+      "ToyProject/Assets/_OptimizeTool/Script/Common.OptimizeTool.asmdef.meta": "aa48807a6e7e1b1cb620e5f0dc8a144fae1480b8e0171b03d0aa11b073dad57c",
+      "ToyProject/Assets/_OptimizeTool/Script/MeshRendererSettings.cs.meta": "6d247aa602f9fdf5fb5eeef1bcd98956f510157d5cbf8259beee26051e4953f3",
+      "ToyProject/Assets/_OptimizeTool/Script/MeshSceneOutput.cs.meta": "6e142c7aa5eddd1d3de2f5730620cf3e6a7726e21b1778b2ec44e9d50eebe756",
+      "ToyProject/Assets/_OptimizeTool/Script/AssemblyInfo.cs.meta": "1df32c6d7838df74bb85444811480838b45ea28ef243a7687c302f358d7385cc",
+      "ToyProject/Assets/_OptimizeTool/Script/MeshAssetTransaction.cs.meta": "eb06a12baa5a73d2eb63a9d83eb69e188ff93669a272b9e5162e3e893bc53ad4",
+      "ToyProject/Assets/_OptimizeTool/Script/BackfaceCullMeshBaker.cs.meta": "e3c5aa67ae21e9d0439997118317d18b38705f33a5c428962e611f7d013d87b6",
+      "ToyProject/Assets/_OptimizeTool/Script/MeshBuildResult.cs.meta": "33118e59fb303a39d68e461af95f1483007c14da7b59d0e4e32dccefaccb5676",
+      "ToyProject/Assets/_OptimizeTool/Script/PhysicsRecordingSettings.cs.meta": "394dd540debbf4b400a0adcaff621d3eacd9f5aa009202124c5a37e2a59a099e",
+      "ToyProject/Assets/_OptimizeTool/Script/PhysicsRecordingSession.cs.meta": "ea37c7ea2b582d09ef5e676b5e408c3ecb77366dd678df2135e33e48f4a5eaec",
+      "ToyProject/Assets/_OptimizeTool/Script/Editor.meta": "565f96ed61ca14ef0a5eb5d5e6f0679130c385b60f5de56d92066680b12c0df9",
+      "ToyProject/Assets/_OptimizeTool/Script/MeshVisibilityQuery.cs.meta": "513e411ecb67578215e4383b5fdedc0bcb5e216f8544c6a6922c91c9ba1d3410",
+      "ToyProject/Assets/_OptimizeTool/Script/PhysicsRecorder.cs.meta": "699858e4a494f8b3d085de9308fb517b9adcf329d5aad0a63afc66c28dda35cf",
+      "ToyProject/Assets/_OptimizeTool/Script/PhysicsRecordingAssetWriter.cs.meta": "750b7960e27a6520baf6cbc6cc1b1f2d903a4c425c4f7520be11398e5c69c027",
+      "ToyProject/Assets/_OptimizeTool/Script/MeshCombiner.cs.meta": "8e6c81136dd87dd5719709ad71ca8c461ee9d37a7e836589f26b7401556d419a",
+      "ToyProject/Assets/_OptimizeTool/Script/MeshBuildPipeline.cs.meta": "420c1bfe855b4bb4c05182f546f9671e766ec297ba72da5d0ec43a9634fe991b",
+      "ToyProject/Assets/_OptimizeTool/Script/Samples.meta": "fa4b16e631106c9ccf5e172d380fc93c16a6f53df2d15c755bd7776fbd4dcfbc",
+      "ToyProject/Assets/_OptimizeTool/Script/PhysicsRecordingMetrics.cs.meta": "efe76bd226542874a5a00e3425eaaa471677b8aa223bd40f0d74767e94526172",
+      "ToyProject/Assets/_OptimizeTool/Script/Tests.meta": "27d7ec9ecc1243f513a1018f18e625d56e557283f56161ff8358fb31a1cb584b",
+      "ToyProject/Assets/_OptimizeTool/Script/MeshProcessingUtility.cs.meta": "c70434a515e01de0585eec585a9950ca0471d9084a7dfbba8e3d1e4b94cffb43",
+      "ToyProject/Assets/_OptimizeTool/Script/PhysicsRecordingResult.cs.meta": "9dc973a8f217c9ee3d2f04a6719e6f6471056630a448135e9d4e72aad872ee8e",
+      "ToyProject/Assets/_OptimizeTool/Script/AssetFileSnapshot.cs.meta": "934bc31c4b4cd150f46a2a71662a143d2e4d94ff98eee34a3ce80363eeeb02c6",
+      "ToyProject/Assets/_OptimizeTool/Script/PhysicsPoseSample.cs.meta": "d6141be8a275d98428a0df963cc3ea552fe20369e217ad755e53bb37962879b3",
+      "ToyProject/Assets/_OptimizeTool/Prefab/OptimizeToolShowcase.prefab.meta": "57ef6de94dabafb39291c7b725bdef12ad3f79ef2ed5318bb3a398eb1157d5c6",
+      "ToyProject/Assets/_OptimizeTool/Prefab/OptimizeToolShowcase.prefab": "0e539d3fd36f16dd15dd516e7c0d17d495b2cb431519622c6ea6c4f4a990a293",
+      "ToyProject/Assets/_OptimizeTool/Scene/OptimizeToolSample.unity.meta": "724f86fb89d49c6905136ec5d41cb84f15abb4226dabb125f8ddc2572cad5b9b",
+      "ToyProject/Assets/_OptimizeTool/Scene/OptimizeToolSample.unity": "b30da90cfb80d8cb30f1851ac8cbf481c8bb492c32b697747fb70eca80fb236d",
+      "ToyProject/Assets/_OptimizeTool/Script/Tests/Editor.meta": "9800f7d588c0a2cd4de271291c9b3b84c3b1deaae03bc95fd30ac2c78d751f39",
+      "ToyProject/Assets/_OptimizeTool/Script/Tests/PlayMode.meta": "888e6b1ed22d9c79b3cb5a2b4efb1e35e45532e3b527720448c87cfd8ad7cc9d",
+      "ToyProject/Assets/_OptimizeTool/Script/Samples/OptimizeToolOverviewController.cs.meta": "c9c50f7c9f38be371f1e0a839124c4534ef5e04840205fe026a0071dd1ee92a7",
+      "ToyProject/Assets/_OptimizeTool/Script/Samples/OptimizeToolPhysicsStatusFormatter.cs.meta": "21e708c1c8f54eab8e9f9918e4b66388f259e17b96ed395f06d40c0404ab3c73",
+      "ToyProject/Assets/_OptimizeTool/Script/Samples/OptimizeToolSampleModes.cs.meta": "5eb070f20420ae5df99a69730aaecb39b6f16f5402b5bcb8fea391323a99f0cd",
+      "ToyProject/Assets/_OptimizeTool/Script/Samples/OptimizeToolComparisonController.cs.meta": "5391fe1df8b96bbb2f01b5006d6d5d39e65784a7afa62579e37361ecf298af8e",
+      "ToyProject/Assets/_OptimizeTool/Script/Samples/OptimizeToolShowcaseUI.cs.meta": "da830f99cf0c06ba9c2a4b87b5268c09e6ddd03d7cf0aa33bc09713ef8c3600b",
+      "ToyProject/Assets/_OptimizeTool/Script/Samples/OptimizeToolPerformanceBenchmark.cs.meta": "180c27816c67f240e3196dc89ff5f6b9028bfb52f95ebc05ba9a3e74b160b031",
+      "ToyProject/Assets/_OptimizeTool/Script/Samples/Editor.meta": "774d0198f16c09799411aba54683e91f5b356008b472fc3cbe0b03f963888d7f",
+      "ToyProject/Assets/_OptimizeTool/Script/Samples/BenchmarkEnvironmentScope.cs.meta": "09cc93d31d4b3eb1ce7897c3a220f6092e595ba12fcd247aa189bac501a2ad83",
+      "ToyProject/Assets/_OptimizeTool/Script/Samples/OptimizeToolFreeCamera.cs.meta": "027dd3bdc8dff5774c73faf315a010377012d1a21b8670c65986e43a2fbf43d7",
+      "ToyProject/Assets/_OptimizeTool/Script/Samples/OptimizeToolOverviewBoard.cs.meta": "7228cbe0e02c756abc5fbf6346eb95c414604f784841e24688c582c9366833ec",
+      "ToyProject/Assets/_OptimizeTool/Script/Samples/PhysicsPrefabPlayback.cs.meta": "4040c37e56f95af00f33bfbb46452922e4975dab4d30d2e4b51c8cdac4274b45",
+      "ToyProject/Assets/_OptimizeTool/Script/Samples/OptimizeToolPhysicsDemo.cs.meta": "fc16548280654441f2663342fdbbaa19e8fab12b89c2ccc1877733b5333dfbee",
+      "ToyProject/Assets/_OptimizeTool/Script/Samples/Common.OptimizeTool.Samples.asmdef.meta": "8c5803279a72f413baea7e2ecbf3dfc1988991b7e057dfb2db115e1a5ef68adc",
+      "ToyProject/Assets/_OptimizeTool/Script/Editor/Common.OptimizeTool.Editor.asmdef.meta": "c31d023206ba729dae5f5642a6247f6aac2247e57d4bde0b68cfe9dc00ba3870",
+      "ToyProject/Assets/_OptimizeTool/Script/Editor/MeshOptimizationEditors.cs.meta": "aad7b7e7d51799e9d05463bb83d806f0df34c94a6ef01cefd44325b4a3a5a225",
+      "ToyProject/Assets/_OptimizeTool/Script/Samples/Editor/OptimizeToolShowcaseEditor.cs.meta": "5e7b5e0d8fdefa7ca0296fdd782ee744b32fc3cecc3b1c725bda376b246e61cf",
+      "ToyProject/Assets/_OptimizeTool/Script/Samples/Editor/Common.OptimizeTool.Samples.Editor.asmdef.meta": "54976b0f4b0951a50122955bc558cc4cefdd385f35997a8702374290ba26febf",
+      "ToyProject/Assets/_OptimizeTool/Script/Samples/Editor/OptimizeToolPhysicsDemoBuilder.cs.meta": "af28679758c39beb0875292400ace18de333060f03854a492a93fab9772ca015",
+      "ToyProject/Assets/_OptimizeTool/Script/Samples/Editor/GameViewCaptureScope.cs.meta": "ae314dde05eff06b082a67e4bcdcb47ff089c4694f3720b8037aeaff70815d27",
+      "ToyProject/Assets/_OptimizeTool/Script/Samples/Editor/OptimizeToolBenchmarkEditor.cs.meta": "a336b7b68f7ac85993bb12d1de203eb43e3963d49e914ac642d7c6cb71ae9260",
+      "ToyProject/Assets/_OptimizeTool/Script/Tests/PlayMode/Common.OptimizeTool.PlayModeTests.asmdef.meta": "09bf5b98783b298ee48d8a8bba542668678c80e8eb1f90956f2eb8f2a16a714c",
+      "ToyProject/Assets/_OptimizeTool/Script/Tests/PlayMode/OptimizeToolPhysicsDemoTests.cs.meta": "e17a9a76cd2d034fbef0a84d4c3b9c4bec11baaf9b95a022d668bd20050a68f9",
+      "ToyProject/Assets/_OptimizeTool/Script/Tests/PlayMode/OptimizeToolBenchmarkTests.cs.meta": "7c2122392e5a17614ce905e76b6ebccef5fb3117c2517633bdb2228780c72cb7",
+      "ToyProject/Assets/_OptimizeTool/Script/Tests/PlayMode/PhysicsRecorderPlaybackTests.cs.meta": "58f543940a5d296370ec0568d5504cd98107135370c0ceb417ba0a29b2253c11",
+      "ToyProject/Assets/_OptimizeTool/Script/Tests/PlayMode/OptimizeToolShowcaseTests.cs.meta": "a5ed7d8946f48db8f1031deeede013d9644c27e12c5e8fc202c130e72755e222",
+      "ToyProject/Assets/_OptimizeTool/Script/Tests/Editor/Common.OptimizeTool.Tests.asmdef.meta": "6345b8cc4838ca58d06ce46ea583126fb6068b294f862e22ed117ffdab2fe7ae",
+      "ToyProject/Assets/_OptimizeTool/Script/Tests/Editor/PhysicsRecorderTests.cs.meta": "c902cfb184d5ee6f751b2606c8d078084cb3a223b1d108b276b6076696feb63c",
+      "ToyProject/Assets/_OptimizeTool/Script/Tests/Editor/MeshOptimizationTests.cs.meta": "b7a6e971558e41f0199027d81fe32892478f112ff9fe816f9a69f5acc365eda7",
+      "ToyProject/Assets/_OptimizeTool/Script/Tests/Editor/MeshRefactoringTests.cs.meta": "d8daefc268188875e08277d55a35fe5cc354090b2c8fc4f02eebb4264b6c98bf",
+      "ToyProject/Assets/_OptimizeTool/Script/Tests/Editor/PhysicsRecordingSessionTests.cs.meta": "f9d414ba57b14581cf7041f0b4a5e3ecbfaab29d66e2fae94025d91b632bc725",
+      "ToyProject/Assets/_OptimizeTool/Script/Tests/Editor/PhysicsRecorderCompatibilityTests.cs.meta": "284bc1582c4cf3dc9f5007017d2ad4dc2408d5493fc0f59eb7e540c37057da95",
+      "ToyProject/Assets/_OptimizeTool/Docs/Images/feature-showcase-original.png.meta": "ffc18ee1222b9e3e2880367a856bd59f5723e894042707eada48dd17622a289c",
+      "ToyProject/Assets/_OptimizeTool/Docs/Images/feature-showcase-backface-preview.png.meta": "4d98bcd22011cbc54d93a661b847ec1031f1a586bfc91059796286900d50199b",
+      "ToyProject/Assets/_OptimizeTool/Docs/Images/feature-editor-generated-assets.png.meta": "faf9513fb862bf77c7fed3a84e930b5579a51b37f685a9ee9b77ac2fe33cc94a",
+      "ToyProject/Assets/_OptimizeTool/Docs/Images/optimizetool-uml.png.meta": "db17f052803516eb5544227f905daaf0446ac551d1dbe8c6a37bd3946565f3cc",
+      "ToyProject/Assets/_OptimizeTool/Docs/Images/feature-showcase-real-original.png.meta": "77ea514b9ea8959f0d5fe12a8dfce350185c204d2251a23ea1e38f7e23bbdbe0",
+      "ToyProject/Assets/_OptimizeTool/Docs/Images/feature-physics-recorder-live-comparison.png.meta": "715f26a650d5ca73fe462c03903fac34f6aea1987aed7ea1e29a7f319a8a6e87",
+      "ToyProject/Assets/_OptimizeTool/Docs/Images/feature-showcase-occlusion-preview.png.meta": "ea4e2794efe9243d8fe3aa2ad5ab5dfbe6d0e7357c7f5bf2552269ff00fe4832",
+      "ToyProject/Assets/_OptimizeTool/Docs/Images/feature-showcase-combined.png.meta": "d6487605bb7a88ed806f68196bb5d3b056b73583e9e0d4ed8fef4ce42273d257",
+      "ToyProject/Assets/_OptimizeTool/Docs/Images/feature-backface-settings.png.meta": "a963a221cbfc5ccaa916c0be4eeefc1c9fde0493849361b5c9236bd9a31fb316",
+      "ToyProject/Assets/_OptimizeTool/Docs/Images/feature-physics-recorder-settings.png.meta": "c3e549524e8225d28cf8eef0f409a3b19997c91fe192085dd7b11e7b737403a1",
+      "ToyProject/Assets/_OptimizeTool/Docs/Images/feature-editor-showcase.png.meta": "827c8f09b671fa19ebb74d393b0ab4fee7517be5c633354e375aa619e3f6413f",
+      "ToyProject/Assets/_OptimizeTool/Docs/Images/feature-showcase-real-occlusion.png.meta": "17a495bba2c076f4ecdc7c896eb1afc4c61789a766ac2a20108f6bfd86328cf8",
+      "ToyProject/Assets/_OptimizeTool/Docs/Images/feature-occlusion-settings.png.meta": "3f922ef0abcb10eae577fa9f795baf8f9684015b1c96c64963c2d80d09a86fd1",
+      "ToyProject/Assets/_OptimizeTool/Docs/Images/feature-showcase-physics-recorded.png.meta": "45471605a93aa688785ccf34b818b16dafbfb3f90db017401e01d355ca93b25f",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance/PerformanceReport.md.meta": "c46547514127d6a725acc95f92f8aa821facb9786bab06a98f58efc3f8100ab6",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance/summary.json.meta": "7944bab86cde427cc5fde9c5d0169ca7f1a4cfaddd325e548ec27a767abe7e7a",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance/run-01.meta": "75696b26e2125e384fb360b4691e8e8124729158ccb0448e52726084c19a4ecd",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance/run-02.meta": "ef64e1a3e8e4d87e5469d3205a35525697b10675f6d472ee3556a60ac63a838b",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance/analyze_benchmark.py.meta": "5cd9cf860af666b8ebecbef4f330f6663a65ff4038b7a68edd3f1e7d68f505ce",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance/run-03.meta": "ad0905fbe09c8098b4f48b92830110535eca291bd98a5d283570bbeb55729c4b",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance/source-assets.json.meta": "57c9e7ff8ae8ed2ff61142707b26afe23a04934cbb67db17226ebf995aeb781d",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance/run-03/metadata.json.meta": "36d17f82f92e26a96afddf97912946c5f395628328fccb3b945d10428307d0bf",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance/run-03/complete.json.meta": "4e54b0e4aecc6f20b427ebbf18c1a19cdab5f6be968c791fd9bd953422f3b2d8",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance/run-03/frames.csv.gz.meta": "02dcfb7bbe1803ef3bb663414be378550879ea905656d5f1229c1e82f38ab7ac",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance/run-02/metadata.json.meta": "a5ce0e267492f1267057f3fcbddb5056e2a25f4d2d87cfdbd546f9319cb19232",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance/run-02/complete.json.meta": "5e1409b990ace8416582bb753ff5bc3cfe3474c1a9490b49ea07a48a6b13a671",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance/run-02/frames.csv.gz.meta": "8ec8ceeaae86e58c6f75eae0014e5f4918882258bcf8d7c465a8e3e870f5ee1b",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance/run-01/metadata.json.meta": "7e3b90174ad534df91f2f2bdef465a5599aef9e3bb9b133e1c2608c959a8d4e3",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance/run-01/complete.json.meta": "c84678714e175d2115ebddcd840ab1afe1b4fa1cee16f3006b0c09045fac5ea8",
+      "ToyProject/Assets/_OptimizeTool/Docs/Performance/run-01/frames.csv.gz.meta": "1dbde8ded87ca1373337649ba2193a35f737d99e92424ae0ff0d9cbb69329b8e",
+      "ToyProject/Assets/_OptimizeTool/Settings/Generated/OptimizeToolSampleCombined.asset.meta": "05b7a4f3a79c9c73412954f862c36faec72e8e82d0ebb75a99b89d9457d26249",
+      "ToyProject/Assets/_OptimizeTool/Settings/Generated/OptimizeToolSampleOcclusion.asset.meta": "9566cdf35f555704389e6fa2c7af1807d7c2e0e02ac070bb4cf2901cabaffea5",
+      "ToyProject/Assets/_OptimizeTool/Settings/Generated/PhysicsRecordings.meta": "d44014f432deba2cc941dc22706c2f9c2665d96b898ed8231120e1973d1e6b1c",
+      "ToyProject/Assets/_OptimizeTool/Settings/Generated/OptimizeToolSampleRecorded.prefab.meta": "0c3eb3ccc02f1dfdfec3e31449ca469d3f319c5c8447bf5293fddee44e7779dd",
+      "ToyProject/Assets/_OptimizeTool/Settings/Generated/OptimizeToolSampleRecorded.anim.meta": "5d11c6c9dc6a14a98945aae4edab9a3d49ce7fdc6783ebe66420b3accf5aa9c9",
+      "ToyProject/Assets/_OptimizeTool/Settings/Generated/OptimizeToolSampleRecorded.prefab": "de4c99c7db7187d62d2a3bc5b1e0f28a722b79d6bac05c5bc0eb4ebe0b25fec5",
+      "ToyProject/Assets/_OptimizeTool/Settings/Generated/OptimizeToolSampleBackface.asset.meta": "f4d969da40ceef9c822478760a2be19bc81642ed7be55ae8a430b0c384234f47",
+      "ToyProject/Assets/_OptimizeTool/Settings/PhysicsDemo/PhysicsDemoFloor.mat.meta": "2eacfc3334e99c24a35998d2542424fd11b248502f57b40a0a0eb1d5bb0e80cf",
+      "ToyProject/Assets/_OptimizeTool/Settings/PhysicsDemo/PhysicsDemoRamp.mat.meta": "6abcc835d73bb8318c49b4556b470fceba91021c32e4e06211cc7ac464412db3",
+      "ToyProject/Assets/_OptimizeTool/Settings/PhysicsDemo/PhysicsDemoBody.mat.meta": "c27965bf95384a5d3656748c4e8736ffe5e5b2b8ceef9c89d4b5109394b29ae9",
+      "ToyProject/Assets/_OptimizeTool/Settings/PhysicsDemo/PhysicsDemoSurface.physicMaterial.meta": "6c836d3265aec63999910713b27869b83348337cf6360bf9a9c28f5d1f0ce484",
+      "ToyProject/Assets/_OptimizeTool/Settings/Generated/PhysicsRecordings/OptimizeToolPhysicsTake.prefab": "65db03ee0bdf4bb074622d90558837615a68b1b0b1d755e47bedfe5dd6547388",
+      "ToyProject/Assets/_OptimizeTool/Settings/Generated/PhysicsRecordings/OptimizeToolPhysicsTake.prefab.meta": "1404b9132602647114e253a65fd74c38191e3e234ccd30fea939703f6a350adb",
+      "ToyProject/Assets/_OptimizeTool/Settings/Generated/PhysicsRecordings/OptimizeToolPhysicsTake.anim.meta": "354d279078ec52c77feaddf2a8a75c1040ff7e904f987f4615348a3033efd558"
+    }
+  }
+}

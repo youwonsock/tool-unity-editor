@@ -38,15 +38,13 @@ namespace Common.FlowField
         internal FlowFieldSpaceMode SpaceMode { get; }
         internal int GoalIndex { get; }
         internal int MaxGpuWaves { get; }
-        internal int Version { get; }
 
         internal FlowFieldComputeRequest(
             FlowFieldGridSpace grid,
             FlowFieldSurfaceData surface,
             FlowFieldWorkspace workspace,
             int goalIndex,
-            int maxGpuWaves,
-            int version)
+            int maxGpuWaves)
         {
             Grid = grid;
             Surface = surface;
@@ -57,7 +55,6 @@ namespace Common.FlowField
             SpaceMode = FlowFieldSpaceMode.Surface2D;
             GoalIndex = goalIndex;
             MaxGpuWaves = maxGpuWaves;
-            Version = version;
         }
 
         internal FlowFieldComputeRequest(
@@ -66,8 +63,7 @@ namespace Common.FlowField
             bool[] volumeInfluence,
             uint[] volumeTopology,
             int goalIndex,
-            int maxGpuWaves,
-            int version)
+            int maxGpuWaves)
         {
             Grid = grid;
             Surface = null;
@@ -78,7 +74,6 @@ namespace Common.FlowField
             SpaceMode = FlowFieldSpaceMode.Volume3D;
             GoalIndex = goalIndex;
             MaxGpuWaves = maxGpuWaves;
-            Version = version;
         }
 
         internal bool IsVolume => SpaceMode == FlowFieldSpaceMode.Volume3D;
@@ -358,21 +353,6 @@ namespace Common.FlowField
             _completed = null;
             _failed = null;
             callback?.Invoke(_request, kind, exception);
-        }
-
-        private void DrainPendingReadbacks()
-        {
-            if (_pendingControl)
-            {
-                _controlRequest.WaitForCompletion();
-                _pendingControl = false;
-            }
-
-            if (_pendingOutput)
-            {
-                _outputRequest.WaitForCompletion();
-                _pendingOutput = false;
-            }
         }
 
         private void EnsureBuffers(int cellCount, bool volume)

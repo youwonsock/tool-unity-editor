@@ -1,0 +1,9 @@
+{
+    "name": "Common.OptimizeTool",
+    "rootNamespace": "Common.OptimizeTool",
+    "references": [
+        "Unity.Collections"
+    ],
+    "includePlatforms": [],
+    "autoReferenced": true
+}

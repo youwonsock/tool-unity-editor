@@ -1,0 +1,166 @@
+{
+  "cpu": [
+    {
+      "pair": 1,
+      "variant": "before",
+      "peakStageApproximate": "public rebuild",
+      "peakAtSecondsAfterCoreStart": 2.007687707999139,
+      "buildOnlySampledPeakMiB": 1654.203125,
+      "saveSampledPeakMiB": 1717.078125,
+      "allStageSampledPeakMiB": 1748.859375,
+      "osWholeProcessPeakMiB": 1749.5
+    },
+    {
+      "pair": 1,
+      "variant": "after",
+      "peakStageApproximate": "public rebuild",
+      "peakAtSecondsAfterCoreStart": 1.7679893329986953,
+      "buildOnlySampledPeakMiB": 1554.65625,
+      "saveSampledPeakMiB": 1676.203125,
+      "allStageSampledPeakMiB": 1704.140625,
+      "osWholeProcessPeakMiB": 1712.65625
+    },
+    {
+      "pair": 2,
+      "variant": "before",
+      "peakStageApproximate": "public rebuild",
+      "peakAtSecondsAfterCoreStart": 2.0318048330009333,
+      "buildOnlySampledPeakMiB": 1637.84375,
+      "saveSampledPeakMiB": 1705.625,
+      "allStageSampledPeakMiB": 1736.6875,
+      "osWholeProcessPeakMiB": 1736.6875
+    },
+    {
+      "pair": 2,
+      "variant": "after",
+      "peakStageApproximate": "public rebuild",
+      "peakAtSecondsAfterCoreStart": 1.8459713330012164,
+      "buildOnlySampledPeakMiB": 1415.234375,
+      "saveSampledPeakMiB": 1590.265625,
+      "allStageSampledPeakMiB": 1672.53125,
+      "osWholeProcessPeakMiB": 1672.53125
+    },
+    {
+      "pair": 3,
+      "variant": "before",
+      "peakStageApproximate": "public rebuild",
+      "peakAtSecondsAfterCoreStart": 1.9707078330029617,
+      "buildOnlySampledPeakMiB": 1586.796875,
+      "saveSampledPeakMiB": 1695.3125,
+      "allStageSampledPeakMiB": 1725.40625,
+      "osWholeProcessPeakMiB": 1725.65625
+    },
+    {
+      "pair": 3,
+      "variant": "after",
+      "peakStageApproximate": "public rebuild",
+      "peakAtSecondsAfterCoreStart": 1.8697695419978118,
+      "buildOnlySampledPeakMiB": 1418.671875,
+      "saveSampledPeakMiB": 1598.28125,
+      "allStageSampledPeakMiB": 1646.921875,
+      "osWholeProcessPeakMiB": 1655.171875
+    },
+    {
+      "pair": 4,
+      "variant": "before",
+      "peakStageApproximate": "public rebuild",
+      "peakAtSecondsAfterCoreStart": 1.9557186669990188,
+      "buildOnlySampledPeakMiB": 1612.796875,
+      "saveSampledPeakMiB": 1704.625,
+      "allStageSampledPeakMiB": 1735.03125,
+      "osWholeProcessPeakMiB": 1735.03125
+    },
+    {
+      "pair": 4,
+      "variant": "after",
+      "peakStageApproximate": "public rebuild",
+      "peakAtSecondsAfterCoreStart": 1.8541748330026167,
+      "buildOnlySampledPeakMiB": 1415.359375,
+      "saveSampledPeakMiB": 1596.453125,
+      "allStageSampledPeakMiB": 1650.953125,
+      "osWholeProcessPeakMiB": 1659.296875
+    }
+  ],
+  "gpu": [
+    {
+      "pair": 1,
+      "variant": "before",
+      "peakStageApproximate": "core save",
+      "peakAtSecondsAfterCoreStart": 26.76028508300078,
+      "buildOnlySampledPeakMiB": 4472.75,
+      "saveSampledPeakMiB": 6994.0625,
+      "allStageSampledPeakMiB": 6994.0625,
+      "osWholeProcessPeakMiB": 7005.921875
+    },
+    {
+      "pair": 1,
+      "variant": "after",
+      "peakStageApproximate": "public rebuild",
+      "peakAtSecondsAfterCoreStart": 58.79906608299643,
+      "buildOnlySampledPeakMiB": 3707.875,
+      "saveSampledPeakMiB": 7238.359375,
+      "allStageSampledPeakMiB": 7535.0,
+      "osWholeProcessPeakMiB": 7535.0
+    },
+    {
+      "pair": 2,
+      "variant": "before",
+      "peakStageApproximate": "public rebuild",
+      "peakAtSecondsAfterCoreStart": 60.39833145799639,
+      "buildOnlySampledPeakMiB": 4454.71875,
+      "saveSampledPeakMiB": 7758.859375,
+      "allStageSampledPeakMiB": 8265.984375,
+      "osWholeProcessPeakMiB": 8297.734375
+    },
+    {
+      "pair": 2,
+      "variant": "after",
+      "peakStageApproximate": "public rebuild",
+      "peakAtSecondsAfterCoreStart": 57.37399225000263,
+      "buildOnlySampledPeakMiB": 3641.109375,
+      "saveSampledPeakMiB": 7207.390625,
+      "allStageSampledPeakMiB": 7462.28125,
+      "osWholeProcessPeakMiB": 7539.078125
+    },
+    {
+      "pair": 3,
+      "variant": "before",
+      "peakStageApproximate": "core save",
+      "peakAtSecondsAfterCoreStart": 25.552375624996785,
+      "buildOnlySampledPeakMiB": 4337.4375,
+      "saveSampledPeakMiB": 7557.90625,
+      "allStageSampledPeakMiB": 7557.90625,
+      "osWholeProcessPeakMiB": 7609.921875
+    },
+    {
+      "pair": 3,
+      "variant": "after",
+      "peakStageApproximate": "public rebuild",
+      "peakAtSecondsAfterCoreStart": 58.1626932500003,
+      "buildOnlySampledPeakMiB": 3631.671875,
+      "saveSampledPeakMiB": 7089.140625,
+      "allStageSampledPeakMiB": 7529.875,
+      "osWholeProcessPeakMiB": 7529.875
+    },
+    {
+      "pair": 4,
+      "variant": "before",
+      "peakStageApproximate": "core save",
+      "peakAtSecondsAfterCoreStart": 25.953698874996917,
+      "buildOnlySampledPeakMiB": 4345.171875,
+      "saveSampledPeakMiB": 7633.28125,
+      "allStageSampledPeakMiB": 7633.28125,
+      "osWholeProcessPeakMiB": 7633.28125
+    },
+    {
+      "pair": 4,
+      "variant": "after",
+      "peakStageApproximate": "public rebuild",
+      "peakAtSecondsAfterCoreStart": 58.70164900000236,
+      "buildOnlySampledPeakMiB": 3639.5,
+      "saveSampledPeakMiB": 7190.96875,
+      "allStageSampledPeakMiB": 7510.390625,
+      "osWholeProcessPeakMiB": 7510.390625
+    }
+  ]
+}

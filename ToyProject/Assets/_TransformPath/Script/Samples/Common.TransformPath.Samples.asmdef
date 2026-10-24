@@ -2,7 +2,8 @@
   "name": "Common.TransformPath.Samples",
   "rootNamespace": "Common.TransformPath.Samples",
   "references": [
-    "Common.TransformPath.Runtime"
+    "Common.TransformPath.Runtime",
+    "UnityEngine.UI"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

@@ -1,0 +1,36 @@
+using System;
+using System.IO;
+using System.Collections.Generic;
+using System.Linq;
+using Mono.Cecil;
+class ApiCheck {
+ static HashSet<string> Read(string folder, bool serialized) {
+  var rows=new HashSet<string>();
+  foreach(var name in new[]{"Common.OptimizeTool"})
+   using(var asm=AssemblyDefinition.ReadAssembly(Path.Combine(folder,name+".dll")))
+    foreach(var type in asm.MainModule.Types) Add(type,rows,serialized);
+  return rows;
+ }
+ static void Add(TypeDefinition t, HashSet<string> rows, bool serialized) {
+  if(serialized && (t.IsSerializable || (t.BaseType != null && (t.BaseType.FullName=="UnityEngine.MonoBehaviour" || t.BaseType.FullName=="UnityEngine.ScriptableObject")))) {
+   foreach(var f in t.Fields)
+    if(!f.IsStatic && !f.IsNotSerialized && (f.IsPublic || f.CustomAttributes.Any(a=>a.AttributeType.FullName=="UnityEngine.SerializeField")))
+     rows.Add(t.FullName+" :: "+f.FieldType.FullName+" "+f.Name);
+  } else if(!serialized && (t.IsPublic || t.IsNestedPublic)) {
+   rows.Add("TYPE "+t.FullName);
+   foreach(var m in t.Methods.Where(m=>m.IsPublic)) rows.Add(t.FullName+" :: "+m.ReturnType.FullName+" "+m.Name+"("+String.Join(",",m.Parameters.Select(p=>p.ParameterType.FullName+" "+p.Name).ToArray())+")");
+   foreach(var f in t.Fields.Where(f=>f.IsPublic)) rows.Add(t.FullName+" :: "+f.FieldType.FullName+" "+f.Name);
+  }
+  foreach(var nested in t.NestedTypes) Add(nested,rows,serialized);
+ }
+ static int Main(string[] args) {
+  int missing=0;
+  foreach(bool serialized in new[]{false,true}) {
+   var before=Read(args[0],serialized); var after=Read(args[1],serialized);
+   var removed=before.Except(after).OrderBy(x=>x).ToArray(); var added=after.Except(before).ToArray(); if(added.Length!=0 || (serialized ? removed.Length!=0 : removed.Length!=12)) missing++;
+   Console.WriteLine((serialized?"Serialized fields":"Public API")+": before="+before.Count+", after="+after.Count+", removed="+removed.Length+", added="+added.Length);
+   foreach(var row in removed) Console.WriteLine(row);
+  }
+  return missing==0?0:1;
+ }
+}

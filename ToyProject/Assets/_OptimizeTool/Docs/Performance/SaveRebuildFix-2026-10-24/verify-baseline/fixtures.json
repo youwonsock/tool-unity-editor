@@ -1,0 +1,25 @@
+{
+    "outputs": [
+        {
+            "path": "Assets/__ABMeasuredOutput/Combined.asset",
+            "sha256": "756fbab266e7c6be5bdcbc307443a58e706cb1160ca688cf884d240dccf32bb0",
+            "vertices": 86400,
+            "renderers": 1,
+            "triangles": 43200
+        },
+        {
+            "path": "Assets/__ABMeasuredOutput/Backface.asset",
+            "sha256": "44079489c779f599ea02386a3994e93f9a8d48d17b46826ea3851fa6db3180d1",
+            "vertices": 14400,
+            "renderers": 1,
+            "triangles": 7200
+        },
+        {
+            "path": "Assets/__ABMeasuredOutput/Occlusion.asset",
+            "sha256": "2adab4b6d78752dbb1d2e4e7e6ff940cb8eaa579b249f8e3b121915a7d7f6e13",
+            "vertices": 28800,
+            "renderers": 1,
+            "triangles": 14400
+        }
+    ]
+}

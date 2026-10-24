@@ -1,33 +1,18 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using System.Collections;
 
 #if UNITY_EDITOR
 using UnityEditor;
+using Stopwatch = System.Diagnostics.Stopwatch;
 #endif
 
 namespace Common.OptimizeTool
 {
     public class PhysicsRecorder : MonoBehaviour
     {
-        #if UNITY_EDITOR
-
-        #region Inner Classes
-
-        [System.Serializable]
-        public class FrameData
-        {
-            public float _time;
-            public Dictionary<Transform, Vector3> _positionTable = new();
-            public Dictionary<Transform, Quaternion> _rotationTable = new();
-        }
-
-        #endregion
-
-
-        #region Member Variables
-
+#if UNITY_EDITOR
         [Header("설정")]
         [SerializeField] private Transform _root;
         [SerializeField] private float _recordInterval = 0.02f;
@@ -36,26 +21,37 @@ namespace Common.OptimizeTool
         [SerializeField] private float _rotationThreshold = 0.001f;
         [SerializeField] private string _savePath;
         [SerializeField] private string _animationFileName;
-        [SerializeField] private bool _convertToLegacy = false;
-        [SerializeField] private bool _overwriteExistingAssets = false;
+        [SerializeField] private bool _overwriteExistingAssets;
 
-        private List<FrameData> _frameList = new();
-        private HashSet<Transform> _trackedTransformSet = new();
-        private Dictionary<Transform, Vector3> _lastPositionTable = new();
-        private Dictionary<Transform, Quaternion> _lastRotationsTable = new();
-        private float _timer = 0f;
-        private float _duration = 0f;
-        private float _nextRecordTime = 0f;
-        private bool _isRecording = false;
-        private AnimationClip _resultClip = null;
+        private sealed class TransformBinding
+        {
+            public Transform Transform, Parent;
+            public string Name;
+            public Vector3 Scale;
+        }
+
+        private readonly List<TransformBinding> _tracks = new();
+        private readonly Dictionary<Transform, TransformBinding> _trackTable = new();
+        private readonly List<Transform> _hierarchyBuffer = new();
+        private readonly List<Rigidbody> _rigidbodyBuffer = new();
+        private PhysicsRecordingSettings _settings;
+        private double _startTime;
+        private PhysicsRecordingSession _session;
+        private PhysicsRecordingMeasurements _measurements;
+        private readonly List<PhysicsPoseSample> _poseBuffer = new();
+        private readonly List<string> _paths = new();
+        private int _recordingVersion;
+        private enum RecordingPhase { Idle, Recording, Saving }
+        private RecordingPhase _phase;
         private bool _isInitialized;
-        private bool _isFaulted;
-        private System.Exception _fault;
+        private Exception _fault;
 
-        #endregion
-
-
-        #region Unity Event Functions
+        public bool IsInitialized => _isInitialized;
+        public bool IsFaulted => _fault != null;
+        public bool IsRecording => _phase == RecordingPhase.Recording;
+        public bool IsSaving => _phase == RecordingPhase.Saving;
+        public Exception LastError => _fault;
+        public PhysicsRecordingResult Result { get; private set; }
 
         private void Awake()
         {
@@ -63,373 +59,270 @@ namespace Common.OptimizeTool
                 Init();
         }
 
-        public bool IsInitialized => _isInitialized;
-        public bool IsFaulted => _isFaulted;
-
         public void Init()
         {
             if (_isInitialized)
                 throw new InvalidOperationException("PhysicsRecorder is already initialized.");
-            if (_isFaulted)
+            if (IsFaulted)
                 throw new InvalidOperationException("PhysicsRecorder is faulted; call Release before Init.", _fault);
             try
             {
-                if (_root == null)
-                    throw new InvalidOperationException("PhysicsRecorder requires a Root reference.");
-                if (!IsFinite(_recordInterval) || _recordInterval <= 0f)
-                    throw new ArgumentOutOfRangeException(nameof(_recordInterval));
-                if (!IsFinite(_positionThreshold) || _positionThreshold < 0f
-                    || !IsFinite(_rotationThreshold) || _rotationThreshold < 0f)
-                    throw new ArgumentOutOfRangeException(nameof(_positionThreshold));
-                if (string.IsNullOrWhiteSpace(_animationFileName))
-                    throw new ArgumentException("Animation file name is required.", nameof(_animationFileName));
-                ValidateAssetFileName(_animationFileName);
-                ValidateAssetFolderPath(_savePath);
+                ReadSettings();
                 _isInitialized = true;
             }
-            catch (System.Exception exception)
+            catch (Exception exception)
             {
-                _isInitialized = false;
-                _isFaulted = true;
-                if (_fault == null)
-                    _fault = exception;
+                SetFault(exception);
                 throw;
             }
-        }
-
-        private void OnDestroy()
-        {
-            if (_isInitialized || _isFaulted)
-                Release();
         }
 
         public void Release()
         {
-            if (!_isInitialized && !_isFaulted)
+            if (!_isInitialized && !IsFaulted)
                 throw new InvalidOperationException("PhysicsRecorder has not been initialized.");
-            if (_isRecording && _isInitialized)
-                StopRecording();
-            _isInitialized = false;
-            _isFaulted = false;
-            _fault = null;
+            try
+            {
+                if (IsRecording)
+                    StopRecording(PhysicsRecordingStopReason.Released);
+            }
+            finally
+            {
+                _phase = RecordingPhase.Idle;
+                _recordingVersion++;
+                _session = null;
+                _measurements = null;
+                _tracks.Clear();
+                _trackTable.Clear();
+                _hierarchyBuffer.Clear();
+                _rigidbodyBuffer.Clear();
+                _poseBuffer.Clear();
+                _paths.Clear();
+                _settings = null;
+                _isInitialized = false;
+                _fault = null;
+            }
         }
 
-        private void FixedUpdate()
+        private void OnDisable()
         {
-            if (_isFaulted)
-                throw new InvalidOperationException("PhysicsRecorder is faulted; call Release before use.", _fault);
-            if (!_isInitialized)
-                throw new InvalidOperationException("PhysicsRecorder is not initialized.");
-            if (!_isRecording || _timer >= _duration) 
-            {
-                if(_isRecording)
-                    StopRecording();
-                    
+            // Complete before the hierarchy is destroyed or Play Mode ends.
+            if (!IsRecording)
                 return;
-            }
-
-            _timer += Time.fixedDeltaTime;
-
-            if (_timer >= _nextRecordTime)
-            {
-                _nextRecordTime = _timer + _recordInterval;
-
-                foreach (var rb in _root.GetComponentsInChildren<Rigidbody>())
-                {
-                    if (!_trackedTransformSet.Contains(rb.transform))
-                    {
-                        _trackedTransformSet.Add(rb.transform);
-                        _lastPositionTable[rb.transform] = rb.transform.localPosition;
-                        _lastRotationsTable[rb.transform] = rb.transform.localRotation;
-                    }
-                }
-
-                FrameData frame = new FrameData() { _time = _timer };
-                bool anyChanged = false;
-
-                foreach (var tf in _trackedTransformSet)
-                {
-                    Vector3 currentPos = tf.localPosition;
-                    Quaternion currentRot = tf.localRotation;
-
-                    bool moved = true;
-
-                    if (_recordOnlyIfMoved)
-                    {
-                        bool posSame = Vector3.Distance(currentPos, _lastPositionTable[tf]) < _positionThreshold;
-                        bool rotSame = Quaternion.Angle(currentRot, _lastRotationsTable[tf]) < _rotationThreshold;
-                        moved = !(posSame && rotSame);
-                    }
-
-                    if (moved)
-                    {
-                        frame._positionTable[tf] = currentPos;
-                        frame._rotationTable[tf] = currentRot;
-                        _lastPositionTable[tf] = currentPos;
-                        _lastRotationsTable[tf] = currentRot;
-                        anyChanged = true;
-                    }
-                }
-
-                if (anyChanged || !_recordOnlyIfMoved)
-                    _frameList.Add(frame);
-            }
+            try { StopRecording(PhysicsRecordingStopReason.Disabled); }
+            catch (Exception exception) { Debug.LogException(exception, this); }
         }
 
-        #endregion
-
-
-        #region Member Functions
+        private void OnDestroy()
+        {
+            if (!_isInitialized && !IsFaulted)
+                return;
+            try { Release(); }
+            catch (Exception exception) { Debug.LogException(exception); }
+        }
 
         public void StartRecording(float duration, string animName = null)
         {
-            if (_isFaulted)
-                throw new InvalidOperationException("PhysicsRecorder is faulted; call Release before use.", _fault);
-            if (!_isInitialized)
-                throw new InvalidOperationException("PhysicsRecorder is not initialized.");
+            ThrowIfUnavailable();
+            if (IsRecording || IsSaving)
+                throw new InvalidOperationException("PhysicsRecorder is already recording or saving.");
             if (!IsFinite(duration) || duration <= 0f)
                 throw new ArgumentOutOfRangeException(nameof(duration));
-
-            _timer = 0f;
-            _nextRecordTime = 0f;
-            _duration = duration;
-            if (!string.IsNullOrWhiteSpace(animName))
-            {
-                ValidateAssetFileName(animName);
-                _animationFileName = animName;
-            }
-            if (string.IsNullOrWhiteSpace(_animationFileName))
-                throw new ArgumentException("Animation file name is required.", nameof(animName));
-            ValidateAssetFileName(_animationFileName);
-
-            _isRecording = true;
-            _frameList.Clear();
-            _trackedTransformSet.Clear();
-            _lastPositionTable.Clear();
-            _lastRotationsTable.Clear();
+            if (Application.isPlaying && !isActiveAndEnabled)
+                throw new InvalidOperationException("PhysicsRecorder must be active to record in Play Mode.");
+            PhysicsRecordingSettings settings = ReadSettings(animName);
+            PhysicsRecordingAssetWriter.ValidateOutputAssetTargets(settings);
+            CaptureInitialHierarchy();
+            _settings = settings;
+            _animationFileName = settings.Name;
+            _session = new PhysicsRecordingSession(_paths, _poseBuffer, duration, settings.Interval,
+                settings.OnlyIfMoved, settings.PositionThreshold, settings.RotationThreshold);
+            _measurements = new PhysicsRecordingMeasurements { TransformCount = _tracks.Count, ObservationCount = 1 };
+            _startTime = Time.timeAsDouble;
+            Result = null;
+            _phase = RecordingPhase.Recording;
+            int version = ++_recordingVersion;
+            if (Application.isPlaying)
+                StartCoroutine(RecordAfterPhysics(version));
         }
 
+        private IEnumerator RecordAfterPhysics(int version)
+        {
+            var wait = new WaitForFixedUpdate();
+            while (IsRecording && version == _recordingVersion)
+            {
+                yield return wait;
+                if (!IsRecording || version != _recordingVersion)
+                    break;
+                try { RecordFrame((float)(Time.fixedTimeAsDouble - _startTime)); }
+                catch (Exception exception)
+                {
+                    SetFault(exception);
+                    Debug.LogException(exception, this);
+                }
+            }
+        }
+
+        // Called after a completed physics step, with its actual elapsed time.
+        private void RecordFrame(float elapsed)
+        {
+            ValidateRecordingHierarchy();
+            long started = Stopwatch.GetTimestamp();
+            CapturePoses(elapsed);
+            bool finished = _session.Observe(elapsed, _poseBuffer);
+            _measurements.SamplingTicks += Stopwatch.GetTimestamp() - started;
+            _measurements.ObservationCount++;
+            if (finished)
+                CompleteRecording(PhysicsRecordingStopReason.DurationReached);
+        }
+
+        private void CapturePoses(float time)
+        {
+            _poseBuffer.Clear();
+            foreach (TransformBinding track in _tracks)
+                _poseBuffer.Add(new PhysicsPoseSample(time, track.Transform.localPosition, track.Transform.localRotation));
+        }
+
+        /// <summary>Returns after both assets are saved; throws and sets LastError on failure.</summary>
         public void StopRecording()
         {
-            if (_isFaulted)
-                throw new InvalidOperationException("PhysicsRecorder is faulted; call Release before use.", _fault);
-            if (!_isInitialized)
-                throw new InvalidOperationException("PhysicsRecorder is not initialized.");
-            if (!_isRecording)
-                throw new InvalidOperationException("PhysicsRecorder is not recording.");
+            StopRecording(PhysicsRecordingStopReason.Stopped);
+        }
 
-            ValidateOutputAssetTargets();
-            _isRecording = false;
+        private void StopRecording(PhysicsRecordingStopReason reason)
+        {
+            ThrowIfUnavailable();
+            if (!IsRecording)
+                throw new InvalidOperationException("PhysicsRecorder is not recording.");
             try
             {
-                SaveAnimationClip();
-                StartCoroutine(SaveTrackedObjectsAsPrefabs());
+                ValidateRecordingHierarchy();
+                float elapsed = Application.isPlaying
+                    ? Mathf.Max(_session.Elapsed, (float)(Time.timeAsDouble - _startTime)) : _session.Elapsed;
+                long started = Stopwatch.GetTimestamp();
+                CapturePoses(elapsed);
+                _session.Stop(elapsed, _poseBuffer);
+                _measurements.SamplingTicks += Stopwatch.GetTimestamp() - started;
+                _measurements.ObservationCount++;
+                CompleteRecording(reason);
             }
-            catch
+            catch (Exception exception)
             {
-                if (_resultClip != null && string.IsNullOrEmpty(AssetDatabase.GetAssetPath(_resultClip)))
-                    DestroyImmediate(_resultClip);
-                _resultClip = null;
+                SetFault(exception);
                 throw;
             }
         }
 
-        private IEnumerator SaveTrackedObjectsAsPrefabs()
+        private void CompleteRecording(PhysicsRecordingStopReason reason)
         {
-            const string TEMP_PARENT_NAME = "TempParent";
-            const string PREFAB_EXTENSION = ".prefab";
-
-            string savePath = ValidateAndCreateSaveFolder();
-
-            GameObject tempParent = null;
+            _phase = RecordingPhase.Saving;
+            _recordingVersion++;
+            Result = null;
+            long started = Stopwatch.GetTimestamp();
             try
             {
-                tempParent = Instantiate(_root.gameObject);
-                tempParent.name = TEMP_PARENT_NAME;
-
-                Animation animation = tempParent.AddComponent<Animation>();
-                animation.AddClip(_resultClip, _animationFileName);
-
-                yield return null;
-
-                string prefabPath = $"{savePath}/{TEMP_PARENT_NAME}{PREFAB_EXTENSION}";
-                GameObject existingPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
-                if (existingPrefab != null)
-                {
-                    if (!_overwriteExistingAssets)
-                        throw new InvalidOperationException($"Prefab asset already exists: {prefabPath}");
-                    if (!AssetDatabase.DeleteAsset(prefabPath))
-                        throw new InvalidOperationException($"Unable to replace prefab asset: {prefabPath}");
-                }
-
-                GameObject savedPrefab = PrefabUtility.SaveAsPrefabAsset(tempParent, prefabPath);
-                if (savedPrefab == null || AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath) == null)
-                    throw new InvalidOperationException($"Unable to save prefab asset: {prefabPath}");
-                Debug.Log($"Object saved as prefab: {prefabPath}");
+                var assets = PhysicsRecordingAssetWriter.Write(_root, _session.Take, _settings, _measurements);
+                _measurements.ExportTicks = Stopwatch.GetTimestamp() - started;
+                Result = new PhysicsRecordingResult(_session.Elapsed, reason, assets.Clip, assets.Prefab,
+                    metrics: _measurements.Snapshot(_session.Take), reference: assets.Reference);
             }
-            finally
+            catch (Exception exception)
             {
-                if (tempParent != null)
-                    DestroyImmediate(tempParent);
+                _measurements.ExportTicks = Stopwatch.GetTimestamp() - started;
+                SetFault(exception);
+                throw;
             }
+            finally { _phase = RecordingPhase.Idle; }
         }
 
-        private void SaveAnimationClip()
+        private void CaptureInitialHierarchy()
         {
-            const float FRAME_RATE_DIVISOR = 1f;
-            const string ANIM_EXTENSION = ".anim";
-            const string POSITION_X_PROPERTY = "localPosition.x";
-            const string POSITION_Y_PROPERTY = "localPosition.y";
-            const string POSITION_Z_PROPERTY = "localPosition.z";
-            const string ROTATION_X_PROPERTY = "localRotation.x";
-            const string ROTATION_Y_PROPERTY = "localRotation.y";
-            const string ROTATION_Z_PROPERTY = "localRotation.z";
-            const string ROTATION_W_PROPERTY = "localRotation.w";
-
-            _resultClip = new AnimationClip();
-            _resultClip.frameRate = FRAME_RATE_DIVISOR / _recordInterval;
-
-            var posCurves = new Dictionary<string, (AnimationCurve x, AnimationCurve y, AnimationCurve z)>();
-            var rotCurves = new Dictionary<string, (AnimationCurve x, AnimationCurve y, AnimationCurve z, AnimationCurve w)>();
-
-            foreach (var tf in _trackedTransformSet)
+            _root.GetComponentsInChildren(true, _rigidbodyBuffer);
+            if (_rigidbodyBuffer.Count == 0)
+                throw new InvalidOperationException("PhysicsRecorder requires at least one Rigidbody under Root.");
+            _tracks.Clear();
+            _trackTable.Clear();
+            _poseBuffer.Clear();
+            _paths.Clear();
+            _root.GetComponentsInChildren(true, _hierarchyBuffer);
+            var paths = new HashSet<string>(StringComparer.Ordinal);
+            // Include non-Rigidbody parents too, so their motion is preserved in local space.
+            foreach (Transform tf in _hierarchyBuffer)
             {
                 string path = AnimationUtility.CalculateTransformPath(tf, _root);
-                posCurves[path] = (new(), new(), new());
-                rotCurves[path] = (new(), new(), new(), new());
-            }
-
-            foreach (var frame in _frameList)
-            {
-                float t = frame._time;
-
-                foreach (var kvp in frame._positionTable)
+                if (tf.name.Contains("/") || !paths.Add(path))
+                    throw new InvalidOperationException($"Animation paths must be unique and names cannot contain '/': {path}");
+                _paths.Add(path);
+                _poseBuffer.Add(new PhysicsPoseSample(0f, tf.localPosition, tf.localRotation));
+                var track = new TransformBinding
                 {
-                    string path = AnimationUtility.CalculateTransformPath(kvp.Key, _root);
-                    var pos = kvp.Value;
-                    posCurves[path].x.AddKey(t, pos.x);
-                    posCurves[path].y.AddKey(t, pos.y);
-                    posCurves[path].z.AddKey(t, pos.z);
-                }
-
-                foreach (var kvp in frame._rotationTable)
-                {
-                    string path = AnimationUtility.CalculateTransformPath(kvp.Key, _root);
-                    var rot = kvp.Value;
-                    rotCurves[path].x.AddKey(t, rot.x);
-                    rotCurves[path].y.AddKey(t, rot.y);
-                    rotCurves[path].z.AddKey(t, rot.z);
-                    rotCurves[path].w.AddKey(t, rot.w);
-                }
+                    Transform = tf, Parent = tf.parent, Name = tf.name,
+                    Scale = tf.localScale,
+                };
+                _tracks.Add(track);
+                _trackTable.Add(tf, track);
             }
-
-            foreach (var (path, (x, y, z)) in posCurves)
-            {
-                _resultClip.SetCurve(path, typeof(Transform), POSITION_X_PROPERTY, x);
-                _resultClip.SetCurve(path, typeof(Transform), POSITION_Y_PROPERTY, y);
-                _resultClip.SetCurve(path, typeof(Transform), POSITION_Z_PROPERTY, z);
-            }
-
-            foreach (var (path, (x, y, z, w)) in rotCurves)
-            {
-                _resultClip.SetCurve(path, typeof(Transform), ROTATION_X_PROPERTY, x);
-                _resultClip.SetCurve(path, typeof(Transform), ROTATION_Y_PROPERTY, y);
-                _resultClip.SetCurve(path, typeof(Transform), ROTATION_Z_PROPERTY, z);
-                _resultClip.SetCurve(path, typeof(Transform), ROTATION_W_PROPERTY, w);
-            }
-
-            string fileName = _animationFileName;
-            ValidateAssetFileName(fileName);
-            string savePath = ValidateAndCreateSaveFolder();
-            string pathToSave = $"{savePath}/{fileName}{ANIM_EXTENSION}";
-            
-            // 애니메이션 클립 타입을 Legacy로 설정
-            if(_convertToLegacy)
-                _resultClip.legacy = true;
-
-            AnimationClip existingClip = AssetDatabase.LoadAssetAtPath<AnimationClip>(pathToSave);
-            if (existingClip != null)
-            {
-                if (!_overwriteExistingAssets)
-                    throw new InvalidOperationException($"Animation asset already exists: {pathToSave}");
-                if (!AssetDatabase.DeleteAsset(pathToSave))
-                    throw new InvalidOperationException($"Unable to replace animation asset: {pathToSave}");
-            }
-            AssetDatabase.CreateAsset(_resultClip, pathToSave);
-            if (AssetDatabase.LoadAssetAtPath<AnimationClip>(pathToSave) == null)
-                throw new InvalidOperationException($"Unable to save animation asset: {pathToSave}");
-            AssetDatabase.SaveAssets();
-            Debug.Log($"애니메이션 저장 완료: {pathToSave}");
         }
 
-        private void ValidateOutputAssetTargets()
+        private void ValidateRecordingHierarchy()
         {
-            string savePath = ValidateAssetFolderPath(_savePath);
-            ValidateAssetFileName(_animationFileName);
-
-            string animationPath = $"{savePath}/{_animationFileName}.anim";
-            UnityEngine.Object existingAnimation = AssetDatabase.LoadMainAssetAtPath(animationPath);
-            if (existingAnimation != null
-                && !(existingAnimation is AnimationClip)
-                && _overwriteExistingAssets)
-                throw new InvalidOperationException($"Animation output path is occupied by a non-animation asset: {animationPath}");
-            if (existingAnimation != null && !_overwriteExistingAssets)
-                throw new InvalidOperationException($"Animation asset already exists: {animationPath}");
-
-            const string PREFAB_FILE_NAME = "TempParent.prefab";
-            string prefabPath = $"{savePath}/{PREFAB_FILE_NAME}";
-            UnityEngine.Object existingPrefab = AssetDatabase.LoadMainAssetAtPath(prefabPath);
-            if (existingPrefab != null
-                && !(existingPrefab is GameObject)
-                && _overwriteExistingAssets)
-                throw new InvalidOperationException($"Prefab output path is occupied by a non-prefab asset: {prefabPath}");
-            if (existingPrefab != null && !_overwriteExistingAssets)
-                throw new InvalidOperationException($"Prefab asset already exists: {prefabPath}");
-        }
-
-        #endregion
-
-        private static bool IsFinite(float value)
-            => !float.IsNaN(value) && !float.IsInfinity(value);
-
-        private string ValidateAndCreateSaveFolder()
-        {
-            string normalizedPath = ValidateAssetFolderPath(_savePath);
-            if (!AssetDatabase.IsValidFolder(normalizedPath))
+            long started = Stopwatch.GetTimestamp();
+            try { ValidateHierarchy(); }
+            finally
             {
-                System.IO.Directory.CreateDirectory(normalizedPath);
-                AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+                if (_measurements != null) _measurements.ValidationTicks += Stopwatch.GetTimestamp() - started;
             }
-
-            if (!AssetDatabase.IsValidFolder(normalizedPath))
-                throw new InvalidOperationException($"Unable to create recorder output folder: {normalizedPath}");
-            return normalizedPath;
         }
 
-        private static string ValidateAssetFolderPath(string path)
+        private void ValidateHierarchy()
         {
-            if (string.IsNullOrWhiteSpace(path))
-                throw new ArgumentException("Save path is required.", nameof(path));
-
-            string normalizedPath = path.Replace('\\', '/').TrimEnd('/');
-            if (!normalizedPath.StartsWith("Assets/", StringComparison.Ordinal)
-                || normalizedPath.IndexOf("/../", StringComparison.Ordinal) >= 0
-                || normalizedPath.EndsWith("/..", StringComparison.Ordinal)
-                || normalizedPath.IndexOf("//", StringComparison.Ordinal) >= 0)
-                throw new ArgumentException("Save path must be a normalized folder under Assets/.", nameof(path));
-            return normalizedPath;
+            if (_root == null)
+                throw new InvalidOperationException("The recording Root was destroyed.");
+            _root.GetComponentsInChildren(true, _hierarchyBuffer);
+            if (_hierarchyBuffer.Count != _tracks.Count)
+                throw new InvalidOperationException("The recording hierarchy changed; restart the recording.");
+            foreach (Transform tf in _hierarchyBuffer)
+                if (!_trackTable.TryGetValue(tf, out TransformBinding track)
+                    || tf.parent != track.Parent || tf.name != track.Name || tf.localScale != track.Scale)
+                    throw new InvalidOperationException("The recording hierarchy, names or scale changed; restart the recording.");
         }
 
-        private static void ValidateAssetFileName(string fileName)
+        private PhysicsRecordingSettings ReadSettings(string animName = null)
         {
-            if (string.IsNullOrWhiteSpace(fileName)
-                || fileName.IndexOfAny(new[] { '/', '\\' }) >= 0
-                || fileName == "."
-                || fileName == ".."
-                || fileName.IndexOf("..", StringComparison.Ordinal) >= 0)
-                throw new ArgumentException("Animation file name must be a simple file name.", nameof(fileName));
+            if (_root == null)
+                throw new InvalidOperationException("PhysicsRecorder requires a Root reference.");
+            if (!IsFinite(_recordInterval) || _recordInterval <= 0f || !IsFinite(1f / _recordInterval))
+                throw new ArgumentOutOfRangeException(nameof(_recordInterval));
+            if (!IsFinite(_positionThreshold) || _positionThreshold < 0f
+                || !IsFinite(_rotationThreshold) || _rotationThreshold < 0f)
+                throw new ArgumentOutOfRangeException(nameof(_positionThreshold));
+            string name = string.IsNullOrWhiteSpace(animName) ? _animationFileName : animName;
+            PhysicsRecordingAssetWriter.ValidateAssetFileName(name);
+            return new PhysicsRecordingSettings(_recordInterval, _positionThreshold, _rotationThreshold,
+                _recordOnlyIfMoved, _overwriteExistingAssets,
+                PhysicsRecordingAssetWriter.ValidateAssetFolderPath(_savePath), name);
         }
 
-        #endif
+        private void ThrowIfUnavailable()
+        {
+            if (IsFaulted)
+                throw new InvalidOperationException("PhysicsRecorder is faulted; call Release before use.", _fault);
+            if (!_isInitialized)
+                throw new InvalidOperationException("PhysicsRecorder is not initialized.");
+        }
+
+        private void SetFault(Exception exception)
+        {
+            if (IsFaulted && ReferenceEquals(_fault, exception)) return;
+            _phase = RecordingPhase.Idle;
+            _recordingVersion++;
+            _fault = exception;
+            Result = new PhysicsRecordingResult(_session?.Elapsed ?? 0f, PhysicsRecordingStopReason.Faulted,
+                null, null, exception,
+                _measurements?.Snapshot(_session?.Take));
+        }
+
+        private static bool IsFinite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);
+#endif
     }
 }

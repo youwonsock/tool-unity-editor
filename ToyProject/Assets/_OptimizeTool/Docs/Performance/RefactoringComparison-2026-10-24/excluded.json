@@ -1,0 +1,17 @@
+[
+  {
+    "directory": "resource-sidecar-trial-pair",
+    "reason": "Resource sidecar was placed in capture directory and the new integrity gate correctly rejected it; entire pair excluded",
+    "selectionBasedOnPerformance": false
+  },
+  {
+    "directory": "focus-loss-trial",
+    "reason": "Focus/splash requirement failed",
+    "selectionBasedOnPerformance": false
+  },
+  {
+    "directory": "focus-initialization-trial",
+    "reason": "Focus/splash requirement failed",
+    "selectionBasedOnPerformance": false
+  }
+]

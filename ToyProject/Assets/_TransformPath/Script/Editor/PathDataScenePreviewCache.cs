@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System.Collections.Generic;
+using UnityEditor;
 using UnityEngine;
 
 namespace Common.TransformPath
@@ -11,6 +12,35 @@ namespace Common.TransformPath
 
         private static readonly Dictionary<int, PathDataScenePreview> CACHES =
             new Dictionary<int, PathDataScenePreview>();
+        private static readonly List<int> REMOVED_IDS = new List<int>();
+
+        static PathDataScenePreviewCache()
+        {
+            PathEditorChangeMonitor.StructureChanged += RemoveDestroyedPaths;
+            PathEditorChangeMonitor.Updated += RemoveDestroyedPaths;
+            PathEditorChangeMonitor.BeforeReload += BeforeReload;
+            EditorApplication.playModeStateChanged += PlayModeChanged;
+        }
+
+        private static void RemoveDestroyedPaths()
+        {
+            REMOVED_IDS.Clear();
+            foreach (int id in CACHES.Keys)
+                if (!(EditorUtility.InstanceIDToObject(id) is PathData))
+                    REMOVED_IDS.Add(id);
+            for (int i = 0; i < REMOVED_IDS.Count; i++)
+                CACHES.Remove(REMOVED_IDS[i]);
+            REMOVED_IDS.Clear();
+        }
+
+        private static void PlayModeChanged(PlayModeStateChange state) => CACHES.Clear();
+
+        private static void BeforeReload()
+        {
+            CACHES.Clear();
+            REMOVED_IDS.Clear();
+            EditorApplication.playModeStateChanged -= PlayModeChanged;
+        }
 
         #endregion
 

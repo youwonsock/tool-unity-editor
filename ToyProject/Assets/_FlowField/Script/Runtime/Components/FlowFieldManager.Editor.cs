@@ -146,8 +146,7 @@ namespace Common.FlowField
                         _obstacleClearance,
                         _defaultFlowDirection,
                         dirty,
-                        maxWaves,
-                        $"{name}_EditorStaticSurface"));
+                        maxWaves));
             }
             else
             {
@@ -165,8 +164,7 @@ namespace Common.FlowField
                         dirty,
                         _editorPreviewSession.DirtyFinalRegion,
                         _editorPreviewSession.DirtyObstacleRegion,
-                        maxWaves,
-                        $"{name}_EditorSurface"));
+                        maxWaves));
             }
 
             // Editor preview is a managed, short-lived execution owner. Keep

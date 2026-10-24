@@ -1,6 +1,5 @@
 using System;
 using UnityEngine;
-using UnityEngine.Serialization;
 
 namespace Common.TransformPath
 {
@@ -18,6 +17,20 @@ namespace Common.TransformPath
         Moving = 2,
         Paused = 3,
         Completed = 4,
+    }
+
+    /// <summary>
+    /// <see cref="PathFollower.AlignRotationToPathDirection"/>에서 경로 방향을 반영할 euler 축.
+    /// 선택되지 않은 축은 현재 회전값을 유지합니다.
+    /// </summary>
+    [Flags]
+    public enum EPathAlignRotationAxes
+    {
+        None = 0,
+        X = 1 << 0,
+        Y = 1 << 1,
+        Z = 1 << 2,
+        All = X | Y | Z,
     }
 
     /// <summary>
@@ -77,77 +90,6 @@ namespace Common.TransformPath
         }
     }
 
-    internal enum EPathPlaybackKind
-    {
-        Single,
-        Aggregate,
-        Sequence,
-    }
-
-    /// <summary>
-    /// Runtime-only description of one playback request. The request is not
-    /// serialized; authoring data remains on the referenced provider.
-    /// </summary>
-    public readonly struct PathPlaybackRequest
-    {
-        private readonly IPathProvider _provider;
-        private readonly bool _loop;
-        private readonly EPathPlaybackKind _kind;
-        private readonly PathMovementSettings _movementOverride;
-
-        public IPathProvider Provider => _provider;
-        public bool Loop => _loop;
-
-        internal EPathPlaybackKind Kind => _kind;
-        internal PathMovementSettings MovementOverride => _movementOverride;
-
-        private PathPlaybackRequest(
-            EPathPlaybackKind kind,
-            IPathProvider provider,
-            bool loop,
-            PathMovementSettings movementOverride)
-        {
-            _kind = kind;
-            _provider = provider;
-            _loop = loop;
-            _movementOverride = movementOverride;
-        }
-
-        public static PathPlaybackRequest Single(
-            IPathMovementProvider provider,
-            bool loop = false)
-        {
-            return new PathPlaybackRequest(
-                EPathPlaybackKind.Single,
-                provider,
-                loop,
-                default(PathMovementSettings));
-        }
-
-        public static PathPlaybackRequest Aggregate(
-            IPathProvider provider,
-            PathMovementSettings movement,
-            bool loop = false)
-        {
-            return new PathPlaybackRequest(
-                EPathPlaybackKind.Aggregate,
-                provider,
-                loop,
-                movement);
-        }
-
-        public static PathPlaybackRequest Sequence(
-            IPathSequenceProvider provider,
-            bool loop = false)
-        {
-            return new PathPlaybackRequest(
-                EPathPlaybackKind.Sequence,
-                provider,
-                loop,
-                default(PathMovementSettings));
-        }
-    }
-
     /// <summary>Runtime descriptor used by sequence providers.</summary>
     public readonly struct PathSegmentDescriptor
     {
@@ -180,7 +122,7 @@ namespace Common.TransformPath
     [Serializable]
     public struct PathSegmentAuthoring
     {
-        [SerializeField, FormerlySerializedAs("_pathData")]
+        [SerializeField]
         private MonoBehaviour _providerObject;
         [SerializeField] private EPathSegmentMovementSource _movementSource;
         [SerializeField] private EPathMoveType _moveType;

@@ -17,7 +17,6 @@ namespace Common.FlowField
         internal readonly FlowFieldVolumeBakeData StaticBakeData;
         internal readonly int StaticBakeRevision;
         internal readonly int StaticBakeContentGeneration;
-        internal readonly long SessionGeneration;
         internal readonly long ResultId;
 
         internal FlowFieldVolumeVisualizationSource(
@@ -26,7 +25,6 @@ namespace Common.FlowField
             FlowFieldBakeMode bakeMode,
             FlowFieldVolumeBakeData staticBakeData,
             int staticBakeRevision,
-            long sessionGeneration,
             long resultId)
             : this(
                 grid,
@@ -35,7 +33,6 @@ namespace Common.FlowField
                 staticBakeData,
                 staticBakeRevision,
                 staticBakeData != null ? staticBakeData.ContentGeneration : -1,
-                sessionGeneration,
                 resultId)
         {
         }
@@ -47,7 +44,6 @@ namespace Common.FlowField
             FlowFieldVolumeBakeData staticBakeData,
             int staticBakeRevision,
             int staticBakeContentGeneration,
-            long sessionGeneration,
             long resultId)
         {
             Grid = grid;
@@ -56,7 +52,6 @@ namespace Common.FlowField
             StaticBakeData = staticBakeData;
             StaticBakeRevision = staticBakeRevision;
             StaticBakeContentGeneration = staticBakeContentGeneration;
-            SessionGeneration = sessionGeneration;
             ResultId = resultId;
         }
 
@@ -89,7 +84,6 @@ namespace Common.FlowField
     internal readonly struct FlowFieldReadView
     {
         private readonly FlowFieldGridSpace _grid;
-        private readonly Bounds _worldBounds;
         private readonly FlowFieldSpaceMode _spaceMode;
         private readonly FlowFieldSurfaceData _surface;
         private readonly bool[] _blocked;
@@ -100,13 +94,7 @@ namespace Common.FlowField
 
         internal FlowFieldVolumeVisualizationSource Source { get; }
         internal FlowFieldGridSpace Grid => _grid;
-        internal Bounds WorldBounds => _worldBounds;
-        internal FlowFieldSpaceMode SpaceMode => _spaceMode;
-        internal int Revision { get; }
-        internal long ResultId { get; }
-        internal bool IsRuntimeFinal { get; }
-        internal bool HasActiveGoal { get; }
-        internal int ResolvedGoalIndex { get; }
+        internal long ResultId => Source.ResultId;
         internal FlowFieldSurfaceData Surface => _surface;
         internal int CellCount => _grid.CellCount;
         internal bool IsValid
@@ -134,14 +122,8 @@ namespace Common.FlowField
 
         private FlowFieldReadView(
             FlowFieldGridSpace grid,
-            Bounds worldBounds,
             FlowFieldSpaceMode spaceMode,
             FlowFieldVolumeVisualizationSource source,
-            int revision,
-            long resultId,
-            bool isRuntimeFinal,
-            bool hasActiveGoal,
-            int resolvedGoalIndex,
             FlowFieldSurfaceData surface,
             bool[] blocked,
             FlowFieldGoalFlags[] goalFlags,
@@ -150,14 +132,8 @@ namespace Common.FlowField
             bool[] modifierInfluence)
         {
             _grid = grid;
-            _worldBounds = worldBounds;
             _spaceMode = spaceMode;
             Source = source;
-            Revision = revision;
-            ResultId = resultId;
-            IsRuntimeFinal = isRuntimeFinal;
-            HasActiveGoal = hasActiveGoal;
-            ResolvedGoalIndex = resolvedGoalIndex;
             _surface = surface;
             _blocked = blocked;
             _goalFlags = goalFlags;
@@ -215,10 +191,6 @@ namespace Common.FlowField
         internal static FlowFieldReadView CreateSurface(
             FlowFieldGridSpace grid,
             FlowFieldSurfaceData surface,
-            bool hasActiveGoal,
-            int resolvedGoalIndex,
-            int revision,
-            long resultId,
             bool[] blocked,
             FlowFieldGoalFlags[] goalFlags,
             Vector3[] directions,
@@ -226,14 +198,8 @@ namespace Common.FlowField
             bool[] modifierInfluence)
             => new FlowFieldReadView(
                 grid,
-                surface != null ? surface.BakeBoundsWorld : default,
                 FlowFieldSpaceMode.Surface2D,
                 default,
-                revision,
-                resultId,
-                true,
-                hasActiveGoal,
-                resolvedGoalIndex,
                 surface,
                 blocked,
                 goalFlags,
@@ -243,21 +209,13 @@ namespace Common.FlowField
 
         internal static FlowFieldReadView CreateVolume(
             FlowFieldVolumeVisualizationSource source,
-            int revision,
             bool[] blocked,
             Vector3[] directions,
-            float[] speeds,
-            bool isRuntimeFinal)
+            float[] speeds)
             => new FlowFieldReadView(
                 source.Grid,
-                source.WorldBounds,
                 FlowFieldSpaceMode.Volume3D,
                 source,
-                revision,
-                source.ResultId,
-                isRuntimeFinal,
-                false,
-                -1,
                 null,
                 blocked,
                 null,
@@ -269,7 +227,6 @@ namespace Common.FlowField
             FlowFieldGridSpace grid,
             Bounds worldBounds,
             FlowFieldVolumeBakeData bakeData,
-            int revision,
             long resultId,
             bool[] blocked,
             Vector3[] directions,
@@ -283,9 +240,8 @@ namespace Common.FlowField
                     bakeData,
                     bakeData != null ? bakeData.Revision : -1,
                     bakeData != null ? bakeData.ContentGeneration : -1,
-                    0L,
                     resultId);
-            return CreateVolume(source, revision, blocked, directions, speeds, false);
+            return CreateVolume(source, blocked, directions, speeds);
         }
     }
 
@@ -306,14 +262,8 @@ namespace Common.FlowField
         private readonly FlowFieldVolumeSliceAxis _sliceAxis;
 
         internal FlowFieldVolumeGizmoMode Mode { get; }
-        internal FlowFieldVolumeSliceAxis SliceAxis => _sliceAxis;
         internal int Slice => _fixedCoordinate;
-        internal int SampleCountX => _sampleX;
-        internal int SampleCountY => _sampleY;
-        internal int SampleCountZ => _sampleZ;
         internal int DisplayCount { get; }
-        internal int TotalCellCount { get; }
-        internal int Stride { get; }
 
         private FlowFieldVolumeDisplaySelection(
             FlowFieldVolumeGizmoMode mode,
@@ -322,9 +272,7 @@ namespace Common.FlowField
             int sampleX,
             int sampleY,
             int sampleZ,
-            int displayCount,
-            int totalCellCount,
-            int stride)
+            int displayCount)
         {
             Mode = mode;
             _sliceAxis = sliceAxis;
@@ -333,8 +281,6 @@ namespace Common.FlowField
             _sampleY = sampleY;
             _sampleZ = sampleZ;
             DisplayCount = displayCount;
-            TotalCellCount = totalCellCount;
-            Stride = stride;
         }
 
         internal static bool TryCreate(
@@ -352,7 +298,6 @@ namespace Common.FlowField
                 || !Enum.IsDefined(typeof(FlowFieldVolumeSliceAxis), sliceAxis))
                 return false;
 
-            int totalCellCount = grid.CellCount;
             int fixedCoordinate = NormalizeSlice(grid, sliceAxis, requestedSlice);
             int limit = mode == FlowFieldVolumeGizmoMode.Slice
                 ? Math.Min(maxDisplayCells, DefaultSliceLimit)
@@ -385,9 +330,7 @@ namespace Common.FlowField
                 sampleX,
                 sampleY,
                 sampleZ,
-                (int)displayCount,
-                totalCellCount,
-                stride);
+                (int)displayCount);
             return true;
         }
 

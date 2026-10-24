@@ -257,22 +257,20 @@ namespace Common.FlowField
 
     internal interface IFlowFieldSurfaceSource
     {
-        FlowFieldSurfaceData Build(in FlowFieldSurfaceBakeSettings settings, string name);
+        FlowFieldSurfaceData Build(in FlowFieldSurfaceBakeSettings settings);
     }
 
     internal sealed class FlowFieldRaycastSurfaceSource : IFlowFieldSurfaceSource
     {
         internal static readonly FlowFieldRaycastSurfaceSource Instance = new FlowFieldRaycastSurfaceSource();
-        internal int BuildCount { get; private set; }
         private int _revision;
 
         private FlowFieldRaycastSurfaceSource()
         {
         }
 
-        public FlowFieldSurfaceData Build(in FlowFieldSurfaceBakeSettings settings, string name)
+        public FlowFieldSurfaceData Build(in FlowFieldSurfaceBakeSettings settings)
         {
-            BuildCount++;
             FlowFieldSurfaceBakeResult result = FlowFieldSurfaceBaker.Bake(settings);
             return FlowFieldSurfaceData.FromRuntime(settings, result, ++_revision);
         }
@@ -281,16 +279,14 @@ namespace Common.FlowField
     internal sealed class FlowFieldFixedSurfaceSource : IFlowFieldSurfaceSource
     {
         private readonly FlowFieldSurfaceData _surface;
-        internal int BuildCount { get; private set; }
 
         internal FlowFieldFixedSurfaceSource(FlowFieldSurfaceData surface)
         {
             _surface = surface ?? throw new ArgumentNullException(nameof(surface));
         }
 
-        public FlowFieldSurfaceData Build(in FlowFieldSurfaceBakeSettings settings, string name)
+        public FlowFieldSurfaceData Build(in FlowFieldSurfaceBakeSettings settings)
         {
-            BuildCount++;
             if (!_surface.Matches(settings, out string reason))
                 throw new InvalidOperationException(reason);
             return _surface;
@@ -344,6 +340,7 @@ namespace Common.FlowField
         internal FlowFieldSurfaceBakeSettings SurfaceSettings { get; }
         internal FlowFieldStaticBakeData StaticBakeSource { get; }
         internal FlowFieldStaticBakeSnapshot StaticBakeSnapshot { get; }
+        private readonly int _staticBakeContentGeneration;
         internal LayerMask ObstacleLayer { get; }
         internal float ObstacleCheckHeight { get; }
         internal float ObstacleCheckCenterOffset { get; }
@@ -355,7 +352,6 @@ namespace Common.FlowField
         internal FlowFieldCellRect DirtyFinalRegion { get; }
         internal FlowFieldCellRect DirtyObstacleRegion { get; }
         internal int MaxGpuWaves { get; }
-        internal string SurfaceName { get; }
 
         private FlowFieldSessionRequest(
             FlowFieldSessionSourceKind sourceKind,
@@ -372,13 +368,13 @@ namespace Common.FlowField
             FlowFieldDirtyFlags dirtyFlags,
             FlowFieldCellRect dirtyFinalRegion,
             FlowFieldCellRect dirtyObstacleRegion,
-            int maxGpuWaves,
-            string surfaceName)
+            int maxGpuWaves)
         {
             SourceKind = sourceKind;
             SurfaceSettings = surfaceSettings;
             StaticBakeSource = staticBakeSource;
             StaticBakeSnapshot = staticBakeSnapshot;
+            _staticBakeContentGeneration = staticBakeSource != null ? staticBakeSource.ContentGeneration : -1;
             ObstacleLayer = obstacleLayer;
             ObstacleCheckHeight = obstacleCheckHeight;
             ObstacleCheckCenterOffset = obstacleCheckCenterOffset;
@@ -390,7 +386,6 @@ namespace Common.FlowField
             DirtyFinalRegion = dirtyFinalRegion;
             DirtyObstacleRegion = dirtyObstacleRegion;
             MaxGpuWaves = maxGpuWaves;
-            SurfaceName = surfaceName;
         }
 
         internal static FlowFieldSessionRequest ForSceneBuild(
@@ -405,8 +400,7 @@ namespace Common.FlowField
             FlowFieldDirtyFlags dirtyFlags,
             FlowFieldCellRect dirtyFinalRegion,
             FlowFieldCellRect dirtyObstacleRegion,
-            int maxGpuWaves,
-            string surfaceName)
+            int maxGpuWaves)
             => new FlowFieldSessionRequest(
                 FlowFieldSessionSourceKind.SceneBuild,
                 settings,
@@ -422,8 +416,7 @@ namespace Common.FlowField
                 dirtyFlags,
                 dirtyFinalRegion,
                 dirtyObstacleRegion,
-                maxGpuWaves,
-                surfaceName);
+                maxGpuWaves);
 
         internal static FlowFieldSessionRequest ForStaticSnapshot(
             in FlowFieldSurfaceBakeSettings settings,
@@ -435,8 +428,7 @@ namespace Common.FlowField
             float obstacleClearance,
             Vector3 defaultDirection,
             FlowFieldDirtyFlags dirtyFlags,
-            int maxGpuWaves,
-            string surfaceName)
+            int maxGpuWaves)
             => new FlowFieldSessionRequest(
                 FlowFieldSessionSourceKind.StaticSnapshot,
                 settings,
@@ -452,8 +444,7 @@ namespace Common.FlowField
                 dirtyFlags,
                 FlowFieldCellRect.Invalid,
                 FlowFieldCellRect.Invalid,
-                maxGpuWaves,
-                surfaceName);
+                maxGpuWaves);
 
         internal bool HasSameInputs(in FlowFieldSessionRequest other)
             => HasSameBaseInputs(other)
@@ -469,18 +460,12 @@ namespace Common.FlowField
         internal bool HasSameSource(in FlowFieldSessionRequest other)
             => SourceKind == other.SourceKind
                 && SurfaceSettingsMatch(SurfaceSettings, other.SurfaceSettings)
-                && ReferenceEquals(StaticBakeSource, other.StaticBakeSource)
-                && (StaticBakeSource == null
-                    || StaticBakeSource.Revision == other.StaticBakeSource.Revision
-                    && StaticBakeSource.ContentGeneration == other.StaticBakeSource.ContentGeneration);
+                && HasSameStaticBake(other);
 
         internal bool HasSameBaseInputs(in FlowFieldSessionRequest other)
             => SourceKind == other.SourceKind
                 && SurfaceSettingsMatch(SurfaceSettings, other.SurfaceSettings)
-                && ReferenceEquals(StaticBakeSource, other.StaticBakeSource)
-                && (StaticBakeSource == null
-                    || StaticBakeSource.Revision == other.StaticBakeSource.Revision
-                    && StaticBakeSource.ContentGeneration == other.StaticBakeSource.ContentGeneration)
+                && HasSameStaticBake(other)
                 && ObstacleLayer.value == other.ObstacleLayer.value
                 && Approximately(ObstacleCheckHeight, other.ObstacleCheckHeight)
                 && Approximately(ObstacleCheckCenterOffset, other.ObstacleCheckCenterOffset)
@@ -496,11 +481,7 @@ namespace Common.FlowField
         {
             FlowFieldDirtyFlags flags = FlowFieldDirtyFlags.None;
             bool surfaceChanged = !SurfaceSettingsMatch(SurfaceSettings, other.SurfaceSettings)
-                || !ReferenceEquals(StaticBakeSource, other.StaticBakeSource)
-                || StaticBakeSource != null
-                    && other.StaticBakeSource != null
-                    && (StaticBakeSource.Revision != other.StaticBakeSource.Revision
-                        || StaticBakeSource.ContentGeneration != other.StaticBakeSource.ContentGeneration)
+                || !HasSameStaticBake(other)
                 || SourceKind != other.SourceKind;
             if (surfaceChanged)
             {
@@ -525,6 +506,12 @@ namespace Common.FlowField
                 flags |= FlowFieldDirtyFlags.FinalRegion;
             return flags;
         }
+
+        private bool HasSameStaticBake(in FlowFieldSessionRequest other)
+            => ReferenceEquals(StaticBakeSource, other.StaticBakeSource)
+                && (ReferenceEquals(StaticBakeSource, null)
+                    || (StaticBakeSnapshot?.Revision ?? -1) == (other.StaticBakeSnapshot?.Revision ?? -1)
+                    && _staticBakeContentGeneration == other._staticBakeContentGeneration);
 
         private static bool SurfaceSettingsMatch(
             in FlowFieldSurfaceBakeSettings left,

@@ -17,8 +17,8 @@ namespace Common.TransformPath
     {
         #region Constants
 
-        private const double SYNC_INTERVAL = 0.05d;
-        private const float POSITION_SYNC_EPSILON_SQR = 0.000001f;
+        private const float POSITION_SYNC_EPSILON_SQR =
+            PathLinkEditorUtility.POSITION_SYNC_EPSILON_SQR;
 
         #endregion
 
@@ -31,10 +31,15 @@ namespace Common.TransformPath
             private readonly List<List<Transform>> _pathPoints =
                 new List<List<Transform>>();
             private readonly PathLinkSnapshot _snapshot = new PathLinkSnapshot();
+            private string _structureSignature = string.Empty;
             private bool _autoLinkEnabled;
+            private bool _wasAutoLinkEnabled;
+            private bool _needsInitialSync;
 
             public MultiPathData Target { get; }
             public int Id { get; }
+
+            public string CachedStructureSignature => _structureSignature;
 
             public TrackedMultiPath(MultiPathData target)
             {
@@ -42,11 +47,19 @@ namespace Common.TransformPath
                 Id = target.GetInstanceID();
             }
 
+            public void RequestInitialSync()
+            {
+                _needsInitialSync = true;
+            }
+
             public void RefreshReferences()
             {
                 if (Target == null)
                 {
                     _autoLinkEnabled = false;
+                    _wasAutoLinkEnabled = false;
+                    _needsInitialSync = false;
+                    _structureSignature = string.Empty;
                     _pathDatas.Clear();
                     _pathPoints.Clear();
                     return;
@@ -59,7 +72,26 @@ namespace Common.TransformPath
                 _pathPoints.Clear();
                 for (int i = 0; i < _pathDatas.Count; i++)
                     _pathPoints.Add(PathEditorSerializationUtility.GetPathPoints(_pathDatas[i]));
-                _snapshot.Capture(_pathPoints);
+
+                string currentSignature = PathEditorSerializationUtility.BuildPathConfigsSignature(
+                    Target);
+                bool structureChanged = string.IsNullOrEmpty(_structureSignature)
+                    || !string.Equals(
+                        _structureSignature,
+                        currentSignature,
+                        StringComparison.Ordinal);
+                bool autoLinkTurnedOn = _autoLinkEnabled && !_wasAutoLinkEnabled;
+
+                if (structureChanged)
+                {
+                    _structureSignature = currentSignature;
+                    _snapshot.Capture(_pathPoints);
+                    _needsInitialSync = true;
+                }
+                else if (autoLinkTurnedOn)
+                    _needsInitialSync = true;
+
+                _wasAutoLinkEnabled = _autoLinkEnabled;
             }
 
             public bool Sync()
@@ -76,7 +108,7 @@ namespace Common.TransformPath
                         continue;
                     if (previous == current)
                     {
-                        WarnDuplicateLink(Target, i);
+                        PathLinkEditorUtility.WarnDuplicateLink(Target, i);
                         continue;
                     }
 
@@ -84,33 +116,51 @@ namespace Common.TransformPath
                     List<Transform> currentPoints = _pathPoints[i];
                     if (previousPoints.Count == 0 || currentPoints.Count == 0)
                         continue;
+
                     Transform previousEnd = previousPoints[previousPoints.Count - 1];
                     Transform currentStart = currentPoints[0];
                     if (previousEnd == null || currentStart == null)
                         continue;
 
-                    Vector3 previousEndBefore = _snapshot.GetPosition(
-                        i - 1,
-                        previousPoints.Count - 1);
-                    Vector3 currentStartBefore = _snapshot.GetPosition(i, 0);
-                    if ((currentStart.position - currentStartBefore).sqrMagnitude
-                        > POSITION_SYNC_EPSILON_SQR)
-                    {
-                        PathEditorUndoUtility.Record(previousEnd, "Sync Path Point");
-                        previousEnd.position = currentStart.position;
-                        PathEditorUndoUtility.MarkDirty(previousEnd);
-                        PathEditorUndoUtility.MarkDirty(previous);
+                    if (PathLinkEditorUtility.TrySyncJointByMovement(
+                            previous,
+                            current,
+                            previousEnd,
+                            currentStart,
+                            _snapshot.GetPosition(i - 1, previousPoints.Count - 1),
+                            _snapshot.GetPosition(i, 0),
+                            POSITION_SYNC_EPSILON_SQR))
                         syncedAny = true;
-                    }
-                    else if ((previousEnd.position - previousEndBefore).sqrMagnitude
-                        > POSITION_SYNC_EPSILON_SQR)
+                }
+
+                if (_needsInitialSync)
+                {
+                    for (int i = 1; i < _pathDatas.Count; i++)
                     {
-                        PathEditorUndoUtility.Record(currentStart, "Sync Path Point");
-                        currentStart.position = previousEnd.position;
-                        PathEditorUndoUtility.MarkDirty(currentStart);
-                        PathEditorUndoUtility.MarkDirty(current);
-                        syncedAny = true;
+                        PathData previous = _pathDatas[i - 1];
+                        PathData current = _pathDatas[i];
+                        if (previous == null || current == null)
+                            continue;
+                        if (previous == current)
+                            continue;
+
+                        if (!PathLinkEditorUtility.TryGetJointTransforms(
+                                previous,
+                                current,
+                                out Transform previousEnd,
+                                out Transform currentStart))
+                            continue;
+
+                        if (PathLinkEditorUtility.TryAlignStartToEnd(
+                                previous,
+                                current,
+                                previousEnd,
+                                currentStart,
+                                POSITION_SYNC_EPSILON_SQR))
+                            syncedAny = true;
                     }
+
+                    _needsInitialSync = false;
                 }
 
                 _snapshot.Capture(_pathPoints);
@@ -169,9 +219,6 @@ namespace Common.TransformPath
         private static readonly Dictionary<int, TrackedMultiPath> TRACKED_BY_ID =
             new Dictionary<int, TrackedMultiPath>();
         private static readonly HashSet<int> LIVE_IDS = new HashSet<int>();
-        private static readonly HashSet<string> DUPLICATE_WARNINGS =
-            new HashSet<string>();
-        private static double _lastSyncTime;
         private static bool _trackedTargetsDirty = true;
 
         #endregion
@@ -181,15 +228,11 @@ namespace Common.TransformPath
 
         static MultiPathAutoLinker()
         {
-            EditorApplication.update += OnEditorUpdate;
-            EditorApplication.hierarchyChanged += MarkTrackedTargetsDirty;
-            EditorSceneManager.sceneOpened += HandleSceneOpened;
-            EditorSceneManager.sceneClosed += HandleSceneClosed;
-            PrefabStage.prefabStageOpened += HandlePrefabStageOpened;
-            PrefabStage.prefabStageClosing += HandlePrefabStageClosing;
-            Undo.undoRedoPerformed += MarkTrackedTargetsDirty;
-            ObjectChangeEvents.changesPublished += HandleObjectChanges;
-            AssemblyReloadEvents.beforeAssemblyReload += Clear;
+            PathEditorChangeMonitor.Updated += OnEditorUpdate;
+            PathEditorChangeMonitor.StructureChanged += MarkTrackedTargetsDirty;
+            PathEditorChangeMonitor.DefinitionChanged += HandleDefinitionChanged;
+            PathEditorChangeMonitor.UndoRedo += HandleUndoRedo;
+            PathEditorChangeMonitor.BeforeReload += Clear;
         }
 
         #endregion
@@ -199,12 +242,6 @@ namespace Common.TransformPath
 
         private static void OnEditorUpdate()
         {
-            if (EditorApplication.isPlayingOrWillChangePlaymode
-                || EditorApplication.isCompiling
-                || EditorApplication.timeSinceStartup - _lastSyncTime < SYNC_INTERVAL)
-                return;
-
-            _lastSyncTime = EditorApplication.timeSinceStartup;
             if (_trackedTargetsDirty)
                 RefreshTrackedTargets();
 
@@ -261,29 +298,43 @@ namespace Common.TransformPath
             _trackedTargetsDirty = false;
         }
 
-        private static void HandleObjectChanges(ref ObjectChangeEventStream stream)
+        private static void HandleDefinitionChanged(UnityEngine.Object changedObject)
         {
-            MarkTrackedTargetsDirty();
+            if (changedObject is MultiPathData || changedObject is PathData)
+                MarkTrackedTargetsDirty();
         }
 
-        private static void HandleSceneOpened(Scene scene, OpenSceneMode mode)
+        private static void HandleUndoRedo()
         {
-            MarkTrackedTargetsDirty();
-        }
+            if (TRACKED_MULTI_PATHS.Count == 0)
+            {
+                MarkTrackedTargetsDirty();
+                return;
+            }
 
-        private static void HandleSceneClosed(Scene scene)
-        {
-            MarkTrackedTargetsDirty();
-        }
+            for (int i = 0; i < TRACKED_MULTI_PATHS.Count; i++)
+            {
+                TrackedMultiPath tracked = TRACKED_MULTI_PATHS[i];
+                if (tracked.Target == null)
+                    continue;
 
-        private static void HandlePrefabStageOpened(PrefabStage prefabStage)
-        {
-            MarkTrackedTargetsDirty();
-        }
+                string liveSignature = PathEditorSerializationUtility.BuildPathConfigsSignature(
+                    tracked.Target);
+                if (!string.Equals(
+                        tracked.CachedStructureSignature,
+                        liveSignature,
+                        StringComparison.Ordinal))
+                {
+                    MarkTrackedTargetsDirty();
+                    return;
+                }
+            }
 
-        private static void HandlePrefabStageClosing(PrefabStage prefabStage)
-        {
-            MarkTrackedTargetsDirty();
+            for (int i = 0; i < TRACKED_MULTI_PATHS.Count; i++)
+            {
+                if (TRACKED_MULTI_PATHS[i].Target != null)
+                    TRACKED_MULTI_PATHS[i].RequestInitialSync();
+            }
         }
 
         private static void MarkTrackedTargetsDirty()
@@ -291,33 +342,17 @@ namespace Common.TransformPath
             _trackedTargetsDirty = true;
         }
 
-        private static void WarnDuplicateLink(
-            MultiPathData multiPathData,
-            int segmentIndex)
-        {
-            string key = $"{multiPathData.GetInstanceID()}:{segmentIndex}";
-            if (!DUPLICATE_WARNINGS.Add(key))
-                return;
-            Debug.LogWarning(
-                $"MultiPathData: segment {segmentIndex - 1}와 {segmentIndex}가 동일한 PathData를 참조해 자동 연결을 건너뜁니다.",
-                multiPathData);
-        }
-
         private static void Clear()
         {
-            EditorApplication.update -= OnEditorUpdate;
-            EditorApplication.hierarchyChanged -= MarkTrackedTargetsDirty;
-            EditorSceneManager.sceneOpened -= HandleSceneOpened;
-            EditorSceneManager.sceneClosed -= HandleSceneClosed;
-            PrefabStage.prefabStageOpened -= HandlePrefabStageOpened;
-            PrefabStage.prefabStageClosing -= HandlePrefabStageClosing;
-            Undo.undoRedoPerformed -= MarkTrackedTargetsDirty;
-            ObjectChangeEvents.changesPublished -= HandleObjectChanges;
-            AssemblyReloadEvents.beforeAssemblyReload -= Clear;
+            PathEditorChangeMonitor.Updated -= OnEditorUpdate;
+            PathEditorChangeMonitor.StructureChanged -= MarkTrackedTargetsDirty;
+            PathEditorChangeMonitor.DefinitionChanged -= HandleDefinitionChanged;
+            PathEditorChangeMonitor.UndoRedo -= HandleUndoRedo;
+            PathEditorChangeMonitor.BeforeReload -= Clear;
             TRACKED_MULTI_PATHS.Clear();
             TRACKED_BY_ID.Clear();
             LIVE_IDS.Clear();
-            DUPLICATE_WARNINGS.Clear();
+            PathLinkEditorUtility.ClearDuplicateWarnings();
         }
 
         #endregion

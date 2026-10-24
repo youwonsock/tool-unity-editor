@@ -1,0 +1,229 @@
+{
+    "rows": [
+        {
+            "name": "coreSave/Clone",
+            "calls": 3,
+            "gc0": 0,
+            "gc1": 0,
+            "gc2": 0,
+            "milliseconds": 2.2808,
+            "bytes": 0
+        },
+        {
+            "name": "coreSave/CreateAsset",
+            "calls": 3,
+            "gc0": 0,
+            "gc1": 0,
+            "gc2": 0,
+            "milliseconds": 178.9767,
+            "bytes": 0
+        },
+        {
+            "name": "coreSave/InitialFileBytes",
+            "calls": 0,
+            "gc0": 0,
+            "gc1": 0,
+            "gc2": 0,
+            "milliseconds": 0.0,
+            "bytes": 15820615
+        },
+        {
+            "name": "coreSave/Readability",
+            "calls": 3,
+            "gc0": 0,
+            "gc1": 0,
+            "gc2": 0,
+            "milliseconds": 1.2029,
+            "bytes": 0
+        },
+        {
+            "name": "coreSave/ApplyScene",
+            "calls": 1,
+            "gc0": 0,
+            "gc1": 0,
+            "gc2": 0,
+            "milliseconds": 0.0009,
+            "bytes": 0
+        },
+        {
+            "name": "coreSave/SaveDirty",
+            "calls": 3,
+            "gc0": 0,
+            "gc1": 0,
+            "gc2": 0,
+            "milliseconds": 198.18800000000003,
+            "bytes": 0
+        },
+        {
+            "name": "initial/Clone",
+            "calls": 1,
+            "gc0": 0,
+            "gc1": 0,
+            "gc2": 0,
+            "milliseconds": 1.2698,
+            "bytes": 0
+        },
+        {
+            "name": "initial/CreateAsset",
+            "calls": 1,
+            "gc0": 0,
+            "gc1": 0,
+            "gc2": 0,
+            "milliseconds": 97.1154,
+            "bytes": 0
+        },
+        {
+            "name": "initial/InitialFileBytes",
+            "calls": 0,
+            "gc0": 0,
+            "gc1": 0,
+            "gc2": 0,
+            "milliseconds": 0.0,
+            "bytes": 10716739
+        },
+        {
+            "name": "initial/Readability",
+            "calls": 1,
+            "gc0": 0,
+            "gc1": 0,
+            "gc2": 0,
+            "milliseconds": 0.6154,
+            "bytes": 0
+        },
+        {
+            "name": "initial/ApplyScene",
+            "calls": 1,
+            "gc0": 0,
+            "gc1": 0,
+            "gc2": 0,
+            "milliseconds": 30.8052,
+            "bytes": 0
+        },
+        {
+            "name": "initial/OwnerUndo",
+            "calls": 1,
+            "gc0": 0,
+            "gc1": 0,
+            "gc2": 0,
+            "milliseconds": 0.3483,
+            "bytes": 0
+        },
+        {
+            "name": "initial/RendererState",
+            "calls": 3600,
+            "gc0": 0,
+            "gc1": 0,
+            "gc2": 0,
+            "milliseconds": 25.93400000000012,
+            "bytes": 0
+        },
+        {
+            "name": "initial/RendererActualChanges",
+            "calls": 0,
+            "gc0": 0,
+            "gc1": 0,
+            "gc2": 0,
+            "milliseconds": 0.0,
+            "bytes": 3600
+        },
+        {
+            "name": "initial/OwnerPrefab",
+            "calls": 1,
+            "gc0": 0,
+            "gc1": 0,
+            "gc2": 0,
+            "milliseconds": 0.0015,
+            "bytes": 0
+        },
+        {
+            "name": "initial/SaveDirty",
+            "calls": 1,
+            "gc0": 0,
+            "gc1": 0,
+            "gc2": 0,
+            "milliseconds": 110.1975,
+            "bytes": 0
+        },
+        {
+            "name": "rebuild/AssetUndo",
+            "calls": 1,
+            "gc0": 0,
+            "gc1": 0,
+            "gc2": 0,
+            "milliseconds": 0.15,
+            "bytes": 0
+        },
+        {
+            "name": "rebuild/Copy",
+            "calls": 1,
+            "gc0": 0,
+            "gc1": 0,
+            "gc2": 0,
+            "milliseconds": 0.3014,
+            "bytes": 0
+        },
+        {
+            "name": "rebuild/Readability",
+            "calls": 1,
+            "gc0": 0,
+            "gc1": 0,
+            "gc2": 0,
+            "milliseconds": 0.657,
+            "bytes": 0
+        },
+        {
+            "name": "rebuild/ApplyScene",
+            "calls": 1,
+            "gc0": 0,
+            "gc1": 0,
+            "gc2": 0,
+            "milliseconds": 99.5831,
+            "bytes": 0
+        },
+        {
+            "name": "rebuild/OwnerUndo",
+            "calls": 1,
+            "gc0": 0,
+            "gc1": 0,
+            "gc2": 0,
+            "milliseconds": 0.4261,
+            "bytes": 0
+        },
+        {
+            "name": "rebuild/RendererState",
+            "calls": 7200,
+            "gc0": 0,
+            "gc1": 0,
+            "gc2": 0,
+            "milliseconds": 88.43069999999944,
+            "bytes": 0
+        },
+        {
+            "name": "rebuild/RendererActualChanges",
+            "calls": 0,
+            "gc0": 0,
+            "gc1": 0,
+            "gc2": 0,
+            "milliseconds": 0.0,
+            "bytes": 7200
+        },
+        {
+            "name": "rebuild/OwnerPrefab",
+            "calls": 1,
+            "gc0": 0,
+            "gc1": 0,
+            "gc2": 0,
+            "milliseconds": 0.0002,
+            "bytes": 0
+        },
+        {
+            "name": "rebuild/SaveDirty",
+            "calls": 1,
+            "gc0": 0,
+            "gc1": 0,
+            "gc2": 0,
+            "milliseconds": 105.3873,
+            "bytes": 0
+        }
+    ]
+}

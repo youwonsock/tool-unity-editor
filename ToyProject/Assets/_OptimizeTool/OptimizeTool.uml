@@ -12,17 +12,13 @@ hide empty members
 
 package "Editor Tools\n(#if UNITY_EDITOR asset generation)" as EditorTools {
   class MeshCombiner {
-    +IsInitialized
-    +IsFaulted
-    +Init()
-    +Release()
+    +BuildMeshes()
+    +CombineAndSaveMeshes()
+    +LastBuildWarnings
   }
 
   class BackfaceCullMeshBaker {
-    +IsInitialized
-    +IsFaulted
-    +Init()
-    +Release()
+    +BakeBackFaceCullingMesh()
   }
 
   class PhysicsRecorder {
@@ -32,6 +28,7 @@ package "Editor Tools\n(#if UNITY_EDITOR asset generation)" as EditorTools {
     +StartRecording(duration, animName)
     +StopRecording()
     +Release()
+    +Result : PhysicsRecordingResult
   }
 }
 

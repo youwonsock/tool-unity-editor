@@ -1,0 +1,55 @@
+{
+  "pid": 68944,
+  "cubes": 225,
+  "subdivisions": 64,
+  "unityVersion": "2023.2.20f1",
+  "scope": "Core bake: three pipeline modes retained through fresh batch save. Also measures public MeshCombiner initial bake and overwrite/rebuild with scene output and source disabling. Timings exclude startup, input construction and cleanup; process/RSS peaks cover all stages.",
+  "fixtureMs": 356.4907,
+  "totalMs": 31681.3182,
+  "buildMs": 11049.253700000001,
+  "saveMs": 20570.7379,
+  "workflowInitialMs": 18155.050300000003,
+  "workflowRebuildMs": 13754.836800000001,
+  "unityAllocatedAtStart": 215355447,
+  "unityAllocatedAfterBuild": 1968193383,
+  "unityReservedAtStart": 526777240,
+  "modes": [
+    {
+      "mode": 1,
+      "vertices": 5703750,
+      "culled": 0,
+      "triangles": 11059200,
+      "milliseconds": 4331.6903
+    },
+    {
+      "mode": 2,
+      "vertices": 950625,
+      "culled": 0,
+      "triangles": 1843200,
+      "milliseconds": 5184.9799
+    },
+    {
+      "mode": 3,
+      "vertices": 1901250,
+      "culled": 150,
+      "triangles": 3686400,
+      "milliseconds": 1532.3262
+    }
+  ],
+  "variant": "before",
+  "profile": "gpu",
+  "pair": 2,
+  "processPeakRssBytes": 7979581440,
+  "bakeSampledPeakRssBytes": 7925039104,
+  "bakeFirstObservedRssBytes": 1420967936,
+  "sampleCount": 4733,
+  "samplingIntervalSeconds": 0.01,
+  "telemetryBefore": {
+    "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+    "power": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=21823587)\t49%; discharging; 1:13 remaining present: true"
+  },
+  "telemetryAfter": {
+    "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+    "power": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=21823587)\t47%; discharging; 1:01 remaining present: true"
+  }
+}

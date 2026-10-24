@@ -1,0 +1,55 @@
+{
+  "pid": 68558,
+  "cubes": 225,
+  "subdivisions": 64,
+  "unityVersion": "2023.2.20f1",
+  "scope": "Core bake: three pipeline modes retained through fresh batch save. Also measures public MeshCombiner initial bake and overwrite/rebuild with scene output and source disabling. Timings exclude startup, input construction and cleanup; process/RSS peaks cover all stages.",
+  "fixtureMs": 230.62830000000002,
+  "totalMs": 30815.2105,
+  "buildMs": 9994.9472,
+  "saveMs": 20758.5158,
+  "workflowInitialMs": 17017.5033,
+  "workflowRebuildMs": 11703.786600000001,
+  "unityAllocatedAtStart": 219847287,
+  "unityAllocatedAfterBuild": 1345661367,
+  "unityReservedAtStart": 526895016,
+  "modes": [
+    {
+      "mode": 1,
+      "vertices": 5703750,
+      "culled": 0,
+      "triangles": 11059200,
+      "milliseconds": 3878.762
+    },
+    {
+      "mode": 2,
+      "vertices": 950625,
+      "culled": 0,
+      "triangles": 1843200,
+      "milliseconds": 4904.6692
+    },
+    {
+      "mode": 3,
+      "vertices": 1901250,
+      "culled": 150,
+      "triangles": 3686400,
+      "milliseconds": 1211.2616
+    }
+  ],
+  "variant": "after",
+  "profile": "gpu",
+  "pair": 2,
+  "processPeakRssBytes": 7895646208,
+  "bakeSampledPeakRssBytes": 7895646208,
+  "bakeFirstObservedRssBytes": 1370341376,
+  "sampleCount": 4418,
+  "samplingIntervalSeconds": 0.01,
+  "telemetryBefore": {
+    "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+    "power": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=21823587)\t50%; discharging; 1:16 remaining present: true"
+  },
+  "telemetryAfter": {
+    "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+    "power": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=21823587)\t49%; discharging; 1:13 remaining present: true"
+  }
+}

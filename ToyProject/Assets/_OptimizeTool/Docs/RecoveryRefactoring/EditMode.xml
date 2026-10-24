@@ -1,0 +1,788 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="92" result="Passed" total="92" passed="92" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-24 06:31:25Z" end-time="2026-10-24 06:31:33Z" duration="7.1650667">
+  <test-suite type="TestSuite" id="1000" name="ToyProject" fullname="ToyProject" runstate="Runnable" testcasecount="405" result="Passed" start-time="2026-10-24 06:31:25Z" end-time="2026-10-24 06:31:33Z" duration="7.165067" total="92" passed="92" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="1340" name="Common.OptimizeTool.Tests.dll" fullname="/private/var/folders/4m/v7xw547n4wj7kgvjblgr8ry00000gn/T/optimizetool-refactor-iehkdrz1/Project/Library/ScriptAssemblies/Common.OptimizeTool.Tests.dll" runstate="Runnable" testcasecount="92" result="Passed" start-time="2026-10-24 06:31:25Z" end-time="2026-10-24 06:31:33Z" duration="7.160517" total="92" passed="92" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="42650" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+      </properties>
+      <test-suite type="TestSuite" id="1341" name="Common" fullname="Common" runstate="Runnable" testcasecount="92" result="Passed" start-time="2026-10-24 06:31:25Z" end-time="2026-10-24 06:31:33Z" duration="7.160091" total="92" passed="92" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties>
+          <property name="platform" value="EditMode" />
+        </properties>
+        <test-suite type="TestSuite" id="1342" name="OptimizeTool" fullname="Common.OptimizeTool" runstate="Runnable" testcasecount="92" result="Passed" start-time="2026-10-24 06:31:25Z" end-time="2026-10-24 06:31:33Z" duration="7.159885" total="92" passed="92" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties>
+            <property name="platform" value="EditMode" />
+          </properties>
+          <test-suite type="TestSuite" id="1343" name="Tests" fullname="Common.OptimizeTool.Tests" runstate="Runnable" testcasecount="92" result="Passed" start-time="2026-10-24 06:31:25Z" end-time="2026-10-24 06:31:33Z" duration="7.159531" total="92" passed="92" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties>
+              <property name="platform" value="EditMode" />
+            </properties>
+            <test-suite type="TestFixture" id="1229" name="BenchmarkCaptureOutputTests" fullname="Common.OptimizeTool.Tests.BenchmarkCaptureOutputTests" classname="Common.OptimizeTool.Tests.BenchmarkCaptureOutputTests" runstate="Runnable" testcasecount="6" result="Passed" start-time="2026-10-24 06:31:25Z" end-time="2026-10-24 06:31:25Z" duration="0.053124" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties>
+                <property name="platform" value="EditMode" />
+              </properties>
+              <test-case id="1234" name="ADirectoryCanOnlyBeClaimedOnce" fullname="Common.OptimizeTool.Tests.BenchmarkCaptureOutputTests.ADirectoryCanOnlyBeClaimedOnce" methodname="ADirectoryCanOnlyBeClaimedOnce" classname="Common.OptimizeTool.Tests.BenchmarkCaptureOutputTests" runstate="Runnable" seed="557482940" result="Passed" start-time="2026-10-24 06:31:25Z" end-time="2026-10-24 06:31:25Z" duration="0.012845" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1235" name="CompletionCarriesMatchingIdentityAndPayloadHashesAndCanBeInvalidated" fullname="Common.OptimizeTool.Tests.BenchmarkCaptureOutputTests.CompletionCarriesMatchingIdentityAndPayloadHashesAndCanBeInvalidated" methodname="CompletionCarriesMatchingIdentityAndPayloadHashesAndCanBeInvalidated" classname="Common.OptimizeTool.Tests.BenchmarkCaptureOutputTests" runstate="Runnable" seed="165950756" result="Passed" start-time="2026-10-24 06:31:25Z" end-time="2026-10-24 06:31:25Z" duration="0.008344" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-suite type="ParameterizedMethod" id="1233" name="ExistingArtifactsAreRejectedWithoutBeingModified" fullname="Common.OptimizeTool.Tests.BenchmarkCaptureOutputTests.ExistingArtifactsAreRejectedWithoutBeingModified" classname="Common.OptimizeTool.Tests.BenchmarkCaptureOutputTests" runstate="Runnable" testcasecount="3" result="Passed" start-time="2026-10-24 06:31:25Z" end-time="2026-10-24 06:31:25Z" duration="0.020344" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                </properties>
+                <test-case id="1230" name="ExistingArtifactsAreRejectedWithoutBeingModified(&quot;complete.json&quot;)" fullname="Common.OptimizeTool.Tests.BenchmarkCaptureOutputTests.ExistingArtifactsAreRejectedWithoutBeingModified(&quot;complete.json&quot;)" methodname="ExistingArtifactsAreRejectedWithoutBeingModified" classname="Common.OptimizeTool.Tests.BenchmarkCaptureOutputTests" runstate="Runnable" seed="1819384543" result="Passed" start-time="2026-10-24 06:31:25Z" end-time="2026-10-24 06:31:25Z" duration="0.001233" asserts="0">
+                  <properties>
+                    <property name="platform" value="EditMode" />
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+                <test-case id="1231" name="ExistingArtifactsAreRejectedWithoutBeingModified(&quot;frames.csv&quot;)" fullname="Common.OptimizeTool.Tests.BenchmarkCaptureOutputTests.ExistingArtifactsAreRejectedWithoutBeingModified(&quot;frames.csv&quot;)" methodname="ExistingArtifactsAreRejectedWithoutBeingModified" classname="Common.OptimizeTool.Tests.BenchmarkCaptureOutputTests" runstate="Runnable" seed="399005292" result="Passed" start-time="2026-10-24 06:31:25Z" end-time="2026-10-24 06:31:25Z" duration="0.000658" asserts="0">
+                  <properties>
+                    <property name="platform" value="EditMode" />
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+                <test-case id="1232" name="ExistingArtifactsAreRejectedWithoutBeingModified(&quot;error.txt&quot;)" fullname="Common.OptimizeTool.Tests.BenchmarkCaptureOutputTests.ExistingArtifactsAreRejectedWithoutBeingModified(&quot;error.txt&quot;)" methodname="ExistingArtifactsAreRejectedWithoutBeingModified" classname="Common.OptimizeTool.Tests.BenchmarkCaptureOutputTests" runstate="Runnable" seed="629393725" result="Passed" start-time="2026-10-24 06:31:25Z" end-time="2026-10-24 06:31:25Z" duration="0.000916" asserts="0">
+                  <properties>
+                    <property name="platform" value="EditMode" />
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+              </test-suite>
+              <test-case id="1236" name="MissingPayloadCannotPublishCompletion" fullname="Common.OptimizeTool.Tests.BenchmarkCaptureOutputTests.MissingPayloadCannotPublishCompletion" methodname="MissingPayloadCannotPublishCompletion" classname="Common.OptimizeTool.Tests.BenchmarkCaptureOutputTests" runstate="Runnable" seed="1459659971" result="Passed" start-time="2026-10-24 06:31:25Z" end-time="2026-10-24 06:31:25Z" duration="0.001279" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1237" name="MeshOptimizationTests" fullname="Common.OptimizeTool.Tests.MeshOptimizationTests" classname="Common.OptimizeTool.Tests.MeshOptimizationTests" runstate="Runnable" testcasecount="19" result="Passed" start-time="2026-10-24 06:31:25Z" end-time="2026-10-24 06:31:26Z" duration="0.791877" total="19" passed="19" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties>
+                <property name="platform" value="EditMode" />
+              </properties>
+              <test-case id="1247" name="ASourceOver65535VerticesUsesUInt32AndSurvivesCombination" fullname="Common.OptimizeTool.Tests.MeshOptimizationTests.ASourceOver65535VerticesUsesUInt32AndSurvivesCombination" methodname="ASourceOver65535VerticesUsesUInt32AndSurvivesCombination" classname="Common.OptimizeTool.Tests.MeshOptimizationTests" runstate="Runnable" seed="1909990433" result="Passed" start-time="2026-10-24 06:31:25Z" end-time="2026-10-24 06:31:26Z" duration="0.061322" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1238" name="BackfaceCompactionPreservesAllVertexChannelsAndEmptySubmeshes" fullname="Common.OptimizeTool.Tests.MeshOptimizationTests.BackfaceCompactionPreservesAllVertexChannelsAndEmptySubmeshes" methodname="BackfaceCompactionPreservesAllVertexChannelsAndEmptySubmeshes" classname="Common.OptimizeTool.Tests.MeshOptimizationTests" runstate="Runnable" seed="1956223013" result="Passed" start-time="2026-10-24 06:31:26Z" end-time="2026-10-24 06:31:26Z" duration="0.003286" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1250" name="BakerStagesEveryInputBeforeSavingOrReplacingAnyFilter" fullname="Common.OptimizeTool.Tests.MeshOptimizationTests.BakerStagesEveryInputBeforeSavingOrReplacingAnyFilter" methodname="BakerStagesEveryInputBeforeSavingOrReplacingAnyFilter" classname="Common.OptimizeTool.Tests.MeshOptimizationTests" runstate="Runnable" seed="124746733" result="Passed" start-time="2026-10-24 06:31:26Z" end-time="2026-10-24 06:31:26Z" duration="0.001290" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1251" name="BakerUsesScalePerInstanceAndUndoRestoresMeshReferences" fullname="Common.OptimizeTool.Tests.MeshOptimizationTests.BakerUsesScalePerInstanceAndUndoRestoresMeshReferences" methodname="BakerUsesScalePerInstanceAndUndoRestoresMeshReferences" classname="Common.OptimizeTool.Tests.MeshOptimizationTests" runstate="Runnable" seed="1631926053" result="Passed" start-time="2026-10-24 06:31:26Z" end-time="2026-10-24 06:31:26Z" duration="0.145627" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1256" name="BothToolsHaveRealCustomInspectors" fullname="Common.OptimizeTool.Tests.MeshOptimizationTests.BothToolsHaveRealCustomInspectors" methodname="BothToolsHaveRealCustomInspectors" classname="Common.OptimizeTool.Tests.MeshOptimizationTests" runstate="Runnable" seed="816956760" result="Passed" start-time="2026-10-24 06:31:26Z" end-time="2026-10-24 06:31:26Z" duration="0.001806" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1248" name="CombinationCreatesMaterialMappedSceneOutputAndUndoRestoresSources" fullname="Common.OptimizeTool.Tests.MeshOptimizationTests.CombinationCreatesMaterialMappedSceneOutputAndUndoRestoresSources" methodname="CombinationCreatesMaterialMappedSceneOutputAndUndoRestoresSources" classname="Common.OptimizeTool.Tests.MeshOptimizationTests" runstate="Runnable" seed="873773642" result="Passed" start-time="2026-10-24 06:31:26Z" end-time="2026-10-24 06:31:26Z" duration="0.093333" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1255" name="CustomVectorDoesNotRequireAnUnusedCameraReference" fullname="Common.OptimizeTool.Tests.MeshOptimizationTests.CustomVectorDoesNotRequireAnUnusedCameraReference" methodname="CustomVectorDoesNotRequireAnUnusedCameraReference" classname="Common.OptimizeTool.Tests.MeshOptimizationTests" runstate="Runnable" seed="1119622762" result="Passed" start-time="2026-10-24 06:31:26Z" end-time="2026-10-24 06:31:26Z" duration="0.086475" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1243" name="MirroredNonUniformScalePreservesFrontFaceAndCorrectWinding" fullname="Common.OptimizeTool.Tests.MeshOptimizationTests.MirroredNonUniformScalePreservesFrontFaceAndCorrectWinding" methodname="MirroredNonUniformScalePreservesFrontFaceAndCorrectWinding" classname="Common.OptimizeTool.Tests.MeshOptimizationTests" runstate="Runnable" seed="2128055238" result="Passed" start-time="2026-10-24 06:31:26Z" end-time="2026-10-24 06:31:26Z" duration="0.000828" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1240" name="MissingNormalsRequirePermissionAndAreRecalculatedForSingleMaterialOutput" fullname="Common.OptimizeTool.Tests.MeshOptimizationTests.MissingNormalsRequirePermissionAndAreRecalculatedForSingleMaterialOutput" methodname="MissingNormalsRequirePermissionAndAreRecalculatedForSingleMaterialOutput" classname="Common.OptimizeTool.Tests.MeshOptimizationTests" runstate="Runnable" seed="279167769" result="Passed" start-time="2026-10-24 06:31:26Z" end-time="2026-10-24 06:31:26Z" duration="0.000621" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1241" name="MixedChannelLayoutsKeepTangentsAndUv2DuringCombination" fullname="Common.OptimizeTool.Tests.MeshOptimizationTests.MixedChannelLayoutsKeepTangentsAndUv2DuringCombination" methodname="MixedChannelLayoutsKeepTangentsAndUv2DuringCombination" classname="Common.OptimizeTool.Tests.MeshOptimizationTests" runstate="Runnable" seed="2098079179" result="Passed" start-time="2026-10-24 06:31:26Z" end-time="2026-10-24 06:31:26Z" duration="0.003553" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1246" name="OcclusionExpandsTheHitBufferInsteadOfTreatingOwnHitsAsBlockers" fullname="Common.OptimizeTool.Tests.MeshOptimizationTests.OcclusionExpandsTheHitBufferInsteadOfTreatingOwnHitsAsBlockers" methodname="OcclusionExpandsTheHitBufferInsteadOfTreatingOwnHitsAsBlockers" classname="Common.OptimizeTool.Tests.MeshOptimizationTests" runstate="Runnable" seed="632431893" result="Passed" start-time="2026-10-24 06:31:26Z" end-time="2026-10-24 06:31:26Z" duration="0.002023" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1245" name="OcclusionIgnoresOwnCollidersButDetectsAnExternalWallAndLayerMask" fullname="Common.OptimizeTool.Tests.MeshOptimizationTests.OcclusionIgnoresOwnCollidersButDetectsAnExternalWallAndLayerMask" methodname="OcclusionIgnoresOwnCollidersButDetectsAnExternalWallAndLayerMask" classname="Common.OptimizeTool.Tests.MeshOptimizationTests" runstate="Runnable" seed="231377728" result="Passed" start-time="2026-10-24 06:31:26Z" end-time="2026-10-24 06:31:26Z" duration="0.000429" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1254" name="OutputCollisionIsRejectedBeforeAnyAssetIsCreated" fullname="Common.OptimizeTool.Tests.MeshOptimizationTests.OutputCollisionIsRejectedBeforeAnyAssetIsCreated" methodname="OutputCollisionIsRejectedBeforeAnyAssetIsCreated" classname="Common.OptimizeTool.Tests.MeshOptimizationTests" runstate="Runnable" seed="1056992526" result="Passed" start-time="2026-10-24 06:31:26Z" end-time="2026-10-24 06:31:26Z" duration="0.000542" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1242" name="PerspectiveUsesTrianglePositionWhileOrthographicUsesCameraForward" fullname="Common.OptimizeTool.Tests.MeshOptimizationTests.PerspectiveUsesTrianglePositionWhileOrthographicUsesCameraForward" methodname="PerspectiveUsesTrianglePositionWhileOrthographicUsesCameraForward" classname="Common.OptimizeTool.Tests.MeshOptimizationTests" runstate="Runnable" seed="498727122" result="Passed" start-time="2026-10-24 06:31:26Z" end-time="2026-10-24 06:31:26Z" duration="0.000503" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1239" name="ReadableCopyHandlesUnreadableMeshesWithoutChangingTheSource" fullname="Common.OptimizeTool.Tests.MeshOptimizationTests.ReadableCopyHandlesUnreadableMeshesWithoutChangingTheSource" methodname="ReadableCopyHandlesUnreadableMeshesWithoutChangingTheSource" classname="Common.OptimizeTool.Tests.MeshOptimizationTests" runstate="Runnable" seed="1658658052" result="Passed" start-time="2026-10-24 06:31:26Z" end-time="2026-10-24 06:31:26Z" duration="0.000781" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1249" name="RepeatedChildCollectionDoesNotCombineItsOwnGeneratedOutput" fullname="Common.OptimizeTool.Tests.MeshOptimizationTests.RepeatedChildCollectionDoesNotCombineItsOwnGeneratedOutput" methodname="RepeatedChildCollectionDoesNotCombineItsOwnGeneratedOutput" classname="Common.OptimizeTool.Tests.MeshOptimizationTests" runstate="Runnable" seed="1219910863" result="Passed" start-time="2026-10-24 06:31:26Z" end-time="2026-10-24 06:31:26Z" duration="0.108243" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1244" name="SmallValidScaleIsNotMistakenForAZeroScaleTransform" fullname="Common.OptimizeTool.Tests.MeshOptimizationTests.SmallValidScaleIsNotMistakenForAZeroScaleTransform" methodname="SmallValidScaleIsNotMistakenForAZeroScaleTransform" classname="Common.OptimizeTool.Tests.MeshOptimizationTests" runstate="Runnable" seed="853143434" result="Passed" start-time="2026-10-24 06:31:26Z" end-time="2026-10-24 06:31:26Z" duration="0.000796" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1253" name="SuccessfulOverwritePreservesGuidAndSupportsUndoAndRedo" fullname="Common.OptimizeTool.Tests.MeshOptimizationTests.SuccessfulOverwritePreservesGuidAndSupportsUndoAndRedo" methodname="SuccessfulOverwritePreservesGuidAndSupportsUndoAndRedo" classname="Common.OptimizeTool.Tests.MeshOptimizationTests" runstate="Runnable" seed="1247862943" result="Passed" start-time="2026-10-24 06:31:26Z" end-time="2026-10-24 06:31:26Z" duration="0.108277" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1252" name="TransactionRollsBackExistingNewAssetsAndSceneChangesOnFailure" fullname="Common.OptimizeTool.Tests.MeshOptimizationTests.TransactionRollsBackExistingNewAssetsAndSceneChangesOnFailure" methodname="TransactionRollsBackExistingNewAssetsAndSceneChangesOnFailure" classname="Common.OptimizeTool.Tests.MeshOptimizationTests" runstate="Runnable" seed="1888940038" result="Passed" start-time="2026-10-24 06:31:26Z" end-time="2026-10-24 06:31:26Z" duration="0.168664" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[Main Object Name 'Original Asset Name' does not match filename 'Existing'
+Main Object Name 'Original Asset Name' does not match filename 'Existing'
+]]></output>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1257" name="MeshRefactoringTests" fullname="Common.OptimizeTool.Tests.MeshRefactoringTests" classname="Common.OptimizeTool.Tests.MeshRefactoringTests" runstate="Runnable" testcasecount="23" result="Passed" start-time="2026-10-24 06:31:26Z" end-time="2026-10-24 06:31:29Z" duration="2.344074" total="23" passed="23" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties>
+                <property name="platform" value="EditMode" />
+              </properties>
+              <test-case id="1276" name="DirectBuildCanRecoverAfterFailureWithoutChangingLegacyInitializationApi" fullname="Common.OptimizeTool.Tests.MeshRefactoringTests.DirectBuildCanRecoverAfterFailureWithoutChangingLegacyInitializationApi" methodname="DirectBuildCanRecoverAfterFailureWithoutChangingLegacyInitializationApi" classname="Common.OptimizeTool.Tests.MeshRefactoringTests" runstate="Runnable" seed="430662217" result="Passed" start-time="2026-10-24 06:31:26Z" end-time="2026-10-24 06:31:26Z" duration="0.044497" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1283" name="ExistingShowcasePrefabResolvesAllScriptsAndModeReferencesWithoutMigration" fullname="Common.OptimizeTool.Tests.MeshRefactoringTests.ExistingShowcasePrefabResolvesAllScriptsAndModeReferencesWithoutMigration" methodname="ExistingShowcasePrefabResolvesAllScriptsAndModeReferencesWithoutMigration" classname="Common.OptimizeTool.Tests.MeshRefactoringTests" runstate="Runnable" seed="2043160697" result="Passed" start-time="2026-10-24 06:31:26Z" end-time="2026-10-24 06:31:26Z" duration="0.098859" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1274" name="FailedRebuildRestoresPreviousOutputOwnershipAndMesh" fullname="Common.OptimizeTool.Tests.MeshRefactoringTests.FailedRebuildRestoresPreviousOutputOwnershipAndMesh" methodname="FailedRebuildRestoresPreviousOutputOwnershipAndMesh" classname="Common.OptimizeTool.Tests.MeshRefactoringTests" runstate="Runnable" seed="1877845202" result="Passed" start-time="2026-10-24 06:31:26Z" end-time="2026-10-24 06:31:27Z" duration="0.128522" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-suite type="ParameterizedMethod" id="1280" name="FailureAfterSavingAPrefabRestoresBothAssetsAndTheirGuids" fullname="Common.OptimizeTool.Tests.MeshRefactoringTests.FailureAfterSavingAPrefabRestoresBothAssetsAndTheirGuids" classname="Common.OptimizeTool.Tests.MeshRefactoringTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-24 06:31:27Z" end-time="2026-10-24 06:31:27Z" duration="0.331066" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                </properties>
+                <test-case id="1278" name="FailureAfterSavingAPrefabRestoresBothAssetsAndTheirGuids(False)" fullname="Common.OptimizeTool.Tests.MeshRefactoringTests.FailureAfterSavingAPrefabRestoresBothAssetsAndTheirGuids(False)" methodname="FailureAfterSavingAPrefabRestoresBothAssetsAndTheirGuids" classname="Common.OptimizeTool.Tests.MeshRefactoringTests" runstate="Runnable" seed="477293654" result="Passed" start-time="2026-10-24 06:31:27Z" end-time="2026-10-24 06:31:27Z" duration="0.172282" asserts="0">
+                  <properties>
+                    <property name="platform" value="EditMode" />
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+                <test-case id="1279" name="FailureAfterSavingAPrefabRestoresBothAssetsAndTheirGuids(True)" fullname="Common.OptimizeTool.Tests.MeshRefactoringTests.FailureAfterSavingAPrefabRestoresBothAssetsAndTheirGuids(True)" methodname="FailureAfterSavingAPrefabRestoresBothAssetsAndTheirGuids" classname="Common.OptimizeTool.Tests.MeshRefactoringTests" runstate="Runnable" seed="1246369593" result="Passed" start-time="2026-10-24 06:31:27Z" end-time="2026-10-24 06:31:27Z" duration="0.156898" asserts="0">
+                  <properties>
+                    <property name="platform" value="EditMode" />
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+              </test-suite>
+              <test-suite type="ParameterizedMethod" id="1265" name="IncompatibleRendererSettingsFailBeforeSavingOrDisablingSources" fullname="Common.OptimizeTool.Tests.MeshRefactoringTests.IncompatibleRendererSettingsFailBeforeSavingOrDisablingSources" classname="Common.OptimizeTool.Tests.MeshRefactoringTests" runstate="Runnable" testcasecount="5" result="Passed" start-time="2026-10-24 06:31:27Z" end-time="2026-10-24 06:31:27Z" duration="0.233101" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                </properties>
+                <test-case id="1260" name="IncompatibleRendererSettingsFailBeforeSavingOrDisablingSources(&quot;layer&quot;)" fullname="Common.OptimizeTool.Tests.MeshRefactoringTests.IncompatibleRendererSettingsFailBeforeSavingOrDisablingSources(&quot;layer&quot;)" methodname="IncompatibleRendererSettingsFailBeforeSavingOrDisablingSources" classname="Common.OptimizeTool.Tests.MeshRefactoringTests" runstate="Runnable" seed="1547232582" result="Passed" start-time="2026-10-24 06:31:27Z" end-time="2026-10-24 06:31:27Z" duration="0.046814" asserts="0">
+                  <properties>
+                    <property name="platform" value="EditMode" />
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+                <test-case id="1261" name="IncompatibleRendererSettingsFailBeforeSavingOrDisablingSources(&quot;shadows&quot;)" fullname="Common.OptimizeTool.Tests.MeshRefactoringTests.IncompatibleRendererSettingsFailBeforeSavingOrDisablingSources(&quot;shadows&quot;)" methodname="IncompatibleRendererSettingsFailBeforeSavingOrDisablingSources" classname="Common.OptimizeTool.Tests.MeshRefactoringTests" runstate="Runnable" seed="1127755844" result="Passed" start-time="2026-10-24 06:31:27Z" end-time="2026-10-24 06:31:27Z" duration="0.045873" asserts="0">
+                  <properties>
+                    <property name="platform" value="EditMode" />
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+                <test-case id="1262" name="IncompatibleRendererSettingsFailBeforeSavingOrDisablingSources(&quot;sorting&quot;)" fullname="Common.OptimizeTool.Tests.MeshRefactoringTests.IncompatibleRendererSettingsFailBeforeSavingOrDisablingSources(&quot;sorting&quot;)" methodname="IncompatibleRendererSettingsFailBeforeSavingOrDisablingSources" classname="Common.OptimizeTool.Tests.MeshRefactoringTests" runstate="Runnable" seed="255018413" result="Passed" start-time="2026-10-24 06:31:27Z" end-time="2026-10-24 06:31:27Z" duration="0.047499" asserts="0">
+                  <properties>
+                    <property name="platform" value="EditMode" />
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+                <test-case id="1263" name="IncompatibleRendererSettingsFailBeforeSavingOrDisablingSources(&quot;renderingLayers&quot;)" fullname="Common.OptimizeTool.Tests.MeshRefactoringTests.IncompatibleRendererSettingsFailBeforeSavingOrDisablingSources(&quot;renderingLayers&quot;)" methodname="IncompatibleRendererSettingsFailBeforeSavingOrDisablingSources" classname="Common.OptimizeTool.Tests.MeshRefactoringTests" runstate="Runnable" seed="890854617" result="Passed" start-time="2026-10-24 06:31:27Z" end-time="2026-10-24 06:31:27Z" duration="0.045516" asserts="0">
+                  <properties>
+                    <property name="platform" value="EditMode" />
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+                <test-case id="1264" name="IncompatibleRendererSettingsFailBeforeSavingOrDisablingSources(&quot;probeAnchor&quot;)" fullname="Common.OptimizeTool.Tests.MeshRefactoringTests.IncompatibleRendererSettingsFailBeforeSavingOrDisablingSources(&quot;probeAnchor&quot;)" methodname="IncompatibleRendererSettingsFailBeforeSavingOrDisablingSources" classname="Common.OptimizeTool.Tests.MeshRefactoringTests" runstate="Runnable" seed="919533657" result="Passed" start-time="2026-10-24 06:31:27Z" end-time="2026-10-24 06:31:27Z" duration="0.044379" asserts="0">
+                  <properties>
+                    <property name="platform" value="EditMode" />
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+              </test-suite>
+              <test-case id="1258" name="InMemoryBuildDoesNotRequireSaveSettingsAndOwnsOnlyTransientOutputs" fullname="Common.OptimizeTool.Tests.MeshRefactoringTests.InMemoryBuildDoesNotRequireSaveSettingsAndOwnsOnlyTransientOutputs" methodname="InMemoryBuildDoesNotRequireSaveSettingsAndOwnsOnlyTransientOutputs" classname="Common.OptimizeTool.Tests.MeshRefactoringTests" runstate="Runnable" seed="1384617883" result="Passed" start-time="2026-10-24 06:31:27Z" end-time="2026-10-24 06:31:27Z" duration="0.047558" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1275" name="PrefabInstanceRebuildUsesItsSerializedOwnershipWithoutTouchingTheOriginal" fullname="Common.OptimizeTool.Tests.MeshRefactoringTests.PrefabInstanceRebuildUsesItsSerializedOwnershipWithoutTouchingTheOriginal" methodname="PrefabInstanceRebuildUsesItsSerializedOwnershipWithoutTouchingTheOriginal" classname="Common.OptimizeTool.Tests.MeshRefactoringTests" runstate="Runnable" seed="1087623685" result="Passed" start-time="2026-10-24 06:31:27Z" end-time="2026-10-24 06:31:27Z" duration="0.249203" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1273" name="RebuildKeepsOriginallyDisabledSourcesDisabled" fullname="Common.OptimizeTool.Tests.MeshRefactoringTests.RebuildKeepsOriginallyDisabledSourcesDisabled" methodname="RebuildKeepsOriginallyDisabledSourcesDisabled" classname="Common.OptimizeTool.Tests.MeshRefactoringTests" runstate="Runnable" seed="902796115" result="Passed" start-time="2026-10-24 06:31:27Z" end-time="2026-10-24 06:31:28Z" duration="0.105891" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1272" name="RebuildRestoresRemovedSourcesAndOptionChangesWithUndoRedo" fullname="Common.OptimizeTool.Tests.MeshRefactoringTests.RebuildRestoresRemovedSourcesAndOptionChangesWithUndoRedo" methodname="RebuildRestoresRemovedSourcesAndOptionChangesWithUndoRedo" classname="Common.OptimizeTool.Tests.MeshRefactoringTests" runstate="Runnable" seed="1573379847" result="Passed" start-time="2026-10-24 06:31:28Z" end-time="2026-10-24 06:31:28Z" duration="0.127285" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1281" name="RollbackContinuesRestoringOtherAssetsWhenOneRestorationFails" fullname="Common.OptimizeTool.Tests.MeshRefactoringTests.RollbackContinuesRestoringOtherAssetsWhenOneRestorationFails" methodname="RollbackContinuesRestoringOtherAssetsWhenOneRestorationFails" classname="Common.OptimizeTool.Tests.MeshRefactoringTests" runstate="Runnable" seed="211011106" result="Passed" start-time="2026-10-24 06:31:28Z" end-time="2026-10-24 06:31:28Z" duration="0.170559" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1271" name="SceneOutputPreservesSupportedSettingsAndUndoRedoRestoresSources" fullname="Common.OptimizeTool.Tests.MeshRefactoringTests.SceneOutputPreservesSupportedSettingsAndUndoRedoRestoresSources" methodname="SceneOutputPreservesSupportedSettingsAndUndoRedoRestoresSources" classname="Common.OptimizeTool.Tests.MeshRefactoringTests" runstate="Runnable" seed="1825743250" result="Passed" start-time="2026-10-24 06:31:28Z" end-time="2026-10-24 06:31:28Z" duration="0.089945" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1282" name="ShowcaseBuilderRegeneratesRealOutputsInAnIsolatedPrefabAndPreservesAssetGuids" fullname="Common.OptimizeTool.Tests.MeshRefactoringTests.ShowcaseBuilderRegeneratesRealOutputsInAnIsolatedPrefabAndPreservesAssetGuids" methodname="ShowcaseBuilderRegeneratesRealOutputsInAnIsolatedPrefabAndPreservesAssetGuids" classname="Common.OptimizeTool.Tests.MeshRefactoringTests" runstate="Runnable" seed="330035523" result="Passed" start-time="2026-10-24 06:31:28Z" end-time="2026-10-24 06:31:28Z" duration="0.428966" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[OptimizeTool showcase rebuilt using MeshCombiner: combined 108 triangles, backface 30, occlusion 36 (6 objects removed).
+OptimizeTool showcase rebuilt using MeshCombiner: combined 108 triangles, backface 30, occlusion 36 (6 objects removed).
+]]></output>
+              </test-case>
+              <test-case id="1259" name="TypedRequestCopiesTheSourceListAndMatchesTheLegacyComponent" fullname="Common.OptimizeTool.Tests.MeshRefactoringTests.TypedRequestCopiesTheSourceListAndMatchesTheLegacyComponent" methodname="TypedRequestCopiesTheSourceListAndMatchesTheLegacyComponent" classname="Common.OptimizeTool.Tests.MeshRefactoringTests" runstate="Runnable" seed="1643840492" result="Passed" start-time="2026-10-24 06:31:28Z" end-time="2026-10-24 06:31:28Z" duration="0.047110" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1277" name="UnsafeMaterialAndLightingAssumptionsAreAvailableAsBuildDiagnostics" fullname="Common.OptimizeTool.Tests.MeshRefactoringTests.UnsafeMaterialAndLightingAssumptionsAreAvailableAsBuildDiagnostics" methodname="UnsafeMaterialAndLightingAssumptionsAreAvailableAsBuildDiagnostics" classname="Common.OptimizeTool.Tests.MeshRefactoringTests" runstate="Runnable" seed="1488832228" result="Passed" start-time="2026-10-24 06:31:28Z" end-time="2026-10-24 06:31:28Z" duration="0.045856" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-suite type="ParameterizedMethod" id="1270" name="UnsupportedPerRendererDataFailsBeforeSaving" fullname="Common.OptimizeTool.Tests.MeshRefactoringTests.UnsupportedPerRendererDataFailsBeforeSaving" classname="Common.OptimizeTool.Tests.MeshRefactoringTests" runstate="Runnable" testcasecount="4" result="Passed" start-time="2026-10-24 06:31:28Z" end-time="2026-10-24 06:31:29Z" duration="0.189172" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                </properties>
+                <test-case id="1266" name="UnsupportedPerRendererDataFailsBeforeSaving(&quot;propertyBlock&quot;)" fullname="Common.OptimizeTool.Tests.MeshRefactoringTests.UnsupportedPerRendererDataFailsBeforeSaving(&quot;propertyBlock&quot;)" methodname="UnsupportedPerRendererDataFailsBeforeSaving" classname="Common.OptimizeTool.Tests.MeshRefactoringTests" runstate="Runnable" seed="1094772117" result="Passed" start-time="2026-10-24 06:31:28Z" end-time="2026-10-24 06:31:28Z" duration="0.046784" asserts="0">
+                  <properties>
+                    <property name="platform" value="EditMode" />
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+                <test-case id="1267" name="UnsupportedPerRendererDataFailsBeforeSaving(&quot;lightmap&quot;)" fullname="Common.OptimizeTool.Tests.MeshRefactoringTests.UnsupportedPerRendererDataFailsBeforeSaving(&quot;lightmap&quot;)" methodname="UnsupportedPerRendererDataFailsBeforeSaving" classname="Common.OptimizeTool.Tests.MeshRefactoringTests" runstate="Runnable" seed="1271502567" result="Passed" start-time="2026-10-24 06:31:28Z" end-time="2026-10-24 06:31:29Z" duration="0.047046" asserts="0">
+                  <properties>
+                    <property name="platform" value="EditMode" />
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+                <test-case id="1268" name="UnsupportedPerRendererDataFailsBeforeSaving(&quot;streams&quot;)" fullname="Common.OptimizeTool.Tests.MeshRefactoringTests.UnsupportedPerRendererDataFailsBeforeSaving(&quot;streams&quot;)" methodname="UnsupportedPerRendererDataFailsBeforeSaving" classname="Common.OptimizeTool.Tests.MeshRefactoringTests" runstate="Runnable" seed="1224171169" result="Passed" start-time="2026-10-24 06:31:29Z" end-time="2026-10-24 06:31:29Z" duration="0.044827" asserts="0">
+                  <properties>
+                    <property name="platform" value="EditMode" />
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+                <test-case id="1269" name="UnsupportedPerRendererDataFailsBeforeSaving(&quot;lod&quot;)" fullname="Common.OptimizeTool.Tests.MeshRefactoringTests.UnsupportedPerRendererDataFailsBeforeSaving(&quot;lod&quot;)" methodname="UnsupportedPerRendererDataFailsBeforeSaving" classname="Common.OptimizeTool.Tests.MeshRefactoringTests" runstate="Runnable" seed="1714633396" result="Passed" start-time="2026-10-24 06:31:29Z" end-time="2026-10-24 06:31:29Z" duration="0.046513" asserts="0">
+                  <properties>
+                    <property name="platform" value="EditMode" />
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+              </test-suite>
+            </test-suite>
+            <test-suite type="TestFixture" id="1284" name="OptimizeToolGpuGeometryTests" fullname="Common.OptimizeTool.Tests.OptimizeToolGpuGeometryTests" classname="Common.OptimizeTool.Tests.OptimizeToolGpuGeometryTests" runstate="Runnable" testcasecount="7" result="Passed" start-time="2026-10-24 06:31:29Z" end-time="2026-10-24 06:31:29Z" duration="0.887100" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties>
+                <property name="platform" value="EditMode" />
+              </properties>
+              <test-case id="1293" name="DenseBakesRemoveFacesAndHiddenLayersAndKeepSavedSourceReferences" fullname="Common.OptimizeTool.Tests.OptimizeToolGpuGeometryTests.DenseBakesRemoveFacesAndHiddenLayersAndKeepSavedSourceReferences" methodname="DenseBakesRemoveFacesAndHiddenLayersAndKeepSavedSourceReferences" classname="Common.OptimizeTool.Tests.OptimizeToolGpuGeometryTests" runstate="Runnable" seed="1371872324" result="Passed" start-time="2026-10-24 06:31:29Z" end-time="2026-10-24 06:31:29Z" duration="0.455632" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[Built scale benchmark: 9 cubes.
+]]></output>
+              </test-case>
+              <test-suite type="ParameterizedMethod" id="1289" name="DenseCubeHasTheSameSurfaceAndOutwardWinding" fullname="Common.OptimizeTool.Tests.OptimizeToolGpuGeometryTests.DenseCubeHasTheSameSurfaceAndOutwardWinding" classname="Common.OptimizeTool.Tests.OptimizeToolGpuGeometryTests" runstate="Runnable" testcasecount="4" result="Passed" start-time="2026-10-24 06:31:29Z" end-time="2026-10-24 06:31:29Z" duration="0.424648" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                </properties>
+                <test-case id="1285" name="DenseCubeHasTheSameSurfaceAndOutwardWinding(1)" fullname="Common.OptimizeTool.Tests.OptimizeToolGpuGeometryTests.DenseCubeHasTheSameSurfaceAndOutwardWinding(1)" methodname="DenseCubeHasTheSameSurfaceAndOutwardWinding" classname="Common.OptimizeTool.Tests.OptimizeToolGpuGeometryTests" runstate="Runnable" seed="2007413788" result="Passed" start-time="2026-10-24 06:31:29Z" end-time="2026-10-24 06:31:29Z" duration="0.000824" asserts="0">
+                  <properties>
+                    <property name="platform" value="EditMode" />
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+                <test-case id="1286" name="DenseCubeHasTheSameSurfaceAndOutwardWinding(2)" fullname="Common.OptimizeTool.Tests.OptimizeToolGpuGeometryTests.DenseCubeHasTheSameSurfaceAndOutwardWinding(2)" methodname="DenseCubeHasTheSameSurfaceAndOutwardWinding" classname="Common.OptimizeTool.Tests.OptimizeToolGpuGeometryTests" runstate="Runnable" seed="679922049" result="Passed" start-time="2026-10-24 06:31:29Z" end-time="2026-10-24 06:31:29Z" duration="0.000181" asserts="0">
+                  <properties>
+                    <property name="platform" value="EditMode" />
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+                <test-case id="1287" name="DenseCubeHasTheSameSurfaceAndOutwardWinding(8)" fullname="Common.OptimizeTool.Tests.OptimizeToolGpuGeometryTests.DenseCubeHasTheSameSurfaceAndOutwardWinding(8)" methodname="DenseCubeHasTheSameSurfaceAndOutwardWinding" classname="Common.OptimizeTool.Tests.OptimizeToolGpuGeometryTests" runstate="Runnable" seed="949869688" result="Passed" start-time="2026-10-24 06:31:29Z" end-time="2026-10-24 06:31:29Z" duration="0.001817" asserts="0">
+                  <properties>
+                    <property name="platform" value="EditMode" />
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+                <test-case id="1288" name="DenseCubeHasTheSameSurfaceAndOutwardWinding(128)" fullname="Common.OptimizeTool.Tests.OptimizeToolGpuGeometryTests.DenseCubeHasTheSameSurfaceAndOutwardWinding(128)" methodname="DenseCubeHasTheSameSurfaceAndOutwardWinding" classname="Common.OptimizeTool.Tests.OptimizeToolGpuGeometryTests" runstate="Runnable" seed="2084252404" result="Passed" start-time="2026-10-24 06:31:29Z" end-time="2026-10-24 06:31:29Z" duration="0.419252" asserts="0">
+                  <properties>
+                    <property name="platform" value="EditMode" />
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+              </test-suite>
+              <test-suite type="ParameterizedMethod" id="1292" name="InvalidDensityIsRejected" fullname="Common.OptimizeTool.Tests.OptimizeToolGpuGeometryTests.InvalidDensityIsRejected" classname="Common.OptimizeTool.Tests.OptimizeToolGpuGeometryTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-24 06:31:29Z" end-time="2026-10-24 06:31:29Z" duration="0.001814" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                </properties>
+                <test-case id="1290" name="InvalidDensityIsRejected(0)" fullname="Common.OptimizeTool.Tests.OptimizeToolGpuGeometryTests.InvalidDensityIsRejected(0)" methodname="InvalidDensityIsRejected" classname="Common.OptimizeTool.Tests.OptimizeToolGpuGeometryTests" runstate="Runnable" seed="1692673975" result="Passed" start-time="2026-10-24 06:31:29Z" end-time="2026-10-24 06:31:29Z" duration="0.000540" asserts="0">
+                  <properties>
+                    <property name="platform" value="EditMode" />
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+                <test-case id="1291" name="InvalidDensityIsRejected(129)" fullname="Common.OptimizeTool.Tests.OptimizeToolGpuGeometryTests.InvalidDensityIsRejected(129)" methodname="InvalidDensityIsRejected" classname="Common.OptimizeTool.Tests.OptimizeToolGpuGeometryTests" runstate="Runnable" seed="1633411938" result="Passed" start-time="2026-10-24 06:31:29Z" end-time="2026-10-24 06:31:29Z" duration="0.000072" asserts="0">
+                  <properties>
+                    <property name="platform" value="EditMode" />
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+              </test-suite>
+            </test-suite>
+            <test-suite type="TestFixture" id="1294" name="OptimizeToolScaleTests" fullname="Common.OptimizeTool.Tests.OptimizeToolScaleTests" classname="Common.OptimizeTool.Tests.OptimizeToolScaleTests" runstate="Runnable" testcasecount="1" result="Passed" start-time="2026-10-24 06:31:29Z" end-time="2026-10-24 06:31:30Z" duration="0.298989" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties>
+                <property name="platform" value="EditMode" />
+              </properties>
+              <test-case id="1295" name="ScaleBuilderBakesIndependentDepthLayersAndPreservesExistingScene" fullname="Common.OptimizeTool.Tests.OptimizeToolScaleTests.ScaleBuilderBakesIndependentDepthLayersAndPreservesExistingScene" methodname="ScaleBuilderBakesIndependentDepthLayersAndPreservesExistingScene" classname="Common.OptimizeTool.Tests.OptimizeToolScaleTests" runstate="Runnable" seed="394795635" result="Passed" start-time="2026-10-24 06:31:29Z" end-time="2026-10-24 06:31:30Z" duration="0.298453" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[Built scale benchmark: 36 cubes.
+]]></output>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1296" name="PhysicsRecorderCompatibilityTests" fullname="Common.OptimizeTool.Tests.PhysicsRecorderCompatibilityTests" classname="Common.OptimizeTool.Tests.PhysicsRecorderCompatibilityTests" runstate="Runnable" testcasecount="1" result="Passed" start-time="2026-10-24 06:31:30Z" end-time="2026-10-24 06:31:30Z" duration="0.002881" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties>
+                <property name="platform" value="EditMode" />
+              </properties>
+              <test-case id="1297" name="ExistingEntryPointsAndSerializedPrefabReferencesRemainAvailable" fullname="Common.OptimizeTool.Tests.PhysicsRecorderCompatibilityTests.ExistingEntryPointsAndSerializedPrefabReferencesRemainAvailable" methodname="ExistingEntryPointsAndSerializedPrefabReferencesRemainAvailable" classname="Common.OptimizeTool.Tests.PhysicsRecorderCompatibilityTests" runstate="Runnable" seed="622271698" result="Passed" start-time="2026-10-24 06:31:30Z" end-time="2026-10-24 06:31:30Z" duration="0.001306" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1298" name="PhysicsRecorderTests" fullname="Common.OptimizeTool.Tests.PhysicsRecorderTests" classname="Common.OptimizeTool.Tests.PhysicsRecorderTests" runstate="Runnable" testcasecount="20" result="Passed" start-time="2026-10-24 06:31:30Z" end-time="2026-10-24 06:31:33Z" duration="2.771960" total="20" passed="20" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties>
+                <property name="platform" value="EditMode" />
+              </properties>
+              <test-case id="1313" name="CompletionResultMatchesLegacyApiAndSurvivesReleaseUntilTheNextTake" fullname="Common.OptimizeTool.Tests.PhysicsRecorderTests.CompletionResultMatchesLegacyApiAndSurvivesReleaseUntilTheNextTake" methodname="CompletionResultMatchesLegacyApiAndSurvivesReleaseUntilTheNextTake" classname="Common.OptimizeTool.Tests.PhysicsRecorderTests" runstate="Runnable" seed="1532697522" result="Passed" start-time="2026-10-24 06:31:30Z" end-time="2026-10-24 06:31:30Z" duration="0.191392" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1310" name="DestroyedOrRenamedHierarchyFailsBeforeWritingAssets" fullname="Common.OptimizeTool.Tests.PhysicsRecorderTests.DestroyedOrRenamedHierarchyFailsBeforeWritingAssets" methodname="DestroyedOrRenamedHierarchyFailsBeforeWritingAssets" classname="Common.OptimizeTool.Tests.PhysicsRecorderTests" runstate="Runnable" seed="1677173461" result="Passed" start-time="2026-10-24 06:31:30Z" end-time="2026-10-24 06:31:30Z" duration="0.044569" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1311" name="DuplicatePathsAndNestedRecordingAreRejected" fullname="Common.OptimizeTool.Tests.PhysicsRecorderTests.DuplicatePathsAndNestedRecordingAreRejected" methodname="DuplicatePathsAndNestedRecordingAreRejected" classname="Common.OptimizeTool.Tests.PhysicsRecorderTests" runstate="Runnable" seed="1975804674" result="Passed" start-time="2026-10-24 06:31:30Z" end-time="2026-10-24 06:31:30Z" duration="0.112728" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1305" name="DurationBetweenFixedTicksInterpolatesTheBoundaryPose" fullname="Common.OptimizeTool.Tests.PhysicsRecorderTests.DurationBetweenFixedTicksInterpolatesTheBoundaryPose" methodname="DurationBetweenFixedTicksInterpolatesTheBoundaryPose" classname="Common.OptimizeTool.Tests.PhysicsRecorderTests" runstate="Runnable" seed="2000265478" result="Passed" start-time="2026-10-24 06:31:30Z" end-time="2026-10-24 06:31:30Z" duration="0.116257" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-suite type="ParameterizedMethod" id="1301" name="InitialFinalAndIdlePosesSurviveSavedClipSampling" fullname="Common.OptimizeTool.Tests.PhysicsRecorderTests.InitialFinalAndIdlePosesSurviveSavedClipSampling" classname="Common.OptimizeTool.Tests.PhysicsRecorderTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-24 06:31:30Z" end-time="2026-10-24 06:31:30Z" duration="0.226238" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                </properties>
+                <test-case id="1299" name="InitialFinalAndIdlePosesSurviveSavedClipSampling(True)" fullname="Common.OptimizeTool.Tests.PhysicsRecorderTests.InitialFinalAndIdlePosesSurviveSavedClipSampling(True)" methodname="InitialFinalAndIdlePosesSurviveSavedClipSampling" classname="Common.OptimizeTool.Tests.PhysicsRecorderTests" runstate="Runnable" seed="1216022068" result="Passed" start-time="2026-10-24 06:31:30Z" end-time="2026-10-24 06:31:30Z" duration="0.112151" asserts="0">
+                  <properties>
+                    <property name="platform" value="EditMode" />
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+                <test-case id="1300" name="InitialFinalAndIdlePosesSurviveSavedClipSampling(False)" fullname="Common.OptimizeTool.Tests.PhysicsRecorderTests.InitialFinalAndIdlePosesSurviveSavedClipSampling(False)" methodname="InitialFinalAndIdlePosesSurviveSavedClipSampling" classname="Common.OptimizeTool.Tests.PhysicsRecorderTests" runstate="Runnable" seed="1889835873" result="Passed" start-time="2026-10-24 06:31:30Z" end-time="2026-10-24 06:31:30Z" duration="0.113144" asserts="0">
+                  <properties>
+                    <property name="platform" value="EditMode" />
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+              </test-suite>
+              <test-case id="1321" name="InitializationFailureRetainsPreviouslyPublishedAssetReferences" fullname="Common.OptimizeTool.Tests.PhysicsRecorderTests.InitializationFailureRetainsPreviouslyPublishedAssetReferences" methodname="InitializationFailureRetainsPreviouslyPublishedAssetReferences" classname="Common.OptimizeTool.Tests.PhysicsRecorderTests" runstate="Runnable" seed="412529022" result="Passed" start-time="2026-10-24 06:31:30Z" end-time="2026-10-24 06:31:31Z" duration="0.115596" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1306" name="IntervalStaysAnchoredAndInspectorEditsDoNotChangeActiveRecording" fullname="Common.OptimizeTool.Tests.PhysicsRecorderTests.IntervalStaysAnchoredAndInspectorEditsDoNotChangeActiveRecording" methodname="IntervalStaysAnchoredAndInspectorEditsDoNotChangeActiveRecording" classname="Common.OptimizeTool.Tests.PhysicsRecorderTests" runstate="Runnable" seed="2034333411" result="Passed" start-time="2026-10-24 06:31:31Z" end-time="2026-10-24 06:31:31Z" duration="0.113605" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1309" name="OutputConflictAtStopFaultsOnceAndReleaseAllowsRetry" fullname="Common.OptimizeTool.Tests.PhysicsRecorderTests.OutputConflictAtStopFaultsOnceAndReleaseAllowsRetry" methodname="OutputConflictAtStopFaultsOnceAndReleaseAllowsRetry" classname="Common.OptimizeTool.Tests.PhysicsRecorderTests" runstate="Runnable" seed="1248927998" result="Passed" start-time="2026-10-24 06:31:31Z" end-time="2026-10-24 06:31:31Z" duration="0.138784" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1308" name="OverwritePreservesBothAssetGuidsAndTheClipReference" fullname="Common.OptimizeTool.Tests.PhysicsRecorderTests.OverwritePreservesBothAssetGuidsAndTheClipReference" methodname="OverwritePreservesBothAssetGuidsAndTheClipReference" classname="Common.OptimizeTool.Tests.PhysicsRecorderTests" runstate="Runnable" seed="1015598128" result="Passed" start-time="2026-10-24 06:31:31Z" end-time="2026-10-24 06:31:31Z" duration="0.182041" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1307" name="PlaybackStripsInactivePhysicsAndExistingAnimationComponents" fullname="Common.OptimizeTool.Tests.PhysicsRecorderTests.PlaybackStripsInactivePhysicsAndExistingAnimationComponents" methodname="PlaybackStripsInactivePhysicsAndExistingAnimationComponents" classname="Common.OptimizeTool.Tests.PhysicsRecorderTests" runstate="Runnable" seed="930449647" result="Passed" start-time="2026-10-24 06:31:31Z" end-time="2026-10-24 06:31:31Z" duration="0.112524" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-suite type="ParameterizedMethod" id="1319" name="RecordingMetricsExposeObservationKeysExportPhasesAndOverwriteBackupSize" fullname="Common.OptimizeTool.Tests.PhysicsRecorderTests.RecordingMetricsExposeObservationKeysExportPhasesAndOverwriteBackupSize" classname="Common.OptimizeTool.Tests.PhysicsRecorderTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-24 06:31:31Z" end-time="2026-10-24 06:31:32Z" duration="0.511063" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                </properties>
+                <test-case id="1317" name="RecordingMetricsExposeObservationKeysExportPhasesAndOverwriteBackupSize(16)" fullname="Common.OptimizeTool.Tests.PhysicsRecorderTests.RecordingMetricsExposeObservationKeysExportPhasesAndOverwriteBackupSize(16)" methodname="RecordingMetricsExposeObservationKeysExportPhasesAndOverwriteBackupSize" classname="Common.OptimizeTool.Tests.PhysicsRecorderTests" runstate="Runnable" seed="100968692" result="Passed" start-time="2026-10-24 06:31:31Z" end-time="2026-10-24 06:31:31Z" duration="0.196421" asserts="0">
+                  <properties>
+                    <property name="platform" value="EditMode" />
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                  <output><![CDATA[RECORDING_METRICS transforms=16 observations=21 poses=317 hierarchy_ms=0.1359 sampling_ms=0.1168 curves_ms=2.1585 prefab_ms=0.1878 save_ms=74.0148 export_ms=76.7962
+OVERWRITE_BACKUP transforms=16 bytes=957994
+]]></output>
+                </test-case>
+                <test-case id="1318" name="RecordingMetricsExposeObservationKeysExportPhasesAndOverwriteBackupSize(128)" fullname="Common.OptimizeTool.Tests.PhysicsRecorderTests.RecordingMetricsExposeObservationKeysExportPhasesAndOverwriteBackupSize(128)" methodname="RecordingMetricsExposeObservationKeysExportPhasesAndOverwriteBackupSize" classname="Common.OptimizeTool.Tests.PhysicsRecorderTests" runstate="Runnable" seed="1536396453" result="Passed" start-time="2026-10-24 06:31:31Z" end-time="2026-10-24 06:31:32Z" duration="0.313205" asserts="0">
+                  <properties>
+                    <property name="platform" value="EditMode" />
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                  <output><![CDATA[RECORDING_METRICS transforms=128 observations=21 poses=2669 hierarchy_ms=1.1289 sampling_ms=1.0789 curves_ms=20.1998 prefab_ms=0.5778 save_ms=134.0983 export_ms=155.5022
+OVERWRITE_BACKUP transforms=128 bytes=8004118
+]]></output>
+                </test-case>
+              </test-suite>
+              <test-case id="1302" name="ReleaseClearsWorkingBuffersAndKeepsThePublishedResult" fullname="Common.OptimizeTool.Tests.PhysicsRecorderTests.ReleaseClearsWorkingBuffersAndKeepsThePublishedResult" methodname="ReleaseClearsWorkingBuffersAndKeepsThePublishedResult" classname="Common.OptimizeTool.Tests.PhysicsRecorderTests" runstate="Runnable" seed="487674691" result="Passed" start-time="2026-10-24 06:31:32Z" end-time="2026-10-24 06:31:32Z" duration="0.112293" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1312" name="ReleaseDuringRecordingCompletesBothAssetsSynchronously" fullname="Common.OptimizeTool.Tests.PhysicsRecorderTests.ReleaseDuringRecordingCompletesBothAssetsSynchronously" methodname="ReleaseDuringRecordingCompletesBothAssetsSynchronously" classname="Common.OptimizeTool.Tests.PhysicsRecorderTests" runstate="Runnable" seed="49831756" result="Passed" start-time="2026-10-24 06:31:32Z" end-time="2026-10-24 06:31:32Z" duration="0.111410" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1320" name="SavedReferenceRetainsUnreducedObservationsAndSurvivesOverwriteAndReimport" fullname="Common.OptimizeTool.Tests.PhysicsRecorderTests.SavedReferenceRetainsUnreducedObservationsAndSurvivesOverwriteAndReimport" methodname="SavedReferenceRetainsUnreducedObservationsAndSurvivesOverwriteAndReimport" classname="Common.OptimizeTool.Tests.PhysicsRecorderTests" runstate="Runnable" seed="109669124" result="Passed" start-time="2026-10-24 06:31:32Z" end-time="2026-10-24 06:31:32Z" duration="0.196373" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1303" name="SharedAssetSnapshotRestoresMetadataAndRemovesMetaOnlyPartialOutputs" fullname="Common.OptimizeTool.Tests.PhysicsRecorderTests.SharedAssetSnapshotRestoresMetadataAndRemovesMetaOnlyPartialOutputs" methodname="SharedAssetSnapshotRestoresMetadataAndRemovesMetaOnlyPartialOutputs" classname="Common.OptimizeTool.Tests.PhysicsRecorderTests" runstate="Runnable" seed="785038884" result="Passed" start-time="2026-10-24 06:31:32Z" end-time="2026-10-24 06:31:32Z" duration="0.136546" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1304" name="StationaryRecordingRetainsBothBoundaryKeysAndFullDuration" fullname="Common.OptimizeTool.Tests.PhysicsRecorderTests.StationaryRecordingRetainsBothBoundaryKeysAndFullDuration" methodname="StationaryRecordingRetainsBothBoundaryKeysAndFullDuration" classname="Common.OptimizeTool.Tests.PhysicsRecorderTests" runstate="Runnable" seed="1438168809" result="Passed" start-time="2026-10-24 06:31:32Z" end-time="2026-10-24 06:31:32Z" duration="0.113632" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-suite type="ParameterizedMethod" id="1316" name="UnavailablePrefabImportRollsBackBothOutputAssets" fullname="Common.OptimizeTool.Tests.PhysicsRecorderTests.UnavailablePrefabImportRollsBackBothOutputAssets" classname="Common.OptimizeTool.Tests.PhysicsRecorderTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-24 06:31:32Z" end-time="2026-10-24 06:31:33Z" duration="0.233545" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                </properties>
+                <test-case id="1314" name="UnavailablePrefabImportRollsBackBothOutputAssets(False)" fullname="Common.OptimizeTool.Tests.PhysicsRecorderTests.UnavailablePrefabImportRollsBackBothOutputAssets(False)" methodname="UnavailablePrefabImportRollsBackBothOutputAssets" classname="Common.OptimizeTool.Tests.PhysicsRecorderTests" runstate="Runnable" seed="195820407" result="Passed" start-time="2026-10-24 06:31:32Z" end-time="2026-10-24 06:31:32Z" duration="0.059912" asserts="0">
+                  <properties>
+                    <property name="platform" value="EditMode" />
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+                <test-case id="1315" name="UnavailablePrefabImportRollsBackBothOutputAssets(True)" fullname="Common.OptimizeTool.Tests.PhysicsRecorderTests.UnavailablePrefabImportRollsBackBothOutputAssets(True)" methodname="UnavailablePrefabImportRollsBackBothOutputAssets" classname="Common.OptimizeTool.Tests.PhysicsRecorderTests" runstate="Runnable" seed="61529859" result="Passed" start-time="2026-10-24 06:31:32Z" end-time="2026-10-24 06:31:33Z" duration="0.172033" asserts="0">
+                  <properties>
+                    <property name="platform" value="EditMode" />
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+              </test-suite>
+            </test-suite>
+            <test-suite type="TestFixture" id="1322" name="PhysicsRecordingSessionTests" fullname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests" classname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests" runstate="Runnable" testcasecount="15" result="Passed" start-time="2026-10-24 06:31:33Z" end-time="2026-10-24 06:31:33Z" duration="0.007994" total="15" passed="15" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties>
+                <property name="platform" value="EditMode" />
+              </properties>
+              <test-case id="1336" name="CompletedTakeCannotBeMutatedThroughTheSessionOrPublishedLists" fullname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests.CompletedTakeCannotBeMutatedThroughTheSessionOrPublishedLists" methodname="CompletedTakeCannotBeMutatedThroughTheSessionOrPublishedLists" classname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests" runstate="Runnable" seed="818515111" result="Passed" start-time="2026-10-24 06:31:33Z" end-time="2026-10-24 06:31:33Z" duration="0.001166" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1333" name="EndpointUsesThePreviousObservationEvenWhenItWasNotStoredAsAKey" fullname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests.EndpointUsesThePreviousObservationEvenWhenItWasNotStoredAsAKey" methodname="EndpointUsesThePreviousObservationEvenWhenItWasNotStoredAsAKey" classname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests" runstate="Runnable" seed="1550337201" result="Passed" start-time="2026-10-24 06:31:33Z" end-time="2026-10-24 06:31:33Z" duration="0.000135" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1329" name="FrameSamplingAndDirectObservationRetainTheOriginalReferencePoses" fullname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests.FrameSamplingAndDirectObservationRetainTheOriginalReferencePoses" methodname="FrameSamplingAndDirectObservationRetainTheOriginalReferencePoses" classname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests" runstate="Runnable" seed="1636363089" result="Passed" start-time="2026-10-24 06:31:33Z" end-time="2026-10-24 06:31:33Z" duration="0.000537" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-suite type="ParameterizedMethod" id="1332" name="IdleBoundariesAndInitialFinalPosesAreRetained" fullname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests.IdleBoundariesAndInitialFinalPosesAreRetained" classname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-24 06:31:33Z" end-time="2026-10-24 06:31:33Z" duration="0.001132" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                </properties>
+                <test-case id="1330" name="IdleBoundariesAndInitialFinalPosesAreRetained(True)" fullname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests.IdleBoundariesAndInitialFinalPosesAreRetained(True)" methodname="IdleBoundariesAndInitialFinalPosesAreRetained" classname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests" runstate="Runnable" seed="1702587855" result="Passed" start-time="2026-10-24 06:31:33Z" end-time="2026-10-24 06:31:33Z" duration="0.000637" asserts="0">
+                  <properties>
+                    <property name="platform" value="EditMode" />
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+                <test-case id="1331" name="IdleBoundariesAndInitialFinalPosesAreRetained(False)" fullname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests.IdleBoundariesAndInitialFinalPosesAreRetained(False)" methodname="IdleBoundariesAndInitialFinalPosesAreRetained" classname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests" runstate="Runnable" seed="958470281" result="Passed" start-time="2026-10-24 06:31:33Z" end-time="2026-10-24 06:31:33Z" duration="0.000047" asserts="0">
+                  <properties>
+                    <property name="platform" value="EditMode" />
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+              </test-suite>
+              <test-suite type="ParameterizedMethod" id="1328" name="MalformedReferenceIsRejectedBeforeComparison" fullname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests.MalformedReferenceIsRejectedBeforeComparison" classname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests" runstate="Runnable" testcasecount="5" result="Passed" start-time="2026-10-24 06:31:33Z" end-time="2026-10-24 06:31:33Z" duration="0.001818" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                </properties>
+                <test-case id="1323" name="MalformedReferenceIsRejectedBeforeComparison(&quot;paths&quot;)" fullname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests.MalformedReferenceIsRejectedBeforeComparison(&quot;paths&quot;)" methodname="MalformedReferenceIsRejectedBeforeComparison" classname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests" runstate="Runnable" seed="1770712107" result="Passed" start-time="2026-10-24 06:31:33Z" end-time="2026-10-24 06:31:33Z" duration="0.001020" asserts="0">
+                  <properties>
+                    <property name="platform" value="EditMode" />
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+                <test-case id="1324" name="MalformedReferenceIsRejectedBeforeComparison(&quot;times&quot;)" fullname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests.MalformedReferenceIsRejectedBeforeComparison(&quot;times&quot;)" methodname="MalformedReferenceIsRejectedBeforeComparison" classname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests" runstate="Runnable" seed="882881544" result="Passed" start-time="2026-10-24 06:31:33Z" end-time="2026-10-24 06:31:33Z" duration="0.000071" asserts="0">
+                  <properties>
+                    <property name="platform" value="EditMode" />
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+                <test-case id="1325" name="MalformedReferenceIsRejectedBeforeComparison(&quot;nonfinite-time&quot;)" fullname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests.MalformedReferenceIsRejectedBeforeComparison(&quot;nonfinite-time&quot;)" methodname="MalformedReferenceIsRejectedBeforeComparison" classname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests" runstate="Runnable" seed="1672323449" result="Passed" start-time="2026-10-24 06:31:33Z" end-time="2026-10-24 06:31:33Z" duration="0.000053" asserts="0">
+                  <properties>
+                    <property name="platform" value="EditMode" />
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+                <test-case id="1326" name="MalformedReferenceIsRejectedBeforeComparison(&quot;poses&quot;)" fullname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests.MalformedReferenceIsRejectedBeforeComparison(&quot;poses&quot;)" methodname="MalformedReferenceIsRejectedBeforeComparison" classname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests" runstate="Runnable" seed="1804237973" result="Passed" start-time="2026-10-24 06:31:33Z" end-time="2026-10-24 06:31:33Z" duration="0.000052" asserts="0">
+                  <properties>
+                    <property name="platform" value="EditMode" />
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+                <test-case id="1327" name="MalformedReferenceIsRejectedBeforeComparison(&quot;rotation&quot;)" fullname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests.MalformedReferenceIsRejectedBeforeComparison(&quot;rotation&quot;)" methodname="MalformedReferenceIsRejectedBeforeComparison" classname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests" runstate="Runnable" seed="598286158" result="Passed" start-time="2026-10-24 06:31:33Z" end-time="2026-10-24 06:31:33Z" duration="0.000057" asserts="0">
+                  <properties>
+                    <property name="platform" value="EditMode" />
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+              </test-suite>
+              <test-case id="1339" name="ManualStopAtTheSameTimeReplacesTheBoundaryKey" fullname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests.ManualStopAtTheSameTimeReplacesTheBoundaryKey" methodname="ManualStopAtTheSameTimeReplacesTheBoundaryKey" classname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests" runstate="Runnable" seed="1288055095" result="Passed" start-time="2026-10-24 06:31:33Z" end-time="2026-10-24 06:31:33Z" duration="0.000142" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1335" name="QuaternionSignsStayContinuousAcrossAnIdleSpan" fullname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests.QuaternionSignsStayContinuousAcrossAnIdleSpan" methodname="QuaternionSignsStayContinuousAcrossAnIdleSpan" classname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests" runstate="Runnable" seed="599510038" result="Passed" start-time="2026-10-24 06:31:33Z" end-time="2026-10-24 06:31:33Z" duration="0.000185" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1338" name="ReferenceKeepsEveryObservationAndTheInterpolatedEndpointIndependentlyOfKeyReduction" fullname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests.ReferenceKeepsEveryObservationAndTheInterpolatedEndpointIndependentlyOfKeyReduction" methodname="ReferenceKeepsEveryObservationAndTheInterpolatedEndpointIndependentlyOfKeyReduction" classname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests" runstate="Runnable" seed="390188358" result="Passed" start-time="2026-10-24 06:31:33Z" end-time="2026-10-24 06:31:33Z" duration="0.000692" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1334" name="SamplingIntervalRemainsAnchoredToTheStartTime" fullname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests.SamplingIntervalRemainsAnchoredToTheStartTime" methodname="SamplingIntervalRemainsAnchoredToTheStartTime" classname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests" runstate="Runnable" seed="857429260" result="Passed" start-time="2026-10-24 06:31:33Z" end-time="2026-10-24 06:31:33Z" duration="0.000202" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1337" name="SmallRotationsAboveTheConfiguredThresholdAreNotDiscarded" fullname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests.SmallRotationsAboveTheConfiguredThresholdAreNotDiscarded" methodname="SmallRotationsAboveTheConfiguredThresholdAreNotDiscarded" classname="Common.OptimizeTool.Tests.PhysicsRecordingSessionTests" runstate="Runnable" seed="1553500567" result="Passed" start-time="2026-10-24 06:31:33Z" end-time="2026-10-24 06:31:33Z" duration="0.000136" asserts="0">
+                <properties>
+                  <property name="platform" value="EditMode" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: [TestRunnerNoThrottle] Restored Interaction Mode after test run.
+Saving results to: /var/folders/4m/v7xw547n4wj7kgvjblgr8ry00000gn/T/optimizetool-refactor-iehkdrz1/EditMode-verified.xml
+]]></output>
+              </test-case>
+            </test-suite>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
