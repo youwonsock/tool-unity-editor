@@ -50,22 +50,12 @@ namespace Common.FlowField.Samples
 
         public bool IsInitialized => _isInitialized;
         public bool IsFaulted => _isFaulted;
-        public string CurrentMode => _mode.ToString();
         public bool DynamicObstacleEnabled => _dynamicObstacleEnabled;
-        public bool DynamicObstacleRegistered => _dynamicObstacleRegistered;
-        public bool HasSample => _hasSample;
-        public string LastAction => _lastAction;
         public int ActiveGoalIndex => _sampleController != null ? _sampleController.ActiveGoalIndex : -1;
         public int GoalCount => _sampleController != null ? _sampleController.GoalCount : 0;
         public Vector3 ActiveGoalPosition => _sampleController != null && _sampleController.HasActiveGoal
             ? _sampleController.ActiveGoalPosition
             : throw new InvalidOperationException("FlowField sample has no active goal.");
-        public FlowFieldSample LastSample => _hasSample
-            ? _lastSample
-            : throw new InvalidOperationException("FlowField overview has not sampled a probe yet.");
-        public FlowFieldClampResult LastClamp => _hasSample
-            ? _lastClamp
-            : throw new InvalidOperationException("FlowField overview has not clamped a probe yet.");
 
         private void Awake()
         {
@@ -187,7 +177,6 @@ namespace Common.FlowField.Samples
             if (_showcaseStarted)
                 return;
 
-            _sampleController.SetAutomaticGoalChanges(false);
             ApplyMode(ShowcaseMode.Baseline);
             if (_manager.BakeMode == FlowFieldBakeMode.StaticBaked)
             {

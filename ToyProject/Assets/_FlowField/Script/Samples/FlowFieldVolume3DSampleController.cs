@@ -47,7 +47,6 @@ namespace Common.FlowField.Samples
             ? _activeGoalPosition
             : throw new InvalidOperationException("Volume3D sample has no active goal.");
         public bool IsInitialized => _initialized;
-        public bool IsWaitingForManager => _waitingForManager;
         public string LastStatus { get; private set; } = "Waiting for Volume3D field.";
 
         private void Awake()

@@ -21,8 +21,6 @@ namespace Common.FlowField.Samples
         /// the helpers below.
         /// </summary>
         protected List<FlowFieldSampleAgent> Agents => _ownedAgents;
-        protected IReadOnlyList<FlowFieldSampleAgent> OwnedAgents => _ownedAgents;
-        protected int OwnedAgentCount => _ownedAgents.Count;
 
         /// <summary>
         /// Takes ownership before any user/component initialization runs.  This

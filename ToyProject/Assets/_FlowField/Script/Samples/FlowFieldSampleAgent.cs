@@ -28,9 +28,6 @@ namespace Common.FlowField.Samples
         public Vector3 Position => _rigidbody != null
             ? GetPosition()
             : throw new InvalidOperationException("FlowFieldSampleAgent requires a Rigidbody.");
-        public Vector3 Velocity => _rigidbody != null
-            ? GetVelocity()
-            : throw new InvalidOperationException("FlowFieldSampleAgent requires a Rigidbody.");
         public bool IsFlowReady => _provider != null && _provider.IsReady;
 
         private void Awake()
@@ -117,15 +114,6 @@ namespace Common.FlowField.Samples
             if (!_isInitialized)
                 throw new InvalidOperationException("FlowFieldSampleAgent is not initialized.");
             return _rigidbody.position;
-        }
-
-        private Vector3 GetVelocity()
-        {
-            if (_isFaulted)
-                throw new InvalidOperationException("FlowFieldSampleAgent is faulted; call Release before use.", _fault);
-            if (!_isInitialized)
-                throw new InvalidOperationException("FlowFieldSampleAgent is not initialized.");
-            return _rigidbody.velocity;
         }
 
         internal void Simulate(float deltaTime)

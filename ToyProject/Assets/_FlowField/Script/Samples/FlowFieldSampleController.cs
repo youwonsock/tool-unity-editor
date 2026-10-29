@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using UnityEngine;
 using static Common.FlowField.Samples.FlowFieldSampleMath;
 
@@ -40,21 +39,10 @@ namespace Common.FlowField.Samples
         };
         [SerializeField] private float _goalInfluenceRadius = 0f;
 
-        [Header("Diagnostics")]
-        [SerializeField] private float _diagnosticsInterval = 1f;
-        [SerializeField] private float _deepOverlapDistance = 0.45f;
-
-        private readonly Dictionary<Vector2Int, List<int>> _overlapBuckets =
-            new Dictionary<Vector2Int, List<int>>();
-        private float _diagnosticsTimer;
         private int _activeGoalIndex = -1;
-        private int _goalChangeCount;
-        private int _deepOverlapPairs;
         private bool _simulationReady;
-        private bool _automaticGoalChanges;
         private bool _isInitialized;
         private bool _isFaulted;
-        private bool _waitingForField;
         private bool _startCompleted;
         private bool _initializationReported;
         private bool _hasActiveGoal;
@@ -70,19 +58,14 @@ namespace Common.FlowField.Samples
             }
         }
         public int ActiveGoalIndex => _activeGoalIndex;
-        public int GoalChangeCount => _goalChangeCount;
         public int GoalCount => _goalPositions != null ? _goalPositions.Length : 0;
         public bool HasActiveGoal => _hasActiveGoal;
-        public int ManagerRevision => _manager != null ? _manager.Revision : 0;
         public Vector3 ActiveGoalPosition => _hasActiveGoal
             ? _activeGoalPosition
             : throw new InvalidOperationException("FlowField sample has no active goal.");
-        public bool AutomaticGoalChangesEnabled => _automaticGoalChanges;
-        public int DeepOverlapPairs => _deepOverlapPairs;
         public bool IsSimulationReady => _simulationReady;
         public bool IsInitialized => _isInitialized;
         public bool IsFaulted => _isFaulted;
-        public bool IsWaitingForField => _waitingForField && !_startCompleted && !_isFaulted;
         public string LastStatus { get; private set; } = "Waiting for FlowField.";
 
         private void Awake()
@@ -132,13 +115,7 @@ namespace Common.FlowField.Samples
                 }
                 if (!IsFinite(_goalInfluenceRadius) || _goalInfluenceRadius < 0f)
                     throw new ArgumentOutOfRangeException(nameof(_goalInfluenceRadius));
-                if (!IsFinite(_diagnosticsInterval) || _diagnosticsInterval <= 0f)
-                    throw new ArgumentOutOfRangeException(nameof(_diagnosticsInterval));
-                if (!IsFinite(_deepOverlapDistance) || _deepOverlapDistance <= 0f)
-                    throw new ArgumentOutOfRangeException(nameof(_deepOverlapDistance));
-                _automaticGoalChanges = false;
                 _isInitialized = true;
-                _waitingForField = true;
                 LastStatus = _manager.IsReady
                     ? "FlowField is ready; preparing sample agents."
                     : "Waiting for a published FlowField.";
@@ -187,13 +164,6 @@ namespace Common.FlowField.Samples
                 if (agent == null || !agent.IsInitialized)
                     throw new InvalidOperationException($"FlowField agent {i} is missing or not initialized.");
                 agent.Simulate(deltaTime);
-            }
-
-            _diagnosticsTimer += deltaTime;
-            if (_diagnosticsTimer >= _diagnosticsInterval)
-            {
-                _diagnosticsTimer = 0f;
-                UpdateOverlapDiagnostics();
             }
         }
 
@@ -292,16 +262,9 @@ namespace Common.FlowField.Samples
             _manager.RequestRebuild();
             _activeGoalIndex = -1;
             _hasActiveGoal = false;
-            _goalChangeCount++;
             _goalMarker.gameObject.SetActive(false);
             LastStatus = "Cleared the runtime Goal and requested a rebuild.";
             return true;
-        }
-
-        public void SetAutomaticGoalChanges(bool enabled)
-        {
-            ThrowIfUnavailable();
-            _automaticGoalChanges = enabled;
         }
 
         private bool SetGoalByIndex(int index)
@@ -319,7 +282,6 @@ namespace Common.FlowField.Samples
             _hasActiveGoal = true;
             _goalMarker.position = goalPosition;
             _goalMarker.gameObject.SetActive(true);
-            _goalChangeCount++;
             LastStatus = $"Requested runtime Goal {index + 1}.";
             return true;
         }
@@ -338,7 +300,6 @@ namespace Common.FlowField.Samples
             }
             catch (Exception exception)
             {
-                _waitingForField = false;
                 _simulationReady = false;
                 if (_initializationReported)
                     return;
@@ -361,13 +322,11 @@ namespace Common.FlowField.Samples
                     new InvalidOperationException(_manager.LastError));
             if (!_manager.IsReady)
             {
-                _waitingForField = true;
                 LastStatus = "Waiting for a published FlowField.";
                 return;
             }
             if (!_manager.TryGetFieldInfo(out FlowFieldFieldInfo fieldInfo) || !fieldInfo.IsValid)
             {
-                _waitingForField = true;
                 LastStatus = "Waiting for valid FlowField metadata.";
                 return;
             }
@@ -388,7 +347,6 @@ namespace Common.FlowField.Samples
                 else
                     ApplyInitialRuntimeGoal(fieldInfo);
 
-                _waitingForField = false;
                 _startCompleted = true;
                 _simulationReady = Agents.Count == _agentCount && _manager.IsReady;
                 LastStatus = _manager.BakeMode == FlowFieldBakeMode.StaticBaked
@@ -400,7 +358,6 @@ namespace Common.FlowField.Samples
                 ReleaseSpawnedAgents();
                 _simulationReady = false;
                 _startCompleted = false;
-                _waitingForField = false;
                 throw;
             }
         }
@@ -443,80 +400,6 @@ namespace Common.FlowField.Samples
                 && !_manager.IsFaulted
                 && _manager.BakeMode == FlowFieldBakeMode.RuntimeDynamic;
 
-        private void UpdateOverlapDiagnostics()
-        {
-            _deepOverlapPairs = 0;
-            _overlapBuckets.Clear();
-
-            float bucketSize = _deepOverlapDistance;
-            for (int i = 0; i < Agents.Count; i++)
-            {
-                FlowFieldSampleAgent agent = Agents[i];
-                if (agent == null)
-                    throw new InvalidOperationException($"FlowField agent {i} is missing.");
-
-                Vector3 position = agent.Position;
-                Vector2Int bucket = new Vector2Int(
-                    Mathf.FloorToInt(position.x / bucketSize),
-                    Mathf.FloorToInt(position.z / bucketSize));
-                if (!_overlapBuckets.TryGetValue(bucket, out List<int> indices))
-                {
-                    indices = new List<int>();
-                    _overlapBuckets.Add(bucket, indices);
-                }
-
-                indices.Add(i);
-            }
-
-            float thresholdSqr = _deepOverlapDistance * _deepOverlapDistance;
-            foreach (KeyValuePair<Vector2Int, List<int>> pair in _overlapBuckets)
-            {
-                Vector2Int bucket = pair.Key;
-                List<int> currentIndices = pair.Value;
-                for (int dz = -1; dz <= 1; dz++)
-                {
-                    for (int dx = -1; dx <= 1; dx++)
-                    {
-                        Vector2Int neighborKey = bucket + new Vector2Int(dx, dz);
-                        if (!_overlapBuckets.TryGetValue(neighborKey, out List<int> neighborIndices))
-                            continue;
-
-                        for (int i = 0; i < currentIndices.Count; i++)
-                        {
-                            int firstIndex = currentIndices[i];
-                            FlowFieldSampleAgent first = Agents[firstIndex];
-                            if (first == null)
-                                throw new InvalidOperationException($"FlowField agent {firstIndex} is missing.");
-
-                            for (int j = 0; j < neighborIndices.Count; j++)
-                            {
-                                int secondIndex = neighborIndices[j];
-                                if (secondIndex <= firstIndex)
-                                    continue;
-
-                                FlowFieldSampleAgent second = Agents[secondIndex];
-                                if (second == null)
-                                    throw new InvalidOperationException($"FlowField agent {secondIndex} is missing.");
-
-                                Vector3 delta = first.Position - second.Position;
-                                delta.y = 0f;
-                                if (delta.sqrMagnitude < thresholdSqr)
-                                    _deepOverlapPairs++;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        private void ThrowIfUnavailable()
-        {
-            if (_isFaulted)
-                throw new InvalidOperationException("FlowFieldSampleController is faulted; call Release before use.", _fault);
-            if (!_isInitialized)
-                throw new InvalidOperationException("FlowFieldSampleController is not initialized.");
-        }
-
         private void OnValidate()
         {
             // Validation is reported at Init so serialized values remain untouched in the editor.
@@ -539,9 +422,6 @@ namespace Common.FlowField.Samples
             _activeGoalIndex = -1;
             _hasActiveGoal = false;
             _activeGoalPosition = default;
-            _goalChangeCount = 0;
-            _deepOverlapPairs = 0;
-            _waitingForField = false;
             _startCompleted = false;
             _isInitialized = false;
             _isFaulted = false;
@@ -552,7 +432,6 @@ namespace Common.FlowField.Samples
         private void ReleaseSpawnedAgents()
         {
             ReleaseOwnedAgents();
-            _overlapBuckets.Clear();
         }
     }
 }

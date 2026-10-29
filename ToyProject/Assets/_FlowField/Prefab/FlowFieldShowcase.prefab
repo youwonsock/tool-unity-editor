@@ -3579,8 +3579,6 @@ MonoBehaviour:
   - {x: -35, y: 0.4, z: -5}
   - {x: 5, y: 0.4, z: 5}
   _goalInfluenceRadius: 0
-  _diagnosticsInterval: 1
-  _deepOverlapDistance: 0.45
 --- !u!114 &1888116987211774303
 MonoBehaviour:
   m_ObjectHideFlags: 0
