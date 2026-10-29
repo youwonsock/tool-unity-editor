@@ -107,6 +107,7 @@ namespace Common.FlowField
         private const int Unreachable = FlowFieldVolumeNavigation.Unreachable;
         private readonly FlowFieldVolumeObstacleTracker _obstacles;
         private Collider[] _registeredObstacleOverlapBuffer;
+        private readonly FlowFieldVolumeCellQuery _cellQuery = new FlowFieldVolumeCellQuery();
         private readonly FlowFieldVolumeModifierRegistry _modifierRegistry = new FlowFieldVolumeModifierRegistry();
         private readonly FlowFieldVolumeSafetyState _safety = new FlowFieldVolumeSafetyState();
 
@@ -678,6 +679,7 @@ namespace Common.FlowField
             _computeSolver = null;
             _obstacles.Clear();
             _registeredObstacleOverlapBuffer = null;
+            _cellQuery.Clear();
             _modifierRegistry.Clear();
             SetState(FlowFieldRuntimeState.Released);
         }
@@ -1036,51 +1038,35 @@ namespace Common.FlowField
             if (build.Cursor == 0)
                 Physics.SyncTransforms();
             int end = Math.Min(build.Cursor + CellsPerStep, build.Count);
-            Vector3 half = ObstacleHalfExtents(
-                build.Request.Grid.CellSize,
-                build.Request.ObstacleClearance);
+            FlowFieldGridSpace grid = build.Request.Grid;
+            Vector3 half = ObstacleHalfExtents(grid.CellSize, build.Request.ObstacleClearance);
+            _cellQuery.BeginObstacleStep(
+                FlowFieldVolumeCellQuery.StepBounds(grid, build.Cursor, end, half),
+                build.Request.ObstacleLayer,
+                _obstacles);
             for (; build.Cursor < end; build.Cursor++)
             {
                 int index = build.Cursor;
-                build.Request.Grid.FromFlatIndex(index, out int x, out int y, out int z);
-                Vector3 center = build.Request.Grid.LocalToWorldCenter(x, y, z);
-                build.Blocked[index] = Physics.CheckBox(
-                    center,
-                    half,
-                    Quaternion.identity,
-                    build.Request.ObstacleLayer,
-                    QueryTriggerInteraction.Ignore);
+                grid.FromFlatIndex(index, out int x, out int y, out int z);
+                Vector3 center = grid.LocalToWorldCenter(x, y, z);
+                var cellBox = new Bounds(center, half * 2f);
+                build.Blocked[index] = _cellQuery.MayHitLayer(cellBox)
+                    && Physics.CheckBox(
+                        center,
+                        half,
+                        Quaternion.identity,
+                        build.Request.ObstacleLayer,
+                        QueryTriggerInteraction.Ignore);
                 if (!build.Blocked[index])
-                    build.Blocked[index] = IntersectsRegisteredObstacle(center, half);
+                {
+                    build.Blocked[index] = _cellQuery.IntersectsRegistered(
+                        center,
+                        half,
+                        cellBox,
+                        ref _registeredObstacleOverlapBuffer);
+                }
             }
             return build.Cursor >= build.Count;
-        }
-
-        private bool IntersectsRegisteredObstacle(Vector3 center, Vector3 halfExtents)
-        {
-            for (int index = 0; index < _obstacles.RegisteredCount; index++)
-            {
-                Collider collider = _obstacles.GetRegisteredObstacle(index);
-                if (collider == null || collider.isTrigger)
-                    continue;
-                int layerMask = 1 << collider.gameObject.layer;
-                if (!Physics.CheckBox(
-                        center,
-                        halfExtents,
-                        Quaternion.identity,
-                        layerMask,
-                        QueryTriggerInteraction.Ignore))
-                    continue;
-                if (FlowFieldOverlapUtility.OverlapsTarget(
-                        center,
-                        halfExtents,
-                        layerMask,
-                        collider,
-                        QueryTriggerInteraction.Ignore,
-                        ref _registeredObstacleOverlapBuffer))
-                    return true;
-            }
-            return false;
         }
 
         private bool StepBfs(BuildContext build)
@@ -1251,6 +1237,13 @@ namespace Common.FlowField
                 Physics.SyncTransforms();
 
             int end = Math.Min(build.Cursor + CellsPerStep, build.Count);
+            Vector3 cellSize = Vector3.one * build.Request.Grid.CellSize;
+            if (build.Modifiers.Length > 0)
+            {
+                _cellQuery.BeginModifierStep(
+                    FlowFieldVolumeCellQuery.StepBounds(build.Request.Grid, build.Cursor, end, cellSize * 0.5f),
+                    build.Modifiers);
+            }
             for (; build.Cursor < end; build.Cursor++)
             {
                 int index = build.Cursor;
@@ -1273,6 +1266,8 @@ namespace Common.FlowField
                     build.FinalSpeeds[index]);
                 for (int modifierIndex = 0; modifierIndex < build.Modifiers.Length; modifierIndex++)
                 {
+                    if (!_cellQuery.MayTouchModifier(modifierIndex, new Bounds(center, cellSize)))
+                        continue;
                     FlowFieldModifierWorkItem modifier = build.Modifiers[modifierIndex];
                     Collider collider = modifier.InfluenceCollider;
                     if (!FlowFieldModifierMaskBuilder.IsUsableTrigger(collider))
@@ -1280,7 +1275,7 @@ namespace Common.FlowField
                     int layerMask = 1 << collider.gameObject.layer;
                     if (!FlowFieldOverlapUtility.OverlapsTarget(
                             center,
-                            Vector3.one * (build.Request.Grid.CellSize * 0.5f),
+                            cellSize * 0.5f,
                             layerMask,
                             collider,
                             QueryTriggerInteraction.Collide,
@@ -1500,6 +1495,7 @@ namespace Common.FlowField
         {
             long bytes = 64L;
             bytes = checked(bytes + _obstacles.SweepBufferBytes);
+            bytes = checked(bytes + _cellQuery.BufferBytes);
             if (_registeredObstacleOverlapBuffer != null)
                 bytes = checked(bytes + 8L * _registeredObstacleOverlapBuffer.Length);
             bytes = checked(bytes + 8L * _modifierRegistry.Count);
@@ -1526,6 +1522,7 @@ namespace Common.FlowField
             _computeSolver = null;
             _obstacles.Clear();
             _registeredObstacleOverlapBuffer = null;
+            _cellQuery.Clear();
             _modifierRegistry.Clear();
             _safety.ClearRegions();
             _state = FlowFieldRuntimeState.Released;

@@ -16,6 +16,11 @@ namespace Common.FlowField
         internal static bool StepTopology(BuildContext build)
         {
             int end = Math.Min(build.Cursor + CellsPerStep, build.Count);
+            FlowFieldGridSpace grid = build.Request.Grid;
+            FlowFieldVolumeInteriorOffsets interior = build.InteriorOffsets ??= new FlowFieldVolumeInteriorOffsets(grid);
+            int lastX = grid.Width - 1;
+            int lastY = grid.Height - 1;
+            int lastZ = grid.Depth - 1;
             for (; build.Cursor < end; build.Cursor++)
             {
                 int index = build.Cursor;
@@ -28,7 +33,12 @@ namespace Common.FlowField
                     continue;
                 }
 
-                build.Request.Grid.FromFlatIndex(index, out int x, out int y, out int z);
+                grid.FromFlatIndex(index, out int x, out int y, out int z);
+                if (x > 0 && x < lastX && y > 0 && y < lastY && z > 0 && z < lastZ)
+                {
+                    build.Topology[index] = interior.TopologyMask(build.Blocked, index);
+                    continue;
+                }
                 uint mask = 0u;
                 for (int direction = 0; direction < FlowFieldNeighborUtility.VolumeCount; direction++)
                 {
@@ -160,16 +170,17 @@ namespace Common.FlowField
         internal static bool StepManagedBfs(BuildContext build)
         {
             int processed = 0;
+            FlowFieldGridSpace grid = build.Request.Grid;
             while (build.Head < build.Tail && processed++ < CellsPerStep)
             {
                 int current = build.Queue[build.Head++];
-                build.Request.Grid.FromFlatIndex(current, out int x, out int y, out int z);
+                grid.FromFlatIndex(current, out int x, out int y, out int z);
                 int currentCost = build.Costs[current];
                 for (int direction = 0; direction < FlowFieldNeighborUtility.VolumeCount; direction++)
                 {
                     if ((build.Topology[current] & (1u << direction)) == 0u)
                         continue;
-                    if (!TryNeighbor(build.Request.Grid, x, y, z, direction, out int neighbor))
+                    if (!TryNeighbor(grid, x, y, z, direction, out int neighbor))
                         continue;
                     if (!build.Influence[neighbor])
                         continue;
@@ -211,6 +222,10 @@ namespace Common.FlowField
         internal static bool StepDirections(BuildContext build)
         {
             int end = Math.Min(build.Cursor + ArrayElementsPerStep, build.Count);
+            FlowFieldGridSpace grid = build.Request.Grid;
+            int goalX = 0, goalY = 0, goalZ = 0;
+            if (build.GoalIndex >= 0)
+                grid.FromFlatIndex(build.GoalIndex, out goalX, out goalY, out goalZ);
             Vector3 defaultDirection = FlowFieldVectorUtility.NormalizeDefaultDirection(build.Request.DefaultDirection);
             for (; build.Cursor < end; build.Cursor++)
             {
@@ -247,15 +262,15 @@ namespace Common.FlowField
                     && build.Influence[index]
                     && build.Costs[index] != Unreachable)
                 {
-                    build.Request.Grid.FromFlatIndex(index, out int x, out int y, out int z);
+                    grid.FromFlatIndex(index, out int x, out int y, out int z);
                     int bestScore = int.MinValue;
                     for (int candidateDirection = 0; candidateDirection < FlowFieldNeighborUtility.VolumeCount; candidateDirection++)
                     {
                         if ((build.Topology[index] & (1u << candidateDirection)) == 0u
-                            || !TryNeighbor(build.Request.Grid, x, y, z, candidateDirection, out int neighbor)
+                            || !TryNeighbor(grid, x, y, z, candidateDirection, out int neighbor)
                             || build.Costs[neighbor] != build.Costs[index] - 1)
                             continue;
-                        int score = AlignmentScore(x, y, z, build.Request.Grid, build.GoalIndex, candidateDirection);
+                        int score = AlignmentScore(goalX - x, goalY - y, goalZ - z, candidateDirection);
                         if (next < 0 || score > bestScore || score == bestScore && neighbor < next)
                         {
                             next = neighbor;
@@ -264,7 +279,7 @@ namespace Common.FlowField
                     }
 
                     if (next >= 0)
-                        direction = DirectionBetweenCells(build.Request.Grid, index, next);
+                        direction = DirectionBetweenCells(grid, index, next);
                     else
                     {
                         goalCellIsUnreachable = true;
@@ -311,21 +326,22 @@ namespace Common.FlowField
             }
 
             int processed = 0;
+            FlowFieldGridSpace grid = build.Request.Grid;
             while (build.EscapeHead < build.EscapeTail && processed++ < CellsPerStep)
             {
                 int current = build.Queue[build.EscapeHead++];
-                build.Request.Grid.FromFlatIndex(current, out int x, out int y, out int z);
+                grid.FromFlatIndex(current, out int x, out int y, out int z);
                 int nextCost = build.Costs[current] + 1;
                 for (int face = 0; face < FlowFieldNeighborUtility.VolumeFaceDirections.Length; face++)
                 {
                     int direction = FlowFieldNeighborUtility.VolumeFaceDirections[face];
-                    if (!TryNeighbor(build.Request.Grid, x, y, z, direction, out int neighbor)
+                    if (!TryNeighbor(grid, x, y, z, direction, out int neighbor)
                         || !build.Blocked[neighbor]
                         || build.Costs[neighbor] != Unreachable)
                         continue;
                     build.Costs[neighbor] = nextCost;
                     build.EscapeDirections[neighbor] = DirectionBetweenCells(
-                        build.Request.Grid,
+                        grid,
                         neighbor,
                         current);
                     build.Queue[build.EscapeTail++] = neighbor;
@@ -400,18 +416,9 @@ namespace Common.FlowField
             return true;
         }
 
-        internal static int AlignmentScore(
-            int x,
-            int y,
-            int z,
-            FlowFieldGridSpace grid,
-            int goalIndex,
-            int direction)
+        /// <summary>Alignment of a step with the offset (dx, dy, dz) from the cell to the Goal.</summary>
+        internal static int AlignmentScore(int dx, int dy, int dz, int direction)
         {
-            grid.FromFlatIndex(goalIndex, out int gx, out int gy, out int gz);
-            int dx = gx - x;
-            int dy = gy - y;
-            int dz = gz - z;
             int sx = FlowFieldNeighborUtility.DeltaX[direction];
             int sy = FlowFieldNeighborUtility.DeltaY[direction];
             int sz = FlowFieldNeighborUtility.DeltaZ[direction];
