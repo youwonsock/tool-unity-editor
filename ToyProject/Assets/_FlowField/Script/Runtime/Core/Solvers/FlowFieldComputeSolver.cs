@@ -259,6 +259,10 @@ namespace Common.FlowField
             _controlRequest = AsyncGPUReadback.Request(
                 _control,
                 readback => OnControlReadback(readback, operationId));
+            // Submit the queued dispatches now. Without a presented frame
+            // (batch mode, hidden views) the driver may hold them for hundreds
+            // of frames, delaying every readback by the same amount.
+            GL.Flush();
         }
 
         private void OnControlReadback(AsyncGPUReadbackRequest readback, int operationId)
@@ -317,6 +321,7 @@ namespace Common.FlowField
                     ref target,
                     _output,
                     readback => OnOutputReadback(readback, operationId));
+                GL.Flush();
             }
             catch (Exception exception)
             {
