@@ -204,5 +204,51 @@ namespace Common.FlowField.Tests
             Assert.That(_session.TryGetFieldInfo(out var info), Is.True);
             Assert.That(info.ResolvedGoalWorld, Is.EqualTo(GoalA));
         }
+
+        [Test]
+        public void PendingSolveDoesNotComposeModifiersUntilItCompletes()
+        {
+            Build(GoalA);
+            _colliderObject = new GameObject("Compose count regression") { layer = FlowFieldRegressionFixture.Layer };
+            var collider = _colliderObject.AddComponent<BoxCollider>();
+            collider.isTrigger = true;
+            collider.center = new Vector3(1.5f, 0.5f, 1.5f);
+            collider.size = new Vector3(3f, 2f, 3f);
+            var modifier = new CountingModifier { InfluenceCollider = collider, Priority = 100 };
+            _session.RegisterModifierCommand(modifier);
+            _session.Submit(FlowFieldRegressionFixture.Request(GoalA));
+            _session.Pump();
+            Assert.That(modifier.Calls, Is.GreaterThan(0));
+
+            modifier.Calls = 0;
+            _session.Submit(FlowFieldRegressionFixture.Request(GoalB));
+            _session.Pump();
+            Assert.That(_session.IsRebuilding, Is.True);
+            Assert.That(modifier.Calls, Is.Zero, "The field is composed once, after the solve.");
+            _backend.Complete(_backend.Calls.Count - 1);
+            Assert.That(_session.IsReady, Is.True, _session.LastError);
+            Assert.That(modifier.Calls, Is.GreaterThan(0));
+            Assert.That(_session.Sample(OriginCell).SpeedMultiplier, Is.EqualTo(2f));
+        }
+
+        private sealed class CountingModifier : IFlowFieldVectorModifier
+        {
+            public Collider InfluenceCollider { get; set; }
+            public int Priority { get; set; }
+            public int Revision { get; set; }
+            internal int Calls;
+            public IFlowFieldModifierSnapshot CaptureSnapshot() => new Snapshot(this);
+
+            private sealed class Snapshot : IFlowFieldModifierSnapshot
+            {
+                private readonly CountingModifier _owner;
+                internal Snapshot(CountingModifier owner) { _owner = owner; }
+                public FlowFieldVectorState Modify(in FlowFieldVectorState current, in FlowFieldVectorModifierContext context)
+                {
+                    _owner.Calls++;
+                    return new FlowFieldVectorState(current.Direction, current.SpeedMultiplier * 2f);
+                }
+            }
+        }
     }
 }

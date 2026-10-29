@@ -991,6 +991,17 @@ namespace Common.FlowField
                         _state.DirtyFinalRegion = FlowFieldCellRect.Invalid;
                     }
                 }
+                bool topologyChanged = (pending & (FlowFieldDirtyFlags.Grid
+                    | FlowFieldDirtyFlags.StaticObstacles
+                    | FlowFieldDirtyFlags.DynamicObstacles
+                    | FlowFieldDirtyFlags.Escape
+                    | FlowFieldDirtyFlags.Goal)) != 0;
+                // A pending BFS recomposes the whole field when it completes
+                // (OnBfsCompleted), and a rejected solve restores the published
+                // field, so composing before the solve would never be visible.
+                if (_state.Workspace.HasActiveGoal && topologyChanged)
+                    return StartBfs(request);
+
                 if ((pending & (FlowFieldDirtyFlags.ModifierValue | FlowFieldDirtyFlags.FinalRegion)) != 0)
                 {
                     if (!ComposeFinal(
@@ -1001,14 +1012,6 @@ namespace Common.FlowField
                             || !_state.BaseComposed))
                         return false;
                 }
-
-                bool topologyChanged = (pending & (FlowFieldDirtyFlags.Grid
-                    | FlowFieldDirtyFlags.StaticObstacles
-                    | FlowFieldDirtyFlags.DynamicObstacles
-                    | FlowFieldDirtyFlags.Escape
-                    | FlowFieldDirtyFlags.Goal)) != 0;
-                if (_state.Workspace.HasActiveGoal && topologyChanged)
-                    return StartBfs(request);
 
                 Commit(
                     request,
