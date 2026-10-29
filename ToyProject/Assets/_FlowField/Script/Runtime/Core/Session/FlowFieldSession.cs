@@ -241,7 +241,7 @@ namespace Common.FlowField
         /// by GPU/Managed failures. The caller deliberately stays outside the
         /// solver exception boundary.
         /// </summary>
-        internal void ReportFault(Exception exception)
+        internal override void ReportFault(Exception exception)
         {
             if (_disposed
                 || _lifecycle == FlowFieldSessionLifecycle.Uninitialized
@@ -251,7 +251,7 @@ namespace Common.FlowField
             Fail(exception ?? new InvalidOperationException("FlowField session failed."));
         }
 
-        internal void RetryFault()
+        internal override void RetryFault()
         {
             if (_disposed)
                 throw new ObjectDisposedException(nameof(FlowFieldSession));
@@ -1774,7 +1774,7 @@ namespace Common.FlowField
                 NotifyFailed(exception);
         }
 
-        internal void Suspend()
+        internal override void Suspend()
         {
             if (_disposed
                 || _lifecycle == FlowFieldSessionLifecycle.Uninitialized
@@ -1807,7 +1807,7 @@ namespace Common.FlowField
             SetLifecycle(FlowFieldSessionLifecycle.Suspended);
         }
 
-        internal void Release()
+        internal override void Release()
         {
             if (_disposed)
                 return;

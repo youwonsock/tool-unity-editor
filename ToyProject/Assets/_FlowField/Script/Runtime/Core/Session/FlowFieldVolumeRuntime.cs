@@ -642,7 +642,7 @@ namespace Common.FlowField
                 QueueCurrentRequest();
         }
 
-        internal void Suspend()
+        internal override void Suspend()
         {
             if (!IsInitialized)
                 return;
@@ -659,7 +659,7 @@ namespace Common.FlowField
             SetState(FlowFieldRuntimeState.Building);
         }
 
-        internal void Release()
+        internal override void Release()
         {
             if (!IsInitialized && !IsFaulted)
                 return;
@@ -684,7 +684,7 @@ namespace Common.FlowField
             SetState(FlowFieldRuntimeState.Released);
         }
 
-        internal void RetryFault()
+        internal override void RetryFault()
         {
             if (!IsFaulted)
                 return;
@@ -695,7 +695,7 @@ namespace Common.FlowField
             SetState(FlowFieldRuntimeState.Building);
         }
 
-        internal void ReportFault(Exception exception)
+        internal override void ReportFault(Exception exception)
         {
             if (!IsInitialized || IsFaulted)
                 return;

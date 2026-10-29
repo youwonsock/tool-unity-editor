@@ -417,10 +417,7 @@ namespace Common.FlowField
                 return;
             BeginLifecycleOperation();
             _requiresActivationRebuild = true;
-            if (SpaceMode == FlowFieldSpaceMode.Volume3D)
-                _volumeSession.Suspend();
-            else
-                _session.Suspend();
+            ActiveSession.Suspend();
             _refreshTimer = 0f;
         }
 
@@ -513,37 +510,12 @@ namespace Common.FlowField
         public void RequestRebuild()
         {
             int version = _lifecycleVersion;
-            if (SpaceMode == FlowFieldSpaceMode.Volume3D)
-            {
-                bool retryingVolumeFault = _volumeSession.IsFaulted;
-                if (retryingVolumeFault)
-                {
-                    _volumeSession.RetryFault();
-                    if (!OwnsLifecycleOperation(_volumeSession, version))
-                        return;
-                }
-                try
-                {
-                    ThrowIfLifecycleUnavailable();
-                    ValidateConfiguration(validateStaticGoal: false);
-                    QueueVolumeRequest(force: true);
-                    if (OwnsLifecycleOperation(_volumeSession, version))
-                        _volumeSession.AttachRuntimeScheduler();
-                }
-                catch (Exception exception)
-                {
-                    if (retryingVolumeFault && OwnsLifecycleOperation(_volumeSession, version))
-                        _volumeSession.ReportFault(exception);
-                    throw;
-                }
-                return;
-            }
-
-            bool retryingFault = _session.IsFaulted;
+            FlowFieldSessionBase owner = ActiveSession;
+            bool retryingFault = owner.IsFaulted;
             if (retryingFault)
             {
-                _session.RetryFault();
-                if (!OwnsLifecycleOperation(_session, version))
+                owner.RetryFault();
+                if (!OwnsLifecycleOperation(owner, version))
                     return;
             }
             try
@@ -556,88 +528,90 @@ namespace Common.FlowField
                 // baked Goal signature, while later rebuilds validate only the
                 // loaded snapshot settings and recompose it.
                 ValidateConfiguration(validateStaticGoal: false);
-
-                FlowFieldSurfaceBakeSettings settings = CreateSurfaceBakeSettings();
-                int maxWaves = Mathf.Min(settings.Grid.CellCount, Mathf.Max(64, _maxGpuWaves));
-                FlowFieldSessionRequest submittedRequest;
-                if (BakeMode == FlowFieldBakeMode.StaticBaked)
+                if (owner.SpaceMode == FlowFieldSpaceMode.Volume3D)
                 {
-                    FlowFieldStaticBakeSnapshot snapshot = CreateStaticBakeSnapshot(settings);
-                    submittedRequest = FlowFieldSessionRequest.ForStaticSnapshot(
-                        settings,
-                        _staticBakeData,
-                        snapshot,
-                        _obstacleLayer,
-                        _obstacleCheckHeight,
-                        _obstacleCheckCenterOffset,
-                        _obstacleClearance,
-                        _defaultFlowDirection,
-                        FlowFieldDirtyFlags.None,
-                        maxWaves);
+                    QueueVolumeRequest(force: true);
+                    if (OwnsLifecycleOperation(_volumeSession, version))
+                        _volumeSession.AttachRuntimeScheduler();
                 }
                 else
                 {
-                    FlowFieldGoalResolution goal = ResolveConfiguredGoal(settings.Grid);
-                    submittedRequest = FlowFieldSessionRequest.ForSceneBuild(
-                        settings,
-                        _obstacleLayer,
-                        _obstacleCheckHeight,
-                        _obstacleCheckCenterOffset,
-                        _obstacleClearance,
-                        _enableUnregisteredObstacleSweep,
-                        goal,
-                        _defaultFlowDirection,
-                        FlowFieldDirtyFlags.None,
-                        _session.DirtyFinalRegion,
-                        _session.DirtyObstacleRegion,
-                        maxWaves);
+                    SubmitSurfaceRebuild(version);
                 }
-                _session.Submit(submittedRequest);
-
-                // A backend can fail synchronously (for example a RequireGpu
-                // probe or an injected test backend). Treat that exactly like
-                // a rejected request even when the backend reported that it
-                // accepted a callback before transitioning the Session.
-                if (version == _lifecycleVersion && ReferenceEquals(_attachedSession, _session) && _session.IsFaulted)
-                    throw new InvalidOperationException($"{nameof(FlowFieldManager)} rebuild failed.", _session.Fault);
             }
             catch (Exception exception)
             {
                 // If a retry fails during validation or request submission,
                 // retain a diagnosable Faulted state instead of leaving an
                 // initialized but unusable Session with no LastError.
-                if (retryingFault && OwnsLifecycleOperation(_session, version))
-                    _session.ReportFault(exception);
+                if (retryingFault && OwnsLifecycleOperation(owner, version))
+                    owner.ReportFault(exception);
                 throw;
             }
         }
 
+        private void SubmitSurfaceRebuild(int version)
+        {
+            FlowFieldSurfaceBakeSettings settings = CreateSurfaceBakeSettings();
+            int maxWaves = Mathf.Min(settings.Grid.CellCount, Mathf.Max(64, _maxGpuWaves));
+            FlowFieldSessionRequest submittedRequest;
+            if (BakeMode == FlowFieldBakeMode.StaticBaked)
+            {
+                FlowFieldStaticBakeSnapshot snapshot = CreateStaticBakeSnapshot(settings);
+                submittedRequest = FlowFieldSessionRequest.ForStaticSnapshot(
+                    settings,
+                    _staticBakeData,
+                    snapshot,
+                    _obstacleLayer,
+                    _obstacleCheckHeight,
+                    _obstacleCheckCenterOffset,
+                    _obstacleClearance,
+                    _defaultFlowDirection,
+                    FlowFieldDirtyFlags.None,
+                    maxWaves);
+            }
+            else
+            {
+                FlowFieldGoalResolution goal = ResolveConfiguredGoal(settings.Grid);
+                submittedRequest = FlowFieldSessionRequest.ForSceneBuild(
+                    settings,
+                    _obstacleLayer,
+                    _obstacleCheckHeight,
+                    _obstacleCheckCenterOffset,
+                    _obstacleClearance,
+                    _enableUnregisteredObstacleSweep,
+                    goal,
+                    _defaultFlowDirection,
+                    FlowFieldDirtyFlags.None,
+                    _session.DirtyFinalRegion,
+                    _session.DirtyObstacleRegion,
+                    maxWaves);
+            }
+            _session.Submit(submittedRequest);
+
+            // A backend can fail synchronously (for example a RequireGpu
+            // probe or an injected test backend). Treat that exactly like
+            // a rejected request even when the backend reported that it
+            // accepted a callback before transitioning the Session.
+            if (version == _lifecycleVersion && ReferenceEquals(_attachedSession, _session) && _session.IsFaulted)
+                throw new InvalidOperationException($"{nameof(FlowFieldManager)} rebuild failed.", _session.Fault);
+        }
+
         public void Release()
         {
-            if (SpaceMode == FlowFieldSpaceMode.Volume3D)
-            {
-                if (!_volumeSession.IsInitialized && !_volumeSession.IsFaulted)
-                    return;
-                BeginLifecycleOperation();
-                DetachActiveModifiers();
-                _volumeSession.Release();
-                DetachReleasedSession(_volumeSession);
-                _refreshTimer = 0f;
-#if UNITY_EDITOR
-                FlowFieldEditorVisualizationBridge.RequestRefresh(this);
-#endif
-                return;
-            }
-
-            if ((_session.Lifecycle == FlowFieldSessionLifecycle.Uninitialized
-                || _session.Lifecycle == FlowFieldSessionLifecycle.Released)
-                && !_session.IsFaulted)
+            FlowFieldSessionBase owner = ActiveSession;
+            if (!owner.IsInitialized && !owner.IsFaulted)
                 return;
             BeginLifecycleOperation();
             DetachActiveModifiers();
-            _session.Release();
-            DetachReleasedSession(_session);
+            owner.Release();
+            DetachReleasedSession(owner);
             _refreshTimer = 0f;
+#if UNITY_EDITOR
+            // The Volume3D gizmo mesh is cached per result and must drop the released field.
+            if (owner.SpaceMode == FlowFieldSpaceMode.Volume3D)
+                FlowFieldEditorVisualizationBridge.RequestRefresh(this);
+#endif
         }
 
         private void ThrowIfLifecycleUnavailable()
@@ -685,59 +659,66 @@ namespace Common.FlowField
                 throw new InvalidOperationException("FlowField Space Mode cannot change during an active Init session. Release and Init again.");
 
             if (_spaceMode == FlowFieldSpaceMode.Volume3D)
-            {
-                if (!FlowFieldGridSpace.IsFinite(_cellSize) || _cellSize < FlowFieldBakeBoundsUtility.MinCellSize)
-                    throw new ArgumentOutOfRangeException(nameof(_cellSize));
-                if (!FlowFieldGridSpace.IsFinite(_bakeBoundsLocal.center)
-                    || !FlowFieldGridSpace.IsFinite(_bakeBoundsLocal.size)
-                    || _bakeBoundsLocal.size.x <= 0f
-                    || _bakeBoundsLocal.size.y <= 0f
-                    || _bakeBoundsLocal.size.z <= 0f)
-                    throw new ArgumentOutOfRangeException(nameof(_bakeBoundsLocal));
-                if (!FlowFieldGridSpace.IsFinite(_defaultFlowDirection)
-                    || _defaultFlowDirection.sqrMagnitude <= VALUE_EPSILON)
-                    throw new ArgumentOutOfRangeException(nameof(_defaultFlowDirection));
-                if (Quaternion.Angle(transform.rotation, Quaternion.identity) > 0.01f
-                    || (transform.lossyScale - Vector3.one).sqrMagnitude > 0.0001f)
-                    throw new ArgumentException("FlowField Manager must use an unrotated transform with unit scale in Volume3D mode.", nameof(transform));
-                if (_obstacleLayer.value == 0)
-                    throw new ArgumentException("Obstacle LayerMask must contain at least one layer.", nameof(_obstacleLayer));
-                if (!FlowFieldGridSpace.IsFinite(_obstacleClearance) || _obstacleClearance < 0f)
-                    throw new ArgumentOutOfRangeException(nameof(_obstacleClearance));
-                if (!FlowFieldGridSpace.IsFinite(_goalInfluenceRadius) || _goalInfluenceRadius < 0f)
-                    throw new ArgumentOutOfRangeException(nameof(_goalInfluenceRadius));
-                if (!Enum.IsDefined(typeof(FlowFieldBakeMode), _bakeMode))
-                    throw new ArgumentOutOfRangeException(nameof(_bakeMode));
-                if (_maxGpuWaves < 64)
-                    throw new ArgumentOutOfRangeException(nameof(_maxGpuWaves), "GPU wave limit must be at least 64.");
-                if (!TryGetVolumeLayout(out Bounds volumeBounds, out FlowFieldGridSpace volumeGrid) || !volumeGrid.IsValid)
-                    throw new ArgumentException("Volume Bounds and Cell Size do not produce a valid grid.", nameof(_bakeBoundsLocal));
-                if (volumeGrid.CellCount > FlowFieldBakeBoundsUtility.MaxVolumeCellCount)
-                    throw new ArgumentOutOfRangeException(nameof(_bakeBoundsLocal), "Volume cell count exceeds one million cells.");
-                if (_volumeSession.IsInitialized && BakeMode != _bakeMode)
-                    throw new InvalidOperationException("FlowField Bake Mode cannot change during an active Init session. Release and Init again.");
-                if (_bakeMode == FlowFieldBakeMode.StaticBaked)
-                {
-                    if (_volumeStaticBakeData == null)
-                        throw new InvalidOperationException("Volume3D StaticBaked mode requires a FlowFieldVolumeBakeData asset.");
-                    if (!_volumeStaticBakeData.Matches(
-                            volumeGrid,
-                            volumeBounds,
-                            _obstacleLayer,
-                            _obstacleClearance,
-                            out string volumeMismatch))
-                        throw new InvalidOperationException(volumeMismatch);
-                    if (validateStaticGoal
-                        && !_volumeStaticBakeData.MatchesGoal(
-                            HasConfiguredGoal,
-                            ConfiguredGoalWorld,
-                            _goalInfluenceRadius,
-                            out string volumeGoalMismatch))
-                        throw new InvalidOperationException(volumeGoalMismatch);
-                }
-                return;
-            }
+                ValidateVolumeConfiguration(validateStaticGoal);
+            else
+                ValidateSurfaceConfiguration(validateStaticGoal);
+        }
 
+        private void ValidateVolumeConfiguration(bool validateStaticGoal)
+        {
+            if (!FlowFieldGridSpace.IsFinite(_cellSize) || _cellSize < FlowFieldBakeBoundsUtility.MinCellSize)
+                throw new ArgumentOutOfRangeException(nameof(_cellSize));
+            if (!FlowFieldGridSpace.IsFinite(_bakeBoundsLocal.center)
+                || !FlowFieldGridSpace.IsFinite(_bakeBoundsLocal.size)
+                || _bakeBoundsLocal.size.x <= 0f
+                || _bakeBoundsLocal.size.y <= 0f
+                || _bakeBoundsLocal.size.z <= 0f)
+                throw new ArgumentOutOfRangeException(nameof(_bakeBoundsLocal));
+            if (!FlowFieldGridSpace.IsFinite(_defaultFlowDirection)
+                || _defaultFlowDirection.sqrMagnitude <= VALUE_EPSILON)
+                throw new ArgumentOutOfRangeException(nameof(_defaultFlowDirection));
+            if (Quaternion.Angle(transform.rotation, Quaternion.identity) > 0.01f
+                || (transform.lossyScale - Vector3.one).sqrMagnitude > 0.0001f)
+                throw new ArgumentException("FlowField Manager must use an unrotated transform with unit scale in Volume3D mode.", nameof(transform));
+            if (_obstacleLayer.value == 0)
+                throw new ArgumentException("Obstacle LayerMask must contain at least one layer.", nameof(_obstacleLayer));
+            if (!FlowFieldGridSpace.IsFinite(_obstacleClearance) || _obstacleClearance < 0f)
+                throw new ArgumentOutOfRangeException(nameof(_obstacleClearance));
+            if (!FlowFieldGridSpace.IsFinite(_goalInfluenceRadius) || _goalInfluenceRadius < 0f)
+                throw new ArgumentOutOfRangeException(nameof(_goalInfluenceRadius));
+            if (!Enum.IsDefined(typeof(FlowFieldBakeMode), _bakeMode))
+                throw new ArgumentOutOfRangeException(nameof(_bakeMode));
+            if (_maxGpuWaves < 64)
+                throw new ArgumentOutOfRangeException(nameof(_maxGpuWaves), "GPU wave limit must be at least 64.");
+            if (!TryGetVolumeLayout(out Bounds volumeBounds, out FlowFieldGridSpace volumeGrid) || !volumeGrid.IsValid)
+                throw new ArgumentException("Volume Bounds and Cell Size do not produce a valid grid.", nameof(_bakeBoundsLocal));
+            if (volumeGrid.CellCount > FlowFieldBakeBoundsUtility.MaxVolumeCellCount)
+                throw new ArgumentOutOfRangeException(nameof(_bakeBoundsLocal), "Volume cell count exceeds one million cells.");
+            if (_volumeSession.IsInitialized && BakeMode != _bakeMode)
+                throw new InvalidOperationException("FlowField Bake Mode cannot change during an active Init session. Release and Init again.");
+            if (_bakeMode == FlowFieldBakeMode.StaticBaked)
+            {
+                if (_volumeStaticBakeData == null)
+                    throw new InvalidOperationException("Volume3D StaticBaked mode requires a FlowFieldVolumeBakeData asset.");
+                if (!_volumeStaticBakeData.Matches(
+                        volumeGrid,
+                        volumeBounds,
+                        _obstacleLayer,
+                        _obstacleClearance,
+                        out string volumeMismatch))
+                    throw new InvalidOperationException(volumeMismatch);
+                if (validateStaticGoal
+                    && !_volumeStaticBakeData.MatchesGoal(
+                        HasConfiguredGoal,
+                        ConfiguredGoalWorld,
+                        _goalInfluenceRadius,
+                        out string volumeGoalMismatch))
+                    throw new InvalidOperationException(volumeGoalMismatch);
+            }
+        }
+
+        private void ValidateSurfaceConfiguration(bool validateStaticGoal)
+        {
             if (!FlowFieldGridSpace.IsFinite(_cellSize) || _cellSize < FlowFieldBakeBoundsUtility.MinCellSize)
                 throw new ArgumentOutOfRangeException(nameof(_cellSize), _cellSize, "Cell Size must be finite and positive.");
             if (!FlowFieldGridSpace.IsFinite(_bakeBoundsLocal.center)

@@ -44,6 +44,13 @@ namespace Common.FlowField
         internal abstract bool UnregisterObstacleCommand(Collider collider);
         internal abstract void NotifyObstacleRegionDirtyCommand(Bounds worldBounds);
 
+        // Lifecycle commands with the same contract in both modes. Mode
+        // specific Init/request creation stays on the concrete sessions.
+        internal abstract void Suspend();
+        internal abstract void Release();
+        internal abstract void RetryFault();
+        internal abstract void ReportFault(Exception exception);
+
         protected void NotifyFieldCommitted()
         {
             if (_baseDisposed)
