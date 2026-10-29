@@ -108,6 +108,11 @@ namespace Common.FlowField
         private readonly FlowFieldVolumeObstacleTracker _obstacles;
         private Collider[] _registeredObstacleOverlapBuffer;
         private readonly FlowFieldVolumeCellQuery _cellQuery = new FlowFieldVolumeCellQuery();
+        // Build-only search arrays of the last committed build, reused by the
+        // next build of the same size (published arrays are never reused).
+        private int[] _spareCosts;
+        private int[] _spareQueue;
+        private bool[] _spareInfluence;
         private readonly FlowFieldVolumeModifierRegistry _modifierRegistry = new FlowFieldVolumeModifierRegistry();
         private readonly FlowFieldVolumeSafetyState _safety = new FlowFieldVolumeSafetyState();
 
@@ -445,6 +450,27 @@ namespace Common.FlowField
             _modifierRegistry.InvalidateCaptures();
         }
 
+        /// <summary>
+        /// Takes the spare array when it has the requested size and clears it,
+        /// which leaves it in the same state as a new allocation.
+        /// </summary>
+        private static T[] RentBuildArray<T>(ref T[] spare, int count)
+        {
+            T[] array = spare;
+            spare = null;
+            if (array == null || array.Length != count)
+                return new T[count];
+            Array.Clear(array, 0, count);
+            return array;
+        }
+
+        private void ReleaseSpareBuildArrays()
+        {
+            _spareCosts = null;
+            _spareQueue = null;
+            _spareInfluence = null;
+        }
+
         private void DiscardBuild()
         {
             BuildContext previous = _build;
@@ -680,6 +706,7 @@ namespace Common.FlowField
             _obstacles.Clear();
             _registeredObstacleOverlapBuffer = null;
             _cellQuery.Clear();
+            ReleaseSpareBuildArrays();
             _modifierRegistry.Clear();
             SetState(FlowFieldRuntimeState.Released);
         }
@@ -1012,9 +1039,9 @@ namespace Common.FlowField
                 case 6: build.FinalDirections = new Vector3[build.Count]; break;
                 case 7: build.FinalSpeeds = new float[build.Count]; break;
                 case 8: build.EscapeDirections = new Vector3[build.Count]; break;
-                case 9: build.Costs = new int[build.Count]; break;
-                case 10: build.Queue = new int[build.Count]; break;
-                case 11: build.Influence = new bool[build.Count]; break;
+                case 9: build.Costs = RentBuildArray(ref _spareCosts, build.Count); break;
+                case 10: build.Queue = RentBuildArray(ref _spareQueue, build.Count); break;
+                case 11: build.Influence = RentBuildArray(ref _spareInfluence, build.Count); break;
                 case 12:
                     int end = Math.Min(build.Cursor + ArrayElementsPerStep, build.Count);
                     for (; build.Cursor < end; build.Cursor++)
@@ -1336,6 +1363,11 @@ namespace Common.FlowField
                 _safety.ClearRegions();
             _build = null;
             _buildReservationBytes = 0;
+            // The published field holds none of these; a completed build has
+            // no GPU readback left that could still read them.
+            _spareCosts = build.Costs;
+            _spareQueue = build.Queue;
+            _spareInfluence = build.Influence;
             if (gridChanged)
                 InvalidateBuildGeneration();
 
@@ -1496,6 +1528,10 @@ namespace Common.FlowField
             long bytes = 64L;
             bytes = checked(bytes + _obstacles.SweepBufferBytes);
             bytes = checked(bytes + _cellQuery.BufferBytes);
+            bytes = checked(bytes
+                + 4L * (_spareCosts?.Length ?? 0)
+                + 4L * (_spareQueue?.Length ?? 0)
+                + (_spareInfluence?.Length ?? 0));
             if (_registeredObstacleOverlapBuffer != null)
                 bytes = checked(bytes + 8L * _registeredObstacleOverlapBuffer.Length);
             bytes = checked(bytes + 8L * _modifierRegistry.Count);
@@ -1523,6 +1559,7 @@ namespace Common.FlowField
             _obstacles.Clear();
             _registeredObstacleOverlapBuffer = null;
             _cellQuery.Clear();
+            ReleaseSpareBuildArrays();
             _modifierRegistry.Clear();
             _safety.ClearRegions();
             _state = FlowFieldRuntimeState.Released;

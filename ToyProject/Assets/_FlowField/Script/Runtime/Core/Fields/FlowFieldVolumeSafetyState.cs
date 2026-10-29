@@ -13,6 +13,7 @@ namespace Common.FlowField
         private const int MaxUncertainBounds = 64;
         private readonly List<Bounds> _uncertainBounds = new List<Bounds>(8);
         private Snapshot _snapshot;
+        private SafetyCellState[] _spareStates;
 
         internal int Epoch { get; private set; }
         internal int UncertainRegionCount => _uncertainBounds.Count;
@@ -25,7 +26,11 @@ namespace Common.FlowField
             ClearRegions();
         }
 
-        internal void ClearSnapshot() => _snapshot = default;
+        internal void ClearSnapshot()
+        {
+            _snapshot = default;
+            _spareStates = null;
+        }
         internal void ClearRegions() => _uncertainBounds.Clear();
 
         // An obstacle mask/clearance change invalidates the complete volume.
@@ -43,9 +48,21 @@ namespace Common.FlowField
         }
 
         internal Snapshot PrepareSnapshot(FlowFieldGridSpace grid, bool[] blocked, int buildSafetyEpoch)
-            => new Snapshot(grid, blocked, buildSafetyEpoch != Epoch, _uncertainBounds);
+        {
+            SafetyCellState[] reuse = _spareStates;
+            _spareStates = null;
+            return new Snapshot(grid, blocked, buildSafetyEpoch != Epoch, _uncertainBounds, reuse);
+        }
 
-        internal void PublishSnapshot(in Snapshot snapshot) => _snapshot = snapshot;
+        /// <summary>
+        /// Replaces the published snapshot. The replaced array is kept for the
+        /// next PrepareSnapshot; nothing reads it after publication.
+        /// </summary>
+        internal void PublishSnapshot(in Snapshot snapshot)
+        {
+            _spareStates = _snapshot.States;
+            _snapshot = snapshot;
+        }
 
         internal static long EstimateSnapshotBytes(int count)
             => count <= 0 ? 0 : checked(count + 32L);
@@ -192,7 +209,7 @@ namespace Common.FlowField
             return left;
         }
 
-        private enum SafetyCellState : byte
+        internal enum SafetyCellState : byte
         {
             Unknown = 0,
             Clear = 1,
@@ -206,13 +223,17 @@ namespace Common.FlowField
             private readonly SafetyCellState[] _states;
 
             internal int Count => _states?.Length ?? 0;
+            internal SafetyCellState[] States => _states;
             internal bool IsUnknown(int index) => _states[index] == SafetyCellState.Unknown;
             internal bool IsBlocked(int index) => _states[index] == SafetyCellState.Blocked;
 
             internal Snapshot(FlowFieldGridSpace grid, bool[] blocked, bool safetyChangedDuringBuild,
-                List<Bounds> uncertainBounds)
+                List<Bounds> uncertainBounds, SafetyCellState[] reuse = null)
             {
-                _states = new SafetyCellState[grid.CellCount];
+                // Every entry is written below, so a reused array needs no clear.
+                _states = reuse != null && reuse.Length == grid.CellCount
+                    ? reuse
+                    : new SafetyCellState[grid.CellCount];
                 for (int index = 0; index < _states.Length; index++)
                     _states[index] = blocked[index] ? SafetyCellState.Blocked : SafetyCellState.Clear;
                 if (!safetyChangedDuringBuild)

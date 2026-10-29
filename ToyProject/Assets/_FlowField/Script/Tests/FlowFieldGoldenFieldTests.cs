@@ -69,6 +69,21 @@ namespace Common.FlowField.Tests
         }
 
         [Test]
+        public void VolumeRebuildWithReusedArraysMatchesTheFirstBuild()
+        {
+            using var scenario = CreateVolume();
+            string first = scenario.Hash().ToString();
+            Vector3 goal = scenario.Goal;
+            scenario.Goal = new Vector3(1.5f, 8.5f, 1.5f);
+            scenario.Build();
+            Assert.That(scenario.Hash().ToString(), Is.Not.EqualTo(first));
+            scenario.Goal = goal;
+            scenario.Build();
+            Assert.That(scenario.Hash().ToString(), Is.EqualTo(first),
+                "Pooled build arrays and safety snapshots must not carry state between builds.");
+        }
+
+        [Test]
         public void SurfaceFieldMatchesGolden()
         {
             using var scenario = CreateSurface();
