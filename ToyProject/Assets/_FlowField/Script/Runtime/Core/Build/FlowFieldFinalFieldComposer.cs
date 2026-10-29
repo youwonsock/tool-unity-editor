@@ -137,8 +137,10 @@ namespace Common.FlowField
             Func<bool> isCurrent)
         {
             if (!surface.IsSurfaceValid(index)
-                || workspace.Blocked[index]
-                || (workspace.GoalFlags[index] & (FlowFieldGoalFlags.Anchor | FlowFieldGoalFlags.Unreachable)) != 0)
+                || !FlowFieldVectorUtility.CanApplyModifier(
+                    workspace.Blocked[index],
+                    workspace.GoalFlags[index],
+                    workspace.BaseDirections[index]))
                 return true;
 
             grid.FromFlatIndex(index, out int cellX, out int cellZ);
@@ -211,19 +213,15 @@ namespace Common.FlowField
                     isDefaultDirection = true;
                 }
 
-                float speed = workspace.Blocked[index]
-                    ? hasEscapeDirection ? 1f : 0f
-                    : (workspace.GoalFlags[index] & FlowFieldGoalFlags.Unreachable) != 0
-                        ? 0f
-                        : 1f;
-                var baseState = new FlowFieldVectorState(direction, speed);
                 if (isDefaultDirection)
                 {
                     direction = FlowFieldVectorUtility.ProjectDefaultOnSurface(
                         direction,
                         surface.GetSurfaceNormal(index));
-                    baseState = new FlowFieldVectorState(direction, 1f);
                 }
+                // Same rule as Volume3D: a cell without a base direction is stopped.
+                float speed = direction.sqrMagnitude > FlowFieldVectorUtility.DIRECTION_EPSILON_SQR ? 1f : 0f;
+                var baseState = new FlowFieldVectorState(direction, speed);
                 if (!FlowFieldGridSpace.IsFinite(baseState.Direction)
                     || !FlowFieldGridSpace.IsFinite(baseState.SpeedMultiplier)
                     || baseState.SpeedMultiplier < 0f)

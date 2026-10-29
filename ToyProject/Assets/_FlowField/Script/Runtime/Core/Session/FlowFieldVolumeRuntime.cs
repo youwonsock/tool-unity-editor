@@ -1254,7 +1254,10 @@ namespace Common.FlowField
             for (; build.Cursor < end; build.Cursor++)
             {
                 int index = build.Cursor;
-                if (build.Blocked[index] || build.Directions[index].sqrMagnitude <= 0.00000001f)
+                if (!FlowFieldVectorUtility.CanApplyModifier(
+                        build.Blocked[index],
+                        build.GoalFlags[index],
+                        build.Directions[index]))
                 {
                     build.FinalDirections[index] = build.Directions[index];
                     build.FinalSpeeds[index] = build.Speeds[index];

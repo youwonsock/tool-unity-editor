@@ -7,6 +7,16 @@ namespace Common.FlowField
     {
         internal const float DIRECTION_EPSILON_SQR = 0.00000001f;
 
+        /// <summary>
+        /// Shared Surface2D/Volume3D rule: Modifiers apply only to open cells
+        /// that move. Blocked, Goal anchor, unreachable and zero-direction
+        /// cells keep their base vector (a zero base direction has speed 0).
+        /// </summary>
+        internal static bool CanApplyModifier(bool blocked, FlowFieldGoalFlags goalFlags, Vector3 baseDirection)
+            => !blocked
+                && (goalFlags & (FlowFieldGoalFlags.Anchor | FlowFieldGoalFlags.Unreachable)) == 0
+                && baseDirection.sqrMagnitude > DIRECTION_EPSILON_SQR;
+
         internal static void ValidateModifierOutput(
             in FlowFieldVectorState candidate,
             Vector3 surfaceNormal)

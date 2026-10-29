@@ -12,7 +12,7 @@ namespace Common.FlowField.Tests
     {
         // Recorded with the Managed solver. "PENDING" reports the current
         // value as Inconclusive until a baseline run fills it in.
-        private const string SurfaceGolden = "576:1d59fca4f9daa9a0";
+        private const string SurfaceGolden = "576:db7be2db64899a59";
         private const string VolumeGolden = "2560:d91d8eddafd33b3d";
 
         private static FlowFieldScenarioFixture.SurfaceScenario CreateSurface()
