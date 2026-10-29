@@ -33,7 +33,7 @@ alt RuntimeDynamic
     S -> F : Recompose with current accepted final inputs
   end
 else StaticBaked
-  S -> B : Load validated v5 navigation snapshot
+  S -> B : Load validated v6 navigation snapshot
   S -> F : Update dirty areas and compose final values
 end
 note over S,F : Getter / CaptureSnapshot / Modify calls check ownership on return.\nCancelled work cannot publish into a replacement lifetime.

@@ -15,7 +15,7 @@ if (Space mode?) then (Surface2D)
 else (Volume3D)
   :BuildDriver.LateUpdate\nBuildScheduler.PumpAll;
 endif
-:Session prepares navigation\nor loads a v5 bake;
+:Session prepares navigation\nor loads a v6 bake;
 :Compose Default Direction\nand Modifier snapshots;
 :Publish complete result\nFieldStore / VolumeFieldData;
 :IFlowFieldProvider.TrySample(position);

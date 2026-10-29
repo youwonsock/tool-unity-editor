@@ -50,9 +50,13 @@ Volume3D는 Bounds 전체를 CellSize 정육면체 셀로 분할하고 `x + Widt
 
 Surface Build Pipeline은 `IFlowFieldGpuBackend`를 통해 `FlowFieldComputeSolver`를 사용합니다. Volume Session은 자신의 Solver와 Volume 단계 실행을 관리합니다. `FlowFieldComputeSolver`는 GPU Backend 인터페이스의 구현 타입이 아니며 Solver가 내부 GPU·Readback 자원을 소유합니다.
 
-Compute Solver의 Control Readback 콜백은 다음 wave 배치 또는 방향 생성 Dispatch를 제출합니다. 최종 결과 콜백에서 Surface는 GPU 결과 검증과 Session의 합성·게시 경로로 이어지고, Volume은 결과 참조와 완료 신호를 기록한 뒤 Scheduler가 나누어 검증합니다. GPU를 사용할 수 없거나 결과 검증에 실패하면 동일하게 고정된 입력의 Managed 경로로 이어집니다.
+Compute Solver의 Control Readback 콜백은 다음 wave 배치 또는 방향 생성 Dispatch를 제출합니다. 최종 결과 콜백에서 Surface는 GPU 결과 검증과 Session의 합성·게시 경로로 이어지고, Volume은 결과 참조와 완료 신호를 기록한 뒤 Scheduler가 나누어 검증합니다. GPU를 사용할 수 없거나 결과 검증에 실패하면 동일하게 고정된 입력의 Managed 경로로 이어집니다. Readback 요청 직후 `GL.Flush()`로 대기 중인 Dispatch를 제출합니다. 프레임을 표시하지 않는 환경(배치 모드 Direct3D 11 등)에서는 드라이버가 명령을 수백 프레임 동안 보류해 Readback이 그만큼 늦어졌기 때문입니다.
+
+Modifier 적용 대상은 두 모드가 같은 `FlowFieldVectorUtility.CanApplyModifier`로 판정합니다. 막힌 셀, Goal Anchor, 도달 불가 셀과 기본 방향이 0인 셀은 Modifier를 적용하지 않고 기본 속도 0을 유지합니다. Surface 빌드에서 BFS가 예정되면 BFS 전 합성을 생략하고, BFS 완료 후 전체를 한 번 합성합니다.
 
 Volume 작업은 `FlowFieldBuildScheduler`와 `FlowFieldBuildDriver`의 협력 실행 경계를 사용합니다. 탐색·장애물·Modifier 단계는 최대 64셀, 방향 생성과 일부 배열 처리는 최대 4,096원소 단위로 진행합니다. deadline은 단계 호출 사이에 확인하므로 한 단계의 여러 Physics·Modify 호출이나 배열 할당·게시 처리가 예산을 초과할 수 있습니다. 2ms는 협력 CPU 예산이며 프레임 실행 시간, 전체 빌드 완료 시간이나 GPU 실행 시간의 보장이 아닙니다.
+
+Volume의 장애물·Modifier 단계는 `FlowFieldVolumeCellQuery`로 스텝마다 Layer 후보를 `OverlapBox` 한 번으로 모으고 등록 장애물·Modifier Collider의 Bounds를 한 번 읽습니다. 후보의 AABB(contactOffset 여유 포함)가 닿는 셀만 정확한 `CheckBox`·`OverlapsTarget`을 실행하므로 결과는 셀마다 쿼리한 것과 같습니다. 후보가 4,096개를 넘는 스텝은 셀별 쿼리로 돌아갑니다. Topology는 경계가 아닌 셀에서 `FlowFieldVolumeInteriorOffsets`의 평탄 인덱스 오프셋으로 이웃·코너 셀의 Blocked만 확인하고, 경계 셀은 `CanTraverse`를 사용합니다. 커밋된 빌드의 Costs·Queue·Influence 배열과 이전 안전성 Snapshot 배열은 다음 같은 크기 빌드에서 재사용합니다.
 
 Volume의 Modifier 등록·변경 관측·Snapshot 캡처는 `FlowFieldVolumeModifierRegistry`, Physics와 무관한 탐색 연산은 `FlowFieldVolumeNavigation`, GPU 결과 검증은 `FlowFieldVolumeGpuResultValidator`가 담당합니다. `FlowFieldVolumeBuildContext`는 한 작업의 배열·진행 커서를, `FlowFieldVolumeFieldData`는 완성된 게시 결과를 보관합니다. `FlowFieldVolumeSafetyState`는 불확실 영역·안전성 Epoch·셀 Snapshot과 샘플링의 보수적 정지 판정을 담당합니다. `FlowFieldVolumeObstacleTracker`는 등록·미등록 Collider 관측과 스윕 버퍼를 소유하고 변경 Bounds를 Session에 동기 통지합니다. Session은 요청 수락·취소, 수명, Physics 입력, Scheduler·GPU 실행 연결과 게시 정책을 유지합니다. 단계별 회귀 검증과 보존 범위는 [RefactoringNotes.md](RefactoringNotes.md)에 기록합니다.
 
@@ -62,7 +66,7 @@ Volume의 `CaptureSnapshot()` 호출 전 세대와 캡처 토큰을 보관하고
 
 ## StaticBaked와 Asset 검증
 
-Surface2D는 `FlowFieldStaticBakeData`, Volume3D는 `FlowFieldVolumeBakeData` v5를 사용합니다. 현재 형식 이외의 입력은 거부하며 자동 변환·마이그레이션은 제공하지 않습니다. Asset의 구조 검증은 메타데이터·내용 세대·Revision을 기준으로 캐시할 수 있지만 Manager 설정 일치 검사는 별도로 수행합니다.
+Surface2D는 `FlowFieldStaticBakeData`, Volume3D는 `FlowFieldVolumeBakeData` v6을 사용합니다. 현재 형식 이외의 입력은 거부하며 자동 변환·마이그레이션은 제공하지 않습니다. Volume3D v6은 방향·속도·탈출 벡터를 저장하지 않습니다. 방향은 `(NextCell − 셀).normalized`, 영향 범위 밖 셀은 베이크 시점 Default Direction, 탈출 방향은 6개 면 인덱스(`_escapeFaces`)에서 `OnAfterDeserialize`로 재구성하며, `Apply`는 재구성 결과가 입력과 같지 않으면 저장을 거부합니다. Surface2D v6은 float·Vector3 배열을 `FlowFieldBakeBlob`으로 `byte[]`에 담아 비트 그대로 저장합니다. Asset의 구조 검증은 메타데이터·내용 세대·Revision을 기준으로 캐시할 수 있지만 Manager 설정 일치 검사는 별도로 수행합니다.
 
 정적 로드에서는 저장된 내비게이션·Goal·NextCell·장애물 결과를 사용하며 Physics나 BFS를 다시 실행하지 않습니다. 로드 후 Default Direction과 Modifier의 최종 합성은 저장된 기본 데이터와 구분합니다. Payload 검증·Apply·저장에 실패한 경우 기존 Asset 내용·Revision·GUID를 보존해야 합니다.
 
@@ -94,7 +98,7 @@ README의 [핵심 흐름](Images/flowfield-uml.png)은 요청부터 조회까지
 [원본 이미지](Images/flowfield-surface.png) · [PlantUML 원본](flowfield-surface.puml)
 
 - `FlowFieldManager.FixedUpdate`가 현재 설정을 반영해 Submit하고 `FlowFieldSession.Pump`를 실행합니다. 비동기 BFS의 완료 콜백에서도 후속 합성과 게시가 이어질 수 있습니다.
-- Surface/base 서비스는 Surface Source, `FlowFieldSurfaceBuildPipeline`, `FlowFieldObstaclePipeline`, `FlowFieldGoalPipeline`의 준비 처리를 묶어 표시합니다. RuntimeDynamic은 변경된 기본 입력을 계산하고 StaticBaked는 검증한 v5 내비게이션을 로드합니다.
+- Surface/base 서비스는 Surface Source, `FlowFieldSurfaceBuildPipeline`, `FlowFieldObstaclePipeline`, `FlowFieldGoalPipeline`의 준비 처리를 묶어 표시합니다. RuntimeDynamic은 변경된 기본 입력을 계산하고 StaticBaked는 검증한 v6 내비게이션을 로드합니다.
 - Modifier Registry/Pipeline은 필요할 때 영역을 갱신하고 staging에 값을 합성합니다. 내비게이션 변경으로 BFS를 수행하면 완료 후에도 현재 수락 입력의 최종 합성을 거칩니다. Modifier·Default Direction만 바뀌면 기존 내비게이션을 사용합니다.
 - 완성된 결과만 `FlowFieldFieldStore`에 반영합니다. 일반 조회는 게시된 값에서 읽고 최신 장애물·탈출·연결 안전성 검사를 더합니다. 외부 호출 후 소유권이 바뀌면 이전 작업은 게시하지 않습니다.
 
@@ -106,7 +110,7 @@ README의 [핵심 흐름](Images/flowfield-uml.png)은 요청부터 조회까지
 
 - Manager는 최신 요청과 관측 변경을 Session에 전달합니다. `FlowFieldBuildDriver.LateUpdate`가 `FlowFieldBuildScheduler.PumpAll`을 호출하며, Session이 실행 가능한 상태인 작업을 공통 CPU 예산 안에서 진행합니다.
 - 관측 경계는 `FlowFieldVolumeObstacleTracker`와 `FlowFieldVolumeModifierRegistry`입니다. 새 작업은 요청과 Modifier Snapshot을 고정해 `FlowFieldVolumeBuildContext`의 배열·커서를 준비합니다.
-- Build steps는 Session의 단계 실행과 `FlowFieldVolumeNavigation`, `FlowFieldComputeSolver`, `FlowFieldVolumeGpuResultValidator`를 묶어 표시합니다. RuntimeDynamic은 장애물·연결·Goal·BFS·방향·탈출 단계를, StaticBaked는 v5 기본 데이터 복사를 수행한 뒤 Modifier를 합성합니다. 각 메시지는 여러 Pump에 걸칠 수 있는 단계 처리를 요약합니다.
+- Build steps는 Session의 단계 실행과 `FlowFieldVolumeNavigation`, `FlowFieldComputeSolver`, `FlowFieldVolumeGpuResultValidator`를 묶어 표시합니다. RuntimeDynamic은 장애물·연결·Goal·BFS·방향·탈출 단계를, StaticBaked는 v6 기본 데이터 복사를 수행한 뒤 Modifier를 합성합니다. 각 메시지는 여러 Pump에 걸칠 수 있는 단계 처리를 요약합니다.
 - GPU 완료 신호는 결과를 기록하며 후속 Pump가 이를 검증합니다. 현재 작업의 GPU 미지원·실패는 같은 입력의 Managed 경로로 처리합니다. 완료 후 `FlowFieldVolumeSafetyState`의 Snapshot과 `FlowFieldVolumeFieldData`를 준비해 게시합니다.
 - 샘플은 게시 데이터와 최신 안전성 상태를 함께 사용합니다. 불확실·위험 셀은 조회 성공 상태에서도 속도 0을 반환할 수 있으며, 취소된 작업은 새 수명의 결과를 덮어쓰지 않습니다.
 
@@ -118,7 +122,7 @@ README의 [핵심 흐름](Images/flowfield-uml.png)은 요청부터 조회까지
 | Surface 상세 | [flowfield-surface.puml](flowfield-surface.puml) | [flowfield-surface.png](Images/flowfield-surface.png) |
 | Volume 상세 | [flowfield-volume.puml](flowfield-volume.puml) | [flowfield-volume.png](Images/flowfield-volume.png) |
 
-렌더 기준은 PlantUML 1.2024.6, Unity AndroidPlayer에 포함된 OpenJDK 11.0.14.1, UTF-8입니다. 활동도·순서도를 사용하며 Graphviz는 사용하지 않습니다. 별도 도구 경로의 PlantUML JAR를 지정하고 Docs 폴더에서 세 파일을 함께 렌더합니다. Java 실행 파일은 설치 환경에 맞는 경로를 사용합니다.
+현재 이미지는 v6 베이크 표기 갱신 때 PlantUML 1.2024.3·Java 8(Windows), UTF-8로 렌더했습니다. 이전 기준은 PlantUML 1.2024.6, Unity AndroidPlayer에 포함된 OpenJDK 11.0.14.1입니다. 활동도·순서도를 사용하며 Graphviz는 사용하지 않습니다. 별도 도구 경로의 PlantUML JAR를 지정하고 Docs 폴더에서 세 파일을 함께 렌더합니다. Java 실행 파일은 설치 환경에 맞는 경로를 사용합니다.
 
 ```sh
 "/Applications/Unity/Hub/Editor/2023.2.20f1/PlaybackEngines/AndroidPlayer/OpenJDK/bin/java" \

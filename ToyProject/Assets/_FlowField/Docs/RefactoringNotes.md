@@ -78,7 +78,7 @@ Editor 전용이며 `UNITY_INCLUDE_TESTS`와 `TestAssemblies`를 사용한다.
 | Volume 관측 경계 | 2 | 불완전 스윕의 이전 관측 유지, Clear 후 등록·관측 상태 해제 |
 | Volume 관측 중 수명 변경 | 20 | 등록/미등록 × 이동/파괴 × Release·Suspend·Dispose·재초기화·Fault, 중단된 Pump의 새 수명 요청 소비 금지 |
 | Volume 관측 재진입 경계 | 5 | 발견·갱신·제거 중 Clear, 알림 중 등록 해제, 중첩 스윕 후 이전 관측 재개 금지 |
-| 에셋 무결성 | 4 | GUID 참조, v5 Bake payload, 씬·Prefab의 스크립트/오브젝트 참조, 제거된 직렬화 필드 검사 |
+| 에셋 무결성 | 4 | GUID 참조, Bake payload(당시 v5, 현재 v6), 씬·Prefab의 스크립트/오브젝트 참조, 제거된 직렬화 필드 검사 |
 | Modifier 호출 중 수명 변경 | 24 | CaptureSnapshot/Modify × Release·Suspend·Dispose·재초기화·Fault·Cancel × 호출 뒤 예외 유무 |
 | Modifier 중첩 Pump | 3 | 같은 Session의 Capture/Modify 중 재진입 방지, 다른 Session의 Pump 허용 |
 | Modifier 캡처 중 등록 변경 | 8 | 최초/기존 게시 후 추가·자기 제거·다른 Modifier 제거, 오래된 캡처 예외, 최신 Goal 보존 |
@@ -317,3 +317,43 @@ Modifier 재진입 수정의 전후 XML·로그·소스 차이·보존 해시·�
 구조 단순화의 기준선·미사용 계층 제거·최종 XML과 로그, 소스 차이·보존 해시·검증 요약은 `ToyProject/Logs/FlowFieldSimplification/`에 보관했다. 삭제된 파일의 사본은 Assets 밖의 이 검증 기록에만 남으며 Unity에서 컴파일하지 않는다.
 
 성능 수치, 장시간 군중 이동, 기기별 동작과 Player 빌드는 이번 검증 범위에 포함하지 않는다.
+
+## 성능·구조 개선 (2026-10-29~30)
+
+검증 환경: Unity 2023.2.20f1 / Windows 11 / Direct3D 11 (AMD Radeon RX 9070). 기준선은 같은 환경에서 기존 테스트 449개(성능 프로브 7개 제외) 통과로 시작했다.
+
+| 단계 | 변경 | 검증 |
+| --- | --- | --- |
+| 0. 안전망 | 고정 장면의 전체 셀 샘플 골든 해시(Managed 고정), 성능 프로브(`FLOWFIELD_PERF=1`일 때만 실행) | 449 통과, 기준 수치 기록 |
+| 1. 정리 | 미사용 멤버 3개, Overlap 버퍼 확장·FieldStore 복사·Grid 레이아웃·마스크 인자 검증 중복, 샘플 `IsFinite`·`Approximately`·`FindGoalIndex` 중복, Scheduler·Pump·이벤트 클로저 할당 제거 | 448 통과, 골든 일치 |
+| GPU 수정 | Readback 요청 직후 `GL.Flush`. 배치 모드 D3D11에서 Readback 한 번이 수백 프레임 지연되어 샘플 씬 Goal 재빌드가 20~60초 이상 걸리던 문제 | 장면 테스트 27~31초(30초 제한 경계 실패) → 2초, 449 통과 |
+| 2. Modifier 규칙 | Surface·Volume 공통 `CanApplyModifier`(막힘·Anchor·Unreachable·기본 방향 0이면 미적용), Surface 기본 방향 0이면 속도 0 | Surface 골든만 의도대로 변경(Anchor 속도 1→0), 457 통과 |
+| 3. Volume 셀 쿼리 | 스텝 단위 Physics 후보 필터(`FlowFieldVolumeCellQuery`), 내부 셀 Topology 오프셋, 단계 루프의 Grid 복사 제거 | 후보 필터·Topology 동등성 테스트, 461 통과 |
+| 4. Surface 합성 | BFS가 예정된 빌드의 사전 `ComposeFinal` 생략 | 이전 코드 9회 호출(실패) → 0회, 462 통과 |
+| 5. Manager | Session 공통 수명 명령(Suspend·Release·RetryFault·ReportFault), RequestRebuild·Release·OnDisable 중복 정리, 설정 검증 분리 | 462 통과 |
+| 6. 베이크 v6 | Volume 방향·속도·탈출 벡터를 NextCell·면 인덱스에서 재구성, Surface float·Vector3 배열을 byte[]로 저장. 두 Asset을 같은 GUID로 다시 베이크 | 내용 해시가 v5와 동일, 왕복 테스트, 464 통과 |
+| 7. 배열 재사용 | 커밋된 빌드의 Costs·Queue·Influence와 안전성 Snapshot 배열 재사용 | A→B→A 재빌드 결과 동일, 467 통과 |
+| 레거시 정리 | 샘플의 결과를 읽지 않던 겹침 진단·자동 Goal 토글·기록 전용 필드와 미사용 공개 속성 17개 제거 | 466 통과(임시 진단 제외), 직렬화 무결성 통과 |
+
+Volume 100^3(장애물 40개) 단계별 시간에서 Topology가 17.8초로 전체의 70%였다. 경계가 아닌 셀의 이웃·코너 검사를 평탄 인덱스 오프셋과 Blocked 조회로 바꿔 1.5초가 되었다. 전체 빌드는 26.1/32.3/55.4초(등록 장애물 0/10/50)에서 5.8/5.9/6.4초, 2ms 예산 빌드는 12,585에서 2,214프레임, 장애물 1개 이동 후 재빌드는 31.3에서 6.0초가 되었다.
+
+계획에서 측정 후 결정한 항목과 중단한 항목:
+
+- **Surface 버전·지연 플래그 제거(4단계 일부) 중단**: 버전 값은 오래된 BFS 결과 판정 외에도 Surface Source 재진입 감지, BFS 전 취소된 Goal 재시도(빌드 밖에서도 사용), 설정 무효화 후 명시적 재빌드 게이트에 쓰인다. 계획의 중단 조건에 따라 유지했다.
+- **게시 배열 재사용(7b) 보류**: Volume 빌드 중 GC가 0회였고, 재사용하면 상주 메모리가 약 50MB 늘어난다.
+- **증분 장애물 갱신(8) 보류**: 3단계 후 장애물 단계는 약 0.46초로 전체 약 6초의 8%다.
+- **GPU 재시도 정책(9) 보류**: 선택 항목이며, 관찰된 GPU 지연은 `GL.Flush` 수정으로 해결했다.
+- **샘플 직렬화 필드의 기반 클래스 이동 취소**: 기반 클래스는 Agent 수명만 소유한다는 설계 의도가 있고, `_spawnSpacing` 타입과 기본값이 샘플마다 달라 중복 메서드만 옮겼다.
+
+베이크 v6 전환은 마이그레이션 코드 없이 진행했다. 현재 코드로 v5를 다시 베이크하면 Revision 한 줄 외에 내용이 같음을 먼저 확인했고, v6 코드로 다시 베이크한 Asset의 내용 해시가 v5와 같음을 `FlowFieldBakeAssetContentTests`로 확인했다. Volume Asset은 453,863에서 106,568바이트, Surface Asset은 1,286,861에서 981,158바이트가 되었다.
+
+Windows 배치 실행 예:
+
+```powershell
+& "C:\Program Files\Unity\Hub\Editor\2023.2.20f1\Editor\Unity.exe" -batchmode -projectPath <ToyProject> `
+  -runTests -testPlatform EditMode -assemblyNames Common.FlowField.Tests `
+  -testResults <results.xml> -logFile <unity.log>
+$env:FLOWFIELD_PERF = "1"   # 성능 프로브: 위 명령에 -testCategory Performance 추가
+```
+
+단계별 XML·로그와 프로브 CSV는 Git에서 제외되는 `ToyProject/Logs/FlowFieldImprovement/`, `ToyProject/Logs/FlowFieldPerformance/`에 보관했다.
