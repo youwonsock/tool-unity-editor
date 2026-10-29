@@ -2005,9 +2005,6 @@ namespace Common.FlowField
             HasBlockedCells = false;
         }
 
-        public void CommitObstacleScratch()
-            => Array.Copy(ObstacleScratch, Blocked, Blocked.Length);
-
         public void RebuildCombinedBlocked()
         {
             int count = Capacity;

@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using static Common.FlowField.Samples.FlowFieldSampleMath;
 
 namespace Common.FlowField.Samples
 {
@@ -294,8 +295,5 @@ namespace Common.FlowField.Samples
                     _gateButton.onClick.RemoveListener(HandleToggleGate);
             }
         }
-
-        private static bool IsFinite(float value)
-            => !float.IsNaN(value) && !float.IsInfinity(value);
     }
 }

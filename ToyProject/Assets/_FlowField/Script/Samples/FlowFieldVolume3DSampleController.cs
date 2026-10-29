@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using static Common.FlowField.Samples.FlowFieldSampleMath;
 
 namespace Common.FlowField.Samples
 {
@@ -132,7 +133,7 @@ namespace Common.FlowField.Samples
                 if (_manager.BakeMode == FlowFieldBakeMode.StaticBaked)
                 {
                     _goalIndex = fieldInfo.HasRequestedGoal
-                        ? FindGoalIndex(fieldInfo.RequestedGoalWorld)
+                        ? FindGoalIndex(_goalPositions, fieldInfo.RequestedGoalWorld)
                         : -1;
                     _hasActiveGoal = fieldInfo.HasRequestedGoal;
                     _activeGoalPosition = fieldInfo.RequestedGoalWorld;
@@ -241,21 +242,5 @@ namespace Common.FlowField.Samples
             _goalMarker.position = initialGoal;
             _goalMarker.gameObject.SetActive(true);
         }
-
-        private int FindGoalIndex(Vector3 position)
-        {
-            for (int index = 0; index < _goalPositions.Length; index++)
-                if (Approximately(_goalPositions[index], position))
-                    return index;
-            return -1;
-        }
-
-        private static bool Approximately(Vector3 left, Vector3 right)
-            => (left - right).sqrMagnitude <= 0.000001f;
-
-        private static bool IsFinite(Vector3 value)
-            => !float.IsNaN(value.x) && !float.IsInfinity(value.x)
-                && !float.IsNaN(value.y) && !float.IsInfinity(value.y)
-                && !float.IsNaN(value.z) && !float.IsInfinity(value.z);
     }
 }

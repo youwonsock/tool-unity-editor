@@ -130,21 +130,7 @@ namespace Common.FlowField
             if (!IsValid || workspace == null || workspace.Capacity != Capacity)
                 throw new ArgumentException("Committed workspace does not match the field store.", nameof(workspace));
             Array.Copy(_blocked, workspace.Blocked, Capacity);
-            Array.Copy(_topologyMasks, workspace.TopologyMasks, Capacity);
-            Array.Copy(_goalFlags, workspace.GoalFlags, Capacity);
-            Array.Copy(_nextCells, workspace.NextCells, Capacity);
-            Array.Copy(_baseDirections, workspace.BaseDirections, Capacity);
-            Array.Copy(_baseSpeeds, workspace.BaseSpeedMultipliers, Capacity);
-            Array.Copy(_finalDirections, workspace.FinalDirections, Capacity);
-            Array.Copy(_finalSpeeds, workspace.FinalSpeedMultipliers, Capacity);
-            Array.Copy(_modifierInfluence, workspace.ModifierInfluence, Capacity);
-            workspace.LoadBakedGoal(HasActiveGoal, ResolvedGoalIndex, _nextCells);
-            for (int i = 0; i < Capacity; i++)
-            {
-                workspace.GoalDirections[i] = (_goalFlags[i] & FlowFieldGoalFlags.Directed) != 0
-                    ? _baseDirections[i]
-                    : Vector3.zero;
-            }
+            CopyGoalAndFieldToWorkspace(workspace);
             // Escape vectors are a diagnostic/bake concern rather than part
             // of the compact runtime field. Reconstruct them only when an
             // explicit workspace snapshot is requested.

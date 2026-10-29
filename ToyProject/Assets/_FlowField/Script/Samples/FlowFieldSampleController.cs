@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using static Common.FlowField.Samples.FlowFieldSampleMath;
 
 namespace Common.FlowField.Samples
 {
@@ -263,11 +264,6 @@ namespace Common.FlowField.Samples
             }
         }
 
-        public void ChooseNextGoal()
-        {
-            AdvanceToNextGoal();
-        }
-
         public bool AdvanceToNextGoal()
         {
             if (!CanChangeRuntimeGoal())
@@ -414,7 +410,7 @@ namespace Common.FlowField.Samples
             _hasActiveGoal = fieldInfo.HasRequestedGoal;
             _activeGoalPosition = fieldInfo.RequestedGoalWorld;
             _activeGoalIndex = fieldInfo.HasRequestedGoal
-                ? FindGoalIndex(fieldInfo.RequestedGoalWorld)
+                ? FindGoalIndex(_goalPositions, fieldInfo.RequestedGoalWorld)
                 : -1;
             _goalMarker.position = fieldInfo.RequestedGoalWorld;
             _goalMarker.gameObject.SetActive(fieldInfo.HasRequestedGoal);
@@ -446,17 +442,6 @@ namespace Common.FlowField.Samples
                 && _manager.IsInitialized
                 && !_manager.IsFaulted
                 && _manager.BakeMode == FlowFieldBakeMode.RuntimeDynamic;
-
-        private int FindGoalIndex(Vector3 position)
-        {
-            for (int index = 0; index < _goalPositions.Length; index++)
-                if (Approximately(_goalPositions[index], position))
-                    return index;
-            return -1;
-        }
-
-        private static bool Approximately(Vector3 left, Vector3 right)
-            => (left - right).sqrMagnitude <= 0.000001f;
 
         private void UpdateOverlapDiagnostics()
         {
@@ -569,11 +554,5 @@ namespace Common.FlowField.Samples
             ReleaseOwnedAgents();
             _overlapBuckets.Clear();
         }
-
-        private static bool IsFinite(float value)
-            => !float.IsNaN(value) && !float.IsInfinity(value);
-
-        private static bool IsFinite(Vector3 value)
-            => IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
     }
 }

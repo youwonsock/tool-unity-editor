@@ -135,8 +135,14 @@ namespace Common.FlowField
         private long _buildReservationBytes;
         private long _committedReservationBytes;
 
+        private readonly Stopwatch _pumpTimer = new Stopwatch();
+        private readonly Func<double> _pumpElapsedMilliseconds;
+
         internal FlowFieldVolumeSession()
-            => _obstacles = new FlowFieldVolumeObstacleTracker(MarkObstacleRegionDirty);
+        {
+            _obstacles = new FlowFieldVolumeObstacleTracker(MarkObstacleRegionDirty);
+            _pumpElapsedMilliseconds = () => _pumpTimer.Elapsed.TotalMilliseconds;
+        }
 
         internal override FlowFieldSpaceMode SpaceMode => FlowFieldSpaceMode.Volume3D;
         internal override FlowFieldBakeMode BakeMode => _bakeMode;
@@ -277,12 +283,16 @@ namespace Common.FlowField
 
         internal void Pump(double budgetMilliseconds = DefaultBudgetMilliseconds)
         {
+            // A nested Pump would return from PumpInternal anyway; returning
+            // first keeps it from restarting the outer pump's timer.
+            if (_pumping)
+                return;
             if (budgetMilliseconds <= 0d)
                 budgetMilliseconds = DefaultBudgetMilliseconds;
-            Stopwatch timer = Stopwatch.StartNew();
+            _pumpTimer.Restart();
             FlowFieldBuildBudget budget = new FlowFieldBuildBudget(
                 budgetMilliseconds,
-                () => timer.Elapsed.TotalMilliseconds);
+                _pumpElapsedMilliseconds);
             PumpInternal(in budget);
         }
 

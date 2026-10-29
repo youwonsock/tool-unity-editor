@@ -95,13 +95,21 @@ namespace Common.FlowField.Samples
             _ownedAgents.Clear();
         }
 
-        protected void ClearOwnedAgentReferences()
-            => _ownedAgents.Clear();
-
         private void OwnAgentIfMissing(FlowFieldSampleAgent agent)
         {
             if (!_ownedAgents.Contains(agent))
                 _ownedAgents.Add(agent);
+        }
+
+        /// <summary>
+        /// Index of the authored goal matching a published goal position, or -1.
+        /// </summary>
+        protected static int FindGoalIndex(Vector3[] goalPositions, Vector3 position)
+        {
+            for (int index = 0; index < goalPositions.Length; index++)
+                if (FlowFieldSampleMath.Approximately(goalPositions[index], position))
+                    return index;
+            return -1;
         }
     }
 }

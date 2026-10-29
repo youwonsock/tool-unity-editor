@@ -536,11 +536,7 @@ namespace Common.FlowField
         {
             worldBounds = default;
             grid = default;
-            if (!FlowFieldGridSpace.IsFinite(managerWorldPosition)
-                || !FlowFieldGridSpace.IsFinite(localBounds.center)
-                || !FlowFieldGridSpace.IsFinite(localBounds.size)
-                || !FlowFieldGridSpace.IsFinite(cellSize)
-                || cellSize < MinCellSize
+            if (!HasFiniteLayoutInput(managerWorldPosition, localBounds, cellSize)
                 || localBounds.size.x <= 0f
                 || localBounds.size.y < MinBoundsHeight
                 || localBounds.size.z <= 0f)
@@ -553,12 +549,11 @@ namespace Common.FlowField
                 || !TryValidateCellCount(width, depth, out _))
                 return false;
 
-            Bounds snapped = new Bounds(
-                localBounds.center,
-                new Vector3(width * cellSize, localBounds.size.y, depth * cellSize));
-            worldBounds = new Bounds(managerWorldPosition + snapped.center, snapped.size);
-            if (!FlowFieldGridSpace.IsFinite(worldBounds.center)
-                || !FlowFieldGridSpace.IsFinite(worldBounds.size))
+            if (!TryCreateSnappedWorldBounds(
+                    managerWorldPosition,
+                    localBounds.center,
+                    new Vector3(width * cellSize, localBounds.size.y, depth * cellSize),
+                    out worldBounds))
                 return false;
             Vector3 origin = new Vector3(worldBounds.min.x, worldBounds.center.y, worldBounds.min.z);
             grid = FlowFieldGridSpace.FromCellGrid(origin, width, depth, cellSize);
@@ -574,11 +569,7 @@ namespace Common.FlowField
         {
             worldBounds = default;
             grid = default;
-            if (!FlowFieldGridSpace.IsFinite(managerWorldPosition)
-                || !FlowFieldGridSpace.IsFinite(localBounds.center)
-                || !FlowFieldGridSpace.IsFinite(localBounds.size)
-                || !FlowFieldGridSpace.IsFinite(cellSize)
-                || cellSize < MinCellSize
+            if (!HasFiniteLayoutInput(managerWorldPosition, localBounds, cellSize)
                 || localBounds.size.x <= 0f
                 || localBounds.size.y <= 0f
                 || localBounds.size.z <= 0f)
@@ -590,12 +581,11 @@ namespace Common.FlowField
                 || !TryValidateVolumeCellCount(width, height, depth, out _))
                 return false;
 
-            Bounds snapped = new Bounds(
-                localBounds.center,
-                new Vector3(width * cellSize, height * cellSize, depth * cellSize));
-            worldBounds = new Bounds(managerWorldPosition + snapped.center, snapped.size);
-            if (!FlowFieldGridSpace.IsFinite(worldBounds.center)
-                || !FlowFieldGridSpace.IsFinite(worldBounds.size))
+            if (!TryCreateSnappedWorldBounds(
+                    managerWorldPosition,
+                    localBounds.center,
+                    new Vector3(width * cellSize, height * cellSize, depth * cellSize),
+                    out worldBounds))
                 return false;
             grid = FlowFieldGridSpace.FromVolumeCellGrid(
                 worldBounds.min,
@@ -604,6 +594,24 @@ namespace Common.FlowField
                 depth,
                 cellSize);
             return grid.IsValid;
+        }
+
+        private static bool HasFiniteLayoutInput(Vector3 managerWorldPosition, Bounds localBounds, float cellSize)
+            => FlowFieldGridSpace.IsFinite(managerWorldPosition)
+                && FlowFieldGridSpace.IsFinite(localBounds.center)
+                && FlowFieldGridSpace.IsFinite(localBounds.size)
+                && FlowFieldGridSpace.IsFinite(cellSize)
+                && cellSize >= MinCellSize;
+
+        private static bool TryCreateSnappedWorldBounds(
+            Vector3 managerWorldPosition,
+            Vector3 localCenter,
+            Vector3 snappedSize,
+            out Bounds worldBounds)
+        {
+            worldBounds = new Bounds(managerWorldPosition + localCenter, snappedSize);
+            return FlowFieldGridSpace.IsFinite(worldBounds.center)
+                && FlowFieldGridSpace.IsFinite(worldBounds.size);
         }
 
         /// <summary>

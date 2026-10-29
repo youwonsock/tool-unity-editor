@@ -49,21 +49,24 @@ namespace Common.FlowField
             if (_baseDisposed)
                 return;
 
-            InvokeUserEvent(() => FieldCommitted?.Invoke());
+            try { FieldCommitted?.Invoke(); }
+            catch (Exception exception) { ReportEventFailure(exception); }
         }
 
         protected void NotifyFailed(Exception exception)
         {
             if (_baseDisposed)
                 return;
-            InvokeUserEvent(() => Failed?.Invoke(exception));
+            try { Failed?.Invoke(exception); }
+            catch (Exception callbackException) { ReportEventFailure(callbackException); }
         }
 
         protected void NotifyStateChanged(FlowFieldRuntimeState state)
         {
             if (_baseDisposed)
                 return;
-            InvokeUserEvent(() => StateChanged?.Invoke(state));
+            try { StateChanged?.Invoke(state); }
+            catch (Exception exception) { ReportEventFailure(exception); }
         }
 
         protected void MarkBaseDisposed()
@@ -77,22 +80,17 @@ namespace Common.FlowField
             EventFailed = null;
         }
 
-        protected void InvokeUserEvent(Action callback)
+        // Subscriber exceptions are isolated per event. Each Notify method
+        // catches inline instead of wrapping the call in a closure.
+        private void ReportEventFailure(Exception exception)
         {
             try
             {
-                callback?.Invoke();
+                EventFailed?.Invoke(exception);
             }
-            catch (Exception exception)
+            catch (Exception reportingException)
             {
-                try
-                {
-                    EventFailed?.Invoke(exception);
-                }
-                catch (Exception reportingException)
-                {
-                    Debug.LogException(reportingException);
-                }
+                Debug.LogException(reportingException);
             }
         }
 

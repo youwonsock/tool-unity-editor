@@ -19,14 +19,7 @@ namespace Common.FlowField
             ref Collider[] overlapBuffer,
             bool syncTransformsBeforeQuery = false)
         {
-            if (!grid.IsValid)
-                throw new ArgumentException("Grid is invalid.", nameof(grid));
-            if (!surface.IsValid)
-                throw new ArgumentException("Surface bake data is invalid.", nameof(surface));
-            if (destination == null)
-                throw new ArgumentNullException(nameof(destination));
-            if (destination.Length != grid.CellCount)
-                throw new ArgumentException("Destination length must match the grid cell count.", nameof(destination));
+            FlowFieldMaskArguments.ValidateTarget(grid, surface, destination);
 
             if (syncTransformsBeforeQuery)
                 Physics.SyncTransforms();
@@ -35,12 +28,7 @@ namespace Common.FlowField
             if (obstacleLayer.value == 0)
                 return true;
 
-            if (!FlowFieldGridSpace.IsFinite(checkHeight) || checkHeight <= 0f)
-                throw new ArgumentOutOfRangeException(nameof(checkHeight));
-            if (!FlowFieldGridSpace.IsFinite(centerOffset))
-                throw new ArgumentOutOfRangeException(nameof(centerOffset));
-            if (!FlowFieldGridSpace.IsFinite(clearance) || clearance < 0f)
-                throw new ArgumentOutOfRangeException(nameof(clearance));
+            FlowFieldMaskArguments.ValidateObstacleBox(checkHeight, centerOffset, clearance);
             float halfHeight = checkHeight * 0.5f;
             float halfXZ = grid.CellSize * 0.5f + clearance;
             Vector3 cellHalfExtents = new Vector3(halfXZ, halfHeight, halfXZ);
@@ -112,14 +100,7 @@ namespace Common.FlowField
             bool syncTransformsBeforeQuery = false)
         {
             excludedColliderCount = 0;
-            if (!grid.IsValid)
-                throw new ArgumentException("Grid is invalid.", nameof(grid));
-            if (!surface.IsValid)
-                throw new ArgumentException("Surface bake data is invalid.", nameof(surface));
-            if (destination == null)
-                throw new ArgumentNullException(nameof(destination));
-            if (destination.Length != grid.CellCount)
-                throw new ArgumentException("Destination length must match the grid cell count.", nameof(destination));
+            FlowFieldMaskArguments.ValidateTarget(grid, surface, destination);
 
             if (syncTransformsBeforeQuery)
                 Physics.SyncTransforms();
@@ -128,12 +109,7 @@ namespace Common.FlowField
             if (obstacleLayer.value == 0)
                 return true;
 
-            if (!FlowFieldGridSpace.IsFinite(checkHeight) || checkHeight <= 0f)
-                throw new ArgumentOutOfRangeException(nameof(checkHeight));
-            if (!FlowFieldGridSpace.IsFinite(centerOffset))
-                throw new ArgumentOutOfRangeException(nameof(centerOffset));
-            if (!FlowFieldGridSpace.IsFinite(clearance) || clearance < 0f)
-                throw new ArgumentOutOfRangeException(nameof(clearance));
+            FlowFieldMaskArguments.ValidateObstacleBox(checkHeight, centerOffset, clearance);
             float halfHeight = checkHeight * 0.5f;
             float halfXZ = grid.CellSize * 0.5f + clearance;
             Vector3 cellHalfExtents = new Vector3(halfXZ, halfHeight, halfXZ);
@@ -223,7 +199,8 @@ namespace Common.FlowField
             float clearance,
             ref Collider[] overlapBuffer)
         {
-            ResizeOverlapBuffer(ref overlapBuffer, INITIAL_OVERLAP_CAPACITY);
+            FlowFieldOverlapUtility.EnsureCapacity(
+                ref overlapBuffer, INITIAL_OVERLAP_CAPACITY, INITIAL_OVERLAP_CAPACITY, MAX_OVERLAP_HITS);
             Vector3 center = grid.Origin + new Vector3(grid.WorldSizeX * 0.5f, 0f, grid.WorldSizeZ * 0.5f);
             center.y = (minCenterY + maxCenterY) * 0.5f;
             Vector3 halfExtents = new Vector3(
@@ -251,7 +228,8 @@ namespace Common.FlowField
                         $"Obstacle overlap count reached the configured capacity of {MAX_OVERLAP_HITS}.");
                 }
 
-                ResizeOverlapBuffer(ref overlapBuffer, overlapBuffer.Length * 2);
+                FlowFieldOverlapUtility.EnsureCapacity(
+                    ref overlapBuffer, overlapBuffer.Length * 2, INITIAL_OVERLAP_CAPACITY, MAX_OVERLAP_HITS);
             }
         }
 
@@ -260,14 +238,6 @@ namespace Common.FlowField
                 && collider.gameObject.isStatic
                 && collider.attachedRigidbody == null;
 
-        private static void ResizeOverlapBuffer(ref Collider[] overlapBuffer, int minimumCapacity)
-        {
-            int cappedCapacity = Mathf.Min(Mathf.Max(INITIAL_OVERLAP_CAPACITY, minimumCapacity), MAX_OVERLAP_HITS);
-            if (overlapBuffer != null && overlapBuffer.Length >= cappedCapacity)
-                return;
-
-            overlapBuffer = new Collider[cappedCapacity];
-        }
     }
 
     internal static class FlowFieldModifierMaskBuilder
@@ -285,14 +255,7 @@ namespace Common.FlowField
             ref Collider[] overlapBuffer,
             bool syncTransformsBeforeQuery = false)
         {
-            if (!grid.IsValid)
-                throw new ArgumentException("Grid is invalid.", nameof(grid));
-            if (!surface.IsValid)
-                throw new ArgumentException("Surface bake data is invalid.", nameof(surface));
-            if (destination == null)
-                throw new ArgumentNullException(nameof(destination));
-            if (destination.Length != grid.CellCount)
-                throw new ArgumentException("Destination length must match the grid cell count.", nameof(destination));
+            FlowFieldMaskArguments.ValidateTarget(grid, surface, destination);
 
             Array.Clear(destination, 0, destination.Length);
             if (!IsUsableTrigger(influenceCollider))
@@ -416,7 +379,7 @@ namespace Common.FlowField
             QueryTriggerInteraction triggerInteraction,
             ref Collider[] overlapBuffer)
         {
-            ResizeOverlapBuffer(ref overlapBuffer, INITIAL_OVERLAP_CAPACITY);
+            EnsureCapacity(ref overlapBuffer, INITIAL_OVERLAP_CAPACITY, INITIAL_OVERLAP_CAPACITY, MAX_OVERLAP_HITS);
             while (true)
             {
                 int count = Physics.OverlapBoxNonAlloc(
@@ -440,19 +403,55 @@ namespace Common.FlowField
                     throw new System.InvalidOperationException(
                         $"Target overlap count reached the configured capacity of {MAX_OVERLAP_HITS}.");
 
-                ResizeOverlapBuffer(ref overlapBuffer, overlapBuffer.Length * 2);
+                EnsureCapacity(ref overlapBuffer, overlapBuffer.Length * 2, INITIAL_OVERLAP_CAPACITY, MAX_OVERLAP_HITS);
             }
         }
 
-        private static void ResizeOverlapBuffer(ref Collider[] overlapBuffer, int minimumCapacity)
+        /// <summary>
+        /// Grows a NonAlloc query buffer to at least <paramref name="minimumCapacity"/>,
+        /// clamped to [<paramref name="initialCapacity"/>, <paramref name="maxCapacity"/>].
+        /// </summary>
+        internal static void EnsureCapacity(
+            ref Collider[] overlapBuffer,
+            int minimumCapacity,
+            int initialCapacity,
+            int maxCapacity)
         {
             int cappedCapacity = Mathf.Min(
-                Mathf.Max(INITIAL_OVERLAP_CAPACITY, minimumCapacity),
-                MAX_OVERLAP_HITS);
+                Mathf.Max(initialCapacity, minimumCapacity),
+                maxCapacity);
             if (overlapBuffer != null && overlapBuffer.Length >= cappedCapacity)
                 return;
 
             overlapBuffer = new Collider[cappedCapacity];
+        }
+    }
+
+    /// <summary>
+    /// Argument checks shared by the Surface2D obstacle and modifier mask builders.
+    /// </summary>
+    internal static class FlowFieldMaskArguments
+    {
+        internal static void ValidateTarget(FlowFieldGridSpace grid, FlowFieldSurfaceData surface, bool[] destination)
+        {
+            if (!grid.IsValid)
+                throw new ArgumentException("Grid is invalid.", nameof(grid));
+            if (!surface.IsValid)
+                throw new ArgumentException("Surface bake data is invalid.", nameof(surface));
+            if (destination == null)
+                throw new ArgumentNullException(nameof(destination));
+            if (destination.Length != grid.CellCount)
+                throw new ArgumentException("Destination length must match the grid cell count.", nameof(destination));
+        }
+
+        internal static void ValidateObstacleBox(float checkHeight, float centerOffset, float clearance)
+        {
+            if (!FlowFieldGridSpace.IsFinite(checkHeight) || checkHeight <= 0f)
+                throw new ArgumentOutOfRangeException(nameof(checkHeight));
+            if (!FlowFieldGridSpace.IsFinite(centerOffset))
+                throw new ArgumentOutOfRangeException(nameof(centerOffset));
+            if (!FlowFieldGridSpace.IsFinite(clearance) || clearance < 0f)
+                throw new ArgumentOutOfRangeException(nameof(clearance));
         }
     }
 }

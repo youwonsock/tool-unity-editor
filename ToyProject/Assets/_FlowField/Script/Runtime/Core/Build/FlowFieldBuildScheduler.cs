@@ -15,6 +15,10 @@ namespace Common.FlowField
             = new List<IFlowFieldBuildOperation>(8);
         private static int _cursor;
         private static bool _pumping;
+        // PumpAll is non-reentrant, so one timer and one cached, non-capturing
+        // delegate serve every frame without allocating.
+        private static readonly Stopwatch Timer = new Stopwatch();
+        private static readonly Func<double> ElapsedMilliseconds = () => Timer.Elapsed.TotalMilliseconds;
 
         internal static int Count => Operations.Count;
 
@@ -51,12 +55,12 @@ namespace Common.FlowField
                 return;
 
             _pumping = true;
-            Stopwatch timer = Stopwatch.StartNew();
+            Timer.Restart();
             try
             {
                 int visitedWithoutWork = 0;
                 while (Operations.Count > 0
-                    && timer.Elapsed.TotalMilliseconds < budgetMilliseconds)
+                    && Timer.Elapsed.TotalMilliseconds < budgetMilliseconds)
                 {
                     if (_cursor >= Operations.Count)
                         _cursor = 0;
@@ -74,7 +78,7 @@ namespace Common.FlowField
 
                     FlowFieldBuildBudget budget = new FlowFieldBuildBudget(
                         budgetMilliseconds,
-                        () => timer.Elapsed.TotalMilliseconds);
+                        ElapsedMilliseconds);
                     bool wasBuilding = operation.IsBuilding;
                     operation.PumpInternal(in budget);
                     bool isBuilding = operation.IsBuilding;

@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using static Common.FlowField.Samples.FlowFieldSampleMath;
 
 namespace Common.FlowField.Samples
 {
@@ -297,11 +298,5 @@ namespace Common.FlowField.Samples
             }
             _dynamicGateRegistered = false;
         }
-
-        private static bool IsFinite(Vector3 value)
-            => IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
-
-        private static bool IsFinite(float value)
-            => !float.IsNaN(value) && !float.IsInfinity(value);
     }
 }
