@@ -6,9 +6,9 @@ namespace Common.FlowField
     [CreateAssetMenu(
         fileName = "FlowFieldVolumeBakeData",
         menuName = "FlowField/Volume 3D Bake Data")]
-    public sealed class FlowFieldVolumeBakeData : ScriptableObject
+    public sealed class FlowFieldVolumeBakeData : ScriptableObject, ISerializationCallbackReceiver
     {
-        public const int CURRENT_FORMAT_VERSION = 5;
+        public const int CURRENT_FORMAT_VERSION = 6;
 
         [SerializeField] private int _formatVersion = CURRENT_FORMAT_VERSION;
         [SerializeField] private int _revision;
@@ -26,9 +26,12 @@ namespace Common.FlowField
         [SerializeField] private uint[] _topologyMasks = Array.Empty<uint>();
         [SerializeField] private FlowFieldGoalFlags[] _goalFlags = Array.Empty<FlowFieldGoalFlags>();
         [SerializeField] private int[] _nextCells = Array.Empty<int>();
-        [SerializeField] private Vector3[] _directions = Array.Empty<Vector3>();
-        [SerializeField] private float[] _speeds = Array.Empty<float>();
-        [SerializeField] private Vector3[] _escapeDirections = Array.Empty<Vector3>();
+        // v6 stores the per-cell vectors implicitly: base directions and
+        // speeds follow from NextCells (plus the bake-time Default Direction
+        // for cells outside the Goal influence), and an escape direction is
+        // one of the six faces. They are rebuilt on load.
+        [SerializeField] private Vector3 _defaultDirection;
+        [SerializeField] private byte[] _escapeFaces = Array.Empty<byte>();
         [SerializeField] private bool _hasGoal;
         [SerializeField] private Vector3 _requestedGoalWorld;
         [SerializeField] private float _goalInfluenceRadius;
@@ -42,6 +45,9 @@ namespace Common.FlowField
         [NonSerialized] private int _validatedContentGeneration = -1;
         [NonSerialized] private bool _hasValidatedSignature;
         [NonSerialized] private int _contentGeneration;
+        [NonSerialized] private Vector3[] _directions = Array.Empty<Vector3>();
+        [NonSerialized] private float[] _speeds = Array.Empty<float>();
+        [NonSerialized] private Vector3[] _escapeDirections = Array.Empty<Vector3>();
 
         public int FormatVersion => _formatVersion;
         public int Revision => _revision;
@@ -63,6 +69,13 @@ namespace Common.FlowField
             unchecked { _contentGeneration++; }
             _hasValidatedSignature = false;
         }
+
+        void ISerializationCallbackReceiver.OnBeforeSerialize()
+        {
+        }
+
+        void ISerializationCallbackReceiver.OnAfterDeserialize()
+            => RebuildDerivedArrays();
 
         /// <summary>
         /// Checks only the serialized source metadata.  This intentionally
@@ -336,6 +349,17 @@ namespace Common.FlowField
                     escapeDirections,
                     out string reason))
                 throw new InvalidOperationException(reason);
+            if (!TryEncodeVectors(
+                    grid,
+                    blocked,
+                    next,
+                    directions,
+                    speeds,
+                    escapeDirections,
+                    out Vector3 defaultDirection,
+                    out byte[] escapeFaces,
+                    out reason))
+                throw new InvalidOperationException(reason);
 
             _formatVersion = CURRENT_FORMAT_VERSION;
             _gridOriginWorld = grid.Origin;
@@ -355,9 +379,9 @@ namespace Common.FlowField
             _topologyMasks = (uint[])topology.Clone();
             _goalFlags = (FlowFieldGoalFlags[])goalFlags.Clone();
             _nextCells = (int[])next.Clone();
-            _directions = (Vector3[])directions.Clone();
-            _speeds = (float[])speeds.Clone();
-            _escapeDirections = (Vector3[])escapeDirections.Clone();
+            _defaultDirection = defaultDirection;
+            _escapeFaces = escapeFaces;
+            RebuildDerivedArrays();
             _revision++;
             unchecked { _contentGeneration++; }
             _validatedRevision = _revision;
@@ -367,6 +391,130 @@ namespace Common.FlowField
             _validatedObstacleClearance = obstacleClearance;
             _validatedContentGeneration = _contentGeneration;
             _hasValidatedSignature = true;
+        }
+
+        private void RebuildDerivedArrays()
+        {
+            int count = _nextCells?.Length ?? 0;
+            if (_blocked == null || _blocked.Length != count
+                || _escapeFaces == null || _escapeFaces.Length != count
+                || (long)_width * _height * _depth != count)
+            {
+                // Inconsistent serialized data: leave no view so validation rejects it.
+                _directions = null;
+                _speeds = null;
+                _escapeDirections = null;
+                return;
+            }
+            _directions = new Vector3[count];
+            _speeds = new float[count];
+            _escapeDirections = new Vector3[count];
+            for (int index = 0; index < count; index++)
+            {
+                _directions[index] = DeriveDirection(index, _width, _depth, _blocked, _nextCells, _defaultDirection, out float speed);
+                _speeds[index] = speed;
+                _escapeDirections[index] = DecodeEscape(_escapeFaces[index]);
+            }
+        }
+
+        /// <summary>
+        /// Same values the build writes: (next - cell).normalized for a directed
+        /// cell, the Default Direction outside the Goal influence, zero otherwise.
+        /// </summary>
+        private static Vector3 DeriveDirection(
+            int index,
+            int width,
+            int depth,
+            bool[] blocked,
+            int[] next,
+            Vector3 defaultDirection,
+            out float speed)
+        {
+            int target = next[index];
+            speed = 0f;
+            if (blocked[index] || target == index || target < -1 || target >= next.Length)
+                return Vector3.zero;
+            if (target == -1)
+            {
+                speed = defaultDirection.sqrMagnitude > FlowFieldVectorUtility.DIRECTION_EPSILON_SQR ? 1f : 0f;
+                return defaultDirection;
+            }
+            int layer = width * depth;
+            int y = index / layer;
+            int z = (index - y * layer) / width;
+            int x = index - y * layer - z * width;
+            int ny = target / layer;
+            int nz = (target - ny * layer) / width;
+            int nx = target - ny * layer - nz * width;
+            speed = 1f;
+            return new Vector3(nx - x, ny - y, nz - z).normalized;
+        }
+
+        private static Vector3 DecodeEscape(byte face)
+        {
+            if (face == 0)
+                return Vector3.zero;
+            if (face > FlowFieldNeighborUtility.VolumeFaceDirections.Length)
+                return new Vector3(float.NaN, float.NaN, float.NaN);
+            int direction = FlowFieldNeighborUtility.VolumeFaceDirections[face - 1];
+            return new Vector3(
+                FlowFieldNeighborUtility.DeltaX[direction],
+                FlowFieldNeighborUtility.DeltaY[direction],
+                FlowFieldNeighborUtility.DeltaZ[direction]);
+        }
+
+        /// <summary>
+        /// Encodes the incoming vectors into the v6 form and confirms that
+        /// rebuilding reproduces them exactly; otherwise the bake is rejected.
+        /// </summary>
+        private static bool TryEncodeVectors(
+            FlowFieldGridSpace grid,
+            bool[] blocked,
+            int[] next,
+            Vector3[] directions,
+            float[] speeds,
+            Vector3[] escapeDirections,
+            out Vector3 defaultDirection,
+            out byte[] escapeFaces,
+            out string reason)
+        {
+            int count = grid.CellCount;
+            defaultDirection = Vector3.zero;
+            escapeFaces = new byte[count];
+            reason = string.Empty;
+            for (int index = 0; index < count; index++)
+            {
+                if (!blocked[index] && next[index] == -1)
+                {
+                    defaultDirection = directions[index];
+                    break;
+                }
+            }
+            for (int index = 0; index < count; index++)
+            {
+                Vector3 escape = escapeDirections[index];
+                if (escape == Vector3.zero)
+                    continue;
+                for (int face = 0; face < FlowFieldNeighborUtility.VolumeFaceDirections.Length; face++)
+                {
+                    if ((DecodeEscape((byte)(face + 1)) - escape).sqrMagnitude <= 0.000001f)
+                    {
+                        escapeFaces[index] = (byte)(face + 1);
+                        break;
+                    }
+                }
+                if (escapeFaces[index] == 0)
+                    return Fail(out reason, $"Volume3D bake escape direction at cell {index} is not a face direction.");
+            }
+            for (int index = 0; index < count; index++)
+            {
+                Vector3 derived = DeriveDirection(index, grid.Width, grid.Depth, blocked, next, defaultDirection, out float speed);
+                if ((derived - directions[index]).sqrMagnitude > 1e-12f
+                    || Mathf.Abs(speed - speeds[index]) > 0.0001f
+                    || (DecodeEscape(escapeFaces[index]) - escapeDirections[index]).sqrMagnitude > 0.000001f)
+                    return Fail(out reason, $"Volume3D bake cell {index} cannot be stored in the v6 format.");
+            }
+            return true;
         }
 
         private static bool ValidateIncomingArrays(

@@ -169,9 +169,9 @@ namespace Common.FlowField
     /// only immutable base navigation data; default direction and modifiers
     /// remain runtime inputs and are composed after loading the snapshot.
     /// </summary>
-    public sealed class FlowFieldStaticBakeData : ScriptableObject
+    public sealed class FlowFieldStaticBakeData : ScriptableObject, ISerializationCallbackReceiver
     {
-        internal const int CURRENT_FORMAT_VERSION = 5;
+        internal const int CURRENT_FORMAT_VERSION = 6;
         private const float EPSILON = 0.0001f;
         private const int MinSentinel = -3;
 
@@ -192,16 +192,23 @@ namespace Common.FlowField
         [SerializeField] private float _obstacleCheckCenterOffset;
         [SerializeField] private float _obstacleClearance;
 
-        [SerializeField] private float[] _surfaceHeights = Array.Empty<float>();
-        [SerializeField] private Vector3[] _surfaceNormals = Array.Empty<Vector3>();
+        // v6 stores the float and Vector3 arrays packed as bytes (see
+        // FlowFieldBakeBlob); the runtime arrays below are unpacked on load.
+        [SerializeField] private byte[] _surfaceHeightData = Array.Empty<byte>();
+        [SerializeField] private byte[] _surfaceNormalData = Array.Empty<byte>();
         [SerializeField] private byte[] _surfaceFlags = Array.Empty<byte>();
         [SerializeField] private byte[] _surfaceNeighborMasks = Array.Empty<byte>();
         [SerializeField] private bool[] _blocked = Array.Empty<bool>();
-        [SerializeField] private Vector3[] _escapeDirections = Array.Empty<Vector3>();
+        [SerializeField] private byte[] _escapeDirectionData = Array.Empty<byte>();
         [SerializeField] private byte[] _topologyMasks = Array.Empty<byte>();
         [SerializeField] private FlowFieldGoalFlags[] _goalFlags = Array.Empty<FlowFieldGoalFlags>();
-        [SerializeField] private Vector3[] _goalDirections = Array.Empty<Vector3>();
+        [SerializeField] private byte[] _goalDirectionData = Array.Empty<byte>();
         [SerializeField] private int[] _nextCells = Array.Empty<int>();
+
+        [NonSerialized] private float[] _surfaceHeights = Array.Empty<float>();
+        [NonSerialized] private Vector3[] _surfaceNormals = Array.Empty<Vector3>();
+        [NonSerialized] private Vector3[] _escapeDirections = Array.Empty<Vector3>();
+        [NonSerialized] private Vector3[] _goalDirections = Array.Empty<Vector3>();
 
         [SerializeField] private bool _hasGoal;
         [SerializeField] private Vector3 _requestedGoalWorld;
@@ -238,6 +245,28 @@ namespace Common.FlowField
             _snapshotCacheRevision = -1;
         }
 
+        void ISerializationCallbackReceiver.OnBeforeSerialize()
+        {
+            _surfaceHeightData = FlowFieldBakeBlob.Pack(_surfaceHeights);
+            _surfaceNormalData = FlowFieldBakeBlob.Pack(_surfaceNormals);
+            _escapeDirectionData = FlowFieldBakeBlob.Pack(_escapeDirections);
+            _goalDirectionData = FlowFieldBakeBlob.Pack(_goalDirections);
+        }
+
+        void ISerializationCallbackReceiver.OnAfterDeserialize()
+        {
+            _surfaceHeights = FlowFieldBakeBlob.Unpack<float>(_surfaceHeightData);
+            _surfaceNormals = FlowFieldBakeBlob.Unpack<Vector3>(_surfaceNormalData);
+            _escapeDirections = FlowFieldBakeBlob.Unpack<Vector3>(_escapeDirectionData);
+            _goalDirections = FlowFieldBakeBlob.Unpack<Vector3>(_goalDirectionData);
+            _snapshotCache = null;
+            _snapshotCacheRevision = -1;
+        }
+
+        internal float[] SurfaceHeights => _surfaceHeights;
+        internal Vector3[] SurfaceNormals => _surfaceNormals;
+        internal byte[] SurfaceFlags => _surfaceFlags;
+        internal byte[] SurfaceNeighborMasks => _surfaceNeighborMasks;
         internal bool[] Blocked => _blocked;
         internal Vector3[] EscapeDirections => _escapeDirections;
         internal byte[] TopologyMasks => _topologyMasks;

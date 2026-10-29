@@ -37,20 +37,20 @@ namespace Common.FlowField.Tests
         }
 
         [Test]
-        public void BothCurrentBakeAssetsUseV5AndValidateTheirPayloads()
+        public void BothCurrentBakeAssetsUseV6AndValidateTheirPayloads()
         {
             int count = 0;
             foreach (string guid in AssetDatabase.FindAssets("t:FlowFieldStaticBakeData", new[] { "Assets/_FlowField" }))
             {
                 var data = AssetDatabase.LoadAssetAtPath<FlowFieldStaticBakeData>(AssetDatabase.GUIDToAssetPath(guid));
-                Assert.That(data.FormatVersion, Is.EqualTo(5));
+                Assert.That(data.FormatVersion, Is.EqualTo(6));
                 Assert.That(data.Validate(out string reason), Is.True, reason);
                 count++;
             }
             foreach (string guid in AssetDatabase.FindAssets("t:FlowFieldVolumeBakeData", new[] { "Assets/_FlowField" }))
             {
                 var data = AssetDatabase.LoadAssetAtPath<FlowFieldVolumeBakeData>(AssetDatabase.GUIDToAssetPath(guid));
-                Assert.That(data.FormatVersion, Is.EqualTo(5));
+                Assert.That(data.FormatVersion, Is.EqualTo(6));
                 Assert.That(data.TryGetValidationView(out var view), Is.True);
                 var grid = FlowFieldGridSpace.FromVolumeCellGrid(view.Origin, view.Width, view.Height, view.Depth, view.CellSize);
                 Assert.That(data.Matches(grid, new Bounds(view.BoundsCenter, view.BoundsSize), view.ObstacleLayerMask,

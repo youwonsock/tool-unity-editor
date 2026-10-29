@@ -26,7 +26,7 @@ namespace Common.FlowField
         [SerializeField] private float _maxSurfaceSlope = 45f;
         [SerializeField] private float _maxStepHeight = 0.5f;
         [SerializeField, Tooltip("Surface2D 정적 모드에서 사용할 Flow Field Snapshot입니다.")] private FlowFieldStaticBakeData _staticBakeData;
-        [SerializeField, Tooltip("Volume3D 정적 모드에서 사용할 v5 Flow Field Snapshot입니다.")] private FlowFieldVolumeBakeData _volumeStaticBakeData;
+        [SerializeField, Tooltip("Volume3D 정적 모드에서 사용할 v6 Flow Field Snapshot입니다.")] private FlowFieldVolumeBakeData _volumeStaticBakeData;
 
         [Header("GPU Frontier BFS")]
         [SerializeField] private ComputeShader _frontierComputeShader;
