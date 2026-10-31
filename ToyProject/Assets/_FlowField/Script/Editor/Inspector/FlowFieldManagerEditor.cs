@@ -36,7 +36,6 @@ namespace Common.FlowField.Editor
                         "_maxStepHeight",
                         "_obstacleCheckHeight",
                         "_obstacleCheckCenterOffset",
-                        "_refreshRate",
                         "_showField",
                         "_volumeGizmoMode",
                         "_showVolumeCells",
