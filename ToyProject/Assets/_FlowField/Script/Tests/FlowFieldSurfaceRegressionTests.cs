@@ -96,6 +96,38 @@ namespace Common.FlowField.Tests
             Assert.That(_session.Sample(OriginCell).Direction, Is.EqualTo(Vector3.forward));
         }
 
+        [Test]
+        public void GoalMovingDuringEverySolveKeepsPublishing()
+        {
+            // Three Goals, so each published solve differs from the previous one.
+            Vector3[] goals = { GoalB, new Vector3(2.5f, 0f, 0.5f), new Vector3(1.5f, 0f, 2.5f) };
+            Build(GoalA);
+            int revision = _session.Revision;
+
+            Vector3 latest = GoalB;
+            _session.Submit(FlowFieldRegressionFixture.Request(latest));
+            int solves = 0;
+            for (int cycle = 0; cycle < 8; cycle++)
+            {
+                _session.Pump();
+                Assert.That(_session.IsRebuilding, Is.True, $"Cycle {cycle} did not start a solve.");
+                solves++;
+                latest = goals[(cycle + 1) % goals.Length];
+                _session.Submit(FlowFieldRegressionFixture.Request(latest));
+                _backend.Complete(_backend.Calls.Count - 1);
+                Assert.That(_session.IsFaulted, Is.False, _session.LastError);
+            }
+
+            Assert.That(solves, Is.EqualTo(8));
+            Assert.That(_session.Revision - revision, Is.EqualTo(4), "Every second superseded solve publishes.");
+            Assert.That(_session.HasPendingRequest, Is.True);
+
+            _session.Pump();
+            Assert.That(_session.IsRebuilding, Is.True);
+            _backend.Complete(_backend.Calls.Count - 1);
+            AssertResolvedGoal(latest);
+        }
+
         [TestCase(false)]
         [TestCase(true)]
         public void ReleasedOrSuspendedSessionIgnoresLateCompletion(bool release)

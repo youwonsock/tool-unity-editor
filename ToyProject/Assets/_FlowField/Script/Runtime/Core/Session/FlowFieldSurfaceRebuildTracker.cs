@@ -30,6 +30,7 @@ namespace Common.FlowField
         // a request. Keep track of those flags so Submit can detect changes
         // from test/editor adapters without incrementing the version twice.
         private FlowFieldDirtyFlags _versionedFlags;
+        private bool _lastGoalSolveRejected;
 
         internal int RequestVersion { get; private set; }
         internal bool IsBaseStale => _activeBaseVersion != _baseVersion;
@@ -138,6 +139,21 @@ namespace Common.FlowField
             }
             _versionedFlags = FlowFieldDirtyFlags.None;
         }
+
+        /// <summary>
+        /// A single superseded Goal solve is dropped so movers do not briefly
+        /// follow an obsolete Goal. A consecutive one is published: a Goal
+        /// moving faster than the solve would otherwise starve publication.
+        /// </summary>
+        internal bool ShouldRejectSupersededGoal()
+        {
+            if (_lastGoalSolveRejected)
+                return false;
+            _lastGoalSolveRejected = true;
+            return true;
+        }
+
+        internal void ResetSupersededGoal() => _lastGoalSolveRejected = false;
 
         internal void PromoteObstacle()
         {
