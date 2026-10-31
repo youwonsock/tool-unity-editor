@@ -178,7 +178,7 @@ namespace Common.FlowField
                 }
                 else
                 {
-                    return FlowFieldFinalFieldComposer.ComposeRegion(
+                    return FlowFieldFinalFieldComposer.ApplyModifiers(
                         request.Grid,
                         request.Surface,
                         request.Workspace,

@@ -274,6 +274,17 @@ namespace Common.FlowField
         internal void ResetWarning()
             => _missingWalkableWarningIssued = false;
 
+        /// <summary>
+        /// Forgets the last build so the same Goal is solved again, keeping
+        /// the one-shot warning state of the unchanged Goal.
+        /// </summary>
+        internal void ForgetLastBuild()
+        {
+            bool warned = _missingWalkableWarningIssued;
+            Clear();
+            _missingWalkableWarningIssued = warned;
+        }
+
         internal void Clear()
         {
             _hasBuiltRequest = false;

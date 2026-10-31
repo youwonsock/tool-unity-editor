@@ -55,10 +55,7 @@ namespace Common.FlowField
         private FlowFieldGridSpace _lastObservedGrid;
         private bool _hasObservedGrid;
         private bool _obstacleProbePending;
-        private int _requestVersion;
-        private int _baseVersion;
-        private int _activeBaseVersion = -1;
-        private int _activeRequestVersion = -1;
+        private readonly FlowFieldSurfaceRebuildTracker _rebuild = new FlowFieldSurfaceRebuildTracker();
         private bool _hasPendingRequest;
         private FlowFieldSessionRequest _activeRequest;
         // Submit coalesces input here; the pending flag schedules it. Active
@@ -67,16 +64,6 @@ namespace Common.FlowField
         private bool _hasLatestRequestedInput;
         private Vector3 _latestDefaultDirection;
         private bool _hasLatestDefaultDirection;
-        // Obstacle registration/movement is first treated as a non-versioning
-        // request.  The effective mask is not known until the physics probe
-        // runs; only then is the pending input promoted to a base version.
-        private bool _deferredObstacleVersion;
-        private bool _deferredSurfaceVersion;
-        private bool _deferredGoalVersion;
-        // MarkDirty is also used by the Unity-facing façade before it submits
-        // a request. Keep track of those flags so Submit can detect changes
-        // from test/editor adapters without incrementing the version twice.
-        private FlowFieldDirtyFlags _versionedDirtyFlags;
         private bool _configurationStale;
         private FlowFieldBakeMode _bakeMode;
         private FlowFieldSessionSourceKind _sourceKind;
@@ -90,6 +77,7 @@ namespace Common.FlowField
         // lifetime of this Session. Release clears the flag; Suspend keeps it
         // so a resume cannot repeatedly rediscover a broken backend.
         private bool _managedBackendForced;
+        private string _gpuFallbackReason;
         private int _callbackGeneration;
         private FlowFieldRuntimeState _publishedRuntimeState = FlowFieldRuntimeState.Uninitialized;
 
@@ -123,6 +111,7 @@ namespace Common.FlowField
             _ => FlowFieldRuntimeState.Uninitialized,
         };
         internal override string LastError => _fault?.Message;
+        internal override string GpuFallbackReason => _gpuFallbackReason;
         internal override bool IsInitialized => _lifecycle == FlowFieldSessionLifecycle.Active
             || _lifecycle == FlowFieldSessionLifecycle.Building
             || _lifecycle == FlowFieldSessionLifecycle.Suspended;
@@ -138,7 +127,7 @@ namespace Common.FlowField
         // Stale publications stay hidden until commit. A validated Submit
         // clears these unsubmitted flags, allowing that rebuild to be pumped.
         internal bool RequiresExplicitRebuild => _configurationStale
-            && (_versionedDirtyFlags & FlowFieldDirtyFlags.Grid) != 0;
+            && _rebuild.HasVersionedGrid;
         internal override int Revision => _revision;
 
         private bool HasCompatibleCommittedSource()
@@ -352,9 +341,9 @@ namespace Common.FlowField
             // second time.
             if (_lifecycle == FlowFieldSessionLifecycle.Suspended)
             {
-                _deferredObstacleVersion = false;
-                _deferredSurfaceVersion = false;
-                _deferredGoalVersion = false;
+                _rebuild.DropDeferredObstacle();
+                _rebuild.DropDeferredSurface();
+                _rebuild.DropDeferredGoal();
             }
 
             _bakeMode = bakeMode;
@@ -395,58 +384,19 @@ namespace Common.FlowField
             // Adding the derived flag at the point where the input is
             // versioned keeps Submit from counting the same change twice when
             // a Manager marks dirty and then submits the latest request.
-            if (IsBaseDirty(flags)
+            if (FlowFieldSurfaceRebuildTracker.IsBaseDirty(flags)
                 || (flags & (FlowFieldDirtyFlags.DefaultDirection
                     | FlowFieldDirtyFlags.ModifierArea
                     | FlowFieldDirtyFlags.ModifierValue)) != 0)
             {
                 flags |= FlowFieldDirtyFlags.FinalRegion;
             }
-            // Only navigation inputs advance BaseVersion; final-only changes
-            // still advance RequestVersion without invalidating the BFS.
-            bool baseChange = IsBaseDirty(flags);
             _state.DirtyFlags |= flags;
             if (finalRegion.IsValid)
                 _state.ExpandFinalDirty(finalRegion);
             if (obstacleRegion.IsValid)
                 _state.ExpandObstacleDirty(obstacleRegion);
-            unchecked
-            {
-                if (deferBaseVersion)
-                    _deferredObstacleVersion = true;
-                if (deferSurfaceVersion)
-                    _deferredSurfaceVersion = true;
-                if (deferGoalVersion)
-                {
-                    // Goal authoring changes are accepted immediately, but
-                    // the resolved cell/influence result is not known until
-                    // the shared Goal stage runs. RequestVersion therefore
-                    // advances now while BaseVersion waits for that stage to
-                    // prove that the base graph actually changed.
-                    _deferredGoalVersion = true;
-                }
-                // Obstacle-only requests intentionally wait for the physics
-                // probe before becoming observable. Surface and Goal edits
-                // are authoring changes, so they advance RequestVersion as
-                // soon as they are accepted. If several deferred categories
-                // are marked together, still advance it only once.
-                if (!deferBaseVersion || deferSurfaceVersion || deferGoalVersion)
-                    _requestVersion++;
-                FlowFieldDirtyFlags deferredBaseFlags = FlowFieldDirtyFlags.None;
-                if (deferBaseVersion)
-                    deferredBaseFlags |= FlowFieldDirtyFlags.StaticObstacles
-                        | FlowFieldDirtyFlags.DynamicObstacles
-                        | FlowFieldDirtyFlags.Escape;
-                if (deferSurfaceVersion)
-                    deferredBaseFlags |= FlowFieldDirtyFlags.Grid;
-                if (deferGoalVersion)
-                    deferredBaseFlags |= FlowFieldDirtyFlags.Goal;
-                FlowFieldDirtyFlags immediateBaseFlags = (flags & BaseDirtyMask)
-                    & ~deferredBaseFlags;
-                if (immediateBaseFlags != FlowFieldDirtyFlags.None)
-                    _baseVersion++;
-            }
-            _versionedDirtyFlags |= flags;
+            _rebuild.RecordMarkDirty(flags, deferBaseVersion, deferSurfaceVersion, deferGoalVersion);
             // Dirty observations reuse the latest accepted request. Initial
             // setup has no request yet and must wait for its first Submit.
             if (_hasLatestRequestedInput)
@@ -493,14 +443,7 @@ namespace Common.FlowField
                 _obstaclePipeline.DiscardStagedDynamicProbe();
             }
 
-            // A request can be submitted by a test/editor adapter without a
-            // preceding MarkDirty call. Merge those inferred and explicit
-            // flags once, then subtract the flags already versioned by the
-            // façade. This gives one RequestVersion/BaseVersion increment for
-            // one logical input change regardless of which entry point marked
-            // it first.
             FlowFieldDirtyFlags combinedFlags = inputFlags | request.DirtyFlags;
-            FlowFieldDirtyFlags unversionedFlags = combinedFlags & ~_versionedDirtyFlags;
             _state.DirtyFlags |= combinedFlags;
             if ((combinedFlags & FlowFieldDirtyFlags.FinalRegion) != 0)
             {
@@ -514,51 +457,7 @@ namespace Common.FlowField
 
             _latestRequestedInput = request;
             _hasLatestRequestedInput = true;
-            if (unversionedFlags != FlowFieldDirtyFlags.None)
-            {
-                FlowFieldDirtyFlags deferredObstacleFlags = unversionedFlags
-                    & (FlowFieldDirtyFlags.StaticObstacles
-                        | FlowFieldDirtyFlags.DynamicObstacles
-                        | FlowFieldDirtyFlags.Escape);
-                if (deferredObstacleFlags != FlowFieldDirtyFlags.None)
-                    _deferredObstacleVersion = true;
-                FlowFieldDirtyFlags deferredGoalFlags = unversionedFlags & FlowFieldDirtyFlags.Goal;
-                if (deferredGoalFlags != FlowFieldDirtyFlags.None)
-                    _deferredGoalVersion = true;
-                FlowFieldDirtyFlags deferredSurfaceFlags = unversionedFlags & FlowFieldDirtyFlags.Grid;
-                if (deferredSurfaceFlags != FlowFieldDirtyFlags.None)
-                    _deferredSurfaceVersion = true;
-                FlowFieldDirtyFlags immediatelyVersioned = unversionedFlags
-                    & ~(deferredObstacleFlags | deferredSurfaceFlags | deferredGoalFlags);
-                // FinalRegion is a derived flag for an obstacle-only request.
-                // Do not turn that derived bit into a visible RequestVersion;
-                // the probe below decides whether the base input really
-                // changed. If another source (Goal, DefaultDirection or a
-                // Modifier) is present, keep it and version normally.
-                if ((deferredObstacleFlags != FlowFieldDirtyFlags.None
-                        || deferredSurfaceFlags != FlowFieldDirtyFlags.None
-                        || deferredGoalFlags != FlowFieldDirtyFlags.None)
-                    && (unversionedFlags
-                        & ~(deferredObstacleFlags
-                            | deferredSurfaceFlags
-                            | deferredGoalFlags
-                            | FlowFieldDirtyFlags.FinalRegion)) == 0)
-                {
-                    immediatelyVersioned &= ~FlowFieldDirtyFlags.FinalRegion;
-                }
-                unchecked
-                {
-                    if (deferredSurfaceFlags != FlowFieldDirtyFlags.None
-                        || deferredGoalFlags != FlowFieldDirtyFlags.None
-                        || immediatelyVersioned != FlowFieldDirtyFlags.None)
-                    {
-                        _requestVersion++;
-                        if (IsBaseDirty(immediatelyVersioned))
-                            _baseVersion++;
-                    }
-                }
-            }
-            _versionedDirtyFlags = FlowFieldDirtyFlags.None;
+            _rebuild.RecordSubmit(combinedFlags);
             _hasPendingRequest = true;
             return true;
         }
@@ -765,8 +664,8 @@ namespace Common.FlowField
             if (!staticStillDirty)
                 clearedFlags |= FlowFieldDirtyFlags.Escape;
             _state.DirtyFlags &= ~clearedFlags;
-            _versionedDirtyFlags &= ~clearedFlags;
-            _deferredObstacleVersion = false;
+            _rebuild.ClearVersioned(clearedFlags);
+            _rebuild.DropDeferredObstacle();
 
             // FinalRegion is derived for an obstacle request. Remove it only
             // when no independent Goal/default/Modifier change still owns the
@@ -946,9 +845,9 @@ namespace Common.FlowField
                 if (!TryPrepareSurface(request, pending, callbackGeneration, out bool surfaceChanged))
                     return false;
                 if (surfaceChanged)
-                    PromoteDeferredSurfaceVersion();
+                    _rebuild.PromoteSurface();
                 else
-                    _deferredSurfaceVersion = false;
+                    _rebuild.DropDeferredSurface();
                 // Surface preparation may invalidate every downstream stage
                 // (for example after a grid change). Include those flags in
                 // this build rather than leaving them for a later no-op tick.
@@ -1007,7 +906,7 @@ namespace Common.FlowField
                     if (!ComposeFinal(
                         request,
                         callbackGeneration,
-                        IsBaseDirty(pending)
+                        FlowFieldSurfaceRebuildTracker.IsBaseDirty(pending)
                             || (pending & FlowFieldDirtyFlags.DefaultDirection) != 0
                             || !_state.BaseComposed))
                         return false;
@@ -1016,7 +915,7 @@ namespace Common.FlowField
                 Commit(
                     request,
                     resultChanged: (pending & FlowFieldDirtyFlags.FinalRegion) != 0,
-                    includeBase: IsBaseDirty(pending) || !_fieldStore.IsValid,
+                    includeBase: FlowFieldSurfaceRebuildTracker.IsBaseDirty(pending) || !_fieldStore.IsValid,
                     finalRegion: _state.LastComposedRegion);
                 return true;
             }
@@ -1066,19 +965,19 @@ namespace Common.FlowField
             }
             else
             {
-                int requestVersion = _requestVersion;
+                int requestVersion = _rebuild.RequestVersion;
                 FlowFieldSurfaceData supplied = null;
                 try
                 {
                     supplied = _surfaceSource.Build(request.SurfaceSettings);
                 }
-                catch (Exception) when (!IsCurrentOperation(callbackGeneration) || requestVersion != _requestVersion)
+                catch (Exception) when (!IsCurrentOperation(callbackGeneration) || requestVersion != _rebuild.RequestVersion)
                 {
                     // The old source result/exception no longer owns this request.
                 }
                 if (!IsCurrentOperation(callbackGeneration))
                     return false;
-                if (requestVersion != _requestVersion)
+                if (requestVersion != _rebuild.RequestVersion)
                 {
                     _state.DirtyFlags |= pending;
                     _hasPendingRequest = true;
@@ -1282,16 +1181,16 @@ namespace Common.FlowField
                 // transform notification or probe that produces the same
                 // mask completely invisible to BFS and consumers.
                 if (prepared.ObstacleMaskChanged)
-                    PromoteDeferredObstacleVersion();
+                    _rebuild.PromoteObstacle();
                 else
-                    _deferredObstacleVersion = false;
+                    _rebuild.DropDeferredObstacle();
             }
             if (rebuildGoal)
             {
                 if (goalChanged)
-                    PromoteDeferredGoalVersion();
+                    _rebuild.PromoteGoal();
                 else
-                    _deferredGoalVersion = false;
+                    _rebuild.DropDeferredGoal();
             }
             if (prepared.ObstacleMaskChanged || !hadObstacleMask)
             {
@@ -1334,34 +1233,6 @@ namespace Common.FlowField
             }
         }
 
-        private void PromoteDeferredObstacleVersion()
-        {
-            if (!_deferredObstacleVersion)
-                return;
-            unchecked
-            {
-                _requestVersion++;
-                _baseVersion++;
-            }
-            _deferredObstacleVersion = false;
-        }
-
-        private void PromoteDeferredSurfaceVersion()
-        {
-            if (!_deferredSurfaceVersion)
-                return;
-            unchecked { _baseVersion++; }
-            _deferredSurfaceVersion = false;
-        }
-
-        private void PromoteDeferredGoalVersion()
-        {
-            if (!_deferredGoalVersion)
-                return;
-            unchecked { _baseVersion++; }
-            _deferredGoalVersion = false;
-        }
-
         private bool RebuildModifierAreaData(
             in FlowFieldSessionRequest request,
             int callbackGeneration,
@@ -1393,7 +1264,7 @@ namespace Common.FlowField
                 registry.MarkAllAreasDirty();
                 _state.BaseComposed = false;
                 if (_sourceKind == FlowFieldSessionSourceKind.SceneBuild
-                    && _state.Workspace.HasActiveGoal && _activeBaseVersion != _baseVersion)
+                    && _state.Workspace.HasActiveGoal && _rebuild.IsBaseStale)
                 {
                     // A canceled pre-BFS mask pass has prepared, but not yet
                     // solved, this goal. Retry its solve without rebaking.
@@ -1456,15 +1327,14 @@ namespace Common.FlowField
                 request.Goal.LocalZ,
                 request.Goal.InfluenceRadius,
                 _state.Workspace.ResolvedGoalIndex,
-                Mathf.Min(_state.Grid.CellCount, Mathf.Max(64, request.MaxGpuWaves)),
+                FlowFieldComputeSolver.ClampMaxWaves(_state.Grid.CellCount, request.MaxGpuWaves),
                 () => IsCurrentBuild(callbackGeneration));
 
             if (_backendPolicy == FlowFieldBfsBackendPolicy.RequireGpu
                 && (_buildPipeline == null || !_buildPipeline.SupportsGpu))
                 throw new PlatformNotSupportedException("FlowField GPU backend is required but unavailable.");
 
-            _activeBaseVersion = _baseVersion;
-            _activeRequestVersion = _requestVersion;
+            _rebuild.BeginSolve();
             _activeRequest = request;
             SetLifecycle(FlowFieldSessionLifecycle.Building);
             // A subscriber can release, suspend, fault or restart the session.
@@ -1499,6 +1369,16 @@ namespace Common.FlowField
             return true;
         }
 
+        // A missing shader passes no reason: Managed is then the configured path.
+        private void ForceManagedBackend(string reason)
+        {
+            _managedBackendForced = true;
+            if (reason == null || _gpuFallbackReason != null)
+                return;
+            _gpuFallbackReason = reason;
+            Debug.LogWarning($"[FlowField] Surface2D GPU 계산을 끄고 Managed로 전환합니다: {reason}");
+        }
+
         private bool IsCurrentOperation(int callbackGeneration)
             => !_disposed && callbackGeneration == _callbackGeneration
                 && (_lifecycle == FlowFieldSessionLifecycle.Active
@@ -1527,12 +1407,15 @@ namespace Common.FlowField
 
         /// <summary>
         /// Shared rejection policy for successful and failed Surface2D completions.
-        /// Final-only inputs remain eligible for recomposition; changed navigation
-        /// inputs restore staging and stay pending for the next owning update.
+        /// Final-only inputs remain eligible for recomposition; changed Grid or
+        /// Goal inputs restore staging and stay pending for the next owning
+        /// update. Obstacle-only staleness does not reject a solve: rejecting
+        /// would starve publication while an obstacle keeps moving, and sampling
+        /// already re-checks the latest obstacle state against the published field.
         /// </summary>
         private bool RejectStaleBfsResult()
         {
-            if (_activeBaseVersion != _baseVersion)
+            if (_rebuild.IsBaseStale)
             {
                 bool obstacleStale = HasStaleObstacleInput();
                 RestoreStagingAfterStaleResult(preserveObstacle: !obstacleStale);
@@ -1544,38 +1427,35 @@ namespace Common.FlowField
                         | FlowFieldDirtyFlags.Escape;
                     _state.ExpandObstacleDirty(FlowFieldCellRect.Full(_state.Grid));
                 }
-                _state.DirtyFlags |= FlowFieldDirtyFlags.Goal | FlowFieldDirtyFlags.FinalRegion;
-                _state.ExpandFinalDirty(FlowFieldCellRect.Full(_state.Grid));
+                RequeueRejectedGoal();
                 SetLifecycle(FlowFieldSessionLifecycle.Active);
                 return true;
             }
 
-            // A dynamic obstacle can be registered or moved while the GPU
-            // solve is in flight.  Its request is intentionally unversioned
-            // until the physics probe compares the effective mask, so the
-            // version numbers above can still match even though a new base
-            // dirty flag is pending.  Never commit the old BFS result in
-            // that case; keep the dirty request for the next FixedUpdate.
-            if (IsBaseDirty(_state.DirtyFlags))
+            // Grid and Goal requests stay unversioned until their stage proves
+            // a change, so the versions above can match while one is pending.
+            if ((_state.DirtyFlags & (FlowFieldDirtyFlags.Grid | FlowFieldDirtyFlags.Goal)) != 0)
             {
                 RestoreStagingAfterStaleResult(preserveObstacle: true);
-                SetLifecycle(FlowFieldSessionLifecycle.Active);
-                return true;
-            }
-
-            // A collider transform can be observed while the GPU is running
-            // before the deferred physics probe has compared its effective
-            // mask. Do not publish a field that was computed against the old
-            // collider pose; the probe will either clear this flag (same
-            // mask) or promote the change to the next BFS request.
-            if (_obstacleProbePending)
-            {
-                RestoreStagingAfterStaleResult(preserveObstacle: true);
+                RequeueRejectedGoal();
                 SetLifecycle(FlowFieldSessionLifecycle.Active);
                 return true;
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Restored staging holds the published Goal, while the tracker still
+        /// records the rejected one. Forget it so the next Goal stage rebuilds.
+        /// </summary>
+        private void RequeueRejectedGoal()
+        {
+            _goalTracker.ForgetLastBuild();
+            _state.DirtyFlags |= FlowFieldDirtyFlags.Goal | FlowFieldDirtyFlags.FinalRegion;
+            _state.ExpandFinalDirty(FlowFieldCellRect.Full(_state.Grid));
+            if (_hasLatestRequestedInput)
+                _hasPendingRequest = true;
         }
 
         private void OnBfsCompleted()
@@ -1585,14 +1465,16 @@ namespace Common.FlowField
             int callbackGeneration = _callbackGeneration;
             if (_buildPipeline is FlowFieldSurfaceBuildPipeline productionPipeline
                 && productionPipeline.GpuDisabled)
-                _managedBackendForced = true;
+                ForceManagedBackend(productionPipeline.GpuFallbackReason);
             if (RejectStaleBfsResult())
                 return;
 
             bool hasNewRequest = _hasPendingRequest;
             FlowFieldSessionRequest finalRequest = hasNewRequest ? _latestRequestedInput : _activeRequest;
             FlowFieldDirtyFlags pending = _state.DirtyFlags;
-            _hasPendingRequest = false;
+            // Obstacle input observed during this solve keeps its request and
+            // dirty flags through Commit; the next owner boundary handles it.
+            _hasPendingRequest = HasStaleObstacleInput();
 
             // RequestVersion also advances for Default Direction and Modifier
             // edits. Those changes are final-only and must never invalidate a
@@ -1636,7 +1518,7 @@ namespace Common.FlowField
             if (_lifecycle != FlowFieldSessionLifecycle.Building)
                 return;
             if (_backendPolicy == FlowFieldBfsBackendPolicy.PreferGpu)
-                _managedBackendForced = true;
+                ForceManagedBackend(exception?.Message ?? "GPU 계산에 실패했습니다.");
             if (RejectStaleBfsResult())
                 return;
             // A failed base solve cannot be replaced by a final-only compose:
@@ -1645,15 +1527,13 @@ namespace Common.FlowField
             // changed while the backend was running (including a pending
             // Default Direction/Modifier request), then retry the same base
             // inputs without exposing a partial result.
-            if (_activeRequestVersion != _requestVersion || _hasPendingRequest)
+            if (_rebuild.IsRequestStale
+                || _hasPendingRequest
+                || _obstacleProbePending
+                || FlowFieldSurfaceRebuildTracker.IsBaseDirty(_state.DirtyFlags))
             {
                 RestoreStagingAfterStaleResult(preserveObstacle: true);
-                _state.DirtyFlags |= FlowFieldDirtyFlags.Goal | FlowFieldDirtyFlags.FinalRegion;
-                _state.ExpandFinalDirty(FlowFieldCellRect.Full(_state.Grid));
-                if (_hasPendingRequest)
-                {
-                    _state.DirtyFlags |= FlowFieldDirtyFlags.Goal;
-                }
+                RequeueRejectedGoal();
                 SetLifecycle(FlowFieldSessionLifecycle.Active);
                 return;
             }
@@ -1717,7 +1597,9 @@ namespace Common.FlowField
             {
                 _state.DirtyFlags = FlowFieldDirtyFlags.None;
                 _state.DirtyFinalRegion = FlowFieldCellRect.Invalid;
-                _state.DirtyObstacleRegion = FlowFieldCellRect.Invalid;
+                // A pending probe still needs the region it observed.
+                if (!_obstacleProbePending)
+                    _state.DirtyObstacleRegion = FlowFieldCellRect.Invalid;
             }
             int callbackGeneration = _callbackGeneration;
             PublishRuntimeState();
@@ -1801,7 +1683,7 @@ namespace Common.FlowField
             // colliders themselves, but do not run a duplicate probe against
             // the same pose after activation.
             _obstacleProbePending = false;
-            _deferredGoalVersion = false;
+            _rebuild.DropDeferredGoal();
             _state.DirtyFlags = FlowFieldDirtyFlags.All;
             _configurationStale = false;
             SetLifecycle(FlowFieldSessionLifecycle.Suspended);
@@ -1845,11 +1727,12 @@ namespace Common.FlowField
             _hasPendingRequest = false;
             _hasLatestRequestedInput = false;
             _obstacleProbePending = false;
-            _deferredObstacleVersion = false;
-            _deferredSurfaceVersion = false;
-            _deferredGoalVersion = false;
-            _versionedDirtyFlags = FlowFieldDirtyFlags.None;
+            _rebuild.DropDeferredObstacle();
+            _rebuild.DropDeferredSurface();
+            _rebuild.DropDeferredGoal();
+            _rebuild.ClearVersioned(FlowFieldDirtyFlags.All);
             _managedBackendForced = false;
+            _gpuFallbackReason = null;
             _latestDefaultDirection = Vector3.zero;
             _hasLatestDefaultDirection = false;
             _fault = null;
@@ -1875,15 +1758,6 @@ namespace Common.FlowField
 
         public override void Dispose()
             => DisposePermanently();
-
-        private static bool IsBaseDirty(FlowFieldDirtyFlags flags)
-            => (flags & BaseDirtyMask) != 0;
-
-        private const FlowFieldDirtyFlags BaseDirtyMask = FlowFieldDirtyFlags.Grid
-                | FlowFieldDirtyFlags.StaticObstacles
-                | FlowFieldDirtyFlags.DynamicObstacles
-                | FlowFieldDirtyFlags.Escape
-                | FlowFieldDirtyFlags.Goal;
 
         private void DetachBackend()
         {

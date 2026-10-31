@@ -25,6 +25,7 @@ namespace Common.FlowField
         internal abstract bool IsReady { get; }
         internal abstract bool IsRebuilding { get; }
         internal abstract string LastError { get; }
+        internal abstract string GpuFallbackReason { get; }
         internal abstract int Revision { get; }
         internal abstract bool TrySample(Vector3 worldPosition, out FlowFieldSample sample);
         internal abstract FlowFieldSample Sample(Vector3 worldPosition);

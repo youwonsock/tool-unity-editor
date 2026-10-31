@@ -11,12 +11,15 @@ namespace Common.FlowField
     internal sealed class FlowFieldVolumeSafetyState
     {
         private const int MaxUncertainBounds = 64;
+        // Changes no running build has observed yet.
         private readonly List<Bounds> _uncertainBounds = new List<Bounds>(8);
+        // Changes the running build observes, still unsafe until it is published.
+        private readonly List<Bounds> _observingBounds = new List<Bounds>(8);
         private Snapshot _snapshot;
         private SafetyCellState[] _spareStates;
 
         internal int Epoch { get; private set; }
-        internal int UncertainRegionCount => _uncertainBounds.Count;
+        internal int UncertainRegionCount => _uncertainBounds.Count + _observingBounds.Count;
         internal long SnapshotBytes => EstimateSnapshotBytes(_snapshot.Count);
 
         internal void Reset()
@@ -31,7 +34,26 @@ namespace Common.FlowField
             _snapshot = default;
             _spareStates = null;
         }
-        internal void ClearRegions() => _uncertainBounds.Clear();
+        internal void ClearRegions()
+        {
+            _uncertainBounds.Clear();
+            _observingBounds.Clear();
+        }
+
+        /// <summary>
+        /// Every build queries all obstacles after it starts, so it resolves
+        /// the regions recorded so far. A discarded build keeps them here until
+        /// its replacement publishes.
+        /// </summary>
+        internal int BeginBuild()
+        {
+            for (int index = 0; index < _uncertainBounds.Count; index++)
+                AddBounds(_observingBounds, _uncertainBounds[index]);
+            _uncertainBounds.Clear();
+            return Epoch;
+        }
+
+        internal void ClearObservedRegions() => _observingBounds.Clear();
 
         // An obstacle mask/clearance change invalidates the complete volume.
         // Preserve its distinct policy: no dirty-region expansion or epoch change.
@@ -44,7 +66,7 @@ namespace Common.FlowField
             Bounds expanded = bounds;
             expanded.Expand(Vector3.one * (margin * 2f));
             Epoch++;
-            AddUncertainBounds(expanded);
+            AddBounds(_uncertainBounds, expanded);
         }
 
         internal Snapshot PrepareSnapshot(FlowFieldGridSpace grid, bool[] blocked, int buildSafetyEpoch)
@@ -169,7 +191,8 @@ namespace Common.FlowField
         }
 
         private bool IntersectsUncertainBounds(FlowFieldGridSpace grid, Vector3 center)
-            => IntersectsUncertainBounds(grid, center, _uncertainBounds);
+            => IntersectsUncertainBounds(grid, center, _uncertainBounds)
+                || IntersectsUncertainBounds(grid, center, _observingBounds);
 
         private static bool IntersectsUncertainBounds(FlowFieldGridSpace grid, Vector3 center,
             List<Bounds> uncertainBounds)
@@ -181,25 +204,25 @@ namespace Common.FlowField
             return false;
         }
 
-        private void AddUncertainBounds(Bounds bounds)
+        private static void AddBounds(List<Bounds> list, Bounds bounds)
         {
-            for (int index = 0; index < _uncertainBounds.Count; index++)
+            for (int index = 0; index < list.Count; index++)
             {
-                if (!_uncertainBounds[index].Intersects(bounds))
+                if (!list[index].Intersects(bounds))
                     continue;
-                _uncertainBounds[index] = UnionBounds(_uncertainBounds[index], bounds);
+                list[index] = UnionBounds(list[index], bounds);
                 return;
             }
 
-            if (_uncertainBounds.Count < MaxUncertainBounds)
+            if (list.Count < MaxUncertainBounds)
             {
-                _uncertainBounds.Add(bounds);
+                list.Add(bounds);
                 return;
             }
 
             // Once the bounded dirty-list is full, retaining a conservative
             // union is safer than evicting an area and treating it as clear.
-            _uncertainBounds[0] = UnionBounds(_uncertainBounds[0], bounds);
+            list[0] = UnionBounds(list[0], bounds);
         }
 
         private static Bounds UnionBounds(Bounds left, Bounds right)

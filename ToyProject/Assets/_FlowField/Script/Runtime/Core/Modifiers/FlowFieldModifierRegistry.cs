@@ -59,7 +59,7 @@ namespace Common.FlowField
 
         internal FlowFieldModifierRegistryResult Register(IFlowFieldVectorModifier modifier)
         {
-            if (IsMissingModifier(modifier))
+            if (FlowFieldVectorUtility.IsMissingModifier(modifier))
                 throw new ArgumentNullException(nameof(modifier));
             int version = BeginOperation();
             return RegisterImmediately(modifier, version);
@@ -67,7 +67,7 @@ namespace Common.FlowField
 
         internal FlowFieldModifierRegistryResult Unregister(IFlowFieldVectorModifier modifier)
         {
-            if (IsMissingModifier(modifier))
+            if (FlowFieldVectorUtility.IsMissingModifier(modifier))
                 throw new ArgumentNullException(nameof(modifier));
             BeginOperation();
 
@@ -77,7 +77,7 @@ namespace Common.FlowField
         internal FlowFieldModifierRegistryResult MarkDirty(IFlowFieldVectorModifier modifier, out bool completed)
         {
             completed = false;
-            if (IsMissingModifier(modifier))
+            if (FlowFieldVectorUtility.IsMissingModifier(modifier))
                 throw new ArgumentNullException(nameof(modifier));
             int version = BeginOperation();
             Entry entry = Find(modifier);
@@ -117,7 +117,7 @@ namespace Common.FlowField
 
         internal FlowFieldModifierRegistryResult MarkAreaDirty(IFlowFieldVectorModifier modifier)
         {
-            if (IsMissingModifier(modifier))
+            if (FlowFieldVectorUtility.IsMissingModifier(modifier))
                 throw new ArgumentNullException(nameof(modifier));
             BeginOperation();
             Entry entry = Find(modifier);
@@ -145,13 +145,13 @@ namespace Common.FlowField
                 for (int i = 0; i < _entries.Count; i++)
                 {
                     IFlowFieldVectorModifier modifier = _entries[i].Modifier;
-                    if (IsMissingModifier(modifier))
+                    if (FlowFieldVectorUtility.IsMissingModifier(modifier))
                         continue;
                     if (!TryReadMetadata(modifier, version, out Collider collider, out int priority, out int revision))
                         return default;
                     ValidateConfiguration(collider);
                     for (int previous = 0; previous < i; previous++)
-                        if (!IsMissingModifier(_entries[previous].Modifier) && observations[previous].priority == priority)
+                        if (!FlowFieldVectorUtility.IsMissingModifier(_entries[previous].Modifier) && observations[previous].priority == priority)
                             throw new InvalidOperationException($"Vector modifier priority {priority} is duplicated.");
                     observations[i] = (collider, priority, revision);
                 }
@@ -164,7 +164,7 @@ namespace Common.FlowField
                 {
                     Entry entry = _entries[i];
                     IFlowFieldVectorModifier modifier = entry.Modifier;
-                    if (IsMissingModifier(modifier))
+                    if (FlowFieldVectorUtility.IsMissingModifier(modifier))
                     {
                         dirtyRegion = FlowFieldCellRect.Union(
                             dirtyRegion,
@@ -394,9 +394,6 @@ namespace Common.FlowField
         {
             unchecked { _operationVersion++; }
         }
-
-        private static bool IsMissingModifier(IFlowFieldVectorModifier modifier)
-            => modifier == null || modifier is UnityEngine.Object unityObject && unityObject == null;
 
         private static bool HasColliderSnapshotChanged(Entry entry, Collider collider)
         {

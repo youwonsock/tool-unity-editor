@@ -182,14 +182,7 @@ namespace Common.FlowField.Editor
             }
 
             FlowFieldSurfaceBakeSettings settings = manager.CreateSurfaceBakeSettings();
-            int bakeInputGeneration = manager.CaptureBakeInputGeneration();
-            LayerMask obstacleLayer = manager.ObstacleLayer;
-            float obstacleCheckHeight = manager.ObstacleCheckHeight;
-            float obstacleCheckCenterOffset = manager.ObstacleCheckCenterOffset;
-            float obstacleClearance = manager.ObstacleClearance;
-            bool hasConfiguredGoal = manager.HasConfiguredGoal;
-            Vector3 configuredGoalWorld = manager.ConfiguredGoalWorld;
-            float configuredGoalRadius = manager.ConfiguredGoalInfluenceRadius;
+            SurfaceBakeInput input = new SurfaceBakeInput(manager, settings);
             FlowFieldSurfaceBakeJob bakeJob = new FlowFieldSurfaceBakeJob(
                 settings,
                 ReportSurfaceProgress);
@@ -216,6 +209,14 @@ namespace Common.FlowField.Editor
                     ScheduleNextOrStop();
             }
 
+            bool InputChanged()
+            {
+                if (input.IsCurrent(manager))
+                    return false;
+                Debug.LogWarning("Static Flow Bake input changed; existing asset was preserved.", manager);
+                return true;
+            }
+
             void Failed(Exception exception)
             {
                 try
@@ -235,19 +236,8 @@ namespace Common.FlowField.Editor
                     Cleanup();
                     return;
                 }
-                if (!IsCurrentInput(
-                        manager,
-                        settings,
-                        obstacleLayer,
-                        obstacleCheckHeight,
-                        obstacleCheckCenterOffset,
-                        obstacleClearance,
-                        hasConfiguredGoal,
-                        configuredGoalWorld,
-                        configuredGoalRadius,
-                        bakeInputGeneration))
+                if (InputChanged())
                 {
-                    Debug.LogWarning("Static Flow Bake input changed; existing asset was preserved.", manager);
                     Cleanup();
                     return;
                 }
@@ -267,17 +257,17 @@ namespace Common.FlowField.Editor
                     FlowFieldGoalResolution goalSnapshot = manager.ResolveConfiguredGoal(settings.Grid);
                     bool accepted = session.Submit(FlowFieldSessionRequest.ForSceneBuild(
                         settings,
-                        obstacleLayer,
-                        obstacleCheckHeight,
-                        obstacleCheckCenterOffset,
-                        obstacleClearance,
+                        input.ObstacleLayer,
+                        input.CheckHeight,
+                        input.CheckCenterOffset,
+                        input.Clearance,
                         false,
                         goalSnapshot,
                         manager.DefaultFlowDirection,
                         FlowFieldDirtyFlags.All,
                         FlowFieldCellRect.Full(settings.Grid),
                         FlowFieldCellRect.Full(settings.Grid),
-                        Mathf.Min(settings.Grid.CellCount, Mathf.Max(64, manager.MaxGpuWaves))));
+                        FlowFieldComputeSolver.ClampMaxWaves(settings.Grid.CellCount, manager.MaxGpuWaves)));
                     if (!accepted && !session.IsFaulted)
                         throw new InvalidOperationException("Static Flow Bake session could not be started.");
                     if (session.IsFaulted)
@@ -303,43 +293,17 @@ namespace Common.FlowField.Editor
                         return;
                     }
 
+                    if (InputChanged())
+                    {
+                        Cleanup();
+                        return;
+                    }
+
                     if (session != null)
                     {
-                        if (!IsCurrentInput(
-                                manager,
-                                settings,
-                                obstacleLayer,
-                                obstacleCheckHeight,
-                                obstacleCheckCenterOffset,
-                                obstacleClearance,
-                                hasConfiguredGoal,
-                                configuredGoalWorld,
-                                configuredGoalRadius,
-                                bakeInputGeneration))
-                        {
-                            Debug.LogWarning("Static Flow Bake input changed; existing asset was preserved.", manager);
-                            Cleanup();
-                            return;
-                        }
                         session.Pump();
                         if (session.IsFaulted)
                             Failed(session.Fault ?? new InvalidOperationException("Static Flow Bake failed."));
-                        return;
-                    }
-                    if (!IsCurrentInput(
-                            manager,
-                            settings,
-                            obstacleLayer,
-                            obstacleCheckHeight,
-                            obstacleCheckCenterOffset,
-                            obstacleClearance,
-                            hasConfiguredGoal,
-                            configuredGoalWorld,
-                            configuredGoalRadius,
-                            bakeInputGeneration))
-                    {
-                        Debug.LogWarning("Static Flow Bake input changed; existing asset was preserved.", manager);
-                        Cleanup();
                         return;
                     }
 
@@ -382,82 +346,11 @@ namespace Common.FlowField.Editor
 
             void Complete()
             {
-                int undoGroup = -1;
-                string assetPath = null;
-                FlowFieldStaticBakeData asset = null;
-                bool createdAsset = false;
                 try
                 {
-                    if (generation != _callbackGeneration)
+                    if (generation != _callbackGeneration || InputChanged())
                         return;
-                    if (!IsCurrentInput(
-                            manager,
-                            settings,
-                            obstacleLayer,
-                            obstacleCheckHeight,
-                            obstacleCheckCenterOffset,
-                            obstacleClearance,
-                            hasConfiguredGoal,
-                            configuredGoalWorld,
-                            configuredGoalRadius,
-                            bakeInputGeneration))
-                    {
-                        Debug.LogWarning("Static Flow Bake input changed; existing asset was preserved.", manager);
-                        return;
-                    }
-                    FlowFieldWorkspace workspace = session.CommittedWorkspace;
-                    if (workspace == null || session.CommittedSurface == null)
-                        throw new InvalidOperationException("Static Flow Bake produced no committed field.");
-
-                    assetPath = FlowFieldBakeAssetUtility.ResolveStaticAssetPath(manager);
-                    FlowFieldBakeAssetUtility.CreateBakeFolder();
-                    undoGroup = Undo.GetCurrentGroup();
-                    Undo.SetCurrentGroupName("Bake FlowField Static Snapshot");
-                    asset = AssetDatabase.LoadAssetAtPath<FlowFieldStaticBakeData>(assetPath);
-                    FlowFieldBakeAssetUtility.ValidateTargetOwnership(
-                        manager.StaticBakeData,
-                        asset,
-                        AssetDatabase.LoadMainAssetAtPath(assetPath),
-                        assetPath,
-                        "Surface2D");
-                    if (asset == null)
-                    {
-                        asset = ScriptableObject.CreateInstance<FlowFieldStaticBakeData>();
-                        createdAsset = true;
-                        asset.name = Path.GetFileNameWithoutExtension(assetPath);
-                        AssetDatabase.CreateAsset(asset, assetPath);
-                        Undo.RegisterCreatedObjectUndo(asset, "Create FlowField Static Snapshot");
-                    }
-                    Undo.RecordObject(asset, "Bake FlowField Static Snapshot");
-                    bool hasGoal = workspace.HasActiveGoal && workspace.ResolvedGoalIndex >= 0;
-                    FlowFieldGoalResolution goal = manager.ResolveConfiguredGoal(settings.Grid);
-                    asset.Apply(settings, session.CommittedSurface, manager.ObstacleLayer,
-                        manager.ObstacleCheckHeight, manager.ObstacleCheckCenterOffset,
-                        manager.ObstacleClearance, hasGoal, goal.RequestedWorld,
-                        goal.InfluenceRadius, hasGoal ? workspace.ResolvedGoalIndex : -1, workspace);
-                    EditorUtility.SetDirty(asset);
-                    Undo.RecordObject(manager, "Assign FlowField Static Snapshot");
-                    manager.AssignStaticBakeData(asset);
-                    EditorUtility.SetDirty(manager);
-                    if (manager.gameObject.scene.IsValid())
-                        EditorSceneManager.MarkSceneDirty(manager.gameObject.scene);
-                    AssetDatabase.SaveAssetIfDirty(asset);
-                    Undo.CollapseUndoOperations(undoGroup);
-                    Debug.Log($"[{nameof(FlowFieldManager)}] Static Flow Bake complete: {assetPath}", manager);
-                }
-                catch (Exception exception)
-                {
-                    if (undoGroup >= 0)
-                    {
-                        try { Undo.RevertAllDownToGroup(undoGroup); }
-                        catch (Exception undoException) { Debug.LogException(undoException, manager); }
-                    }
-                    if (createdAsset && !string.IsNullOrEmpty(assetPath)
-                        && AssetDatabase.LoadAssetAtPath<FlowFieldStaticBakeData>(assetPath) != null)
-                    {
-                        AssetDatabase.DeleteAsset(assetPath);
-                    }
-                    Debug.LogException(exception, manager);
+                    SaveSurfaceBake(manager, settings, session);
                 }
                 finally { Cleanup(); }
             }
@@ -469,6 +362,73 @@ namespace Common.FlowField.Editor
                 "FlowField Static Bake",
                 "Baking Surface",
                 0f);
+        }
+
+        private static void SaveSurfaceBake(
+            FlowFieldManager manager,
+            FlowFieldSurfaceBakeSettings settings,
+            FlowFieldSession session)
+        {
+            int undoGroup = -1;
+            string assetPath = null;
+            FlowFieldStaticBakeData asset = null;
+            bool createdAsset = false;
+            try
+            {
+                FlowFieldWorkspace workspace = session.CommittedWorkspace;
+                if (workspace == null || session.CommittedSurface == null)
+                    throw new InvalidOperationException("Static Flow Bake produced no committed field.");
+
+                assetPath = FlowFieldBakeAssetUtility.ResolveStaticAssetPath(manager);
+                FlowFieldBakeAssetUtility.CreateBakeFolder();
+                undoGroup = Undo.GetCurrentGroup();
+                Undo.SetCurrentGroupName("Bake FlowField Static Snapshot");
+                asset = AssetDatabase.LoadAssetAtPath<FlowFieldStaticBakeData>(assetPath);
+                FlowFieldBakeAssetUtility.ValidateTargetOwnership(
+                    manager.StaticBakeData,
+                    asset,
+                    AssetDatabase.LoadMainAssetAtPath(assetPath),
+                    assetPath,
+                    "Surface2D");
+                if (asset == null)
+                {
+                    asset = ScriptableObject.CreateInstance<FlowFieldStaticBakeData>();
+                    createdAsset = true;
+                    asset.name = Path.GetFileNameWithoutExtension(assetPath);
+                    AssetDatabase.CreateAsset(asset, assetPath);
+                    Undo.RegisterCreatedObjectUndo(asset, "Create FlowField Static Snapshot");
+                }
+                Undo.RecordObject(asset, "Bake FlowField Static Snapshot");
+                bool hasGoal = workspace.HasActiveGoal && workspace.ResolvedGoalIndex >= 0;
+                FlowFieldGoalResolution goal = manager.ResolveConfiguredGoal(settings.Grid);
+                asset.Apply(settings, session.CommittedSurface, manager.ObstacleLayer,
+                    manager.ObstacleCheckHeight, manager.ObstacleCheckCenterOffset,
+                    manager.ObstacleClearance, hasGoal, goal.RequestedWorld,
+                    goal.InfluenceRadius, hasGoal ? workspace.ResolvedGoalIndex : -1, workspace);
+                EditorUtility.SetDirty(asset);
+                Undo.RecordObject(manager, "Assign FlowField Static Snapshot");
+                manager.AssignStaticBakeData(asset);
+                EditorUtility.SetDirty(manager);
+                if (manager.gameObject.scene.IsValid())
+                    EditorSceneManager.MarkSceneDirty(manager.gameObject.scene);
+                AssetDatabase.SaveAssetIfDirty(asset);
+                Undo.CollapseUndoOperations(undoGroup);
+                Debug.Log($"[{nameof(FlowFieldManager)}] Static Flow Bake complete: {assetPath}", manager);
+            }
+            catch (Exception exception)
+            {
+                if (undoGroup >= 0)
+                {
+                    try { Undo.RevertAllDownToGroup(undoGroup); }
+                    catch (Exception undoException) { Debug.LogException(undoException, manager); }
+                }
+                if (createdAsset && !string.IsNullOrEmpty(assetPath)
+                    && AssetDatabase.LoadAssetAtPath<FlowFieldStaticBakeData>(assetPath) != null)
+                {
+                    AssetDatabase.DeleteAsset(assetPath);
+                }
+                Debug.LogException(exception, manager);
+            }
         }
 
         private static void BakeVolumeAndAssign(FlowFieldManager manager)
@@ -516,17 +476,10 @@ namespace Common.FlowField.Editor
 
             void Complete()
             {
-                string assetPath = null;
-                FlowFieldVolumeBakeData asset = null;
-                bool created = false;
-                int undoGroup = -1;
                 try
                 {
                     if (generation != _callbackGeneration)
-                    {
-                        Cleanup();
                         return;
-                    }
                     if (!IsCurrentVolumeInput(manager, request, bakeInputGeneration))
                     {
                         Debug.LogWarning(
@@ -534,77 +487,7 @@ namespace Common.FlowField.Editor
                             manager);
                         return;
                     }
-
-                    if (!session.TryExport(
-                            out FlowFieldVolumeRequest committedRequest,
-                            out bool[] blocked,
-                            out uint[] topology,
-                            out FlowFieldGoalFlags[] goalFlags,
-                            out int[] next,
-                            out Vector3[] directions,
-                            out float[] speeds,
-                            out Vector3[] escapeDirections,
-                            out int resolvedGoalIndex))
-                        throw new InvalidOperationException("Volume3D bake produced no committed field.");
-
-                    assetPath = FlowFieldBakeAssetUtility.ResolveVolumeAssetPath(manager);
-                    FlowFieldBakeAssetUtility.CreateBakeFolder();
-                    undoGroup = Undo.GetCurrentGroup();
-                    Undo.SetCurrentGroupName("Bake FlowField Volume Snapshot");
-                    asset = AssetDatabase.LoadAssetAtPath<FlowFieldVolumeBakeData>(assetPath);
-                    FlowFieldBakeAssetUtility.ValidateTargetOwnership(
-                        manager.VolumeStaticBakeData,
-                        asset,
-                        AssetDatabase.LoadMainAssetAtPath(assetPath),
-                        assetPath,
-                        "Volume3D");
-                    if (asset == null)
-                    {
-                        asset = ScriptableObject.CreateInstance<FlowFieldVolumeBakeData>();
-                        asset.name = Path.GetFileNameWithoutExtension(assetPath);
-                        AssetDatabase.CreateAsset(asset, assetPath);
-                        Undo.RegisterCreatedObjectUndo(asset, "Create FlowField Volume Snapshot");
-                        created = true;
-                    }
-                    Undo.RecordObject(asset, "Bake FlowField Volume Snapshot");
-                    asset.Apply(
-                        committedRequest.Grid,
-                        committedRequest.WorldBounds,
-                        manager.ObstacleLayer,
-                        manager.ObstacleClearance,
-                        committedRequest.HasGoal,
-                        committedRequest.GoalWorld,
-                        committedRequest.GoalInfluenceRadius,
-                        resolvedGoalIndex,
-                        blocked,
-                        topology,
-                        goalFlags,
-                        next,
-                        directions,
-                        speeds,
-                        escapeDirections);
-                    EditorUtility.SetDirty(asset);
-                    Undo.RecordObject(manager, "Assign FlowField Volume Snapshot");
-                    manager.AssignVolumeBakeData(asset);
-                    EditorUtility.SetDirty(manager);
-                    if (manager.gameObject.scene.IsValid())
-                        EditorSceneManager.MarkSceneDirty(manager.gameObject.scene);
-                    AssetDatabase.SaveAssetIfDirty(asset);
-                    Undo.CollapseUndoOperations(undoGroup);
-                    Debug.Log(
-                        $"[{nameof(FlowFieldManager)}] Volume3D Static Bake complete: {assetPath}",
-                        manager);
-                }
-                catch (Exception exception)
-                {
-                    if (undoGroup >= 0)
-                    {
-                        try { Undo.RevertAllDownToGroup(undoGroup); }
-                        catch (Exception undoException) { Debug.LogException(undoException, manager); }
-                    }
-                    if (created && !string.IsNullOrEmpty(assetPath))
-                        AssetDatabase.DeleteAsset(assetPath);
-                    Debug.LogException(exception, manager);
+                    SaveVolumeBake(manager, session);
                 }
                 finally
                 {
@@ -650,6 +533,87 @@ namespace Common.FlowField.Editor
             _cancel = Cleanup;
             _asyncPending = true;
             EditorApplication.update += Pump;
+        }
+
+        private static void SaveVolumeBake(FlowFieldManager manager, FlowFieldVolumeSession session)
+        {
+            string assetPath = null;
+            FlowFieldVolumeBakeData asset = null;
+            bool created = false;
+            int undoGroup = -1;
+            try
+            {
+                if (!session.TryExport(
+                        out FlowFieldVolumeRequest committedRequest,
+                        out bool[] blocked,
+                        out uint[] topology,
+                        out FlowFieldGoalFlags[] goalFlags,
+                        out int[] next,
+                        out Vector3[] directions,
+                        out float[] speeds,
+                        out Vector3[] escapeDirections,
+                        out int resolvedGoalIndex))
+                    throw new InvalidOperationException("Volume3D bake produced no committed field.");
+
+                assetPath = FlowFieldBakeAssetUtility.ResolveVolumeAssetPath(manager);
+                FlowFieldBakeAssetUtility.CreateBakeFolder();
+                undoGroup = Undo.GetCurrentGroup();
+                Undo.SetCurrentGroupName("Bake FlowField Volume Snapshot");
+                asset = AssetDatabase.LoadAssetAtPath<FlowFieldVolumeBakeData>(assetPath);
+                FlowFieldBakeAssetUtility.ValidateTargetOwnership(
+                    manager.VolumeStaticBakeData,
+                    asset,
+                    AssetDatabase.LoadMainAssetAtPath(assetPath),
+                    assetPath,
+                    "Volume3D");
+                if (asset == null)
+                {
+                    asset = ScriptableObject.CreateInstance<FlowFieldVolumeBakeData>();
+                    asset.name = Path.GetFileNameWithoutExtension(assetPath);
+                    AssetDatabase.CreateAsset(asset, assetPath);
+                    Undo.RegisterCreatedObjectUndo(asset, "Create FlowField Volume Snapshot");
+                    created = true;
+                }
+                Undo.RecordObject(asset, "Bake FlowField Volume Snapshot");
+                asset.Apply(
+                    committedRequest.Grid,
+                    committedRequest.WorldBounds,
+                    manager.ObstacleLayer,
+                    manager.ObstacleClearance,
+                    committedRequest.HasGoal,
+                    committedRequest.GoalWorld,
+                    committedRequest.GoalInfluenceRadius,
+                    resolvedGoalIndex,
+                    blocked,
+                    topology,
+                    goalFlags,
+                    next,
+                    directions,
+                    speeds,
+                    escapeDirections);
+                EditorUtility.SetDirty(asset);
+                Undo.RecordObject(manager, "Assign FlowField Volume Snapshot");
+                manager.AssignVolumeBakeData(asset);
+                EditorUtility.SetDirty(manager);
+                if (manager.gameObject.scene.IsValid())
+                    EditorSceneManager.MarkSceneDirty(manager.gameObject.scene);
+                AssetDatabase.SaveAssetIfDirty(asset);
+                Undo.CollapseUndoOperations(undoGroup);
+                Debug.Log(
+                    $"[{nameof(FlowFieldManager)}] Volume3D Static Bake complete: {assetPath}",
+                    manager);
+            }
+            catch (Exception exception)
+            {
+                if (undoGroup >= 0)
+                {
+                    try { Undo.RevertAllDownToGroup(undoGroup); }
+                    catch (Exception undoException) { Debug.LogException(undoException, manager); }
+                }
+                if (created && !string.IsNullOrEmpty(assetPath))
+                    AssetDatabase.DeleteAsset(assetPath);
+                Debug.LogException(exception, manager);
+            }
         }
 
         private static bool ReportSurfaceProgress(int row, int rowCount)
@@ -718,40 +682,56 @@ namespace Common.FlowField.Editor
             }
         }
 
-        private static bool IsCurrentInput(
-            FlowFieldManager manager,
-            in FlowFieldSurfaceBakeSettings settings,
-            LayerMask obstacleLayer,
-            float obstacleCheckHeight,
-            float obstacleCheckCenterOffset,
-            float obstacleClearance,
-            bool hasConfiguredGoal,
-            Vector3 configuredGoalWorld,
-            float configuredGoalRadius,
-            int bakeInputGeneration)
+        private readonly struct SurfaceBakeInput
         {
-            if (manager == null || manager.BakeMode != FlowFieldBakeMode.StaticBaked)
-                return false;
-            try
+            private readonly FlowFieldSurfaceBakeSettings _settings;
+            private readonly int _generation;
+            internal readonly LayerMask ObstacleLayer;
+            internal readonly float CheckHeight;
+            internal readonly float CheckCenterOffset;
+            internal readonly float Clearance;
+            private readonly bool _hasGoal;
+            private readonly Vector3 _goalWorld;
+            private readonly float _goalRadius;
+
+            internal SurfaceBakeInput(FlowFieldManager manager, FlowFieldSurfaceBakeSettings settings)
             {
-                if (manager.CaptureBakeInputGeneration() != bakeInputGeneration)
-                    return false;
-                FlowFieldSurfaceBakeSettings current = manager.CreateSurfaceBakeSettings();
-                return current.IsValid && current.Grid.MatchesBounds(settings.Grid)
-                    && FlowFieldBakeBoundsUtility.Approximately(current.BakeBounds, settings.BakeBounds)
-                    && current.GroundLayer.value == settings.GroundLayer.value
-                    && Mathf.Abs(current.MaxSurfaceSlope - settings.MaxSurfaceSlope) <= 0.0001f
-                    && Mathf.Abs(current.MaxStepHeight - settings.MaxStepHeight) <= 0.0001f
-                    && manager.ObstacleLayer.value == obstacleLayer.value
-                    && Mathf.Abs(manager.ObstacleCheckHeight - obstacleCheckHeight) <= 0.0001f
-                    && Mathf.Abs(manager.ObstacleCheckCenterOffset - obstacleCheckCenterOffset) <= 0.0001f
-                    && Mathf.Abs(manager.ObstacleClearance - obstacleClearance) <= 0.0001f
-                    && manager.HasConfiguredGoal == hasConfiguredGoal
-                    && (!hasConfiguredGoal
-                        || (manager.ConfiguredGoalWorld - configuredGoalWorld).sqrMagnitude <= 0.00000001f
-                            && Mathf.Abs(manager.ConfiguredGoalInfluenceRadius - configuredGoalRadius) <= 0.0001f);
+                _settings = settings;
+                _generation = manager.CaptureBakeInputGeneration();
+                ObstacleLayer = manager.ObstacleLayer;
+                CheckHeight = manager.ObstacleCheckHeight;
+                CheckCenterOffset = manager.ObstacleCheckCenterOffset;
+                Clearance = manager.ObstacleClearance;
+                _hasGoal = manager.HasConfiguredGoal;
+                _goalWorld = manager.ConfiguredGoalWorld;
+                _goalRadius = manager.ConfiguredGoalInfluenceRadius;
             }
-            catch { return false; }
+
+            internal bool IsCurrent(FlowFieldManager manager)
+            {
+                if (manager == null || manager.BakeMode != FlowFieldBakeMode.StaticBaked)
+                    return false;
+                try
+                {
+                    if (manager.CaptureBakeInputGeneration() != _generation)
+                        return false;
+                    FlowFieldSurfaceBakeSettings current = manager.CreateSurfaceBakeSettings();
+                    return current.IsValid && current.Grid.MatchesBounds(_settings.Grid)
+                        && FlowFieldBakeBoundsUtility.Approximately(current.BakeBounds, _settings.BakeBounds)
+                        && current.GroundLayer.value == _settings.GroundLayer.value
+                        && Mathf.Abs(current.MaxSurfaceSlope - _settings.MaxSurfaceSlope) <= 0.0001f
+                        && Mathf.Abs(current.MaxStepHeight - _settings.MaxStepHeight) <= 0.0001f
+                        && manager.ObstacleLayer.value == ObstacleLayer.value
+                        && Mathf.Abs(manager.ObstacleCheckHeight - CheckHeight) <= 0.0001f
+                        && Mathf.Abs(manager.ObstacleCheckCenterOffset - CheckCenterOffset) <= 0.0001f
+                        && Mathf.Abs(manager.ObstacleClearance - Clearance) <= 0.0001f
+                        && manager.HasConfiguredGoal == _hasGoal
+                        && (!_hasGoal
+                            || (manager.ConfiguredGoalWorld - _goalWorld).sqrMagnitude <= 0.00000001f
+                                && Mathf.Abs(manager.ConfiguredGoalInfluenceRadius - _goalRadius) <= 0.0001f);
+                }
+                catch { return false; }
+            }
         }
 
         public static void ClearReference(FlowFieldManager manager)

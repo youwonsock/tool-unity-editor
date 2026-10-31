@@ -357,3 +357,14 @@ $env:FLOWFIELD_PERF = "1"   # 성능 프로브: 위 명령에 -testCategory Perf
 ```
 
 단계별 XML·로그와 프로브 CSV는 Git에서 제외되는 `ToyProject/Logs/FlowFieldImprovement/`, `ToyProject/Logs/FlowFieldPerformance/`에 보관했다.
+
+## 이동 장애물 결함과 유지보수 정리 (2026-10-31)
+
+검증 환경: Unity 2023.2.20f1 / macOS / Metal(Apple M4 Pro). 커밋별 내용은 [StatusAndBacklog.md](StatusAndBacklog.md#유지보수-작업-2026-10-31)에 있다.
+
+- **낡은 BFS 결과 게시**: 이전에는 장애물 관측이 하나라도 있으면 BFS 결과를 버렸다. Goal Dirty는 이미 소비되고 Goal Tracker는 새 Goal을 기록한 뒤라, 마스크가 그대로면 Goal 변경이 사라졌고 풀이 때마다 움직이면 게시가 멈췄다. 샘플링이 최신 장애물을 다시 검사하므로 장애물만 낡은 결과는 게시한다. 이 경로를 지나는 테스트가 없어 드러나지 않았다.
+- **불확실 영역 분리**: 세대 번호만 붙이면 겹치는 영역이 합쳐지며 계속 최신 세대가 되어 지워지지 않는다. 빌드 시작 때 목록을 옮기는 방식을 택했다. 폐기된 빌드의 목록은 다음 빌드가 게시될 때 함께 지운다. 모든 빌드가 장애물을 처음부터 다시 조회하므로 안전하다.
+- **GPU 전환**: 일시적 충돌과 재시도해도 반복될 실패를 나눴다. 전환 이유는 공개 인터페이스에 넣지 않고 Manager 속성으로만 제공한다.
+- **Driver**: `HideAndDontSave` 객체는 Play 종료 후 남고 `FindObjectsByType`에 보이지 않아, 도메인 리로드 뒤 Play마다 Driver가 늘고 `PumpAll`이 프레임당 여러 번 돌았다. Editor에서만 생기는 문제이며 Editor 측정값에 영향을 줬을 수 있다.
+- **베이크 에디터 검증**: Surface·Volume 모두 다시 베이크하면 `_revision`만 달라지므로, 정리 전후 Asset을 바이트로 비교했다. 씬과 Asset은 원복했다.
+- **샌드박스**: 배치 실행은 Unity 라이선스 소켓 때문에 Claude Code 샌드박스 밖에서 실행해야 한다. 별도 worktree에서 실행하면 열려 있는 Editor와 충돌하지 않는다.

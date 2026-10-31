@@ -83,6 +83,7 @@ namespace Common.FlowField
     {
         private const int THREADS = 64;
         private const int MAX_BATCH_WAVES = 64;
+        private const int MIN_MAX_WAVES = 64;
         private const uint VALID = 1u << 0;
         private const uint BLOCKED = 1u << 1;
         private const uint INFLUENCE = 1u << 2;
@@ -133,6 +134,9 @@ namespace Common.FlowField
             && _shader != null
             && SystemInfo.supportsComputeShaders
             && SystemInfo.supportsAsyncGPUReadback;
+
+        internal static int ClampMaxWaves(int cellCount, int requested)
+            => Mathf.Min(cellCount, Mathf.Max(MIN_MAX_WAVES, requested));
 
         internal FlowFieldComputeSolver(ComputeShader shader)
         {
@@ -206,7 +210,7 @@ namespace Common.FlowField
                 _cellCount = request.Grid.CellCount;
                 _frontierParity = 0;
                 _waves = 0;
-                _maxWaves = Mathf.Min(request.Grid.CellCount, Mathf.Max(64, request.MaxGpuWaves));
+                _maxWaves = ClampMaxWaves(request.Grid.CellCount, request.MaxGpuWaves);
                 _running = true;
                 _pendingControl = false;
                 _pendingOutput = false;

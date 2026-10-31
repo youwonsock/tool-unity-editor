@@ -218,7 +218,7 @@ namespace Common.FlowField.Tests
                 new FlowFieldModifierLayer(later, mask)
             };
             bool completed = regional
-                ? FlowFieldFinalFieldComposer.ComposeRegion(FlowFieldRegressionFixture.Grid, source.CommittedSurface,
+                ? FlowFieldFinalFieldComposer.ApplyModifiers(FlowFieldRegressionFixture.Grid, source.CommittedSurface,
                     workspace, layers, FlowFieldCellRect.Full(FlowFieldRegressionFixture.Grid), () => current)
                 : FlowFieldFinalFieldComposer.Compose(FlowFieldRegressionFixture.Grid, source.CommittedSurface,
                     workspace, Vector3.forward, layers, () => current);

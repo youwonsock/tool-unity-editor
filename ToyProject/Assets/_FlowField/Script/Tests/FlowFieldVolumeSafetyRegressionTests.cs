@@ -120,6 +120,41 @@ namespace Common.FlowField.Tests
         }
 
         [Test]
+        public void PatrollingObstacleDoesNotKeepItsWholePathUnsafe()
+        {
+            var grid = FlowFieldGridSpace.FromVolumeCellGrid(Vector3.zero, 12, 4, 12, 1f);
+            var farEnd = new Vector3(11.5f, 0.5f, 5.5f);
+            BoxCollider collider = Obstacle(new Vector3(0.5f, 0.5f, 5.5f));
+            _session.RegisterDynamicObstacle(collider);
+            _session.Submit(Request(grid, goal: new Vector3(0.5f, 3.5f, 11.5f)));
+            Finish(_session);
+
+            int revision = _session.Revision;
+            int movableSamplesAfterFirstSweep = 0;
+            for (int frame = 0; frame < 1320; frame++)
+            {
+                collider.transform.position = new Vector3(0.5f + Mathf.PingPong(frame * 0.05f, 11f), 0.5f, 5.5f);
+                Physics.SyncTransforms();
+                PumpOneStep(_session);
+                if (frame >= 440
+                    && _session.TrySample(farEnd, out FlowFieldSample sample)
+                    && sample.SpeedMultiplier > 0f)
+                    movableSamplesAfterFirstSweep++;
+            }
+
+            Assert.That(_session.IsFaulted, Is.False, _session.LastError);
+            Assert.That(_session.Revision, Is.GreaterThan(revision + 2));
+            Assert.That(movableSamplesAfterFirstSweep, Is.GreaterThan(0),
+                "A cell far from the moving obstacle must become usable again.");
+
+            PumpOneStep(_session);
+            Finish(_session);
+            PumpOneStep(_session);
+            Finish(_session);
+            Assert.That(_session.Sample(farEnd).SpeedMultiplier, Is.GreaterThan(0f));
+        }
+
+        [Test]
         public void MovingRegisteredObstacleDuringBuildProtectsOldAndNewRegions()
         {
             var collider = Obstacle(OldCell);

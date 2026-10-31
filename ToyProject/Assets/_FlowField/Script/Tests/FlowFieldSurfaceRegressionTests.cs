@@ -231,6 +231,190 @@ namespace Common.FlowField.Tests
             Assert.That(_session.Sample(OriginCell).SpeedMultiplier, Is.EqualTo(2f));
         }
 
+        [Test]
+        public void GoalChangePublishesWhenAnObstacleMovesDuringTheSolve()
+        {
+            Build(GoalA);
+            RegisterObstacle(new Vector3(1.5f, 100f, 1.5f));
+            RunOwnerTicks(GoalA);
+            int revision = _session.Revision;
+
+            StartSolve(GoalB);
+            ObserveObstacleMove(new Vector3(1.5f, 101f, 1.5f));
+            _backend.Complete(_backend.Calls.Count - 1);
+
+            Assert.That(_session.Revision, Is.GreaterThan(revision));
+            AssertResolvedGoal(GoalB);
+            Assert.That(_session.HasPendingObstacleProbe, Is.True);
+
+            int solves = _backend.Calls.Count;
+            RunOwnerTicks(GoalB);
+            AssertResolvedGoal(GoalB);
+            Assert.That(_session.HasPendingObstacleProbe, Is.False);
+            Assert.That(_backend.Calls.Count, Is.EqualTo(solves), "The same mask needs no further solve.");
+        }
+
+        [Test]
+        public void ObstacleDirtiedDuringTheSolveIsPublishedAndRebuiltNext()
+        {
+            Vector3 cell = new Vector3(1.5f, 0.5f, 1.5f);
+            Build(GoalA);
+            RegisterObstacle(new Vector3(1.5f, 100f, 1.5f));
+            RunOwnerTicks(GoalA);
+            int revision = _session.Revision;
+
+            StartSolve(GoalB);
+            _colliderObject.transform.position = cell;
+            Physics.SyncTransforms();
+            FlowFieldCellRect dirty = FlowFieldCellRect.Full(FlowFieldRegressionFixture.Grid);
+            _session.MarkObstacleDirty(dirty);
+            int solves = _backend.Calls.Count;
+            _backend.Complete(_backend.Calls.Count - 1);
+
+            Assert.That(_session.Revision, Is.GreaterThan(revision));
+            AssertResolvedGoal(GoalB);
+            Assert.That(_session.HasPendingRequest, Is.True, "The obstacle request must survive the publication.");
+
+            RunOwnerTicks(GoalB);
+            Assert.That(_backend.Calls.Count, Is.GreaterThan(solves));
+            Assert.That(_session.IsFaulted, Is.False, _session.LastError);
+            int index = FlowFieldRegressionFixture.Grid.ToFlatIndex((int)cell.x, (int)cell.z);
+            Assert.That(_session.CommittedWorkspace.Blocked[index], Is.True);
+            AssertResolvedGoal(GoalB);
+        }
+
+        [Test]
+        public void GoalForgottenByARejectedSolveKeepsItsNoWalkableWarningState()
+        {
+            var tracker = new FlowFieldGoalTracker();
+            Assert.That(tracker.TryConsumeMissingWalkableWarning(), Is.True);
+            tracker.ForgetLastBuild();
+            Assert.That(tracker.TryConsumeMissingWalkableWarning(), Is.False);
+        }
+
+        [Test]
+        public void ContinuouslyMovingObstacleDoesNotStarvePublication()
+        {
+            Vector3 first = new Vector3(2.5f, 0.5f, 0.5f);
+            Vector3 second = new Vector3(1.5f, 0.5f, 1.5f);
+            Build(GoalA);
+            RegisterObstacle(first);
+            RunOwnerTicks(GoalA);
+            int revision = _session.Revision;
+
+            _session.Submit(FlowFieldRegressionFixture.Request(GoalB));
+            int solves = 0;
+            Vector3 latest = first;
+            for (int cycle = 0; cycle < 6; cycle++)
+            {
+                _session.Pump();
+                Assert.That(_session.IsRebuilding, Is.True, $"Cycle {cycle} did not start a solve.");
+                solves++;
+                latest = cycle % 2 == 0 ? second : first;
+                ObserveObstacleMove(latest);
+                _backend.Complete(_backend.Calls.Count - 1);
+                Assert.That(_session.IsFaulted, Is.False, _session.LastError);
+                AssertResolvedGoal(GoalB);
+                _session.ProbeObstacleChanges(FlowFieldRegressionFixture.Request(GoalB));
+                _session.Submit(FlowFieldRegressionFixture.Request(GoalB));
+            }
+
+            Assert.That(solves, Is.EqualTo(6));
+            Assert.That(_session.Revision, Is.GreaterThan(revision));
+            RunOwnerTicks(GoalB);
+            bool[] blocked = _session.CommittedWorkspace.Blocked;
+            Assert.That(blocked[FlowFieldRegressionFixture.Grid.ToFlatIndex((int)latest.x, (int)latest.z)], Is.True);
+            AssertResolvedGoal(GoalB);
+        }
+
+        [Test]
+        public void GoalRejectedByAGridRequestIsSolvedAgain()
+        {
+            Build(GoalA);
+            StartSolve(GoalB);
+            _session.MarkDirty(
+                FlowFieldDirtyFlags.Grid,
+                FlowFieldCellRect.Invalid,
+                FlowFieldCellRect.Invalid,
+                deferSurfaceVersion: true);
+            _backend.Complete(_backend.Calls.Count - 1);
+            AssertResolvedGoal(GoalA);
+
+            Assert.That(_session.HasPendingRequest, Is.True);
+            RunOwnerTicks(GoalB);
+            AssertResolvedGoal(GoalB);
+        }
+
+        [Test]
+        public void FailedSolveWithAnObservedObstacleRetriesTheGoal()
+        {
+            Build(GoalA);
+            RegisterObstacle(new Vector3(1.5f, 100f, 1.5f));
+            RunOwnerTicks(GoalA);
+
+            StartSolve(GoalB);
+            ObserveObstacleMove(new Vector3(1.5f, 101f, 1.5f));
+            _backend.Fail(_backend.Calls.Count - 1);
+            Assert.That(_session.IsFaulted, Is.False, _session.LastError);
+            Assert.That(_session.GpuFallbackReason, Does.Contain("Simulated GPU failure"));
+            AssertResolvedGoal(GoalA);
+
+            RunOwnerTicks(GoalB);
+            AssertResolvedGoal(GoalB);
+        }
+
+        private void RegisterObstacle(Vector3 position)
+        {
+            _colliderObject = new GameObject("Moving obstacle regression");
+            _colliderObject.layer = FlowFieldRegressionFixture.Layer;
+            _colliderObject.transform.position = position;
+            _colliderObject.transform.localScale = Vector3.one * 0.5f;
+            BoxCollider collider = _colliderObject.AddComponent<BoxCollider>();
+            Physics.SyncTransforms();
+            _session.RegisterObstacle(collider, FlowFieldCellRect.Invalid);
+        }
+
+        private void StartSolve(Vector3 goal)
+        {
+            _session.Submit(FlowFieldRegressionFixture.Request(goal));
+            _session.Pump();
+            Assert.That(_session.IsRebuilding, Is.True);
+        }
+
+        // The same order as Manager.LateUpdate while a solve is in flight.
+        private void ObserveObstacleMove(Vector3 position)
+        {
+            _colliderObject.transform.position = position;
+            Physics.SyncTransforms();
+            Assert.That(_session.DetectObstacleTransformsChanged(), Is.True);
+            _session.RecordObstacleObservation(_session.DirtyObstacleRegion);
+        }
+
+        // Manager.LateUpdate probes and Manager.FixedUpdate submits and pumps.
+        private void RunOwnerTicks(Vector3 goal)
+        {
+            for (int tick = 0; tick < 8; tick++)
+            {
+                if (_session.HasPendingObstacleProbe)
+                    _session.ProbeObstacleChanges(FlowFieldRegressionFixture.Request(goal));
+                if (!_session.HasPendingRequest)
+                    return;
+                _session.Submit(FlowFieldRegressionFixture.Request(goal));
+                _session.Pump();
+                if (_session.IsRebuilding)
+                    _backend.Complete(_backend.Calls.Count - 1);
+            }
+            Assert.Fail("The session did not settle.");
+        }
+
+        private void AssertResolvedGoal(Vector3 goal)
+        {
+            Assert.That(_session.TryGetFieldInfo(out FlowFieldFieldInfo info), Is.True);
+            Assert.That(info.HasResolvedGoal, Is.True);
+            Assert.That(info.ResolvedGoalWorld.x, Is.EqualTo(goal.x).Within(0.01f));
+            Assert.That(info.ResolvedGoalWorld.z, Is.EqualTo(goal.z).Within(0.01f));
+        }
+
         private sealed class CountingModifier : IFlowFieldVectorModifier
         {
             public Collider InfluenceCollider { get; set; }

@@ -19,71 +19,18 @@ namespace Common.FlowField
             ref Collider[] overlapBuffer,
             bool syncTransformsBeforeQuery = false)
         {
-            FlowFieldMaskArguments.ValidateTarget(grid, surface, destination);
-
-            if (syncTransformsBeforeQuery)
-                Physics.SyncTransforms();
-
-            Array.Clear(destination, 0, destination.Length);
-            if (obstacleLayer.value == 0)
-                return true;
-
-            FlowFieldMaskArguments.ValidateObstacleBox(checkHeight, centerOffset, clearance);
-            float halfHeight = checkHeight * 0.5f;
-            float halfXZ = grid.CellSize * 0.5f + clearance;
-            Vector3 cellHalfExtents = new Vector3(halfXZ, halfHeight, halfXZ);
-            if (!surface.TryGetHeightRange(out float minSurfaceY, out float maxSurfaceY))
-                return true;
-
-            int hitCount = QueryOverlappingObstacles(
+            var policy = new AnyObstaclePolicy();
+            return Scan(
                 grid,
+                surface,
                 obstacleLayer,
-                minSurfaceY + centerOffset,
-                maxSurfaceY + centerOffset,
-                halfHeight,
+                checkHeight,
+                centerOffset,
                 clearance,
-                ref overlapBuffer);
-            if (hitCount <= 0)
-                return true;
-
-            Vector3 boundsExpand = new Vector3(halfXZ * 2f, 0f, halfXZ * 2f);
-            for (int hitIndex = 0; hitIndex < hitCount; hitIndex++)
-            {
-                Collider obstacle = overlapBuffer[hitIndex];
-                if (obstacle == null)
-                    continue;
-
-                Bounds candidateBounds = obstacle.bounds;
-                candidateBounds.Expand(boundsExpand);
-                if (!grid.TryGetOverlappingCells(
-                        candidateBounds,
-                        out int minX,
-                        out int maxX,
-                        out int minZ,
-                        out int maxZ))
-                    continue;
-
-                for (int z = minZ; z <= maxZ; z++)
-                {
-                    for (int x = minX; x <= maxX; x++)
-                    {
-                        int index = grid.ToFlatIndex(x, z);
-                        if (!surface.IsSurfaceValid(index) || destination[index])
-                            continue;
-
-                        Vector3 center = surface.GetCellCenter(grid, index);
-                        center.y += centerOffset;
-                        destination[index] = Physics.CheckBox(
-                            center,
-                            cellHalfExtents,
-                            Quaternion.identity,
-                            obstacleLayer,
-                            QueryTriggerInteraction.Ignore);
-                    }
-                }
-            }
-
-            return true;
+                destination,
+                ref overlapBuffer,
+                syncTransformsBeforeQuery,
+                ref policy);
         }
 
         public static bool BuildStatic(
@@ -99,7 +46,37 @@ namespace Common.FlowField
             out int excludedColliderCount,
             bool syncTransformsBeforeQuery = false)
         {
-            excludedColliderCount = 0;
+            var policy = new StaticObstaclePolicy { TargetBuffer = targetOverlapBuffer };
+            bool built = Scan(
+                grid,
+                surface,
+                obstacleLayer,
+                checkHeight,
+                centerOffset,
+                clearance,
+                destination,
+                ref overlapBuffer,
+                syncTransformsBeforeQuery,
+                ref policy);
+            targetOverlapBuffer = policy.TargetBuffer;
+            excludedColliderCount = policy.ExcludedCount;
+            return built;
+        }
+
+        // A struct constraint keeps the per-cell query free of delegate calls.
+        private static bool Scan<TPolicy>(
+            FlowFieldGridSpace grid,
+            FlowFieldSurfaceData surface,
+            LayerMask obstacleLayer,
+            float checkHeight,
+            float centerOffset,
+            float clearance,
+            bool[] destination,
+            ref Collider[] overlapBuffer,
+            bool syncTransformsBeforeQuery,
+            ref TPolicy policy)
+            where TPolicy : struct, IObstaclePolicy
+        {
             FlowFieldMaskArguments.ValidateTarget(grid, surface, destination);
 
             if (syncTransformsBeforeQuery)
@@ -131,12 +108,8 @@ namespace Common.FlowField
             for (int hitIndex = 0; hitIndex < hitCount; hitIndex++)
             {
                 Collider obstacle = overlapBuffer[hitIndex];
-                if (!IsStaticBakeCollider(obstacle))
-                {
-                    if (obstacle != null)
-                        excludedColliderCount++;
+                if (!policy.Accepts(obstacle))
                     continue;
-                }
 
                 Bounds candidateBounds = obstacle.bounds;
                 candidateBounds.Expand(boundsExpand);
@@ -158,18 +131,55 @@ namespace Common.FlowField
 
                         Vector3 center = surface.GetCellCenter(grid, index);
                         center.y += centerOffset;
-                        destination[index] = FlowFieldOverlapUtility.OverlapsTarget(
-                            center,
-                            cellHalfExtents,
-                            obstacleLayer,
-                            obstacle,
-                            QueryTriggerInteraction.Ignore,
-                            ref targetOverlapBuffer);
+                        destination[index] = policy.Overlaps(center, cellHalfExtents, obstacleLayer, obstacle);
                     }
                 }
             }
 
             return true;
+        }
+
+        private interface IObstaclePolicy
+        {
+            bool Accepts(Collider obstacle);
+            bool Overlaps(Vector3 center, Vector3 halfExtents, LayerMask obstacleLayer, Collider obstacle);
+        }
+
+        private struct AnyObstaclePolicy : IObstaclePolicy
+        {
+            public bool Accepts(Collider obstacle) => obstacle != null;
+
+            public bool Overlaps(Vector3 center, Vector3 halfExtents, LayerMask obstacleLayer, Collider obstacle)
+                => Physics.CheckBox(
+                    center,
+                    halfExtents,
+                    Quaternion.identity,
+                    obstacleLayer,
+                    QueryTriggerInteraction.Ignore);
+        }
+
+        private struct StaticObstaclePolicy : IObstaclePolicy
+        {
+            public Collider[] TargetBuffer;
+            public int ExcludedCount;
+
+            public bool Accepts(Collider obstacle)
+            {
+                if (IsStaticBakeCollider(obstacle))
+                    return true;
+                if (obstacle != null)
+                    ExcludedCount++;
+                return false;
+            }
+
+            public bool Overlaps(Vector3 center, Vector3 halfExtents, LayerMask obstacleLayer, Collider obstacle)
+                => FlowFieldOverlapUtility.OverlapsTarget(
+                    center,
+                    halfExtents,
+                    obstacleLayer,
+                    obstacle,
+                    QueryTriggerInteraction.Ignore,
+                    ref TargetBuffer);
         }
 
         public static bool AreEqual(bool[] left, bool[] right)

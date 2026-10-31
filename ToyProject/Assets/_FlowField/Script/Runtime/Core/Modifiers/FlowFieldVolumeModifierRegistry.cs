@@ -47,7 +47,7 @@ namespace Common.FlowField
                 for (int index = _modifiers.Count - 1; index >= 0; index--)
                 {
                     IFlowFieldVectorModifier modifier = _modifiers[index];
-                    if (IsMissingModifier(modifier))
+                    if (FlowFieldVectorUtility.IsMissingModifier(modifier))
                     {
                         changed = true;
                         continue;
@@ -55,7 +55,7 @@ namespace Common.FlowField
                     if (!TryReadObservation(modifier, version, out ModifierObservation current))
                         return false;
                     for (int previousIndex = _modifiers.Count - 1; previousIndex > index; previousIndex--)
-                        if (!IsMissingModifier(_modifiers[previousIndex]) && observations[previousIndex].Priority == current.Priority)
+                        if (!FlowFieldVectorUtility.IsMissingModifier(_modifiers[previousIndex]) && observations[previousIndex].Priority == current.Priority)
                             throw new InvalidOperationException($"Vector modifier priority {current.Priority} is duplicated.");
                     observations[index] = current;
                     if (!_modifierObservations.TryGetValue(modifier, out ModifierObservation previous)
@@ -70,7 +70,7 @@ namespace Common.FlowField
                     for (int index = _modifiers.Count - 1; index >= 0; index--)
                     {
                         IFlowFieldVectorModifier modifier = _modifiers[index];
-                        if (IsMissingModifier(modifier))
+                        if (FlowFieldVectorUtility.IsMissingModifier(modifier))
                         {
                             _modifiers.RemoveAt(index);
                             _modifierObservations.Remove(modifier);
@@ -246,10 +246,6 @@ namespace Common.FlowField
             if (version != _captureVersion)
                 throw new OperationCanceledException("FlowField modifier capture was invalidated.");
         }
-
-        private static bool IsMissingModifier(IFlowFieldVectorModifier modifier)
-            => modifier == null
-                || modifier is UnityEngine.Object unityObject && unityObject == null;
 
         private readonly struct ModifierObservation : IEquatable<ModifierObservation>
         {

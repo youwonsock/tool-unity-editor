@@ -234,24 +234,6 @@ namespace Common.FlowField
             }
         }
 
-        internal static bool ComposeRegion(
-            FlowFieldGridSpace grid,
-            FlowFieldSurfaceData surface,
-            FlowFieldWorkspace workspace,
-            IReadOnlyList<FlowFieldModifierLayer> modifierLayers,
-            FlowFieldCellRect dirtyRegion,
-            Func<bool> isCurrent = null)
-        {
-            if (isCurrent?.Invoke() == false)
-                return false;
-            ValidateWorkspace(grid, surface, workspace);
-            if (modifierLayers == null)
-                throw new ArgumentNullException(nameof(modifierLayers));
-            if (!dirtyRegion.IsValid)
-                dirtyRegion = FlowFieldCellRect.Full(grid);
-            return ApplyModifiers(grid, surface, workspace, modifierLayers, dirtyRegion, isCurrent);
-        }
-
         private static void ClearFinalRegionFromBase(
             FlowFieldGridSpace grid,
             FlowFieldWorkspace workspace,

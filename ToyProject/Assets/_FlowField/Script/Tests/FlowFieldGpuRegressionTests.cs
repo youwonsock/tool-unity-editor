@@ -40,6 +40,7 @@ namespace Common.FlowField.Tests
                     Assert.That(completed, Is.True, "GPU fallback timed out.");
                     Assert.That(failure, Is.Null);
                     Assert.That(backend.GpuDisabled, Is.True);
+                    Assert.That(backend.GpuFallbackReason, Does.Contain("Overflow"));
                     for (int i = 0; i < 79; i++)
                     {
                         Assert.That(workspace.NextCells[i], Is.EqualTo(i + 1));

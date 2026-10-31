@@ -255,6 +255,7 @@ namespace Common.FlowField
         private bool _disposed;
 
         internal bool GpuDisabled => _gpuDisabled;
+        internal string GpuFallbackReason { get; private set; }
         public bool SupportsGpu => !_gpuDisabled && _computeSolver != null && _computeSolver.IsSupported;
 
         internal FlowFieldSurfaceBuildPipeline(ComputeShader shader)
@@ -268,13 +269,20 @@ namespace Common.FlowField
             try
             {
                 _computeSolver = new FlowFieldComputeSolver(shader);
-                _gpuDisabled = !_computeSolver.IsSupported;
+                if (!_computeSolver.IsSupported)
+                    DisableGpu("Compute Shader 또는 AsyncGPUReadback을 지원하지 않습니다.");
             }
-            catch
+            catch (Exception exception)
             {
-                _gpuDisabled = true;
+                DisableGpu(exception.Message);
                 _computeSolver = null;
             }
+        }
+
+        private void DisableGpu(string reason)
+        {
+            _gpuDisabled = true;
+            GpuFallbackReason ??= reason;
         }
 
         public bool StartBfs(
@@ -327,7 +335,7 @@ namespace Common.FlowField
                     failed(request, exception);
                     return false;
                 }
-                _gpuDisabled = true;
+                DisableGpu(exception.Message);
                 return RunManaged(request, completed, failed, exception);
             }
 
@@ -336,7 +344,7 @@ namespace Common.FlowField
                 failed(request, new InvalidOperationException("FlowField GPU dispatch was not accepted."));
                 return false;
             }
-            _gpuDisabled = true;
+            DisableGpu("GPU 계산 요청이 거부됐습니다.");
             return RunManaged(request, completed, failed, null);
 
             void OnGpuCompleted(
@@ -356,7 +364,7 @@ namespace Common.FlowField
                         failed(requestCopy, exception);
                         return;
                     }
-                    _gpuDisabled = true;
+                    DisableGpu(exception.Message);
                     RunManaged(requestCopy, completed, failed, exception);
                     return;
                 }
@@ -373,7 +381,7 @@ namespace Common.FlowField
             {
                 if (!requestCopy.IsCurrent)
                     return;
-                _gpuDisabled = true;
+                DisableGpu(exception != null ? $"{kind}: {exception.Message}" : kind.ToString());
                 if (!allowManagedFallback)
                 {
                     failed(requestCopy, exception);

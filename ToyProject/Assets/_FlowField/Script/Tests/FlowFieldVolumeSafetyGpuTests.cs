@@ -18,13 +18,114 @@ namespace Common.FlowField.Tests
         [UnityTest]
         public IEnumerator GridReplacementDuringGpuReadbackRejectsOldGridResult() => InterruptGpuBuild(2);
 
-        private static IEnumerator InterruptGpuBuild(int interruption)
+        [UnityTest]
+        public IEnumerator SuspendDuringGpuReadbackKeepsTheGpuForLaterBuilds() => GpuReturnsAfterInterruption(true);
+
+        [UnityTest]
+        public IEnumerator GridReplacementDuringGpuReadbackKeepsTheGpuForLaterBuilds() => GpuReturnsAfterInterruption(false);
+
+        private static IEnumerator GpuReturnsAfterInterruption(bool suspend)
+        {
+            ComputeShader shader = LoadShader();
+            var session = new FlowFieldVolumeSession();
+            try
+            {
+                session.Initialize(FlowFieldBakeMode.RuntimeDynamic, shader);
+                var grid = FlowFieldVolumeSafetyRegressionTests.Grid;
+                session.Submit(FlowFieldVolumeSafetyRegressionTests.Request(grid, shader: shader));
+                PumpUntilGpuWaits(session);
+                Assert.That(session.IsWaitingForExternalCompletion, Is.True, "Expected a real in-flight GPU request.");
+
+                var nextGrid = grid;
+                if (suspend)
+                {
+                    session.Suspend();
+                    session.Resume();
+                }
+                else
+                {
+                    nextGrid = FlowFieldGridSpace.FromVolumeCellGrid(new Vector3(100f, 0f, 0f), 4, 4, 4, 1f);
+                }
+                var nextGoal = nextGrid.Origin + new Vector3(0.5f, 2.5f, 2.5f);
+                var nextRequest = FlowFieldVolumeSafetyRegressionTests.Request(nextGrid, goal: nextGoal, shader: shader);
+                session.Submit(nextRequest);
+                FlowFieldVolumeSafetyRegressionTests.Finish(session);
+                Assert.That(session.GpuFallbackReason, Is.Null);
+
+                for (int i = 0; i < 3; i++)
+                {
+                    AsyncGPUReadback.WaitAllRequests();
+                    yield return null;
+                }
+
+                session.Submit(nextRequest);
+                PumpUntilGpuWaits(session);
+                Assert.That(session.IsWaitingForExternalCompletion, Is.True, "The later build must use the GPU again.");
+            }
+            finally { session.Dispose(); }
+        }
+
+        [UnityTest]
+        public IEnumerator WaveOverflowKeepsManagedAndReportsTheReason()
+        {
+            ComputeShader shader = LoadShader();
+            var session = new FlowFieldVolumeSession();
+            try
+            {
+                session.Initialize(FlowFieldBakeMode.RuntimeDynamic, shader);
+                var grid = FlowFieldGridSpace.FromVolumeCellGrid(Vector3.zero, 200, 1, 1, 1f);
+                var request = new FlowFieldVolumeRequest(
+                    grid,
+                    new Bounds(new Vector3(100f, 0.5f, 0.5f), new Vector3(200f, 1f, 1f)),
+                    FlowFieldBakeMode.RuntimeDynamic,
+                    1 << FlowFieldRegressionFixture.Layer,
+                    0f,
+                    true,
+                    new Vector3(199.5f, 0.5f, 0.5f),
+                    0f,
+                    Vector3.forward,
+                    64,
+                    shader,
+                    null);
+                session.Submit(request);
+                double deadline = EditorApplication.timeSinceStartup + 30d;
+                while (session.IsRebuilding && EditorApplication.timeSinceStartup < deadline)
+                {
+                    session.Pump(10d);
+                    yield return null;
+                }
+
+                Assert.That(session.IsRebuilding, Is.False, "GPU fallback timed out.");
+                Assert.That(session.IsFaulted, Is.False, session.LastError);
+                Assert.That(session.GpuFallbackReason, Does.Contain("Overflow"));
+                Assert.That(session.Sample(new Vector3(0.5f, 0.5f, 0.5f)).Direction, Is.EqualTo(Vector3.right));
+
+                session.Submit(request);
+                PumpUntilGpuWaits(session);
+                Assert.That(session.IsWaitingForExternalCompletion, Is.False, "Overflow keeps the session on Managed.");
+            }
+            finally { session.Dispose(); }
+        }
+
+        private static ComputeShader LoadShader()
         {
             if (!SystemInfo.supportsComputeShaders || !SystemInfo.supportsAsyncGPUReadback)
                 Assert.Ignore("Compute shaders and async readback are required.");
             var shader = AssetDatabase.LoadAssetAtPath<ComputeShader>(
                 "Assets/_FlowField/Script/Runtime/Core/Solvers/FlowFieldFrontier.compute");
             Assert.That(shader, Is.Not.Null);
+            return shader;
+        }
+
+        private static void PumpUntilGpuWaits(FlowFieldVolumeSession session)
+        {
+            for (int i = 0; i < 2000 && !session.IsWaitingForExternalCompletion && session.IsRebuilding; i++)
+                FlowFieldVolumeSafetyRegressionTests.PumpOneStep(session);
+        }
+
+        private static IEnumerator InterruptGpuBuild(int interruption)
+        {
+            ComputeShader shader = LoadShader();
             var session = new FlowFieldVolumeSession();
             try
             {
