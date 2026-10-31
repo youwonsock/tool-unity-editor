@@ -377,6 +377,59 @@ namespace Common.FlowField.Tests
             AssertResolvedGoal(GoalB);
         }
 
+        [TestCase("failure")]
+        [TestCase("grid")]
+        public void OneOffGoalChangeAfterAnInterruptedRetryIsStillRejected(string interruption)
+        {
+            if (interruption == "failure")
+            {
+                // PreferGpu leaves the deferred backend after a failure.
+                _session.Release();
+                _session.Initialize(FlowFieldBakeMode.RuntimeDynamic, FlowFieldSessionSourceKind.SceneBuild,
+                    FlowFieldBfsBackendPolicy.RequireGpu, null);
+            }
+            Build(GoalA);
+
+            StartSolve(GoalB);
+            _session.Submit(FlowFieldRegressionFixture.Request(new Vector3(2.5f, 0f, 0.5f)));
+            _backend.Complete(_backend.Calls.Count - 1);
+            AssertResolvedGoal(GoalA);
+
+            Vector3 oneOffGoal = new Vector3(1.5f, 0f, 2.5f);
+            PumpUntilSolving();
+            if (interruption == "failure")
+            {
+                _session.MarkDirty(
+                    FlowFieldDirtyFlags.DefaultDirection,
+                    FlowFieldCellRect.Invalid,
+                    FlowFieldCellRect.Invalid);
+                _backend.Fail(_backend.Calls.Count - 1);
+            }
+            else
+            {
+                _session.MarkDirty(
+                    FlowFieldDirtyFlags.Grid,
+                    FlowFieldCellRect.Invalid,
+                    FlowFieldCellRect.Invalid,
+                    deferSurfaceVersion: true);
+                _backend.Complete(_backend.Calls.Count - 1);
+            }
+            Assert.That(_session.IsFaulted, Is.False, _session.LastError);
+            AssertResolvedGoal(GoalA);
+
+            PumpUntilSolving();
+            _session.Submit(FlowFieldRegressionFixture.Request(oneOffGoal));
+            _backend.Complete(_backend.Calls.Count - 1);
+            AssertResolvedGoal(GoalA);
+        }
+
+        private void PumpUntilSolving()
+        {
+            for (int tick = 0; tick < 4 && !_session.IsRebuilding; tick++)
+                _session.Pump();
+            Assert.That(_session.IsRebuilding, Is.True, _session.LastError);
+        }
+
         [Test]
         public void FailedSolveWithAnObservedObstacleRetriesTheGoal()
         {

@@ -1416,6 +1416,11 @@ namespace Common.FlowField
         /// </summary>
         private bool RejectStaleBfsResult()
         {
+            // Grid and Goal requests stay unversioned until their stage proves
+            // a change, so the versions below can match while one is pending.
+            bool gridStale = (_state.DirtyFlags & FlowFieldDirtyFlags.Grid) != 0;
+            bool goalStale = (_state.DirtyFlags & FlowFieldDirtyFlags.Goal) != 0;
+            bool rejectGoal = _rebuild.ShouldRejectSupersededGoal(goalStale && !gridStale && !_rebuild.IsBaseStale);
             if (_rebuild.IsBaseStale)
             {
                 bool obstacleStale = HasStaleObstacleInput();
@@ -1433,11 +1438,7 @@ namespace Common.FlowField
                 return true;
             }
 
-            // Grid and Goal requests stay unversioned until their stage proves
-            // a change, so the versions above can match while one is pending.
-            bool gridStale = (_state.DirtyFlags & FlowFieldDirtyFlags.Grid) != 0;
-            bool goalStale = (_state.DirtyFlags & FlowFieldDirtyFlags.Goal) != 0;
-            if (gridStale || goalStale && _rebuild.ShouldRejectSupersededGoal())
+            if (gridStale || rejectGoal)
             {
                 RestoreStagingAfterStaleResult(preserveObstacle: true);
                 RequeueRejectedGoal();
@@ -1477,7 +1478,6 @@ namespace Common.FlowField
             FlowFieldDirtyFlags pending = _state.DirtyFlags;
             // Obstacle or Goal input observed during this solve keeps its request
             // and dirty flags through Commit; the next owner boundary handles it.
-            _rebuild.ResetSupersededGoal();
             _hasPendingRequest = FlowFieldSurfaceRebuildTracker.IsBaseDirty(_state.DirtyFlags);
 
             // RequestVersion also advances for Default Direction and Modifier
