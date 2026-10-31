@@ -4,6 +4,7 @@
     "references": [
         "Common.FlowField.Core",
         "Common.FlowField.Runtime",
+        "Common.FlowField.Editor",
         "Unity.Collections"
     ],
     "includePlatforms": [
