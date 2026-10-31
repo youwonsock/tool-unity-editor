@@ -16,19 +16,9 @@ namespace Common.FlowField
         public int Depth { get; }
         public float CellSize { get; }
         public FlowFieldSpaceMode SpaceMode { get; }
-        public int CellCount => IsValid ? (int)((long)Width * Height * Depth) : 0;
-        public bool IsValid => Width > 0
-            && Height > 0
-            && Depth > 0
-            && IsFinite(Origin)
-            && IsFinite(CellSize)
-            && IsFinite(WorldSizeX)
-            && IsFinite(WorldSizeY)
-            && IsFinite(WorldSizeZ)
-            && CellSize >= FlowFieldBakeBoundsUtility.MinCellSize
-            && (SpaceMode == FlowFieldSpaceMode.Volume3D
-                ? FlowFieldBakeBoundsUtility.TryValidateVolumeCellCount(Width, Height, Depth, out _)
-                : FlowFieldBakeBoundsUtility.TryValidateCellCount(Width, Depth, out _));
+        // Stored because the field loops read both on every cell.
+        public int CellCount { get; }
+        public bool IsValid { get; }
 
         private FlowFieldGridSpace(
             Vector3 origin,
@@ -47,6 +37,19 @@ namespace Common.FlowField
             WorldSizeX = (float)((double)width * cellSize);
             WorldSizeY = (float)((double)height * cellSize);
             WorldSizeZ = (float)((double)depth * cellSize);
+            IsValid = Width > 0
+                && Height > 0
+                && Depth > 0
+                && IsFinite(Origin)
+                && IsFinite(CellSize)
+                && IsFinite(WorldSizeX)
+                && IsFinite(WorldSizeY)
+                && IsFinite(WorldSizeZ)
+                && CellSize >= FlowFieldBakeBoundsUtility.MinCellSize
+                && (SpaceMode == FlowFieldSpaceMode.Volume3D
+                    ? FlowFieldBakeBoundsUtility.TryValidateVolumeCellCount(Width, Height, Depth, out _)
+                    : FlowFieldBakeBoundsUtility.TryValidateCellCount(Width, Depth, out _));
+            CellCount = IsValid ? (int)((long)Width * Height * Depth) : 0;
         }
 
         public static FlowFieldGridSpace FromCellGrid(Vector3 origin, int width, int depth, float cellSize)

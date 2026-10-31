@@ -496,9 +496,6 @@ namespace Common.FlowField
             return dirty;
         }
 
-        public bool DetectDynamicTransformsChanged()
-            => DetectDynamicTransformsChanged(default, out _);
-
         internal bool DetectDynamicTransformsChanged(
             FlowFieldGridSpace grid,
             out FlowFieldCellRect dirtyRegion)

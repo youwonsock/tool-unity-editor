@@ -540,6 +540,19 @@ namespace Common.FlowField.Tests
             }
         }
 
+        [TestCase(0.01f)]
+        [TestCase(float.NaN)]
+        public void VolumeRejectsAnInvalidRefreshRate(float rate)
+        {
+            var manager = Manager(true, activate: false);
+            using (var settings = new SerializedObject(manager))
+            {
+                settings.FindProperty("_refreshRate").floatValue = rate;
+                settings.ApplyModifiedPropertiesWithoutUndo();
+            }
+            Assert.Throws<ArgumentOutOfRangeException>(manager.Init);
+        }
+
         [UnityTest]
         public IEnumerator VolumeSweepWaitsForTheRefreshRate([Values(false, true)] bool due)
         {

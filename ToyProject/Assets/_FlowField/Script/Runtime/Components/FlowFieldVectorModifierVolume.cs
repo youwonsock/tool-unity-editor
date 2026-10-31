@@ -277,21 +277,6 @@ namespace Common.FlowField
         }
 
         /// <summary>
-        /// Marks an influence-area change without exposing the old public
-        /// dirty-method API to consumers.
-        /// </summary>
-        protected void NotifyInfluenceAreaChanged()
-        {
-            ThrowIfFaulted();
-            if (Application.isPlaying && isActiveAndEnabled)
-            {
-                if (_registeredManager == null && !CanChangeConfigurationWhilePlaying())
-                    throw new InvalidOperationException("Modifier is not registered with a FlowFieldManager.");
-                _registeredManager?.NotifyModifierChanged(this, FlowFieldModifierChange.Area);
-            }
-        }
-
-        /// <summary>
         /// Captures an immutable value operation for one build.  The common
         /// validation lives here so every concrete modifier follows the same
         /// null/collider/settings contract; derived classes only create their

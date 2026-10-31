@@ -144,10 +144,25 @@ namespace Common.FlowField
                 case 6: build.FinalDirections = new Vector3[build.Count]; break;
                 case 7: build.FinalSpeeds = new float[build.Count]; break;
                 case 8: build.EscapeDirections = new Vector3[build.Count]; break;
-                case 9: build.Costs = RentBuildArray(ref _spareCosts, build.Count); break;
-                case 10: build.Queue = RentBuildArray(ref _spareQueue, build.Count); break;
-                case 11: build.Influence = RentBuildArray(ref _spareInfluence, build.Count); break;
+                // A static bake loads its navigation and never searches.
+                case 9:
+                    if (build.Request.StaticBakeData == null)
+                        build.Costs = RentBuildArray(ref _spareCosts, build.Count);
+                    break;
+                case 10:
+                    if (build.Request.StaticBakeData == null)
+                        build.Queue = RentBuildArray(ref _spareQueue, build.Count);
+                    break;
+                case 11:
+                    if (build.Request.StaticBakeData == null)
+                        build.Influence = RentBuildArray(ref _spareInfluence, build.Count);
+                    break;
                 case 12:
+                    if (build.Request.StaticBakeData != null)
+                    {
+                        build.AllocationStage++;
+                        return true;
+                    }
                     int end = Math.Min(build.Cursor + ArrayElementsPerStep, build.Count);
                     for (; build.Cursor < end; build.Cursor++)
                     {
@@ -477,9 +492,9 @@ namespace Common.FlowField
                 _safety.ClearObservedRegions();
                 // The published field holds none of these; a completed build has
                 // no GPU readback left that could still read them.
-                _spareCosts = build.Costs;
-                _spareQueue = build.Queue;
-                _spareInfluence = build.Influence;
+                _spareCosts = build.Costs ?? _spareCosts;
+                _spareQueue = build.Queue ?? _spareQueue;
+                _spareInfluence = build.Influence ?? _spareInfluence;
             }
             _build = null;
             _buildReservationBytes = 0;

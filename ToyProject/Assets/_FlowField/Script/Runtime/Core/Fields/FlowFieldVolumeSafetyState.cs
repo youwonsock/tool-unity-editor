@@ -60,22 +60,16 @@ namespace Common.FlowField
 
         internal bool IsLatestPathUnsafe(VolumeFieldData field, int current, int next)
         {
-            if (IsLatestCellUnsafe(field, current)
-                || IsLatestCellUnsafe(field, next))
-                return true;
             field.Grid.FromFlatIndex(current, out int x0, out int y0, out int z0);
             field.Grid.FromFlatIndex(next, out int x1, out int y1, out int z1);
             for (int x = Math.Min(x0, x1); x <= Math.Max(x0, x1); x++)
             for (int y = Math.Min(y0, y1); y <= Math.Max(y0, y1); y++)
             for (int z = Math.Min(z0, z1); z <= Math.Max(z0, z1); z++)
             {
-                if (x == x0 && y == y0 && z == z0 || x == x1 && y == y1 && z == z1)
-                    continue;
-                int intermediate = field.Grid.ToFlatIndex(x, y, z);
-                if (IsLatestCellUnsafe(field, intermediate))
+                if (IsLatestCellUnsafe(field, field.Grid.ToFlatIndex(x, y, z)))
                     return true;
             }
-            return IsLatestCellUnsafe(field, next);
+            return false;
         }
 
         private bool IsLatestCellUnsafe(VolumeFieldData field, int index)

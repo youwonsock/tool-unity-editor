@@ -131,7 +131,6 @@ namespace Common.FlowField
     {
         None,
         Changed,
-        Invalid,
     }
 
     internal readonly struct FlowFieldGoalSolveInput
@@ -207,9 +206,7 @@ namespace Common.FlowField
                 explicitGoal,
                 influenceRadius);
             if (!resolution.IsValid)
-                return resolution.HasActiveGoal
-                    ? FlowFieldGoalChangeStatus.Invalid
-                    : FlowFieldGoalChangeStatus.None;
+                return FlowFieldGoalChangeStatus.None;
 
             FlowFieldGoalSolveInput request = new FlowFieldGoalSolveInput(
                 true,

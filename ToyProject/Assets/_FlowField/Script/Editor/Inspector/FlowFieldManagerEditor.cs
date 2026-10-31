@@ -194,10 +194,16 @@ namespace Common.FlowField.Editor
             bool validLayout = manager.SpaceMode == FlowFieldSpaceMode.Volume3D
                 ? manager.TryGetVolumeLayout(out Bounds worldBounds, out FlowFieldGridSpace grid)
                 : manager.TryGetBakeLayout(out worldBounds, out grid);
+            int maxCells = manager.SpaceMode == FlowFieldSpaceMode.Volume3D
+                ? FlowFieldBakeBoundsUtility.MaxVolumeCellCount
+                : FlowFieldBakeBoundsUtility.MaxSurfaceCellCount;
             if (!validLayout)
             {
-                EditorGUILayout.HelpBox("Bake Bounds 또는 Cell Size가 유효하지 않습니다.", MessageType.Error);
-                return false;
+                // The layout also fails above the cell limit.
+                EditorGUILayout.HelpBox(
+                    $"Bake Bounds 또는 Cell Size가 유효하지 않거나 Cell Count가 상한({maxCells:N0})을 초과합니다.",
+                    MessageType.Error);
+                return true;
             }
 
             string dimensions = manager.SpaceMode == FlowFieldSpaceMode.Volume3D
@@ -205,17 +211,7 @@ namespace Common.FlowField.Editor
                 : $"{grid.Width} × {grid.Depth}";
             EditorGUILayout.LabelField("Computed Grid", $"{dimensions} ({grid.CellCount:N0} cells)");
             EditorGUILayout.LabelField("World Y Range", $"{worldBounds.min.y:0.###} → {worldBounds.max.y:0.###}");
-            int maxCells = manager.SpaceMode == FlowFieldSpaceMode.Volume3D
-                ? FlowFieldBakeBoundsUtility.MaxVolumeCellCount
-                : FlowFieldBakeBoundsUtility.MaxSurfaceCellCount;
-            if (grid.CellCount <= maxCells)
-                return false;
-
-            EditorGUILayout.HelpBox(
-                $"Cell Count가 상한({maxCells:N0})을 초과합니다. "
-                + "Bake Bounds 또는 Cell Size를 줄이세요.",
-                MessageType.Error);
-            return true;
+            return false;
         }
 
         private static void ApplyBoundsChange(

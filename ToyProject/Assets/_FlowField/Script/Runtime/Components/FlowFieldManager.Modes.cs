@@ -280,8 +280,6 @@ namespace Common.FlowField
                     Owner._hasExplicitGoal,
                     Owner._explicitGoalWorld,
                     Owner._goalInfluenceRadius);
-                if (status == FlowFieldGoalChangeStatus.Invalid)
-                    throw new InvalidOperationException("Active Goal became invalid.");
                 if (status == FlowFieldGoalChangeStatus.Changed)
                 {
                     _session.MarkDirty(

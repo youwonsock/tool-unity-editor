@@ -49,6 +49,79 @@ namespace Common.FlowField.Tests
         [UnityTest] public IEnumerator SurfaceBakePreservesTheAssetWhenInputChanges() => CheckInputChange(volume: false);
         [UnityTest] public IEnumerator VolumeBakePreservesTheAssetWhenInputChanges() => CheckInputChange(volume: true);
 
+        [UnityTest]
+        public IEnumerator BakeRejectsAGoalWithoutAWalkableCellAndKeepsEarlierUndo([Values(false, true)] bool volume)
+        {
+            FlowFieldManager manager = CreateManager(volume);
+            string before = File.ReadAllText(_assetPath);
+            var blocker = new GameObject("Bake blocker");
+            blocker.layer = 28;
+            blocker.isStatic = true;
+            blocker.AddComponent<BoxCollider>().size = Vector3.one * 100f;
+            Physics.SyncTransforms();
+
+            // An edit the person made before baking must survive the rollback of a failed bake.
+            Undo.IncrementCurrentGroup();
+            using (var settings = new SerializedObject(manager))
+            {
+                settings.FindProperty("_maxStepHeight").floatValue = 0.75f;
+                settings.ApplyModifiedProperties();
+            }
+            LogAssert.ignoreFailingMessages = true;
+            try
+            {
+                FlowFieldSurfaceBakeEditor.BakeAndAssign(manager);
+                yield return WaitForLog("Cannot bake");
+            }
+            finally
+            {
+                LogAssert.ignoreFailingMessages = false;
+            }
+            Assert.That(File.ReadAllText(_assetPath), Is.EqualTo(before));
+            using (var settings = new SerializedObject(manager))
+                Assert.That(settings.FindProperty("_maxStepHeight").floatValue, Is.EqualTo(0.75f));
+        }
+
+        [UnityTest]
+        public IEnumerator SurfaceBakeValidationFollowsContentChanges()
+        {
+            FlowFieldManager manager = CreateManager(false);
+            FlowFieldSurfaceBakeEditor.BakeAndAssign(manager);
+            yield return WaitForLog(CompleteLog);
+            FlowFieldStaticBakeData data = manager.StaticBakeData;
+            Assert.That(data.HasValidData, Is.True);
+            using (var settings = new SerializedObject(data))
+            {
+                float cellSize = settings.FindProperty("_cellSize").floatValue;
+                settings.FindProperty("_cellSize").floatValue = -1f;
+                settings.ApplyModifiedPropertiesWithoutUndo();
+                Assert.That(data.HasValidData, Is.False);
+                settings.FindProperty("_cellSize").floatValue = cellSize;
+                settings.ApplyModifiedPropertiesWithoutUndo();
+            }
+            Assert.That(data.HasValidData, Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator VolumeStaticBuildAllocatesNoSearchArrays()
+        {
+            FlowFieldManager manager = CreateManager(true);
+            FlowFieldSurfaceBakeEditor.BakeAndAssign(manager);
+            yield return WaitForLog(CompleteLog);
+            manager.Init();
+            for (int i = 0; i < 1000 && !manager.IsReady && !manager.IsFaulted; i++)
+                manager.VolumeSession.Pump(1000d);
+            Assert.That(manager.IsReady, Is.True, manager.LastError);
+            foreach (string field in new[] { "_spareCosts", "_spareQueue", "_spareInfluence" })
+            {
+                object spare = typeof(FlowFieldVolumeSession)
+                    .GetField(field, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+                    .GetValue(manager.VolumeSession);
+                Assert.That(spare, Is.Null, field);
+            }
+            manager.Release();
+        }
+
         [Test]
         public void BakeTargetMustBelongToTheManager()
         {

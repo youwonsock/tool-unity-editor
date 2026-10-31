@@ -100,8 +100,7 @@ namespace Common.FlowField
                 grid,
                 surface,
                 workspace,
-                surfaceAnchorIndex,
-                useDistanceTieEpsilon: true);
+                surfaceAnchorIndex);
             if (resolvedGoalIndex < 0)
                 return false;
 
@@ -434,8 +433,7 @@ namespace Common.FlowField
             FlowFieldGridSpace grid,
             FlowFieldSurfaceData surface,
             FlowFieldWorkspace workspace,
-            int anchorIndex,
-            bool useDistanceTieEpsilon)
+            int anchorIndex)
         {
             if (workspace.InfluenceMask[anchorIndex] && !workspace.Blocked[anchorIndex])
                 return anchorIndex;
@@ -451,11 +449,9 @@ namespace Common.FlowField
                     continue;
 
                 float distanceSqr = (surface.GetCellCenter(grid, index) - anchor).sqrMagnitude;
-                bool replace = useDistanceTieEpsilon
-                    ? distanceSqr < bestDistanceSqr - DISTANCE_TIE_EPSILON
-                        || Mathf.Abs(distanceSqr - bestDistanceSqr) <= DISTANCE_TIE_EPSILON
-                            && index < bestIndex
-                    : distanceSqr < bestDistanceSqr;
+                bool replace = distanceSqr < bestDistanceSqr - DISTANCE_TIE_EPSILON
+                    || Mathf.Abs(distanceSqr - bestDistanceSqr) <= DISTANCE_TIE_EPSILON
+                        && index < bestIndex;
                 if (replace)
                 {
                     bestIndex = index;
