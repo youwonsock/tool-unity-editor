@@ -11,6 +11,14 @@ Unity 프로젝트에서 사용하던 기능을 분리해 보관하고, `ToyProj
 
 세 샘플 씬은 월드 공간 UGUI Overview Board를 포함해 상태, 주요 수치, 현재 모드와 조작법을 동시에 보여줍니다. OptimizeTool은 미리 생성한 메시 결과를 비교하고, PHYSICS 모드에서 RECORD를 누를 때 실제 물리 움직임을 새 AnimationClip·Prefab·원본 기준 데이터로 저장합니다. 단순 Play 진입이나 모드 전환으로는 기록 에셋을 저장하지 않습니다. FlowField/TransformPath도 모든 참조를 직렬화 필드로 구성합니다.
 
+## 테스트 실행
+
+```bash
+Tools/run-tests.sh
+```
+
+현재 작업 트리의 스냅샷을 별도 Git worktree에서 실행하므로 Unity Editor를 연 채로 돌릴 수 있습니다. EditMode, PlayMode, OptimizeTool Python 테스트를 차례로 실행하며, 옵션은 스크립트 첫머리에 있습니다. 그래픽 Editor가 필요한 `TransformPathEditorUiTests`는 여기서 건너뛰므로 Editor의 Test Runner에서 실행합니다.
+
 ## 시스템 문서
 
 - FlowField — [README](./ToyProject/Assets/_FlowField/README.md)
