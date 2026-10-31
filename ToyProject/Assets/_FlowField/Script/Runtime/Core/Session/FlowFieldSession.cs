@@ -90,6 +90,7 @@ namespace Common.FlowField
         // lifetime of this Session. Release clears the flag; Suspend keeps it
         // so a resume cannot repeatedly rediscover a broken backend.
         private bool _managedBackendForced;
+        private string _gpuFallbackReason;
         private int _callbackGeneration;
         private FlowFieldRuntimeState _publishedRuntimeState = FlowFieldRuntimeState.Uninitialized;
 
@@ -123,6 +124,7 @@ namespace Common.FlowField
             _ => FlowFieldRuntimeState.Uninitialized,
         };
         internal override string LastError => _fault?.Message;
+        internal override string GpuFallbackReason => _gpuFallbackReason;
         internal override bool IsInitialized => _lifecycle == FlowFieldSessionLifecycle.Active
             || _lifecycle == FlowFieldSessionLifecycle.Building
             || _lifecycle == FlowFieldSessionLifecycle.Suspended;
@@ -1499,6 +1501,16 @@ namespace Common.FlowField
             return true;
         }
 
+        // A missing shader passes no reason: Managed is then the configured path.
+        private void ForceManagedBackend(string reason)
+        {
+            _managedBackendForced = true;
+            if (reason == null || _gpuFallbackReason != null)
+                return;
+            _gpuFallbackReason = reason;
+            Debug.LogWarning($"[FlowField] Surface2D GPU 계산을 끄고 Managed로 전환합니다: {reason}");
+        }
+
         private bool IsCurrentOperation(int callbackGeneration)
             => !_disposed && callbackGeneration == _callbackGeneration
                 && (_lifecycle == FlowFieldSessionLifecycle.Active
@@ -1585,7 +1597,7 @@ namespace Common.FlowField
             int callbackGeneration = _callbackGeneration;
             if (_buildPipeline is FlowFieldSurfaceBuildPipeline productionPipeline
                 && productionPipeline.GpuDisabled)
-                _managedBackendForced = true;
+                ForceManagedBackend(productionPipeline.GpuFallbackReason);
             if (RejectStaleBfsResult())
                 return;
 
@@ -1638,7 +1650,7 @@ namespace Common.FlowField
             if (_lifecycle != FlowFieldSessionLifecycle.Building)
                 return;
             if (_backendPolicy == FlowFieldBfsBackendPolicy.PreferGpu)
-                _managedBackendForced = true;
+                ForceManagedBackend(exception?.Message ?? "GPU 계산에 실패했습니다.");
             if (RejectStaleBfsResult())
                 return;
             // A failed base solve cannot be replaced by a final-only compose:
@@ -1852,6 +1864,7 @@ namespace Common.FlowField
             _deferredGoalVersion = false;
             _versionedDirtyFlags = FlowFieldDirtyFlags.None;
             _managedBackendForced = false;
+            _gpuFallbackReason = null;
             _latestDefaultDirection = Vector3.zero;
             _hasLatestDefaultDirection = false;
             _fault = null;

@@ -118,6 +118,7 @@ namespace Common.FlowField
 
         private FlowFieldComputeSolver _computeSolver;
         private bool _gpuDisabled;
+        private string _gpuFallbackReason;
         private VolumeFieldData _committed;
         private BuildContext _build;
         // The latest accepted input is also the next build input when pending.
@@ -167,6 +168,7 @@ namespace Common.FlowField
             && _committed != null
             && !IsFaulted;
         internal override string LastError => _fault?.Message;
+        internal override string GpuFallbackReason => _gpuFallbackReason;
         internal override int Revision => _revision;
         internal long TrackedMemoryBytes
         {
@@ -218,6 +220,7 @@ namespace Common.FlowField
             _bakeMode = bakeMode;
             _fault = null;
             _gpuDisabled = false;
+            _gpuFallbackReason = null;
             _hasLatestRequestedInput = false;
             _latestRequestedInput = default;
             _hasPendingRequest = false;
@@ -232,11 +235,12 @@ namespace Common.FlowField
                 try
                 {
                     _computeSolver = new FlowFieldComputeSolver(computeShader);
-                    _gpuDisabled = !_computeSolver.IsSupported;
+                    if (!_computeSolver.IsSupported)
+                        DisableGpu("Compute Shader 또는 AsyncGPUReadback을 지원하지 않습니다.");
                 }
-                catch
+                catch (Exception exception)
                 {
-                    _gpuDisabled = true;
+                    DisableGpu(exception.Message);
                     _computeSolver = null;
                 }
             }
@@ -269,12 +273,8 @@ namespace Common.FlowField
                 InvalidateBuildGeneration();
                 // A grid/signature change invalidates the private staging
                 // arrays immediately. If an async GPU solve belongs to the
-                // discarded build, its late callback is ignored and the new
-                // request falls back to managed BFS until the solver is
-                // recreated by the next Init.
+                // discarded build, its late callback is ignored.
                 DiscardBuild();
-                if (_computeSolver?.IsRunning == true)
-                    _gpuDisabled = true;
             }
             if (_committed != null
                 && _committed.Request.HasSameGrid(request)
@@ -1132,6 +1132,10 @@ namespace Common.FlowField
             if (_gpuDisabled || _computeSolver == null || !_computeSolver.IsSupported
                 || build.Request.HasGoal == false || build.GoalIndex < 0)
                 return false;
+            // A discarded build's readback is still draining. Only this build
+            // falls back; the solver is free again for the next one.
+            if (_computeSolver.IsRunning)
+                return false;
 
             long currentGpuBytes = _computeSolver.AllocatedBytes;
             long requestedGpuBytes = FlowFieldComputeSolver.EstimateAllocationBytes(
@@ -1143,7 +1147,7 @@ namespace Common.FlowField
                 // A buffer-size change is a backend choice, not a failed
                 // field request. Continue with the managed solver under the
                 // same staged build and input snapshot.
-                _gpuDisabled = true;
+                DisableGpu("GPU 버퍼가 512 MiB 메모리 예산을 넘습니다.");
                 return false;
             }
 
@@ -1163,20 +1167,29 @@ namespace Common.FlowField
                     (completedRequest, result) => OnGpuCompleted(build, completedRequest, result),
                     (failedRequest, kind, exception) => OnGpuFailed(build, failedRequest, kind, exception));
             }
-            catch
+            catch (Exception exception)
             {
                 build.GpuPending = false;
-                _gpuDisabled = true;
+                DisableGpu(exception.Message);
                 return false;
             }
 
             if (!accepted)
             {
                 build.GpuPending = false;
-                _gpuDisabled = true;
+                DisableGpu("GPU 계산 요청이 거부됐습니다.");
                 return false;
             }
             return true;
+        }
+
+        private void DisableGpu(string reason)
+        {
+            _gpuDisabled = true;
+            if (_gpuFallbackReason != null)
+                return;
+            _gpuFallbackReason = reason;
+            UnityEngine.Debug.LogWarning($"[FlowField] Volume3D GPU 계산을 끄고 Managed로 전환합니다: {reason}");
         }
 
         private void OnGpuCompleted(
@@ -1203,7 +1216,7 @@ namespace Common.FlowField
         {
             if (_disposed || _build != build || build.Generation != _generation)
                 return;
-            _gpuDisabled = true;
+            DisableGpu(exception != null ? $"{kind}: {exception.Message}" : kind.ToString());
             build.GpuPending = false;
             build.GpuFailed = exception
                 ?? new InvalidOperationException($"Volume3D GPU BFS failed ({kind}).");
@@ -1250,7 +1263,7 @@ namespace Common.FlowField
 
         private void HandleGpuValidationFailure(BuildContext build, Exception exception)
         {
-            _gpuDisabled = true;
+            DisableGpu(exception?.Message ?? "GPU 결과 검증에 실패했습니다.");
             build.GpuResultPending = false;
             build.GpuFailed = exception
                 ?? new InvalidOperationException("Volume3D GPU result validation failed.");

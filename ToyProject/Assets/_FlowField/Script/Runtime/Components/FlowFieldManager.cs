@@ -100,6 +100,8 @@ namespace Common.FlowField
         public bool IsReady => ActiveSession.IsReady;
         public bool IsRebuilding => ActiveSession.IsRebuilding;
         public string LastError => ActiveSession.LastError;
+        /// <summary>GPU 계산을 끄고 Managed로 전환한 이유입니다. 전환하지 않았으면 null입니다.</summary>
+        public string GpuFallbackReason => ActiveSession.GpuFallbackReason;
         public FlowFieldBakeMode BakeMode => IsInitialized || IsFaulted
             ? ActiveSession.BakeMode
             : _bakeMode;

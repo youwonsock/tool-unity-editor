@@ -318,6 +318,7 @@ namespace Common.FlowField.Tests
             ObserveObstacleMove(new Vector3(1.5f, 101f, 1.5f));
             _backend.Fail(_backend.Calls.Count - 1);
             Assert.That(_session.IsFaulted, Is.False, _session.LastError);
+            Assert.That(_session.GpuFallbackReason, Does.Contain("Simulated GPU failure"));
             AssertResolvedGoal(GoalA);
 
             RunOwnerTicks(GoalB);
