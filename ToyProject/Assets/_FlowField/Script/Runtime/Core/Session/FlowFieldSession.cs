@@ -1458,7 +1458,7 @@ namespace Common.FlowField
                 request.Goal.LocalZ,
                 request.Goal.InfluenceRadius,
                 _state.Workspace.ResolvedGoalIndex,
-                Mathf.Min(_state.Grid.CellCount, Mathf.Max(64, request.MaxGpuWaves)),
+                FlowFieldComputeSolver.ClampMaxWaves(_state.Grid.CellCount, request.MaxGpuWaves),
                 () => IsCurrentBuild(callbackGeneration));
 
             if (_backendPolicy == FlowFieldBfsBackendPolicy.RequireGpu

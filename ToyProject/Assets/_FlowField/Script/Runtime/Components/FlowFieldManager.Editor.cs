@@ -131,41 +131,11 @@ namespace Common.FlowField
             RegisterEditorModifiers(_editorPreviewSession);
             FlowFieldSurfaceBakeSettings settings = CreateSurfaceBakeSettings();
             FlowFieldDirtyFlags dirty = _editorPreviewSession.DirtyFlags;
-            int maxWaves = Mathf.Min(grid.CellCount, Mathf.Max(64, _maxGpuWaves));
-            if (BakeMode == FlowFieldBakeMode.StaticBaked)
-            {
-                FlowFieldStaticBakeSnapshot snapshot = CreateStaticBakeSnapshot(settings);
-                _editorPreviewSession.Submit(
-                    FlowFieldSessionRequest.ForStaticSnapshot(
-                        settings,
-                        _staticBakeData,
-                        snapshot,
-                        _obstacleLayer,
-                        _obstacleCheckHeight,
-                        _obstacleCheckCenterOffset,
-                        _obstacleClearance,
-                        _defaultFlowDirection,
-                        dirty,
-                        maxWaves));
-            }
-            else
-            {
-                FlowFieldGoalResolution goal = ResolveConfiguredGoal(grid);
-                _editorPreviewSession.Submit(
-                    FlowFieldSessionRequest.ForSceneBuild(
-                        settings,
-                        _obstacleLayer,
-                        _obstacleCheckHeight,
-                        _obstacleCheckCenterOffset,
-                        _obstacleClearance,
-                        _enableUnregisteredObstacleSweep,
-                        goal,
-                        _defaultFlowDirection,
-                        dirty,
-                        _editorPreviewSession.DirtyFinalRegion,
-                        _editorPreviewSession.DirtyObstacleRegion,
-                        maxWaves));
-            }
+            _editorPreviewSession.Submit(CreateSurfaceRequest(
+                settings,
+                dirty,
+                _editorPreviewSession.DirtyFinalRegion,
+                _editorPreviewSession.DirtyObstacleRegion));
 
             // Editor preview is a managed, short-lived execution owner. Keep
             // the Submit boundary non-recursive while still completing the

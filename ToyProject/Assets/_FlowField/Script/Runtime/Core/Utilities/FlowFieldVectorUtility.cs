@@ -17,6 +17,10 @@ namespace Common.FlowField
                 && (goalFlags & (FlowFieldGoalFlags.Anchor | FlowFieldGoalFlags.Unreachable)) == 0
                 && baseDirection.sqrMagnitude > DIRECTION_EPSILON_SQR;
 
+        internal static bool IsMissingModifier(IFlowFieldVectorModifier modifier)
+            => modifier == null
+                || modifier is UnityEngine.Object unityObject && unityObject == null;
+
         internal static void ValidateModifierOutput(
             in FlowFieldVectorState candidate,
             Vector3 surfaceNormal)

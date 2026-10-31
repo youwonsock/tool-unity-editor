@@ -555,41 +555,11 @@ namespace Common.FlowField
         private void SubmitSurfaceRebuild(int version)
         {
             FlowFieldSurfaceBakeSettings settings = CreateSurfaceBakeSettings();
-            int maxWaves = Mathf.Min(settings.Grid.CellCount, Mathf.Max(64, _maxGpuWaves));
-            FlowFieldSessionRequest submittedRequest;
-            if (BakeMode == FlowFieldBakeMode.StaticBaked)
-            {
-                FlowFieldStaticBakeSnapshot snapshot = CreateStaticBakeSnapshot(settings);
-                submittedRequest = FlowFieldSessionRequest.ForStaticSnapshot(
-                    settings,
-                    _staticBakeData,
-                    snapshot,
-                    _obstacleLayer,
-                    _obstacleCheckHeight,
-                    _obstacleCheckCenterOffset,
-                    _obstacleClearance,
-                    _defaultFlowDirection,
-                    FlowFieldDirtyFlags.None,
-                    maxWaves);
-            }
-            else
-            {
-                FlowFieldGoalResolution goal = ResolveConfiguredGoal(settings.Grid);
-                submittedRequest = FlowFieldSessionRequest.ForSceneBuild(
-                    settings,
-                    _obstacleLayer,
-                    _obstacleCheckHeight,
-                    _obstacleCheckCenterOffset,
-                    _obstacleClearance,
-                    _enableUnregisteredObstacleSweep,
-                    goal,
-                    _defaultFlowDirection,
-                    FlowFieldDirtyFlags.None,
-                    _session.DirtyFinalRegion,
-                    _session.DirtyObstacleRegion,
-                    maxWaves);
-            }
-            _session.Submit(submittedRequest);
+            _session.Submit(CreateSurfaceRequest(
+                settings,
+                FlowFieldDirtyFlags.None,
+                _session.DirtyFinalRegion,
+                _session.DirtyObstacleRegion));
 
             // A backend can fail synchronously (for example a RequireGpu
             // probe or an injected test backend). Treat that exactly like
@@ -819,10 +789,16 @@ namespace Common.FlowField
                     FlowFieldCellRect.Invalid,
                     FlowFieldCellRect.Invalid,
                     deferGoalVersion: true);
-#if UNITY_EDITOR
-                InvalidateEditorPreview();
-#endif
+                RefreshEditorPreview();
             }
+        }
+
+        [System.Diagnostics.Conditional("UNITY_EDITOR")]
+        private void RefreshEditorPreview()
+        {
+#if UNITY_EDITOR
+            InvalidateEditorPreview();
+#endif
         }
 
         private void MarkGoalDirty()
@@ -831,9 +807,7 @@ namespace Common.FlowField
             {
                 if (_volumeSession.IsInitialized)
                     QueueVolumeRequest(force: true);
-#if UNITY_EDITOR
-                InvalidateEditorPreview();
-#endif
+                RefreshEditorPreview();
                 return;
             }
             _session.GoalTracker.ResetWarning();
@@ -842,9 +816,7 @@ namespace Common.FlowField
                 FlowFieldCellRect.Invalid,
                 FlowFieldCellRect.Invalid,
                 deferGoalVersion: true);
-#if UNITY_EDITOR
-            InvalidateEditorPreview();
-#endif
+            RefreshEditorPreview();
         }
 
         private FlowFieldGridSpace CreateGridSpace()
@@ -866,10 +838,22 @@ namespace Common.FlowField
         {
             if (!TryGetVolumeLayout(out Bounds worldBounds, out FlowFieldGridSpace grid))
                 throw new InvalidOperationException("Volume Bounds and Cell Size do not produce a valid grid.");
-            return new FlowFieldVolumeRequest(
+            return CreateVolumeRequest(
                 grid,
                 worldBounds,
                 _bakeMode,
+                _bakeMode == FlowFieldBakeMode.StaticBaked ? _volumeStaticBakeData : null);
+        }
+
+        private FlowFieldVolumeRequest CreateVolumeRequest(
+            FlowFieldGridSpace grid,
+            Bounds worldBounds,
+            FlowFieldBakeMode bakeMode,
+            FlowFieldVolumeBakeData bakeData)
+            => new FlowFieldVolumeRequest(
+                grid,
+                worldBounds,
+                bakeMode,
                 _obstacleLayer,
                 _obstacleClearance,
                 HasConfiguredGoal,
@@ -878,9 +862,8 @@ namespace Common.FlowField
                 _defaultFlowDirection,
                 _maxGpuWaves,
                 _frontierComputeShader,
-                _bakeMode == FlowFieldBakeMode.StaticBaked ? _volumeStaticBakeData : null,
+                bakeData,
                 CaptureBakeInputGeneration());
-        }
 
         private void QueueVolumeRequest(bool force = false)
         {
@@ -910,20 +893,7 @@ namespace Common.FlowField
             if (!TryGetVolumeLayout(out Bounds worldBounds, out FlowFieldGridSpace grid))
                 throw new InvalidOperationException("Volume Bounds and Cell Size do not produce a valid grid.");
 
-            request = new FlowFieldVolumeRequest(
-                grid,
-                worldBounds,
-                FlowFieldBakeMode.RuntimeDynamic,
-                _obstacleLayer,
-                _obstacleClearance,
-                HasConfiguredGoal,
-                ConfiguredGoalWorld,
-                _goalInfluenceRadius,
-                _defaultFlowDirection,
-                _maxGpuWaves,
-                _frontierComputeShader,
-                null,
-                CaptureBakeInputGeneration());
+            request = CreateVolumeRequest(grid, worldBounds, FlowFieldBakeMode.RuntimeDynamic, null);
 
             FlowFieldVolumeSession session = new FlowFieldVolumeSession();
             try
@@ -1007,9 +977,7 @@ namespace Common.FlowField
             if (BakeMode == FlowFieldBakeMode.StaticBaked)
                 throw new InvalidOperationException("Obstacle changes are not allowed in StaticBaked mode.");
             ActiveSession.NotifyObstacleRegionDirtyCommand(worldBounds);
-#if UNITY_EDITOR
-            InvalidateEditorPreview();
-#endif
+            RefreshEditorPreview();
         }
 
         public void SetGoal(in FlowFieldGoalRequest request)
@@ -1062,9 +1030,7 @@ namespace Common.FlowField
                 FlowFieldCellRect.Invalid,
                 FlowFieldCellRect.Invalid,
                 deferSurfaceVersion: true);
-#if UNITY_EDITOR
-            InvalidateEditorPreview();
-#endif
+            RefreshEditorPreview();
         }
 
         internal void MarkConfigurationStale()
@@ -1073,17 +1039,13 @@ namespace Common.FlowField
             {
                 if (_volumeSession.IsInitialized)
                     QueueVolumeRequest(force: true);
-#if UNITY_EDITOR
-                InvalidateEditorPreview();
-#endif
+                RefreshEditorPreview();
                 return;
             }
             if (!_session.IsInitialized)
                 return;
             _session.MarkConfigurationStale();
-#if UNITY_EDITOR
-            InvalidateEditorPreview();
-#endif
+            RefreshEditorPreview();
         }
 
         #region Bake Integration
@@ -1108,45 +1070,54 @@ namespace Common.FlowField
                 out worldBounds,
                 out grid);
 
+        private FlowFieldSessionRequest CreateSurfaceRequest(
+            FlowFieldSurfaceBakeSettings settings,
+            FlowFieldDirtyFlags dirtyFlags,
+            FlowFieldCellRect dirtyFinalRegion,
+            FlowFieldCellRect dirtyObstacleRegion)
+        {
+            int maxWaves = FlowFieldComputeSolver.ClampMaxWaves(settings.Grid.CellCount, _maxGpuWaves);
+            if (BakeMode == FlowFieldBakeMode.StaticBaked)
+            {
+                return FlowFieldSessionRequest.ForStaticSnapshot(
+                    settings,
+                    _staticBakeData,
+                    CreateStaticBakeSnapshot(settings),
+                    _obstacleLayer,
+                    _obstacleCheckHeight,
+                    _obstacleCheckCenterOffset,
+                    _obstacleClearance,
+                    _defaultFlowDirection,
+                    dirtyFlags,
+                    maxWaves);
+            }
+
+            return FlowFieldSessionRequest.ForSceneBuild(
+                settings,
+                _obstacleLayer,
+                _obstacleCheckHeight,
+                _obstacleCheckCenterOffset,
+                _obstacleClearance,
+                _enableUnregisteredObstacleSweep,
+                ResolveConfiguredGoal(settings.Grid),
+                _defaultFlowDirection,
+                dirtyFlags,
+                dirtyFinalRegion,
+                dirtyObstacleRegion,
+                maxWaves);
+        }
+
         private bool TryCreateCurrentSessionRequest(out FlowFieldSessionRequest request)
         {
             request = default;
             try
             {
                 FlowFieldSurfaceBakeSettings settings = CreateSurfaceBakeSettings();
-                int maxWaves = Mathf.Min(settings.Grid.CellCount, Mathf.Max(64, _maxGpuWaves));
-                if (BakeMode == FlowFieldBakeMode.StaticBaked)
-                {
-                    FlowFieldStaticBakeSnapshot snapshot = CreateStaticBakeSnapshot(settings);
-                    request = FlowFieldSessionRequest.ForStaticSnapshot(
-                        settings,
-                        _staticBakeData,
-                        snapshot,
-                        _obstacleLayer,
-                        _obstacleCheckHeight,
-                        _obstacleCheckCenterOffset,
-                        _obstacleClearance,
-                        _defaultFlowDirection,
-                        FlowFieldDirtyFlags.None,
-                        maxWaves);
-                }
-                else
-                {
-                    request = FlowFieldSessionRequest.ForSceneBuild(
-                        settings,
-                        _obstacleLayer,
-                        _obstacleCheckHeight,
-                        _obstacleCheckCenterOffset,
-                        _obstacleClearance,
-                        _enableUnregisteredObstacleSweep,
-                        ResolveConfiguredGoal(settings.Grid),
-                        _defaultFlowDirection,
-                        FlowFieldDirtyFlags.None,
-                        FlowFieldCellRect.Invalid,
-                        FlowFieldCellRect.Invalid,
-                        maxWaves);
-                }
-
+                request = CreateSurfaceRequest(
+                    settings,
+                    FlowFieldDirtyFlags.None,
+                    FlowFieldCellRect.Invalid,
+                    FlowFieldCellRect.Invalid);
                 return true;
             }
             catch
@@ -1167,9 +1138,7 @@ namespace Common.FlowField
             {
                 if (_volumeSession.IsInitialized)
                     QueueVolumeRequest(force: true);
-#if UNITY_EDITOR
-                InvalidateEditorPreview();
-#endif
+                RefreshEditorPreview();
                 return;
             }
             if (_session.IsInitialized)
@@ -1182,9 +1151,7 @@ namespace Common.FlowField
                     FlowFieldCellRect.Invalid,
                     deferSurfaceVersion: true);
             }
-#if UNITY_EDITOR
-            InvalidateEditorPreview();
-#endif
+            RefreshEditorPreview();
         }
 
         internal bool TryValidateSurfaceBake(out string reason)
@@ -1296,9 +1263,7 @@ namespace Common.FlowField
             _staticBakeData = bakeData;
             if (_session.IsInitialized)
                 _session.MarkConfigurationStale();
-#if UNITY_EDITOR
-            InvalidateEditorPreview();
-#endif
+            RefreshEditorPreview();
         }
 
         internal void AssignVolumeBakeData(FlowFieldVolumeBakeData bakeData)
@@ -1308,9 +1273,7 @@ namespace Common.FlowField
             _volumeStaticBakeData = bakeData;
             if (_volumeSession.IsInitialized)
                 QueueVolumeRequest(force: true);
-#if UNITY_EDITOR
-            InvalidateEditorPreview();
-#endif
+            RefreshEditorPreview();
         }
 
         #endregion
