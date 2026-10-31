@@ -212,21 +212,6 @@ namespace Common.FlowField.Tests
                 "Assets/_FlowField/Script/Runtime/Core/Solvers/FlowFieldFrontier.compute");
         }
 
-        [TestCase(1)]
-        [TestCase(64)]
-        public void VolumeCommitSafetySnapshot(int regions)
-        {
-            var grid = FlowFieldGridSpace.FromVolumeCellGrid(Vector3.zero, VolumeSize, VolumeSize, VolumeSize, 1f);
-            var blocked = new bool[grid.CellCount];
-            var safety = new FlowFieldVolumeSafetyState();
-            int buildEpoch = safety.BeginBuild();
-            // Separate small regions, as moving obstacles leave them.
-            for (int i = 0; i < regions; i++)
-                safety.MarkDirty(new Bounds(new Vector3(5f + (i % 8) * 12f, 5f + (i / 8) * 12f, 50f), Vector3.one), 1f);
-            Measure($"volume.commit.safetySnapshot.regions{regions}", grid.CellCount,
-                () => safety.PrepareSnapshot(grid, blocked, buildEpoch));
-        }
-
         [Test]
         public void VolumeRebuildAfterModifierValue()
         {

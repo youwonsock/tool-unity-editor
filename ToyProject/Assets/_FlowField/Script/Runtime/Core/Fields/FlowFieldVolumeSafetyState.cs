@@ -15,25 +15,9 @@ namespace Common.FlowField
         private readonly List<Bounds> _uncertainBounds = new List<Bounds>(8);
         // Changes the running build observes, still unsafe until it is published.
         private readonly List<Bounds> _observingBounds = new List<Bounds>(8);
-        private Snapshot _snapshot;
-        private SafetyCellState[] _spareStates;
 
-        internal int Epoch { get; private set; }
         internal int UncertainRegionCount => _uncertainBounds.Count + _observingBounds.Count;
-        internal long SnapshotBytes => EstimateSnapshotBytes(_snapshot.Count);
 
-        internal void Reset()
-        {
-            ClearSnapshot();
-            Epoch = 0;
-            ClearRegions();
-        }
-
-        internal void ClearSnapshot()
-        {
-            _snapshot = default;
-            _spareStates = null;
-        }
         internal void ClearRegions()
         {
             _uncertainBounds.Clear();
@@ -45,18 +29,17 @@ namespace Common.FlowField
         /// the regions recorded so far. A discarded build keeps them here until
         /// its replacement publishes.
         /// </summary>
-        internal int BeginBuild()
+        internal void BeginBuild()
         {
             for (int index = 0; index < _uncertainBounds.Count; index++)
                 AddBounds(_observingBounds, _uncertainBounds[index]);
             _uncertainBounds.Clear();
-            return Epoch;
         }
 
         internal void ClearObservedRegions() => _observingBounds.Clear();
 
         // An obstacle mask/clearance change invalidates the complete volume.
-        // Preserve its distinct policy: no dirty-region expansion or epoch change.
+        // Preserve its distinct policy: no dirty-region expansion.
         internal void InvalidateRegion(Bounds bounds) => _uncertainBounds.Add(bounds);
 
         internal void MarkDirty(Bounds bounds, float margin)
@@ -65,46 +48,14 @@ namespace Common.FlowField
                 throw new ArgumentOutOfRangeException(nameof(bounds));
             Bounds expanded = bounds;
             expanded.Expand(Vector3.one * (margin * 2f));
-            Epoch++;
             AddBounds(_uncertainBounds, expanded);
         }
 
-        internal Snapshot PrepareSnapshot(FlowFieldGridSpace grid, bool[] blocked, int buildSafetyEpoch)
-        {
-            SafetyCellState[] reuse = _spareStates;
-            _spareStates = null;
-            return new Snapshot(grid, blocked, buildSafetyEpoch != Epoch, _uncertainBounds, reuse);
-        }
-
-        /// <summary>
-        /// Replaces the published snapshot. The replaced array is kept for the
-        /// next PrepareSnapshot; nothing reads it after publication.
-        /// </summary>
-        internal void PublishSnapshot(in Snapshot snapshot)
-        {
-            _spareStates = _snapshot.States;
-            _snapshot = snapshot;
-        }
-
-        internal static long EstimateSnapshotBytes(int count)
-            => count <= 0 ? 0 : checked(count + 32L);
-
-        internal bool IsLatestCellUnknown(VolumeFieldData field, int index, Vector3 center)
+        internal bool IsLatestCellUnknown(VolumeFieldData field, Vector3 center)
         {
             if (field == null || field.Request.BakeMode == FlowFieldBakeMode.StaticBaked)
                 return false;
-            if (IntersectsUncertainBounds(field.Grid, center))
-                return true;
-            return _snapshot.Count == field.Grid.CellCount
-                && _snapshot.IsUnknown(index);
-        }
-
-        internal bool IsLatestCellBlocked(VolumeFieldData field, int index)
-        {
-            if (field == null || field.Request.BakeMode == FlowFieldBakeMode.StaticBaked)
-                return false;
-            return _snapshot.Count == field.Grid.CellCount
-                && _snapshot.IsBlocked(index);
+            return IntersectsUncertainBounds(field.Grid, center);
         }
 
         internal bool IsLatestPathUnsafe(VolumeFieldData field, int current, int next)
@@ -129,9 +80,10 @@ namespace Common.FlowField
 
         private bool IsLatestCellUnsafe(VolumeFieldData field, int index)
         {
-            Vector3 center = CellCenter(field.Grid, index);
-            return IsLatestCellUnknown(field, index, center)
-                || IsLatestCellBlocked(field, index);
+            if (field.Request.BakeMode == FlowFieldBakeMode.StaticBaked)
+                return false;
+            return IntersectsUncertainBounds(field.Grid, CellCenter(field.Grid, index))
+                || field.Blocked[index];
         }
 
         internal bool IsEscapePathUnsafe(VolumeFieldData field, int index)
@@ -230,62 +182,6 @@ namespace Common.FlowField
             left.Encapsulate(right.min);
             left.Encapsulate(right.max);
             return left;
-        }
-
-        internal enum SafetyCellState : byte
-        {
-            Unknown = 0,
-            Clear = 1,
-            Blocked = 2,
-        }
-
-        // Build the replacement completely before the session publishes its field.
-        // The backing array stays private, and publication only copies this value.
-        internal readonly struct Snapshot
-        {
-            private readonly SafetyCellState[] _states;
-
-            internal int Count => _states?.Length ?? 0;
-            internal SafetyCellState[] States => _states;
-            internal bool IsUnknown(int index) => _states[index] == SafetyCellState.Unknown;
-            internal bool IsBlocked(int index) => _states[index] == SafetyCellState.Blocked;
-
-            internal Snapshot(FlowFieldGridSpace grid, bool[] blocked, bool safetyChangedDuringBuild,
-                List<Bounds> uncertainBounds, SafetyCellState[] reuse = null)
-            {
-                // Every entry is written below, so a reused array needs no clear.
-                _states = reuse != null && reuse.Length == grid.CellCount
-                    ? reuse
-                    : new SafetyCellState[grid.CellCount];
-                for (int index = 0; index < _states.Length; index++)
-                    _states[index] = blocked[index] ? SafetyCellState.Blocked : SafetyCellState.Clear;
-                if (!safetyChangedDuringBuild)
-                    return;
-                for (int region = 0; region < uncertainBounds.Count; region++)
-                    MarkUnknown(grid, uncertainBounds[region]);
-            }
-
-            // Visits only the cells near the region, so the publication frame
-            // does not scale with the whole volume.
-            private void MarkUnknown(FlowFieldGridSpace grid, Bounds region)
-            {
-                Vector3 min = (region.min - grid.Origin) / grid.CellSize;
-                Vector3 max = (region.max - grid.Origin) / grid.CellSize;
-                int minX = Mathf.Max(0, Mathf.FloorToInt(min.x) - 1);
-                int minY = Mathf.Max(0, Mathf.FloorToInt(min.y) - 1);
-                int minZ = Mathf.Max(0, Mathf.FloorToInt(min.z) - 1);
-                int maxX = Mathf.Min(grid.Width - 1, Mathf.FloorToInt(max.x) + 1);
-                int maxY = Mathf.Min(grid.Height - 1, Mathf.FloorToInt(max.y) + 1);
-                int maxZ = Mathf.Min(grid.Depth - 1, Mathf.FloorToInt(max.z) + 1);
-                Vector3 cellSize = Vector3.one * grid.CellSize;
-                for (int y = minY; y <= maxY; y++)
-                for (int z = minZ; z <= maxZ; z++)
-                for (int x = minX; x <= maxX; x++)
-                {
-                    if (region.Intersects(new Bounds(grid.LocalToWorldCenter(x, y, z), cellSize)))
-                        _states[grid.ToFlatIndex(x, y, z)] = SafetyCellState.Unknown;
-                }
-            }
         }
     }
 }

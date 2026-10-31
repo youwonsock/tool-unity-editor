@@ -900,7 +900,7 @@ namespace Common.FlowField
             try
             {
                 session.Initialize(FlowFieldBakeMode.RuntimeDynamic, null);
-                session.ForceManagedBackend();
+                session.UseManagedBackendForBake();
                 session.Submit(request);
                 return session;
             }

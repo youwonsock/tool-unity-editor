@@ -120,11 +120,13 @@ namespace Common.FlowField.Tests
         }
 
         [Test]
-        public void SafetySnapshotMarksExactlyTheCellsTouchingARegion()
+        public void UncertainRegionCoversExactlyTheCellsTouchingItUntilItsBuildPublishes()
         {
             var grid = FlowFieldGridSpace.FromVolumeCellGrid(new Vector3(-3f, 2f, 7f), 9, 5, 7, 0.5f);
+            var request = new FlowFieldVolumeRequest(grid, new Bounds(new Vector3(-0.75f, 3.25f, 8.75f), new Vector3(4.5f, 2.5f, 3.5f)),
+                FlowFieldBakeMode.RuntimeDynamic, 1 << FlowFieldRegressionFixture.Layer, 0f, false, default, 0f, Vector3.forward, 1024, null, null);
+            var field = new FlowFieldVolumeFieldData(request, new bool[grid.CellCount], null, null, null, null, null, null, null, null, -1, 1);
             var safety = new FlowFieldVolumeSafetyState();
-            int epoch = safety.BeginBuild();
             var regions = new[]
             {
                 new Bounds(new Vector3(-2f, 3f, 8f), new Vector3(0.3f, 0.2f, 0.4f)),
@@ -135,24 +137,32 @@ namespace Common.FlowField.Tests
             foreach (Bounds region in regions)
                 safety.MarkDirty(region, margin);
 
-            var blocked = new bool[grid.CellCount];
-            FlowFieldVolumeSafetyState.Snapshot snapshot = safety.PrepareSnapshot(grid, blocked, epoch);
-            int unknown = 0;
-            for (int index = 0; index < grid.CellCount; index++)
+            void AssertCells(bool regionsActive)
             {
-                grid.FromFlatIndex(index, out int x, out int y, out int z);
-                var cell = new Bounds(grid.LocalToWorldCenter(x, y, z), Vector3.one * grid.CellSize);
-                bool expected = false;
-                foreach (Bounds region in regions)
+                int unknown = 0;
+                for (int index = 0; index < grid.CellCount; index++)
                 {
-                    Bounds expanded = region;
-                    expanded.Expand(Vector3.one * (margin * 2f));
-                    expected |= expanded.Intersects(cell);
+                    grid.FromFlatIndex(index, out int x, out int y, out int z);
+                    Vector3 center = grid.LocalToWorldCenter(x, y, z);
+                    var cell = new Bounds(center, Vector3.one * grid.CellSize);
+                    bool expected = false;
+                    foreach (Bounds region in regions)
+                    {
+                        Bounds expanded = region;
+                        expanded.Expand(Vector3.one * (margin * 2f));
+                        expected |= regionsActive && expanded.Intersects(cell);
+                    }
+                    Assert.That(safety.IsLatestCellUnknown(field, center), Is.EqualTo(expected), $"Cell {x},{y},{z}");
+                    if (expected) unknown++;
                 }
-                Assert.That(snapshot.IsUnknown(index), Is.EqualTo(expected), $"Cell {x},{y},{z}");
-                if (expected) unknown++;
+                Assert.That(unknown > 0, Is.EqualTo(regionsActive));
             }
-            Assert.That(unknown, Is.GreaterThan(0));
+
+            AssertCells(regionsActive: true);
+            safety.BeginBuild();
+            AssertCells(regionsActive: true);
+            safety.ClearObservedRegions();
+            AssertCells(regionsActive: false);
         }
 
         [Test]
