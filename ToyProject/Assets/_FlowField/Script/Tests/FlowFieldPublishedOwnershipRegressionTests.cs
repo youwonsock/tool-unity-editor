@@ -351,7 +351,15 @@ namespace Common.FlowField.Tests
             var manager = Manager(volume);
             yield return WaitReady(manager);
             manager.enabled = false;
+            FlowFieldSpeedModifier modifier = SpeedModifier(manager);
 
+            manager.enabled = true;
+            yield return WaitReady(manager);
+            yield return WaitForModifierSpeed(manager, modifier);
+        }
+
+        private FlowFieldSpeedModifier SpeedModifier(FlowFieldManager manager)
+        {
             var owner = Make("Review reattached modifier");
             owner.SetActive(false);
             owner.layer = 27;
@@ -369,9 +377,11 @@ namespace Common.FlowField.Tests
             }
             owner.SetActive(true);
             Physics.SyncTransforms();
+            return modifier;
+        }
 
-            manager.enabled = true;
-            yield return WaitReady(manager);
+        private static IEnumerator WaitForModifierSpeed(FlowFieldManager manager, FlowFieldSpeedModifier modifier)
+        {
             Vector3 position = new Vector3(.5f, .5f, .5f);
             float speed = 0f;
             float deadline = Time.realtimeSinceStartup + 3f;
@@ -379,6 +389,181 @@ namespace Common.FlowField.Tests
                 || (speed = sample.SpeedMultiplier) != modifier.SpeedMultiplier))
                 yield return null;
             Assert.That(speed, Is.EqualTo(modifier.SpeedMultiplier));
+        }
+
+        private static void ReportFault(FlowFieldManager manager, bool volume)
+        {
+            var fault = new InvalidOperationException("Expected fault");
+            if (volume) manager.VolumeSession.ReportFault(fault);
+            else Surface(manager).ReportFault(fault);
+        }
+
+        private static IEnumerator ExpectNoLoggedExceptions(Func<IEnumerator> body)
+        {
+            var exceptions = new List<string>();
+            void Listen(string message, string stack, LogType type)
+            {
+                if (type == LogType.Exception) exceptions.Add(message);
+            }
+            Application.logMessageReceived += Listen;
+            LogAssert.ignoreFailingMessages = true;
+            try
+            {
+                IEnumerator steps = body();
+                while (steps.MoveNext()) yield return steps.Current;
+            }
+            finally
+            {
+                Application.logMessageReceived -= Listen;
+                LogAssert.ignoreFailingMessages = false;
+            }
+            Assert.That(exceptions, Is.Empty);
+        }
+
+        [UnityTest]
+        public IEnumerator RetryWhileDisabledWaitsForActivation(
+            [Values(false, true)] bool volume,
+            [Values(false, true)] bool faultBeforeDisable)
+        {
+            yield return new EnterPlayMode();
+            var manager = Manager(volume);
+            yield return WaitReady(manager);
+            int revision = manager.Revision;
+            yield return ExpectNoLoggedExceptions(() => Steps());
+
+            IEnumerator Steps()
+            {
+                if (faultBeforeDisable) ReportFault(manager, volume);
+                manager.enabled = false;
+                if (!faultBeforeDisable) ReportFault(manager, volume);
+                Assert.That(manager.IsFaulted, Is.True);
+
+                manager.RequestRebuild();
+                Assert.That(manager.State, Is.EqualTo(FlowFieldRuntimeState.Suspended));
+                yield return null;
+                Assert.That(manager.State, Is.EqualTo(FlowFieldRuntimeState.Suspended));
+
+                FlowFieldSpeedModifier modifier = SpeedModifier(manager);
+                manager.enabled = true;
+                yield return WaitReady(manager);
+                Assert.That(manager.Revision, Is.GreaterThan(revision));
+                yield return WaitForModifierSpeed(manager, modifier);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator SurfaceRetryAfterAFaultWhileDisabledAttachesLateModifiers()
+        {
+            yield return new EnterPlayMode();
+            var manager = Manager(false);
+            yield return WaitReady(manager);
+            yield return ExpectNoLoggedExceptions(() => Steps());
+
+            IEnumerator Steps()
+            {
+                manager.enabled = false;
+                ReportFault(manager, false);
+                FlowFieldSpeedModifier modifier = SpeedModifier(manager);
+                manager.enabled = true;
+                Assert.That(manager.IsFaulted, Is.True);
+                manager.RequestRebuild();
+                yield return WaitReady(manager);
+                yield return WaitForModifierSpeed(manager, modifier);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator ReleaseClearsTheLastError([Values(false, true)] bool volume)
+        {
+            yield return new EnterPlayMode();
+            var manager = Manager(volume);
+            yield return WaitReady(manager);
+            LogAssert.ignoreFailingMessages = true;
+            ReportFault(manager, volume);
+            LogAssert.ignoreFailingMessages = false;
+            Assert.That(manager.LastError, Is.Not.Null);
+            manager.Release();
+            Assert.That(manager.LastError, Is.Null);
+            Assert.That(manager.IsFaulted, Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator SurfaceObservationFailureBecomesAFault()
+        {
+            yield return new EnterPlayMode();
+            var manager = Manager(false);
+            yield return WaitReady(manager);
+            yield return ExpectNoLoggedExceptions(() => Steps());
+
+            IEnumerator Steps()
+            {
+                // Only a direct field write bypasses the configuration checks.
+                typeof(FlowFieldManager).GetField("_cellSize", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .SetValue(manager, -1f);
+                float deadline = Time.realtimeSinceStartup + 3f;
+                while (!manager.IsFaulted && Time.realtimeSinceStartup < deadline) yield return null;
+                Assert.That(manager.IsFaulted, Is.True);
+                Assert.That(manager.LastError, Does.Contain("Bake Bounds"));
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator SurfaceRebuildsWhileTimeIsStopped()
+        {
+            yield return new EnterPlayMode();
+            var manager = Manager(false);
+            yield return WaitReady(manager);
+            var goal = Make("Review goal");
+            goal.transform.position = new Vector3(.5f, .5f, .5f);
+            using (var settings = new SerializedObject(manager))
+            {
+                settings.FindProperty("_goalTransform").objectReferenceValue = goal.transform;
+                settings.ApplyModifiedPropertiesWithoutUndo();
+            }
+            manager.RequestRebuild();
+            yield return WaitReady(manager);
+            yield return null;
+            int revision = manager.Revision;
+
+            Time.timeScale = 0f;
+            try
+            {
+                goal.transform.position = new Vector3(2.5f, .5f, 2.5f);
+                float deadline = Time.realtimeSinceStartup + 3f;
+                while (manager.Revision == revision && Time.realtimeSinceStartup < deadline) yield return null;
+                Assert.That(manager.Revision, Is.GreaterThan(revision));
+                Assert.That(manager.IsReady, Is.True, manager.LastError);
+            }
+            finally
+            {
+                Time.timeScale = 1f;
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator VolumeSweepWaitsForTheRefreshRate([Values(false, true)] bool due)
+        {
+            yield return new EnterPlayMode();
+            var manager = Manager(true, activate: false);
+            using (var settings = new SerializedObject(manager))
+            {
+                settings.FindProperty("_enableUnregisteredObstacleSweep").boolValue = true;
+                settings.FindProperty("_refreshRate").floatValue = due ? 0.05f : 3600f;
+                settings.ApplyModifiedPropertiesWithoutUndo();
+            }
+            manager.gameObject.SetActive(true);
+            yield return WaitReady(manager);
+            for (int i = 0; i < 3; i++) yield return null;
+            int revision = manager.Revision;
+
+            var obstacle = Make("Review unregistered obstacle");
+            obstacle.layer = 28;
+            obstacle.transform.position = new Vector3(1.5f, .5f, 1.5f);
+            obstacle.AddComponent<BoxCollider>();
+            Physics.SyncTransforms();
+            float deadline = Time.realtimeSinceStartup + (due ? 3f : 0.5f);
+            while (manager.Revision == revision && Time.realtimeSinceStartup < deadline) yield return null;
+            Assert.That(manager.Revision > revision, Is.EqualTo(due));
         }
 
         [UnityTest]

@@ -656,6 +656,7 @@ namespace Common.FlowField
             if (!IsInitialized && !IsFaulted)
                 return;
             CancelCurrentBuild();
+            _fault = null;
             _committed = null;
             _committedReservationBytes = 0;
             _hasLatestRequestedInput = false;

@@ -103,7 +103,7 @@ README의 [핵심 흐름](Images/flowfield-uml.png)은 요청부터 조회까지
 
 [원본 이미지](Images/flowfield-surface.png) · [PlantUML 원본](flowfield-surface.puml)
 
-- `FlowFieldManager.FixedUpdate`가 현재 설정을 반영해 Submit하고 `FlowFieldSession.Pump`를 실행합니다. 비동기 BFS의 완료 콜백에서도 후속 합성과 게시가 이어질 수 있습니다.
+- `FlowFieldManager.FixedUpdate`가 현재 설정을 반영해 Submit하고 `FlowFieldSession.Pump`를 실행합니다. `FixedUpdate`가 돌지 않는 `timeScale = 0`에서는 `LateUpdate`가 같은 일을 합니다. 비동기 BFS의 완료 콜백에서도 후속 합성과 게시가 이어질 수 있습니다.
 - Surface/base 서비스는 Surface Source, `FlowFieldSurfaceBuildPipeline`, `FlowFieldObstaclePipeline`, `FlowFieldGoalPipeline`의 준비 처리를 묶어 표시합니다. RuntimeDynamic은 변경된 기본 입력을 계산하고 StaticBaked는 검증한 v6 내비게이션을 로드합니다.
 - Modifier Registry/Pipeline은 필요할 때 영역을 갱신하고 staging에 값을 합성합니다. 내비게이션 변경으로 BFS를 수행하면 완료 후에도 현재 수락 입력의 최종 합성을 거칩니다. Modifier·Default Direction만 바뀌면 기존 내비게이션을 사용합니다.
 - 완성된 결과만 `FlowFieldFieldStore`에 반영합니다. 일반 조회는 게시된 값에서 읽고 최신 장애물·탈출·연결 안전성 검사를 더합니다. 외부 호출 후 소유권이 바뀌면 이전 작업은 게시하지 않습니다.

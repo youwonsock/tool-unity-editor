@@ -47,7 +47,7 @@ FlowField는 Manager가 작성 설정과 현재 입력을 확인한 뒤 Surface2
 ```text
 Manager 설정·Goal·Obstacle·Modifier
   → Surface / Volume 전용 계산 요청
-  → Surface: FixedUpdate / Volume: BuildDriver.LateUpdate
+  → Surface: FixedUpdate (timeScale 0이면 LateUpdate) / Volume: BuildDriver.LateUpdate
   → 모드별 Session의 계산 또는 StaticBaked 로드
   → Default Direction·Modifier 합성
   → Surface FieldStore / Volume 결과 저장소 게시

@@ -222,20 +222,21 @@ namespace Common.FlowField
             if (!owner.IsInitialized)
                 return;
             int version = BeginLifecycleOperation();
+            if (ActivateSuspendedSession(owner, version))
+                RequestRebuild();
+        }
+
+        private bool ActivateSuspendedSession(FlowFieldSessionBase owner, int version)
+        {
             _requiresActivationRebuild = false;
-            if (owner.SpaceMode == FlowFieldSpaceMode.Volume3D)
-            {
-                _volumeSession.Resume();
-                if (!OwnsLifecycleOperation(owner, version))
-                    return;
-                // A Modifier enabled during the suspension could not register.
-                ReattachActiveModifiers();
-                if (!OwnsLifecycleOperation(owner, version))
-                    return;
-            }
-            else if (!InitializeSession(version))
-                return;
-            RequestRebuild();
+            if (owner.SpaceMode != FlowFieldSpaceMode.Volume3D)
+                return InitializeSession(version);
+            _volumeSession.Resume();
+            if (!OwnsLifecycleOperation(owner, version))
+                return false;
+            // A Modifier enabled during the suspension could not register.
+            ReattachActiveModifiers();
+            return OwnsLifecycleOperation(owner, version);
         }
 
         private void OnValidate()
@@ -343,7 +344,8 @@ namespace Common.FlowField
             {
                 try
                 {
-                    _volumeSession.DetectUnregisteredObstacleChanges(_enableUnregisteredObstacleSweep);
+                    if (_enableUnregisteredObstacleSweep && ConsumeRefreshTick())
+                        _volumeSession.DetectUnregisteredObstacleChanges(true);
                     _volumeSession.DetectModifierChanges();
                     QueueVolumeRequest();
                 }
@@ -353,13 +355,37 @@ namespace Common.FlowField
                 }
                 return;
             }
-            if (_session.ConfigurationStale)
-                return;
+            try
+            {
+                ObserveSurfaceInputs();
+                // FixedUpdate does not run while the game time is stopped.
+                if (Time.timeScale == 0f)
+                    PumpPendingSurfaceRebuild();
+            }
+            catch (Exception exception)
+            {
+                // Invalid live input is a single Session fault. Once Faulted,
+                // LateUpdate stops polling and callers can explicitly retry
+                // through RequestRebuild().
+                _session.ReportFault(exception);
+            }
+        }
 
-            _refreshTimer -= Time.deltaTime;
+        // Observation follows real time, so slowing or stopping the game does
+        // not delay the detection of input changes.
+        private bool ConsumeRefreshTick()
+        {
+            _refreshTimer -= Time.unscaledDeltaTime;
             if (_refreshTimer > 0f)
-                return;
+                return false;
             _refreshTimer = Mathf.Max(MIN_REFRESH_RATE, _refreshRate);
+            return true;
+        }
+
+        private void ObserveSurfaceInputs()
+        {
+            if (_session.ConfigurationStale || !ConsumeRefreshTick())
+                return;
 
             if (BakeMode == FlowFieldBakeMode.RuntimeDynamic)
             {
@@ -385,24 +411,20 @@ namespace Common.FlowField
                 }
             }
 
-            try
-            {
-                _session.DetectModifierChanges();
-            }
-            catch (Exception exception)
-            {
-                // Invalid live Modifier configuration is a single Session
-                // fault. Once Faulted, LateUpdate stops polling and callers
-                // can explicitly retry through RequestRebuild().
-                _session.ReportFault(exception);
-            }
+            _session.DetectModifierChanges();
         }
 
         private void FixedUpdate()
         {
             if (!Application.isPlaying || !IsInitialized || IsFaulted)
                 return;
-            if (SpaceMode == FlowFieldSpaceMode.Volume3D)
+            if (SpaceMode != FlowFieldSpaceMode.Volume3D)
+                PumpPendingSurfaceRebuild();
+        }
+
+        private void PumpPendingSurfaceRebuild()
+        {
+            if (!isActiveAndEnabled || !_session.IsInitialized || _session.IsFaulted)
                 return;
             if (_session.RequiresExplicitRebuild || _session.IsRebuilding)
                 return;
@@ -523,17 +545,15 @@ namespace Common.FlowField
                 owner.RetryFault();
                 if (!OwnsLifecycleOperation(owner, version))
                     return;
-                // OnEnable cannot resume a Faulted session, so a fault raised
-                // while disabled leaves its reactivation to this retry.
-                if (_requiresActivationRebuild && isActiveAndEnabled
-                    && owner.SpaceMode == FlowFieldSpaceMode.Volume3D)
+                if (_requiresActivationRebuild)
                 {
-                    _requiresActivationRebuild = false;
-                    _volumeSession.Resume();
+                    // A fault skipped or replaced the suspension, so restore
+                    // it. OnEnable cannot resume a Faulted session, which
+                    // leaves the activation to a retry made while enabled.
+                    owner.Suspend();
                     if (!OwnsLifecycleOperation(owner, version))
                         return;
-                    ReattachActiveModifiers();
-                    if (!OwnsLifecycleOperation(owner, version))
+                    if (isActiveAndEnabled && !ActivateSuspendedSession(owner, version))
                         return;
                 }
             }

@@ -63,9 +63,12 @@
 | `016bc8e` | Surface: Modifier 갱신 영역을 마스크 기준으로 계산 | 격자에 맞춘 Collider의 옛 값 잔류 해결, 값 변경 통지가 Revision과 무관하게 동작, 회귀 테스트 3개 |
 | `46a9c09` | Volume: StaticBaked 기본 방향과 같은 셀 Goal 이동 처리 | 방향과 안전 검사 불일치 해결, 같은 셀 이동의 재빌드 제거, 회귀 테스트 7개 |
 | `5df5067` | 맞닿은 셀 판정 통일 | 1칸 Collider가 이웃을 잡던 문제 해결, 골든 해시 2개 갱신, 회귀 테스트 7개 |
+| 이번 수정 | 비활성 중 재시도와 재활성화 | 재시도가 Suspended로 돌아가 `OnEnable` 예외와 비활성 중 빌드 해결, 늦게 켠 Modifier 재연결, Volume `Release`의 `LastError` 해제, 회귀 테스트 11개 |
+| 이번 수정 | Surface 감지 실패와 `timeScale = 0` | `LateUpdate` 감지 예외를 Fault로 처리, 시간이 멈춰도 재빌드, 감지 주기를 실제 시간 기준으로 변경, Volume 스윕이 `_refreshRate`를 따름 |
 
 사용자에게 보이는 변경은 다음과 같다.
 
+- 감지 주기 `_refreshRate`가 실제 시간 기준으로 동작하고 Volume의 미등록 장애물 스윕에도 적용된다. Volume Inspector에도 표시한다. Volume 스윕의 감지 지연이 최대 `_refreshRate`만큼 늘어난다.
 - Surface: 풀이 중 장애물만 바뀌면 그 결과를 게시한다. Goal이 풀이보다 자주 바뀌면 밀린 결과를 번갈아 게시하므로, 해석된 Goal이 요청 Goal보다 잠시 뒤처질 수 있다.
 - Volume: Goal이나 Modifier만 바뀌면 추적하지 않는 Collider를 다시 읽지 않는다. `RequestRebuild()`와 `NotifyCellsDirty()`는 다시 읽는다.
 - `SetGoal()` 뒤의 `RequestRebuild()`는 Volume의 Goal 재사용 효과를 없앤다. Goal만 바꿀 때는 `SetGoal()`만 호출한다.
@@ -87,10 +90,6 @@ Editor Play Mode 확인: Surface 샘플은 장애물이 매 Editor 틱 움직이
 | Surface GPU: Goal이 풀이보다 자주 바뀌면 풀이가 하나 걸러 버려지고, 같은 셀 안의 이동도 풀이를 무효화 | 일회성 변경의 낡은 결과를 게시하지 않는 계약의 비용. GPU 경로에서만 생기며 실제 프레임 측정이 없다 | Player 프레임을 측정할 수 있을 때 해석된 셀 비교 검토 |
 | `FlowFieldGridSpace.CellCount`가 호출마다 `IsValid`를 전부 검사 | 측정: 값을 저장하는 임시 패치로 Surface 316² Goal 재빌드 190 → 136ms. 범위 밖이라 적용하지 않았다 | 생성자에서 계산해 저장 |
 | Surface 베이크 데이터가 요청·Gizmo·Inspector마다 전체 검증 | 측정: 316² 기준 검증 1회 115ms, 캐시된 `CreateSnapshot` 1회 225ms | Volume처럼 검증 결과 캐시 |
-| Volume `Release`가 `LastError`를 남김 | 재현됨. Surface는 지운다 | `Release`에서 Fault 해제 |
-| Surface `LateUpdate` 감지 코드가 `try` 밖 | 코드 판독. Goal이 NaN이면 Fault 없이 예외 반복 | Volume처럼 Fault로 처리 |
-| Surface는 `timeScale = 0`이면 재빌드 정지 | 코드 판독. `FixedUpdate`에서 실행하기 때문이며 문서에 없다 | 실행 시점 재검토 또는 문서화 |
-| Volume 스윕이 `_refreshRate`를 쓰지 않아 매 프레임 실행 | 코드 판독 | 주기 적용 검토 |
 | Volume StaticBaked가 쓰지 않는 Costs·Queue·Influence 할당 | 코드 판독. 100³ 기준 약 9MB | 정적 로드에서 할당 생략 |
 | Editor: 검증 완료 뒤 다시 그리지 않음, 셀 상한 초과 메시지가 나올 수 없음 | 코드 판독 | 표시 경로 수정 |
 | 베이크: Surface만 GPU 사용, Goal 셀이 없는 Surface 베이크 허용, 저장 실패 시 직전 Undo까지 되돌릴 수 있음 | 코드 판독 | 베이크 경로 통일 |
