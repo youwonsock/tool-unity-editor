@@ -5,7 +5,7 @@ Unity 프로젝트에서 사용하던 기능을 분리해 보관하고, `ToyProj
 ## Unity 프로젝트
 
 - Unity 2023.2.20f1 / URP 기반 `ToyProject`
-- 샘플 씬: `FlowFieldSample`, `TransformPathSample`, `OptimizeToolSample`
+- 샘플 씬: `FlowFieldSample`, `FlowFieldVolume3DTest`, `TransformPathSample`, `OptimizeToolSample` (빌드 설정 순서, 첫 씬은 `FlowFieldSample`)
 
 각 쇼케이스는 `Assets/_기능명/Script`, `Scene`, `Prefab`, `Settings`로 독립 보관하며, 실행 가능한 Demo 루트는 해당 기능의 `Prefab`에 함께 저장합니다. 샘플 코드는 `Script/Samples`, 자동 회귀 검사는 `Script/Tests`에서 시스템 코드와 분리합니다.
 

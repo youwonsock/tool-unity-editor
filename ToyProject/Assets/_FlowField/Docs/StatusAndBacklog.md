@@ -129,7 +129,7 @@ GPU 경로(같은 장면, 배치 실행의 프레임 대기 포함)는 Surface 2
 
 | 항목 | 보류 이유 | 다시 볼 조건 |
 | --- | --- | --- |
-| Player 빌드 검증 | 2026-10-31 이번 계획 범위에서 제외했다. 실행 기록이 없어 Player에서의 동작은 미확인이다. v6 로드는 `MemoryMarshal`과 `ISerializationCallbackReceiver`에 의존하고, 첫 빌드 씬은 템플릿 `SampleScene`이며, 이 Mac의 2023.2.20f1에는 Mono용 Mac Player만 있다 | Player 배포가 필요해질 때. IL2CPP는 Mac Build Support (IL2CPP) 설치 후 |
+| Player 빌드 검증 | 2026-10-31 이번 계획 범위에서 제외했다. 실행 기록이 없어 Player에서의 동작은 미확인이다. v6 로드는 `MemoryMarshal`과 `ISerializationCallbackReceiver`에 의존하고, 이 Mac의 2023.2.20f1에는 Mono용 Mac Player만 있다 | Player 배포가 필요해질 때. IL2CPP는 Mac Build Support (IL2CPP) 설치 후 |
 | Burst 전환 | Directions·BFS·Topology가 합계 62%지만 관리 배열 변환이 크고, Burst 동작은 Player에서 확인해야 하는데 Player 검증을 범위에서 제외했다 | Player 검증을 재개하고 Volume 전체 빌드 시간이 문제 될 때 |
 | 게시 배열 재사용 | 빌드 중 GC 0회. 재사용하면 상주 메모리가 약 50MB 늘어난다 | 실제 프로파일에서 재빌드 뒤 GC 스파이크가 문제 될 때 |
 | 증분 장애물 갱신 | 장애물 단계가 전체의 12%다. BFS·방향까지 증분이 아니면 효과가 작다 | 복잡한 Collider 장면에서 이 단계 비중이 커질 때 |
@@ -144,9 +144,10 @@ GPU 경로(같은 장면, 배치 실행의 프레임 대기 포함)는 Surface 2
 | --- | ---: | ---: |
 | `FlowFieldManager.cs` | 1,433줄 | 614줄 |
 | `FlowFieldSession.cs` | 1,989줄 | 803줄 |
-| `FlowFieldVolumeSession.cs` | 1,592줄 | 748줄 |
+| `FlowFieldVolumeSession.cs` | 1,592줄 | 745줄 |
 | Manager의 모드 분기 | 14곳 | 드라이버 선택 1곳 |
 | 100줄을 넘는 메서드 | 10개 | 0개 |
+| 외부 호출 뒤 소유권 재검사 | 약 43곳 | 약 41곳 |
 
 - `FlowFieldSessionBase`: 공개 상태, Fault 순서, 작업 세대 같은 공통 수명 규칙. 재시도와 해제의 자원 처리는 모드별로 달라 각 세션에 있다.
 - `FlowFieldManager.Modes.cs`: Surface와 Volume의 차이. Manager 본체에는 모드 분기가 없다. `FlowFieldManager.Validation.cs`, `FlowFieldManager.Bake.cs`는 설정 검증과 베이크 연동이다.
