@@ -74,6 +74,53 @@ namespace Common.FlowField.Tests
         }
 
         [Test]
+        public void GoalChangeReusesObstaclesUntilAnExplicitRebuild()
+        {
+            _session.Submit(Request());
+            Finish();
+
+            // A collider nothing tracks only appears in a full build.
+            _obstacle = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _obstacle.layer = FlowFieldRegressionFixture.Layer;
+            _obstacle.transform.position = Vector3.one * 1.5f;
+            Physics.SyncTransforms();
+            Vector3 cell = Vector3.one * 1.5f;
+
+            Vector3 goal = new Vector3(0.5f, 2.5f, 0.5f);
+            _session.Submit(Request(goal));
+            Finish();
+            Assert.That(_session.TryGetFieldInfo(out var info), Is.True);
+            Assert.That(info.ResolvedGoalWorld, Is.EqualTo(goal));
+            Assert.That(_session.Sample(cell).SpeedMultiplier, Is.GreaterThan(0f));
+
+            _session.Submit(Request(goal));
+            Finish();
+            Assert.That(_session.TryGetView(out _, out bool[] blocked, out _, out _), Is.True);
+            Assert.That(blocked[Grid.ToFlatIndex(1, 1, 1)], Is.True);
+        }
+
+        [Test]
+        public void GoalChangeQueriesObstaclesWhenATrackedObstacleMoved()
+        {
+            _obstacle = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _obstacle.layer = FlowFieldRegressionFixture.Layer;
+            _obstacle.transform.position = new Vector3(1.5f, 1.5f, 0.5f);
+            Physics.SyncTransforms();
+            _session.RegisterDynamicObstacle(_obstacle.GetComponent<Collider>());
+            _session.Submit(Request());
+            Finish();
+
+            _obstacle.transform.position = Vector3.one * 1.5f;
+            Physics.SyncTransforms();
+            _session.MarkObstacleRegionDirty(new Bounds(Vector3.one * 1.5f, Vector3.one * 3f));
+            _session.Submit(Request(new Vector3(0.5f, 2.5f, 0.5f)));
+            Finish();
+            Assert.That(_session.TryGetView(out _, out bool[] blocked, out _, out _), Is.True);
+            Assert.That(blocked[Grid.ToFlatIndex(1, 1, 1)], Is.True);
+            Assert.That(blocked[Grid.ToFlatIndex(1, 1, 0)], Is.False);
+        }
+
+        [Test]
         public void ModifierChangeDuringABuildIsComposedAfterIt()
         {
             var modifier = Modifier();

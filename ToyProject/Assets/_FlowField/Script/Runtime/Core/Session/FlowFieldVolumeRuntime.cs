@@ -70,20 +70,25 @@ namespace Common.FlowField
                 && StaticBakeContentGeneration == other.StaticBakeContentGeneration
                 && ReferenceEquals(ComputeShader, other.ComputeShader);
 
-        internal bool HasSameInputs(in FlowFieldVolumeRequest other)
-        {
-            if (!HasSameGrid(other)
-                || ObstacleLayer.value != other.ObstacleLayer.value
-                || Mathf.Abs(ObstacleClearance - other.ObstacleClearance) > 0.0001f)
-                return false;
+        internal bool HasSameObstacleInputs(in FlowFieldVolumeRequest other)
+            => HasSameGrid(other)
+                && ObstacleLayer.value == other.ObstacleLayer.value
+                && Mathf.Abs(ObstacleClearance - other.ObstacleClearance) <= 0.0001f;
 
-            if (BakeMode != FlowFieldBakeMode.StaticBaked
-                && (HasGoal != other.HasGoal
-                    || HasGoal && (!FlowFieldGridSpace.Approximately(
+        internal bool HasSameGoal(in FlowFieldVolumeRequest other)
+            => HasGoal == other.HasGoal
+                && (!HasGoal || FlowFieldGridSpace.Approximately(
                         GoalWorld,
                         other.GoalWorld,
                         0.00000001d)
-                        || Mathf.Abs(GoalInfluenceRadius - other.GoalInfluenceRadius) > 0.0001f)))
+                    && Mathf.Abs(GoalInfluenceRadius - other.GoalInfluenceRadius) <= 0.0001f);
+
+        internal bool HasSameInputs(in FlowFieldVolumeRequest other)
+        {
+            if (!HasSameObstacleInputs(other))
+                return false;
+
+            if (BakeMode != FlowFieldBakeMode.StaticBaked && !HasSameGoal(other))
                 return false;
 
             return FlowFieldGridSpace.Approximately(
@@ -126,6 +131,8 @@ namespace Common.FlowField
         private bool _hasPendingRequest;
         // Modifier changes reuse the published navigation unless a full build is pending.
         private bool _hasPendingModifierRecompose;
+        // A repeated accepted input is an explicit rebuild: it re-queries obstacles.
+        private bool _obstacleQueryRequired;
         private FlowFieldVolumeRequest _latestRequestedInput;
         private bool _hasLatestRequestedInput;
         private FlowFieldRuntimeState _state = FlowFieldRuntimeState.Uninitialized;
@@ -227,6 +234,7 @@ namespace Common.FlowField
             _latestRequestedInput = default;
             _hasPendingRequest = false;
             _hasPendingModifierRecompose = false;
+            _obstacleQueryRequired = false;
             _safety.Reset();
             _suspendedByLifecycle = false;
             _buildReservationBytes = 0;
@@ -266,6 +274,8 @@ namespace Common.FlowField
             if (!IsInitialized)
                 throw new InvalidOperationException("FlowField volume session is not initialized.");
             ValidateRequest(request);
+            if (_hasLatestRequestedInput && _latestRequestedInput.HasSameInputs(request))
+                _obstacleQueryRequired = true;
             // Keep the last accepted request independently of the committed
             // field.  A dirty notification that arrives while another Goal is
             // building must never resurrect the older committed Goal.
@@ -343,9 +353,22 @@ namespace Common.FlowField
                                 + $"{MemoryBudgetBytes / (1024d * 1024d):0} MiB manager budget "
                                 + $"(required {EstimateRequiredBytes(request, reservation) / (1024d * 1024d):0.0} MiB).");
                         // A recompose queries no obstacles, so it resolves no safety region.
-                        _build = recompose
-                            ? new BuildContext(_committed, pumpGeneration, _safety.Epoch, modifierSnapshots)
-                            : new BuildContext(request, pumpGeneration, _safety.BeginBuild(), modifierSnapshots);
+                        if (recompose)
+                        {
+                            _build = new BuildContext(_committed, pumpGeneration, _safety.Epoch, modifierSnapshots);
+                        }
+                        else
+                        {
+                            bool reuseObstacles = CanReuseObstacleQueries(request);
+                            _obstacleQueryRequired = false;
+                            _build = new BuildContext(request, pumpGeneration, _safety.BeginBuild(), modifierSnapshots);
+                            if (reuseObstacles)
+                            {
+                                _build.ReusesObstacleQueries = true;
+                                _build.Blocked = _committed.Blocked;
+                                _build.Topology = _committed.Topology;
+                            }
+                        }
                         _buildReservationBytes = reservation;
                     }
 
@@ -408,6 +431,18 @@ namespace Common.FlowField
                 _pumping = false;
             }
         }
+
+        /// <summary>
+        /// A Goal change keeps the obstacle result unless a tracked obstacle
+        /// changed. Unobserved colliders wait for the next full build.
+        /// </summary>
+        private bool CanReuseObstacleQueries(in FlowFieldVolumeRequest request)
+            => !_obstacleQueryRequired
+                && _committed != null
+                && request.StaticBakeData == null
+                && _safety.UncertainRegionCount == 0
+                && _committed.Request.HasSameObstacleInputs(request)
+                && !_committed.Request.HasSameGoal(request);
 
         private bool CanPump => !_disposed
             && (_state == FlowFieldRuntimeState.Building || _state == FlowFieldRuntimeState.Ready);
@@ -940,7 +975,9 @@ namespace Common.FlowField
                             build.Cursor = 0;
                             build.Phase = build.Request.StaticBakeData != null
                                 ? BuildPhase.StaticData
-                                : BuildPhase.Obstacles;
+                                : build.ReusesObstacleQueries
+                                    ? BuildPhase.Goal
+                                    : BuildPhase.Obstacles;
                         }
                         break;
                     case BuildPhase.StaticData:
@@ -1036,8 +1073,8 @@ namespace Common.FlowField
             // constructing the entire Volume3D staging graph in one frame.
             switch (build.AllocationStage)
             {
-                case 0: build.Blocked = new bool[build.Count]; break;
-                case 1: build.Topology = new uint[build.Count]; break;
+                case 0: build.Blocked ??= new bool[build.Count]; break;
+                case 1: build.Topology ??= new uint[build.Count]; break;
                 case 2: build.GoalFlags = new FlowFieldGoalFlags[build.Count]; break;
                 case 3: build.Next = new int[build.Count]; break;
                 case 4: build.Directions = new Vector3[build.Count]; break;
