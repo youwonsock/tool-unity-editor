@@ -133,6 +133,75 @@ namespace Common.FlowField.Tests
             });
         }
 
+        [Test]
+        public void VolumeBuildStages()
+        {
+            using var scenario = CreateVolume(registeredObstacles: 10, modifiers: 3);
+            int phaseCount = (int)FlowFieldVolumeBuildPhase.Complete;
+            var elapsed = new double[phaseCount];
+            Physics.SyncTransforms();
+            scenario.Session.Submit(scenario.Request());
+            var stopwatch = new Stopwatch();
+            while (scenario.Session.IsRebuilding)
+            {
+                // BuildProgress is (phase + local) / phaseCount, so a short
+                // budget attributes each Pump to the phase it started in.
+                int phase = Mathf.Clamp((int)(scenario.Session.BuildProgress * phaseCount), 0, phaseCount - 1);
+                stopwatch.Restart();
+                scenario.Session.Pump(1d);
+                elapsed[phase] += stopwatch.Elapsed.TotalMilliseconds;
+            }
+            Assert.That(scenario.Session.IsFaulted, Is.False, scenario.Session.LastError);
+            for (int phase = 0; phase < phaseCount; phase++)
+                Record($"volume.stage.{(FlowFieldVolumeBuildPhase)phase}", "elapsedMs", elapsed[phase]);
+        }
+
+        [Test]
+        public void SurfaceRebuildStages()
+        {
+            using var scenario = new FlowFieldScenarioFixture.SurfaceScenario(SurfaceSize, SurfaceSize)
+            {
+                Goal = new Vector3(SurfaceSize - 2.5f, 0f, 2.5f),
+            };
+            var random = new Random(1234);
+            for (int i = 0; i < LayerObstacleCount; i++)
+            {
+                float x = random.Next(4, SurfaceSize - 8);
+                float z = random.Next(4, SurfaceSize - 8);
+                scenario.StaticWall(x, x + random.Next(1, 6), z, z + random.Next(1, 30));
+            }
+            scenario.Build();
+
+            int cells = scenario.Grid.CellCount;
+            FlowFieldGridSpace grid = scenario.Grid;
+            FlowFieldSurfaceData surface = scenario.Surface;
+            FlowFieldWorkspace workspace = null;
+            Measure("surface.stage.commitSnapshotCopy", cells, () => workspace = scenario.Session.CommittedWorkspace);
+
+            var mask = new bool[cells];
+            Collider[] overlaps = new Collider[32];
+            Measure("surface.stage.obstacleMask", cells, () => FlowFieldObstacleMaskBuilder.Build(
+                grid, surface, 1 << FlowFieldScenarioFixture.Layer, 1f, 0.5f, 0f, mask, ref overlaps));
+            Measure("surface.stage.escape", cells, () => FlowFieldSolver.BuildEscapeDirections(grid, surface, workspace));
+
+            const int goalX = 2;
+            int goalZ = SurfaceSize - 3;
+            int goalIndex = -1;
+            Measure("surface.stage.prepareGoal", cells, () => FlowFieldSolver.PrepareGoal(
+                grid, surface, workspace, goalX, goalZ, 0f, out goalIndex));
+            var request = new FlowFieldBfsRequest(grid, surface, workspace, true, goalX, goalZ, 0f, goalIndex, 1024);
+            Measure("surface.stage.managedBfs", cells, () => FlowFieldSurfaceBuildPipeline.BuildManaged(request));
+            Measure("surface.stage.compose", cells, () => FlowFieldFinalFieldComposer.Compose(
+                grid, surface, workspace, Vector3.forward, Array.Empty<FlowFieldModifierLayer>()));
+            workspace.Release();
+
+            Measure("surface.stage.fullGoalRebuild", cells, () =>
+            {
+                scenario.Goal = new Vector3(goalX + 0.5f, 0f, goalZ + 0.5f);
+                scenario.Build();
+            });
+        }
+
         private static FlowFieldScenarioFixture.VolumeScenario CreateVolume(int registeredObstacles, int modifiers)
         {
             var scenario = new FlowFieldScenarioFixture.VolumeScenario(VolumeSize, VolumeSize, VolumeSize)
