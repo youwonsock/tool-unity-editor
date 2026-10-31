@@ -55,114 +55,121 @@ namespace Common.FlowField
             switch (build.GoalStage)
             {
                 case 0:
-                {
-                    int end = Math.Min(build.Cursor + ArrayElementsPerStep, build.Count);
-                    for (; build.Cursor < end; build.Cursor++)
-                        build.Influence[build.Cursor] = false;
-                    if (build.Cursor < build.Count)
-                        return false;
-
-                    build.Cursor = 0;
-                    build.GoalIndex = -1;
-                    build.Head = 0;
-                    build.Tail = 0;
-                    if (!build.Request.HasGoal)
-                    {
-                        build.GoalStage = 4;
-                        return true;
-                    }
-
-                    build.RequestedGoalIndex = build.Request.GoalCell;
-                    if (!build.Blocked[build.RequestedGoalIndex])
-                    {
-                        build.GoalIndex = build.RequestedGoalIndex;
-                        build.GoalStage = 2;
-                        build.Cursor = 0;
-                    }
-                    else
-                    {
-                        build.NearestGoalDistance = long.MaxValue;
-                        build.GoalStage = 1;
-                    }
-                    break;
-                }
+                    return StepClearGoalInfluence(build);
                 case 1:
-                {
-                    build.Request.Grid.FromFlatIndex(
-                        build.RequestedGoalIndex,
-                        out int requestedX,
-                        out int requestedY,
-                        out int requestedZ);
-                    int end = Math.Min(build.Cursor + ArrayElementsPerStep, build.Count);
-                    for (; build.Cursor < end; build.Cursor++)
-                    {
-                        int index = build.Cursor;
-                        if (build.Blocked[index])
-                            continue;
-                        build.Request.Grid.FromFlatIndex(index, out int x, out int y, out int z);
-                        long dx = x - requestedX;
-                        long dy = y - requestedY;
-                        long dz = z - requestedZ;
-                        long distance = dx * dx + dy * dy + dz * dz;
-                        if (distance < build.NearestGoalDistance
-                            || distance == build.NearestGoalDistance
-                                && (build.GoalIndex < 0 || index < build.GoalIndex))
-                        {
-                            build.NearestGoalDistance = distance;
-                            build.GoalIndex = index;
-                        }
-                    }
-                    if (build.Cursor < build.Count)
-                        return false;
-                    build.Cursor = 0;
-                    build.GoalStage = build.GoalIndex >= 0 ? 2 : 4;
-                    break;
-                }
+                    return StepFindNearestGoalCell(build);
                 case 2:
-                {
-                    if (build.GoalIndex < 0)
-                    {
-                        build.GoalStage = 4;
-                        return true;
-                    }
-
-                    build.Request.Grid.FromFlatIndex(
-                        build.GoalIndex,
-                        out int goalX,
-                        out int goalY,
-                        out int goalZ);
-                    build.GoalRadiusSqr = (double)build.Request.GoalInfluenceRadius
-                        * build.Request.GoalInfluenceRadius;
-                    int end = Math.Min(build.Cursor + ArrayElementsPerStep, build.Count);
-                    for (; build.Cursor < end; build.Cursor++)
-                    {
-                        int index = build.Cursor;
-                        if (build.Blocked[index])
-                            continue;
-                        build.Request.Grid.FromFlatIndex(index, out int x, out int y, out int z);
-                        long dx = x - goalX;
-                        long dy = y - goalY;
-                        long dz = z - goalZ;
-                        double distanceSqr = (double)(dx * dx + dy * dy + dz * dz)
-                            * build.Request.Grid.CellSize
-                            * build.Request.Grid.CellSize;
-                        build.Influence[index] = build.Request.GoalInfluenceRadius <= 0f
-                            || distanceSqr <= build.GoalRadiusSqr;
-                    }
-                    if (build.Cursor < build.Count)
-                        return false;
-
-                    build.Influence[build.GoalIndex] = true;
-                    build.Costs[build.GoalIndex] = 0;
-                    build.Queue[build.Tail++] = build.GoalIndex;
-                    build.GoalStage = 4;
-                    return true;
-                }
+                    return StepMarkGoalInfluence(build);
                 default:
                     return true;
             }
+        }
 
+        private static bool StepClearGoalInfluence(BuildContext build)
+        {
+            int end = Math.Min(build.Cursor + ArrayElementsPerStep, build.Count);
+            for (; build.Cursor < end; build.Cursor++)
+                build.Influence[build.Cursor] = false;
+            if (build.Cursor < build.Count)
+                return false;
+
+            build.Cursor = 0;
+            build.GoalIndex = -1;
+            build.Head = 0;
+            build.Tail = 0;
+            if (!build.Request.HasGoal)
+            {
+                build.GoalStage = 4;
+                return true;
+            }
+
+            build.RequestedGoalIndex = build.Request.GoalCell;
+            if (!build.Blocked[build.RequestedGoalIndex])
+            {
+                build.GoalIndex = build.RequestedGoalIndex;
+                build.GoalStage = 2;
+                build.Cursor = 0;
+            }
+            else
+            {
+                build.NearestGoalDistance = long.MaxValue;
+                build.GoalStage = 1;
+            }
             return false;
+        }
+
+        private static bool StepFindNearestGoalCell(BuildContext build)
+        {
+            build.Request.Grid.FromFlatIndex(
+                build.RequestedGoalIndex,
+                out int requestedX,
+                out int requestedY,
+                out int requestedZ);
+            int end = Math.Min(build.Cursor + ArrayElementsPerStep, build.Count);
+            for (; build.Cursor < end; build.Cursor++)
+            {
+                int index = build.Cursor;
+                if (build.Blocked[index])
+                    continue;
+                build.Request.Grid.FromFlatIndex(index, out int x, out int y, out int z);
+                long dx = x - requestedX;
+                long dy = y - requestedY;
+                long dz = z - requestedZ;
+                long distance = dx * dx + dy * dy + dz * dz;
+                if (distance < build.NearestGoalDistance
+                    || distance == build.NearestGoalDistance
+                        && (build.GoalIndex < 0 || index < build.GoalIndex))
+                {
+                    build.NearestGoalDistance = distance;
+                    build.GoalIndex = index;
+                }
+            }
+            if (build.Cursor < build.Count)
+                return false;
+            build.Cursor = 0;
+            build.GoalStage = build.GoalIndex >= 0 ? 2 : 4;
+            return false;
+        }
+
+        private static bool StepMarkGoalInfluence(BuildContext build)
+        {
+            if (build.GoalIndex < 0)
+            {
+                build.GoalStage = 4;
+                return true;
+            }
+
+            build.Request.Grid.FromFlatIndex(
+                build.GoalIndex,
+                out int goalX,
+                out int goalY,
+                out int goalZ);
+            build.GoalRadiusSqr = (double)build.Request.GoalInfluenceRadius
+                * build.Request.GoalInfluenceRadius;
+            int end = Math.Min(build.Cursor + ArrayElementsPerStep, build.Count);
+            for (; build.Cursor < end; build.Cursor++)
+            {
+                int index = build.Cursor;
+                if (build.Blocked[index])
+                    continue;
+                build.Request.Grid.FromFlatIndex(index, out int x, out int y, out int z);
+                long dx = x - goalX;
+                long dy = y - goalY;
+                long dz = z - goalZ;
+                double distanceSqr = (double)(dx * dx + dy * dy + dz * dz)
+                    * build.Request.Grid.CellSize
+                    * build.Request.Grid.CellSize;
+                build.Influence[index] = build.Request.GoalInfluenceRadius <= 0f
+                    || distanceSqr <= build.GoalRadiusSqr;
+            }
+            if (build.Cursor < build.Count)
+                return false;
+
+            build.Influence[build.GoalIndex] = true;
+            build.Costs[build.GoalIndex] = 0;
+            build.Queue[build.Tail++] = build.GoalIndex;
+            build.GoalStage = 4;
+            return true;
         }
 
         internal static bool StepManagedBfs(BuildContext build)
