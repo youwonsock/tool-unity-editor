@@ -230,7 +230,7 @@ Manager도 함께 Fault 상태라면 Modifier를 비활성화·Release해 설정
 - **수락·실행·게시 입력**: 최신 요청은 다음 작업을, 실행 중 입력은 해당 계산을, 게시 입력은 현재 공개 결과를 설명합니다. 서로 다른 시점의 소유권이며 연속 요청은 최신 값과 대기 플래그로 병합합니다.
 - **Surface 조회**: 일반 샘플과 해석된 Goal 메타데이터는 항상 게시 FieldStore에서 읽습니다. Modifier 합성 중의 작업 배열은 노출하지 않습니다. 장애물·탈출·연결 안전성 검사는 최신 관측을 반영해 이동을 제한할 수 있습니다. 요청 Goal과 게시 결과의 해석된 Goal은 별도 의미를 유지합니다.
 - **Revision과 참조**: Surface Revision은 셀 데이터·Goal의 실질 변경에 따라 증가합니다. 같은 내용의 Snapshot 교체는 Revision 증가 없이 게시 Grid·Surface 참조를 갱신할 수 있습니다. Volume Revision은 완료 결과 교체 정책을 따릅니다.
-- **움직이는 장애물**: BFS나 Volume 빌드 중 장애물만 바뀌면 그 결과를 게시하고 재빌드를 예약합니다. 조회는 최신 장애물 상태를 다시 검사합니다. Volume은 이미 반영한 불확실 영역을 게시 때 지우므로, 빌드 중 장애물이 지나간 영역만 다음 게시까지 정지합니다. Surface는 Grid·Goal이 바뀐 결과를 거부하고 다시 계산하므로, Goal이 풀이 시간보다 자주 셀을 옮기면 그동안 새 결과가 게시되지 않을 수 있습니다.
+- **움직이는 장애물**: BFS나 Volume 빌드 중 장애물만 바뀌면 그 결과를 게시하고 재빌드를 예약합니다. 조회는 최신 장애물 상태를 다시 검사합니다. Volume은 이미 반영한 불확실 영역을 게시 때 지우므로, 빌드 중 장애물이 지나간 영역만 다음 게시까지 정지합니다. Surface는 Grid가 바뀐 결과를 거부하고 다시 계산합니다. Goal이 바뀐 결과도 거부하지만, 연속으로 밀리면 이미 푼 결과를 게시하고 최신 Goal을 다시 계산하므로 Goal이 풀이보다 빨리 움직여도 게시가 멈추지 않습니다. 이때 해석된 Goal은 요청 Goal보다 잠시 뒤처질 수 있습니다.
 - **재진입**: 이벤트, Modifier getter·`CaptureSnapshot()`·`Modify()`, Surface Source 호출 이후에는 작업 소유권을 다시 검사합니다. Release·재초기화·모드 변경·Suspend·Fault·Dispose가 취소한 이전 작업은 새 결과나 상태를 덮어쓰지 않습니다. Manager의 수명 버전은 빌드 세대와 구분합니다.
 - **활성·실패 처리**: `OnDisable`은 실행을 중단하고 재활성화는 현재 수명의 재계산을 요청합니다. Manager·Session Fault는 명시적인 `RequestRebuild()`로 재시도하며 Modifier 자체 Fault는 위의 별도 복구 절차를 따릅니다. 실행할 수 없는 Volume의 대기 요청은 보관하되 Scheduler에서 예산을 반복 소비하지 않습니다.
 - **정적 입력**: 두 베이크 형식 모두 v6만 허용합니다. 다른 형식의 자동 변환·마이그레이션은 제공하지 않으므로 이전 형식 Asset은 ReBake해야 합니다. Volume3D v6은 방향·속도를 저장하지 않고 NextCell과 베이크 시점의 Default Direction에서, 탈출 방향은 셀당 1바이트의 면 인덱스에서 로드 시 재구성합니다. Surface2D v6은 높이·법선·탈출·Goal 방향을 `byte[]`로 묶어 비트 그대로 저장합니다. StaticBaked 내비게이션은 고정하며 Default Direction·Modifier는 런타임에 합성합니다.
@@ -341,7 +341,7 @@ Surface2D의 X·Z 셀 수는 `floor(axisLength / CellSize + 0.5)`로 계산하�
 
 ### 검증 기록
 
-Unity 2023.2.20f1·macOS·Metal(Apple M4 Pro) 배치 실행에서 **회귀 테스트 477개가 모두 통과**했습니다(성능 프로브 9개 제외). Windows·Direct3D 11(AMD Radeon RX 9070)의 마지막 기록은 이번 수정 이전의 466개 통과입니다. 실제 GPU, 저장된 샘플 씬 통합 2개, PlayMode에 진입하는 Manager 통합을 포함합니다. Surface·Volume의 샘플 게시, 재진입·취소·재활성화, 장애물 안전성, Modifier 합성, 베이크 검증·저장 실패 경계와 직렬화 참조를 확인합니다.
+Unity 2023.2.20f1·macOS·Metal(Apple M4 Pro)에서 **회귀 테스트 478개가 모두 통과**했습니다(성능 프로브 9개 제외). Windows·Direct3D 11(AMD Radeon RX 9070)의 마지막 기록은 이번 수정 이전의 466개 통과입니다. 실제 GPU, 저장된 샘플 씬 통합 2개, PlayMode에 진입하는 Manager 통합을 포함합니다. Surface·Volume의 샘플 게시, 재진입·취소·재활성화, 장애물 안전성, Modifier 합성, 베이크 검증·저장 실패 경계와 직렬화 참조를 확인합니다.
 
 리팩터링 안전망으로 다음 검사가 함께 실행됩니다.
 

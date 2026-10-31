@@ -24,7 +24,7 @@ Surface도 최신 수락 `FlowFieldSessionRequest` 한 벌과 대기 플래그�
 
 Surface의 상태·게시 콜백은 수명 전이 경계입니다. Fault·Retry·Release·Suspend가 이전 콜백 세대를 무효화하며, 정리와 dirty 설정을 알림 전에 끝내 구독자가 제출한 새 요청을 보존합니다. Pump와 비동기 완료 처리 중 같은 Session의 중첩 Pump는 실행하지 않고 다음 소유자 실행 경계에 요청을 남깁니다. Dispose는 Released 알림 전에 영구 종료 상태가 됩니다.
 
-BFS 완료 시 Grid·Goal 입력이 달라졌으면 결과를 거부하고 다음 Goal 단계에서 다시 풉니다. 복원된 작업 공간은 게시된 Goal을 담으므로 Goal Tracker도 함께 비웁니다. 장애물만 바뀌었으면 결과를 게시하고 Dirty 플래그와 프로브를 유지해 다음 소유자 경계에서 처리합니다. 입력 버전 판정은 `FlowFieldSurfaceRebuildTracker`가 맡습니다.
+BFS 완료 시 Grid 입력이 달라졌으면 결과를 거부하고 다음 Goal 단계에서 다시 풉니다. Goal 입력이 달라진 결과는 한 번은 거부하고, 다음 풀이도 밀리면 게시한 뒤 최신 Goal을 다시 풉니다. 복원된 작업 공간은 게시된 Goal을 담으므로 Goal Tracker도 함께 비웁니다. 장애물만 바뀌었으면 결과를 게시하고 Dirty 플래그와 프로브를 유지해 다음 소유자 경계에서 처리합니다. 입력 버전 판정은 `FlowFieldSurfaceRebuildTracker`가 맡습니다.
 
 BFS 요청은 Session의 기존 세대로 수명 유효성을 판정합니다. GPU 결과 적용과 Managed fallback은 작업 배열을 쓰기 전에 이 판정을 확인하고, Session도 후속 게시·실패 전달 전에 다시 확인합니다. 취소된 GPU 제출 자체의 완료 대기는 Solver가 기존 방식으로 관리하며, 취소된 결과는 작업 배열에 적용하지 않습니다. 게시 Grid·Surface와 해석된 Goal은 FieldStore에서만 가져오며 내부 FieldCommitted 이벤트는 인자 없이 변경된 결과의 게시만 알립니다. 일반 샘플은 합성 중 작업 배열이 아닌 게시 저장소를 읽고, 최신 장애물·탈출·연결 안전성 검사를 추가로 적용합니다.
 
