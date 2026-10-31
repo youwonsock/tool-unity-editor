@@ -144,13 +144,12 @@ namespace Common.FlowField
         /// A single superseded Goal solve is dropped so movers do not briefly
         /// follow an obsolete Goal. A consecutive one is published: a Goal
         /// moving faster than the solve would otherwise starve publication.
+        /// Called once per finished solve, so any other ending clears the streak.
         /// </summary>
-        internal bool ShouldRejectSupersededGoal()
+        internal bool ShouldRejectSupersededGoal(bool superseded)
         {
-            if (_lastGoalSolveRejected)
-                return false;
-            _lastGoalSolveRejected = true;
-            return true;
+            _lastGoalSolveRejected = superseded && !_lastGoalSolveRejected;
+            return _lastGoalSolveRejected;
         }
 
         internal void ResetSupersededGoal() => _lastGoalSolveRejected = false;
