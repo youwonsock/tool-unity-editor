@@ -20,6 +20,20 @@ namespace Common.OptimizeTool
 
         public static bool IsFinite(Vector3 v) => IsFinite(v.x) && IsFinite(v.y) && IsFinite(v.z);
         private static bool IsFinite(float v) => !float.IsNaN(v) && !float.IsInfinity(v);
+
+        // Vector3.normalized returns zero below a fixed magnitude, which small
+        // triangles and large transforms reach while still having a direction.
+        private static Vector3 Direction(Vector3 v)
+        {
+            Vector3 unit = v.normalized;
+            if (unit != Vector3.zero) return unit;
+            float largest = Mathf.Max(Mathf.Abs(v.x), Mathf.Max(Mathf.Abs(v.y), Mathf.Abs(v.z)));
+            return largest > 0f && IsFinite(largest) ? (v / largest).normalized : Vector3.zero;
+        }
+
+        // Compared with the edge lengths, so a triangle counts by shape and not by size.
+        private static bool IsDegenerate(Vector3 edgeA, Vector3 edgeB, Vector3 cross)
+            => cross.sqrMagnitude <= 1e-12f * edgeA.sqrMagnitude * edgeB.sqrMagnitude;
         public static void ValidateAngle(float angle)
         {
             if (!IsFinite(angle) || angle < 0 || angle > 180) throw new ArgumentOutOfRangeException(nameof(angle));
@@ -141,7 +155,9 @@ namespace Common.OptimizeTool
                 for (int i = 0; i < triangles.Length; i += 3)
                 {
                     Vector3 a = vertices[triangles[i]], b = vertices[triangles[i + 1]], c = vertices[triangles[i + 2]];
-                    Vector3 normal = normalMatrix.MultiplyVector(Vector3.Cross(b - a, c - a)).normalized;
+                    Vector3 cross = Vector3.Cross(b - a, c - a);
+                    if (IsDegenerate(b - a, c - a, cross)) continue;
+                    Vector3 normal = Direction(normalMatrix.MultiplyVector(cross));
                     if (normal.sqrMagnitude < 0.000001f) continue;
                     Vector3 toCamera = useCustomVector ? -customVector.normalized
                         : camera.orthographic ? -camera.transform.forward
@@ -163,12 +179,12 @@ namespace Common.OptimizeTool
             Matrix4x4 normalMatrix = matrix.inverse.transpose;
             float sign = matrix.determinant < 0 ? -1 : 1;
             for (int i = 0; i < vertices.Length; i++) vertices[i] = matrix.MultiplyPoint3x4(vertices[i]);
-            for (int i = 0; i < normals.Length; i++) normals[i] = normalMatrix.MultiplyVector(normals[i]).normalized;
+            for (int i = 0; i < normals.Length; i++) normals[i] = Direction(normalMatrix.MultiplyVector(normals[i]));
             for (int i = 0; i < tangents.Length; i++)
             {
                 Vector3 t = matrix.MultiplyVector(tangents[i]);
                 if (normals.Length == vertices.Length) t = t - normals[i] * Vector3.Dot(normals[i], t);
-                t.Normalize();
+                t = Direction(t);
                 tangents[i] = new Vector4(t.x, t.y, t.z, tangents[i].w * sign);
             }
             mesh.vertices = vertices;

@@ -40,13 +40,16 @@ namespace Common.OptimizeTool
         public MeshBuildResult BuildMeshes()
         {
             LastBuildWarnings = Array.Empty<string>();
-            var result = MeshBuildPipeline.Build(CaptureBuildRequest());
+            var result = MeshBuildPipeline.Build(CaptureBuildRequest(out bool skippedDisabledChild));
+            if (skippedDisabledChild)
+                result.AddWarning("Child MeshFilters with a disabled Renderer were left out. Assign them directly to bake them.");
             LastBuildWarnings = result.Warnings;
             return result;
         }
 
-        private MeshBuildRequest CaptureBuildRequest()
+        private MeshBuildRequest CaptureBuildRequest(out bool skippedDisabledChild)
         {
+            skippedDisabledChild = false;
             MeshProcessingUtility.RequireEditMode();
             if (_collectChildMeshes == (_targetMeshFilterArray != null && _targetMeshFilterArray.Length > 0))
                 throw new ArgumentException("Choose direct MeshFilters or child collection, not both.");
@@ -56,12 +59,26 @@ namespace Common.OptimizeTool
             foreach (MeshFilter filter in filters)
             {
                 if (filter != null && _generatedRoot != null && filter.transform.IsChildOf(_generatedRoot.transform)) continue;
+                if (_collectChildMeshes && filter != null && IsDisabledByUser(filter.GetComponent<MeshRenderer>()))
+                {
+                    skippedDisabledChild = true;
+                    continue;
+                }
                 inputs.Add(filter);
             }
             return new MeshBuildRequest(inputs, transform.worldToLocalMatrix, _targetCamera,
                 _allowReadableCopy, _allowNormalRecalculation, _optimizeMesh, _combineAllIntoSingleMesh,
                 _enableBackfaceCulling, _backfaceCullingAngle, _enableOcclusionCulling,
                 _vertexSamplingCount, _visibilityThreshold, _cullingLayerMask);
+        }
+
+        // A source this component disabled in an earlier bake is still an input.
+        private bool IsDisabledByUser(MeshRenderer renderer)
+        {
+            if (renderer == null || renderer.enabled) return false;
+            foreach (MeshSourceRendererState state in _sourceRendererStates)
+                if (state.Renderer == renderer) return !state.Enabled;
+            return true;
         }
 
         public Mesh[] CombineAndSaveMeshes()
