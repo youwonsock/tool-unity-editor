@@ -13,7 +13,7 @@ namespace Common.FlowField.Samples
     {
         [SerializeField] private FlowFieldShowcaseOverviewController _overview;
         [SerializeField] private float _panelWidth = 390f;
-        [SerializeField] private float _panelHeight = 185f;
+        [SerializeField] private float _panelHeight = 250f;
         [SerializeField] private float _panelMargin = 16f;
 
         private Canvas _canvas;

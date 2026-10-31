@@ -401,7 +401,17 @@ namespace Common.FlowField
                 return false;
             try
             {
-                if (request.HasGoal)
+                if (request.HasGoal && request.GoalIndex >= 0 && gpuException == null)
+                {
+                    // The Goal stage prepared this request. GPU fallback below
+                    // prepares again because a failed result may have written.
+                    FlowFieldSolver.SolvePreparedGoal(
+                        request.Grid,
+                        request.Surface,
+                        request.Workspace,
+                        request.GoalIndex);
+                }
+                else if (request.HasGoal)
                 {
                     if (!FlowFieldSolver.BuildGoal(
                             request.Grid,

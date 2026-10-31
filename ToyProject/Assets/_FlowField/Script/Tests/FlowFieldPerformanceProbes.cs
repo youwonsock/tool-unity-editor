@@ -133,6 +133,39 @@ namespace Common.FlowField.Tests
             });
         }
 
+        [TestCase(1)]
+        [TestCase(64)]
+        public void VolumeCommitSafetySnapshot(int regions)
+        {
+            var grid = FlowFieldGridSpace.FromVolumeCellGrid(Vector3.zero, VolumeSize, VolumeSize, VolumeSize, 1f);
+            var blocked = new bool[grid.CellCount];
+            var safety = new FlowFieldVolumeSafetyState();
+            int buildEpoch = safety.BeginBuild();
+            // Separate small regions, as moving obstacles leave them.
+            for (int i = 0; i < regions; i++)
+                safety.MarkDirty(new Bounds(new Vector3(5f + (i % 8) * 12f, 5f + (i / 8) * 12f, 50f), Vector3.one), 1f);
+            Measure($"volume.commit.safetySnapshot.regions{regions}", grid.CellCount,
+                () => safety.PrepareSnapshot(grid, blocked, buildEpoch));
+        }
+
+        [Test]
+        public void VolumeRebuildAfterModifierValue()
+        {
+            using var scenario = CreateVolume(registeredObstacles: 0, modifiers: 0);
+            FlowFieldScenarioFixture.RotateModifier modifier = scenario.Modifier(
+                new Vector3(50f, 50f, 50f), Vector3.one * 30f, 10, 15f, 0.5f);
+            scenario.Build();
+            int revision = scenario.Session.Revision;
+            Measure("volume.rebuild.modifierValue", scenario.Grid.CellCount, () =>
+            {
+                modifier.Speed = 0.25f;
+                modifier.Revision++;
+                scenario.Session.NotifyModifierChangedCommand(modifier, FlowFieldModifierChange.Value);
+                scenario.Finish();
+            });
+            Assert.That(scenario.Session.Revision, Is.GreaterThan(revision));
+        }
+
         [Test]
         public void VolumeBuildStages()
         {

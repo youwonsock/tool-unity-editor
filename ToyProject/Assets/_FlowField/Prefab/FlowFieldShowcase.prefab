@@ -1392,7 +1392,7 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   _overview: {fileID: 0}
   _panelWidth: 390
-  _panelHeight: 185
+  _panelHeight: 250
   _panelMargin: 16
 --- !u!1 &903989350576492481
 GameObject:
