@@ -232,6 +232,75 @@ namespace Common.FlowField.Tests
                 ? FlowFieldRuntimeState.Released : FlowFieldRuntimeState.Suspended));
         }
 
+        [UnityTest] public IEnumerator VolumeRebuildRequestRequeriesWhileTheGoalMoves()
+            => CheckVolumeObstacleQuery("rebuild", expectQueried: true);
+        [UnityTest] public IEnumerator VolumeCellsDirtyRequeriesWhileTheGoalMoves()
+            => CheckVolumeObstacleQuery("cells", expectQueried: true);
+        [UnityTest] public IEnumerator VolumeReactivationRequeriesAfterTheGoalMoved()
+            => CheckVolumeObstacleQuery("reactivate", expectQueried: true);
+        [UnityTest] public IEnumerator VolumeSetGoalKeepsReusingObstacles()
+            => CheckVolumeObstacleQuery("setGoal", expectQueried: false);
+
+        private IEnumerator CheckVolumeObstacleQuery(string operation, bool expectQueried)
+        {
+            yield return new EnterPlayMode();
+            var goal = MakeObject("Scheduling goal");
+            goal.transform.position = Vector3.one * 2.5f;
+            var manager = CreateManager(true);
+            using (var settings = new SerializedObject(manager))
+            {
+                settings.FindProperty("_goalTransform").objectReferenceValue = goal.transform;
+                settings.ApplyModifiedPropertiesWithoutUndo();
+            }
+            yield return null;
+            yield return WaitForVolumeBuild(manager);
+
+            // A collider nothing tracks only appears when obstacles are queried.
+            var wall = MakeObject("Scheduling wall");
+            wall.layer = 28;
+            wall.transform.position = Vector3.one * 1.5f;
+            wall.AddComponent<BoxCollider>();
+            Physics.SyncTransforms();
+
+            // The Manager observes a moved Transform in LateUpdate, so the
+            // explicit request below is the first to carry the new Goal.
+            Vector3 moved = new Vector3(.5f, 2.5f, .5f);
+            switch (operation)
+            {
+                case "rebuild":
+                    goal.transform.position = moved;
+                    manager.RequestRebuild();
+                    break;
+                case "cells":
+                    goal.transform.position = moved;
+                    manager.NotifyCellsDirty();
+                    break;
+                case "reactivate":
+                    manager.enabled = false;
+                    goal.transform.position = moved;
+                    manager.enabled = true;
+                    break;
+                case "setGoal":
+                    manager.SetGoal(FlowFieldGoalRequest.Position(moved));
+                    break;
+            }
+            yield return WaitForVolumeBuild(manager);
+
+            Assert.That(manager.TryGetFieldInfo(out FlowFieldFieldInfo info), Is.True);
+            Assert.That(info.RequestedGoalWorld, Is.EqualTo(moved));
+            Assert.That(manager.VolumeSession.TryGetView(out FlowFieldGridSpace grid, out bool[] blocked, out _, out _), Is.True);
+            Assert.That(blocked[grid.ToFlatIndex(1, 1, 1)], Is.EqualTo(expectQueried));
+        }
+
+        private static IEnumerator WaitForVolumeBuild(FlowFieldManager manager)
+        {
+            float deadline = Time.realtimeSinceStartup + 3f;
+            while ((manager.IsRebuilding || !manager.IsReady) && !manager.IsFaulted && Time.realtimeSinceStartup < deadline)
+                yield return null;
+            Assert.That(manager.IsReady, Is.True, manager.LastError);
+            Assert.That(manager.IsRebuilding, Is.False);
+        }
+
         [Test]
         public void SurfaceDirtyInputsAreProcessedWithoutResubmission(
             [Values("scene", "static", "bfs")] string path,

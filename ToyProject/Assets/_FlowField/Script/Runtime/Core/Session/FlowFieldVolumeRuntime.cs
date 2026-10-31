@@ -131,7 +131,7 @@ namespace Common.FlowField
         private bool _hasPendingRequest;
         // Modifier changes reuse the published navigation unless a full build is pending.
         private bool _hasPendingModifierRecompose;
-        // A repeated accepted input is an explicit rebuild: it re-queries obstacles.
+        // An explicit rebuild re-queries obstacles even when only the Goal changed.
         private bool _obstacleQueryRequired;
         private FlowFieldVolumeRequest _latestRequestedInput;
         private bool _hasLatestRequestedInput;
@@ -268,13 +268,13 @@ namespace Common.FlowField
             _runtimeScheduled = true;
         }
 
-        internal bool Submit(in FlowFieldVolumeRequest request)
+        internal bool Submit(in FlowFieldVolumeRequest request, bool requeryObstacles = false)
         {
             ThrowIfDisposed();
             if (!IsInitialized)
                 throw new InvalidOperationException("FlowField volume session is not initialized.");
             ValidateRequest(request);
-            if (_hasLatestRequestedInput && _latestRequestedInput.HasSameInputs(request))
+            if (requeryObstacles)
                 _obstacleQueryRequired = true;
             // Keep the last accepted request independently of the committed
             // field.  A dirty notification that arrives while another Goal is

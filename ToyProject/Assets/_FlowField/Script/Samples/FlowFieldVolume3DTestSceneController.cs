@@ -90,7 +90,6 @@ namespace Common.FlowField.Samples
                         () =>
                         {
                             _manager.SetGoal(FlowFieldGoalRequest.None);
-                            _manager.RequestRebuild();
                             _goalCleared = true;
                             _goalMarker.gameObject.SetActive(false);
                         },
