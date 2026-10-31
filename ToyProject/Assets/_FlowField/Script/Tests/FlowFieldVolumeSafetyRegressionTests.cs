@@ -120,6 +120,42 @@ namespace Common.FlowField.Tests
         }
 
         [Test]
+        public void SafetySnapshotMarksExactlyTheCellsTouchingARegion()
+        {
+            var grid = FlowFieldGridSpace.FromVolumeCellGrid(new Vector3(-3f, 2f, 7f), 9, 5, 7, 0.5f);
+            var safety = new FlowFieldVolumeSafetyState();
+            int epoch = safety.BeginBuild();
+            var regions = new[]
+            {
+                new Bounds(new Vector3(-2f, 3f, 8f), new Vector3(0.3f, 0.2f, 0.4f)),
+                new Bounds(new Vector3(0.5f, 3.5f, 9.5f), Vector3.one * 0.1f),
+                new Bounds(new Vector3(-20f, 3f, 8f), Vector3.one), // outside the grid
+            };
+            const float margin = 0.25f;
+            foreach (Bounds region in regions)
+                safety.MarkDirty(region, margin);
+
+            var blocked = new bool[grid.CellCount];
+            FlowFieldVolumeSafetyState.Snapshot snapshot = safety.PrepareSnapshot(grid, blocked, epoch);
+            int unknown = 0;
+            for (int index = 0; index < grid.CellCount; index++)
+            {
+                grid.FromFlatIndex(index, out int x, out int y, out int z);
+                var cell = new Bounds(grid.LocalToWorldCenter(x, y, z), Vector3.one * grid.CellSize);
+                bool expected = false;
+                foreach (Bounds region in regions)
+                {
+                    Bounds expanded = region;
+                    expanded.Expand(Vector3.one * (margin * 2f));
+                    expected |= expanded.Intersects(cell);
+                }
+                Assert.That(snapshot.IsUnknown(index), Is.EqualTo(expected), $"Cell {x},{y},{z}");
+                if (expected) unknown++;
+            }
+            Assert.That(unknown, Is.GreaterThan(0));
+        }
+
+        [Test]
         public void PatrollingObstacleDoesNotKeepItsWholePathUnsafe()
         {
             var grid = FlowFieldGridSpace.FromVolumeCellGrid(Vector3.zero, 12, 4, 12, 1f);

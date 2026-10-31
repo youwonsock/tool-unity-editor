@@ -261,11 +261,29 @@ namespace Common.FlowField
                     _states[index] = blocked[index] ? SafetyCellState.Blocked : SafetyCellState.Clear;
                 if (!safetyChangedDuringBuild)
                     return;
-                for (int index = 0; index < _states.Length; index++)
+                for (int region = 0; region < uncertainBounds.Count; region++)
+                    MarkUnknown(grid, uncertainBounds[region]);
+            }
+
+            // Visits only the cells near the region, so the publication frame
+            // does not scale with the whole volume.
+            private void MarkUnknown(FlowFieldGridSpace grid, Bounds region)
+            {
+                Vector3 min = (region.min - grid.Origin) / grid.CellSize;
+                Vector3 max = (region.max - grid.Origin) / grid.CellSize;
+                int minX = Mathf.Max(0, Mathf.FloorToInt(min.x) - 1);
+                int minY = Mathf.Max(0, Mathf.FloorToInt(min.y) - 1);
+                int minZ = Mathf.Max(0, Mathf.FloorToInt(min.z) - 1);
+                int maxX = Mathf.Min(grid.Width - 1, Mathf.FloorToInt(max.x) + 1);
+                int maxY = Mathf.Min(grid.Height - 1, Mathf.FloorToInt(max.y) + 1);
+                int maxZ = Mathf.Min(grid.Depth - 1, Mathf.FloorToInt(max.z) + 1);
+                Vector3 cellSize = Vector3.one * grid.CellSize;
+                for (int y = minY; y <= maxY; y++)
+                for (int z = minZ; z <= maxZ; z++)
+                for (int x = minX; x <= maxX; x++)
                 {
-                    grid.FromFlatIndex(index, out int x, out int y, out int z);
-                    if (IntersectsUncertainBounds(grid, grid.LocalToWorldCenter(x, y, z), uncertainBounds))
-                        _states[index] = SafetyCellState.Unknown;
+                    if (region.Intersects(new Bounds(grid.LocalToWorldCenter(x, y, z), cellSize)))
+                        _states[grid.ToFlatIndex(x, y, z)] = SafetyCellState.Unknown;
                 }
             }
         }
