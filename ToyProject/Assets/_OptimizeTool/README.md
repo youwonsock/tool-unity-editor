@@ -108,7 +108,7 @@ flowchart LR
 | `OptimizeToolOverviewController` / `OptimizeToolShowcaseUI` | 다섯 모드 선택, 상태 갱신, 버튼 활성 상태와 소유 리스너 관리 |
 | `OptimizeToolPhysicsStatusFormatter` | 녹화·재생 실패, 기준 데이터 유무와 오차 검사 상태의 표시 문자열 |
 
-재빌드에서는 다음 입력에도 남아 있는 원본 Renderer를 계속 비활성으로 유지하고, 제거된 원본만 기록해 둔 활성 상태로 복원합니다. 원본 비활성화 옵션을 끄면 소유한 원본 상태를 복원합니다. 이 정보는 컴포넌트에 직렬화되며 Undo/Redo와 Prefab 인스턴스에도 유지됩니다. 직접 지정한 MeshFilter는 Renderer 활성 여부와 관계없이 명시적인 베이크 입력입니다.
+재빌드에서는 다음 입력에도 남아 있는 원본 Renderer를 계속 비활성으로 유지하고, 제거된 원본만 기록해 둔 활성 상태로 복원합니다. 원본 비활성화 옵션을 끄면 소유한 원본 상태를 복원합니다. 이 정보는 컴포넌트에 직렬화되며 Undo/Redo와 Prefab 인스턴스에도 유지됩니다. 직접 지정한 MeshFilter는 Renderer 활성 여부와 관계없이 명시적인 베이크 입력입니다. 자식 수집은 사용자가 끈 Renderer를 제외하고 경고를 남기며, 이전 베이크가 끈 원본은 계속 포함합니다.
 
 메시 도구의 실행 API는 `BuildMeshes()`·`CombineAndSaveMeshes()`·`BakeBackFaceCullingMesh()`입니다. 메모리 결과만 만들 때 저장 경로·파일명이 필요하지 않으며, 결과의 Mesh·Material 매핑은 `Parts`에서 조회합니다. `MeshBuildResult.Warnings`와 Inspector 진단은 Collider 기반 Occlusion, 투명·양면 재질, 다른 카메라·그림자·반사 및 Probe 샘플 위치의 한계를 설명합니다. 샘플 빌더도 같은 `MeshBuildRequest` API를 사용합니다.
 
@@ -358,7 +358,7 @@ Unity -batchmode -projectPath /path/to/ToyProject -runTests -testPlatform PlayMo
 
 검사는 자세·정지 구간 보존, 저장 완료·실패 복원, 기준 데이터의 필수 참조와 누락·불일치 거부, 씬·Prefab 참조, 재컴파일 후 UI 복구, 반복 RESET·비활성화·컴포넌트 파괴 후 인스턴스와 리스너 정리를 포함합니다. NUnit의 버튼 호출과 Game View에서의 실제 마우스 클릭은 별도 증거로 관리합니다. 이전 계약의 검증 이력은 [PhysicsRecorder 회귀 검증 기록](Docs/PhysicsRecorderRegressionValidation.md), 현재 계약의 결과는 아래 정리 검증 문서에서 확인합니다. CPU·GPU 성능 측정은 위 성능 보고서의 별도 실행 결과입니다.
 
-2026-10-24 현재 계약 정리 후 **EditMode 103/103·PlayMode 38/38·Python 10/10** 통과했습니다. 최종 상태 표시 변경 후 관련 PlayMode 22개도 모두 통과했습니다. 정리 범위·원시 로그·실행 제한은 [현재 계약 정리 검증](Docs/CurrentContractCleanup/Validation.md)에 기록합니다. 메시 도구의 `Init`·`Release`·`IsInitialized`·`IsFaulted`, `MeshBuildResult.Materials`, 녹화 결과의 `ResultClip`·`ResultPrefab`·`IsSaveCompleted`, 기준 데이터 없는 녹화본 재생과 계측 v1 호환 처리를 제거했습니다. 호출부·테스트도 현재 API로 정리했으며 별도 마이그레이션 어댑터를 두지 않습니다.
+2026-10-31 기준 **EditMode 117/117·PlayMode 38/38·Python 10/10** 통과했습니다(저장소 루트의 `Tools/run-tests.sh`). 2026-10-24 현재 계약 정리 후 EditMode 103/103·PlayMode 38/38·Python 10/10이었습니다. 최종 상태 표시 변경 후 관련 PlayMode 22개도 모두 통과했습니다. 정리 범위·원시 로그·실행 제한은 [현재 계약 정리 검증](Docs/CurrentContractCleanup/Validation.md)에 기록합니다. 메시 도구의 `Init`·`Release`·`IsInitialized`·`IsFaulted`, `MeshBuildResult.Materials`, 녹화 결과의 `ResultClip`·`ResultPrefab`·`IsSaveCompleted`, 기준 데이터 없는 녹화본 재생과 계측 v1 호환 처리를 제거했습니다. 호출부·테스트도 현재 API로 정리했으며 별도 마이그레이션 어댑터를 두지 않습니다.
 
 물리 Recorder와 샘플 UI의 `Init`·`Release`는 실제 세션·리스너를 관리하는 현재 수명주기로 남습니다. Unity Animation 출력 형식과 `LegacyRuntime.ttf`는 현재 재생·UI에 사용 중인 엔진 기능입니다. 과거 측정 보고서·소스 스냅샷·로그는 당시 결과를 재현하는 이력 자료로 보존합니다.
 
