@@ -419,6 +419,26 @@ namespace Common.FlowField.Tests
         }
 
         [Test]
+        public void StaticBakedFollowsTheCurrentDefaultDirection()
+        {
+            Build(Request(Grid, hasGoal: false, direction: Vector3.forward));
+            Assert.That(_session.TryExport(out var input, out var blocked, out var topology, out var flags,
+                out var next, out var directions, out var speeds, out var escape, out int goal), Is.True);
+            _bake = ScriptableObject.CreateInstance<FlowFieldVolumeBakeData>();
+            _bake.Apply(Grid, input.WorldBounds, input.ObstacleLayer, 0f, false, default, 0f, goal,
+                blocked, topology, flags, next, directions, speeds, escape);
+            _session.Release();
+            _session.Initialize(FlowFieldBakeMode.StaticBaked);
+            Build(Request(Grid, hasGoal: false, direction: Vector3.right, bake: _bake));
+
+            Assert.That(_session.Sample(OldCell).Direction, Is.EqualTo(Vector3.right));
+            Assert.That(_session.Sample(OldCell).SpeedMultiplier, Is.EqualTo(1f));
+            // The boundary check now judges the direction that is published.
+            AssertStopped(new Vector3(7.5f, 1.5f, 3.5f));
+            Assert.That(_session.Sample(new Vector3(3.5f, 1.5f, 7.5f)).Direction, Is.EqualTo(Vector3.right));
+        }
+
+        [Test]
         public void SchedulerKeepsSafetyRegionsIsolatedBetweenSessions()
         {
             var other = new FlowFieldVolumeSession();

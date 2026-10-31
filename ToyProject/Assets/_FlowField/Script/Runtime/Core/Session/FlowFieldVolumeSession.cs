@@ -181,6 +181,7 @@ namespace Common.FlowField
             ValidateRequest(request);
             if (requeryObstacles)
                 _obstacleQueryRequired = true;
+            bool goalMovedWithinCell = IsGoalMoveWithinCell(request);
             // Keep the last accepted request independently of the committed
             // field.  A dirty notification that arrives while another Goal is
             // building must never resurrect the older committed Goal.
@@ -199,9 +200,26 @@ namespace Common.FlowField
                 && (_committed.Request.ObstacleLayer.value != request.ObstacleLayer.value
                     || Mathf.Abs(_committed.Request.ObstacleClearance - request.ObstacleClearance) > 0.0001f))
                 _safety.InvalidateRegion(request.WorldBounds);
+            if (goalMovedWithinCell)
+                return true;
             _hasPendingRequest = true;
             EnterBuildingUnlessStopped();
             return true;
+        }
+
+        /// <summary>
+        /// The running or published field already answers this request; only
+        /// the requested position differs. Resubmitting the same position
+        /// remains an explicit request for another build.
+        /// </summary>
+        private bool IsGoalMoveWithinCell(in FlowFieldVolumeRequest request)
+        {
+            if (_obstacleQueryRequired || _hasPendingRequest || request.BakeMode == FlowFieldBakeMode.StaticBaked)
+                return false;
+            if (_build == null && _committed == null)
+                return false;
+            FlowFieldVolumeRequest current = _build != null ? _build.Request : _committed.Request;
+            return !current.HasSameGoal(request) && current.HasSameResult(request);
         }
 
         // Accepted input waits while the lifecycle has stopped this session.
@@ -783,6 +801,11 @@ namespace Common.FlowField
                 return false;
 
             FlowFieldVolumeRequest request = _committed.Request;
+            // A running build or a move within the Goal cell leaves the
+            // published result behind the requested Goal, as on Surface2D.
+            FlowFieldVolumeRequest requested = _hasLatestRequestedInput && request.BakeMode != FlowFieldBakeMode.StaticBaked
+                ? _latestRequestedInput
+                : request;
             Vector3 resolvedGoal = default;
             bool hasResolvedGoal = _committed.GoalIndex >= 0
                 && _committed.GoalIndex < _committed.Grid.CellCount;
@@ -802,9 +825,9 @@ namespace Common.FlowField
                 FlowFieldSpaceMode.Volume3D,
                 request.BakeMode,
                 _revision,
-                request.HasGoal,
-                request.GoalWorld,
-                request.GoalInfluenceRadius,
+                requested.HasGoal,
+                requested.GoalWorld,
+                requested.GoalInfluenceRadius,
                 hasResolvedGoal,
                 resolvedGoal);
             return info.IsValid;
@@ -963,6 +986,7 @@ namespace Common.FlowField
         {
             FlowFieldVolumeBakeData data = build.Request.StaticBakeData;
             int end = Math.Min(build.Cursor + ArrayElementsPerStep, build.Count);
+            Vector3 defaultDirection = FlowFieldVectorUtility.NormalizeDefaultDirection(build.Request.DefaultDirection);
             for (; build.Cursor < end; build.Cursor++)
             {
                 data.CopyCellToBuild(
@@ -974,6 +998,13 @@ namespace Common.FlowField
                     build.Directions,
                     build.Speeds,
                     build.EscapeDirections);
+                // Default Direction is a runtime input, as on Surface2D. The
+                // asset keeps its bake-time value only to rebuild its own arrays.
+                if (!build.Blocked[build.Cursor] && build.Next[build.Cursor] == -1)
+                {
+                    build.Directions[build.Cursor] = defaultDirection;
+                    build.Speeds[build.Cursor] = 1f;
+                }
             }
             if (build.Cursor < build.Count)
                 return false;
@@ -1359,14 +1390,19 @@ namespace Common.FlowField
             if (!_hasPendingRequest
                 && _committed != null
                 && _hasLatestRequestedInput
-                && _committed.Request.HasSameInputs(_latestRequestedInput))
+                && _committed.Request.HasSameResult(_latestRequestedInput))
             {
                 _hasPendingModifierRecompose = true;
                 EnterBuildingUnlessStopped();
                 return;
             }
             if (_hasLatestRequestedInput)
-                Submit(_latestRequestedInput);
+            {
+                // The latest input was already accepted, and a Goal move within
+                // its cell must not make Submit skip this build.
+                _hasPendingRequest = true;
+                EnterBuildingUnlessStopped();
+            }
             else if (_committed != null)
                 Submit(_committed.Request);
             else if (_build != null)
