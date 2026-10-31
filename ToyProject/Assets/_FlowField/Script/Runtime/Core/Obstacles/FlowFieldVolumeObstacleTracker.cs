@@ -5,7 +5,7 @@ using UnityEngine;
 namespace Common.FlowField
 {
     // Owns registration, cached collider observations and sweep storage. Reports
-    // dirty bounds synchronously; safety margins, epochs, requests and lifecycle
+    // dirty bounds synchronously; safety margins, requests and lifecycle
     // decisions remain with the session that receives them.
     internal sealed class FlowFieldVolumeObstacleTracker
     {
