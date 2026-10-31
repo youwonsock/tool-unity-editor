@@ -105,11 +105,8 @@ namespace Common.FlowField
                     return 1f;
 
                 const float phaseCount = 9f;
-                float local = _build.Phase == BuildPhase.Bfs
-                    ? _build.Count <= 0 ? 0f : (float)_build.Head / _build.Count
-                    : _build.Phase == BuildPhase.Escape
-                        ? _build.Count <= 0 ? 0f : (float)_build.Cursor / _build.Count
-                        : _build.Count <= 0 ? 0f : (float)_build.Cursor / _build.Count;
+                int done = _build.Phase == BuildPhase.Bfs ? _build.Head : _build.Cursor;
+                float local = _build.Count <= 0 ? 0f : (float)done / _build.Count;
                 return Mathf.Clamp01(((int)_build.Phase + Mathf.Clamp01(local)) / phaseCount);
             }
         }

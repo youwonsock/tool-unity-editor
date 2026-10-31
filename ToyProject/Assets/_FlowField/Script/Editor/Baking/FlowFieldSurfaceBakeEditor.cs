@@ -378,9 +378,14 @@ namespace Common.FlowField.Editor
                 FlowFieldWorkspace workspace = session.CommittedWorkspace;
                 if (workspace == null || session.CommittedSurface == null)
                     throw new InvalidOperationException("Static Flow Bake produced no committed field.");
+                if (manager.HasConfiguredGoal && (!workspace.HasActiveGoal || workspace.ResolvedGoalIndex < 0))
+                    throw new InvalidOperationException(
+                        "Cannot bake a Surface2D Goal without a walkable resolved Goal cell.");
 
                 assetPath = FlowFieldBakeAssetUtility.ResolveStaticAssetPath(manager);
                 FlowFieldBakeAssetUtility.CreateBakeFolder();
+                // A failed bake reverts down to this group, so it must hold nothing older.
+                Undo.IncrementCurrentGroup();
                 undoGroup = Undo.GetCurrentGroup();
                 Undo.SetCurrentGroupName("Bake FlowField Static Snapshot");
                 asset = AssetDatabase.LoadAssetAtPath<FlowFieldStaticBakeData>(assetPath);
@@ -557,6 +562,8 @@ namespace Common.FlowField.Editor
 
                 assetPath = FlowFieldBakeAssetUtility.ResolveVolumeAssetPath(manager);
                 FlowFieldBakeAssetUtility.CreateBakeFolder();
+                // A failed bake reverts down to this group, so it must hold nothing older.
+                Undo.IncrementCurrentGroup();
                 undoGroup = Undo.GetCurrentGroup();
                 Undo.SetCurrentGroupName("Bake FlowField Volume Snapshot");
                 asset = AssetDatabase.LoadAssetAtPath<FlowFieldVolumeBakeData>(assetPath);

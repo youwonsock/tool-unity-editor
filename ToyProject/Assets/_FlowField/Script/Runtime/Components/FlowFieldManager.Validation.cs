@@ -28,6 +28,8 @@ namespace Common.FlowField
                 throw new ArgumentOutOfRangeException(nameof(_obstacleClearance));
             if (!FlowFieldGridSpace.IsFinite(_goalInfluenceRadius) || _goalInfluenceRadius < 0f)
                 throw new ArgumentOutOfRangeException(nameof(_goalInfluenceRadius));
+            if (!FlowFieldGridSpace.IsFinite(_refreshRate) || _refreshRate < MIN_REFRESH_RATE)
+                throw new ArgumentOutOfRangeException(nameof(_refreshRate));
             if (!Enum.IsDefined(typeof(FlowFieldBakeMode), _bakeMode))
                 throw new ArgumentOutOfRangeException(nameof(_bakeMode));
             if (_maxGpuWaves < 64)

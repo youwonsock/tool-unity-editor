@@ -229,7 +229,7 @@ namespace Common.FlowField
             for (int i = 0; i < _registry.Entries.Count; i++)
             {
                 FlowFieldModifierRegistry.Entry entry = _registry.Entries[i];
-                if (IsMissingModifier(entry.Modifier)
+                if (FlowFieldVectorUtility.IsMissingModifier(entry.Modifier)
                     || entry.InfluenceMask == null
                     || entry.InfluenceMask.Length != cellCount)
                     throw new InvalidOperationException("Registered modifier data is inconsistent.");
@@ -272,8 +272,5 @@ namespace Common.FlowField
             entry.InfluenceIndices.Clear();
             entry.InfluenceIndicesBuilt = false;
         }
-
-        private static bool IsMissingModifier(IFlowFieldVectorModifier modifier)
-            => modifier == null || modifier is UnityEngine.Object unityObject && unityObject == null;
     }
 }

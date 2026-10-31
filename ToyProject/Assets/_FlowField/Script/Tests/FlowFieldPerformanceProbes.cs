@@ -204,6 +204,19 @@ namespace Common.FlowField.Tests
             finally { session.Dispose(); }
         }
 
+        [Test]
+        public void SurfaceBakeValidation()
+        {
+            var data = UnityEditor.AssetDatabase.LoadAssetAtPath<FlowFieldStaticBakeData>(
+                "Assets/_FlowField/Settings/FlowFieldManager_1569603542928883877_StaticBake.asset");
+            Assert.That(data, Is.Not.Null);
+            // Serialized edits invalidate the result; the second call may reuse it.
+            using (var settings = new UnityEditor.SerializedObject(data))
+                settings.ApplyModifiedPropertiesWithoutUndo();
+            Measure("surface.bake.validate", data.NextCells.Length, () => Assert.That(data.Validate(out _), Is.True));
+            Measure("surface.bake.validateAgain", data.NextCells.Length, () => Assert.That(data.Validate(out _), Is.True));
+        }
+
         private static ComputeShader LoadShader()
         {
             if (!SystemInfo.supportsComputeShaders || !SystemInfo.supportsAsyncGPUReadback)

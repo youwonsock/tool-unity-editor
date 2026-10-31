@@ -217,6 +217,10 @@ namespace Common.FlowField
 
         [NonSerialized] private FlowFieldStaticBakeSnapshot _snapshotCache;
         [NonSerialized] private int _snapshotCacheRevision = -1;
+        [NonSerialized] private int _validatedRevision = -1;
+        [NonSerialized] private int _validatedContentGeneration = -1;
+        [NonSerialized] private bool _validationResult;
+        [NonSerialized] private string _validationReason = string.Empty;
         [NonSerialized] private int _contentGeneration;
 
         public int FormatVersion => _formatVersion;
@@ -259,6 +263,7 @@ namespace Common.FlowField
             _surfaceNormals = FlowFieldBakeBlob.Unpack<Vector3>(_surfaceNormalData);
             _escapeDirections = FlowFieldBakeBlob.Unpack<Vector3>(_escapeDirectionData);
             _goalDirections = FlowFieldBakeBlob.Unpack<Vector3>(_goalDirectionData);
+            unchecked { _contentGeneration++; }
             _snapshotCache = null;
             _snapshotCacheRevision = -1;
         }
@@ -282,7 +287,21 @@ namespace Common.FlowField
             }
         }
 
+        // Requests, Gizmos and the Inspector all ask, and the full check costs
+        // milliseconds at the largest grids, so an unchanged asset answers once.
         internal bool Validate(out string reason)
+        {
+            if (_validatedRevision != _revision || _validatedContentGeneration != _contentGeneration)
+            {
+                _validationResult = ValidateContents(out _validationReason);
+                _validatedRevision = _revision;
+                _validatedContentGeneration = _contentGeneration;
+            }
+            reason = _validationReason;
+            return _validationResult;
+        }
+
+        private bool ValidateContents(out string reason)
         {
             reason = string.Empty;
             if (_formatVersion != CURRENT_FORMAT_VERSION)

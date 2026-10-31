@@ -435,8 +435,10 @@ namespace Common.FlowField
                 state.RefreshRequested = false;
                 return true;
             }
+            bool validationFinished = false;
             if (!assetState.ValidationComplete)
             {
+                validationFinished = true;
                 assetState.ValidationComplete = true;
                 assetState.ValidationValid = assetState.Validator.IsValid;
                 assetState.ValidationError = assetState.Validator.Error;
@@ -450,7 +452,8 @@ namespace Common.FlowField
                     assetState.ValidationError,
                     FlowFieldVolumeVisualizationStatusCode.Invalid);
                 state.ValidationProgress = 1f;
-                return state.RefreshRequested;
+                // The Inspector still shows the progress until the next repaint.
+                return validationFinished || state.RefreshRequested;
             }
 
             if (!asset.TryGetView(grid, out bool[] blocked, out Vector3[] directions, out float[] speeds))
