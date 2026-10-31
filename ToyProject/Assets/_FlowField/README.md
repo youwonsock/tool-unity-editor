@@ -222,7 +222,7 @@ Manager도 함께 Fault 상태라면 Modifier를 비활성화·Release해 설정
 | Volume 안전성·게시 | `FlowFieldVolumeSafetyState`, `FlowFieldVolumeFieldData`, `FlowFieldVolumeGpuResultValidator` | 불확실 영역의 보수적 정지, 완성 결과 보관, GPU 결과 검증 |
 | 격자·읽기 | `FlowFieldGridSpace`, `FlowFieldReadView` | 월드/셀 좌표 변환과 내부 읽기 전용 셀 조회 |
 | 정적 입력 | `FlowFieldStaticBakeData`, `FlowFieldVolumeBakeData`, `FlowFieldBakeBlob` | Surface2D·Volume3D의 v6 베이크 저장·검증 |
-| GPU | `IFlowFieldGpuBackend`, `FlowFieldComputeSolver` | Surface BFS 실행 경계와 Compute Shader·AsyncGPUReadback 자원. Readback 요청 직후 `GL.Flush`로 Dispatch를 제출. Solver는 Backend 인터페이스의 구현체가 아님. GPU를 끄고 Managed로 전환하면 경고를 한 번 남기고 `FlowFieldManager.GpuFallbackReason`으로 이유를 제공 |
+| GPU | `IFlowFieldGpuBackend`, `FlowFieldComputeSolver` | Surface BFS 실행 경계와 Compute Shader·AsyncGPUReadback 자원. Readback 요청 직후 `GL.Flush`로 Dispatch를 제출. Solver는 Backend 인터페이스의 구현체가 아님. GPU를 끄고 Managed로 전환하면 경고를 한 번 남기고 `FlowFieldManager.GpuFallbackReason`으로 이유를 제공. 샘플 HUD에도 표시 |
 | 협력 실행 | `IFlowFieldBuildOperation`, `FlowFieldBuildScheduler`, `FlowFieldBuildDriver` | 실행 가능한 Volume 작업을 2ms의 공통 CPU 예산으로 진행. Session 수명과 취소는 Session 소유 |
 
 ## 수명과 결과 게시
@@ -372,4 +372,4 @@ Unity.exe -batchmode -projectPath <ToyProject> -runTests -testPlatform EditMode 
 - GPU 미지원·결과 검증 실패 시 Managed 계산은 현재 실행 경로입니다. 재계산 중 사용 가능한 게시 결과 유지와 함께 구버전 호환 기능으로 취급하지 않습니다.
 - BFS는 동일 비용의 격자 이동 횟수를 최소화합니다. 속도 Modifier는 경로 비용을 바꾸지 않으며 Agent 간 충돌 회피는 이동 시스템의 책임입니다.
 - Volume의 2ms는 협력 CPU 예산입니다. Physics·Modifier 호출 한 번이나 할당이 이를 초과할 수 있으며 전체 빌드 시간·GPU 시간의 상한은 아닙니다.
-- Surface 런타임·StaticBaked 이미지는 현재 HUD로 다시 캡처했고, 나머지 기능 이미지는 기존 캡처입니다. 회귀 실행은 실제 포인터 조작·GUI 렌더링·Player/기기·장시간 군중 이동을 포함하지 않으며, 성능 수치는 위의 Editor 프로브 기준입니다. Surface 샘플의 실제 포인터 조작, 두 샘플의 실제 키 입력, 군중 1000개 3분 이동은 Editor에서 별도로 확인했습니다. RMB+WASD 자유 카메라는 확인하지 않았습니다. Player 빌드는 실행한 기록이 없습니다.
+- Surface 런타임·StaticBaked 이미지는 현재 HUD로 다시 캡처했고, 나머지 기능 이미지는 기존 캡처입니다. 회귀 실행은 실제 포인터 조작·GUI 렌더링·Player/기기·장시간 군중 이동을 포함하지 않으며, 성능 수치는 위의 Editor 프로브 기준입니다. Surface 샘플의 실제 포인터 조작, 두 샘플의 실제 키 입력, HUD의 GPU 전환 이유 표시, 군중 1000개 3분 이동은 Editor에서 별도로 확인했습니다. RMB+WASD 자유 카메라는 확인하지 않았습니다. Player 빌드는 실행한 기록이 없습니다.
