@@ -1,12 +1,12 @@
 # FlowField 작업 현황과 남은 과제
 
-기준: 2026-10-31, 코드 커밋 `5cdde7f`. 단계별 결정과 근거는 [RefactoringNotes.md](RefactoringNotes.md#성능구조-개선-2026-10-2930), 사용법과 측정 표는 [README.md](../README.md#검증-기록)에 있다. 이 문서는 지금 상태와 다음에 할 일만 다룬다.
+기준: 2026-10-31, 코드 커밋 `00a912c`. 단계별 결정과 근거는 [RefactoringNotes.md](RefactoringNotes.md#성능구조-개선-2026-10-2930), 사용법과 측정 표는 [README.md](../README.md#검증-기록)에 있다. 이 문서는 지금 상태와 다음에 할 일만 다룬다.
 
 ## 현재 상태
 
 | 항목 | 상태 |
 | --- | --- |
-| 테스트 | macOS·Metal(Apple M4 Pro)에서 `Common.FlowField.Tests` 486개 통과, 실패 0, 성능 프로브 15개 제외. Windows·Direct3D 11 마지막 기록은 이번 수정 이전의 466개 |
+| 테스트 | macOS·Metal(Apple M4 Pro)에서 `Common.FlowField.Tests` 494개 통과, 실패 0, 성능 프로브 13개 제외. Windows·Direct3D 11 마지막 기록은 이번 수정 이전의 466개 |
 | 베이크 | Surface·Volume 모두 v6만 허용. Asset 2개는 같은 GUID로 다시 베이크했고 내용 해시는 v5와 같다. 마이그레이션 코드는 없다 |
 | 공개 계약 | Provider·Controller API, Manager 직렬화 설정, 씬·Prefab의 GUID 참조 유지. `FlowFieldManager.GpuFallbackReason` 추가 |
 | 성능 (100³ Volume, Managed, Windows 기록) | 전체 빌드 26~55초 → 약 6초, 2ms 예산 빌드 12,585 → 2,214프레임, 장애물 1개 이동 후 재빌드 31.3 → 6.0초 |
@@ -54,6 +54,17 @@
 | `cbe2a5e` | Volume Modifier 변경은 게시된 내비게이션을 재합성 | 값 변경 3,304 → 425ms, 회귀 테스트 4개 |
 | `afb1fdf` | 샘플 HUD 패널 확장 | 안내 문구와 버튼 겹침 해결 |
 | `5cdde7f` | Volume: Goal만 바뀌면 장애물 결과 재사용 | Goal 변경 약 3,100 → 2,227ms, 회귀 테스트 3개 |
+| `2f0c578`, `3332488` | 스냅샷·Modifier·Goal 변경·GPU 프로브 | 런타임 코드 변경 없음 |
+| `45cb514` | Volume: 명시적 재빌드는 Goal이 함께 바뀌어도 장애물을 다시 조회 | 재조회 누락 해결, 회귀 테스트 6개 |
+| `b0ad1a9` | Surface: 끊긴 재시도 뒤의 일회성 Goal 변경도 거부 | 낡은 Goal 게시 해결, 회귀 테스트 2개 |
+| `00a912c` | Volume: 값이 중복된 안전 스냅샷 제거 | 게시마다 하던 전체 셀 복사와 셀당 1바이트 제거 |
+
+사용자에게 보이는 변경은 다음과 같다.
+
+- Surface: 풀이 중 장애물만 바뀌면 그 결과를 게시한다. Goal이 풀이보다 자주 바뀌면 밀린 결과를 번갈아 게시하므로, 해석된 Goal이 요청 Goal보다 잠시 뒤처질 수 있다.
+- Volume: Goal이나 Modifier만 바뀌면 추적하지 않는 Collider를 다시 읽지 않는다. `RequestRebuild()`와 `NotifyCellsDirty()`는 다시 읽는다.
+- `SetGoal()` 뒤의 `RequestRebuild()`는 Volume의 Goal 재사용 효과를 없앤다. Goal만 바꿀 때는 `SetGoal()`만 호출한다.
+- GPU를 끄고 Managed로 전환하면 경고를 한 번 남기고 `GpuFallbackReason`으로 이유를 제공한다.
 
 Editor Play Mode 확인: Surface 샘플은 장애물이 매 Editor 틱 움직이는 동안 Revision 68까지 게시하고 Goal 변경을 반영했다. Volume 샘플은 StaticBaked v6를 로드했고, RuntimeDynamic으로 바꿔 장애물을 왕복시켰을 때 Revision 29, 정지 셀 133/4800이었다. 경고와 오류는 없었다. 군중 1000개를 3분 이동시켰을 때 NaN·경계 이탈·샘플 실패는 0이었고, Goal을 40번 바꾸는 동안 GC 후 힙은 744MB로 유지됐다. 결과 XML·로그·CSV는 Git에서 제외되는 `ToyProject/Logs/FlowFieldMaintenance/`에 있다.
 
@@ -64,6 +75,7 @@ Editor Play Mode 확인: Surface 샘플은 장애물이 매 Editor 틱 움직이
 | 문제 | 현황 | 해결 방향 |
 | --- | --- | --- |
 | Surface: 장애물과 Modifier 영역이 풀이 중 함께 바뀌면 영역을 한 번 더 만듦 | 결과는 같고 드문 경로의 비용만 중복 | 필요할 때 플래그 분리 |
+| Surface GPU: Goal이 풀이보다 자주 바뀌면 풀이가 하나 걸러 버려지고, 같은 셀 안의 이동도 풀이를 무효화 | 일회성 변경의 낡은 결과를 게시하지 않는 계약의 비용. GPU 경로에서만 생기며 실제 프레임 측정이 없다 | Player 프레임을 측정할 수 있을 때 해석된 셀 비교 검토 |
 
 ### 검증 공백
 
@@ -82,20 +94,20 @@ Apple M4 Pro·Managed 측정(`FlowFieldPerformanceProbes`). 결과 CSV는 `ToyPr
 
 | 항목 | 개선 전 | 현재 | 원인과 수정 |
 | --- | ---: | ---: | --- |
-| Surface 316×316 Goal 재빌드 | 425ms | 205ms | 셀마다 `CanTraverse`를 다시 부르고 Goal 준비를 두 번 했다. 준비된 Topology를 재사용한다 |
-| Volume 100³ 안전 스냅샷, 영역 1 / 64개 | 323ms / 8,872ms | 1.8ms / 6.6ms | 게시 프레임에 전체 셀×영역을 검사했다. 영역 근처 셀만 검사한다 |
-| Volume 100³ Modifier 값 변경 | 3,304ms | 425ms | 전체 빌드를 했다. Modifier 단계만 다시 실행한다 |
-| Volume 100³ Goal 변경 | 약 3,100ms | 2,227ms | Goal만 바뀌면 장애물 결과와 Topology를 재사용한다 |
+| Surface 316×316 Goal 재빌드 | 425ms | 198ms | 셀마다 `CanTraverse`를 다시 부르고 Goal 준비를 두 번 했다. 준비된 Topology를 재사용한다 |
+| Volume 100³ 안전 스냅샷, 영역 1 / 64개 | 323ms / 8,872ms | 없음 | 게시 프레임에 전체 셀×영역을 검사했다. 값이 중복되어 스냅샷을 제거했다 |
+| Volume 100³ Modifier 값 변경 | 3,304ms | 409ms | 전체 빌드를 했다. Modifier 단계만 다시 실행한다 |
+| Volume 100³ Goal 변경 | 약 3,100ms | 2,145ms | Goal만 바뀌면 장애물 결과와 Topology를 재사용한다 |
 
-Surface Managed 재빌드 약 200ms는 여전히 한 번의 Pump에서 동기로 끝난다. Goal 준비 88ms, BFS 76ms, 합성 22ms, 탈출 방향 13ms다. BFS를 프레임으로 나누는 작업은 Session 변경이 커서 하지 않았고, GPU 경로를 쓸 수 없는 환경에서 200ms가 문제 될 때 다시 본다.
+Surface Managed 재빌드 약 200ms는 여전히 한 번의 Pump에서 동기로 끝난다. Goal 준비 85ms, BFS 73ms, 합성 21ms, 탈출 방향 13ms다. BFS를 프레임으로 나누는 작업은 Session 변경이 커서 하지 않았고, GPU 경로를 쓸 수 없는 환경에서 200ms가 문제 될 때 다시 본다.
 
-Volume 100³·장애물 50개·Modifier 3개의 전체 빌드는 약 3.6초다.
+Volume 100³·장애물 50개·Modifier 3개의 전체 빌드는 약 3.5초다.
 
 | Directions | BFS | Modifiers | Topology | Obstacles | Escape | Goal |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 983ms (27%) | 695ms (20%) | 599ms (17%) | 532ms (15%) | 405ms (12%) | 187ms (5%) | 120ms (3%) |
+| 960ms (27%) | 680ms (19%) | 577ms (17%) | 550ms (16%) | 410ms (12%) | 186ms (5%) | 118ms (3%) |
 
-GPU 경로(같은 장면, 배치 실행의 프레임 대기 포함)는 Surface 332ms, 그중 첫 Pump 동기 구간 170ms이고, Volume 5,714ms다. 이 환경에서는 수정 후 Managed가 전체 시간은 더 짧다. 프레임 끊김 비교는 실제 Player 프레임 기준으로 다시 재야 한다.
+GPU 경로(같은 장면, 배치 실행의 프레임 대기 포함)는 Surface 271ms, 그중 첫 Pump 동기 구간 141ms이고, Volume 5,814ms다. 이 환경에서는 수정 후 Managed가 전체 시간은 더 짧다. 프레임 끊김 비교는 실제 Player 프레임 기준으로 다시 재야 한다.
 
 ### 보류한 항목
 
@@ -110,7 +122,7 @@ GPU 경로(같은 장면, 배치 실행의 프레임 대기 포함)는 Surface 3
 
 ### 구조
 
-- 큰 파일: `FlowFieldSession.cs` 1,983줄, `FlowFieldVolumeRuntime.cs` 1,659줄, `FlowFieldManager.cs` 1,414줄. 수명·재진입 검사가 곳곳에 있어 분리 자체의 회귀 위험이 크다. 해당 파일을 크게 바꾸는 기능 작업과 함께 진행한다.
+- 큰 파일: `FlowFieldSession.cs` 1,983줄, `FlowFieldVolumeRuntime.cs` 1,644줄, `FlowFieldManager.cs` 1,414줄. 수명·재진입 검사가 곳곳에 있어 분리 자체의 회귀 위험이 크다. 해당 파일을 크게 바꾸는 기능 작업과 함께 진행한다.
 - 파일 이름: `FlowFieldVolumeRuntime.cs`에는 `FlowFieldVolumeRequest`와 `FlowFieldVolumeSession`이 들어 있다. `.meta`를 유지한 채 이름을 맞출 수 있다.
 - 복잡성의 근원: 콜백 안의 Release·Init·Suspend를 허용해 외부 호출 뒤마다 소유권을 다시 검사한다. 이벤트 지연 전달은 공개 동작을 바꾸므로 진행하지 않았다.
 - Manager: `SpaceMode == Volume3D` 분기 11곳. 모드별 어댑터 분리는 Manager를 크게 바꾸는 기능 작업과 함께 진행한다.
