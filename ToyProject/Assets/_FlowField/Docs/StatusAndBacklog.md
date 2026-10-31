@@ -71,7 +71,7 @@ Editor Play Mode 확인: Surface 샘플은 장애물이 매 Editor 틱 움직이
 | --- | --- | --- |
 | 베이크 에디터 | 테스트 어셈블리가 `Common.FlowField.Editor`를 참조하지 않아 `BakeAndAssign`을 직접 검사하지 않는다. 지금은 실제 베이크 후 `_revision` 외 차이가 없는지 수동으로 비교한다 | 자동 테스트 추가 검토 |
 | Windows | 이번 수정은 Metal에서만 실행했다 | Windows·Direct3D 11에서 전체 테스트 재실행 |
-| 실제 플레이 | Surface 샘플에서 실제 포인터로 게이트·Next Goal 버튼을, 두 샘플에서 Space를 확인했다. macOS 입력 소스가 한글인 상태에서는 R 키가 반응하지 않아 O·R·G·F 실제 키 입력은 확인하지 못했고, Volume의 게이트·카메라 핸들러는 직접 호출로 확인했다 | 영문 입력 소스에서 키 확인 |
+| 실제 플레이 | 실제 포인터로 Surface의 게이트·Next Goal 버튼을, 실제 키로 Surface의 Space·M·R·G와 Volume의 Space·O·R·G·F를 확인했다. RMB+WASD 자유 카메라는 확인하지 않았다 | 필요할 때 카메라 조작 확인 |
 | GPU 경로 | 프로브와 골든 해시는 Managed 고정이다. GPU 빌드 시간 수치가 없고, GPU 결과는 위상 유효성만 검사하므로 동률 이웃이 Managed와 다를 수 있다 | 프로브에 GPU 변형 추가 |
 | Player 스크립트 | Mac Standalone 어셈블리 컴파일만 오류 없이 확인했다. 실행은 범위에서 제외했다 | 보류 항목 참고 |
 | 자동 실행 | 저장소에 CI 설정이 없다. Unity 라이선스에 로그인한 PC에서 수동으로 실행한다 | 자체 호스트 러너 등 검토 |
@@ -117,9 +117,6 @@ GPU 경로(같은 장면, 배치 실행의 프레임 대기 포함)는 Surface 3
 
 ## 다음 순서
 
-2026-10-31 계획을 완료했다. Player 실행은 범위에서 제외했다. 다음 항목은 이 Mac이나 현재 입력 환경에서 할 수 없다.
-
-1. Windows·Direct3D 11 전체 테스트 재실행
-2. 영문 입력 소스에서 샘플의 O·R·G·F 키 확인
+2026-10-31 계획을 완료했다. Player 실행은 범위에서 제외했다. 남은 필수 항목은 이 Mac에서 할 수 없는 Windows·Direct3D 11 전체 테스트 재실행이다.
 
 테스트와 프로브 실행 방법은 [README.md](../README.md#검증-기록)를 따른다. 단계별 XML·로그와 프로브 CSV는 Git에서 제외되는 `ToyProject/Logs/`에 있어 작업한 PC에만 남는다.
