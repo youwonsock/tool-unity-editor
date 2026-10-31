@@ -74,7 +74,10 @@ namespace Common.FlowField
             return UnregisterImmediately(modifier);
         }
 
-        internal FlowFieldModifierRegistryResult MarkDirty(IFlowFieldVectorModifier modifier, out bool completed)
+        internal FlowFieldModifierRegistryResult MarkDirty(
+            IFlowFieldVectorModifier modifier,
+            bool valueNotified,
+            out bool completed)
         {
             completed = false;
             if (FlowFieldVectorUtility.IsMissingModifier(modifier))
@@ -101,7 +104,7 @@ namespace Common.FlowField
                 priorityChanged = true;
                 finalDirty = true;
             }
-            if (entry.Revision != revision)
+            if (valueNotified || entry.Revision != revision)
             {
                 entry.Revision = revision;
                 valueDirty = true;

@@ -496,7 +496,10 @@ namespace Common.FlowField
             if ((change & (FlowFieldModifierChange.Value | FlowFieldModifierChange.Priority)) != 0)
             {
                 EnsureModifierServices();
-                FlowFieldModifierRegistryResult result = _modifierRegistry.MarkDirty(modifier, out bool completed);
+                FlowFieldModifierRegistryResult result = _modifierRegistry.MarkDirty(
+                    modifier,
+                    (change & FlowFieldModifierChange.Value) != 0,
+                    out bool completed);
                 if (!completed)
                     return;
                 ApplyModifierRegistryResult(result);

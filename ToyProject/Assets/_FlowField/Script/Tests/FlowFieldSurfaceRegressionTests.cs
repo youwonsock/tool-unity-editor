@@ -225,6 +225,74 @@ namespace Common.FlowField.Tests
             Assert.That(_backend.Calls.Count, Is.EqualTo(1));
         }
 
+        private static float[] CellSpeeds(FlowFieldSession session)
+        {
+            var speeds = new float[FlowFieldRegressionFixture.Grid.CellCount];
+            for (int z = 0; z < 3; z++)
+            for (int x = 0; x < 3; x++)
+                speeds[FlowFieldRegressionFixture.Grid.ToFlatIndex(x, z)] =
+                    session.Sample(new Vector3(x + .5f, 0f, z + .5f)).SpeedMultiplier;
+            return speeds;
+        }
+
+        // A collider aligned with the cell edges must not leave a cell outside
+        // the region that a later partial composition rewrites.
+        private FlowFieldRegressionFixture.Modifier BuildWithAlignedModifier()
+        {
+            _colliderObject = new GameObject("Aligned modifier regression") { layer = FlowFieldRegressionFixture.Layer };
+            _colliderObject.transform.position = new Vector3(1.5f, .5f, 1.5f);
+            var collider = _colliderObject.AddComponent<BoxCollider>();
+            collider.isTrigger = true;
+            collider.size = new Vector3(1f, 2f, 1f);
+            Physics.SyncTransforms();
+            var modifier = new FlowFieldRegressionFixture.Modifier { InfluenceCollider = collider, Priority = 100 };
+            _session.RegisterModifierCommand(modifier);
+            Build();
+            Assert.That(CellSpeeds(_session), Has.Some.EqualTo(2f));
+            return modifier;
+        }
+
+        [Test]
+        public void ValueChangeRewritesEveryCellOfAnAlignedModifier()
+        {
+            var modifier = BuildWithAlignedModifier();
+            modifier.Speed = 3f;
+            modifier.Revision++;
+            _session.NotifyModifierChangedCommand(modifier, FlowFieldModifierChange.Value);
+            Build();
+            Assert.That(CellSpeeds(_session), Has.None.EqualTo(2f));
+            Assert.That(CellSpeeds(_session), Has.Some.EqualTo(3f));
+        }
+
+        [Test]
+        public void MovingAnAlignedModifierAwayRestoresEveryCell()
+        {
+            var modifier = BuildWithAlignedModifier();
+            _colliderObject.transform.position = Vector3.one * 100f;
+            Physics.SyncTransforms();
+            _session.NotifyModifierChangedCommand(modifier, FlowFieldModifierChange.Area);
+            Build();
+            Assert.That(CellSpeeds(_session), Has.All.EqualTo(1f));
+        }
+
+        [Test]
+        public void ValueNotificationAppliesWithoutARevisionChange()
+        {
+            _colliderObject = new GameObject("Notified modifier regression") { layer = FlowFieldRegressionFixture.Layer };
+            _colliderObject.transform.position = new Vector3(1.5f, .5f, 1.5f);
+            var collider = _colliderObject.AddComponent<BoxCollider>();
+            collider.isTrigger = true;
+            collider.size = Vector3.one * 8f;
+            Physics.SyncTransforms();
+            var modifier = new FlowFieldRegressionFixture.Modifier { InfluenceCollider = collider, Priority = 100 };
+            _session.RegisterModifierCommand(modifier);
+            Build();
+            modifier.Speed = 3f;
+            _session.NotifyModifierChangedCommand(modifier, FlowFieldModifierChange.Value);
+            Build();
+            Assert.That(_session.Sample(OriginCell).SpeedMultiplier, Is.EqualTo(3f));
+        }
+
         [Test]
         public void DefaultDirectionObservedDuringSolveDoesNotInvalidateGoal()
         {

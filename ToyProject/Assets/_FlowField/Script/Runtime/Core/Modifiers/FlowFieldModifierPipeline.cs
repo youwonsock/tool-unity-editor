@@ -116,20 +116,34 @@ namespace Common.FlowField
                 if (maskChanged || !entry.InfluenceIndicesBuilt)
                 {
                     entry.InfluenceIndices.Clear();
+                    // The rect comes from the mask, not the collider bounds: a
+                    // cell that only touches the collider belongs to the mask,
+                    // and a partial composition rewrites nothing outside the rect.
+                    FlowFieldCellRect maskRect = FlowFieldCellRect.Invalid;
                     for (int index = 0; index < entry.InfluenceMask.Length; index++)
-                        if (entry.InfluenceMask[index])
-                            entry.InfluenceIndices.Add(index);
+                    {
+                        if (!entry.InfluenceMask[index])
+                            continue;
+                        entry.InfluenceIndices.Add(index);
+                        request.Grid.FromFlatIndex(index, out int x, out int z);
+                        maskRect = FlowFieldCellRect.Union(maskRect, new FlowFieldCellRect
+                        {
+                            MinX = x,
+                            MaxX = x,
+                            MinY = 0,
+                            MaxY = request.Grid.Height - 1,
+                            MinZ = z,
+                            MaxZ = z,
+                        });
+                    }
                     entry.InfluenceIndicesBuilt = true;
+                    entry.InfluenceRect = maskRect;
                 }
 
-                FlowFieldCellRect currentRect = collider != null
-                    ? FlowFieldCellRect.FromBounds(request.Grid, collider.bounds)
-                    : FlowFieldCellRect.Invalid;
-                entry.InfluenceRect = currentRect;
                 if (maskChanged)
                     changedRegion = FlowFieldCellRect.Union(
                         changedRegion,
-                        FlowFieldCellRect.Union(previousRect, currentRect));
+                        FlowFieldCellRect.Union(previousRect, entry.InfluenceRect));
 
                 entry.InfluenceCollider = collider;
                 _registry.UpdateColliderSnapshot(entry, collider);
