@@ -29,7 +29,6 @@ namespace Common.FlowField
 
         private FlowFieldComputeSolver _computeSolver;
         private bool _gpuDisabled;
-        private string _gpuFallbackReason;
         private VolumeFieldData _committed;
         private BuildContext _build;
         // The latest accepted input is also the next build input when pending.
@@ -41,17 +40,11 @@ namespace Common.FlowField
         private bool _obstacleQueryRequired;
         private FlowFieldVolumeRequest _latestRequestedInput;
         private bool _hasLatestRequestedInput;
-        private FlowFieldRuntimeState _state = FlowFieldRuntimeState.Uninitialized;
         // Initialization uses Suspended as a staging state, but the first
         // accepted request must still be able to start a build. This flag
         // distinguishes that state from an explicit lifecycle suspension.
         private bool _suspendedByLifecycle;
-        private FlowFieldBakeMode _bakeMode;
-        private Exception _fault;
-        private int _revision;
-        private int _generation;
         private static long _nextVisualizationResultId;
-        private bool _disposed;
         private bool _pumping;
         private bool _runtimeScheduled;
         private long _buildReservationBytes;
@@ -67,24 +60,19 @@ namespace Common.FlowField
         }
 
         internal override FlowFieldSpaceMode SpaceMode => FlowFieldSpaceMode.Volume3D;
-        internal override FlowFieldBakeMode BakeMode => _bakeMode;
-        internal override FlowFieldRuntimeState State => _state;
-        internal override bool IsInitialized => _state == FlowFieldRuntimeState.Building
-            || _state == FlowFieldRuntimeState.Ready
-            || _state == FlowFieldRuntimeState.Suspended;
-        internal override bool IsFaulted => _state == FlowFieldRuntimeState.Faulted;
-        internal override bool IsRebuilding => _state == FlowFieldRuntimeState.Building;
+        internal override bool IsInitialized => State == FlowFieldRuntimeState.Building
+            || State == FlowFieldRuntimeState.Ready
+            || State == FlowFieldRuntimeState.Suspended;
+        internal override bool IsFaulted => State == FlowFieldRuntimeState.Faulted;
+        internal override bool IsRebuilding => State == FlowFieldRuntimeState.Building;
         internal bool IsWaitingForExternalCompletion
             => _build != null && _build.GpuPending;
         internal bool IsBuilding
             => CanPump && (IsRebuilding || HasPendingRequest);
-        internal override bool IsReady => (_state == FlowFieldRuntimeState.Building
-                || _state == FlowFieldRuntimeState.Ready)
+        internal override bool IsReady => (State == FlowFieldRuntimeState.Building
+                || State == FlowFieldRuntimeState.Ready)
             && _committed != null
             && !IsFaulted;
-        internal override string LastError => _fault?.Message;
-        internal override string GpuFallbackReason => _gpuFallbackReason;
-        internal override int Revision => _revision;
         internal long TrackedMemoryBytes
         {
             get
@@ -131,10 +119,10 @@ namespace Common.FlowField
             ThrowIfDisposed();
             if (IsInitialized)
                 throw new InvalidOperationException("FlowField volume session is already initialized.");
-            _bakeMode = bakeMode;
-            _fault = null;
+            BakeMode = bakeMode;
+            Fault = null;
             _gpuDisabled = false;
-            _gpuFallbackReason = null;
+            GpuFallbackReason = null;
             _hasLatestRequestedInput = false;
             _latestRequestedInput = default;
             _hasPendingRequest = false;
@@ -225,7 +213,7 @@ namespace Common.FlowField
         // Accepted input waits while the lifecycle has stopped this session.
         private void EnterBuildingUnlessStopped()
         {
-            if (!IsFaulted && (_state != FlowFieldRuntimeState.Suspended || !_suspendedByLifecycle))
+            if (!IsFaulted && (State != FlowFieldRuntimeState.Suspended || !_suspendedByLifecycle))
                 SetState(FlowFieldRuntimeState.Building);
         }
 
@@ -250,7 +238,7 @@ namespace Common.FlowField
                 return;
 
             _pumping = true;
-            int pumpGeneration = _generation;
+            int pumpGeneration = OperationGeneration;
             BuildContext activeBuild = _build;
             try
             {
@@ -266,7 +254,7 @@ namespace Common.FlowField
                     {
                         if (!_hasPendingRequest && !_hasPendingModifierRecompose)
                         {
-                            if (_committed != null && _state == FlowFieldRuntimeState.Building)
+                            if (_committed != null && State == FlowFieldRuntimeState.Building)
                                 SetState(FlowFieldRuntimeState.Ready);
                             return;
                         }
@@ -330,10 +318,10 @@ namespace Common.FlowField
                     // A successful grid replacement can advance the generation
                     // itself. Only that completed transition may be adopted;
                     // callback-driven changes have already returned above.
-                    pumpGeneration = _generation;
+                    pumpGeneration = OperationGeneration;
                     if (_hasPendingRequest || _hasPendingModifierRecompose)
                         continue;
-                    if (_state == FlowFieldRuntimeState.Building)
+                    if (State == FlowFieldRuntimeState.Building)
                         SetState(FlowFieldRuntimeState.Ready);
                     return;
                 }
@@ -376,11 +364,11 @@ namespace Common.FlowField
                 && _committed.Request.HasSameObstacleInputs(request)
                 && !_committed.Request.HasSameGoal(request);
 
-        private bool CanPump => !_disposed
-            && (_state == FlowFieldRuntimeState.Building || _state == FlowFieldRuntimeState.Ready);
+        private bool CanPump => !Disposed
+            && (State == FlowFieldRuntimeState.Building || State == FlowFieldRuntimeState.Ready);
 
         private bool CanContinuePump(int generation, BuildContext build)
-            => CanPump && _generation == generation && ReferenceEquals(_build, build);
+            => CanPump && OperationGeneration == generation && ReferenceEquals(_build, build);
 
         private void EnsureCurrentBuild(BuildContext build)
         {
@@ -416,7 +404,7 @@ namespace Common.FlowField
 
         private void InvalidateBuildGeneration()
         {
-            unchecked { _generation++; }
+            AdvanceOperationGeneration();
             _obstacles.InvalidateObservations();
             _modifierRegistry.InvalidateCaptures();
         }
@@ -581,7 +569,7 @@ namespace Common.FlowField
             if (!enabled
                 || !IsInitialized
                 || IsFaulted
-                || _bakeMode == FlowFieldBakeMode.StaticBaked)
+                || BakeMode == FlowFieldBakeMode.StaticBaked)
                 return;
             FlowFieldVolumeRequest request = _hasLatestRequestedInput
                 ? _latestRequestedInput
@@ -645,7 +633,7 @@ namespace Common.FlowField
 
         internal void Resume()
         {
-            if (_state != FlowFieldRuntimeState.Suspended)
+            if (State != FlowFieldRuntimeState.Suspended)
                 return;
             _suspendedByLifecycle = false;
             SetState(FlowFieldRuntimeState.Building);
@@ -656,12 +644,12 @@ namespace Common.FlowField
             if (!IsInitialized && !IsFaulted)
                 return;
             CancelCurrentBuild();
-            _fault = null;
+            Fault = null;
             _committed = null;
             _committedReservationBytes = 0;
             _hasLatestRequestedInput = false;
             _suspendedByLifecycle = false;
-            _gpuFallbackReason = null;
+            GpuFallbackReason = null;
             _safety.ClearRegions();
             if (_runtimeScheduled)
             {
@@ -682,7 +670,7 @@ namespace Common.FlowField
         {
             if (!IsFaulted)
                 return;
-            _fault = null;
+            Fault = null;
             // A retry only clears the failure.  The next accepted request
             // must still build and publish before the session becomes Ready;
             // never expose a transient Ready state with no valid result.
@@ -691,18 +679,9 @@ namespace Common.FlowField
                 : FlowFieldRuntimeState.Building);
         }
 
-        internal override void ReportFault(Exception exception)
-        {
-            if (!IsInitialized || IsFaulted)
-                return;
-            CancelCurrentBuild();
-            Exception failure = exception ?? new InvalidOperationException("FlowField volume session failed.");
-            _fault = failure;
-            int generation = _generation;
-            SetState(FlowFieldRuntimeState.Faulted);
-            if (!_disposed && _generation == generation)
-                NotifyFailed(failure);
-        }
+        private protected override void AbandonWorkForFault() => CancelCurrentBuild();
+
+        private protected override void ApplyFaultedState() => SetState(FlowFieldRuntimeState.Faulted);
 
         // A bake session stays on the deterministic Managed path by design, so
         // this records no fallback reason.
@@ -791,10 +770,10 @@ namespace Common.FlowField
         {
             info = default;
             if (_committed == null
-                || _state == FlowFieldRuntimeState.Uninitialized
-                || _state == FlowFieldRuntimeState.Released
-                || _state == FlowFieldRuntimeState.Suspended
-                || _state == FlowFieldRuntimeState.Faulted)
+                || State == FlowFieldRuntimeState.Uninitialized
+                || State == FlowFieldRuntimeState.Released
+                || State == FlowFieldRuntimeState.Suspended
+                || State == FlowFieldRuntimeState.Faulted)
                 return false;
 
             if (_hasLatestRequestedInput
@@ -825,7 +804,7 @@ namespace Common.FlowField
                 request.WorldBounds,
                 FlowFieldSpaceMode.Volume3D,
                 request.BakeMode,
-                _revision,
+                Revision,
                 requested.HasGoal,
                 requested.GoalWorld,
                 requested.GoalInfluenceRadius,
@@ -838,10 +817,10 @@ namespace Common.FlowField
         {
             view = default;
             if (_committed == null
-                || _state == FlowFieldRuntimeState.Uninitialized
-                || _state == FlowFieldRuntimeState.Released
-                || _state == FlowFieldRuntimeState.Suspended
-                || _state == FlowFieldRuntimeState.Faulted)
+                || State == FlowFieldRuntimeState.Uninitialized
+                || State == FlowFieldRuntimeState.Released
+                || State == FlowFieldRuntimeState.Suspended
+                || State == FlowFieldRuntimeState.Faulted)
                 return false;
 
             VolumeFieldData field = _committed;
@@ -867,10 +846,10 @@ namespace Common.FlowField
             out FlowFieldVolumeVisualizationSource source)
         {
             source = default;
-            if (_state == FlowFieldRuntimeState.Uninitialized
-                || _state == FlowFieldRuntimeState.Released
-                || _state == FlowFieldRuntimeState.Suspended
-                || _state == FlowFieldRuntimeState.Faulted)
+            if (State == FlowFieldRuntimeState.Uninitialized
+                || State == FlowFieldRuntimeState.Released
+                || State == FlowFieldRuntimeState.Suspended
+                || State == FlowFieldRuntimeState.Faulted)
                 return false;
 
             if (_hasLatestRequestedInput)
@@ -1176,9 +1155,9 @@ namespace Common.FlowField
         private void DisableGpu(string reason)
         {
             _gpuDisabled = true;
-            if (_gpuFallbackReason != null)
+            if (GpuFallbackReason != null)
                 return;
-            _gpuFallbackReason = reason;
+            GpuFallbackReason = reason;
             UnityEngine.Debug.LogWarning($"[FlowField] Volume3D GPU 계산을 끄고 Managed로 전환합니다: {reason}");
         }
 
@@ -1187,7 +1166,7 @@ namespace Common.FlowField
             FlowFieldComputeRequest request,
             Unity.Collections.NativeArray<GpuFlowCell> result)
         {
-            if (_disposed || _build != build || build.Generation != _generation)
+            if (Disposed || _build != build || build.Generation != OperationGeneration)
                 return;
             // Keep the callback bounded: the persistent readback storage is
             // owned by FlowFieldComputeSolver until the next dispatch, while
@@ -1204,7 +1183,7 @@ namespace Common.FlowField
             FlowFieldComputeFailureKind kind,
             Exception exception)
         {
-            if (_disposed || _build != build || build.Generation != _generation)
+            if (Disposed || _build != build || build.Generation != OperationGeneration)
                 return;
             DisableGpu(exception != null ? $"{kind}: {exception.Message}" : kind.ToString());
             build.GpuPending = false;
@@ -1353,7 +1332,7 @@ namespace Common.FlowField
             bool gridChanged = _committed != null && !_committed.Request.HasSameGrid(build.Request);
 
             _committed = next;
-            _revision++;
+            Revision++;
             _committedReservationBytes = EstimateCommittedBytes(build.Count);
             if (!build.IsModifierRecompose)
             {
@@ -1374,9 +1353,9 @@ namespace Common.FlowField
             // Publish only after every private reference, revision and
             // lifecycle field has been made internally consistent. A
             // listener may Release, Suspend or submit another request.
-            int callbackGeneration = _generation;
+            int callbackGeneration = OperationGeneration;
             NotifyFieldCommitted();
-            return _generation != callbackGeneration;
+            return OperationGeneration != callbackGeneration;
         }
 
         private void QueueModifierChange()
@@ -1413,24 +1392,18 @@ namespace Common.FlowField
         private static Vector3 ObstacleHalfExtents(float cellSize, float clearance)
             => Vector3.one * FlowFieldOverlapUtility.CellHalfExtent(cellSize, clearance);
 
-        private void SetState(FlowFieldRuntimeState state)
-        {
-            if (_state == state)
-                return;
-            _state = state;
-            NotifyStateChanged(state);
-        }
+        private void SetState(FlowFieldRuntimeState state) => PublishState(state);
 
         private void ThrowIfInputAvailable()
         {
             ThrowIfDisposed();
             if (!IsInitialized || IsFaulted)
-                throw new InvalidOperationException("FlowField volume session is unavailable.", _fault);
+                throw new InvalidOperationException("FlowField volume session is unavailable.", Fault);
         }
 
         private void ThrowIfDisposed()
         {
-            if (_disposed)
+            if (Disposed)
                 throw new ObjectDisposedException(nameof(FlowFieldVolumeSession));
         }
 
@@ -1548,9 +1521,9 @@ namespace Common.FlowField
 
         public override void Dispose()
         {
-            if (_disposed)
+            if (Disposed)
                 return;
-            _disposed = true;
+            Disposed = true;
             if (_runtimeScheduled)
             {
                 FlowFieldBuildScheduler.Unregister(this);
@@ -1568,8 +1541,8 @@ namespace Common.FlowField
             ReleaseSpareBuildArrays();
             _modifierRegistry.Clear();
             _safety.ClearRegions();
-            _state = FlowFieldRuntimeState.Released;
             MarkBaseDisposed();
+            PublishState(FlowFieldRuntimeState.Released);
         }
 
         bool IFlowFieldBuildOperation.IsWaitingForExternalCompletion
@@ -1583,7 +1556,7 @@ namespace Common.FlowField
 
         internal void Cancel()
         {
-            if (_disposed)
+            if (Disposed)
                 return;
             CancelCurrentBuild();
         }
