@@ -367,5 +367,7 @@ $env:FLOWFIELD_PERF = "1"   # 성능 프로브: 위 명령에 -testCategory Perf
 - **GPU 전환**: 일시적 충돌과 재시도해도 반복될 실패를 나눴다. 전환 이유는 공개 인터페이스에 넣지 않고 Manager 속성으로만 제공한다.
 - **Driver**: `HideAndDontSave` 객체는 Play 종료 후 남고 `FindObjectsByType`에 보이지 않아, 도메인 리로드 뒤 Play마다 Driver가 늘고 `PumpAll`이 프레임당 여러 번 돌았다. Editor에서만 생기는 문제이며 Editor 측정값에 영향을 줬을 수 있다.
 - **움직이는 Goal**: Goal이 풀이 시간보다 자주 셀을 옮기면 결과가 계속 거부되어 게시가 멈췄다(프로브에서 풀이 30회, 게시 0회). 낡은 Goal을 게시하지 않는다는 기존 계약은 일회성 변경에서 유지하고, 연속으로 밀린 풀이만 게시한다. 이때 해석된 Goal은 요청 Goal보다 잠시 뒤처진다. Surface 샘플에서 Goal을 매 Editor 틱 움직이는 동안 게시가 이어지는 것을 확인했다.
+- **Surface BFS**: 프레임 분할이나 Burst 전환 전에 낭비부터 없앴다. 재빌드가 425ms에서 205ms로 줄어 분할은 하지 않았다.
+- **Volume Modifier 재합성**: 전체 빌드가 함께 갱신하던 미추적 Collider의 반영 시점이 달라진다. README가 이미 미등록·스윕 OFF 장애물을 추적 대상이 아니라고 설명하고 Surface도 같게 동작하므로 재합성을 택했다.
 - **베이크 에디터 검증**: Surface·Volume 모두 다시 베이크하면 `_revision`만 달라지므로, 정리 전후 Asset을 바이트로 비교했다. 씬과 Asset은 원복했다.
 - **샌드박스**: 배치 실행은 Unity 라이선스 소켓 때문에 Claude Code 샌드박스 밖에서 실행해야 한다. 별도 worktree에서 실행하면 열려 있는 Editor와 충돌하지 않는다.
