@@ -211,6 +211,22 @@ namespace Common.FlowField.Tests
         }
 
         [Test]
+        public void RetryOfAFaultedSolveSolvesTheSameGoalAgain()
+        {
+            _session.Submit(FlowFieldRegressionFixture.Request(GoalA));
+            _session.Pump();
+            Assert.That(_session.IsRebuilding, Is.True);
+            _session.ReportFault(new InvalidOperationException("Fault during the solve"));
+            _session.RetryFault();
+            _session.Submit(FlowFieldRegressionFixture.Request(GoalA));
+            _session.Pump();
+            Assert.That(_session.IsRebuilding, Is.True, "The prepared but unsolved Goal must be solved.");
+            _backend.Complete(_backend.Calls.Count - 1);
+            AssertGoal(GoalA);
+            Assert.That(_session.Sample(new Vector3(0.5f, 0f, 0.5f)).Direction.x, Is.GreaterThan(0f));
+        }
+
+        [Test]
         public void LateFaultedSolveCannotOverwriteTheRetryWorkspace()
         {
             FlowFieldSessionRequest Request(Vector3 goal, Vector3 direction)

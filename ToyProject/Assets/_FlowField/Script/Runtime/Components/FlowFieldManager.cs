@@ -956,7 +956,8 @@ namespace Common.FlowField
 
         public bool UnregisterDynamicObstacle(Collider collider)
         {
-            ThrowIfInputAllowedForMode();
+            // Removal needs no valid configuration, as with Modifiers.
+            ThrowIfLifecycleUnavailable();
             if (ReferenceEquals(collider, null))
                 throw new ArgumentNullException(nameof(collider));
             if (BakeMode == FlowFieldBakeMode.StaticBaked)
