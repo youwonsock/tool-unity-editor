@@ -201,7 +201,7 @@ Manager도 함께 Fault 상태라면 Modifier를 비활성화·Release해 설정
 핵심 흐름은 요청 수락, 모드별 실행 경계, 완성 결과 게시와 샘플 조회를 보여줍니다. 상세 흐름은 책임별 호출을 나누어 다음 문서에서 확인할 수 있습니다.
 
 - [Surface2D 상세 흐름](Docs/TechnicalNotes.md#surface2d-상세-흐름): 표면·장애물·Goal 준비, BFS 완료, Modifier 합성과 FieldStore 게시.
-- [Volume3D 상세 흐름](Docs/TechnicalNotes.md#volume3d-상세-흐름): 입력 관측, 협력 Scheduler, BuildContext 단계, 안전성 Snapshot과 결과 게시.
+- [Volume3D 상세 흐름](Docs/TechnicalNotes.md#volume3d-상세-흐름): 입력 관측, 협력 Scheduler, BuildContext 단계, 불확실 영역과 결과 게시.
 
 ### 클래스·인터페이스별 역할
 
@@ -229,7 +229,7 @@ Manager도 함께 Fault 상태라면 Modifier를 비활성화·Release해 설정
 
 - **수락·실행·게시 입력**: 최신 요청은 다음 작업을, 실행 중 입력은 해당 계산을, 게시 입력은 현재 공개 결과를 설명합니다. 서로 다른 시점의 소유권이며 연속 요청은 최신 값과 대기 플래그로 병합합니다.
 - **Surface 조회**: 일반 샘플과 해석된 Goal 메타데이터는 항상 게시 FieldStore에서 읽습니다. Modifier 합성 중의 작업 배열은 노출하지 않습니다. 장애물·탈출·연결 안전성 검사는 최신 관측을 반영해 이동을 제한할 수 있습니다. 요청 Goal과 게시 결과의 해석된 Goal은 별도 의미를 유지합니다.
-- **Volume 부분 재계산**: 입력이 같으면 Modifier 변경은 게시된 내비게이션에 Modifier만 다시 합성하고, Goal만 바뀌면 장애물 결과와 Topology를 재사용합니다. 등록·스윕으로 추적하지 않는 Collider는 다음 전체 빌드에서 반영되므로, 이런 Collider가 바뀌면 `RequestRebuild()`나 `NotifyCellsDirty()`를 호출합니다.
+- **Volume 부분 재계산**: 입력이 같으면 Modifier 변경은 게시된 내비게이션에 Modifier만 다시 합성하고, Goal만 바뀌면 장애물 결과와 Topology를 재사용합니다. 등록·스윕으로 추적하지 않는 Collider는 다음 전체 빌드에서 반영되므로, 이런 Collider가 바뀌면 `RequestRebuild()`나 `NotifyCellsDirty()`를 호출합니다. Volume의 이 두 호출은 Goal이 함께 바뀌어도 장애물을 다시 조회합니다. `SetGoal()` 뒤에 `RequestRebuild()`를 덧붙이면 Goal 재사용 효과를 잃으므로, Goal만 바꿀 때는 `SetGoal()`만 호출합니다.
 - **Revision과 참조**: Surface Revision은 셀 데이터·Goal의 실질 변경에 따라 증가합니다. 같은 내용의 Snapshot 교체는 Revision 증가 없이 게시 Grid·Surface 참조를 갱신할 수 있습니다. Volume Revision은 완료 결과 교체 정책을 따릅니다.
 - **움직이는 장애물**: BFS나 Volume 빌드 중 장애물만 바뀌면 그 결과를 게시하고 재빌드를 예약합니다. 조회는 최신 장애물 상태를 다시 검사합니다. Volume은 이미 반영한 불확실 영역을 게시 때 지우므로, 빌드 중 장애물이 지나간 영역만 다음 게시까지 정지합니다. Surface는 Grid가 바뀐 결과를 거부하고 다시 계산합니다. Goal이 바뀐 결과도 거부하지만, 연속으로 밀리면 이미 푼 결과를 게시하고 최신 Goal을 다시 계산하므로 Goal이 풀이보다 빨리 움직여도 게시가 멈추지 않습니다. 이때 해석된 Goal은 요청 Goal보다 잠시 뒤처질 수 있습니다.
 - **재진입**: 이벤트, Modifier getter·`CaptureSnapshot()`·`Modify()`, Surface Source 호출 이후에는 작업 소유권을 다시 검사합니다. Release·재초기화·모드 변경·Suspend·Fault·Dispose가 취소한 이전 작업은 새 결과나 상태를 덮어쓰지 않습니다. Manager의 수명 버전은 빌드 세대와 구분합니다.
@@ -324,7 +324,7 @@ Editor에서 씬의 표면 또는 3D 볼륨을 미리 계산해 v6 Bake Asset으
 | Volume3D Bounds | 입력 X·Y·Z 크기는 양수여야 하며, 반올림한 축별 셀 수를 **최소 1셀로 보정**합니다. 입력 Y에 Surface2D의 별도 `0.01` 높이 하한을 적용하지 않습니다. |
 | Surface2D | `Width × Depth` 최대 **100,000셀**입니다. |
 | Volume3D | `Width × Height × Depth` 최대 **1,000,000셀**입니다. |
-| Volume 추적 메모리 | Manager별 **512MiB** 예산을 적용합니다. 기존 게시 결과, 작업 배열, 안전성 Snapshot과 GPU 할당 등을 고려한 예상량으로 요청을 검증하고 작업 시작 시 다시 확인합니다. |
+| Volume 추적 메모리 | Manager별 **512MiB** 예산을 적용합니다. 기존 게시 결과, 작업 배열과 GPU 할당 등을 고려한 예상량으로 요청을 검증하고 작업 시작 시 다시 확인합니다. |
 
 Surface2D의 X·Z 셀 수는 `floor(axisLength / CellSize + 0.5)`로 계산하며 각 결과가 1 이상이어야 합니다. Volume3D의 X·Y·Z 셀 수는 `max(1, floor(axisLength / CellSize + 0.5))`로 계산합니다. 일반적인 양수 입력도 Surface에서는 반올림 결과가 0이면 거부됩니다.
 
@@ -342,7 +342,7 @@ Surface2D의 X·Z 셀 수는 `floor(axisLength / CellSize + 0.5)`로 계산하�
 
 ### 검증 기록
 
-Unity 2023.2.20f1·macOS·Metal(Apple M4 Pro)에서 **회귀 테스트 486개가 모두 통과**했습니다(성능 프로브 15개 제외). Windows·Direct3D 11(AMD Radeon RX 9070)의 마지막 기록은 이번 수정 이전의 466개 통과입니다. 실제 GPU, 저장된 샘플 씬 통합 2개, PlayMode에 진입하는 Manager 통합을 포함합니다. Surface·Volume의 샘플 게시, 재진입·취소·재활성화, 장애물 안전성, Modifier 합성, 베이크 검증·저장 실패 경계와 직렬화 참조를 확인합니다.
+Unity 2023.2.20f1·macOS·Metal(Apple M4 Pro)에서 **회귀 테스트 494개가 모두 통과**했습니다(성능 프로브 13개 제외). Windows·Direct3D 11(AMD Radeon RX 9070)의 마지막 기록은 이번 수정 이전의 466개 통과입니다. 실제 GPU, 저장된 샘플 씬 통합 2개, PlayMode에 진입하는 Manager 통합을 포함합니다. Surface·Volume의 샘플 게시, 재진입·취소·재활성화, 장애물 안전성, Modifier 합성, 베이크 검증·저장 실패 경계와 직렬화 참조를 확인합니다.
 
 리팩터링 안전망으로 다음 검사가 함께 실행됩니다.
 
@@ -366,7 +366,7 @@ Unity.exe -batchmode -projectPath <ToyProject> -runTests -testPlatform EditMode 
 | 등록 장애물 1개 이동 후 재빌드 | 31.3초, 관리 힙 +61MiB | 6.0초, 관리 힙 +52.5MiB |
 | Volume 베이크 Asset(20×12×20) | 453,863바이트 | 106,568바이트 |
 
-측정은 한 기기의 Editor 배치 실행 기준이며 실행마다 20~30% 정도 달라질 수 있습니다. 위 표와 Surface 316×316 재빌드 약 1.1~1.3초는 Windows 기록이며, Surface 재빌드는 Topology 재사용 수정 후 Windows에서 다시 재지 않았습니다. Apple M4 Pro에서는 Volume 전체 빌드 약 3.1초, 2ms 예산 약 1,290프레임, Volume Goal 변경 약 2.2초, Modifier 값 변경 약 0.42초, Surface 재빌드 약 0.2초입니다.
+측정은 한 기기의 Editor 배치 실행 기준이며 실행마다 20~30% 정도 달라질 수 있습니다. 위 표와 Surface 316×316 재빌드 약 1.1~1.3초는 Windows 기록이며, Surface 재빌드는 Topology 재사용 수정 후 Windows에서 다시 재지 않았습니다. Apple M4 Pro에서는 Volume 전체 빌드 약 3.0초, 2ms 예산 약 1,280프레임, Volume Goal 변경 약 2.1초, Modifier 값 변경 약 0.41초, Surface 재빌드 약 0.2초입니다.
 
 - 현재 씬 2개·Prefab 2개·v6 베이크 2개와 기존 GUID·직렬화 값은 유지합니다. 구버전 API 래퍼·직렬화 별칭·변환 전용 코드나 에셋은 두지 않습니다.
 - GPU 미지원·결과 검증 실패 시 Managed 계산은 현재 실행 경로입니다. 재계산 중 사용 가능한 게시 결과 유지와 함께 구버전 호환 기능으로 취급하지 않습니다.

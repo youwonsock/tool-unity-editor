@@ -56,11 +56,11 @@ Compute Solver의 Control Readback 콜백은 다음 wave 배치 또는 방향 �
 
 Modifier 적용 대상은 두 모드가 같은 `FlowFieldVectorUtility.CanApplyModifier`로 판정합니다. 막힌 셀, Goal Anchor, 도달 불가 셀과 기본 방향이 0인 셀은 Modifier를 적용하지 않고 기본 속도 0을 유지합니다. Surface 빌드에서 BFS가 예정되면 BFS 전 합성을 생략하고, BFS 완료 후 전체를 한 번 합성합니다.
 
-Volume Modifier의 등록·해제·값·영역·우선순위 변경은 입력이 게시 결과와 같으면 전체 빌드 대신 Modifier 단계만 다시 실행합니다. Goal만 바뀌고 불확실 영역이 없으면 장애물 결과와 Topology를 게시 결과에서 재사용합니다. 같은 입력을 다시 제출하면 명시적 재빌드로 보고 장애물을 다시 조회합니다. 게시된 내비게이션 배열을 읽기 전용으로 공유하고 최종 방향·속도 배열만 새로 만듭니다. Surface의 Managed BFS는 Goal 단계가 만든 Topology를 재사용하며, GPU 실패 후 대체 경로만 Goal부터 다시 준비합니다.
+Volume Modifier의 등록·해제·값·영역·우선순위 변경은 입력이 게시 결과와 같으면 전체 빌드 대신 Modifier 단계만 다시 실행합니다. 이때 게시된 내비게이션 배열을 읽기 전용으로 공유하고 최종 방향·속도 배열만 새로 만듭니다. Goal만 바뀌고 불확실 영역이 없으면 게시된 Blocked와 Topology를 공유하고 나머지 내비게이션 배열은 새로 계산합니다. `RequestRebuild()`와 `NotifyCellsDirty()` 같은 명시적 재빌드는 Goal이 함께 바뀌어도 장애물을 다시 조회합니다. Surface의 Managed BFS는 Goal 단계가 만든 Topology를 재사용하며, GPU 실패 후 대체 경로만 Goal부터 다시 준비합니다.
 
 Volume 작업은 `FlowFieldBuildScheduler`와 `FlowFieldBuildDriver`의 협력 실행 경계를 사용합니다. 탐색·장애물·Modifier 단계는 최대 64셀, 방향 생성과 일부 배열 처리는 최대 4,096원소 단위로 진행합니다. deadline은 단계 호출 사이에 확인하므로 한 단계의 여러 Physics·Modify 호출이나 배열 할당·게시 처리가 예산을 초과할 수 있습니다. 2ms는 협력 CPU 예산이며 프레임 실행 시간, 전체 빌드 완료 시간이나 GPU 실행 시간의 보장이 아닙니다.
 
-Volume의 장애물·Modifier 단계는 `FlowFieldVolumeCellQuery`로 스텝마다 Layer 후보를 `OverlapBox` 한 번으로 모으고 등록 장애물·Modifier Collider의 Bounds를 한 번 읽습니다. 후보의 AABB(contactOffset 여유 포함)가 닿는 셀만 정확한 `CheckBox`·`OverlapsTarget`을 실행하므로 결과는 셀마다 쿼리한 것과 같습니다. 후보가 4,096개를 넘는 스텝은 셀별 쿼리로 돌아갑니다. Topology는 경계가 아닌 셀에서 `FlowFieldVolumeInteriorOffsets`의 평탄 인덱스 오프셋으로 이웃·코너 셀의 Blocked만 확인하고, 경계 셀은 `CanTraverse`를 사용합니다. 커밋된 빌드의 Costs·Queue·Influence 배열과 이전 안전성 Snapshot 배열은 다음 같은 크기 빌드에서 재사용합니다.
+Volume의 장애물·Modifier 단계는 `FlowFieldVolumeCellQuery`로 스텝마다 Layer 후보를 `OverlapBox` 한 번으로 모으고 등록 장애물·Modifier Collider의 Bounds를 한 번 읽습니다. 후보의 AABB(contactOffset 여유 포함)가 닿는 셀만 정확한 `CheckBox`·`OverlapsTarget`을 실행하므로 결과는 셀마다 쿼리한 것과 같습니다. 후보가 4,096개를 넘는 스텝은 셀별 쿼리로 돌아갑니다. Topology는 경계가 아닌 셀에서 `FlowFieldVolumeInteriorOffsets`의 평탄 인덱스 오프셋으로 이웃·코너 셀의 Blocked만 확인하고, 경계 셀은 `CanTraverse`를 사용합니다. 커밋된 빌드의 Costs·Queue·Influence 배열은 다음 같은 크기 빌드에서 재사용합니다.
 
 Volume의 Modifier 등록·변경 관측·Snapshot 캡처는 `FlowFieldVolumeModifierRegistry`, Physics와 무관한 탐색 연산은 `FlowFieldVolumeNavigation`, GPU 결과 검증은 `FlowFieldVolumeGpuResultValidator`가 담당합니다. `FlowFieldVolumeBuildContext`는 한 작업의 배열·진행 커서를, `FlowFieldVolumeFieldData`는 완성된 게시 결과를 보관합니다. `FlowFieldVolumeSafetyState`는 불확실 영역·안전성 Epoch·셀 Snapshot과 샘플링의 보수적 정지 판정을 담당합니다. 불확실 영역은 빌드 시작 때 관측 목록으로 옮겨 그 빌드를 게시할 때 지우고, 시작 후 기록된 영역은 다음 빌드까지 남깁니다. Modifier 재합성은 장애물을 조회하지 않으므로 영역과 안전성 Snapshot을 그대로 둡니다. `FlowFieldVolumeObstacleTracker`는 등록·미등록 Collider 관측과 스윕 버퍼를 소유하고 변경 Bounds를 Session에 동기 통지합니다. Session은 요청 수락·취소, 수명, Physics 입력, Scheduler·GPU 실행 연결과 게시 정책을 유지합니다. 단계별 회귀 검증과 보존 범위는 [RefactoringNotes.md](RefactoringNotes.md)에 기록합니다.
 
@@ -115,7 +115,7 @@ README의 [핵심 흐름](Images/flowfield-uml.png)은 요청부터 조회까지
 - Manager는 최신 요청과 관측 변경을 Session에 전달합니다. `FlowFieldBuildDriver.LateUpdate`가 `FlowFieldBuildScheduler.PumpAll`을 호출하며, Session이 실행 가능한 상태인 작업을 공통 CPU 예산 안에서 진행합니다.
 - 관측 경계는 `FlowFieldVolumeObstacleTracker`와 `FlowFieldVolumeModifierRegistry`입니다. 새 작업은 요청과 Modifier Snapshot을 고정해 `FlowFieldVolumeBuildContext`의 배열·커서를 준비합니다.
 - Build steps는 Session의 단계 실행과 `FlowFieldVolumeNavigation`, `FlowFieldComputeSolver`, `FlowFieldVolumeGpuResultValidator`를 묶어 표시합니다. RuntimeDynamic은 장애물·연결·Goal·BFS·방향·탈출 단계를, StaticBaked는 v6 기본 데이터 복사를 수행한 뒤 Modifier를 합성합니다. 각 메시지는 여러 Pump에 걸칠 수 있는 단계 처리를 요약합니다.
-- GPU 완료 신호는 결과를 기록하며 후속 Pump가 이를 검증합니다. 현재 작업의 GPU 미지원·실패는 같은 입력의 Managed 경로로 처리합니다. 완료 후 `FlowFieldVolumeSafetyState`의 Snapshot과 `FlowFieldVolumeFieldData`를 준비해 게시합니다.
+- GPU 완료 신호는 결과를 기록하며 후속 Pump가 이를 검증합니다. 현재 작업의 GPU 미지원·실패는 같은 입력의 Managed 경로로 처리합니다. 완료 후 `FlowFieldVolumeFieldData`를 게시하고, 이 빌드가 관측한 불확실 영역을 `FlowFieldVolumeSafetyState`에서 지웁니다.
 - 샘플은 게시 데이터와 최신 안전성 상태를 함께 사용합니다. 불확실·위험 셀은 조회 성공 상태에서도 속도 0을 반환할 수 있으며, 취소된 작업은 새 수명의 결과를 덮어쓰지 않습니다.
 
 ## UML과 문서 이미지 갱신
@@ -126,7 +126,7 @@ README의 [핵심 흐름](Images/flowfield-uml.png)은 요청부터 조회까지
 | Surface 상세 | [flowfield-surface.puml](flowfield-surface.puml) | [flowfield-surface.png](Images/flowfield-surface.png) |
 | Volume 상세 | [flowfield-volume.puml](flowfield-volume.puml) | [flowfield-volume.png](Images/flowfield-volume.png) |
 
-현재 이미지는 v6 베이크 표기 갱신 때 PlantUML 1.2024.3·Java 8(Windows), UTF-8로 렌더했습니다. 이전 기준은 PlantUML 1.2024.6, Unity AndroidPlayer에 포함된 OpenJDK 11.0.14.1입니다. 활동도·순서도를 사용하며 Graphviz는 사용하지 않습니다. 별도 도구 경로의 PlantUML JAR를 지정하고 Docs 폴더에서 세 파일을 함께 렌더합니다. Java 실행 파일은 설치 환경에 맞는 경로를 사용합니다.
+현재 이미지는 v6 베이크 표기 갱신 때 PlantUML 1.2024.3·Java 8(Windows), UTF-8로 렌더했습니다. `flowfield-volume.png`는 안전 스냅샷 제거 때 macOS에서 다시 렌더했습니다. 이전 기준은 PlantUML 1.2024.6, Unity AndroidPlayer에 포함된 OpenJDK 11.0.14.1입니다. 활동도·순서도를 사용하며 Graphviz는 사용하지 않습니다. 별도 도구 경로의 PlantUML JAR를 지정하고 Docs 폴더에서 세 파일을 함께 렌더합니다. Java 실행 파일은 설치 환경에 맞는 경로를 사용합니다.
 
 ```sh
 "/Applications/Unity/Hub/Editor/2023.2.20f1/PlaybackEngines/AndroidPlayer/OpenJDK/bin/java" \

@@ -35,7 +35,7 @@ loop Runnable work at the scheduler boundary
   end
   S -> B : Advance Modifier composition phase
   opt Build complete and owner still current
-    S -> P : Prepare safety snapshot and commit complete field
+    S -> P : Commit complete field and clear observed safety regions
     S --> M : FieldChanged
   end
 end
