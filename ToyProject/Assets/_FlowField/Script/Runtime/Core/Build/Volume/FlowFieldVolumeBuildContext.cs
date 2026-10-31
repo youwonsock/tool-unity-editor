@@ -61,6 +61,8 @@ namespace Common.FlowField
         internal int AllocationStage;
         internal FlowFieldVolumeInteriorOffsets InteriorOffsets;
         internal readonly bool IsModifierRecompose;
+        // Blocked and Topology are shared read-only with the published field.
+        internal bool ReusesObstacleQueries;
 
         internal FlowFieldVolumeBuildContext(
             in FlowFieldVolumeRequest request,

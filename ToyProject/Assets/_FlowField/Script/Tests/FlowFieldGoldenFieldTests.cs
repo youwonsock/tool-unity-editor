@@ -33,6 +33,27 @@ namespace Common.FlowField.Tests
         }
 
         [Test]
+        public void VolumeGoalChangeMatchesAFullBuild()
+        {
+            Vector3 secondGoal = new Vector3(1.5f, 6.5f, 14.5f);
+            string full;
+            using (var scenario = CreateModifierVolume(0.5f, out _))
+            {
+                scenario.Goal = secondGoal;
+                scenario.Build();
+                full = scenario.Hash().ToString();
+            }
+
+            using (var scenario = CreateModifierVolume(0.5f, out _))
+            {
+                scenario.Build();
+                scenario.Goal = secondGoal;
+                scenario.Build();
+                Assert.That(scenario.Hash().ToString(), Is.EqualTo(full));
+            }
+        }
+
+        [Test]
         public void VolumeModifierRecomposeMatchesAFullBuild()
         {
             string full;
