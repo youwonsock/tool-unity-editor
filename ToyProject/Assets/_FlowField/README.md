@@ -342,13 +342,13 @@ Surface2D의 X·Z 셀 수는 `floor(axisLength / CellSize + 0.5)`로 계산하�
 
 ### 검증 기록
 
-Unity 2023.2.20f1·macOS·Metal(Apple M4 Pro)에서 **회귀 테스트 494개가 모두 통과**했습니다(성능 프로브 13개 제외). Windows·Direct3D 11(AMD Radeon RX 9070)의 마지막 기록은 이번 수정 이전의 466개 통과입니다. 실제 GPU, 저장된 샘플 씬 통합 2개, PlayMode에 진입하는 Manager 통합을 포함합니다. Surface·Volume의 샘플 게시, 재진입·취소·재활성화, 장애물 안전성, Modifier 합성, 베이크 검증·저장 실패 경계와 직렬화 참조를 확인합니다.
+Unity 2023.2.20f1·macOS·Metal(Apple M4 Pro)에서 **회귀 테스트 496개가 모두 통과**했습니다(성능 프로브 13개 제외). Windows·Direct3D 11(AMD Radeon RX 9070)의 마지막 기록은 이번 수정 이전의 466개 통과입니다. 실제 GPU, 저장된 샘플 씬 통합 2개, PlayMode에 진입하는 Manager 통합을 포함합니다. Surface·Volume의 샘플 게시, 재진입·취소·재활성화, 장애물 안전성, Modifier 합성, 베이크 검증·저장 실패 경계와 직렬화 참조를 확인합니다.
 
 리팩터링 안전망으로 다음 검사가 함께 실행됩니다.
 
 - **골든 해시**(`FlowFieldGoldenFieldTests`): 고정된 Surface·Volume 장면의 모든 셀 샘플을 1e-4 단위로 양자화한 해시입니다. GPU는 동률 이웃을 다르게 고를 수 있어 Managed 계산으로 고정합니다.
 - **베이크 내용 해시**(`FlowFieldBakeAssetContentTests`): 두 베이크 Asset에서 런타임이 읽는 배열의 해시로, 저장 형식과 무관하게 내용이 같아야 합니다.
-- **동등성 검사**: Volume 후보 필터와 셀마다 Physics 쿼리, 내부 셀 Topology와 `CanTraverse`, v6 저장 왕복과 원래 값을 비교합니다.
+- **동등성 검사**: Volume 후보 필터와 셀마다 Physics 쿼리, 내부 셀 Topology와 `CanTraverse`, v6 저장 왕복과 원래 값을 비교합니다. GPU는 큰 장면에서 Blocked와 셀별 경로 길이를 Managed와 비교합니다.
 
 Unity Test Runner에서 `Common.FlowField.Tests`를 선택해 EditMode 전체를 실행할 수 있습니다. Manager 통합 테스트는 이 실행 안에서 PlayMode에 진입합니다. 배치 실행은 Editor에서 열려 있지 않은 프로젝트를 대상으로 하며, 실제 GPU 검증을 위해 `-nographics`를 생략합니다.
 
