@@ -67,8 +67,7 @@ namespace Common.FlowField
                     IFlowFieldBuildOperation operation = Operations[_cursor];
                     _cursor = (_cursor + 1) % Math.Max(1, Operations.Count);
 
-                    if (operation == null
-                        || operation.IsWaitingForExternalCompletion)
+                    if (operation == null)
                     {
                         visitedWithoutWork++;
                         if (visitedWithoutWork >= Math.Max(1, Operations.Count))
@@ -79,10 +78,13 @@ namespace Common.FlowField
                     FlowFieldBuildBudget budget = new FlowFieldBuildBudget(
                         budgetMilliseconds,
                         ElapsedMilliseconds);
+                    // A waiting operation only observes its inputs, which is
+                    // no reason to give it another turn within this budget.
+                    bool wasWaiting = operation.IsWaitingForExternalCompletion;
                     bool wasBuilding = operation.IsBuilding;
                     operation.PumpInternal(in budget);
                     bool isBuilding = operation.IsBuilding;
-                    if (!wasBuilding || !isBuilding)
+                    if (wasWaiting || !wasBuilding || !isBuilding)
                         visitedWithoutWork++;
                     else
                         visitedWithoutWork = 0;

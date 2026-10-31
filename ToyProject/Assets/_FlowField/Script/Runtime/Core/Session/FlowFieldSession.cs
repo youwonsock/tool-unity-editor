@@ -248,6 +248,9 @@ namespace Common.FlowField
                 return;
             InvalidateCallbacks();
             _fault = null;
+            // The fault may have interrupted a Goal that was prepared but not
+            // solved. Forget it so the Goal stage cannot report it as unchanged.
+            _goalTracker.ForgetLastBuild();
             // A retry is a new build attempt, not a re-publication of the
             // field that was available before the fault.  Keep the public
             // state in Building until the retry commits successfully; this
@@ -493,7 +496,10 @@ namespace Common.FlowField
             if ((change & (FlowFieldModifierChange.Value | FlowFieldModifierChange.Priority)) != 0)
             {
                 EnsureModifierServices();
-                FlowFieldModifierRegistryResult result = _modifierRegistry.MarkDirty(modifier, out bool completed);
+                FlowFieldModifierRegistryResult result = _modifierRegistry.MarkDirty(
+                    modifier,
+                    (change & FlowFieldModifierChange.Value) != 0,
+                    out bool completed);
                 if (!completed)
                     return;
                 ApplyModifierRegistryResult(result);

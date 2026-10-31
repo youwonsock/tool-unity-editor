@@ -16,7 +16,9 @@ namespace Common.FlowField
         {
             if (modifier == null)
                 return false;
-            ThrowIfInputAllowedForMode();
+            // Removal needs no valid configuration; a component must be able
+            // to detach while the Manager waits for an explicit rebuild.
+            ThrowIfLifecycleUnavailable();
             return ActiveSession.UnregisterModifierCommand(modifier);
         }
 

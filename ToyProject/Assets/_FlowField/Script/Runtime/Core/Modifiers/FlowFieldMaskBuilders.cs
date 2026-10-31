@@ -88,7 +88,7 @@ namespace Common.FlowField
 
             FlowFieldMaskArguments.ValidateObstacleBox(checkHeight, centerOffset, clearance);
             float halfHeight = checkHeight * 0.5f;
-            float halfXZ = grid.CellSize * 0.5f + clearance;
+            float halfXZ = FlowFieldOverlapUtility.CellHalfExtent(grid.CellSize, clearance);
             Vector3 cellHalfExtents = new Vector3(halfXZ, halfHeight, halfXZ);
             if (!surface.TryGetHeightRange(out float minSurfaceY, out float maxSurfaceY))
                 return true;
@@ -298,7 +298,8 @@ namespace Common.FlowField
             if (minX > maxX || minZ > maxZ)
                 return true;
 
-            Vector3 halfExtents = new Vector3(grid.CellSize * 0.5f, halfHeight, grid.CellSize * 0.5f);
+            float halfXZ = FlowFieldOverlapUtility.CellHalfExtent(grid.CellSize);
+            Vector3 halfExtents = new Vector3(halfXZ, halfHeight, halfXZ);
             int layerMask = 1 << influenceCollider.gameObject.layer;
 
             for (int z = minZ; z <= maxZ; z++)
@@ -380,6 +381,16 @@ namespace Common.FlowField
     {
         private const int INITIAL_OVERLAP_CAPACITY = 8;
         private const int MAX_OVERLAP_HITS = 256;
+        private const float CellQuerySkin = 0.0001f;
+
+        /// <summary>
+        /// Half extent of a cell's overlap box. Unity's overlap queries count a
+        /// face-touching collider as an overlap; removing a tiny numerical skin
+        /// keeps a collider aligned with the cell edges out of its neighbors
+        /// while the configured clearance still applies to real intersections.
+        /// </summary>
+        internal static float CellHalfExtent(float cellSize, float clearance = 0f)
+            => Mathf.Max(0.000001f, cellSize * 0.5f + clearance - CellQuerySkin);
 
         public static bool OverlapsTarget(
             Vector3 center,

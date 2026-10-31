@@ -72,9 +72,7 @@ namespace Common.FlowField
                         return true;
                     }
 
-                    Vector3 clamped = build.Request.Grid.ClampWorldXYZ(build.Request.GoalWorld);
-                    build.Request.Grid.TryWorldToLocalClamped(clamped, out int x, out int y, out int z);
-                    build.RequestedGoalIndex = build.Request.Grid.ToFlatIndex(x, y, z);
+                    build.RequestedGoalIndex = build.Request.GoalCell;
                     if (!build.Blocked[build.RequestedGoalIndex])
                     {
                         build.GoalIndex = build.RequestedGoalIndex;

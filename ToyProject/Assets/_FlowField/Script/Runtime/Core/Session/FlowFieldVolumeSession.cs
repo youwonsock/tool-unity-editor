@@ -181,6 +181,7 @@ namespace Common.FlowField
             ValidateRequest(request);
             if (requeryObstacles)
                 _obstacleQueryRequired = true;
+            bool goalMovedWithinCell = IsGoalMoveWithinCell(request);
             // Keep the last accepted request independently of the committed
             // field.  A dirty notification that arrives while another Goal is
             // building must never resurrect the older committed Goal.
@@ -199,10 +200,33 @@ namespace Common.FlowField
                 && (_committed.Request.ObstacleLayer.value != request.ObstacleLayer.value
                     || Mathf.Abs(_committed.Request.ObstacleClearance - request.ObstacleClearance) > 0.0001f))
                 _safety.InvalidateRegion(request.WorldBounds);
+            if (goalMovedWithinCell)
+                return true;
             _hasPendingRequest = true;
+            EnterBuildingUnlessStopped();
+            return true;
+        }
+
+        /// <summary>
+        /// The running or published field already answers this request; only
+        /// the requested position differs. Resubmitting the same position
+        /// remains an explicit request for another build.
+        /// </summary>
+        private bool IsGoalMoveWithinCell(in FlowFieldVolumeRequest request)
+        {
+            if (_obstacleQueryRequired || _hasPendingRequest || request.BakeMode == FlowFieldBakeMode.StaticBaked)
+                return false;
+            if (_build == null && _committed == null)
+                return false;
+            FlowFieldVolumeRequest current = _build != null ? _build.Request : _committed.Request;
+            return !current.HasSameGoal(request) && current.HasSameResult(request);
+        }
+
+        // Accepted input waits while the lifecycle has stopped this session.
+        private void EnterBuildingUnlessStopped()
+        {
             if (!IsFaulted && (_state != FlowFieldRuntimeState.Suspended || !_suspendedByLifecycle))
                 SetState(FlowFieldRuntimeState.Building);
-            return true;
         }
 
         internal void Pump(double budgetMilliseconds = DefaultBudgetMilliseconds)
@@ -232,6 +256,8 @@ namespace Common.FlowField
             {
                 if (!_obstacles.DetectRegisteredChanges()
                     || !CanContinuePump(pumpGeneration, activeBuild))
+                    return;
+                if (IsWaitingForExternalCompletion)
                     return;
 
                 while (!budget.IsExpired)
@@ -544,7 +570,7 @@ namespace Common.FlowField
                 return;
             _hasPendingRequest = _hasLatestRequestedInput && request.Grid.IsValid;
             if (_hasPendingRequest)
-                SetState(FlowFieldRuntimeState.Building);
+                EnterBuildingUnlessStopped();
         }
 
         internal override void NotifyObstacleRegionDirtyCommand(Bounds worldBounds)
@@ -659,7 +685,9 @@ namespace Common.FlowField
             // A retry only clears the failure.  The next accepted request
             // must still build and publish before the session becomes Ready;
             // never expose a transient Ready state with no valid result.
-            SetState(FlowFieldRuntimeState.Building);
+            SetState(_suspendedByLifecycle
+                ? FlowFieldRuntimeState.Suspended
+                : FlowFieldRuntimeState.Building);
         }
 
         internal override void ReportFault(Exception exception)
@@ -773,6 +801,11 @@ namespace Common.FlowField
                 return false;
 
             FlowFieldVolumeRequest request = _committed.Request;
+            // A running build or a move within the Goal cell leaves the
+            // published result behind the requested Goal, as on Surface2D.
+            FlowFieldVolumeRequest requested = _hasLatestRequestedInput && request.BakeMode != FlowFieldBakeMode.StaticBaked
+                ? _latestRequestedInput
+                : request;
             Vector3 resolvedGoal = default;
             bool hasResolvedGoal = _committed.GoalIndex >= 0
                 && _committed.GoalIndex < _committed.Grid.CellCount;
@@ -792,9 +825,9 @@ namespace Common.FlowField
                 FlowFieldSpaceMode.Volume3D,
                 request.BakeMode,
                 _revision,
-                request.HasGoal,
-                request.GoalWorld,
-                request.GoalInfluenceRadius,
+                requested.HasGoal,
+                requested.GoalWorld,
+                requested.GoalInfluenceRadius,
                 hasResolvedGoal,
                 resolvedGoal);
             return info.IsValid;
@@ -917,6 +950,10 @@ namespace Common.FlowField
                             build.Cursor = 0;
                             build.Phase = BuildPhase.Directions;
                         }
+                        else if (build.GpuPending)
+                        {
+                            return false;
+                        }
                         break;
                     case BuildPhase.Directions:
                         if (StepDirections(build))
@@ -949,6 +986,7 @@ namespace Common.FlowField
         {
             FlowFieldVolumeBakeData data = build.Request.StaticBakeData;
             int end = Math.Min(build.Cursor + ArrayElementsPerStep, build.Count);
+            Vector3 defaultDirection = FlowFieldVectorUtility.NormalizeDefaultDirection(build.Request.DefaultDirection);
             for (; build.Cursor < end; build.Cursor++)
             {
                 data.CopyCellToBuild(
@@ -960,6 +998,13 @@ namespace Common.FlowField
                     build.Directions,
                     build.Speeds,
                     build.EscapeDirections);
+                // Default Direction is a runtime input, as on Surface2D. The
+                // asset keeps its bake-time value only to rebuild its own arrays.
+                if (!build.Blocked[build.Cursor] && build.Next[build.Cursor] == -1)
+                {
+                    build.Directions[build.Cursor] = defaultDirection;
+                    build.Speeds[build.Cursor] = 1f;
+                }
             }
             if (build.Cursor < build.Count)
                 return false;
@@ -1221,11 +1266,11 @@ namespace Common.FlowField
                 Physics.SyncTransforms();
 
             int end = Math.Min(build.Cursor + CellsPerStep, build.Count);
-            Vector3 cellSize = Vector3.one * build.Request.Grid.CellSize;
+            Vector3 cellHalf = Vector3.one * FlowFieldOverlapUtility.CellHalfExtent(build.Request.Grid.CellSize);
             if (build.Modifiers.Length > 0)
             {
                 _cellQuery.BeginModifierStep(
-                    FlowFieldVolumeCellQuery.StepBounds(build.Request.Grid, build.Cursor, end, cellSize * 0.5f),
+                    FlowFieldVolumeCellQuery.StepBounds(build.Request.Grid, build.Cursor, end, cellHalf),
                     build.Modifiers);
             }
             for (; build.Cursor < end; build.Cursor++)
@@ -1250,7 +1295,7 @@ namespace Common.FlowField
                     build.FinalSpeeds[index]);
                 for (int modifierIndex = 0; modifierIndex < build.Modifiers.Length; modifierIndex++)
                 {
-                    if (!_cellQuery.MayTouchModifier(modifierIndex, new Bounds(center, cellSize)))
+                    if (!_cellQuery.MayTouchModifier(modifierIndex, new Bounds(center, cellHalf * 2f)))
                         continue;
                     FlowFieldModifierWorkItem modifier = build.Modifiers[modifierIndex];
                     Collider collider = modifier.InfluenceCollider;
@@ -1259,7 +1304,7 @@ namespace Common.FlowField
                     int layerMask = 1 << collider.gameObject.layer;
                     if (!FlowFieldOverlapUtility.OverlapsTarget(
                             center,
-                            cellSize * 0.5f,
+                            cellHalf,
                             layerMask,
                             collider,
                             QueryTriggerInteraction.Collide,
@@ -1345,15 +1390,19 @@ namespace Common.FlowField
             if (!_hasPendingRequest
                 && _committed != null
                 && _hasLatestRequestedInput
-                && _committed.Request.HasSameInputs(_latestRequestedInput))
+                && _committed.Request.HasSameResult(_latestRequestedInput))
             {
                 _hasPendingModifierRecompose = true;
-                if (!IsFaulted && (_state != FlowFieldRuntimeState.Suspended || !_suspendedByLifecycle))
-                    SetState(FlowFieldRuntimeState.Building);
+                EnterBuildingUnlessStopped();
                 return;
             }
             if (_hasLatestRequestedInput)
-                Submit(_latestRequestedInput);
+            {
+                // The latest input was already accepted, and a Goal move within
+                // its cell must not make Submit skip this build.
+                _hasPendingRequest = true;
+                EnterBuildingUnlessStopped();
+            }
             else if (_committed != null)
                 Submit(_committed.Request);
             else if (_build != null)
@@ -1361,14 +1410,7 @@ namespace Common.FlowField
         }
 
         private static Vector3 ObstacleHalfExtents(float cellSize, float clearance)
-        {
-            // Unity's overlap queries count a face-touching collider as an
-            // overlap. Removing a tiny numerical skin preserves the intended
-            // cell ownership when clearance is zero while retaining the
-            // configured clearance for actual intersections.
-            float half = Mathf.Max(0.000001f, cellSize * 0.5f + clearance - 0.0001f);
-            return Vector3.one * half;
-        }
+            => Vector3.one * FlowFieldOverlapUtility.CellHalfExtent(cellSize, clearance);
 
         private void SetState(FlowFieldRuntimeState state)
         {

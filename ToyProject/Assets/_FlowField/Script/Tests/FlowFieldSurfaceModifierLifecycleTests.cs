@@ -196,6 +196,42 @@ namespace Common.FlowField.Tests
         }
 
         [Test]
+        public void RetryOfAFaultedAreaPassSolvesTheSameGoal()
+        {
+            var owner = new GameObject("Surface area fault") { layer = FlowFieldRegressionFixture.Layer };
+            owner.transform.position = new Vector3(1.5f, 0f, 1.5f);
+            var collider = owner.AddComponent<BoxCollider>();
+            collider.isTrigger = true;
+            collider.size = new Vector3(3f, 2f, 3f);
+            var session = new FlowFieldSession(FlowFieldRegressionFixture.Surface());
+            var errors = new FlowFieldRegressionFixture.EventFailures(session);
+            var modifier = new Modifier { InfluenceCollider = collider, Speed = 1f };
+            var goal = new Vector3(2.5f, 0f, 2.5f);
+            try
+            {
+                session.Initialize(FlowFieldBakeMode.RuntimeDynamic, FlowFieldSessionSourceKind.SceneBuild,
+                    FlowFieldBfsBackendPolicy.ManagedOnly, null);
+                session.RegisterModifierCommand(modifier);
+                modifier.ThrowFromCollider = true;
+                session.Submit(FlowFieldRegressionFixture.Request(goal));
+                session.Pump();
+                Assert.That(session.IsFaulted, Is.True);
+                modifier.ThrowFromCollider = false;
+                session.RetryFault();
+                session.Submit(FlowFieldRegressionFixture.Request(goal));
+                session.Pump();
+                Assert.That(session.IsReady, Is.True, session.LastError);
+                Assert.That(session.Sample(new Vector3(0.5f, 0f, 0.5f)).Direction.x, Is.GreaterThan(0f));
+            }
+            finally
+            {
+                session.Dispose();
+                UnityEngine.Object.DestroyImmediate(owner);
+                errors.AssertNone();
+            }
+        }
+
+        [Test]
         public void CancelledModifyDoesNotWriteEvenWhenItsReturnedValueIsInvalid(
             [Values(false, true)] bool regional,
             [Values(false, true)] bool indexed)
@@ -287,9 +323,15 @@ namespace Common.FlowField.Tests
 
         private sealed class Modifier : IFlowFieldVectorModifier, IFlowFieldModifierSnapshot
         {
-            public Collider InfluenceCollider { get; set; }
+            private Collider _collider;
+            public Collider InfluenceCollider
+            {
+                get => ThrowFromCollider ? throw new InvalidOperationException("Expected area failure") : _collider;
+                set => _collider = value;
+            }
             public int Priority => 0;
             public int Revision => 0;
+            internal bool ThrowFromCollider;
             internal float Speed = 2f;
             internal Action OnCapture;
             internal Action OnModify;

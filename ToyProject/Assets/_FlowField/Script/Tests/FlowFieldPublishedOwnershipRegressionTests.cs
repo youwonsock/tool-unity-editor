@@ -296,6 +296,111 @@ namespace Common.FlowField.Tests
             finally { FlowFieldBuildScheduler.Unregister(waiting); FlowFieldBuildScheduler.Unregister(active); }
         }
 
+        [Test]
+        public void StaleSurfaceConfigurationStillAllowsUnregistration()
+        {
+            var manager = Manager(false);
+            manager.Init();
+            var modifier = new Modifier { Collider = Influence() };
+            var obstacle = Make("Review stale obstacle").AddComponent<BoxCollider>();
+            Assert.That(manager.RegisterVectorModifier(modifier), Is.True);
+            Assert.That(manager.RegisterDynamicObstacle(obstacle), Is.True);
+            manager.MarkConfigurationStale();
+            Assert.Throws<InvalidOperationException>(() => manager.RegisterVectorModifier(new Modifier { Collider = modifier.Collider }));
+            Assert.That(manager.UnregisterVectorModifier(modifier), Is.True);
+            Assert.That(manager.UnregisterDynamicObstacle(obstacle), Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator DisablingAModifierOnAStaleSurfaceManagerDetachesIt()
+        {
+            yield return new EnterPlayMode();
+            var manager = Manager(false);
+            yield return WaitReady(manager);
+            var owner = Make("Review stale modifier");
+            owner.SetActive(false);
+            owner.layer = 27;
+            owner.transform.position = new Vector3(1.5f, 0f, 1.5f);
+            var collider = owner.AddComponent<BoxCollider>();
+            collider.isTrigger = true;
+            collider.size = Vector3.one * 8f;
+            var modifier = owner.AddComponent<FlowFieldSpeedModifier>();
+            using (var settings = new SerializedObject(modifier))
+            {
+                settings.FindProperty("_flowFieldManager").objectReferenceValue = manager;
+                settings.FindProperty("_influenceCollider").objectReferenceValue = collider;
+                settings.FindProperty("_priority").intValue = 100;
+                settings.ApplyModifiedPropertiesWithoutUndo();
+            }
+            owner.SetActive(true);
+            manager.MarkConfigurationStale();
+            // An exception from OnDisable reaches the log and fails this test.
+            modifier.enabled = false;
+            manager.RequestRebuild();
+            yield return WaitReady(manager);
+            Assert.That(manager.Sample(new Vector3(.5f, 0f, .5f)).SpeedMultiplier, Is.EqualTo(1f),
+                "The disabled Modifier must have left the registry.");
+        }
+
+        [UnityTest] public IEnumerator SurfaceAttachesAModifierEnabledWhileDisabled() => ModifierEnabledWhileDisabled(false);
+        [UnityTest] public IEnumerator VolumeAttachesAModifierEnabledWhileDisabled() => ModifierEnabledWhileDisabled(true);
+
+        private IEnumerator ModifierEnabledWhileDisabled(bool volume)
+        {
+            yield return new EnterPlayMode();
+            var manager = Manager(volume);
+            yield return WaitReady(manager);
+            manager.enabled = false;
+
+            var owner = Make("Review reattached modifier");
+            owner.SetActive(false);
+            owner.layer = 27;
+            owner.transform.position = new Vector3(1.5f, 0f, 1.5f);
+            var collider = owner.AddComponent<BoxCollider>();
+            collider.isTrigger = true;
+            collider.size = Vector3.one * 8f;
+            var modifier = owner.AddComponent<FlowFieldSpeedModifier>();
+            using (var settings = new SerializedObject(modifier))
+            {
+                settings.FindProperty("_flowFieldManager").objectReferenceValue = manager;
+                settings.FindProperty("_influenceCollider").objectReferenceValue = collider;
+                settings.FindProperty("_priority").intValue = 100;
+                settings.ApplyModifiedPropertiesWithoutUndo();
+            }
+            owner.SetActive(true);
+            Physics.SyncTransforms();
+
+            manager.enabled = true;
+            yield return WaitReady(manager);
+            Vector3 position = new Vector3(.5f, .5f, .5f);
+            float speed = 0f;
+            float deadline = Time.realtimeSinceStartup + 3f;
+            while (Time.realtimeSinceStartup < deadline && (!manager.TrySample(position, out FlowFieldSample sample)
+                || (speed = sample.SpeedMultiplier) != modifier.SpeedMultiplier))
+                yield return null;
+            Assert.That(speed, Is.EqualTo(modifier.SpeedMultiplier));
+        }
+
+        [UnityTest]
+        public IEnumerator VolumeRetryAfterAFaultWhileDisabledResumes()
+        {
+            yield return new EnterPlayMode();
+            var manager = Manager(true);
+            yield return WaitReady(manager);
+            int revision = manager.Revision;
+            manager.enabled = false;
+            LogAssert.Expect(LogType.Error, "[FlowFieldManager] FlowField build failed: Fault while disabled");
+            manager.VolumeSession.ReportFault(new InvalidOperationException("Fault while disabled"));
+            manager.enabled = true;
+            Assert.That(manager.IsFaulted, Is.True);
+            manager.RequestRebuild();
+            float deadline = Time.realtimeSinceStartup + 3f;
+            while (manager.Revision == revision && !manager.IsFaulted && Time.realtimeSinceStartup < deadline)
+                yield return null;
+            Assert.That(manager.Revision, Is.GreaterThan(revision), manager.LastError);
+            Assert.That(manager.IsReady, Is.True, manager.LastError);
+        }
+
         [UnityTest] public IEnumerator SurfaceInitializationCallbacksPreserveSelectedLifetime() => ManagerBoundary(false, false);
         [UnityTest] public IEnumerator VolumeInitializationCallbacksPreserveSelectedLifetime() => ManagerBoundary(true, false);
         [UnityTest] public IEnumerator SurfaceReactivationCallbacksPreserveSelectedLifetime() => ManagerBoundary(false, true);

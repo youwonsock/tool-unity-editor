@@ -374,6 +374,70 @@ namespace Common.FlowField.Tests
             Assert.That(_bake.Revision, Is.EqualTo(bakeRevision));
         }
 
+        [TestCase("notify")]
+        [TestCase("register")]
+        [TestCase("unregister")]
+        public void ObstacleInputCannotResumeASuspendedSession(string input)
+        {
+            var collider = Obstacle(OldCell);
+            if (input == "unregister") _session.RegisterDynamicObstacle(collider);
+            Build();
+            _session.AttachRuntimeScheduler();
+            int revision = _session.Revision;
+            _session.Suspend();
+
+            if (input == "notify") _session.NotifyObstacleRegionDirtyCommand(new Bounds(OldCell, Vector3.one));
+            else if (input == "register") _session.RegisterObstacleCommand(collider);
+            else _session.UnregisterObstacleCommand(collider);
+            for (int i = 0; i < 100; i++) FlowFieldBuildScheduler.PumpAll(10d);
+
+            Assert.That(_session.State, Is.EqualTo(FlowFieldRuntimeState.Suspended));
+            Assert.That(_session.IsReady, Is.False);
+            Assert.That(_session.Revision, Is.EqualTo(revision));
+
+            _session.Resume();
+            Finish(_session);
+            Assert.That(_session.Revision, Is.GreaterThan(revision), "The input accepted while suspended must not be lost.");
+        }
+
+        [Test]
+        public void RetryOfAFaultWhileSuspendedStaysSuspended()
+        {
+            Build();
+            _session.AttachRuntimeScheduler();
+            int revision = _session.Revision;
+            _session.Suspend();
+            _session.ReportFault(new InvalidOperationException("Fault while suspended"));
+            Assert.That(_session.IsFaulted, Is.True);
+            _session.RetryFault();
+            Assert.That(_session.State, Is.EqualTo(FlowFieldRuntimeState.Suspended));
+            for (int i = 0; i < 100; i++) FlowFieldBuildScheduler.PumpAll(10d);
+            Assert.That(_session.Revision, Is.EqualTo(revision));
+            _session.Resume();
+            Build();
+            Assert.That(_session.Revision, Is.GreaterThan(revision));
+        }
+
+        [Test]
+        public void StaticBakedFollowsTheCurrentDefaultDirection()
+        {
+            Build(Request(Grid, hasGoal: false, direction: Vector3.forward));
+            Assert.That(_session.TryExport(out var input, out var blocked, out var topology, out var flags,
+                out var next, out var directions, out var speeds, out var escape, out int goal), Is.True);
+            _bake = ScriptableObject.CreateInstance<FlowFieldVolumeBakeData>();
+            _bake.Apply(Grid, input.WorldBounds, input.ObstacleLayer, 0f, false, default, 0f, goal,
+                blocked, topology, flags, next, directions, speeds, escape);
+            _session.Release();
+            _session.Initialize(FlowFieldBakeMode.StaticBaked);
+            Build(Request(Grid, hasGoal: false, direction: Vector3.right, bake: _bake));
+
+            Assert.That(_session.Sample(OldCell).Direction, Is.EqualTo(Vector3.right));
+            Assert.That(_session.Sample(OldCell).SpeedMultiplier, Is.EqualTo(1f));
+            // The boundary check now judges the direction that is published.
+            AssertStopped(new Vector3(7.5f, 1.5f, 3.5f));
+            Assert.That(_session.Sample(new Vector3(3.5f, 1.5f, 7.5f)).Direction, Is.EqualTo(Vector3.right));
+        }
+
         [Test]
         public void SchedulerKeepsSafetyRegionsIsolatedBetweenSessions()
         {

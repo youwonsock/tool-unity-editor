@@ -107,6 +107,72 @@ namespace Common.FlowField.Tests
             finally { session.Dispose(); }
         }
 
+        [UnityTest]
+        public IEnumerator SchedulerObservesARegisteredObstacleDuringTheGpuWait()
+        {
+            ComputeShader shader = LoadShader();
+            var obstacle = new GameObject("Scheduler GPU wait obstacle") { layer = FlowFieldRegressionFixture.Layer };
+            obstacle.transform.position = new Vector3(-50f, 0f, 0f);
+            obstacle.AddComponent<BoxCollider>();
+            Physics.SyncTransforms();
+            var session = new FlowFieldVolumeSession();
+            try
+            {
+                var grid = FlowFieldVolumeSafetyRegressionTests.Grid;
+                var cell = new Vector3(3.5f, 1.5f, 3.5f);
+                session.Initialize(FlowFieldBakeMode.RuntimeDynamic, shader);
+                session.RegisterDynamicObstacle(obstacle.GetComponent<Collider>());
+                session.Submit(FlowFieldVolumeSafetyRegressionTests.Request(grid, shader: shader));
+                double deadline = EditorApplication.timeSinceStartup + 30d;
+                while (session.IsRebuilding && EditorApplication.timeSinceStartup < deadline)
+                {
+                    session.Pump(10d);
+                    yield return null;
+                }
+                Assert.That(session.IsReady, Is.True, session.LastError);
+
+                session.Submit(FlowFieldVolumeSafetyRegressionTests.Request(
+                    grid, goal: new Vector3(0.5f, 3.5f, 7.5f), shader: shader));
+                PumpUntilGpuWaits(session);
+                Assert.That(session.IsWaitingForExternalCompletion, Is.True, "Expected a real in-flight GPU request.");
+                session.AttachRuntimeScheduler();
+                Assert.That(session.Sample(cell).SpeedMultiplier, Is.GreaterThan(0f));
+
+                obstacle.transform.position = cell;
+                Physics.SyncTransforms();
+                FlowFieldBuildScheduler.PumpAll(10d);
+
+                Assert.That(session.IsWaitingForExternalCompletion, Is.True);
+                Assert.That(session.Sample(cell).SpeedMultiplier, Is.Zero);
+            }
+            finally
+            {
+                session.Dispose();
+                Object.DestroyImmediate(obstacle);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator GpuWaitDoesNotSpendTheCallersBudget()
+        {
+            ComputeShader shader = LoadShader();
+            var session = new FlowFieldVolumeSession();
+            try
+            {
+                session.Initialize(FlowFieldBakeMode.RuntimeDynamic, shader);
+                session.Submit(FlowFieldVolumeSafetyRegressionTests.Request(
+                    FlowFieldVolumeSafetyRegressionTests.Grid, shader: shader));
+                PumpUntilGpuWaits(session);
+                Assert.That(session.IsWaitingForExternalCompletion, Is.True, "Expected a real in-flight GPU request.");
+
+                var timer = System.Diagnostics.Stopwatch.StartNew();
+                session.Pump(500d);
+                Assert.That(timer.Elapsed.TotalMilliseconds, Is.LessThan(100d));
+                yield return null;
+            }
+            finally { session.Dispose(); }
+        }
+
         private static ComputeShader LoadShader()
         {
             if (!SystemInfo.supportsComputeShaders || !SystemInfo.supportsAsyncGPUReadback)

@@ -180,6 +180,96 @@ namespace Common.FlowField.Tests
         }
 
         [Test]
+        public void GoalMoveWithinACellKeepsThePublishedField()
+        {
+            _session.Submit(Request());
+            Finish();
+            int revision = _session.Revision;
+            Vector3 moved = Goal + new Vector3(0.1f, -0.2f, 0.3f);
+            _session.Submit(Request(moved));
+            Assert.That(_session.HasPendingRequest, Is.False);
+            Assert.That(_session.IsRebuilding, Is.False);
+            Finish();
+            Assert.That(_session.Revision, Is.EqualTo(revision));
+            Assert.That(_session.TryGetFieldInfo(out var info), Is.True);
+            Assert.That(info.RequestedGoalWorld, Is.EqualTo(moved));
+            Assert.That(info.ResolvedGoalWorld, Is.EqualTo(Goal));
+        }
+
+        [Test]
+        public void GoalMoveWithinACellDoesNotQueueAfterTheRunningBuild()
+        {
+            _session.Submit(Request());
+            FlowFieldVolumeSafetyRegressionTests.PumpOneStep(_session);
+            Assert.That(_session.IsRebuilding, Is.True);
+            int publications = 0;
+            _session.FieldCommitted += () => publications++;
+            _session.Submit(Request(Goal + new Vector3(0.1f, 0f, 0f)));
+            Finish();
+            Assert.That(publications, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void ExplicitRebuildStillRunsForAGoalMoveWithinACell()
+        {
+            _session.Submit(Request());
+            Finish();
+            int revision = _session.Revision;
+            _session.Submit(Request(Goal + new Vector3(0.1f, 0f, 0f)), requeryObstacles: true);
+            Assert.That(_session.HasPendingRequest, Is.True);
+            Finish();
+            Assert.That(_session.Revision, Is.EqualTo(revision + 1));
+        }
+
+        [Test]
+        public void GoalMoveToAnotherCellStillRebuilds()
+        {
+            _session.Submit(Request());
+            Finish();
+            int revision = _session.Revision;
+            _session.Submit(Request(Goal + new Vector3(-1f, 0f, 0f)));
+            Finish();
+            Assert.That(_session.Revision, Is.EqualTo(revision + 1));
+        }
+
+        [Test]
+        public void ModifierChangeAfterAGoalMoveWithinACellStillRecomposes()
+        {
+            var modifier = Modifier();
+            _session.RegisterModifier(modifier);
+            _session.Submit(Request());
+            Finish();
+            _session.Submit(Request(Goal + new Vector3(0.1f, 0f, 0f)));
+            modifier.Speed = 3f;
+            modifier.Revision++;
+            _session.NotifyModifierChangedCommand(modifier, FlowFieldModifierChange.Value);
+            Assert.That(_session.HasPendingRequest, Is.True);
+            Finish();
+            Assert.That(_session.Sample(Position).SpeedMultiplier, Is.EqualTo(3f));
+        }
+
+        [Test]
+        public void ModifierChangeDuringABuildSurvivesAGoalMoveWithinItsCell()
+        {
+            var modifier = Modifier();
+            _session.RegisterModifier(modifier);
+            _session.Submit(Request());
+            Finish();
+            Vector3 goal = new Vector3(0.5f, 2.5f, 2.5f);
+            _session.Submit(Request(goal));
+            FlowFieldVolumeSafetyRegressionTests.PumpOneStep(_session);
+            Assert.That(_session.IsRebuilding, Is.True);
+            _session.Submit(Request(goal + new Vector3(0.1f, 0f, 0f)));
+            modifier.Speed = 4f;
+            modifier.Revision++;
+            _session.NotifyModifierChangedCommand(modifier, FlowFieldModifierChange.Value);
+            Finish();
+            Assert.That(_session.Sample(Position).SpeedMultiplier, Is.EqualTo(4f));
+            Assert.That(_session.TryGetFieldInfo(out var info), Is.True);
+            Assert.That(info.ResolvedGoalWorld, Is.EqualTo(goal));
+        }
+
+        [Test]
         public void ReleaseCancelsAPendingModifierRecompose()
         {
             var modifier = Modifier();

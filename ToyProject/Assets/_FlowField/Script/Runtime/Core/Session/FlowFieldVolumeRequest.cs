@@ -84,11 +84,43 @@ namespace Common.FlowField
             if (BakeMode != FlowFieldBakeMode.StaticBaked && !HasSameGoal(other))
                 return false;
 
-            return FlowFieldGridSpace.Approximately(
-                       DefaultDirection,
-                       other.DefaultDirection,
-                       0.00000001d)
+            return HasSameFlowSettings(other);
+        }
+
+        /// <summary>
+        /// A build only uses the cell the Goal resolves to, so a Goal moved
+        /// within that cell yields the same field.
+        /// </summary>
+        internal bool HasSameResult(in FlowFieldVolumeRequest other)
+        {
+            if (!HasSameObstacleInputs(other))
+                return false;
+
+            if (BakeMode != FlowFieldBakeMode.StaticBaked && !HasSameGoalCell(other))
+                return false;
+
+            return HasSameFlowSettings(other);
+        }
+
+        private bool HasSameFlowSettings(in FlowFieldVolumeRequest other)
+            => FlowFieldGridSpace.Approximately(
+                   DefaultDirection,
+                   other.DefaultDirection,
+                   0.00000001d)
                 && MaxGpuWaves == other.MaxGpuWaves;
+
+        private bool HasSameGoalCell(in FlowFieldVolumeRequest other)
+            => HasGoal == other.HasGoal
+                && (!HasGoal || GoalCell == other.GoalCell
+                    && Mathf.Abs(GoalInfluenceRadius - other.GoalInfluenceRadius) <= 0.0001f);
+
+        internal int GoalCell
+        {
+            get
+            {
+                Grid.TryWorldToLocalClamped(Grid.ClampWorldXYZ(GoalWorld), out int x, out int y, out int z);
+                return Grid.ToFlatIndex(x, y, z);
+            }
         }
 
         private static bool Approximately(Bounds left, Bounds right)
