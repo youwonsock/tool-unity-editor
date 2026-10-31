@@ -6,11 +6,13 @@ namespace Common.FlowField
     /// <summary>
     /// Common execution boundary for the Surface2D and Volume3D sessions.
     /// Mode-specific sessions own their requests, versions and result data.
-    /// This base exposes the shared commands and isolates subscriber failures.
+    /// This base owns the shared lifecycle rules: the published state, the fault
+    /// sequence and the generation that invalidates outstanding work.
     /// </summary>
     internal abstract class FlowFieldSessionBase : IDisposable
     {
         private bool _baseDisposed;
+        private FlowFieldRuntimeState _publishedState = FlowFieldRuntimeState.Uninitialized;
 
         internal event Action FieldCommitted;
         internal event Action<Exception> Failed;
@@ -18,15 +20,20 @@ namespace Common.FlowField
         internal event Action<Exception> EventFailed;
 
         internal abstract FlowFieldSpaceMode SpaceMode { get; }
-        internal abstract FlowFieldBakeMode BakeMode { get; }
-        internal abstract FlowFieldRuntimeState State { get; }
+        internal FlowFieldBakeMode BakeMode { get; private protected set; }
+        internal virtual FlowFieldRuntimeState State => _publishedState;
         internal abstract bool IsInitialized { get; }
         internal abstract bool IsFaulted { get; }
         internal abstract bool IsReady { get; }
         internal abstract bool IsRebuilding { get; }
-        internal abstract string LastError { get; }
-        internal abstract string GpuFallbackReason { get; }
-        internal abstract int Revision { get; }
+        internal Exception Fault { get; private protected set; }
+        internal string LastError => Fault?.Message;
+        internal string GpuFallbackReason { get; private protected set; }
+        internal int Revision { get; private protected set; }
+        private protected bool Disposed { get; set; }
+        // External calls compare this after they return. Every change of the
+        // session's lifetime advances it, which abandons the older work.
+        private protected int OperationGeneration { get; private set; }
         internal abstract bool TrySample(Vector3 worldPosition, out FlowFieldSample sample);
         internal abstract FlowFieldSample Sample(Vector3 worldPosition);
         internal abstract FlowFieldClampResult ClampPositionToGrid(Vector3 worldPosition);
@@ -50,7 +57,40 @@ namespace Common.FlowField
         internal abstract void Suspend();
         internal abstract void Release();
         internal abstract void RetryFault();
-        internal abstract void ReportFault(Exception exception);
+
+        internal void ReportFault(Exception exception)
+        {
+            if (IsInitialized)
+                EnterFault(exception ?? new InvalidOperationException("FlowField session failed."));
+        }
+
+        // Outstanding work ends before user code runs, and a subscriber of the
+        // state change may already have started a newer attempt.
+        private protected void EnterFault(Exception exception)
+        {
+            AbandonWorkForFault();
+            int generation = OperationGeneration;
+            Fault = exception;
+            ApplyFaultedState();
+            if (!Disposed && generation == OperationGeneration)
+                NotifyFailed(exception);
+        }
+
+        private protected abstract void AbandonWorkForFault();
+        private protected abstract void ApplyFaultedState();
+
+        private protected void AdvanceOperationGeneration()
+        {
+            unchecked { OperationGeneration++; }
+        }
+
+        private protected void PublishState(FlowFieldRuntimeState state)
+        {
+            if (_publishedState == state)
+                return;
+            _publishedState = state;
+            NotifyStateChanged(state);
+        }
 
         protected void NotifyFieldCommitted()
         {

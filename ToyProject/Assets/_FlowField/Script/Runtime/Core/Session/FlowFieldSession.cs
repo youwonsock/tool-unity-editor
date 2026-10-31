@@ -65,21 +65,14 @@ namespace Common.FlowField
         private Vector3 _latestDefaultDirection;
         private bool _hasLatestDefaultDirection;
         private bool _configurationStale;
-        private FlowFieldBakeMode _bakeMode;
         private FlowFieldSessionSourceKind _sourceKind;
         private FlowFieldBfsBackendPolicy _backendPolicy;
         private FlowFieldSessionLifecycle _lifecycle;
-        private Exception _fault;
-        private int _revision;
-        private bool _disposed;
         private bool _pumping;
         // PreferGpu is permanently downgraded after a GPU failure for the
         // lifetime of this Session. Release clears the flag; Suspend keeps it
         // so a resume cannot repeatedly rediscover a broken backend.
         private bool _managedBackendForced;
-        private string _gpuFallbackReason;
-        private int _callbackGeneration;
-        private FlowFieldRuntimeState _publishedRuntimeState = FlowFieldRuntimeState.Uninitialized;
 
         internal FlowFieldGridSpace StagingGrid => _state.Grid;
         internal bool StagingSurfaceReady => _state.SurfaceReady;
@@ -95,9 +88,7 @@ namespace Common.FlowField
         internal FlowFieldSurfaceData CommittedSurface => _fieldStore.Surface;
         internal FlowFieldGridSpace CommittedGrid => _fieldStore.Grid;
         internal override FlowFieldSpaceMode SpaceMode => FlowFieldSpaceMode.Surface2D;
-        internal override FlowFieldBakeMode BakeMode => _bakeMode;
         internal FlowFieldSessionLifecycle Lifecycle => _lifecycle;
-        internal Exception Fault => _fault;
         internal override FlowFieldRuntimeState State => RuntimeState;
         internal FlowFieldRuntimeState RuntimeState => _lifecycle switch
         {
@@ -110,8 +101,6 @@ namespace Common.FlowField
             FlowFieldSessionLifecycle.Released => FlowFieldRuntimeState.Released,
             _ => FlowFieldRuntimeState.Uninitialized,
         };
-        internal override string LastError => _fault?.Message;
-        internal override string GpuFallbackReason => _gpuFallbackReason;
         internal override bool IsInitialized => _lifecycle == FlowFieldSessionLifecycle.Active
             || _lifecycle == FlowFieldSessionLifecycle.Building
             || _lifecycle == FlowFieldSessionLifecycle.Suspended;
@@ -128,7 +117,6 @@ namespace Common.FlowField
         // clears these unsubmitted flags, allowing that rebuild to be pumped.
         internal bool RequiresExplicitRebuild => _configurationStale
             && _rebuild.HasVersionedGrid;
-        internal override int Revision => _revision;
 
         private bool HasCompatibleCommittedSource()
             => !_hasCommittedRequest
@@ -145,7 +133,7 @@ namespace Common.FlowField
         /// </summary>
         internal bool Pump()
         {
-            if (_disposed
+            if (Disposed
                 || _pumping
                 || _lifecycle == FlowFieldSessionLifecycle.Suspended
                 || _lifecycle == FlowFieldSessionLifecycle.Released
@@ -198,8 +186,8 @@ namespace Common.FlowField
                 _fieldStore.Grid,
                 _fieldStore.Surface.BakeBoundsWorld,
                 FlowFieldSpaceMode.Surface2D,
-                _bakeMode,
-                _revision,
+                BakeMode,
+                Revision,
                 hasRequestedGoal,
                 requestedGoal,
                 influenceRadius,
@@ -230,24 +218,14 @@ namespace Common.FlowField
         /// by GPU/Managed failures. The caller deliberately stays outside the
         /// solver exception boundary.
         /// </summary>
-        internal override void ReportFault(Exception exception)
-        {
-            if (_disposed
-                || _lifecycle == FlowFieldSessionLifecycle.Uninitialized
-                || _lifecycle == FlowFieldSessionLifecycle.Released
-                || _lifecycle == FlowFieldSessionLifecycle.Faulted)
-                return;
-            Fail(exception ?? new InvalidOperationException("FlowField session failed."));
-        }
-
         internal override void RetryFault()
         {
-            if (_disposed)
+            if (Disposed)
                 throw new ObjectDisposedException(nameof(FlowFieldSession));
             if (_lifecycle != FlowFieldSessionLifecycle.Faulted)
                 return;
             InvalidateCallbacks();
-            _fault = null;
+            Fault = null;
             // The fault may have interrupted a Goal that was prepared but not
             // solved. Forget it so the Goal stage cannot report it as unchanged.
             _goalTracker.ForgetLastBuild();
@@ -322,15 +300,15 @@ namespace Common.FlowField
             FlowFieldBfsBackendPolicy backendPolicy,
             ComputeShader shader)
         {
-            if (_disposed)
+            if (Disposed)
                 throw new ObjectDisposedException(nameof(FlowFieldSession));
             if (_lifecycle == FlowFieldSessionLifecycle.Active
                 || _lifecycle == FlowFieldSessionLifecycle.Building)
                 throw new InvalidOperationException("FlowField session is already initialized.");
             if (_lifecycle == FlowFieldSessionLifecycle.Faulted)
-                throw new InvalidOperationException("FlowField session is faulted. Retry the pending request or Release before Initialize.", _fault);
+                throw new InvalidOperationException("FlowField session is faulted. Retry the pending request or Release before Initialize.", Fault);
             if (_lifecycle == FlowFieldSessionLifecycle.Suspended
-                && (_bakeMode != bakeMode
+                && (BakeMode != bakeMode
                     || _sourceKind != sourceKind
                     || _backendPolicy != backendPolicy))
             {
@@ -349,7 +327,7 @@ namespace Common.FlowField
                 _rebuild.DropDeferredGoal();
             }
 
-            _bakeMode = bakeMode;
+            BakeMode = bakeMode;
             _sourceKind = sourceKind;
             _backendPolicy = backendPolicy;
             _modifierRegistry ??= new FlowFieldModifierRegistry();
@@ -365,7 +343,7 @@ namespace Common.FlowField
                     throw new InvalidOperationException("The FlowField GPU backend factory returned null.");
             }
 
-            _fault = null;
+            Fault = null;
             _configurationStale = false;
             MarkDirty(FlowFieldDirtyFlags.All, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
             SetLifecycle(FlowFieldSessionLifecycle.Active);
@@ -421,7 +399,7 @@ namespace Common.FlowField
 
         internal bool Submit(in FlowFieldSessionRequest request)
         {
-            if (_disposed)
+            if (Disposed)
                 throw new ObjectDisposedException(nameof(FlowFieldSession));
             if (!IsInitialized)
                 throw new InvalidOperationException("FlowField session is not initialized.");
@@ -515,7 +493,7 @@ namespace Common.FlowField
         {
             if (ReferenceEquals(collider, null))
                 throw new ArgumentNullException(nameof(collider));
-            if (_bakeMode == FlowFieldBakeMode.StaticBaked)
+            if (BakeMode == FlowFieldBakeMode.StaticBaked)
                 return true;
             _obstaclePipeline.DiscardStagedDynamicProbe();
             if (!_obstaclePipeline.RegisterDynamicObstacle(collider))
@@ -546,7 +524,7 @@ namespace Common.FlowField
         {
             if (ReferenceEquals(collider, null))
                 throw new ArgumentNullException(nameof(collider));
-            if (_bakeMode == FlowFieldBakeMode.StaticBaked)
+            if (BakeMode == FlowFieldBakeMode.StaticBaked)
                 return true;
             _obstaclePipeline.DiscardStagedDynamicProbe();
             if (!_obstaclePipeline.UnregisterDynamicObstacle(collider))
@@ -578,7 +556,7 @@ namespace Common.FlowField
 
         internal void MarkObstacleDirty(FlowFieldCellRect dirtyRegion)
         {
-            if (_bakeMode == FlowFieldBakeMode.StaticBaked)
+            if (BakeMode == FlowFieldBakeMode.StaticBaked)
                 return;
             _obstaclePipeline.DiscardStagedDynamicProbe();
             MarkDirty(
@@ -600,7 +578,7 @@ namespace Common.FlowField
 
         internal bool DetectObstacleTransformsChanged()
         {
-            if (_bakeMode == FlowFieldBakeMode.StaticBaked || !_state.Grid.IsValid)
+            if (BakeMode == FlowFieldBakeMode.StaticBaked || !_state.Grid.IsValid)
                 return false;
             bool changed = _obstaclePipeline.DetectDynamicTransformsChanged(
                 _state.Grid,
@@ -616,7 +594,7 @@ namespace Common.FlowField
 
         internal void RecordObstacleObservation(FlowFieldCellRect dirtyRegion)
         {
-            if (_bakeMode == FlowFieldBakeMode.StaticBaked)
+            if (BakeMode == FlowFieldBakeMode.StaticBaked)
                 return;
             _obstaclePipeline.DiscardStagedDynamicProbe();
             _obstacleProbePending = true;
@@ -626,7 +604,7 @@ namespace Common.FlowField
 
         internal bool ProbeObstacleChanges(in FlowFieldSessionRequest request)
         {
-            if (_bakeMode == FlowFieldBakeMode.StaticBaked
+            if (BakeMode == FlowFieldBakeMode.StaticBaked
                 || !_state.SurfaceReady
                 || !_state.HasObstacleMask
                 || _state.Workspace.Capacity != _state.Grid.CellCount)
@@ -840,7 +818,7 @@ namespace Common.FlowField
             if (!_hasPendingRequest)
                 return true;
 
-            int callbackGeneration = _callbackGeneration;
+            int callbackGeneration = OperationGeneration;
             FlowFieldSessionRequest request = _latestRequestedInput;
             _hasPendingRequest = false;
             FlowFieldDirtyFlags pending = _state.DirtyFlags;
@@ -927,8 +905,8 @@ namespace Common.FlowField
             }
             catch (Exception exception)
             {
-                if (!_disposed && callbackGeneration == _callbackGeneration)
-                    Fail(exception);
+                if (!Disposed && callbackGeneration == OperationGeneration)
+                    EnterFault(exception);
                 return false;
             }
         }
@@ -1315,7 +1293,7 @@ namespace Common.FlowField
 
         private bool StartBfs(in FlowFieldSessionRequest request)
         {
-            int callbackGeneration = _callbackGeneration;
+            int callbackGeneration = OperationGeneration;
             if (!_state.Workspace.HasActiveGoal)
             {
                 if (!ComposeFinal(request, callbackGeneration, rebuildBase: true))
@@ -1379,14 +1357,14 @@ namespace Common.FlowField
         private void ForceManagedBackend(string reason)
         {
             _managedBackendForced = true;
-            if (reason == null || _gpuFallbackReason != null)
+            if (reason == null || GpuFallbackReason != null)
                 return;
-            _gpuFallbackReason = reason;
+            GpuFallbackReason = reason;
             Debug.LogWarning($"[FlowField] Surface2D GPU 계산을 끄고 Managed로 전환합니다: {reason}");
         }
 
         private bool IsCurrentOperation(int callbackGeneration)
-            => !_disposed && callbackGeneration == _callbackGeneration
+            => !Disposed && callbackGeneration == OperationGeneration
                 && (_lifecycle == FlowFieldSessionLifecycle.Active
                     || _lifecycle == FlowFieldSessionLifecycle.Building);
 
@@ -1406,7 +1384,7 @@ namespace Common.FlowField
             catch (Exception exception)
             {
                 if (IsCurrentBuild(callbackGeneration))
-                    Fail(exception);
+                    EnterFault(exception);
             }
             finally { _pumping = wasPumping; }
         }
@@ -1472,7 +1450,7 @@ namespace Common.FlowField
         {
             if (_lifecycle != FlowFieldSessionLifecycle.Building)
                 return;
-            int callbackGeneration = _callbackGeneration;
+            int callbackGeneration = OperationGeneration;
             if (_buildPipeline is FlowFieldSurfaceBuildPipeline productionPipeline
                 && productionPipeline.GpuDisabled)
                 ForceManagedBackend(productionPipeline.GpuFallbackReason);
@@ -1547,7 +1525,7 @@ namespace Common.FlowField
                 SetLifecycle(FlowFieldSessionLifecycle.Active);
                 return;
             }
-            Fail(exception ?? new InvalidOperationException("Managed FlowField BFS failed."));
+            EnterFault(exception ?? new InvalidOperationException("Managed FlowField BFS failed."));
         }
 
         private bool HasStaleObstacleInput()
@@ -1611,15 +1589,15 @@ namespace Common.FlowField
                 if (!_obstacleProbePending)
                     _state.DirtyObstacleRegion = FlowFieldCellRect.Invalid;
             }
-            int callbackGeneration = _callbackGeneration;
+            int callbackGeneration = OperationGeneration;
             PublishRuntimeState();
-            if (_disposed || callbackGeneration != _callbackGeneration)
+            if (Disposed || callbackGeneration != OperationGeneration)
                 return;
             if (actualChanged)
             {
                 unchecked
                 {
-                    _revision++;
+                    Revision++;
                 }
                 NotifyFieldCommitted();
             }
@@ -1648,27 +1626,21 @@ namespace Common.FlowField
 
         private void InvalidateCallbacks()
         {
-            unchecked { _callbackGeneration++; }
+            AdvanceOperationGeneration();
             _modifierRegistry?.InvalidateOperations();
         }
 
-        private void Fail(Exception exception)
+        private protected override void AbandonWorkForFault() => InvalidateCallbacks();
+
+        private protected override void ApplyFaultedState()
         {
-            // Invalidate any outstanding solve before notifying user code.
-            // Finish old-attempt cleanup before a subscriber can queue a retry.
-            InvalidateCallbacks();
-            int callbackGeneration = _callbackGeneration;
-            _fault = exception;
             _state.DirtyFlags = FlowFieldDirtyFlags.None;
             SetLifecycle(FlowFieldSessionLifecycle.Faulted);
-            if (!_disposed && callbackGeneration == _callbackGeneration
-                && _lifecycle == FlowFieldSessionLifecycle.Faulted)
-                NotifyFailed(exception);
         }
 
         internal override void Suspend()
         {
-            if (_disposed
+            if (Disposed
                 || _lifecycle == FlowFieldSessionLifecycle.Uninitialized
                 || _lifecycle == FlowFieldSessionLifecycle.Released
                 || _lifecycle == FlowFieldSessionLifecycle.Faulted
@@ -1702,7 +1674,7 @@ namespace Common.FlowField
 
         internal override void Release()
         {
-            if (_disposed)
+            if (Disposed)
                 return;
             ReleaseResources();
         }
@@ -1744,20 +1716,20 @@ namespace Common.FlowField
             _rebuild.ClearVersioned(FlowFieldDirtyFlags.All);
             _rebuild.ResetSupersededGoal();
             _managedBackendForced = false;
-            _gpuFallbackReason = null;
+            GpuFallbackReason = null;
             _latestDefaultDirection = Vector3.zero;
             _hasLatestDefaultDirection = false;
-            _fault = null;
+            Fault = null;
             SetLifecycle(FlowFieldSessionLifecycle.Released);
         }
 
         internal void DisposePermanently()
         {
-            if (_disposed)
+            if (Disposed)
                 return;
             // Disposal is terminal before Released subscribers run, so they
             // cannot recreate resources or recursively dispose this owner.
-            _disposed = true;
+            Disposed = true;
             ReleaseResources();
             // A directly injected backend is deliberately kept alive across
             // Release so the same Session can be initialized again. Permanent
@@ -1795,14 +1767,7 @@ namespace Common.FlowField
             PublishRuntimeState();
         }
 
-        private void PublishRuntimeState()
-        {
-            FlowFieldRuntimeState next = RuntimeState;
-            if (_publishedRuntimeState == next)
-                return;
-            _publishedRuntimeState = next;
-            NotifyStateChanged(next);
-        }
+        private void PublishRuntimeState() => PublishState(RuntimeState);
     }
 
     /// <summary>
