@@ -32,6 +32,42 @@ namespace Common.FlowField.Tests
             return scenario;
         }
 
+        [Test]
+        public void VolumeModifierRecomposeMatchesAFullBuild()
+        {
+            string full;
+            using (var scenario = CreateModifierVolume(0.25f, out _))
+            {
+                scenario.Build();
+                full = scenario.Hash().ToString();
+            }
+
+            using (var scenario = CreateModifierVolume(0.5f, out FlowFieldScenarioFixture.RotateModifier modifier))
+            {
+                scenario.Build();
+                int revision = scenario.Session.Revision;
+                modifier.Speed = 0.25f;
+                modifier.Revision++;
+                scenario.Session.NotifyModifierChangedCommand(modifier, FlowFieldModifierChange.Value);
+                scenario.Finish();
+                Assert.That(scenario.Session.Revision, Is.EqualTo(revision + 1));
+                Assert.That(scenario.Hash().ToString(), Is.EqualTo(full));
+            }
+        }
+
+        private static FlowFieldScenarioFixture.VolumeScenario CreateModifierVolume(
+            float speed,
+            out FlowFieldScenarioFixture.RotateModifier modifier)
+        {
+            var scenario = new FlowFieldScenarioFixture.VolumeScenario(16, 10, 16)
+            {
+                Goal = new Vector3(14.5f, 1.5f, 14.5f),
+            };
+            scenario.LayerObstacle(new Vector3(8f, 4f, 6f), new Vector3(1f, 8f, 12f));
+            modifier = scenario.Modifier(new Vector3(4f, 3f, 4f), new Vector3(6f, 6f, 6f), 10, 30f, speed);
+            return scenario;
+        }
+
         private static FlowFieldScenarioFixture.VolumeScenario CreateVolume()
         {
             var scenario = new FlowFieldScenarioFixture.VolumeScenario(16, 10, 16)

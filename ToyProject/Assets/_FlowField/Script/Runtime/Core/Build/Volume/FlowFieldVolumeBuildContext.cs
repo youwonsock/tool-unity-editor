@@ -60,6 +60,7 @@ namespace Common.FlowField
         internal int GpuFallbackResetCursor;
         internal int AllocationStage;
         internal FlowFieldVolumeInteriorOffsets InteriorOffsets;
+        internal readonly bool IsModifierRecompose;
 
         internal FlowFieldVolumeBuildContext(
             in FlowFieldVolumeRequest request,
@@ -72,6 +73,31 @@ namespace Common.FlowField
             SafetyEpoch = safetyEpoch;
             Modifiers = modifiers ?? Array.Empty<FlowFieldModifierWorkItem>();
             Phase = FlowFieldVolumeBuildPhase.Allocate;
+        }
+
+        /// <summary>
+        /// Composes the published navigation with new Modifier snapshots. The
+        /// published arrays are shared read-only; only the final field is new.
+        /// </summary>
+        internal FlowFieldVolumeBuildContext(
+            FlowFieldVolumeFieldData published,
+            int generation,
+            int safetyEpoch,
+            FlowFieldModifierWorkItem[] modifiers)
+            : this(published.Request, generation, safetyEpoch, modifiers)
+        {
+            IsModifierRecompose = true;
+            Blocked = published.Blocked;
+            Topology = published.Topology;
+            GoalFlags = published.GoalFlags;
+            Next = published.NextCells;
+            Directions = published.BaseDirections;
+            Speeds = published.BaseSpeeds;
+            EscapeDirections = published.EscapeDirections;
+            GoalIndex = published.GoalIndex;
+            FinalDirections = new Vector3[Count];
+            FinalSpeeds = new float[Count];
+            Phase = FlowFieldVolumeBuildPhase.Modifiers;
         }
 
         internal void Dispose()

@@ -124,6 +124,8 @@ namespace Common.FlowField
         // The latest accepted input is also the next build input when pending.
         // A running BuildContext and published FieldData retain their own inputs.
         private bool _hasPendingRequest;
+        // Modifier changes reuse the published navigation unless a full build is pending.
+        private bool _hasPendingModifierRecompose;
         private FlowFieldVolumeRequest _latestRequestedInput;
         private bool _hasLatestRequestedInput;
         private FlowFieldRuntimeState _state = FlowFieldRuntimeState.Uninitialized;
@@ -183,7 +185,7 @@ namespace Common.FlowField
             }
         }
         internal FlowFieldGridSpace Grid => _committed?.Grid ?? _build?.Request.Grid ?? default;
-        internal bool HasPendingRequest => _hasPendingRequest || _build != null;
+        internal bool HasPendingRequest => _hasPendingRequest || _hasPendingModifierRecompose || _build != null;
         internal bool TryGetLatestRequestedInput(out FlowFieldVolumeRequest request)
         {
             request = _latestRequestedInput;
@@ -198,7 +200,7 @@ namespace Common.FlowField
             get
             {
                 if (_build == null)
-                    return _hasPendingRequest ? 0f : 1f;
+                    return _hasPendingRequest || _hasPendingModifierRecompose ? 0f : 1f;
                 if (_build.Phase == BuildPhase.Complete)
                     return 1f;
 
@@ -224,6 +226,7 @@ namespace Common.FlowField
             _hasLatestRequestedInput = false;
             _latestRequestedInput = default;
             _hasPendingRequest = false;
+            _hasPendingModifierRecompose = false;
             _safety.Reset();
             _suspendedByLifecycle = false;
             _buildReservationBytes = 0;
@@ -320,15 +323,17 @@ namespace Common.FlowField
                 {
                     if (_build == null)
                     {
-                        if (!_hasPendingRequest)
+                        if (!_hasPendingRequest && !_hasPendingModifierRecompose)
                         {
                             if (_committed != null && _state == FlowFieldRuntimeState.Building)
                                 SetState(FlowFieldRuntimeState.Ready);
                             return;
                         }
 
-                        FlowFieldVolumeRequest request = _latestRequestedInput;
+                        bool recompose = !_hasPendingRequest;
+                        FlowFieldVolumeRequest request = recompose ? _committed.Request : _latestRequestedInput;
                         _hasPendingRequest = false;
+                        _hasPendingModifierRecompose = false;
                         if (!TryCaptureModifiers(pumpGeneration, out FlowFieldModifierWorkItem[] modifierSnapshots))
                             return;
                         long reservation = EstimateBuildBytes(request.Grid.CellCount, modifierSnapshots.Length);
@@ -337,11 +342,10 @@ namespace Common.FlowField
                                 $"FlowField Volume3D tracked memory would exceed the "
                                 + $"{MemoryBudgetBytes / (1024d * 1024d):0} MiB manager budget "
                                 + $"(required {EstimateRequiredBytes(request, reservation) / (1024d * 1024d):0.0} MiB).");
-                        _build = new BuildContext(
-                            request,
-                            pumpGeneration,
-                            _safety.BeginBuild(),
-                            modifierSnapshots);
+                        // A recompose queries no obstacles, so it resolves no safety region.
+                        _build = recompose
+                            ? new BuildContext(_committed, pumpGeneration, _safety.Epoch, modifierSnapshots)
+                            : new BuildContext(request, pumpGeneration, _safety.BeginBuild(), modifierSnapshots);
                         _buildReservationBytes = reservation;
                     }
 
@@ -372,7 +376,7 @@ namespace Common.FlowField
                     // itself. Only that completed transition may be adopted;
                     // callback-driven changes have already returned above.
                     pumpGeneration = _generation;
-                    if (_hasPendingRequest)
+                    if (_hasPendingRequest || _hasPendingModifierRecompose)
                         continue;
                     if (_state == FlowFieldRuntimeState.Building)
                         SetState(FlowFieldRuntimeState.Ready);
@@ -436,7 +440,7 @@ namespace Common.FlowField
                 return true;
 
             // Registration may change before the first BuildContext exists.
-            // QueueCurrentRequest then has no build/publication to fall back
+            // QueueModifierChange then has no build/publication to fall back
             // to. Retry the newest accepted input at the next owner boundary.
             if (_hasLatestRequestedInput)
                 _hasPendingRequest = true;
@@ -484,6 +488,7 @@ namespace Common.FlowField
             InvalidateBuildGeneration();
             DiscardBuild();
             _hasPendingRequest = false;
+            _hasPendingModifierRecompose = false;
         }
 
         internal override bool TrySample(Vector3 worldPosition, out FlowFieldSample sample)
@@ -631,7 +636,7 @@ namespace Common.FlowField
         internal void DetectModifierChanges()
         {
             if (_modifierRegistry.DetectChanges())
-                QueueCurrentRequest();
+                QueueModifierChange();
         }
 
         internal bool RegisterModifier(IFlowFieldVectorModifier modifier)
@@ -639,7 +644,7 @@ namespace Common.FlowField
             ThrowIfInputAvailable();
             if (!_modifierRegistry.Register(modifier))
                 return false;
-            QueueCurrentRequest();
+            QueueModifierChange();
             return true;
         }
 
@@ -651,7 +656,7 @@ namespace Common.FlowField
             ThrowIfInputAvailable();
             if (!_modifierRegistry.Unregister(modifier))
                 return false;
-            QueueCurrentRequest();
+            QueueModifierChange();
             return true;
         }
 
@@ -665,7 +670,7 @@ namespace Common.FlowField
             ThrowIfInputAvailable();
             if (_modifierRegistry.ValidateModifierChange(modifier, change)
                 && change != FlowFieldModifierChange.None)
-                QueueCurrentRequest();
+                QueueModifierChange();
         }
 
         internal override void Suspend()
@@ -1365,23 +1370,27 @@ namespace Common.FlowField
             // Allocate and populate the replacement safety snapshot before
             // publishing any field reference. If allocation or initialization
             // fails, the previous publication remains intact.
-            FlowFieldVolumeSafetyState.Snapshot nextSafety = _safety.PrepareSnapshot(
-                build.Request.Grid, build.Blocked, build.SafetyEpoch);
+            FlowFieldVolumeSafetyState.Snapshot nextSafety = build.IsModifierRecompose
+                ? default
+                : _safety.PrepareSnapshot(build.Request.Grid, build.Blocked, build.SafetyEpoch);
 
             _committed = next;
             _revision++;
             _committedReservationBytes = EstimateCommittedBytes(build.Count);
-            _safety.PublishSnapshot(in nextSafety);
-            // Changes recorded after this build started stay uncertain; a
-            // continuously moving obstacle must not keep older regions unsafe.
-            _safety.ClearObservedRegions();
+            if (!build.IsModifierRecompose)
+            {
+                _safety.PublishSnapshot(in nextSafety);
+                // Changes recorded after this build started stay uncertain; a
+                // continuously moving obstacle must not keep older regions unsafe.
+                _safety.ClearObservedRegions();
+                // The published field holds none of these; a completed build has
+                // no GPU readback left that could still read them.
+                _spareCosts = build.Costs;
+                _spareQueue = build.Queue;
+                _spareInfluence = build.Influence;
+            }
             _build = null;
             _buildReservationBytes = 0;
-            // The published field holds none of these; a completed build has
-            // no GPU readback left that could still read them.
-            _spareCosts = build.Costs;
-            _spareQueue = build.Queue;
-            _spareInfluence = build.Influence;
             if (gridChanged)
                 InvalidateBuildGeneration();
 
@@ -1393,13 +1402,25 @@ namespace Common.FlowField
             return _generation != callbackGeneration;
         }
 
-        private void QueueCurrentRequest()
+        private void QueueModifierChange()
         {
             // Before the first BuildContext exists, interrupted capture owns
             // the retry. Otherwise the latest input must win over the older
             // active or published input, even after pending work was canceled.
             if (!_hasPendingRequest && _committed == null && _build == null)
                 return;
+            // Modifiers only affect the final composition. Unobserved colliders
+            // wait for the next full build, as Surface2D already does.
+            if (!_hasPendingRequest
+                && _committed != null
+                && _hasLatestRequestedInput
+                && _committed.Request.HasSameInputs(_latestRequestedInput))
+            {
+                _hasPendingModifierRecompose = true;
+                if (!IsFaulted && (_state != FlowFieldRuntimeState.Suspended || !_suspendedByLifecycle))
+                    SetState(FlowFieldRuntimeState.Building);
+                return;
+            }
             if (_hasLatestRequestedInput)
                 Submit(_latestRequestedInput);
             else if (_committed != null)

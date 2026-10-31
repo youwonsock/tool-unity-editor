@@ -44,6 +44,69 @@ namespace Common.FlowField.Tests
             Assert.That(_session.IsRebuilding, Is.False);
         }
 
+        [Test]
+        public void ModifierChangeRecomposesThePublishedNavigation()
+        {
+            var modifier = Modifier();
+            _session.RegisterModifier(modifier);
+            _session.Submit(Request());
+            Finish();
+            Assert.That(_session.Sample(Position).SpeedMultiplier, Is.EqualTo(2f));
+            int revision = _session.Revision;
+
+            // A collider nothing tracks only appears in a full build.
+            _obstacle = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _obstacle.layer = FlowFieldRegressionFixture.Layer;
+            _obstacle.transform.position = Position;
+            Physics.SyncTransforms();
+
+            modifier.Speed = 3f;
+            modifier.Revision++;
+            _session.NotifyModifierChangedCommand(modifier, FlowFieldModifierChange.Value);
+            Assert.That(_session.IsRebuilding, Is.True);
+            Finish();
+            Assert.That(_session.Revision, Is.EqualTo(revision + 1));
+            Assert.That(_session.Sample(Position).SpeedMultiplier, Is.EqualTo(3f));
+
+            _session.Submit(Request());
+            Finish();
+            Assert.That(_session.Sample(Position).SpeedMultiplier, Is.Not.EqualTo(3f));
+        }
+
+        [Test]
+        public void ModifierChangeDuringABuildIsComposedAfterIt()
+        {
+            var modifier = Modifier();
+            _session.RegisterModifier(modifier);
+            _session.Submit(Request());
+            Finish();
+
+            _session.Submit(Request(Vector3.one * 0.5f + Vector3.right * 2f));
+            FlowFieldVolumeSafetyRegressionTests.PumpOneStep(_session);
+            Assert.That(_session.IsRebuilding, Is.True);
+            modifier.Speed = 4f;
+            modifier.Revision++;
+            _session.NotifyModifierChangedCommand(modifier, FlowFieldModifierChange.Value);
+            Finish();
+            Assert.That(_session.Sample(Position).SpeedMultiplier, Is.EqualTo(4f));
+        }
+
+        [Test]
+        public void ReleaseCancelsAPendingModifierRecompose()
+        {
+            var modifier = Modifier();
+            _session.RegisterModifier(modifier);
+            _session.Submit(Request());
+            Finish();
+            modifier.Speed = 3f;
+            modifier.Revision++;
+            _session.NotifyModifierChangedCommand(modifier, FlowFieldModifierChange.Value);
+            Assert.That(_session.HasPendingRequest, Is.True);
+            _session.Release();
+            Assert.That(_session.HasPendingRequest, Is.False);
+            Assert.DoesNotThrow(() => _session.Pump());
+        }
+
         private FlowFieldRegressionFixture.Modifier Modifier(int priority = 100)
         {
             if (_area == null)
