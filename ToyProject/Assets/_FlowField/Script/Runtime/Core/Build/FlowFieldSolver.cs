@@ -130,9 +130,29 @@ namespace Common.FlowField
                     out resolvedGoalIndex))
                 return false;
 
-            BuildIntegration(grid, surface, workspace, resolvedGoalIndex);
-            BuildGoalDirections(grid, surface, workspace, resolvedGoalIndex);
+            SolvePreparedGoal(grid, surface, workspace, resolvedGoalIndex);
             return true;
+        }
+
+        /// <summary>
+        /// Solves a Goal whose influence and topology PrepareGoal already built
+        /// from the current obstacle state.
+        /// </summary>
+        public static void SolvePreparedGoal(
+            FlowFieldGridSpace grid,
+            FlowFieldSurfaceData surface,
+            FlowFieldWorkspace workspace,
+            int goalIndex)
+        {
+            ValidateWorkspace(grid, surface, workspace);
+            Span<int> neighborOffsets = stackalloc int[FlowFieldNeighborUtility.Count];
+            for (int direction = 0; direction < FlowFieldNeighborUtility.Count; direction++)
+            {
+                neighborOffsets[direction] = FlowFieldNeighborUtility.DeltaX[direction]
+                    + grid.Width * FlowFieldNeighborUtility.DeltaZ[direction];
+            }
+            BuildIntegration(grid, workspace, goalIndex, neighborOffsets);
+            BuildGoalDirections(grid, surface, workspace, goalIndex, neighborOffsets);
         }
 
 
@@ -163,43 +183,37 @@ namespace Common.FlowField
 
         private static void BuildIntegration(
             FlowFieldGridSpace grid,
-            FlowFieldSurfaceData surface,
             FlowFieldWorkspace workspace,
-            int goalIndex)
+            int goalIndex,
+            ReadOnlySpan<int> neighborOffsets)
         {
+            int[] costs = workspace.Costs;
+            int[] queue = workspace.Queue;
+            byte[] topology = workspace.TopologyMasks;
             for (int index = 0; index < grid.CellCount; index++)
-                workspace.Costs[index] = UNREACHABLE;
+                costs[index] = UNREACHABLE;
 
             int head = 0;
             int tail = 0;
-            workspace.Costs[goalIndex] = 0;
-            workspace.Queue[tail++] = goalIndex;
+            costs[goalIndex] = 0;
+            queue[tail++] = goalIndex;
             while (head < tail)
             {
-                int current = workspace.Queue[head++];
-                grid.FromFlatIndex(current, out int currentX, out int currentZ);
-                int currentCost = workspace.Costs[current];
-                for (int directionIndex = 0; directionIndex < FlowFieldNeighborUtility.Count; directionIndex++)
+                int current = queue[head++];
+                int candidate = costs[current] + 1;
+                int mask = topology[current];
+                for (int directionIndex = 0; directionIndex < neighborOffsets.Length; directionIndex++)
                 {
-                    if ((workspace.TopologyMasks[current] & (1 << directionIndex)) == 0)
-                        continue;
-                    if (!FlowFieldGraphTraversal.CanTraverse(
-                            grid,
-                            surface,
-                            workspace,
-                            current,
-                            currentX,
-                            currentZ,
-                            directionIndex,
-                            out int neighbor))
+                    // A topology bit proves the move stays in bounds and traversable.
+                    if ((mask & (1 << directionIndex)) == 0)
                         continue;
 
-                    int candidate = currentCost + 1;
-                    if (candidate >= workspace.Costs[neighbor])
+                    int neighbor = current + neighborOffsets[directionIndex];
+                    if (candidate >= costs[neighbor])
                         continue;
 
-                    workspace.Costs[neighbor] = candidate;
-                    workspace.Queue[tail++] = neighbor;
+                    costs[neighbor] = candidate;
+                    queue[tail++] = neighbor;
                 }
             }
         }
@@ -208,8 +222,11 @@ namespace Common.FlowField
             FlowFieldGridSpace grid,
             FlowFieldSurfaceData surface,
             FlowFieldWorkspace workspace,
-            int goalIndex)
+            int goalIndex,
+            ReadOnlySpan<int> neighborOffsets)
         {
+            int[] costs = workspace.Costs;
+            byte[] topology = workspace.TopologyMasks;
             grid.FromFlatIndex(goalIndex, out int goalX, out int goalZ);
             for (int index = 0; index < grid.CellCount; index++)
             {
@@ -244,30 +261,19 @@ namespace Common.FlowField
                 int bestIndex = -1;
                 int bestGoalScore = 0;
                 bool hasBest = false;
-                for (int directionIndex = 0; directionIndex < FlowFieldNeighborUtility.Count; directionIndex++)
+                int previousWave = costs[index] - 1;
+                int mask = topology[index];
+                for (int directionIndex = 0; directionIndex < neighborOffsets.Length; directionIndex++)
                 {
-                    if ((workspace.TopologyMasks[index] & (1 << directionIndex)) == 0)
-                        continue;
-                    if (!FlowFieldGraphTraversal.CanTraverse(
-                            grid,
-                            surface,
-                            workspace,
-                            index,
-                            x,
-                            z,
-                            directionIndex,
-                            out int neighbor))
-                        continue;
-
-                    int neighborCost = workspace.Costs[neighbor];
-                    if (neighborCost == UNREACHABLE)
+                    if ((mask & (1 << directionIndex)) == 0)
                         continue;
 
                     // Every edge has cost one. Selecting exactly the previous
                     // wave prevents zero-cost cycles. Among those candidates,
                     // prefer the one that is closest to the resolved Goal in
                     // XZ; flat index is the deterministic final tie-breaker.
-                    if (neighborCost != workspace.Costs[index] - 1)
+                    int neighbor = index + neighborOffsets[directionIndex];
+                    if (costs[neighbor] != previousWave)
                         continue;
 
                     int goalScore = FlowFieldGraphTraversal.CalculateGoalAlignmentScore(
