@@ -532,7 +532,7 @@ namespace Common.FlowField
                 ValidateConfiguration(validateStaticGoal: false);
                 if (owner.SpaceMode == FlowFieldSpaceMode.Volume3D)
                 {
-                    QueueVolumeRequest(force: true);
+                    QueueVolumeRequest(force: true, requeryObstacles: true);
                     if (OwnsLifecycleOperation(_volumeSession, version))
                         _volumeSession.AttachRuntimeScheduler();
                 }
@@ -805,6 +805,7 @@ namespace Common.FlowField
         {
             if (SpaceMode == FlowFieldSpaceMode.Volume3D)
             {
+                // A Goal change keeps the obstacle result unless a tracked obstacle moved.
                 if (_volumeSession.IsInitialized)
                     QueueVolumeRequest(force: true);
                 RefreshEditorPreview();
@@ -865,7 +866,7 @@ namespace Common.FlowField
                 bakeData,
                 CaptureBakeInputGeneration());
 
-        private void QueueVolumeRequest(bool force = false)
+        private void QueueVolumeRequest(bool force = false, bool requeryObstacles = false)
         {
             if (!_volumeSession.IsInitialized || _volumeSession.IsFaulted)
                 return;
@@ -876,7 +877,7 @@ namespace Common.FlowField
                 return;
             // The session owns the accepted input, including a newer input
             // submitted from its synchronous state-change callback.
-            _volumeSession.Submit(request);
+            _volumeSession.Submit(request, requeryObstacles);
         }
 
         /// <summary>
@@ -1022,7 +1023,7 @@ namespace Common.FlowField
                 throw new InvalidOperationException("Cell regeneration is not allowed in StaticBaked mode.");
             if (SpaceMode == FlowFieldSpaceMode.Volume3D)
             {
-                QueueVolumeRequest(force: true);
+                QueueVolumeRequest(force: true, requeryObstacles: true);
                 return;
             }
             _session.MarkDirty(
@@ -1038,7 +1039,7 @@ namespace Common.FlowField
             if (SpaceMode == FlowFieldSpaceMode.Volume3D)
             {
                 if (_volumeSession.IsInitialized)
-                    QueueVolumeRequest(force: true);
+                    QueueVolumeRequest(force: true, requeryObstacles: true);
                 RefreshEditorPreview();
                 return;
             }
@@ -1137,7 +1138,7 @@ namespace Common.FlowField
             if (_spaceMode == FlowFieldSpaceMode.Volume3D)
             {
                 if (_volumeSession.IsInitialized)
-                    QueueVolumeRequest(force: true);
+                    QueueVolumeRequest(force: true, requeryObstacles: true);
                 RefreshEditorPreview();
                 return;
             }
@@ -1272,7 +1273,7 @@ namespace Common.FlowField
                 return;
             _volumeStaticBakeData = bakeData;
             if (_volumeSession.IsInitialized)
-                QueueVolumeRequest(force: true);
+                QueueVolumeRequest(force: true, requeryObstacles: true);
             RefreshEditorPreview();
         }
 

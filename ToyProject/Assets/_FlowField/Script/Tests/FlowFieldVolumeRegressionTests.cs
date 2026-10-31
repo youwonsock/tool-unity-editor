@@ -100,6 +100,47 @@ namespace Common.FlowField.Tests
         }
 
         [Test]
+        public void ExplicitRebuildQueriesObstaclesEvenWhenTheGoalChanges()
+        {
+            _session.Submit(Request());
+            Finish();
+
+            _obstacle = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _obstacle.layer = FlowFieldRegressionFixture.Layer;
+            _obstacle.transform.position = Vector3.one * 1.5f;
+            Physics.SyncTransforms();
+
+            _session.Submit(Request(new Vector3(0.5f, 2.5f, 0.5f)), requeryObstacles: true);
+            Finish();
+            Assert.That(_session.TryGetView(out _, out bool[] blocked, out _, out _), Is.True);
+            Assert.That(blocked[Grid.ToFlatIndex(1, 1, 1)], Is.True);
+        }
+
+        [Test]
+        public void ModifierChangeDuringAGoalBuildKeepsReusingObstacles()
+        {
+            var modifier = Modifier();
+            _session.RegisterModifier(modifier);
+            _session.Submit(Request());
+            Finish();
+
+            _obstacle = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _obstacle.layer = FlowFieldRegressionFixture.Layer;
+            _obstacle.transform.position = Vector3.one * 1.5f;
+            Physics.SyncTransforms();
+
+            _session.Submit(Request(new Vector3(0.5f, 2.5f, 0.5f)));
+            modifier.Speed = 3f;
+            modifier.Revision++;
+            _session.NotifyModifierChangedCommand(modifier, FlowFieldModifierChange.Value);
+            Finish();
+
+            Assert.That(_session.TryGetView(out _, out bool[] blocked, out _, out _), Is.True);
+            Assert.That(blocked[Grid.ToFlatIndex(1, 1, 1)], Is.False);
+            Assert.That(_session.Sample(Position).SpeedMultiplier, Is.EqualTo(3f));
+        }
+
+        [Test]
         public void GoalChangeQueriesObstaclesWhenATrackedObstacleMoved()
         {
             _obstacle = GameObject.CreatePrimitive(PrimitiveType.Cube);

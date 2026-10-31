@@ -214,7 +214,6 @@ namespace Common.FlowField.Samples
 
             Vector3 goal = _goalPositions[index];
             _manager.SetGoal(FlowFieldGoalRequest.Position(goal));
-            _manager.RequestRebuild();
             _goalIndex = index;
             _activeGoalPosition = goal;
             _hasActiveGoal = true;
@@ -232,7 +231,6 @@ namespace Common.FlowField.Samples
             if (!sameGoal)
             {
                 _manager.SetGoal(FlowFieldGoalRequest.Position(initialGoal));
-                _manager.RequestRebuild();
             }
 
             _goalIndex = 0;
