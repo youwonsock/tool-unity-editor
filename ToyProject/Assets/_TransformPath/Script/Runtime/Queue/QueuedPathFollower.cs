@@ -283,6 +283,8 @@ namespace Common.TransformPath
             _pathFollower.Completed += HandleUnderlyingCompleted;
             _pathFollower.LoopBoundary -= HandleUnderlyingLoopBoundary;
             _pathFollower.LoopBoundary += HandleUnderlyingLoopBoundary;
+            _pathFollower.PlaybackAborted -= HandleUnderlyingPlaybackAborted;
+            _pathFollower.PlaybackAborted += HandleUnderlyingPlaybackAborted;
             PathCommandReceipt receipt = _pathFollower.Init();
             _pathFollower.SetEventTarget(this);
             _isInitialized = true;
@@ -311,6 +313,7 @@ namespace Common.TransformPath
                 _pathFollower.SegmentChanged -= HandleUnderlyingSegmentChanged;
                 _pathFollower.Completed -= HandleUnderlyingCompleted;
                 _pathFollower.LoopBoundary -= HandleUnderlyingLoopBoundary;
+                _pathFollower.PlaybackAborted -= HandleUnderlyingPlaybackAborted;
             }
             _isInitialized = false;
             _managerState = null;
@@ -387,13 +390,11 @@ namespace Common.TransformPath
             if (_queueParticipationMode != EQueueParticipationMode.Queued || !_queue.IsRegistered)
                 return;
 
-            float effectiveMaxProgress = _managerState.HasValue
-                ? Mathf.Min(
-                    _requestedMaxGlobalNormalizedTime,
-                    _managerState.Value.MaxGlobalNormalizedTime)
-                : _requestedMaxGlobalNormalizedTime;
+            // Only the requested cap can be violated. The manager's cap follows
+            // the actor ahead, so resuming or a new spacing or route length may
+            // legitimately leave this actor past it. The actor then waits.
             if (_managerState.HasValue
-                && GlobalNormalizedTime > effectiveMaxProgress + CONSTRAINT_VIOLATION_EPSILON)
+                && GlobalNormalizedTime > _requestedMaxGlobalNormalizedTime + CONSTRAINT_VIOLATION_EPSILON)
             {
                 InvalidateRegistration(EPathQueueDetachReason.ConstraintViolation);
                 return;
@@ -700,6 +701,8 @@ namespace Common.TransformPath
             {
                 if (_queueParticipationMode == EQueueParticipationMode.Queued)
                     TryRegisterWithManager();
+                else
+                    ResetConstraintState();
             }
             else if (state == EPathFollowerState.Paused)
             {
@@ -713,6 +716,10 @@ namespace Common.TransformPath
                     state == EPathFollowerState.Completed
                         ? EPathQueueDetachReason.Completed
                         : EPathQueueDetachReason.Explicit);
+                // A pause may have held the presentation without a registration.
+                _queue.IsBlocked = false;
+                _queue.SpeedMultiplier = 1f;
+                UpdateAnimator();
             }
 
             if (PlaybackId != playbackId || StateRevision != stateRevision || State != state)
@@ -756,6 +763,14 @@ namespace Common.TransformPath
             }
 
             TryRegisterWithManager();
+        }
+
+        private void HandleUnderlyingPlaybackAborted()
+        {
+            UnregisterFromManager();
+            _queue.IsBlocked = false;
+            _queue.SpeedMultiplier = 1f;
+            UpdateAnimator();
         }
 
         private void HandleUnderlyingCompleted()

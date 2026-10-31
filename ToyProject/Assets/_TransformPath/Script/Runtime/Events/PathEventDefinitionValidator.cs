@@ -29,6 +29,11 @@ namespace Common.TransformPath
                     || definition.TimeScaleAdjustDuration <= 0f)
                     throw new ArgumentOutOfRangeException(nameof(definition));
                 ValidateAdjustment(definition.TimeScaleAdjustDuration, definition.TimeScaleAdjustCurve);
+                // Delays count game time, which a time scale of zero stops.
+                if (Mathf.Approximately(definition.TimeScaleAdjustValue, 0f)
+                    && definition.DelayedEvents.Count != 0)
+                    throw new ArgumentException(
+                        "A time scale of zero would never run its delayed events.");
             }
 
             EPathEventIntent intent = PathEventRuntime.ResolveIntent(

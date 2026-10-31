@@ -156,6 +156,8 @@ Queue 참여 중 `PauseMove`를 호출하면 재생 상태가 Paused가 되고 M
 
 재출발 기본값은 지연 0.1초, 추가 간격 0.3, 속도 보간율 5입니다. Inspector에서 각각 조절할 수 있습니다. 진행 상한이 1 미만이면 그 경계를 넘어 완료·Loop·구간 전환하지 않습니다.
 
+`ConstraintViolation` 무효화는 시작할 때 지정한 진행 상한을 넘은 경우에만 발생합니다. 재개, 간격 변경, 경로 단축으로 앞 Agent와의 간격이 부족해지면 재생을 끝내지 않고 간격이 벌어질 때까지 대기합니다.
+
 OnBlocked·OnResumed·OnSpeedChanged와 완료·무효화 알림은 고정된 리스너 목록을 순회합니다. 콜백에서 ForceBlock·ForceUnblock·Detach 등 Queue 명령이나 재생 변경이 발생하면 이전 알림 묶음과 그 후속 묶음을 중단합니다. Queue 알림 변경 검사는 내부 값으로 관리하며 공개 StateRevision의 의미는 유지합니다. 이후 Tick의 정상 알림은 계속 전달됩니다.
 
 ## 이벤트와 수명
@@ -169,10 +171,11 @@ OnBlocked·OnResumed·OnSpeedChanged와 완료·무효화 알림은 고정된 �
 
 - 이벤트 이름은 `IPathEventReceiver.ReceivePathEvent`와 OnEventDispatched로 전달합니다.
 - **이벤트 목표값**에서 SpeedBased의 속도 0은 Pause, TimeBased의 Duration 9999는 Pause 신호입니다. Paused 상태에서 유효한 목표값의 이벤트를 실행하면 Resume과 값 변경을 함께 수행합니다. 이는 이벤트 해석 규칙입니다. 직접 `SetSpeed(0)`을 호출하면 값 범위 예외가 발생하고, `SetDuration(9999)`는 Duration을 변경하며 Pause하지 않습니다.
-- 지연 이벤트는 게임 시간을 사용하며, 경로의 다음 이벤트가 실행되면 기존 지연 목록을 취소합니다.
+- 지연 이벤트는 게임 시간을 사용하며, 경로의 다음 이벤트가 실행되면 기존 지연 목록을 취소합니다. 게임 시간이 멈추면 실행될 수 없으므로 TimeScale 목표값 0에 지연 이벤트를 함께 쓰면 거부합니다.
+- 속도·Duration 보간은 시작한 구간과 같은 이동 방식의 구간까지만 이어집니다. 이동 방식이 다른 구간으로 넘어가면 보간을 취소하고 그 구간의 설정을 따릅니다.
 - TimeScale 변경은 소유자를 구분해 복원하며 오래된 재생의 해제가 새 효과를 정리하지 않습니다.
 - 재생 중 Follower가 비활성화한 CharacterController는 종료 시 복원합니다. Pause에서는 비활성을 유지합니다. Inspector에서 이 기능을 끌 수 있습니다.
-- `SetRotateToPathDirection`은 지속 회전을, `AlignRotationToPathDirection`은 선택 축의 일회 정렬을 제어합니다.
+- `SetRotateToPathDirection`은 지속 회전을, `AlignRotationToPathDirection`은 선택 축의 일회 정렬을 제어합니다. 진행 방향은 최소 0.01만큼 앞의 지점으로 계산하므로 짧은 경로에서도 회전합니다. 경로 끝에서는 직전 회전을 유지합니다.
 
 ### 이벤트 수신기 연결
 
@@ -220,5 +223,7 @@ MultiPathData는 구간별 Provider·이동 설정과 연결점 자동 동기화
 - EditMode: `Common.TransformPath.Tests`
 - PlayMode: `Common.TransformPath.Tests.PlayMode`
 - 에디터 UI 회귀는 그래픽 에디터에서 실행합니다. 배치 모드에서는 UI 테스트를 건너뜁니다.
+
+현재 상태와 남은 과제는 [StatusAndBacklog.md](Docs/StatusAndBacklog.md)에 있습니다.
 
 최신 변경·검증과 제거된 계약의 정확한 범위는 [알림·현재 API 정리](Docs/NotificationAndApiCleanup.md), [검증 JSON](Docs/NotificationAndApiCleanupValidation.json)에 정리합니다. API 기준 파일은 현재 공개 표면을 검사하며, Docs의 과거 검증 기록은 해당 작업 당시 결과입니다.

@@ -16,6 +16,8 @@ namespace Common.TransformPath
 
         private const float EPSILON = 0.00001f;
         private const int MAX_SEGMENT_TRANSITIONS_PER_TICK = 65;
+        private const float MIN_DIRECTION_LOOK_AHEAD = 0.001f;
+        private const float MIN_DIRECTION_LOOK_AHEAD_DISTANCE = 0.01f;
 
         #endregion
 
@@ -139,6 +141,10 @@ namespace Common.TransformPath
                 _segmentChangedInvocationList = _segmentChanged?.GetInvocationList();
             }
         }
+        // Listener failures end playback without StateChanged, because a second
+        // public notification could fail again. The queue adapter still has to
+        // give up the ownership of the playback that ended.
+        internal event Action PlaybackAborted;
         internal event Action LoopBoundary
         {
             add
@@ -354,6 +360,7 @@ namespace Common.TransformPath
                     return;
                 StopPlaybackOnly();
                 EndPlayback();
+                ApplyAnimatorSpeed(1f);
                 SetState(EPathFollowerState.Ready);
                 TryRestoreCharacterController();
             }
@@ -962,6 +969,9 @@ namespace Common.TransformPath
         {
             PathSegmentDescriptor descriptor = _playbackSession.Snapshot.GetDescriptor(index);
             PathMovementSettings settings = descriptor.MovementSettings;
+            // An adjustment drives the channel of the segment that started it.
+            if (settings.MoveType != _moveType)
+                _pathEventHandler?.CancelMovementAdjustments();
             _moveType = settings.MoveType;
             _timeCurve = settings.TimeCurve;
             if (preserveSpeed
@@ -1114,19 +1124,33 @@ namespace Common.TransformPath
             if (_playbackSession == null || !_playbackSession.Provider.IsReady)
                 return false;
 
-            float aheadNormalizedTime = Mathf.Min(1f, _normalizedTime + 0.001f);
-            Vector3 position = _playbackSession.Sequence == null
-                ? _playbackSession.Provider.Sample(_normalizedTime)
-                : _playbackSession.Snapshot.Sample(_currentSegmentIndex, _normalizedTime);
-            Vector3 ahead = _playbackSession.Sequence == null
-                ? _playbackSession.Provider.Sample(aheadNormalizedTime)
-                : _playbackSession.Snapshot.Sample(_currentSegmentIndex, aheadNormalizedTime);
+            bool sequence = _playbackSession.Sequence != null;
+            float length = sequence
+                ? _playbackSession.Snapshot.GetLength(_currentSegmentIndex)
+                : _playbackSession.Provider.PathLength;
+            // Look ahead by distance so a short path has as usable a direction
+            // as a long one. The sample is still clamped at the path end.
+            float lookAhead = Mathf.Min(1f, Mathf.Max(
+                MIN_DIRECTION_LOOK_AHEAD,
+                MIN_DIRECTION_LOOK_AHEAD_DISTANCE / length));
+            float aheadNormalizedTime = Mathf.Min(1f, _normalizedTime + lookAhead);
+            Vector3 position = sequence
+                ? _playbackSession.Snapshot.Sample(_currentSegmentIndex, _normalizedTime)
+                : _playbackSession.Provider.Sample(_normalizedTime);
+            Vector3 ahead = sequence
+                ? _playbackSession.Snapshot.Sample(_currentSegmentIndex, aheadNormalizedTime)
+                : _playbackSession.Provider.Sample(aheadNormalizedTime);
             Vector3 delta = ahead - position;
 
-            if (delta.sqrMagnitude <= EPSILON)
+            // Near the end the clamped sample shrinks towards zero. Hold the
+            // rotation there, before rounding starts to decide the direction.
+            float minimumDistance = lookAhead * length * 0.5f;
+            float sqrDistance = delta.sqrMagnitude;
+            if (sqrDistance <= Mathf.Min(EPSILON, minimumDistance * minimumDistance))
                 return false;
 
-            direction = delta.normalized;
+            // Vector3.normalized returns zero below a fixed magnitude.
+            direction = delta / Mathf.Sqrt(sqrDistance);
             return true;
         }
 
@@ -1308,10 +1332,12 @@ namespace Common.TransformPath
 
             StopPlaybackOnly();
             EndPlayback();
+            ApplyAnimatorSpeed(1f);
             _state = _isInitialized
                 ? EPathFollowerState.Ready
                 : EPathFollowerState.Uninitialized;
             TryRestoreCharacterController();
+            PlaybackAborted?.Invoke();
         }
 
         private void TrySuppressCharacterController()

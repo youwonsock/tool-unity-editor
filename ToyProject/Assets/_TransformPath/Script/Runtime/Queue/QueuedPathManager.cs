@@ -276,6 +276,11 @@ namespace Common.TransformPath
             for (int i = 0; i < _entries.Count; i++)
             {
                 QueueEntry entry = _entries[i];
+                // A registration whose playback already ended is no longer on
+                // the route. It stays listed until its agent replaces or
+                // releases it, but no other agent may wait behind it.
+                if (entry.Agent.PlaybackId != entry.Registration.PlaybackId)
+                    continue;
                 _frameEntries.Add(new QueueFrameEntry
                 {
                     Agent = entry.Agent,
