@@ -125,11 +125,7 @@ namespace Common.FlowField.Tests
 
         private static IEnumerator InterruptGpuBuild(int interruption)
         {
-            if (!SystemInfo.supportsComputeShaders || !SystemInfo.supportsAsyncGPUReadback)
-                Assert.Ignore("Compute shaders and async readback are required.");
-            var shader = AssetDatabase.LoadAssetAtPath<ComputeShader>(
-                "Assets/_FlowField/Script/Runtime/Core/Solvers/FlowFieldFrontier.compute");
-            Assert.That(shader, Is.Not.Null);
+            ComputeShader shader = LoadShader();
             var session = new FlowFieldVolumeSession();
             try
             {

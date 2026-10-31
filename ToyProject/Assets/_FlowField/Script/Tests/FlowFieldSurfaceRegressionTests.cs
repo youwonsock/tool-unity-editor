@@ -255,6 +255,44 @@ namespace Common.FlowField.Tests
         }
 
         [Test]
+        public void ObstacleDirtiedDuringTheSolveIsPublishedAndRebuiltNext()
+        {
+            Vector3 cell = new Vector3(1.5f, 0.5f, 1.5f);
+            Build(GoalA);
+            RegisterObstacle(new Vector3(1.5f, 100f, 1.5f));
+            RunOwnerTicks(GoalA);
+            int revision = _session.Revision;
+
+            StartSolve(GoalB);
+            _colliderObject.transform.position = cell;
+            Physics.SyncTransforms();
+            FlowFieldCellRect dirty = FlowFieldCellRect.Full(FlowFieldRegressionFixture.Grid);
+            _session.MarkObstacleDirty(dirty);
+            int solves = _backend.Calls.Count;
+            _backend.Complete(_backend.Calls.Count - 1);
+
+            Assert.That(_session.Revision, Is.GreaterThan(revision));
+            AssertResolvedGoal(GoalB);
+            Assert.That(_session.HasPendingRequest, Is.True, "The obstacle request must survive the publication.");
+
+            RunOwnerTicks(GoalB);
+            Assert.That(_backend.Calls.Count, Is.GreaterThan(solves));
+            Assert.That(_session.IsFaulted, Is.False, _session.LastError);
+            int index = FlowFieldRegressionFixture.Grid.ToFlatIndex((int)cell.x, (int)cell.z);
+            Assert.That(_session.CommittedWorkspace.Blocked[index], Is.True);
+            AssertResolvedGoal(GoalB);
+        }
+
+        [Test]
+        public void GoalForgottenByARejectedSolveKeepsItsNoWalkableWarningState()
+        {
+            var tracker = new FlowFieldGoalTracker();
+            Assert.That(tracker.TryConsumeMissingWalkableWarning(), Is.True);
+            tracker.ForgetLastBuild();
+            Assert.That(tracker.TryConsumeMissingWalkableWarning(), Is.False);
+        }
+
+        [Test]
         public void ContinuouslyMovingObstacleDoesNotStarvePublication()
         {
             Vector3 first = new Vector3(2.5f, 0.5f, 0.5f);

@@ -695,6 +695,7 @@ namespace Common.FlowField
             _safety.ClearSnapshot();
             _hasLatestRequestedInput = false;
             _suspendedByLifecycle = false;
+            _gpuFallbackReason = null;
             _safety.ClearRegions();
             if (_runtimeScheduled)
             {

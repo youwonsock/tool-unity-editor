@@ -1451,7 +1451,7 @@ namespace Common.FlowField
         /// </summary>
         private void RequeueRejectedGoal()
         {
-            _goalTracker.Clear();
+            _goalTracker.ForgetLastBuild();
             _state.DirtyFlags |= FlowFieldDirtyFlags.Goal | FlowFieldDirtyFlags.FinalRegion;
             _state.ExpandFinalDirty(FlowFieldCellRect.Full(_state.Grid));
             if (_hasLatestRequestedInput)
