@@ -122,8 +122,7 @@ GPU 경로(같은 장면, 배치 실행의 프레임 대기 포함)는 Surface 2
 
 ### 구조
 
-- 큰 파일: `FlowFieldSession.cs` 1,983줄, `FlowFieldVolumeRuntime.cs` 1,644줄, `FlowFieldManager.cs` 1,414줄. 수명·재진입 검사가 곳곳에 있어 분리 자체의 회귀 위험이 크다. 해당 파일을 크게 바꾸는 기능 작업과 함께 진행한다.
-- 파일 이름: `FlowFieldVolumeRuntime.cs`에는 `FlowFieldVolumeRequest`와 `FlowFieldVolumeSession`이 들어 있다. `.meta`를 유지한 채 이름을 맞출 수 있다.
+- 큰 파일: `FlowFieldSession.cs` 1,983줄, `FlowFieldVolumeSession.cs` 1,550줄, `FlowFieldManager.cs` 1,414줄. 수명·재진입 검사가 곳곳에 있어 분리 자체의 회귀 위험이 크다. 해당 파일을 크게 바꾸는 기능 작업과 함께 진행한다.
 - 복잡성의 근원: 콜백 안의 Release·Init·Suspend를 허용해 외부 호출 뒤마다 소유권을 다시 검사한다. 이벤트 지연 전달은 공개 동작을 바꾸므로 진행하지 않았다.
 - Manager: `SpaceMode == Volume3D` 분기 11곳. 모드별 어댑터 분리는 Manager를 크게 바꾸는 기능 작업과 함께 진행한다.
 
