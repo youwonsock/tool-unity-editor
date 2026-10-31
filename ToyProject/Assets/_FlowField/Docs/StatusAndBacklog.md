@@ -83,7 +83,7 @@ Editor Play Mode 확인: Surface 샘플은 장애물이 매 Editor 틱 움직이
 | --- | --- | --- |
 | 베이크 에디터 | `FlowFieldBakeEditorTests`가 임시 씬에서 재베이크의 `_revision` 외 차이 없음, 입력 변경 시 Asset 유지, 대상 소유권을 검사한다. 저장 실패 복구는 주입할 방법이 없어 검사하지 않는다 | 필요할 때 저장 실패 경로 검증 |
 | Windows | 이번 수정은 Metal에서만 실행했다 | Windows·Direct3D 11에서 전체 테스트 재실행 |
-| 실제 플레이 | 실제 포인터로 Surface의 게이트·Next Goal 버튼을, 실제 키로 Surface의 Space·M·R·G·1·2·3·O·F와 Volume StaticBaked의 Space·R·O·G·F, RuntimeDynamic의 Space·O·R·G를 확인했다. Surface의 C는 입력만 확인했고 진단 결과는 보지 않았다. RMB+WASD 자유 카메라는 확인하지 않았다 | 필요할 때 C 진단 결과와 카메라 조작 확인 |
+| 실제 플레이 | 실제 포인터로 Surface의 게이트·Next Goal 버튼을, 실제 키로 Surface의 Space·M·R·G·1·2·3·O·F와 Volume StaticBaked의 Space·R·O·G·F, RuntimeDynamic의 Space·O·R·G를 확인했다. Surface의 C는 입력을 받지만, 진단이 매 프레임 갱신되므로 눌러도 결과가 달라지지 않는다. 재조회 수정 뒤 RuntimeDynamic의 Space·O·R·G를 다시 확인했고, 두 HUD의 GPU 전환 이유는 값을 넣어 표시를 확인했다. RMB+WASD 자유 카메라는 확인하지 않았다 | 필요할 때 카메라 조작 확인 |
 | GPU 경로 | 골든 해시는 Managed 고정이다. 동률 이웃이 다를 수 있어 큰 장면(64×48, 32×12×32)은 Blocked와 셀별 경로 길이를 Managed와 비교한다. Modifier 합성 결과는 비교하지 않는다. GPU 빌드 시간은 배치 실행의 프레임 대기를 포함한 수치만 있다 | 프레임 끊김은 Player 검증을 재개할 때 비교 |
 | Player 스크립트 | Mac Standalone 어셈블리 컴파일만 오류 없이 확인했다. 실행은 범위에서 제외했다 | 보류 항목 참고 |
 | 자동 실행 | 저장소에 CI 설정이 없다. Unity 라이선스에 로그인한 PC에서 수동으로 실행한다 | 자체 호스트 러너 등 검토 |
