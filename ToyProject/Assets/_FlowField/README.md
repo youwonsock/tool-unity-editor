@@ -366,10 +366,10 @@ Unity.exe -batchmode -projectPath <ToyProject> -runTests -testPlatform EditMode 
 | 등록 장애물 1개 이동 후 재빌드 | 31.3초, 관리 힙 +61MiB | 6.0초, 관리 힙 +52.5MiB |
 | Volume 베이크 Asset(20×12×20) | 453,863바이트 | 106,568바이트 |
 
-측정은 한 기기의 Editor 배치 실행 기준이며 실행마다 20~30% 정도 달라질 수 있습니다. Surface 316×316 재빌드는 약 1.1~1.3초로 큰 변화가 없습니다. 위 표는 Windows 기록이며, Apple M4 Pro에서는 Volume 전체 빌드 약 3.1초, 2ms 예산 약 1,290프레임, Volume Goal 변경 약 2.2초, Modifier 값 변경 약 0.42초, Surface 재빌드 약 0.2초입니다.
+측정은 한 기기의 Editor 배치 실행 기준이며 실행마다 20~30% 정도 달라질 수 있습니다. 위 표와 Surface 316×316 재빌드 약 1.1~1.3초는 Windows 기록이며, Surface 재빌드는 Topology 재사용 수정 후 Windows에서 다시 재지 않았습니다. Apple M4 Pro에서는 Volume 전체 빌드 약 3.1초, 2ms 예산 약 1,290프레임, Volume Goal 변경 약 2.2초, Modifier 값 변경 약 0.42초, Surface 재빌드 약 0.2초입니다.
 
 - 현재 씬 2개·Prefab 2개·v6 베이크 2개와 기존 GUID·직렬화 값은 유지합니다. 구버전 API 래퍼·직렬화 별칭·변환 전용 코드나 에셋은 두지 않습니다.
 - GPU 미지원·결과 검증 실패 시 Managed 계산은 현재 실행 경로입니다. 재계산 중 사용 가능한 게시 결과 유지와 함께 구버전 호환 기능으로 취급하지 않습니다.
 - BFS는 동일 비용의 격자 이동 횟수를 최소화합니다. 속도 Modifier는 경로 비용을 바꾸지 않으며 Agent 간 충돌 회피는 이동 시스템의 책임입니다.
 - Volume의 2ms는 협력 CPU 예산입니다. Physics·Modifier 호출 한 번이나 할당이 이를 초과할 수 있으며 전체 빌드 시간·GPU 시간의 상한은 아닙니다.
-- Surface 런타임·StaticBaked 이미지는 현재 HUD로 다시 캡처했고, 나머지 기능 이미지는 기존 캡처입니다. 회귀 실행은 실제 포인터 조작·GUI 렌더링·Player/기기·장시간 군중 이동을 포함하지 않으며, 성능 수치는 위의 Editor 프로브 기준입니다. Surface 샘플의 실제 포인터 조작과 군중 1000개 3분 이동은 Editor에서 별도로 확인했습니다. Player 빌드는 실행한 기록이 없습니다.
+- Surface 런타임·StaticBaked 이미지는 현재 HUD로 다시 캡처했고, 나머지 기능 이미지는 기존 캡처입니다. 회귀 실행은 실제 포인터 조작·GUI 렌더링·Player/기기·장시간 군중 이동을 포함하지 않으며, 성능 수치는 위의 Editor 프로브 기준입니다. Surface 샘플의 실제 포인터 조작, 두 샘플의 실제 키 입력, 군중 1000개 3분 이동은 Editor에서 별도로 확인했습니다. RMB+WASD 자유 카메라는 확인하지 않았습니다. Player 빌드는 실행한 기록이 없습니다.
