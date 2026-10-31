@@ -374,6 +374,50 @@ namespace Common.FlowField.Tests
             Assert.That(_bake.Revision, Is.EqualTo(bakeRevision));
         }
 
+        [TestCase("notify")]
+        [TestCase("register")]
+        [TestCase("unregister")]
+        public void ObstacleInputCannotResumeASuspendedSession(string input)
+        {
+            var collider = Obstacle(OldCell);
+            if (input == "unregister") _session.RegisterDynamicObstacle(collider);
+            Build();
+            _session.AttachRuntimeScheduler();
+            int revision = _session.Revision;
+            _session.Suspend();
+
+            if (input == "notify") _session.NotifyObstacleRegionDirtyCommand(new Bounds(OldCell, Vector3.one));
+            else if (input == "register") _session.RegisterObstacleCommand(collider);
+            else _session.UnregisterObstacleCommand(collider);
+            for (int i = 0; i < 100; i++) FlowFieldBuildScheduler.PumpAll(10d);
+
+            Assert.That(_session.State, Is.EqualTo(FlowFieldRuntimeState.Suspended));
+            Assert.That(_session.IsReady, Is.False);
+            Assert.That(_session.Revision, Is.EqualTo(revision));
+
+            _session.Resume();
+            Finish(_session);
+            Assert.That(_session.Revision, Is.GreaterThan(revision), "The input accepted while suspended must not be lost.");
+        }
+
+        [Test]
+        public void RetryOfAFaultWhileSuspendedStaysSuspended()
+        {
+            Build();
+            _session.AttachRuntimeScheduler();
+            int revision = _session.Revision;
+            _session.Suspend();
+            _session.ReportFault(new InvalidOperationException("Fault while suspended"));
+            Assert.That(_session.IsFaulted, Is.True);
+            _session.RetryFault();
+            Assert.That(_session.State, Is.EqualTo(FlowFieldRuntimeState.Suspended));
+            for (int i = 0; i < 100; i++) FlowFieldBuildScheduler.PumpAll(10d);
+            Assert.That(_session.Revision, Is.EqualTo(revision));
+            _session.Resume();
+            Build();
+            Assert.That(_session.Revision, Is.GreaterThan(revision));
+        }
+
         [Test]
         public void SchedulerKeepsSafetyRegionsIsolatedBetweenSessions()
         {

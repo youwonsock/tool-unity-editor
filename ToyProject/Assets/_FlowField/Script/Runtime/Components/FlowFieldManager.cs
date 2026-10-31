@@ -228,6 +228,10 @@ namespace Common.FlowField
                 _volumeSession.Resume();
                 if (!OwnsLifecycleOperation(owner, version))
                     return;
+                // A Modifier enabled during the suspension could not register.
+                ReattachActiveModifiers();
+                if (!OwnsLifecycleOperation(owner, version))
+                    return;
             }
             else if (!InitializeSession(version))
                 return;
@@ -519,6 +523,19 @@ namespace Common.FlowField
                 owner.RetryFault();
                 if (!OwnsLifecycleOperation(owner, version))
                     return;
+                // OnEnable cannot resume a Faulted session, so a fault raised
+                // while disabled leaves its reactivation to this retry.
+                if (_requiresActivationRebuild && isActiveAndEnabled
+                    && owner.SpaceMode == FlowFieldSpaceMode.Volume3D)
+                {
+                    _requiresActivationRebuild = false;
+                    _volumeSession.Resume();
+                    if (!OwnsLifecycleOperation(owner, version))
+                        return;
+                    ReattachActiveModifiers();
+                    if (!OwnsLifecycleOperation(owner, version))
+                        return;
+                }
             }
             try
             {

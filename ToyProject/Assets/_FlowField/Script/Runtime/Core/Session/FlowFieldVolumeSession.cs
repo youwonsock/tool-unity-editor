@@ -200,9 +200,15 @@ namespace Common.FlowField
                     || Mathf.Abs(_committed.Request.ObstacleClearance - request.ObstacleClearance) > 0.0001f))
                 _safety.InvalidateRegion(request.WorldBounds);
             _hasPendingRequest = true;
+            EnterBuildingUnlessStopped();
+            return true;
+        }
+
+        // Accepted input waits while the lifecycle has stopped this session.
+        private void EnterBuildingUnlessStopped()
+        {
             if (!IsFaulted && (_state != FlowFieldRuntimeState.Suspended || !_suspendedByLifecycle))
                 SetState(FlowFieldRuntimeState.Building);
-            return true;
         }
 
         internal void Pump(double budgetMilliseconds = DefaultBudgetMilliseconds)
@@ -232,6 +238,8 @@ namespace Common.FlowField
             {
                 if (!_obstacles.DetectRegisteredChanges()
                     || !CanContinuePump(pumpGeneration, activeBuild))
+                    return;
+                if (IsWaitingForExternalCompletion)
                     return;
 
                 while (!budget.IsExpired)
@@ -544,7 +552,7 @@ namespace Common.FlowField
                 return;
             _hasPendingRequest = _hasLatestRequestedInput && request.Grid.IsValid;
             if (_hasPendingRequest)
-                SetState(FlowFieldRuntimeState.Building);
+                EnterBuildingUnlessStopped();
         }
 
         internal override void NotifyObstacleRegionDirtyCommand(Bounds worldBounds)
@@ -659,7 +667,9 @@ namespace Common.FlowField
             // A retry only clears the failure.  The next accepted request
             // must still build and publish before the session becomes Ready;
             // never expose a transient Ready state with no valid result.
-            SetState(FlowFieldRuntimeState.Building);
+            SetState(_suspendedByLifecycle
+                ? FlowFieldRuntimeState.Suspended
+                : FlowFieldRuntimeState.Building);
         }
 
         internal override void ReportFault(Exception exception)
@@ -916,6 +926,10 @@ namespace Common.FlowField
                         {
                             build.Cursor = 0;
                             build.Phase = BuildPhase.Directions;
+                        }
+                        else if (build.GpuPending)
+                        {
+                            return false;
                         }
                         break;
                     case BuildPhase.Directions:
@@ -1348,8 +1362,7 @@ namespace Common.FlowField
                 && _committed.Request.HasSameInputs(_latestRequestedInput))
             {
                 _hasPendingModifierRecompose = true;
-                if (!IsFaulted && (_state != FlowFieldRuntimeState.Suspended || !_suspendedByLifecycle))
-                    SetState(FlowFieldRuntimeState.Building);
+                EnterBuildingUnlessStopped();
                 return;
             }
             if (_hasLatestRequestedInput)
