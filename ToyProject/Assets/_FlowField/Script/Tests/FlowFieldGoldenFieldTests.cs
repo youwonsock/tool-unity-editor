@@ -12,8 +12,8 @@ namespace Common.FlowField.Tests
     {
         // Recorded with the Managed solver. "PENDING" reports the current
         // value as Inconclusive until a baseline run fills it in.
-        private const string SurfaceGolden = "576:db7be2db64899a59";
-        private const string VolumeGolden = "2560:d91d8eddafd33b3d";
+        private const string SurfaceGolden = "576:171f76fb8107699e";
+        private const string VolumeGolden = "2560:38915563690b1b65";
 
         private static FlowFieldScenarioFixture.SurfaceScenario CreateSurface()
         {
@@ -137,7 +137,7 @@ namespace Common.FlowField.Tests
             scenario.Goal = goal;
             scenario.Build();
             Assert.That(scenario.Hash().ToString(), Is.EqualTo(first),
-                "Pooled build arrays and safety snapshots must not carry state between builds.");
+                "Pooled build arrays must not carry state between builds.");
         }
 
         [Test]

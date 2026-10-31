@@ -1266,11 +1266,11 @@ namespace Common.FlowField
                 Physics.SyncTransforms();
 
             int end = Math.Min(build.Cursor + CellsPerStep, build.Count);
-            Vector3 cellSize = Vector3.one * build.Request.Grid.CellSize;
+            Vector3 cellHalf = Vector3.one * FlowFieldOverlapUtility.CellHalfExtent(build.Request.Grid.CellSize);
             if (build.Modifiers.Length > 0)
             {
                 _cellQuery.BeginModifierStep(
-                    FlowFieldVolumeCellQuery.StepBounds(build.Request.Grid, build.Cursor, end, cellSize * 0.5f),
+                    FlowFieldVolumeCellQuery.StepBounds(build.Request.Grid, build.Cursor, end, cellHalf),
                     build.Modifiers);
             }
             for (; build.Cursor < end; build.Cursor++)
@@ -1295,7 +1295,7 @@ namespace Common.FlowField
                     build.FinalSpeeds[index]);
                 for (int modifierIndex = 0; modifierIndex < build.Modifiers.Length; modifierIndex++)
                 {
-                    if (!_cellQuery.MayTouchModifier(modifierIndex, new Bounds(center, cellSize)))
+                    if (!_cellQuery.MayTouchModifier(modifierIndex, new Bounds(center, cellHalf * 2f)))
                         continue;
                     FlowFieldModifierWorkItem modifier = build.Modifiers[modifierIndex];
                     Collider collider = modifier.InfluenceCollider;
@@ -1304,7 +1304,7 @@ namespace Common.FlowField
                     int layerMask = 1 << collider.gameObject.layer;
                     if (!FlowFieldOverlapUtility.OverlapsTarget(
                             center,
-                            cellSize * 0.5f,
+                            cellHalf,
                             layerMask,
                             collider,
                             QueryTriggerInteraction.Collide,
@@ -1410,14 +1410,7 @@ namespace Common.FlowField
         }
 
         private static Vector3 ObstacleHalfExtents(float cellSize, float clearance)
-        {
-            // Unity's overlap queries count a face-touching collider as an
-            // overlap. Removing a tiny numerical skin preserves the intended
-            // cell ownership when clearance is zero while retaining the
-            // configured clearance for actual intersections.
-            float half = Mathf.Max(0.000001f, cellSize * 0.5f + clearance - 0.0001f);
-            return Vector3.one * half;
-        }
+            => Vector3.one * FlowFieldOverlapUtility.CellHalfExtent(cellSize, clearance);
 
         private void SetState(FlowFieldRuntimeState state)
         {

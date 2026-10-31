@@ -448,7 +448,7 @@ namespace Common.FlowField
             if (!FlowFieldGridSpace.IsFinite(clearance) || clearance < 0f)
                 throw new System.ArgumentOutOfRangeException(nameof(clearance));
             float halfHeight = checkHeight * 0.5f;
-            float halfXZ = grid.CellSize * 0.5f + clearance;
+            float halfXZ = FlowFieldOverlapUtility.CellHalfExtent(grid.CellSize, clearance);
             Vector3 cellHalfExtents = new Vector3(halfXZ, halfHeight, halfXZ);
 
             for (int i = _dynamicObstacles.Count - 1; i >= 0; i--)

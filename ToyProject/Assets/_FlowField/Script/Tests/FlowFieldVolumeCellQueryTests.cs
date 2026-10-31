@@ -32,8 +32,7 @@ namespace Common.FlowField.Tests
 
             Assert.That(scenario.Session.TryGetView(out FlowFieldGridSpace grid, out bool[] blocked, out _, out _), Is.True);
             Physics.SyncTransforms();
-            // Mirrors FlowFieldVolumeSession.ObstacleHalfExtents.
-            Vector3 half = Vector3.one * Mathf.Max(0.000001f, grid.CellSize * 0.5f + clearance - 0.0001f);
+            Vector3 half = Vector3.one * FlowFieldOverlapUtility.CellHalfExtent(grid.CellSize, clearance);
             Collider[] buffer = null;
             int blockedCount = 0;
             for (int index = 0; index < grid.CellCount; index++)
@@ -54,6 +53,25 @@ namespace Common.FlowField.Tests
                     blockedCount++;
             }
             Assert.That(blockedCount, Is.GreaterThan(0));
+        }
+
+        [TestCase(0f, 1)]
+        [TestCase(1f, 26)]
+        public void ModifierAlignedWithACellOnlyInfluencesCellsThatOverlapIt(float size, int expected)
+        {
+            // 0 keeps the collider at exactly one cell; 1 grows it past every neighbor.
+            using var scenario = new FlowFieldScenarioFixture.VolumeScenario(3, 3, 3)
+            {
+                Goal = new Vector3(0.5f, 0.5f, 0.5f),
+                ObstacleClearance = 0f,
+            };
+            scenario.Modifier(Vector3.one * 1.5f, Vector3.one * (1f + size), 10, 0f, 2f);
+            scenario.Build();
+            Assert.That(scenario.Session.TryGetView(out _, out _, out _, out float[] speeds), Is.True);
+            int influenced = 0;
+            foreach (float speed in speeds)
+                if (speed > 1.5f) influenced++;
+            Assert.That(influenced, Is.EqualTo(expected));
         }
 
         [Test]

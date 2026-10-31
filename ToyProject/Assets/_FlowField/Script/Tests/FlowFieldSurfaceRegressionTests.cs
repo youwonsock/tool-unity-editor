@@ -276,6 +276,50 @@ namespace Common.FlowField.Tests
         }
 
         [Test]
+        public void ModifierAlignedWithACellOnlyInfluencesThatCell()
+        {
+            BuildWithAlignedModifier();
+            int influenced = 0;
+            foreach (float speed in CellSpeeds(_session))
+                if (speed > 1.5f) influenced++;
+            Assert.That(influenced, Is.EqualTo(1));
+        }
+
+        private static int BlockedCells(FlowFieldSession session)
+        {
+            int blocked = 0;
+            foreach (bool cell in session.CommittedWorkspace.Blocked)
+                if (cell) blocked++;
+            return blocked;
+        }
+
+        private static FlowFieldSessionRequest RequestWithClearance(float clearance)
+            => FlowFieldSessionRequest.ForSceneBuild(FlowFieldRegressionFixture.Settings,
+                1 << FlowFieldRegressionFixture.Layer, 1f, 0.5f, clearance, false, FlowFieldGoalResolution.None,
+                Vector3.forward, FlowFieldDirtyFlags.None, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid, 1024);
+
+        [TestCase(false, 0f, 1)]
+        [TestCase(true, 0f, 1)]
+        [TestCase(false, 0.25f, 9)]
+        [TestCase(true, 0.25f, 9)]
+        public void ObstacleAlignedWithACellOnlyBlocksCellsWithinItsClearance(bool registered, float clearance, int expected)
+        {
+            _colliderObject = new GameObject("Aligned obstacle regression")
+            {
+                layer = FlowFieldRegressionFixture.Layer,
+                isStatic = !registered,
+            };
+            _colliderObject.transform.position = new Vector3(1.5f, .5f, 1.5f);
+            var collider = _colliderObject.AddComponent<BoxCollider>();
+            Physics.SyncTransforms();
+            if (registered) _session.RegisterObstacle(collider, FlowFieldCellRect.Invalid);
+            _session.Submit(RequestWithClearance(clearance));
+            _session.Pump();
+            Assert.That(_session.IsReady, Is.True, _session.LastError);
+            Assert.That(BlockedCells(_session), Is.EqualTo(expected));
+        }
+
+        [Test]
         public void ValueNotificationAppliesWithoutARevisionChange()
         {
             _colliderObject = new GameObject("Notified modifier regression") { layer = FlowFieldRegressionFixture.Layer };
