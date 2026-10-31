@@ -24,6 +24,8 @@ Surface도 최신 수락 `FlowFieldSessionRequest` 한 벌과 대기 플래그�
 
 Surface의 상태·게시 콜백은 수명 전이 경계입니다. Fault·Retry·Release·Suspend가 이전 콜백 세대를 무효화하며, 정리와 dirty 설정을 알림 전에 끝내 구독자가 제출한 새 요청을 보존합니다. Pump와 비동기 완료 처리 중 같은 Session의 중첩 Pump는 실행하지 않고 다음 소유자 실행 경계에 요청을 남깁니다. Dispose는 Released 알림 전에 영구 종료 상태가 됩니다.
 
+BFS 완료 시 Grid·Goal 입력이 달라졌으면 결과를 거부하고 다음 Goal 단계에서 다시 풉니다. 복원된 작업 공간은 게시된 Goal을 담으므로 Goal Tracker도 함께 비웁니다. 장애물만 바뀌었으면 결과를 게시하고 Dirty 플래그와 프로브를 유지해 다음 소유자 경계에서 처리합니다. 입력 버전 판정은 `FlowFieldSurfaceRebuildTracker`가 맡습니다.
+
 BFS 요청은 Session의 기존 세대로 수명 유효성을 판정합니다. GPU 결과 적용과 Managed fallback은 작업 배열을 쓰기 전에 이 판정을 확인하고, Session도 후속 게시·실패 전달 전에 다시 확인합니다. 취소된 GPU 제출 자체의 완료 대기는 Solver가 기존 방식으로 관리하며, 취소된 결과는 작업 배열에 적용하지 않습니다. 게시 Grid·Surface와 해석된 Goal은 FieldStore에서만 가져오며 내부 FieldCommitted 이벤트는 인자 없이 변경된 결과의 게시만 알립니다. 일반 샘플은 합성 중 작업 배열이 아닌 게시 저장소를 읽고, 최신 장애물·탈출·연결 안전성 검사를 추가로 적용합니다.
 
 Surface 기본 준비 요청의 Grid·Surface는 장애물 요청에서 얻습니다. 준비 결과는 장애물 변경·변경 영역·이동 가능한 표면 여부·Goal 상태만 보관하고, Goal 변경 여부는 그 상태에서 계산합니다. BFS가 실제 사용하는 MaxGpuWaves·Version과 Session의 요청·기본 필드 버전은 유지합니다. Volume 스케줄러 계약은 대기 여부·작업 여부·Pump만 노출하며 취소는 Session이 소유합니다.
@@ -50,7 +52,7 @@ Volume3D는 Bounds 전체를 CellSize 정육면체 셀로 분할하고 `x + Widt
 
 Surface Build Pipeline은 `IFlowFieldGpuBackend`를 통해 `FlowFieldComputeSolver`를 사용합니다. Volume Session은 자신의 Solver와 Volume 단계 실행을 관리합니다. `FlowFieldComputeSolver`는 GPU Backend 인터페이스의 구현 타입이 아니며 Solver가 내부 GPU·Readback 자원을 소유합니다.
 
-Compute Solver의 Control Readback 콜백은 다음 wave 배치 또는 방향 생성 Dispatch를 제출합니다. 최종 결과 콜백에서 Surface는 GPU 결과 검증과 Session의 합성·게시 경로로 이어지고, Volume은 결과 참조와 완료 신호를 기록한 뒤 Scheduler가 나누어 검증합니다. GPU를 사용할 수 없거나 결과 검증에 실패하면 동일하게 고정된 입력의 Managed 경로로 이어집니다. Readback 요청 직후 `GL.Flush()`로 대기 중인 Dispatch를 제출합니다. 프레임을 표시하지 않는 환경(배치 모드 Direct3D 11 등)에서는 드라이버가 명령을 수백 프레임 동안 보류해 Readback이 그만큼 늦어졌기 때문입니다.
+Compute Solver의 Control Readback 콜백은 다음 wave 배치 또는 방향 생성 Dispatch를 제출합니다. 최종 결과 콜백에서 Surface는 GPU 결과 검증과 Session의 합성·게시 경로로 이어지고, Volume은 결과 참조와 완료 신호를 기록한 뒤 Scheduler가 나누어 검증합니다. GPU를 사용할 수 없거나 결과 검증에 실패하면 동일하게 고정된 입력의 Managed 경로로 이어지고, 같은 수명 동안 Managed로 고정하며 이유를 `GpuFallbackReason`에 남깁니다. 폐기된 Volume 빌드의 Readback이 남아 있으면 해당 빌드만 Managed로 처리하고 다음 빌드에서 GPU를 다시 씁니다. Readback 요청 직후 `GL.Flush()`로 대기 중인 Dispatch를 제출합니다. 프레임을 표시하지 않는 환경(배치 모드 Direct3D 11 등)에서는 드라이버가 명령을 수백 프레임 동안 보류해 Readback이 그만큼 늦어졌기 때문입니다.
 
 Modifier 적용 대상은 두 모드가 같은 `FlowFieldVectorUtility.CanApplyModifier`로 판정합니다. 막힌 셀, Goal Anchor, 도달 불가 셀과 기본 방향이 0인 셀은 Modifier를 적용하지 않고 기본 속도 0을 유지합니다. Surface 빌드에서 BFS가 예정되면 BFS 전 합성을 생략하고, BFS 완료 후 전체를 한 번 합성합니다.
 
@@ -58,7 +60,7 @@ Volume 작업은 `FlowFieldBuildScheduler`와 `FlowFieldBuildDriver`의 협력 �
 
 Volume의 장애물·Modifier 단계는 `FlowFieldVolumeCellQuery`로 스텝마다 Layer 후보를 `OverlapBox` 한 번으로 모으고 등록 장애물·Modifier Collider의 Bounds를 한 번 읽습니다. 후보의 AABB(contactOffset 여유 포함)가 닿는 셀만 정확한 `CheckBox`·`OverlapsTarget`을 실행하므로 결과는 셀마다 쿼리한 것과 같습니다. 후보가 4,096개를 넘는 스텝은 셀별 쿼리로 돌아갑니다. Topology는 경계가 아닌 셀에서 `FlowFieldVolumeInteriorOffsets`의 평탄 인덱스 오프셋으로 이웃·코너 셀의 Blocked만 확인하고, 경계 셀은 `CanTraverse`를 사용합니다. 커밋된 빌드의 Costs·Queue·Influence 배열과 이전 안전성 Snapshot 배열은 다음 같은 크기 빌드에서 재사용합니다.
 
-Volume의 Modifier 등록·변경 관측·Snapshot 캡처는 `FlowFieldVolumeModifierRegistry`, Physics와 무관한 탐색 연산은 `FlowFieldVolumeNavigation`, GPU 결과 검증은 `FlowFieldVolumeGpuResultValidator`가 담당합니다. `FlowFieldVolumeBuildContext`는 한 작업의 배열·진행 커서를, `FlowFieldVolumeFieldData`는 완성된 게시 결과를 보관합니다. `FlowFieldVolumeSafetyState`는 불확실 영역·안전성 Epoch·셀 Snapshot과 샘플링의 보수적 정지 판정을 담당합니다. `FlowFieldVolumeObstacleTracker`는 등록·미등록 Collider 관측과 스윕 버퍼를 소유하고 변경 Bounds를 Session에 동기 통지합니다. Session은 요청 수락·취소, 수명, Physics 입력, Scheduler·GPU 실행 연결과 게시 정책을 유지합니다. 단계별 회귀 검증과 보존 범위는 [RefactoringNotes.md](RefactoringNotes.md)에 기록합니다.
+Volume의 Modifier 등록·변경 관측·Snapshot 캡처는 `FlowFieldVolumeModifierRegistry`, Physics와 무관한 탐색 연산은 `FlowFieldVolumeNavigation`, GPU 결과 검증은 `FlowFieldVolumeGpuResultValidator`가 담당합니다. `FlowFieldVolumeBuildContext`는 한 작업의 배열·진행 커서를, `FlowFieldVolumeFieldData`는 완성된 게시 결과를 보관합니다. `FlowFieldVolumeSafetyState`는 불확실 영역·안전성 Epoch·셀 Snapshot과 샘플링의 보수적 정지 판정을 담당합니다. 불확실 영역은 빌드 시작 때 관측 목록으로 옮겨 그 빌드를 게시할 때 지우고, 시작 후 기록된 영역은 다음 빌드까지 남깁니다. `FlowFieldVolumeObstacleTracker`는 등록·미등록 Collider 관측과 스윕 버퍼를 소유하고 변경 Bounds를 Session에 동기 통지합니다. Session은 요청 수락·취소, 수명, Physics 입력, Scheduler·GPU 실행 연결과 게시 정책을 유지합니다. 단계별 회귀 검증과 보존 범위는 [RefactoringNotes.md](RefactoringNotes.md)에 기록합니다.
 
 장애물 관측의 동기 알림 중 수명이나 등록 집합이 바뀌면 Tracker의 관측 토큰을 무효화하고 이전 관측을 중단합니다. 중첩 관측도 이전 순회를 취소합니다. Session은 등록 관측 이후 세대와 실행 가능 상태를 다시 확인하므로, Release·재초기화 콜백 뒤 이전 Pump가 새 수명의 요청을 처리하지 않습니다. Dispose는 대기 요청과 최신 입력의 유효 표시도 해제합니다.
 

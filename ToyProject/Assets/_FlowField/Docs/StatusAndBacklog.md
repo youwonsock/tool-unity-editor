@@ -1,14 +1,14 @@
 # FlowField 작업 현황과 남은 과제
 
-기준: 2026-10-31, 코드 커밋 `cec0b80`. 단계별 결정과 근거는 [RefactoringNotes.md](RefactoringNotes.md#성능구조-개선-2026-10-2930), 사용법과 측정 표는 [README.md](../README.md#검증-기록)에 있다. 이 문서는 지금 상태와 다음에 할 일만 다룬다.
+기준: 2026-10-31, 코드 커밋 `d78a54a`(브랜치 `flowfield-maintenance`). 단계별 결정과 근거는 [RefactoringNotes.md](RefactoringNotes.md#성능구조-개선-2026-10-2930), 사용법과 측정 표는 [README.md](../README.md#검증-기록)에 있다. 이 문서는 지금 상태와 다음에 할 일만 다룬다.
 
 ## 현재 상태
 
 | 항목 | 상태 |
 | --- | --- |
-| 테스트 | `Common.FlowField.Tests` 466개 통과, 실패 0. Windows 11·Direct3D 11은 배치 실행, macOS·Metal(Apple M4 Pro)은 열린 Editor에서 실행(`d70e2c3`). 성능 프로브 7개는 일반 실행에서 제외 |
+| 테스트 | macOS·Metal(Apple M4 Pro) 배치 실행에서 `Common.FlowField.Tests` 475개 통과, 실패 0, 성능 프로브 9개 제외. Windows·Direct3D 11 마지막 기록은 이번 수정 이전의 466개 |
 | 베이크 | Surface·Volume 모두 v6만 허용. Asset 2개는 같은 GUID로 다시 베이크했고 내용 해시는 v5와 같다. 마이그레이션 코드는 없다 |
-| 공개 계약 | Provider·Controller API, Manager 직렬화 설정, 씬·Prefab의 GUID 참조 유지 |
+| 공개 계약 | Provider·Controller API, Manager 직렬화 설정, 씬·Prefab의 GUID 참조 유지. `FlowFieldManager.GpuFallbackReason` 추가 |
 | 성능 (100³ Volume, Managed) | 전체 빌드 26~55초 → 약 6초, 2ms 예산 빌드 12,585 → 2,214프레임, 장애물 1개 이동 후 재빌드 31.3 → 6.0초 |
 
 ## 완료한 작업
@@ -35,49 +35,56 @@
 - v5 베이크 Asset은 거부되므로 ReBake해야 한다.
 - 샘플 컴포넌트의 미사용 공개 속성이 사라졌다. 샘플을 직접 참조하는 외부 코드만 영향을 받는다.
 
-## 남은 개선 사항
+### 유지보수 작업 (2026-10-31)
 
-### 재현된 결함
-
-2026-10-31 macOS·Metal Editor에서 임시 프로브로 재현했다. 프로브는 저장소에 남기지 않았다. 실제 씬 재현은 아니며, 수정 때 같은 시나리오를 정식 회귀 테스트로 추가한다.
-
-| 결함 | 재현 결과 | 원인 |
+| 커밋 | 작업 | 결과 |
 | --- | --- | --- |
-| Surface: BFS 중 장애물이 움직이면 Goal 변경이 사라짐 | 높이 100에서 마스크 변화 없이 이동. 대조군은 Goal B 게시, 이동 시 Revision +0으로 A 유지, 재시도 없음 | Goal Dirty를 소비한 뒤 `RejectStaleBfsResult`의 프로브 대기 경로가 복원하지 않고, Goal Tracker는 B를 처리한 것으로 기록 |
-| Surface: 풀이 때마다 장애물이 움직이면 게시가 멈춤 | BFS 50회 전부 폐기, 게시 0회. 정지 후 게시 | 같은 경로. 이 경로를 지나는 회귀 테스트가 없음. Managed는 동기 완료라 해당 없음 |
-| Volume: 계속 움직이는 장애물 주변 Agent가 풀리지 않음 | 12×4×12, 60,000스텝, 빌드 967회 동안 217/576셀 정지. 정지 후 1/576 | 대기 요청이나 Epoch 변경이 있으면 커밋 때 불확실 영역을 지우지 않아 합집합이 계속 유지됨 |
-| Volume: GPU 풀이 중 Suspend→Resume 후 바로 BFS에 들어가면 GPU가 수명 내내 꺼짐 | 이후 빌드 GPU 미사용. Surface는 Suspend 때 Backend를 분리해 해당 없음 | 이전 Readback으로 `Start`가 거부되면 `_gpuDisabled = true` |
+| `a56c4c4` | Surface: 장애물만 낡은 BFS 결과도 게시, 거부 경로는 Goal 재계산 | Goal 유실·게시 정지 해결, 회귀 테스트 4개 |
+| `0ae4a7e` | Volume: 불확실 영역을 빌드 시작 전후로 분리 | 계속 움직이는 장애물의 경로 전체 정지 해결, 회귀 테스트 1개 |
+| `376ca80` | GPU: 실행 중 충돌은 해당 빌드만 Managed, 전환 이유 공개 | GPU 영구 비활성화 해결, 회귀 테스트 3개 |
+| `f4ca046` | Driver: Play 종료와 함께 제거 | 숨은 Driver 5개 누적 해결(프레임 예산도 함께 늘던 문제), 회귀 테스트 1개 |
+| `e32ae63` | 런타임 중복 정리 | 마스크 순회, 요청 조립, 파도 수 제한, 미리보기 호출, `ComposeRegion`, `IsMissingModifier` |
+| `8f9d0d8` | 베이크 에디터 입력 비교·저장 분리 | `BakeAndAssign` 302 → 약 200줄. 전후 베이크 바이트 동일 |
+| `2232963` | 단계별 시간 프로브 | 런타임 코드 변경 없음 |
+| `d78a54a` | Surface 재빌드 버전 상태 분리 | `FlowFieldSurfaceRebuildTracker` |
+
+Editor Play Mode 확인: Surface 샘플은 장애물이 매 Editor 틱 움직이는 동안 Revision 68까지 게시하고 Goal 변경을 반영했다. Volume 샘플은 StaticBaked v6를 로드했고, RuntimeDynamic으로 바꿔 장애물을 왕복시켰을 때 Revision 29, 정지 셀 133/4800이었다. 경고와 오류는 없었다. 결과 XML·로그·CSV는 Git에서 제외되는 `ToyProject/Logs/FlowFieldMaintenance/`에 있다.
+
+## 남은 개선 사항
 
 ### 검증 공백
 
-구조 변경 전에 처리한다.
-
 | 항목 | 현황 | 할 일 |
 | --- | --- | --- |
-| macOS/Metal 배치 실행 | 2026-10-31 열린 Editor에서 466개 통과, 실패 0, 37.7초. GPU 테스트는 건너뛰지 않았고 v6 로드와 Readback 경로도 통과했다. 장면 테스트는 1.6초·0.66초다. 다만 Readback 지연은 원래 배치 모드에서 관찰됐고, 이 실행은 결과 XML을 남기지 않았으며 도메인·씬 리로드를 끈 설정이었다 | Editor를 닫고 Metal 배치 모드로 다시 실행해 `GL.Flush` 확인, 결과 XML 보관 |
-| 베이크 에디터 | 테스트 어셈블리가 `Common.FlowField.Editor`를 참조하지 않아 `BakeAndAssign`을 직접 검사하지 않는다 | 정리 전에 Editor 테스트나 베이크 내용 해시 비교 추가 |
-| Driver 수명 | Play 종료 후 숨은 `FlowFieldBuildDriver`가 남고 `FindObjectsByType`로 찾히지 않는다. 중복 생성 여부는 미확인 | 도메인 리로드를 켠 Play 반복으로 확인, 중복되면 수정 |
-| 실제 플레이 | 포인터 조작, GUI 렌더링, 장시간 군중 이동을 확인하지 않았다. README의 기능 이미지도 이전 캡처다 | 샘플 씬을 직접 실행해 확인하고 달라졌으면 재캡처 |
+| 베이크 에디터 | 테스트 어셈블리가 `Common.FlowField.Editor`를 참조하지 않아 `BakeAndAssign`을 직접 검사하지 않는다. 지금은 실제 베이크 후 `_revision` 외 차이가 없는지 수동으로 비교한다 | 자동 테스트 추가 검토 |
+| Windows | 이번 수정은 Metal에서만 실행했다 | Windows·Direct3D 11에서 전체 테스트 재실행 |
+| 실제 플레이 | 포인터 조작, GUI 렌더링, 장시간 군중 이동을 확인하지 않았다. README의 기능 이미지도 이전 캡처다 | 샘플 씬을 직접 조작해 확인하고 달라졌으면 재캡처 |
 | GPU 경로 | 프로브와 골든 해시는 Managed 고정이다. GPU 빌드 시간 수치가 없고, GPU 결과는 위상 유효성만 검사하므로 동률 이웃이 Managed와 다를 수 있다 | 프로브에 GPU 변형 추가 |
 | 자동 실행 | 저장소에 CI 설정이 없다. Unity 라이선스에 로그인한 PC에서 수동으로 실행한다 | 자체 호스트 러너 등 검토 |
 
 ### 성능
 
-Volume의 남은 시간 분포는 다음과 같다. 100³·장애물 40개·Managed에서 3단계 완료 시점에 임시 계측으로 1회 잰 값이며(합계 약 6.8초), 계측 코드는 저장소에 남기지 않았다.
+Apple M4 Pro·Managed 측정(`FlowFieldPerformanceProbes`). Volume은 100³·장애물 50개·Modifier 3개, 합계 약 3.6초다.
 
-| Directions | BFS | Topology | Obstacles | Escape | Modifiers | Goal |
+| Directions | BFS | Modifiers | Topology | Obstacles | Escape | Goal |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 2,240ms (33%) | 1,628ms (24%) | 1,483ms (22%) | 460ms (7%) | 420ms (6%) | 281ms (4%) | 225ms (3%) |
+| 983ms (27%) | 697ms (20%) | 598ms (17%) | 544ms (15%) | 409ms (12%) | 187ms (5%) | 120ms (3%) |
+
+Surface 316×316 Goal 재빌드는 약 420ms다.
+
+| Managed BFS | Goal 준비 | 합성 | 탈출 방향 | 장애물 마스크 |
+| ---: | ---: | ---: | ---: | ---: |
+| 314ms (75%) | 88ms (21%) | 22ms (5%) | 13ms (3%) | 1ms |
+
+Surface Managed 재빌드는 한 번의 Pump에서 동기로 끝나므로 이 시간이 그대로 프레임 끊김이 된다. 값을 단계별로 따로 재서 합계가 100%를 조금 넘는다. 원인은 표면 샘플링이나 물리 쿼리가 아니라 BFS 자체다.
 
 | 순위 | 항목 | 근거 | 예상 효과와 주의점 |
 | ---: | --- | --- | --- |
-| 1 | 단계별 시간을 프로브에 포함 | 지금은 단계 시간을 잴 때마다 임시 코드를 넣었다 뺀다 | 아래 항목의 전제. 런타임에 측정 코드가 남지 않게 한다 |
-| 2 | Surface 재빌드 원인 분석 | 316×316(약 10만 셀) Managed 재빌드가 1.1~1.3초인데 단계 분해가 없다. Volume은 100만 셀의 BFS가 1.6초다. Managed BFS는 한 번의 Pump에서 동기로 끝나고 최초 빌드의 관리 힙 증가는 183MiB다 | Managed 경로의 프레임 끊김과 직결된다. 효과는 측정 후 판단한다 |
-| 3 | Volume Modifier 값 변경 시 부분 재합성 | 값만 바뀌어도 `QueueCurrentRequest()`로 전체 빌드(약 6초)를 다시 한다. Surface의 같은 변경은 10만 셀에서 약 15ms다 | 1초 미만 예상(미측정). 전체 빌드는 지금까지 유지한 정책이므로 변경 결정이 필요하다. 그 빌드에서 함께 갱신되던 미추적 장애물의 반영 시점이 달라진다 |
-| 4 | Volume Goal만 바뀔 때 Obstacles·Topology 재사용 | 두 단계 합계 약 1.9초(29%) | 약 29% 단축. 3번과 같은 주의점이 있다 |
-| 5 | Directions 단계 최적화 | 가장 큰 단계(33%) | 결과가 골든 해시와 같아야 한다 |
-
-2ms 예산 빌드는 2,214프레임, 60FPS 기준 약 37초가 걸리며 그동안 이전 결과를 계속 샘플링한다. 3~5번은 이 시간도 함께 줄인다.
+| 1 | Surface Managed BFS 분할 또는 Burst 전환 | 재빌드의 75%, 프레임 끊김의 직접 원인 | 분할은 Volume 협력 실행과 같은 구조가 되며 Session 변경이 크다. Burst는 관리 배열 변환이 필요하다. 방식 결정이 필요하다 |
+| 2 | Volume Modifier 값 변경 시 부분 재합성 | 값만 바뀌어도 `QueueCurrentRequest()`로 전체 빌드를 다시 한다 | 1초 미만 예상(미측정). 전체 빌드는 지금까지 유지한 정책이므로 변경 결정이 필요하다. 그 빌드에서 함께 갱신되던 미추적 장애물의 반영 시점이 달라진다 |
+| 3 | Volume Goal만 바뀔 때 Obstacles·Topology 재사용 | 두 단계 합계 약 27% | 2번과 같은 주의점이 있다 |
+| 4 | Directions·BFS·Topology Burst 전환 | Physics 호출이 없고 합계 62% | 결과가 골든 해시와 같아야 한다 |
+| 5 | 프로브 GPU 변형 | 프로브와 골든 해시가 Managed 고정이다 | GPU 빌드 시간 수치 확보 |
 
 ### 보류한 항목
 
@@ -87,29 +94,21 @@ Volume의 남은 시간 분포는 다음과 같다. 100³·장애물 40개·Mana
 | 게시 배열 재사용 | 빌드 중 GC 0회. 재사용하면 상주 메모리가 약 50MB 늘어난다 | 실제 프로파일에서 재빌드 뒤 GC 스파이크가 문제 될 때 |
 | 증분 장애물 갱신 | 장애물 단계가 전체의 7~8%다. BFS·방향까지 증분이 아니면 효과가 작다 | 복잡한 Collider 장면에서 이 단계 비중이 커질 때 |
 | GPU 실패 재시도 | 관찰된 지연은 `GL.Flush`로 해결했다. 파도 수 초과·결과 검증 실패 후에는 같은 수명 동안 Managed로 고정한다. 실행 중 충돌로 인한 고정은 다음 순서 2단계에서 고친다 | 실제 기기에서 일시적 GPU 실패가 확인될 때 |
-| Surface 버전·지연 플래그 제거 | 오래된 결과 판정 외에 Source 재진입 감지, Goal 재시도, 명시적 재빌드 게이트에도 쓰인다 | Surface Session을 다시 설계할 때 |
+| Surface 버전·지연 플래그 제거 | 오래된 결과 판정 외에 Source 재진입 감지, Goal 재시도, 명시적 재빌드 게이트에도 쓰인다. `FlowFieldSurfaceRebuildTracker`로 한곳에 모았다 | Surface Session을 다시 설계할 때 |
 
 ### 구조
 
-- 큰 파일: `FlowFieldSession.cs` 2,103줄, `FlowFieldVolumeRuntime.cs` 1,587줄, `FlowFieldManager.cs` 1,449줄. 수명·재진입 검사가 곳곳에 있어 분리 자체의 회귀 위험이 크다. 해당 파일을 크게 바꾸는 기능 작업과 함께 진행한다.
+- 큰 파일: `FlowFieldSession.cs` 1,977줄, `FlowFieldVolumeRuntime.cs` 1,600줄, `FlowFieldManager.cs` 1,414줄. 수명·재진입 검사가 곳곳에 있어 분리 자체의 회귀 위험이 크다. 해당 파일을 크게 바꾸는 기능 작업과 함께 진행한다.
 - 파일 이름: `FlowFieldVolumeRuntime.cs`에는 `FlowFieldVolumeRequest`와 `FlowFieldVolumeSession`이 들어 있다. `.meta`를 유지한 채 이름을 맞출 수 있다.
-- 복잡성의 근원: 콜백 안의 Release·Init·Suspend를 허용해 외부 호출 뒤마다 소유권을 다시 검사한다. 이벤트 지연 전달은 공개 동작을 바꾸므로 지금은 진행하지 않는다.
-- Surface 재빌드 상태: 요청 복사본 3개, 대기·Dirty·지연 플래그, 버전 값이 `FlowFieldSession`에 흩어져 있다.
-- Manager: `SpaceMode == Volume3D` 분기 11곳, `#if UNITY_EDITOR` 19곳.
-- 중복: `FlowFieldObstacleMaskBuilder`의 `Build`·`BuildStatic`, Surface 요청 조립 4곳, Volume 요청 조립 2곳, 파도 수 제한 계산, `IsCurrentInput` 블록 4곳, `ComposeRegion`의 중복 검사, `IsMissingModifier`.
+- 복잡성의 근원: 콜백 안의 Release·Init·Suspend를 허용해 외부 호출 뒤마다 소유권을 다시 검사한다. 이벤트 지연 전달은 공개 동작을 바꾸므로 진행하지 않았다.
+- Manager: `SpaceMode == Volume3D` 분기 11곳. 모드별 어댑터 분리는 Volume Modifier 부분 재합성 결정 후 함께 진행한다.
 
 ## 다음 순서
 
-2026-10-31 확정. 단계마다 별도 커밋으로 나누고 테스트 466개와 골든 해시를 유지한다. 새 회귀 테스트만큼 기준 수가 늘어난다.
+2026-10-31 계획의 1~6단계를 완료했다. Player 빌드 검증은 범위에서 제외했다. 남은 항목은 결정이 필요하다.
 
-1. **이동 장애물 결함.**
-   - Surface: 장애물만 낡은 BFS 결과는 버리지 않고 게시한 뒤 재빌드를 예약한다. 샘플링이 최신 장애물을 다시 검사하고, Volume도 같은 방식이다. 커밋이 장애물 Dirty를 지우지 않게 한다. Grid·Source가 바뀐 결과는 계속 거부하고, 남은 거부 경로는 Goal Dirty를 복원한다.
-   - Volume: 불확실 영역을 빌드 시작 전후 두 목록으로 나눠, 끝난 빌드가 반영한 목록만 지운다. 빌드가 긴 격자에서 그 사이 지나간 영역의 정지는 안전 정책으로 유지한다.
-   - 완료 조건: 재현 시나리오 3개를 회귀 테스트로 추가, `MovingRegisteredObstacleDuringBuildProtectsOldAndNewRegions` 유지.
-2. **GPU 전환 정책.** Volume에서 Solver 실행 중 시작 실패와 격자 변경은 해당 빌드만 Managed로 처리한다. 파도 수 초과·결과 검증 실패는 고정을 유지한다. Manager에서 GPU 상태와 전환 이유를 확인할 수 있게 하고 전환 시 경고를 한 번 남긴다.
-3. **Editor 환경 검증.** Metal 배치 실행과 결과 XML 보관, Editor Play Mode에서 샘플 씬 실행, Driver 중복 확인. Player 빌드는 제외한다.
-4. **런타임 중복 정리.** 동작 변경 없이 위 중복 중 베이크 에디터 외 항목을 정리한다. 마스크 공통화는 셀 단위 경로이므로 구조체 전략을 쓴다.
-5. **베이크 에디터 정리.** 검증 수단을 먼저 추가한 뒤 `IsCurrentInput` 반복과 `BakeAndAssign`을 나눈다.
-6. **구조·성능.** 단계별 계측과 Surface 재빌드 원인 분석을 진행한다. Surface 재빌드 추적은 1단계 후, Manager 어댑터와 Volume Modifier 부분 재합성은 정책 결정 후 함께 진행한다.
+1. Surface Managed BFS 분할과 Burst 전환 중 방식 결정
+2. Volume Modifier 부분 재합성 정책 결정, 결정되면 Manager 어댑터 분리와 함께 구현
+3. Windows·Direct3D 11 재검증
 
 테스트와 프로브 실행 방법은 [README.md](../README.md#검증-기록)를 따른다. 단계별 XML·로그와 프로브 CSV는 Git에서 제외되는 `ToyProject/Logs/`에 있어 작업한 PC에만 남는다.
