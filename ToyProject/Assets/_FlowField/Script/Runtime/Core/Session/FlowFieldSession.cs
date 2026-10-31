@@ -1412,6 +1412,7 @@ namespace Common.FlowField
         /// update. Obstacle-only staleness does not reject a solve: rejecting
         /// would starve publication while an obstacle keeps moving, and sampling
         /// already re-checks the latest obstacle state against the published field.
+        /// The same starvation limits how many Goal solves in a row are rejected.
         /// </summary>
         private bool RejectStaleBfsResult()
         {
@@ -1434,7 +1435,9 @@ namespace Common.FlowField
 
             // Grid and Goal requests stay unversioned until their stage proves
             // a change, so the versions above can match while one is pending.
-            if ((_state.DirtyFlags & (FlowFieldDirtyFlags.Grid | FlowFieldDirtyFlags.Goal)) != 0)
+            bool gridStale = (_state.DirtyFlags & FlowFieldDirtyFlags.Grid) != 0;
+            bool goalStale = (_state.DirtyFlags & FlowFieldDirtyFlags.Goal) != 0;
+            if (gridStale || goalStale && _rebuild.ShouldRejectSupersededGoal())
             {
                 RestoreStagingAfterStaleResult(preserveObstacle: true);
                 RequeueRejectedGoal();
@@ -1472,9 +1475,10 @@ namespace Common.FlowField
             bool hasNewRequest = _hasPendingRequest;
             FlowFieldSessionRequest finalRequest = hasNewRequest ? _latestRequestedInput : _activeRequest;
             FlowFieldDirtyFlags pending = _state.DirtyFlags;
-            // Obstacle input observed during this solve keeps its request and
-            // dirty flags through Commit; the next owner boundary handles it.
-            _hasPendingRequest = HasStaleObstacleInput();
+            // Obstacle or Goal input observed during this solve keeps its request
+            // and dirty flags through Commit; the next owner boundary handles it.
+            _rebuild.ResetSupersededGoal();
+            _hasPendingRequest = FlowFieldSurfaceRebuildTracker.IsBaseDirty(_state.DirtyFlags);
 
             // RequestVersion also advances for Default Direction and Modifier
             // edits. Those changes are final-only and must never invalidate a
@@ -1684,6 +1688,7 @@ namespace Common.FlowField
             // the same pose after activation.
             _obstacleProbePending = false;
             _rebuild.DropDeferredGoal();
+            _rebuild.ResetSupersededGoal();
             _state.DirtyFlags = FlowFieldDirtyFlags.All;
             _configurationStale = false;
             SetLifecycle(FlowFieldSessionLifecycle.Suspended);
@@ -1731,6 +1736,7 @@ namespace Common.FlowField
             _rebuild.DropDeferredSurface();
             _rebuild.DropDeferredGoal();
             _rebuild.ClearVersioned(FlowFieldDirtyFlags.All);
+            _rebuild.ResetSupersededGoal();
             _managedBackendForced = false;
             _gpuFallbackReason = null;
             _latestDefaultDirection = Vector3.zero;
