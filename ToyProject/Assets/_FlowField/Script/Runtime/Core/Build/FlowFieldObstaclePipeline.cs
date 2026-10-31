@@ -177,16 +177,7 @@ namespace Common.FlowField
             if (consumeStagedDynamicProbe)
             {
                 dynamicDirty = _stagedDynamicDirtyRegion;
-                dynamicChanged = !FlowFieldObstacleMaskBuilder.AreEqual(
-                    request.Workspace.ObstacleScratch,
-                    request.Workspace.DynamicBlocked);
-                if (dynamicChanged)
-                {
-                    System.Array.Copy(
-                        request.Workspace.ObstacleScratch,
-                        request.Workspace.DynamicBlocked,
-                        request.Workspace.Capacity);
-                }
+                dynamicChanged = CommitDynamicScratch(request.Workspace);
                 DiscardStagedDynamicProbe();
             }
             else if (request.UseUnregisteredSweep)
@@ -201,17 +192,9 @@ namespace Common.FlowField
                         request.Workspace.ObstacleScratch,
                         syncTransforms: false))
                 {
-                    dynamicChanged = !FlowFieldObstacleMaskBuilder.AreEqual(
-                        request.Workspace.ObstacleScratch,
-                        request.Workspace.DynamicBlocked);
+                    dynamicChanged = CommitDynamicScratch(request.Workspace);
                     if (dynamicChanged)
-                    {
-                        System.Array.Copy(
-                            request.Workspace.ObstacleScratch,
-                            request.Workspace.DynamicBlocked,
-                            request.Workspace.Capacity);
                         dynamicDirty = FlowFieldCellRect.Full(request.Grid);
-                    }
                 }
             }
             else
@@ -224,16 +207,7 @@ namespace Common.FlowField
                     request.Clearance,
                     request.Workspace.ObstacleScratch,
                     request.DirtyRegion);
-                dynamicChanged = !FlowFieldObstacleMaskBuilder.AreEqual(
-                    request.Workspace.ObstacleScratch,
-                    request.Workspace.DynamicBlocked);
-                if (dynamicChanged)
-                {
-                    System.Array.Copy(
-                        request.Workspace.ObstacleScratch,
-                        request.Workspace.DynamicBlocked,
-                        request.Workspace.Capacity);
-                }
+                dynamicChanged = CommitDynamicScratch(request.Workspace);
             }
 
             bool effectiveMaskChanged = CompareEffectiveMask(
@@ -246,6 +220,14 @@ namespace Common.FlowField
             return new FlowFieldObstacleResult(
                 effectiveMaskChanged,
                 effectiveMaskDirty);
+        }
+
+        private static bool CommitDynamicScratch(FlowFieldWorkspace workspace)
+        {
+            if (FlowFieldObstacleMaskBuilder.AreEqual(workspace.ObstacleScratch, workspace.DynamicBlocked))
+                return false;
+            System.Array.Copy(workspace.ObstacleScratch, workspace.DynamicBlocked, workspace.Capacity);
+            return true;
         }
 
         private static bool CompareEffectiveMask(

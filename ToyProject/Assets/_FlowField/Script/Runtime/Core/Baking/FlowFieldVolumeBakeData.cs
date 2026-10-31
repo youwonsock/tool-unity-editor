@@ -292,26 +292,7 @@ namespace Common.FlowField
             float[] speeds,
             Vector3[] escapeDirections)
         {
-            if (grid.SpaceMode != FlowFieldSpaceMode.Volume3D || grid.CellCount <= 0)
-                throw new ArgumentException("A valid Volume3D grid is required.", nameof(grid));
-            if (!FlowFieldGridSpace.IsFinite(bounds.center)
-                || !FlowFieldGridSpace.IsFinite(bounds.size)
-                || bounds.size.x <= 0f
-                || bounds.size.y <= 0f
-                || bounds.size.z <= 0f)
-                throw new ArgumentOutOfRangeException(nameof(bounds));
-            Bounds expectedBounds = new Bounds(
-                grid.Origin + new Vector3(grid.WorldSizeX, grid.WorldSizeY, grid.WorldSizeZ) * 0.5f,
-                new Vector3(grid.WorldSizeX, grid.WorldSizeY, grid.WorldSizeZ));
-            if (!FlowFieldBakeBoundsUtility.Approximately(expectedBounds, bounds))
-                throw new ArgumentException("Bake Bounds do not match the Volume3D grid.", nameof(bounds));
-            if (obstacleLayer.value == 0
-                || !FlowFieldGridSpace.IsFinite(obstacleClearance)
-                || obstacleClearance < 0f
-                || !FlowFieldGridSpace.IsFinite(requestedGoalWorld)
-                || !FlowFieldGridSpace.IsFinite(goalInfluenceRadius)
-                || goalInfluenceRadius < 0f)
-                throw new ArgumentOutOfRangeException(nameof(obstacleClearance));
+            ValidateApplyHeader(grid, bounds, obstacleLayer, obstacleClearance, requestedGoalWorld, goalInfluenceRadius);
             int count = grid.CellCount;
             if (blocked == null || blocked.Length != count
                 || topology == null || topology.Length != count
@@ -391,6 +372,36 @@ namespace Common.FlowField
             _validatedObstacleClearance = obstacleClearance;
             _validatedContentGeneration = _contentGeneration;
             _hasValidatedSignature = true;
+        }
+
+        private static void ValidateApplyHeader(
+            FlowFieldGridSpace grid,
+            Bounds bounds,
+            LayerMask obstacleLayer,
+            float obstacleClearance,
+            Vector3 requestedGoalWorld,
+            float goalInfluenceRadius)
+        {
+            if (grid.SpaceMode != FlowFieldSpaceMode.Volume3D || grid.CellCount <= 0)
+                throw new ArgumentException("A valid Volume3D grid is required.", nameof(grid));
+            if (!FlowFieldGridSpace.IsFinite(bounds.center)
+                || !FlowFieldGridSpace.IsFinite(bounds.size)
+                || bounds.size.x <= 0f
+                || bounds.size.y <= 0f
+                || bounds.size.z <= 0f)
+                throw new ArgumentOutOfRangeException(nameof(bounds));
+            Bounds expectedBounds = new Bounds(
+                grid.Origin + new Vector3(grid.WorldSizeX, grid.WorldSizeY, grid.WorldSizeZ) * 0.5f,
+                new Vector3(grid.WorldSizeX, grid.WorldSizeY, grid.WorldSizeZ));
+            if (!FlowFieldBakeBoundsUtility.Approximately(expectedBounds, bounds))
+                throw new ArgumentException("Bake Bounds do not match the Volume3D grid.", nameof(bounds));
+            if (obstacleLayer.value == 0
+                || !FlowFieldGridSpace.IsFinite(obstacleClearance)
+                || obstacleClearance < 0f
+                || !FlowFieldGridSpace.IsFinite(requestedGoalWorld)
+                || !FlowFieldGridSpace.IsFinite(goalInfluenceRadius)
+                || goalInfluenceRadius < 0f)
+                throw new ArgumentOutOfRangeException(nameof(obstacleClearance));
         }
 
         private void RebuildDerivedArrays()

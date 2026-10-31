@@ -312,7 +312,7 @@ namespace Common.FlowField
                 return RunManaged(request, completed, failed);
             }
 
-            FlowFieldBfsRequest requestCopy = request;
+            var attempt = new GpuAttempt(this, request, completed, failed, allowManagedFallback);
             try
             {
                 FlowFieldComputeRequest computeRequest = new FlowFieldComputeRequest(
@@ -323,8 +323,8 @@ namespace Common.FlowField
                     request.MaxGpuWaves);
                 bool accepted = _computeSolver.Start(
                     computeRequest,
-                    OnGpuCompleted,
-                    OnGpuFailed);
+                    attempt.OnCompleted,
+                    attempt.OnFailed);
                 if (accepted)
                     return true;
             }
@@ -346,12 +346,35 @@ namespace Common.FlowField
             }
             DisableGpu("GPU 계산 요청이 거부됐습니다.");
             return RunManaged(request, completed, failed, null);
+        }
 
-            void OnGpuCompleted(
+        private sealed class GpuAttempt
+        {
+            private readonly FlowFieldSurfaceBuildPipeline _owner;
+            private readonly FlowFieldBfsRequest _request;
+            private readonly Action<FlowFieldBfsRequest> _completed;
+            private readonly Action<FlowFieldBfsRequest, Exception> _failed;
+            private readonly bool _allowManagedFallback;
+
+            internal GpuAttempt(
+                FlowFieldSurfaceBuildPipeline owner,
+                in FlowFieldBfsRequest request,
+                Action<FlowFieldBfsRequest> completed,
+                Action<FlowFieldBfsRequest, Exception> failed,
+                bool allowManagedFallback)
+            {
+                _owner = owner;
+                _request = request;
+                _completed = completed;
+                _failed = failed;
+                _allowManagedFallback = allowManagedFallback;
+            }
+
+            internal void OnCompleted(
                 FlowFieldComputeRequest compute,
                 NativeArray<GpuFlowCell> result)
             {
-                if (!requestCopy.IsCurrent)
+                if (!_request.IsCurrent)
                     return;
                 try
                 {
@@ -359,35 +382,35 @@ namespace Common.FlowField
                 }
                 catch (Exception exception)
                 {
-                    if (!allowManagedFallback)
+                    if (!_allowManagedFallback)
                     {
-                        failed(requestCopy, exception);
+                        _failed(_request, exception);
                         return;
                     }
-                    DisableGpu(exception.Message);
-                    RunManaged(requestCopy, completed, failed, exception);
+                    _owner.DisableGpu(exception.Message);
+                    RunManaged(_request, _completed, _failed, exception);
                     return;
                 }
                 // Consumer composition/commit is deliberately outside the
                 // GPU validation catch. A compose error must Fault the
                 // session once, never rerun BFS through the fallback path.
-                completed(requestCopy);
+                _completed(_request);
             }
 
-            void OnGpuFailed(
+            internal void OnFailed(
                 FlowFieldComputeRequest compute,
                 FlowFieldComputeFailureKind kind,
                 Exception exception)
             {
-                if (!requestCopy.IsCurrent)
+                if (!_request.IsCurrent)
                     return;
-                DisableGpu(exception != null ? $"{kind}: {exception.Message}" : kind.ToString());
-                if (!allowManagedFallback)
+                _owner.DisableGpu(exception != null ? $"{kind}: {exception.Message}" : kind.ToString());
+                if (!_allowManagedFallback)
                 {
-                    failed(requestCopy, exception);
+                    _failed(_request, exception);
                     return;
                 }
-                RunManaged(requestCopy, completed, failed, exception);
+                RunManaged(_request, _completed, _failed, exception);
             }
         }
 

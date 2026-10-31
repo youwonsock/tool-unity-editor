@@ -50,18 +50,7 @@ namespace Common.FlowField
             out FlowFieldCellRect changedRegion)
         {
             changedRegion = FlowFieldCellRect.Invalid;
-            if (!request.Grid.IsValid)
-                throw new ArgumentException("Modifier rebuild requires a valid grid.", nameof(request));
-            if (request.Surface == null || !request.Surface.IsValid)
-                throw new ArgumentException("Modifier rebuild requires a valid surface bake.", nameof(request.Surface));
-            if (request.Workspace == null)
-                throw new ArgumentNullException(nameof(request.Workspace));
-            if (request.Workspace.Capacity != request.Grid.CellCount)
-                throw new ArgumentException("Modifier workspace capacity must match the grid.", nameof(request.Workspace));
-            if (!FlowFieldGridSpace.IsFinite(request.ObstacleCheckHeight) || request.ObstacleCheckHeight <= 0f)
-                throw new ArgumentOutOfRangeException(nameof(request.ObstacleCheckHeight));
-            if (!FlowFieldGridSpace.IsFinite(request.ObstacleCheckCenterOffset))
-                throw new ArgumentOutOfRangeException(nameof(request.ObstacleCheckCenterOffset));
+            ValidateAreaRequest(request);
             if (_registry.Entries.Count == 0)
                 return true;
 
@@ -115,29 +104,7 @@ namespace Common.FlowField
 
                 if (maskChanged || !entry.InfluenceIndicesBuilt)
                 {
-                    entry.InfluenceIndices.Clear();
-                    // The rect comes from the mask, not the collider bounds: a
-                    // cell that only touches the collider belongs to the mask,
-                    // and a partial composition rewrites nothing outside the rect.
-                    FlowFieldCellRect maskRect = FlowFieldCellRect.Invalid;
-                    for (int index = 0; index < entry.InfluenceMask.Length; index++)
-                    {
-                        if (!entry.InfluenceMask[index])
-                            continue;
-                        entry.InfluenceIndices.Add(index);
-                        request.Grid.FromFlatIndex(index, out int x, out int z);
-                        maskRect = FlowFieldCellRect.Union(maskRect, new FlowFieldCellRect
-                        {
-                            MinX = x,
-                            MaxX = x,
-                            MinY = 0,
-                            MaxY = request.Grid.Height - 1,
-                            MinZ = z,
-                            MaxZ = z,
-                        });
-                    }
-                    entry.InfluenceIndicesBuilt = true;
-                    entry.InfluenceRect = maskRect;
+                    RebuildInfluenceIndices(entry, request.Grid);
                 }
 
                 if (maskChanged)
@@ -151,6 +118,49 @@ namespace Common.FlowField
             }
 
             return true;
+        }
+
+        private static void ValidateAreaRequest(in FlowFieldModifierBuildRequest request)
+        {
+            if (!request.Grid.IsValid)
+                throw new ArgumentException("Modifier rebuild requires a valid grid.", nameof(request));
+            if (request.Surface == null || !request.Surface.IsValid)
+                throw new ArgumentException("Modifier rebuild requires a valid surface bake.", nameof(request.Surface));
+            if (request.Workspace == null)
+                throw new ArgumentNullException(nameof(request.Workspace));
+            if (request.Workspace.Capacity != request.Grid.CellCount)
+                throw new ArgumentException("Modifier workspace capacity must match the grid.", nameof(request.Workspace));
+            if (!FlowFieldGridSpace.IsFinite(request.ObstacleCheckHeight) || request.ObstacleCheckHeight <= 0f)
+                throw new ArgumentOutOfRangeException(nameof(request.ObstacleCheckHeight));
+            if (!FlowFieldGridSpace.IsFinite(request.ObstacleCheckCenterOffset))
+                throw new ArgumentOutOfRangeException(nameof(request.ObstacleCheckCenterOffset));
+        }
+
+        private static void RebuildInfluenceIndices(FlowFieldModifierRegistry.Entry entry, FlowFieldGridSpace grid)
+        {
+            entry.InfluenceIndices.Clear();
+            // The rect comes from the mask, not the collider bounds: a
+            // cell that only touches the collider belongs to the mask,
+            // and a partial composition rewrites nothing outside the rect.
+            FlowFieldCellRect maskRect = FlowFieldCellRect.Invalid;
+            for (int index = 0; index < entry.InfluenceMask.Length; index++)
+            {
+                if (!entry.InfluenceMask[index])
+                    continue;
+                entry.InfluenceIndices.Add(index);
+                grid.FromFlatIndex(index, out int x, out int z);
+                maskRect = FlowFieldCellRect.Union(maskRect, new FlowFieldCellRect
+                {
+                    MinX = x,
+                    MaxX = x,
+                    MinY = 0,
+                    MaxY = grid.Height - 1,
+                    MinZ = z,
+                    MaxZ = z,
+                });
+            }
+            entry.InfluenceIndicesBuilt = true;
+            entry.InfluenceRect = maskRect;
         }
 
         internal bool RebuildFinalField(

@@ -140,9 +140,20 @@ GPU 경로(같은 장면, 배치 실행의 프레임 대기 포함)는 Surface 2
 
 ### 구조
 
-- 큰 파일: `FlowFieldSession.cs` 1,989줄, `FlowFieldVolumeSession.cs` 1,592줄, `FlowFieldManager.cs` 1,433줄. 수명·재진입 검사가 곳곳에 있어 분리 자체의 회귀 위험이 크다. 해당 파일을 크게 바꾸는 기능 작업과 함께 진행한다.
-- 복잡성의 근원: 콜백 안의 Release·Init·Suspend를 허용해 외부 호출 뒤마다 소유권을 다시 검사한다. 이벤트 지연 전달은 공개 동작을 바꾸므로 진행하지 않았다.
-- Manager: `SpaceMode == Volume3D` 분기 11곳. 모드별 어댑터 분리는 Manager를 크게 바꾸는 기능 작업과 함께 진행한다.
+2026-10-31 구조 개편으로 Manager와 세션을 나눴다. 동작과 테스트 기대값은 바꾸지 않았다.
+
+| 항목 | 개편 전 | 개편 후 |
+| --- | ---: | ---: |
+| `FlowFieldManager.cs` | 1,433줄 | 614줄 |
+| `FlowFieldSession.cs` | 1,989줄 | 803줄 |
+| `FlowFieldVolumeSession.cs` | 1,592줄 | 748줄 |
+| Manager의 모드 분기 | 14곳 | 드라이버 선택 1곳 |
+| 100줄을 넘는 메서드 | 10개 | 0개 |
+
+- `FlowFieldSessionBase`: 공개 상태, Fault 순서, 작업 세대 같은 공통 수명 규칙. 재시도와 해제의 자원 처리는 모드별로 달라 각 세션에 있다.
+- `FlowFieldManager.Modes.cs`: Surface와 Volume의 차이. Manager 본체에는 모드 분기가 없다. `FlowFieldManager.Validation.cs`, `FlowFieldManager.Bake.cs`는 설정 검증과 베이크 연동이다.
+- 세션의 `.Build`, `.Sampling`, `.Views`, `.Memory`는 partial 파일이다. 필드를 공유하므로 읽기 쉬워졌을 뿐 결합이 줄지는 않았다. `FlowFieldSession.Build.cs`(841줄)가 가장 크다.
+- 복잡성의 근원은 남아 있다: 콜백 안의 Release·Init·Suspend를 허용해 외부 호출 뒤마다 소유권을 다시 검사한다. Modifier와 Surface Source도 외부 호출이므로 이벤트 지연 전달만으로는 사라지지 않아 진행하지 않았다.
 
 ## 다음 순서
 

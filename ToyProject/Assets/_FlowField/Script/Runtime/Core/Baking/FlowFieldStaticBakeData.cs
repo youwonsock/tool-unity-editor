@@ -689,6 +689,38 @@ namespace Common.FlowField
             workspace.LoadBakedGoal(_hasGoal, _resolvedGoalIndex, _nextCells);
         }
 
+        private void AssignHeader(
+            in FlowFieldSurfaceBakeSettings settings,
+            LayerMask obstacleLayer,
+            float checkHeight,
+            float centerOffset,
+            float clearance,
+            bool hasGoal,
+            Vector3 requestedGoalWorld,
+            float goalInfluenceRadius,
+            int resolvedGoalIndex)
+        {
+            _formatVersion = CURRENT_FORMAT_VERSION;
+            _spaceMode = FlowFieldSpaceMode.Surface2D;
+            _gridOriginWorld = settings.Grid.Origin;
+            _width = settings.Grid.Width;
+            _depth = settings.Grid.Depth;
+            _cellSize = settings.Grid.CellSize;
+            _groundLayerMask = settings.GroundLayer.value;
+            _bakeBoundsCenterWorld = settings.BakeBounds.center;
+            _bakeBoundsSizeWorld = settings.BakeBounds.size;
+            _maxSurfaceSlope = settings.MaxSurfaceSlope;
+            _maxStepHeight = settings.MaxStepHeight;
+            _obstacleLayerMask = obstacleLayer.value;
+            _obstacleCheckHeight = checkHeight;
+            _obstacleCheckCenterOffset = centerOffset;
+            _obstacleClearance = clearance;
+            _hasGoal = hasGoal;
+            _requestedGoalWorld = requestedGoalWorld;
+            _goalInfluenceRadius = goalInfluenceRadius;
+            _resolvedGoalIndex = hasGoal ? resolvedGoalIndex : -1;
+        }
+
         internal void Apply(
             in FlowFieldSurfaceBakeSettings settings,
             FlowFieldSurfaceData surface,
@@ -731,25 +763,8 @@ namespace Common.FlowField
             FlowFieldStaticBakeData candidate = ScriptableObject.CreateInstance<FlowFieldStaticBakeData>();
             try
             {
-                candidate._formatVersion = CURRENT_FORMAT_VERSION;
-                candidate._spaceMode = FlowFieldSpaceMode.Surface2D;
-                candidate._gridOriginWorld = settings.Grid.Origin;
-                candidate._width = settings.Grid.Width;
-                candidate._depth = settings.Grid.Depth;
-                candidate._cellSize = settings.Grid.CellSize;
-                candidate._groundLayerMask = settings.GroundLayer.value;
-                candidate._bakeBoundsCenterWorld = settings.BakeBounds.center;
-                candidate._bakeBoundsSizeWorld = settings.BakeBounds.size;
-                candidate._maxSurfaceSlope = settings.MaxSurfaceSlope;
-                candidate._maxStepHeight = settings.MaxStepHeight;
-                candidate._obstacleLayerMask = obstacleLayer.value;
-                candidate._obstacleCheckHeight = checkHeight;
-                candidate._obstacleCheckCenterOffset = centerOffset;
-                candidate._obstacleClearance = clearance;
-                candidate._hasGoal = hasGoal;
-                candidate._requestedGoalWorld = requestedGoalWorld;
-                candidate._goalInfluenceRadius = goalInfluenceRadius;
-                candidate._resolvedGoalIndex = hasGoal ? resolvedGoalIndex : -1;
+                candidate.AssignHeader(settings, obstacleLayer, checkHeight, centerOffset, clearance,
+                    hasGoal, requestedGoalWorld, goalInfluenceRadius, resolvedGoalIndex);
                 candidate._surfaceHeights = surfaceHeights;
                 candidate._surfaceNormals = surfaceNormals;
                 candidate._surfaceFlags = surfaceFlags;
@@ -766,30 +781,13 @@ namespace Common.FlowField
 
                 _snapshotCache = null;
                 _snapshotCacheRevision = -1;
-                _formatVersion = CURRENT_FORMAT_VERSION;
-                _spaceMode = FlowFieldSpaceMode.Surface2D;
                 unchecked
                 {
                     _revision++;
                     _contentGeneration++;
                 }
-                _gridOriginWorld = settings.Grid.Origin;
-                _width = settings.Grid.Width;
-                _depth = settings.Grid.Depth;
-                _cellSize = settings.Grid.CellSize;
-                _groundLayerMask = settings.GroundLayer.value;
-                _bakeBoundsCenterWorld = settings.BakeBounds.center;
-                _bakeBoundsSizeWorld = settings.BakeBounds.size;
-                _maxSurfaceSlope = settings.MaxSurfaceSlope;
-                _maxStepHeight = settings.MaxStepHeight;
-                _obstacleLayerMask = obstacleLayer.value;
-                _obstacleCheckHeight = checkHeight;
-                _obstacleCheckCenterOffset = centerOffset;
-                _obstacleClearance = clearance;
-                _hasGoal = hasGoal;
-                _requestedGoalWorld = requestedGoalWorld;
-                _goalInfluenceRadius = goalInfluenceRadius;
-                _resolvedGoalIndex = hasGoal ? resolvedGoalIndex : -1;
+                AssignHeader(settings, obstacleLayer, checkHeight, centerOffset, clearance,
+                    hasGoal, requestedGoalWorld, goalInfluenceRadius, resolvedGoalIndex);
                 _surfaceHeights = surfaceHeights;
                 _surfaceNormals = surfaceNormals;
                 _surfaceFlags = surfaceFlags;

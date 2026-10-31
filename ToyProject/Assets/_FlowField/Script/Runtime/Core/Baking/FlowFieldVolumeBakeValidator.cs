@@ -248,48 +248,57 @@ namespace Common.FlowField
             cellBudget = Math.Max(1, cellBudget);
             graphBudget = Math.Max(1, graphBudget);
 
-            if (_phase == Phase.Metadata)
-            {
-                if (!ValidateMetadata(out string metadataError))
-                {
-                    Fail(metadataError);
-                    return;
-                }
-                _phase = Phase.Cells;
-            }
-
-            if (_phase == Phase.Cells)
-            {
-                int processed = 0;
-                while (_cellCursor < _view.Blocked.Length && processed < cellBudget)
-                {
-                    if (!ValidateCell(_cellCursor, out string cellError))
-                    {
-                        Fail(cellError);
-                        return;
-                    }
-                    _cellCursor++;
-                    processed++;
-                }
-
-                if (_cellCursor < _view.Blocked.Length)
-                    return;
-                if (_view.HasGoal && _anchorCount != 1)
-                {
-                    Fail($"Static Volume3D Bake must contain exactly one Goal anchor; found {_anchorCount}.");
-                    return;
-                }
-                if (!_view.HasGoal && _anchorCount != 0)
-                {
-                    Fail("Static Volume3D Bake without a Goal contains an anchor.");
-                    return;
-                }
-                _phase = Phase.Graph;
-            }
-
-            if (_phase != Phase.Graph)
+            if (_phase == Phase.Metadata && !StepMetadata())
                 return;
+            if (_phase == Phase.Cells && !StepCells(cellBudget))
+                return;
+            if (_phase == Phase.Graph)
+                StepGraph(graphBudget);
+        }
 
+        private bool StepMetadata()
+        {
+            if (!ValidateMetadata(out string metadataError))
+            {
+                Fail(metadataError);
+                return false;
+            }
+            _phase = Phase.Cells;
+            return true;
+        }
+
+        private bool StepCells(int cellBudget)
+        {
+            int processed = 0;
+            while (_cellCursor < _view.Blocked.Length && processed < cellBudget)
+            {
+                if (!ValidateCell(_cellCursor, out string cellError))
+                {
+                    Fail(cellError);
+                    return false;
+                }
+                _cellCursor++;
+                processed++;
+            }
+
+            if (_cellCursor < _view.Blocked.Length)
+                return false;
+            if (_view.HasGoal && _anchorCount != 1)
+            {
+                Fail($"Static Volume3D Bake must contain exactly one Goal anchor; found {_anchorCount}.");
+                return false;
+            }
+            if (!_view.HasGoal && _anchorCount != 0)
+            {
+                Fail("Static Volume3D Bake without a Goal contains an anchor.");
+                return false;
+            }
+            _phase = Phase.Graph;
+            return true;
+        }
+
+        private void StepGraph(int graphBudget)
+        {
             int graphSteps = 0;
             while (_graphCursor < _view.NextCells.Length && graphSteps < graphBudget)
             {
