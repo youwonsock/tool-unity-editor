@@ -14,20 +14,17 @@ namespace Common.FlowField
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void EnsureRuntimeDriver()
         {
-            if (!Application.isPlaying || _instance != null)
+            if (!Application.isPlaying)
                 return;
 
-            FlowFieldBuildDriver[] existing = FindObjectsByType<FlowFieldBuildDriver>(FindObjectsSortMode.None);
-            if (existing != null && existing.Length > 0)
-            {
-                _instance = existing[0];
-                for (int index = 1; index < existing.Length; index++)
-                    Destroy(existing[index].gameObject);
-                return;
-            }
+            // This runs once per Play session, so any driver already present
+            // is a leftover. FindObjectsByType cannot see a hidden object.
+            foreach (FlowFieldBuildDriver stale in Resources.FindObjectsOfTypeAll<FlowFieldBuildDriver>())
+                Destroy(stale.gameObject);
 
             GameObject driverObject = new GameObject(nameof(FlowFieldBuildDriver));
-            driverObject.hideFlags = HideFlags.HideAndDontSave;
+            // Without DontSave the driver ends with Play Mode instead of leaking into the Editor.
+            driverObject.hideFlags = HideFlags.HideInHierarchy;
             DontDestroyOnLoad(driverObject);
             _instance = driverObject.AddComponent<FlowFieldBuildDriver>();
         }

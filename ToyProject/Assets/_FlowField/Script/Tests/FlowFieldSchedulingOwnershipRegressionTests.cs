@@ -82,6 +82,17 @@ namespace Common.FlowField.Tests
             if (Application.isPlaying) yield return new ExitPlayMode();
         }
 
+        [UnityTest]
+        public IEnumerator BuildDriverIsUniqueInPlayModeAndEndsWithIt()
+        {
+            yield return new EnterPlayMode();
+            yield return null;
+            Assert.That(Resources.FindObjectsOfTypeAll<FlowFieldBuildDriver>().Length, Is.EqualTo(1));
+            yield return new ExitPlayMode();
+            yield return null;
+            Assert.That(Resources.FindObjectsOfTypeAll<FlowFieldBuildDriver>(), Is.Empty);
+        }
+
         [UnityTest] public IEnumerator SurfaceManagerRegistrationQueuesComposition()
             => CheckSurfaceUpdate("register");
         [UnityTest] public IEnumerator SurfaceManagerValueNotificationQueuesComposition()
