@@ -340,7 +340,7 @@ namespace Common.FlowField
                         _build = new BuildContext(
                             request,
                             pumpGeneration,
-                            _safety.Epoch,
+                            _safety.BeginBuild(),
                             modifierSnapshots);
                         _buildReservationBytes = reservation;
                     }
@@ -1348,7 +1348,6 @@ namespace Common.FlowField
                 Interlocked.Increment(ref _nextVisualizationResultId));
 
             bool gridChanged = _committed != null && !_committed.Request.HasSameGrid(build.Request);
-            bool safetyChangedDuringBuild = build.SafetyEpoch != _safety.Epoch;
             // Allocate and populate the replacement safety snapshot before
             // publishing any field reference. If allocation or initialization
             // fails, the previous publication remains intact.
@@ -1359,8 +1358,9 @@ namespace Common.FlowField
             _revision++;
             _committedReservationBytes = EstimateCommittedBytes(build.Count);
             _safety.PublishSnapshot(in nextSafety);
-            if (!_hasPendingRequest && !safetyChangedDuringBuild)
-                _safety.ClearRegions();
+            // Changes recorded after this build started stay uncertain; a
+            // continuously moving obstacle must not keep older regions unsafe.
+            _safety.ClearObservedRegions();
             _build = null;
             _buildReservationBytes = 0;
             // The published field holds none of these; a completed build has
