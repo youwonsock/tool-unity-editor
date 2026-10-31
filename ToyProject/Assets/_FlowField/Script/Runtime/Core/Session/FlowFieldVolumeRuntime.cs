@@ -186,7 +186,6 @@ namespace Common.FlowField
                 return checked(
                     _buildReservationBytes
                     + _committedReservationBytes
-                    + _safety.SnapshotBytes
                     + (_computeSolver?.AllocatedBytes ?? 0L)
                     + EstimateAuxiliaryBytes());
             }
@@ -235,7 +234,7 @@ namespace Common.FlowField
             _hasPendingRequest = false;
             _hasPendingModifierRecompose = false;
             _obstacleQueryRequired = false;
-            _safety.Reset();
+            _safety.ClearRegions();
             _suspendedByLifecycle = false;
             _buildReservationBytes = 0;
             _committedReservationBytes = 0;
@@ -355,13 +354,14 @@ namespace Common.FlowField
                         // A recompose queries no obstacles, so it resolves no safety region.
                         if (recompose)
                         {
-                            _build = new BuildContext(_committed, pumpGeneration, _safety.Epoch, modifierSnapshots);
+                            _build = new BuildContext(_committed, pumpGeneration, modifierSnapshots);
                         }
                         else
                         {
                             bool reuseObstacles = CanReuseObstacleQueries(request);
                             _obstacleQueryRequired = false;
-                            _build = new BuildContext(request, pumpGeneration, _safety.BeginBuild(), modifierSnapshots);
+                            _safety.BeginBuild();
+                            _build = new BuildContext(request, pumpGeneration, modifierSnapshots);
                             if (reuseObstacles)
                             {
                                 _build.ReusesObstacleQueries = true;
@@ -546,7 +546,7 @@ namespace Common.FlowField
 
             int index = field.Grid.ToFlatIndex(x, y, z);
             Vector3 center = field.Grid.LocalToWorldCenter(x, y, z);
-            if (_safety.IsLatestCellUnknown(field, index, center))
+            if (_safety.IsLatestCellUnknown(field, center))
             {
                 sample = new FlowFieldSample(Vector3.zero, 0f, Vector3.zero, false, true);
                 return true;
@@ -561,12 +561,6 @@ namespace Common.FlowField
                 }
                 Vector3 escape = field.EscapeDirections[index];
                 sample = new FlowFieldSample(escape, escape.sqrMagnitude > 0.00000001f ? 1f : 0f, Vector3.zero, false, true);
-                return true;
-            }
-
-            if (_safety.IsLatestCellBlocked(field, index))
-            {
-                sample = new FlowFieldSample(Vector3.zero, 0f, Vector3.zero, false, true);
                 return true;
             }
 
@@ -732,7 +726,6 @@ namespace Common.FlowField
             CancelCurrentBuild();
             _committed = null;
             _committedReservationBytes = 0;
-            _safety.ClearSnapshot();
             _hasLatestRequestedInput = false;
             _suspendedByLifecycle = false;
             _gpuFallbackReason = null;
@@ -776,7 +769,9 @@ namespace Common.FlowField
                 NotifyFailed(failure);
         }
 
-        internal void ForceManagedBackend()
+        // A bake session stays on the deterministic Managed path by design, so
+        // this records no fallback reason.
+        internal void UseManagedBackendForBake()
             => _gpuDisabled = true;
 
         internal bool TryExport(
@@ -1404,19 +1399,12 @@ namespace Common.FlowField
                 Interlocked.Increment(ref _nextVisualizationResultId));
 
             bool gridChanged = _committed != null && !_committed.Request.HasSameGrid(build.Request);
-            // Allocate and populate the replacement safety snapshot before
-            // publishing any field reference. If allocation or initialization
-            // fails, the previous publication remains intact.
-            FlowFieldVolumeSafetyState.Snapshot nextSafety = build.IsModifierRecompose
-                ? default
-                : _safety.PrepareSnapshot(build.Request.Grid, build.Blocked, build.SafetyEpoch);
 
             _committed = next;
             _revision++;
             _committedReservationBytes = EstimateCommittedBytes(build.Count);
             if (!build.IsModifierRecompose)
             {
-                _safety.PublishSnapshot(in nextSafety);
                 // Changes recorded after this build started stay uncertain; a
                 // continuously moving obstacle must not keep older regions unsafe.
                 _safety.ClearObservedRegions();
@@ -1561,11 +1549,9 @@ namespace Common.FlowField
                 possibleGpu = Math.Max(possibleGpu, candidateGpu);
             }
 
-            long replacementSafetyReservation = FlowFieldVolumeSafetyState.EstimateSnapshotBytes(request.Grid.CellCount);
             return checked(
                 current
                 + replacementBuildReservation
-                + replacementSafetyReservation
                 + (possibleGpu - currentGpu));
         }
 
@@ -1625,7 +1611,6 @@ namespace Common.FlowField
             _hasLatestRequestedInput = false;
             _committed = null;
             _committedReservationBytes = 0;
-            _safety.ClearSnapshot();
             _computeSolver?.Dispose();
             _computeSolver = null;
             _obstacles.Clear();
