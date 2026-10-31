@@ -1527,8 +1527,11 @@ namespace Common.FlowField
 
         /// <summary>
         /// Shared rejection policy for successful and failed Surface2D completions.
-        /// Final-only inputs remain eligible for recomposition; changed navigation
-        /// inputs restore staging and stay pending for the next owning update.
+        /// Final-only inputs remain eligible for recomposition; changed Grid or
+        /// Goal inputs restore staging and stay pending for the next owning
+        /// update. Obstacle-only staleness does not reject a solve: rejecting
+        /// would starve publication while an obstacle keeps moving, and sampling
+        /// already re-checks the latest obstacle state against the published field.
         /// </summary>
         private bool RejectStaleBfsResult()
         {
@@ -1544,38 +1547,35 @@ namespace Common.FlowField
                         | FlowFieldDirtyFlags.Escape;
                     _state.ExpandObstacleDirty(FlowFieldCellRect.Full(_state.Grid));
                 }
-                _state.DirtyFlags |= FlowFieldDirtyFlags.Goal | FlowFieldDirtyFlags.FinalRegion;
-                _state.ExpandFinalDirty(FlowFieldCellRect.Full(_state.Grid));
+                RequeueRejectedGoal();
                 SetLifecycle(FlowFieldSessionLifecycle.Active);
                 return true;
             }
 
-            // A dynamic obstacle can be registered or moved while the GPU
-            // solve is in flight.  Its request is intentionally unversioned
-            // until the physics probe compares the effective mask, so the
-            // version numbers above can still match even though a new base
-            // dirty flag is pending.  Never commit the old BFS result in
-            // that case; keep the dirty request for the next FixedUpdate.
-            if (IsBaseDirty(_state.DirtyFlags))
+            // Grid and Goal requests stay unversioned until their stage proves
+            // a change, so the versions above can match while one is pending.
+            if ((_state.DirtyFlags & (FlowFieldDirtyFlags.Grid | FlowFieldDirtyFlags.Goal)) != 0)
             {
                 RestoreStagingAfterStaleResult(preserveObstacle: true);
-                SetLifecycle(FlowFieldSessionLifecycle.Active);
-                return true;
-            }
-
-            // A collider transform can be observed while the GPU is running
-            // before the deferred physics probe has compared its effective
-            // mask. Do not publish a field that was computed against the old
-            // collider pose; the probe will either clear this flag (same
-            // mask) or promote the change to the next BFS request.
-            if (_obstacleProbePending)
-            {
-                RestoreStagingAfterStaleResult(preserveObstacle: true);
+                RequeueRejectedGoal();
                 SetLifecycle(FlowFieldSessionLifecycle.Active);
                 return true;
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Restored staging holds the published Goal, while the tracker still
+        /// records the rejected one. Forget it so the next Goal stage rebuilds.
+        /// </summary>
+        private void RequeueRejectedGoal()
+        {
+            _goalTracker.Clear();
+            _state.DirtyFlags |= FlowFieldDirtyFlags.Goal | FlowFieldDirtyFlags.FinalRegion;
+            _state.ExpandFinalDirty(FlowFieldCellRect.Full(_state.Grid));
+            if (_hasLatestRequestedInput)
+                _hasPendingRequest = true;
         }
 
         private void OnBfsCompleted()
@@ -1592,7 +1592,9 @@ namespace Common.FlowField
             bool hasNewRequest = _hasPendingRequest;
             FlowFieldSessionRequest finalRequest = hasNewRequest ? _latestRequestedInput : _activeRequest;
             FlowFieldDirtyFlags pending = _state.DirtyFlags;
-            _hasPendingRequest = false;
+            // Obstacle input observed during this solve keeps its request and
+            // dirty flags through Commit; the next owner boundary handles it.
+            _hasPendingRequest = HasStaleObstacleInput();
 
             // RequestVersion also advances for Default Direction and Modifier
             // edits. Those changes are final-only and must never invalidate a
@@ -1645,15 +1647,13 @@ namespace Common.FlowField
             // changed while the backend was running (including a pending
             // Default Direction/Modifier request), then retry the same base
             // inputs without exposing a partial result.
-            if (_activeRequestVersion != _requestVersion || _hasPendingRequest)
+            if (_activeRequestVersion != _requestVersion
+                || _hasPendingRequest
+                || _obstacleProbePending
+                || IsBaseDirty(_state.DirtyFlags))
             {
                 RestoreStagingAfterStaleResult(preserveObstacle: true);
-                _state.DirtyFlags |= FlowFieldDirtyFlags.Goal | FlowFieldDirtyFlags.FinalRegion;
-                _state.ExpandFinalDirty(FlowFieldCellRect.Full(_state.Grid));
-                if (_hasPendingRequest)
-                {
-                    _state.DirtyFlags |= FlowFieldDirtyFlags.Goal;
-                }
+                RequeueRejectedGoal();
                 SetLifecycle(FlowFieldSessionLifecycle.Active);
                 return;
             }
@@ -1717,7 +1717,9 @@ namespace Common.FlowField
             {
                 _state.DirtyFlags = FlowFieldDirtyFlags.None;
                 _state.DirtyFinalRegion = FlowFieldCellRect.Invalid;
-                _state.DirtyObstacleRegion = FlowFieldCellRect.Invalid;
+                // A pending probe still needs the region it observed.
+                if (!_obstacleProbePending)
+                    _state.DirtyObstacleRegion = FlowFieldCellRect.Invalid;
             }
             int callbackGeneration = _callbackGeneration;
             PublishRuntimeState();
