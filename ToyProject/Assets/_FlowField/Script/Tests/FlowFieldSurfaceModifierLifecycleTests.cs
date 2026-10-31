@@ -321,17 +321,70 @@ namespace Common.FlowField.Tests
             => FlowFieldSessionRequest.ForStaticSnapshot(FlowFieldRegressionFixture.Settings, null, snapshot,
                 1 << FlowFieldRegressionFixture.Layer, 1f, 0.5f, 0f, direction, FlowFieldDirtyFlags.None, 1024);
 
+        [Test]
+        public void AreaAndObstacleChangesDuringASolveBuildTheMaskOnce()
+        {
+            var owner = new GameObject("Surface area rebuild");
+            owner.layer = FlowFieldRegressionFixture.Layer;
+            owner.transform.position = new Vector3(1.5f, 0f, 1.5f);
+            var collider = owner.AddComponent<BoxCollider>();
+            collider.isTrigger = true;
+            collider.size = new Vector3(3f, 2f, 3f);
+            var backend = new FlowFieldRegressionFixture.DeferredBackend();
+            var session = new FlowFieldSession(FlowFieldRegressionFixture.Surface(), backend);
+            var modifier = new Modifier { InfluenceCollider = collider };
+            FlowFieldSessionRequest request = FlowFieldRegressionFixture.Request(new Vector3(2.5f, 0f, 2.5f));
+            try
+            {
+                session.Initialize(FlowFieldBakeMode.RuntimeDynamic, FlowFieldSessionSourceKind.SceneBuild,
+                    FlowFieldBfsBackendPolicy.RequireGpu, null);
+                session.RegisterModifierCommand(modifier);
+                session.Submit(request);
+                session.Pump();
+                backend.Complete(0);
+                Assert.That(session.IsReady, Is.True, session.LastError);
+
+                session.Submit(FlowFieldRegressionFixture.Request(new Vector3(2.5f, 0f, 0.5f)));
+                session.Pump();
+                Assert.That(backend.Calls.Count, Is.EqualTo(2));
+                session.NotifyModifierChangedCommand(modifier, FlowFieldModifierChange.Area);
+                session.NotifyObstacleRegionDirtyCommand(new Bounds(Vector3.one, Vector3.one));
+                int readsBefore = modifier.ColliderReads;
+                int solved = 1;
+                for (int i = 0; i < 16; i++)
+                {
+                    while (solved < backend.Calls.Count)
+                        backend.Complete(solved++);
+                    if (session.HasPendingRequest)
+                        session.Submit(FlowFieldRegressionFixture.Request(new Vector3(2.5f, 0f, 0.5f)));
+                    session.Pump();
+                }
+                Assert.That(session.IsReady, Is.True, session.LastError);
+                Assert.That(modifier.ColliderReads - readsBefore, Is.EqualTo(1));
+            }
+            finally
+            {
+                session.DisposePermanently();
+                UnityEngine.Object.DestroyImmediate(owner);
+            }
+        }
+
         private sealed class Modifier : IFlowFieldVectorModifier, IFlowFieldModifierSnapshot
         {
             private Collider _collider;
             public Collider InfluenceCollider
             {
-                get => ThrowFromCollider ? throw new InvalidOperationException("Expected area failure") : _collider;
+                get
+                {
+                    ColliderReads++;
+                    return ThrowFromCollider ? throw new InvalidOperationException("Expected area failure") : _collider;
+                }
                 set => _collider = value;
             }
             public int Priority => 0;
             public int Revision => 0;
             internal bool ThrowFromCollider;
+            internal int ColliderReads;
             internal float Speed = 2f;
             internal Action OnCapture;
             internal Action OnModify;
