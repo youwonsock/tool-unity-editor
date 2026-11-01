@@ -307,7 +307,6 @@ namespace Common.FlowField.Tests
             _colliderObject = new GameObject("Aligned obstacle regression")
             {
                 layer = FlowFieldRegressionFixture.Layer,
-                isStatic = !registered,
             };
             _colliderObject.transform.position = new Vector3(1.5f, .5f, 1.5f);
             var collider = _colliderObject.AddComponent<BoxCollider>();
@@ -317,6 +316,60 @@ namespace Common.FlowField.Tests
             _session.Pump();
             Assert.That(_session.IsReady, Is.True, _session.LastError);
             Assert.That(BlockedCells(_session), Is.EqualTo(expected));
+        }
+
+        // A Player reports GameObject.isStatic as false for every object, so
+        // this is the state each of these Colliders has there.
+        [Test]
+        public void ObstacleWithoutARigidbodyBlocksWithoutARegistration()
+        {
+            CreateCellObstacle();
+            _session.Submit(RequestWithClearance(0f));
+            _session.Pump();
+            Assert.That(_session.IsReady, Is.True, _session.LastError);
+            Assert.That(BlockedCells(_session), Is.EqualTo(1));
+        }
+
+        [Test]
+        public void ObstacleWithARigidbodyIsNotPartOfTheStaticMask()
+        {
+            CreateCellObstacle().gameObject.AddComponent<Rigidbody>().isKinematic = true;
+            _session.Submit(RequestWithClearance(0f));
+            _session.Pump();
+            Assert.That(_session.IsReady, Is.True, _session.LastError);
+            Assert.That(BlockedCells(_session), Is.EqualTo(0));
+        }
+
+        [Test]
+        public void RegisteringAnObstacleTakesItOutOfTheStaticMaskAndUnregisteringReturnsIt()
+        {
+            BoxCollider collider = CreateCellObstacle();
+            _session.Submit(RequestWithClearance(0f));
+            _session.Pump();
+            Assert.That(BlockedCells(_session), Is.EqualTo(1));
+
+            _session.RegisterObstacle(collider, FlowFieldCellRect.Invalid);
+            collider.transform.position = new Vector3(2.5f, .5f, 2.5f);
+            Physics.SyncTransforms();
+            _session.Submit(RequestWithClearance(0f));
+            _session.Pump();
+            Assert.That(_session.IsReady, Is.True, _session.LastError);
+            Assert.That(BlockedCells(_session), Is.EqualTo(1), "The registered Collider must leave no static cell behind.");
+
+            _session.UnregisterObstacle(collider, FlowFieldCellRect.Invalid);
+            _session.Submit(RequestWithClearance(0f));
+            _session.Pump();
+            Assert.That(_session.IsReady, Is.True, _session.LastError);
+            Assert.That(BlockedCells(_session), Is.EqualTo(1));
+        }
+
+        private BoxCollider CreateCellObstacle()
+        {
+            _colliderObject = new GameObject("Unflagged obstacle regression") { layer = FlowFieldRegressionFixture.Layer };
+            _colliderObject.transform.position = new Vector3(1.5f, .5f, 1.5f);
+            var collider = _colliderObject.AddComponent<BoxCollider>();
+            Physics.SyncTransforms();
+            return collider;
         }
 
         [Test]

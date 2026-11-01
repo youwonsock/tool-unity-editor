@@ -20,10 +20,9 @@ namespace Common.FlowField.Tests
         {
             private readonly List<GameObject> _objects = new List<GameObject>();
 
-            internal BoxCollider Box(string name, Vector3 center, Vector3 size, bool isTrigger = false, bool isStatic = false)
+            internal BoxCollider Box(string name, Vector3 center, Vector3 size, bool isTrigger = false)
             {
                 var gameObject = new GameObject(name) { layer = Layer };
-                gameObject.isStatic = isStatic;
                 var box = gameObject.AddComponent<BoxCollider>();
                 box.isTrigger = isTrigger;
                 gameObject.transform.position = center;
@@ -133,8 +132,7 @@ namespace Common.FlowField.Tests
                 => Objects.Box(
                     "Golden static wall",
                     new Vector3((minX + maxX) * 0.5f, HeightAt(maxX) + 0.5f, (minZ + maxZ) * 0.5f),
-                    new Vector3(maxX - minX, Grid.Width * Rise + 4f, maxZ - minZ),
-                    isStatic: true);
+                    new Vector3(maxX - minX, Grid.Width * Rise + 4f, maxZ - minZ));
 
             internal BoxCollider DynamicObstacle(Vector3 cellCenter, Vector3 size)
             {

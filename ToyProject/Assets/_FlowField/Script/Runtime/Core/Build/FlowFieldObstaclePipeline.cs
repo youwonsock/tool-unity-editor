@@ -156,6 +156,8 @@ namespace Common.FlowField
                     request.CheckHeight,
                     request.CenterOffset,
                     request.Clearance,
+                    request.UseUnregisteredSweep,
+                    _dynamicSet,
                     ref _overlapBuffer,
                     ref _targetOverlapBuffer);
             }
@@ -353,6 +355,8 @@ namespace Common.FlowField
             float checkHeight,
             float centerOffset,
             float clearance,
+            bool useUnregisteredSweep,
+            HashSet<Collider> registeredObstacles,
             ref Collider[] overlapBuffer,
             ref Collider[] targetOverlapBuffer)
         {
@@ -363,19 +367,27 @@ namespace Common.FlowField
             if (workspace.Capacity != grid.CellCount)
                 throw new ArgumentException("Static obstacle workspace capacity must match the grid.", nameof(workspace));
 
-            if (!FlowFieldObstacleMaskBuilder.BuildStatic(
-                grid,
-                surface,
+            // The sweep follows every Collider on the layer. A static copy of
+            // the same Colliders would keep their old cells after they move.
+            if (useUnregisteredSweep)
+            {
+                Array.Clear(workspace.ObstacleScratch, 0, workspace.Capacity);
+            }
+            else if (!FlowFieldObstacleMaskBuilder.BuildStatic(
+                    grid,
+                    surface,
                     obstacleLayer,
                     checkHeight,
                     centerOffset,
                     clearance,
                     workspace.ObstacleScratch,
+                    registeredObstacles,
                     ref overlapBuffer,
                     ref targetOverlapBuffer,
-                    out _,
                     syncTransformsBeforeQuery: true))
+            {
                 throw new InvalidOperationException("Static obstacle mask 생성에 실패했습니다.");
+            }
             bool changed = !FlowFieldObstacleMaskBuilder.AreEqual(
                 workspace.ObstacleScratch,
                 workspace.StaticBlocked);

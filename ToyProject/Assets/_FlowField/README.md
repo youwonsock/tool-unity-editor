@@ -122,7 +122,7 @@ Rigidbody·CharacterController를 사용하는 경우 계산한 속도를 해당
 
 장애물 쿼리에 영향을 주려면 GameObject와 Collider가 활성 상태여야 하며, 쿼리는 **Trigger를 무시**합니다. Trigger가 필요한 Modifier 영향 Collider와 구분합니다. 명시적 등록 경로는 지정된 Collider 자체를 검사하므로 미등록 스윕의 Layer 필터와 구분합니다. Layer에 넣는 것만으로 스윕 OFF 상태의 미등록 장애물이 계속 추적되지는 않습니다.
 
-Surface2D의 정적 장애물 마스크에는 **GameObject의 Static이 켜져 있고 연결된 Rigidbody가 없는 Collider**만 포함합니다. 이동용 장애물은 Static을 끄고 등록·스윕 경로를 사용합니다. 이미 정적 마스크에 포함된 물체를 이동용으로 바꾸었다면 분류 수정 후 `NotifyCellsDirty()`로 기존 정적 점유도 다시 준비합니다. Volume3D의 RuntimeDynamic 장애물 계산은 Obstacle Layer의 Collider와 명시적 등록 Collider를 검사합니다.
+Surface2D의 정적 장애물 마스크에는 **Obstacle Layer의 Collider 중 Rigidbody가 없고 동적 장애물로 등록하지 않은 것**이 들어갑니다. GameObject의 Static 플래그는 Player에서 항상 꺼져 있으므로 보지 않습니다. 이동용 장애물은 등록하거나 Rigidbody를 붙여 베이크에서도 빼고, 등록·해제하면 정적 마스크를 자동으로 다시 만듭니다. 미등록 스윕을 켜면 스윕이 Layer 전체를 추적하므로 정적 마스크는 비워 둡니다. Volume3D의 RuntimeDynamic 장애물 계산은 Obstacle Layer의 Collider와 명시적 등록 Collider를 검사합니다.
 
 등록·변경 알림은 초기화된 `RuntimeDynamic` Manager가 입력을 수락할 수 있을 때 호출합니다. `StaticBaked`의 동적 등록·변경 알림은 거부됩니다. `Release()`는 등록 집합을 정리하므로 이후 `Init()`한 새 Session에는 필요한 동적 장애물을 다시 등록합니다.
 

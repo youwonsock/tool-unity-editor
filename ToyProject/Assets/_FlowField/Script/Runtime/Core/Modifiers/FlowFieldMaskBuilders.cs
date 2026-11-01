@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Common.FlowField
@@ -41,12 +42,16 @@ namespace Common.FlowField
             float centerOffset,
             float clearance,
             bool[] destination,
+            HashSet<Collider> registeredObstacles,
             ref Collider[] overlapBuffer,
             ref Collider[] targetOverlapBuffer,
-            out int excludedColliderCount,
             bool syncTransformsBeforeQuery = false)
         {
-            var policy = new StaticObstaclePolicy { TargetBuffer = targetOverlapBuffer };
+            var policy = new StaticObstaclePolicy
+            {
+                TargetBuffer = targetOverlapBuffer,
+                Registered = registeredObstacles,
+            };
             bool built = Scan(
                 grid,
                 surface,
@@ -59,7 +64,6 @@ namespace Common.FlowField
                 syncTransformsBeforeQuery,
                 ref policy);
             targetOverlapBuffer = policy.TargetBuffer;
-            excludedColliderCount = policy.ExcludedCount;
             return built;
         }
 
@@ -161,16 +165,15 @@ namespace Common.FlowField
         private struct StaticObstaclePolicy : IObstaclePolicy
         {
             public Collider[] TargetBuffer;
-            public int ExcludedCount;
+            public HashSet<Collider> Registered;
 
+            // GameObject.isStatic is always false in a Player, so it cannot
+            // decide this. A Collider without a Rigidbody is what the physics
+            // engine itself treats as static.
             public bool Accepts(Collider obstacle)
-            {
-                if (IsStaticBakeCollider(obstacle))
-                    return true;
-                if (obstacle != null)
-                    ExcludedCount++;
-                return false;
-            }
+                => obstacle != null
+                    && obstacle.attachedRigidbody == null
+                    && !Registered.Contains(obstacle);
 
             public bool Overlaps(Vector3 center, Vector3 halfExtents, LayerMask obstacleLayer, Collider obstacle)
                 => FlowFieldOverlapUtility.OverlapsTarget(
@@ -242,11 +245,6 @@ namespace Common.FlowField
                     ref overlapBuffer, overlapBuffer.Length * 2, INITIAL_OVERLAP_CAPACITY, MAX_OVERLAP_HITS);
             }
         }
-
-        private static bool IsStaticBakeCollider(Collider collider)
-            => collider != null
-                && collider.gameObject.isStatic
-                && collider.attachedRigidbody == null;
 
     }
 
