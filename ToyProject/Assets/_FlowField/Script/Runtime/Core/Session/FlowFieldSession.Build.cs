@@ -13,6 +13,7 @@ namespace Common.FlowField
 
             FlowFieldSessionRequest request = _requests.Latest;
             _requests.Pending = false;
+            _submittedForScheduler = false;
             FlowFieldDirtyFlags pending = _state.DirtyFlags;
             _state.DirtyFlags = FlowFieldDirtyFlags.None;
 
@@ -277,15 +278,17 @@ namespace Common.FlowField
         }
 
         /// <summary>
-        /// A finished solve is published even when newer input has arrived: a Goal
-        /// or obstacle that keeps moving must not starve movers of a field. The
-        /// exceptions are a replaced Grid, whose cells no longer match, and a
-        /// removed Goal, which movers must stop following.
+        /// A solve or composition is published even when newer input has arrived:
+        /// a Goal or obstacle that keeps moving must not starve movers of a field.
+        /// The exceptions are a replaced Grid or stale configuration, whose cells
+        /// no longer match, and a removed Goal, which movers must stop following.
+        /// A request without a Goal keeps GoalRemoved set and has nothing to stop.
         /// </summary>
-        private bool RejectFinishedSolve()
+        private bool RejectOutdatedWork()
         {
             bool gridChanged = (_state.DirtyFlags & FlowFieldDirtyFlags.Grid) != 0;
-            if (!gridChanged && !_state.GoalRemoved)
+            bool goalRemoved = _state.GoalRemoved && _state.Workspace.HasActiveGoal;
+            if (!gridChanged && !goalRemoved)
                 return false;
             RestoreStagingAfterStaleResult(preserveObstacle: true);
             RequeueRejectedGoal();
@@ -310,7 +313,7 @@ namespace Common.FlowField
         {
             if (Lifecycle != FlowFieldSessionLifecycle.Building)
                 return;
-            if (RejectFinishedSolve())
+            if (RejectOutdatedWork())
                 return;
 
             FlowFieldSessionRequest finalRequest = _requests.Latest;
@@ -341,7 +344,7 @@ namespace Common.FlowField
         {
             if (Lifecycle != FlowFieldSessionLifecycle.Building)
                 return;
-            if (RejectFinishedSolve())
+            if (RejectOutdatedWork())
                 return;
             // A failed base solve cannot be replaced by a final-only compose:
             // unlike the successful callback there is no freshly solved Goal

@@ -69,7 +69,7 @@ namespace Common.FlowField
         // operation has finished. The mode-specific sessions keep their
         // different area-cache and rebuild policies behind the Now methods.
         internal bool RegisterModifierCommand(IFlowFieldVectorModifier modifier)
-            => Boundary.TryDefer(() => RunDeferred(() => RegisterModifierNow(modifier)))
+            => Boundary.TryDefer(() => RunDeferred(() => RegisterModifierNow(modifier), "Modifier"))
                 || RegisterModifierNow(modifier);
 
         internal bool UnregisterModifierCommand(IFlowFieldVectorModifier modifier)
@@ -87,19 +87,22 @@ namespace Common.FlowField
         }
 
         internal bool RegisterObstacleCommand(Collider collider)
-            => Boundary.TryDefer(() => RunDeferred(() => RegisterObstacleNow(collider)))
+            => Boundary.TryDefer(() => RunDeferred(() => RegisterObstacleNow(collider), "장애물"))
                 || RegisterObstacleNow(collider);
 
         internal bool UnregisterObstacleCommand(Collider collider)
             => Boundary.TryDefer(() => RunDeferred(() => UnregisterObstacleNow(collider)))
                 || UnregisterObstacleNow(collider);
 
-        // The session may have stopped by the time a deferred command runs, and
-        // stopping already cleared what the command would have changed.
-        private void RunDeferred(Func<bool> command)
+        // The session may have stopped by the time a deferred command runs. Stopping
+        // already cleared what a removal would have changed, but a registration
+        // that was reported as accepted is lost, so it leaves a warning.
+        private void RunDeferred(Func<bool> command, string registration = null)
         {
             if (IsInitialized)
                 command();
+            else if (registration != null)
+                Debug.LogWarning($"[FlowField] 세션이 멈춰 대기 중이던 {registration} 등록을 처리하지 못했습니다.");
         }
 
         private protected abstract bool RegisterModifierNow(IFlowFieldVectorModifier modifier);
