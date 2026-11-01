@@ -55,6 +55,22 @@ namespace Common.FlowField
             return bounds;
         }
 
+        /// <summary>World box enclosing the query boxes of the listed cells.</summary>
+        internal static Bounds StepBounds(FlowFieldGridSpace grid, int[] cells, int count, Vector3 halfExtents)
+        {
+            Vector3 min = FlowFieldVolumeNavigation.CellCenter(grid, cells[0]);
+            Vector3 max = min;
+            for (int i = 1; i < count; i++)
+            {
+                Vector3 center = FlowFieldVolumeNavigation.CellCenter(grid, cells[i]);
+                min = Vector3.Min(min, center);
+                max = Vector3.Max(max, center);
+            }
+            var bounds = new Bounds();
+            bounds.SetMinMax(min - halfExtents, max + halfExtents);
+            return bounds;
+        }
+
         internal void BeginObstacleStep(Bounds stepBox, LayerMask obstacleLayer, FlowFieldVolumeObstacleTracker tracker)
         {
             CollectLayerCandidates(stepBox, obstacleLayer);

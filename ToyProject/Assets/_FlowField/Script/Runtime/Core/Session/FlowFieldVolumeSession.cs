@@ -17,6 +17,7 @@ namespace Common.FlowField
         private const long MemoryBudgetBytes = 512L * 1024L * 1024L;
         private readonly FlowFieldVolumeObstacleTracker _obstacles;
         private Collider[] _registeredObstacleOverlapBuffer;
+        private readonly int[] _obstacleCells = new int[CellsPerStep];
         private readonly FlowFieldVolumeCellQuery _cellQuery = new FlowFieldVolumeCellQuery();
         // Build-only search arrays of the last committed build, reused by the
         // next build of the same size (published arrays are never reused).
@@ -240,6 +241,7 @@ namespace Common.FlowField
             else
             {
                 bool reuseObstacles = CanReuseObstacleQueries(request);
+                bool requeryChangedCells = !reuseObstacles && CanRequeryChangedCells(request);
                 _obstacleQueryRequired = false;
                 _safety.BeginBuild();
                 _build = new BuildContext(request, modifierSnapshots);
@@ -249,15 +251,28 @@ namespace Common.FlowField
                     _build.Blocked = _committed.Blocked;
                     _build.Topology = _committed.Topology;
                 }
+                else if (requeryChangedCells)
+                {
+                    _build.QueryOnlyChangedRegions(_committed.Blocked, _safety.ObservedRegions());
+                }
             }
             _buildReservationBytes = reservation;
             return true;
         }
 
         /// <summary>
-        /// A Goal change keeps the obstacle result unless a tracked obstacle
-        /// changed. Unobserved colliders wait for the next full build.
+        /// Tracked obstacle changes report their regions, so the rest of the published
+        /// mask stays correct. An explicit rebuild or a resubmitted request still
+        /// queries every cell, which picks up a collider that moved without being tracked.
         /// </summary>
+        private bool CanRequeryChangedCells(in FlowFieldVolumeRequest request)
+            => !_obstacleQueryRequired
+                && _committed != null
+                && request.StaticBakeData == null
+                && _safety.UncertainRegionCount > 0
+                && _committed.Request.HasSameObstacleInputs(request);
+
+        /// <summary>A Goal change keeps the obstacle result unless a tracked obstacle changed.</summary>
         private bool CanReuseObstacleQueries(in FlowFieldVolumeRequest request)
             => !_obstacleQueryRequired
                 && _committed != null

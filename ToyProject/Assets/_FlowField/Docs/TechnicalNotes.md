@@ -57,7 +57,7 @@ Modifier 적용 대상은 두 모드가 같은 `FlowFieldVectorUtility.CanApplyM
 
 Unity 오버랩 쿼리는 면만 닿아도 겹침으로 칩니다. 장애물과 Modifier의 셀 판정은 모두 `FlowFieldOverlapUtility.CellHalfExtent`로 0.0001을 뺀 상자를 쓰므로, 격자에 맞춘 Collider는 맞닿은 이웃 셀을 잡지 않습니다. Clearance를 준 만큼의 확장은 그대로 적용합니다.
 
-Volume Modifier의 등록·해제·값·영역·우선순위 변경은 입력이 게시 결과와 같으면 전체 빌드 대신 Modifier 단계만 다시 실행합니다. 이때 게시된 내비게이션 배열을 읽기 전용으로 공유하고 최종 방향·속도 배열만 새로 만듭니다. Goal만 바뀌고 불확실 영역이 없으면 게시된 Blocked와 Topology를 공유하고 나머지 내비게이션 배열은 새로 계산합니다. `RequestRebuild()`와 `NotifyCellsDirty()` 같은 명시적 재빌드는 Goal이 함께 바뀌어도 장애물을 다시 조회합니다. Goal이 같은 셀 안에서만 움직이면 최신 입력만 갱신하고 빌드하지 않습니다. Surface의 풀이 Job은 Goal 단계가 만든 Topology를 재사용합니다.
+Volume Modifier의 등록·해제·값·영역·우선순위 변경은 입력이 게시 결과와 같으면 전체 빌드 대신 Modifier 단계만 다시 실행합니다. 이때 게시된 내비게이션 배열을 읽기 전용으로 공유하고 최종 방향·속도 배열만 새로 만듭니다. Goal만 바뀌고 불확실 영역이 없으면 게시된 Blocked와 Topology를 공유하고 나머지 내비게이션 배열은 새로 계산합니다. `RequestRebuild()`와 `NotifyCellsDirty()` 같은 명시적 재빌드는 Goal이 함께 바뀌어도 장애물을 다시 조회합니다. Goal이 같은 셀 안에서만 움직이면 최신 입력만 갱신하고 빌드하지 않습니다. 추적한 장애물이 바뀌면 그 영역의 셀만 다시 조회하고 나머지는 게시된 Blocked를 복사합니다. 추적되지 않은 Collider는 명시적 재빌드나 같은 요청의 재제출로 전체 조회할 때 반영됩니다. Modifier 단계는 기본 필드를 복사한 뒤 Modifier가 닿을 수 있는 범위의 셀만 돕니다. Surface의 풀이 Job은 Goal 단계가 만든 Topology를 재사용합니다.
 
 Volume 작업은 `FlowFieldBuildScheduler`와 `FlowFieldBuildDriver`의 협력 실행 경계를 사용합니다. 장애물·Modifier 단계는 최대 64셀, StaticBaked 데이터 복사는 최대 4,096원소 단위로 진행합니다. 나머지는 워커 스레드에서 실행되어 이 예산을 쓰지 않습니다. deadline은 단계 호출 사이에 확인하므로 한 단계의 여러 Physics·Modify 호출이나 배열 할당·게시 처리가 예산을 초과할 수 있습니다. 2ms는 협력 CPU 예산이며 프레임 실행 시간이나 전체 빌드 완료 시간의 보장이 아닙니다.
 

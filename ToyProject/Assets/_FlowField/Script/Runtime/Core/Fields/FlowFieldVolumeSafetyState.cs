@@ -25,8 +25,8 @@ namespace Common.FlowField
         }
 
         /// <summary>
-        /// Every build queries all obstacles after it starts, so it resolves
-        /// the regions recorded so far. A discarded build keeps them here until
+        /// Every build queries the obstacles in these regions after it starts, so
+        /// it resolves the regions recorded so far. A discarded build keeps them here until
         /// its replacement publishes.
         /// </summary>
         internal void BeginBuild()
@@ -37,6 +37,8 @@ namespace Common.FlowField
         }
 
         internal void ClearObservedRegions() => _observingBounds.Clear();
+
+        internal Bounds[] ObservedRegions() => _observingBounds.ToArray();
 
         // An obstacle mask/clearance change invalidates the complete volume.
         // Preserve its distinct policy: no dirty-region expansion.

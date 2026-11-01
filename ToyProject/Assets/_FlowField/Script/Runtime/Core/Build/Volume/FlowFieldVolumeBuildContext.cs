@@ -14,6 +14,64 @@ namespace Common.FlowField
         Complete,
     }
 
+    /// <summary>Walks the cells of world-space regions, a few at a time.</summary>
+    internal sealed class FlowFieldCellRegionCursor
+    {
+        private readonly Bounds[] _regions;
+        private int _region;
+        private int _x;
+        private int _y;
+        private int _z;
+        private bool _open;
+
+        internal FlowFieldCellRegionCursor(Bounds[] regions) => _regions = regions;
+
+        /// <summary>Writes the next cells and returns how many. Zero means finished.</summary>
+        internal int Next(FlowFieldGridSpace grid, int[] cells)
+        {
+            int written = 0;
+            while (written < cells.Length && _region < _regions.Length)
+            {
+                // A region must include the cell size and any clearance: every cell
+                // whose query box can touch the change has its center inside.
+                Vector3 min = _regions[_region].min - grid.Origin;
+                Vector3 max = _regions[_region].max - grid.Origin;
+                int minX = Mathf.Clamp(Mathf.FloorToInt(min.x / grid.CellSize), 0, grid.Width - 1);
+                int minY = Mathf.Clamp(Mathf.FloorToInt(min.y / grid.CellSize), 0, grid.Height - 1);
+                int minZ = Mathf.Clamp(Mathf.FloorToInt(min.z / grid.CellSize), 0, grid.Depth - 1);
+                int maxX = Mathf.Clamp(Mathf.FloorToInt(max.x / grid.CellSize), 0, grid.Width - 1);
+                int maxY = Mathf.Clamp(Mathf.FloorToInt(max.y / grid.CellSize), 0, grid.Height - 1);
+                int maxZ = Mathf.Clamp(Mathf.FloorToInt(max.z / grid.CellSize), 0, grid.Depth - 1);
+                if (!_open)
+                {
+                    _open = true;
+                    _x = minX;
+                    _y = minY;
+                    _z = minZ;
+                }
+                while (written < cells.Length && _y <= maxY)
+                {
+                    cells[written++] = grid.ToFlatIndex(_x, _y, _z);
+                    if (++_x > maxX)
+                    {
+                        _x = minX;
+                        if (++_z > maxZ)
+                        {
+                            _z = minZ;
+                            _y++;
+                        }
+                    }
+                }
+                if (_y > maxY)
+                {
+                    _region++;
+                    _open = false;
+                }
+            }
+            return written;
+        }
+    }
+
     /// <summary>
     /// Private workspace and continuation cursors for one Volume3D build.
     /// </summary>
@@ -38,6 +96,7 @@ namespace Common.FlowField
         internal int Cursor;
         internal int GoalIndex = -1;
         internal int AllocationStage;
+        internal bool ObstaclesSynced;
         internal JobHandle SolveHandle;
         internal bool SolveRunning;
         private FlowFieldPinnedArrays _solvePins;
@@ -46,6 +105,10 @@ namespace Common.FlowField
         internal readonly bool IsModifierRecompose;
         // Blocked and Topology are shared read-only with the published field.
         internal bool ReusesObstacleQueries;
+        // Obstacle queries cover only these regions; other cells keep this published mask.
+        internal bool[] PublishedBlocked;
+        private FlowFieldCellRegionCursor _changedCells;
+        internal FlowFieldCellRegionCursor ModifierCells;
 
         internal FlowFieldVolumeBuildContext(
             in FlowFieldVolumeRequest request,
@@ -77,6 +140,26 @@ namespace Common.FlowField
             FinalDirections = new Vector3[Count];
             FinalSpeeds = new float[Count];
             Phase = FlowFieldVolumeBuildPhase.Modifiers;
+        }
+
+        internal void QueryOnlyChangedRegions(bool[] publishedBlocked, Bounds[] regions)
+        {
+            PublishedBlocked = publishedBlocked;
+            _changedCells = new FlowFieldCellRegionCursor(regions);
+        }
+
+        /// <summary>
+        /// Writes the next cells the obstacle stage must query and returns how many.
+        /// Zero means the stage is finished.
+        /// </summary>
+        internal int NextObstacleCells(int[] cells)
+        {
+            if (_changedCells != null)
+                return _changedCells.Next(Request.Grid, cells);
+            int written = 0;
+            for (; written < cells.Length && Cursor < Count; written++)
+                cells[written] = Cursor++;
+            return written;
         }
 
         /// <summary>Solves on a worker thread. Topology is kept when the obstacle result was reused.</summary>
