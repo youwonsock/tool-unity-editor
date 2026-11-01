@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Runs the full test suite against each commit being pushed, when it changes the
+# project or these tools. A push that only touches other files goes straight
+# through. `git push --no-verify` skips it.
+#
+#   git config core.hooksPath Tools/hooks
+set -euo pipefail
+
+root=$(git rev-parse --show-toplevel)
+# Git can set these for a hook, and they would point the snapshot's commands at
+# this checkout instead of the test worktree.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+remote=$1
+zero=0000000000000000000000000000000000000000
+
+while read -r _ local_sha _ remote_sha; do
+    [ "$local_sha" != "$zero" ] || continue
+
+    if [ "$remote_sha" != "$zero" ] && git cat-file -e "$remote_sha^{commit}" 2>/dev/null; then
+        base=$remote_sha
+    else
+        # A new branch: compare with where it left the default branch.
+        base=$(git merge-base "$local_sha" "refs/remotes/$remote/HEAD" 2>/dev/null \
+            || git merge-base "$local_sha" "refs/remotes/$remote/main" 2>/dev/null \
+            || echo)
+    fi
+
+    if [ -n "$base" ] && [ -z "$(git diff --name-only "$base" "$local_sha" -- ToyProject Tools)" ]; then
+        echo "pre-push: no project changes in ${local_sha:0:7}, skipping tests."
+        continue
+    fi
+
+    echo "pre-push: testing ${local_sha:0:7} (git push --no-verify skips this)."
+    UNITY_TEST_TREE=$local_sha "$root/Tools/run-tests.sh" </dev/null || {
+        echo "pre-push: tests failed for ${local_sha:0:7}. Nothing was pushed." >&2
+        exit 1
+    }
+done
