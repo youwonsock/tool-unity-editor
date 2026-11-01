@@ -27,19 +27,19 @@ loop Runnable work at the scheduler boundary
     S -> B : Create context with accepted request\nand per-build arrays / cursors
   end
   alt RuntimeDynamic
-    S -> B : Advance the obstacle phase
+    S -> B : Advance the obstacle phase\n(changed regions only when tracked)
     S -> B : Run topology, Goal, BFS, directions and escape\nas one Burst job on a worker thread
     note over S,B : Each Pump polls the job; no frame waits for it.
   else StaticBaked
     S -> B : Copy validated v6 base data in chunks
   end
   S -> B : Advance Modifier composition phase
-  opt Build complete and owner still current
+  opt Build complete
     S -> P : Commit complete field and clear observed safety regions
     S --> M : FieldChanged
   end
 end
-note over S,O : External getters / CaptureSnapshot / Modify check lifetime and ownership.\nCancelled work stops; it cannot overwrite a newer request or publication.
+note over S,O : User code runs inside the execution boundary: it cannot start other work,\nand events are queued until the outermost operation ends.
 M -> S : Provider.TrySample(position)
 S -> P : Read committed field + latest safety limits
 S --> M : Sample; unsafe / unknown cells can be stopped with true

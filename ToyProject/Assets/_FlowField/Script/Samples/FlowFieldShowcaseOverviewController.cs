@@ -162,8 +162,6 @@ namespace Common.FlowField.Samples
                     _manager.BakeMode == FlowFieldBakeMode.StaticBaked
                         ? "Reloaded and recomposed the baked Surface2D field."
                         : "Requested an explicit RuntimeDynamic rebuild.");
-            if (Input.GetKeyDown(KeyCode.C))
-                RefreshDiagnostics();
             if (Input.GetKeyDown(KeyCode.F))
                 FocusCamera();
 

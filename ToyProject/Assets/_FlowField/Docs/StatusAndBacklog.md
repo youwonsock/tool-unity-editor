@@ -41,11 +41,23 @@ Surface는 이제 Volume과 같은 Scheduler에서 돌고, 끝난 풀이는 Grid
 | Surface 장애물 이동 | 12~15ms | 장애물 Physics 조회와 탈출 방향. 같은 이유로 나누지 않는다 |
 | Surface Modifier 등록 | 7ms | 영향 영역 Physics 조회 |
 | Surface Goal 변경 | 2.4~3.7ms | **목표 2ms를 조금 넘는다.** Goal 준비와 게시 복사는 Burst로 옮겼고, 남은 구간은 한 덩어리로 끝나는 합성 조각과 게시다 |
-| Volume 전부 | 2~4ms | 장애물과 Modifier가 64셀씩 나뉜다 |
+| Volume 전부 | 2.3~5.1ms | 장애물과 Modifier가 64셀씩 나뉜다 |
 
 GC 판정: 게시 배열을 재사용하기 전 움직이는 Volume Goal은 10초에 GC를 330번 일으켰고, GC가 일어난 프레임은 28ms, 그렇지 않은 프레임은 18ms였다. 프레임 예산을 넘겨 교체된 필드의 배열을 다음 빌드가 재사용하게 했다(`FlowFieldVolumeSpareArrays`). 뷰로 내준 필드의 배열은 재사용하지 않는다.
 
 샘플 씬 두 개는 두 베이크 모드 모두 오류 없이 시작하고 나머지 두 씬도 오류가 없었다.
+
+### 2026-11-01 계획의 목표와 결과
+
+| 목표 | 계획 | 결과 |
+| --- | --- | --- |
+| 외부 호출 뒤 소유권 재검사 | 115줄 → 15줄 이하 | 13줄(2단계 끝 기준) |
+| Surface 세션 필드 | 28개 → 15개 이하 | 12개 |
+| 가장 큰 세션 파일 | 841줄 → 600줄 이하 | 579줄 |
+| Volume 100³ 2ms 예산 빌드 | 1,270프레임 → 절반 이하 | 132~218프레임(Player 첫 빌드) |
+| Volume 100³ Directions·BFS·Topology | 2,162ms → 절반 이하 | 워커 Job으로 옮겨 프레임 예산을 쓰지 않는다. 세 단계만 따로 다시 재지는 않았고, Player 첫 빌드 전체는 7.6초 → 2.3~3.7초 |
+| 버려지는 풀이 | Grid 변경·Goal 제거 외 0 | 달성 |
+| 메인 스레드 한 구간 | 2ms | Volume은 2.3~5.1ms, Surface Goal 변경은 2.4~3.7ms로 **목표를 조금 넘는다** |
 
 ## 완료한 작업
 
@@ -128,6 +140,7 @@ Editor Play Mode 확인: Surface 샘플은 장애물이 매 Editor 틱 움직이
 
 | 문제 | 현황 | 해결 방향 |
 | --- | --- | --- |
+| 한글 입력 소스의 샘플 키 | macOS 입력 소스가 한글이면 글자 키가 `Input.GetKeyDown`에 전달되지 않는다(M·R·G·O로 확인). Space와 숫자 키는 동작한다 | 샘플을 조작할 때 영문 입력 소스로 전환 |
 
 ### 검증 공백
 
@@ -135,7 +148,7 @@ Editor Play Mode 확인: Surface 샘플은 장애물이 매 Editor 틱 움직이
 | --- | --- | --- |
 | 베이크 에디터 | `FlowFieldBakeEditorTests`가 임시 씬에서 재베이크의 `_revision` 외 차이 없음, 입력 변경 시 Asset 유지, 대상 소유권, 저장 실패 시 이전 Asset 유지를 검사한다. 조용히 실패한 저장은 Asset이 dirty로 남는 것으로 잡는다. 실제 디스크 오류는 주입한 실패로 대신했다 | 없음 |
 | Windows | 이번 수정은 Metal에서만 실행했다 | Windows·Direct3D 11에서 전체 테스트 재실행 |
-| 실제 플레이 | 실제 포인터로 Surface의 게이트·Next Goal 버튼을, 실제 키로 Surface의 Space·M·R·G·1·2·3·O·F와 Volume StaticBaked의 Space·R·O·G·F, RuntimeDynamic의 Space·O·R·G를 확인했다. Surface의 C는 입력을 받지만, 진단이 매 프레임 갱신되므로 눌러도 결과가 달라지지 않는다. 재조회 수정 뒤 RuntimeDynamic의 Space·O·R·G를 다시 확인했고, 두 HUD의 GPU 전환 이유는 값을 넣어 표시를 확인했다. RMB+WASD 자유 카메라는 확인하지 않았다. 결함 수정 뒤에는 키 입력 대신 공개 API로 Play Mode를 점검했다: Surface의 Goal 변경·Gate·비활성화 후 복귀, Volume StaticBaked 재로드, RuntimeDynamic의 Goal 변경·같은 셀 이동·꺼진 동안의 장애물 등록과 Modifier 연결. 경고와 오류는 없었다 | 필요할 때 카메라 조작과 실제 키 입력 재확인 |
+| 실제 플레이 | 2026-11-01 Editor에서 실제 포인터로 Surface의 Next Goal·게이트 버튼을, 실제 키로 Surface의 Space·M·R·G·1·2·3·O와 Volume StaticBaked의 Space·O·G·R·F, RuntimeDynamic의 Space·O·G·R을 확인했다. 입력을 받아도 결과가 달라지지 않던 Surface의 C는 제거했다. Surface의 F는 눌렀지만 카메라 값의 변화를 비교하지 않았다. Inspector에 GPU 설정이 없고 경고와 오류가 없음을 확인했다. **RMB+WASD 자유 카메라는 확인하지 못했다**: 우클릭을 누른 채 유지하는 입력을 만들 수 없었다. `FlowFieldFreeCamera.cs`는 이 계획에서 바꾸지 않았다 | RMB+WASD 실제 조작 |
 | Player 실행 | Mono arm64 Mac Player에서 위 수치와 샘플 씬 시작을 자동으로 확인했다. IL2CPP는 Android ARM64 APK 빌드까지 성공했고(`Tools/run-il2cpp-build.sh`) 기기에서 실행하지는 않았다 | IL2CPP 기기 실행 |
 | 자동 실행 | 저장소의 `pre-push` 훅이 push하는 커밋을 검사한다. 저장소마다 한 번 켜야 하고 `--no-verify`로 건너뛸 수 있다. 공개 저장소라 외부 PR 코드가 PC에서 실행될 수 있는 자체 호스트 러너는 쓰지 않는다 | 없음 |
 
@@ -150,7 +163,7 @@ Apple M4 Pro·Managed 측정(`FlowFieldPerformanceProbes`). 결과 CSV는 `ToyPr
 | Volume 100³ Modifier 값 변경 | 3,304ms | 424ms | 전체 빌드를 했다. Modifier 단계만 다시 실행한다 |
 | Volume 100³ Goal 변경 | 약 3,100ms | 2,135ms | Goal만 바뀌면 장애물 결과와 Topology를 재사용한다 |
 
-Surface의 재빌드 시간은 위 기준선 표를 본다. 장애물 조회와 합성은 메인 스레드에 남아 있고 프레임 분할은 다음 단계에서 한다.
+Surface의 재빌드 시간은 위 기준선 표를 본다. 합성은 프레임에 나눠 진행하고(`FlowFieldComposeRun`), 표면·장애물 Physics 조회는 한 스냅샷이 되도록 한 프레임에 실행한다.
 
 Volume 100³·장애물 50개·Modifier 3개의 전체 빌드는 약 3.5초다.
 
@@ -162,12 +175,12 @@ Volume 100³·장애물 50개·Modifier 3개의 전체 빌드는 약 3.5초다.
 
 ### 보류한 항목
 
+이전에 보류했던 Player 빌드 검증, Burst 전환, 게시 배열 재사용, 증분 장애물 갱신은 2026-11-01 계획에서 끝냈다.
+
 | 항목 | 보류 이유 | 다시 볼 조건 |
 | --- | --- | --- |
-| Player 빌드 검증 | 2026-10-31 이번 계획 범위에서 제외했다. 실행 기록이 없어 Player에서의 동작은 미확인이다. v6 로드는 `MemoryMarshal`과 `ISerializationCallbackReceiver`에 의존하고, 이 Mac의 2023.2.20f1에는 Mono용 Mac Player만 있다 | Player 배포가 필요해질 때. IL2CPP는 Mac Build Support (IL2CPP) 설치 후 |
-| Burst 전환 | Directions·BFS·Topology가 합계 62%지만 관리 배열 변환이 크고, Burst 동작은 Player에서 확인해야 하는데 Player 검증을 범위에서 제외했다 | Player 검증을 재개하고 Volume 전체 빌드 시간이 문제 될 때 |
-| 게시 배열 재사용 | 빌드 중 GC 0회. 재사용하면 상주 메모리가 약 50MB 늘어난다 | 실제 프로파일에서 재빌드 뒤 GC 스파이크가 문제 될 때 |
-| 증분 장애물 갱신 | 장애물 단계가 전체의 12%다. BFS·방향까지 증분이 아니면 효과가 작다 | 복잡한 Collider 장면에서 이 단계 비중이 커질 때 |
+| Surface Goal 변경의 한 구간 | 2.4~3.7ms로 2ms를 넘지만 프레임은 17ms 안팎이다. 합성 조각과 게시가 한 덩어리로 끝나는 구간이다 | 실제 기기에서 프레임 저하가 보일 때 |
+| UML 이미지 다시 렌더 | 이 PC에 PlantUML jar가 없다. PNG 3장에 GPU 경로가 남아 있고 `.puml` 원본은 최신이다 | jar를 받을 수 있을 때 `TechnicalNotes.md`의 명령으로 렌더 |
 
 ### 구조
 
@@ -186,12 +199,18 @@ Volume 100³·장애물 50개·Modifier 3개의 전체 빌드는 약 3.5초다.
 - `FlowFieldRequestInbox`: 두 세션의 최신 요청과 대기 표시. Surface의 실행 중 요청 복사본은 없앴다.
 - Surface 단계: `FlowFieldSurfaceBaseStage`(표면·장애물·Goal), `FlowFieldSurfaceSolveStage`(풀이 실행), `FlowFieldSurfaceComposeStage`(합성 진행). 세션은 이 단계들의 순서와 수명만 맡는다.
 - `FlowFieldManager.Modes.cs`: Surface와 Volume의 차이. Manager 본체에는 모드 분기가 없다. `FlowFieldManager.Validation.cs`, `FlowFieldManager.Bake.cs`는 설정 검증과 베이크 연동이다.
-- 세션의 `.Build`, `.Sampling`, `.Views`, `.Memory`, `.Obstacles`는 partial 파일이다. 필드를 공유하므로 읽기 쉬워졌을 뿐 결합이 줄지는 않았다. 가장 큰 세션 파일은 `FlowFieldVolumeSession.cs`(583줄)다.
+- 세션의 `.Build`, `.Sampling`, `.Views`, `.Memory`, `.Obstacles`는 partial 파일이다. 필드를 공유하므로 읽기 쉬워졌을 뿐 결합이 줄지는 않았다. 가장 큰 세션 파일은 `FlowFieldVolumeSession.cs`(579줄)다.
 - Surface 세션의 필드는 28개에서 12개로 줄었다.
 - 2026-11-01 `FlowFieldExecutionBoundary`로 복잡성의 근원을 없앴다: 이벤트 핸들러는 작업이 끝난 뒤 실행하고 Modifier 코드에서는 다른 작업을 시작할 수 없어, 외부 호출 뒤 소유권 재검사가 필요 없다. 외부 호출 뒤 소유권을 확인하는 줄이 115줄에서 13줄이 됐고, 남은 13줄은 늦게 도착하는 GPU 콜백용이다. 도달할 수 없게 된 재진입 테스트 케이스 224개를 지우고, Manager를 통한 거부·지연·이벤트 순서 테스트 케이스 73개를 추가했다. Modifier 계약은 getter 3개에서 `Observe()` 하나로 바뀌어 직접 구현한 코드는 고쳐야 한다.
 
 ## 다음 순서
 
-2026-10-31 재분석에서 찾은 결함과 백로그, 구조 개편을 마쳤다. Player 실행은 범위에서 제외했다. 남은 필수 항목은 이 Mac에서 할 수 없는 Windows·Direct3D 11 전체 테스트 재실행이다.
+2026-11-01 계획의 10단계를 마쳤다. 남은 항목은 이 Mac에서 할 수 없거나 확인하지 못한 것들이다.
+
+1. Windows·Direct3D 11 전체 테스트 재실행
+2. GPU 제거 판단을 다른 하드웨어에서 재확인. 판정은 이 Mac(Apple M4 Pro)의 측정만 근거로 했다
+3. IL2CPP 기기 실행
+4. RMB+WASD 자유 카메라 실제 조작
+5. UML 이미지 3장 다시 렌더
 
 테스트와 프로브 실행 방법은 [README.md](../README.md#검증-기록)를 따른다. 단계별 XML·로그와 프로브 CSV는 Git에서 제외되는 `ToyProject/Logs/`에 있어 작업한 PC에만 남는다.
