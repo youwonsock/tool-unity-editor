@@ -252,6 +252,7 @@ namespace Common.FlowField
                     _build.ReusesObstacleQueries = true;
                     _build.Blocked = _committed.Blocked;
                     _build.Topology = _committed.Topology;
+                    _build.EscapeDirections = _committed.EscapeDirections;
                 }
                 else if (requeryChangedCells)
                 {

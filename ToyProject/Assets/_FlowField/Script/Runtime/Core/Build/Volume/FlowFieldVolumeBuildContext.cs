@@ -103,7 +103,8 @@ namespace Common.FlowField
         private int[] _solveCancel;
         private int[] _solveGoal;
         internal readonly bool IsModifierRecompose;
-        // Blocked and Topology are shared read-only with the published field.
+        // Blocked, Topology and EscapeDirections follow only from the obstacles,
+        // so they are shared read-only with the published field.
         internal bool ReusesObstacleQueries;
         // Obstacle queries cover only these regions; other cells keep this published mask.
         internal bool[] PublishedBlocked;
@@ -164,7 +165,7 @@ namespace Common.FlowField
             return written;
         }
 
-        /// <summary>Solves on a worker thread. Topology is kept when the obstacle result was reused.</summary>
+        /// <summary>Solves on a worker thread. What follows only from the obstacles is kept when their result was reused.</summary>
         internal unsafe void StartSolve()
         {
             FlowFieldGridSpace grid = Request.Grid;
@@ -190,6 +191,7 @@ namespace Common.FlowField
                 Depth = grid.Depth,
                 CellSize = grid.CellSize,
                 BuildTopology = !ReusesObstacleQueries,
+                BuildEscape = !ReusesObstacleQueries,
                 HasGoal = Request.HasGoal,
                 RequestedGoal = Request.HasGoal ? Request.GoalCell : -1,
                 GoalInfluenceRadius = Request.GoalInfluenceRadius,

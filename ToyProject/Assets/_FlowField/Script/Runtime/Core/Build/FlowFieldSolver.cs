@@ -342,44 +342,6 @@ namespace Common.FlowField
             return bestIndex;
         }
 
-        public static bool CanTraverse(
-            FlowFieldGridSpace grid,
-            FlowFieldSurfaceData surface,
-            FlowFieldWorkspace workspace,
-            int current,
-            int currentX,
-            int currentZ,
-            int directionIndex,
-            out int neighbor)
-        {
-            neighbor = -1;
-            if (!surface.HasConnection(current, directionIndex))
-                return false;
-
-            int dx = FlowFieldNeighborUtility.DeltaX[directionIndex];
-            int dz = FlowFieldNeighborUtility.DeltaZ[directionIndex];
-            int nx = currentX + dx;
-            int nz = currentZ + dz;
-            if (!grid.IsLocalInBounds(nx, nz))
-                return false;
-
-            neighbor = grid.ToFlatIndex(nx, nz);
-            if (!IsCellTraversable(surface, workspace, neighbor))
-                return false;
-
-            if (!FlowFieldNeighborUtility.IsDiagonal(directionIndex))
-                return true;
-
-            int firstDirection = dx > 0 ? 0 : 1;
-            int secondDirection = dz > 0 ? 2 : 3;
-            int orthogonalX = grid.ToFlatIndex(currentX + dx, currentZ);
-            int orthogonalZ = grid.ToFlatIndex(currentX, currentZ + dz);
-            return surface.HasConnection(current, firstDirection)
-                && surface.HasConnection(current, secondDirection)
-                && IsCellTraversable(surface, workspace, orthogonalX)
-                && IsCellTraversable(surface, workspace, orthogonalZ);
-        }
-
         public static bool IsCellTraversable(
             FlowFieldSurfaceData surface,
             FlowFieldWorkspace workspace,
@@ -394,26 +356,5 @@ namespace Common.FlowField
             => direction.sqrMagnitude > FlowFieldVectorUtility.DIRECTION_EPSILON_SQR
                 ? direction.normalized
                 : Vector3.zero;
-
-        /// <summary>
-        /// Returns a deterministic integer score equivalent to minimizing the
-        /// candidate cell's squared XZ distance to the Goal. The step is one
-        /// of the eight immediate neighbor offsets, so the score remains
-        /// within signed 32-bit range for the supported grid size.
-        /// </summary>
-        internal static int CalculateGoalAlignmentScore(
-            int currentX,
-            int currentZ,
-            int goalX,
-            int goalZ,
-            int stepX,
-            int stepZ)
-        {
-            int goalDeltaX = goalX - currentX;
-            int goalDeltaZ = goalZ - currentZ;
-            int dot = stepX * goalDeltaX + stepZ * goalDeltaZ;
-            int stepLengthSqr = stepX * stepX + stepZ * stepZ;
-            return 2 * dot - stepLengthSqr;
-        }
     }
 }
