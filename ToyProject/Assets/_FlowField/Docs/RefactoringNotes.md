@@ -1,5 +1,7 @@
 # FlowField 구조 개선 및 회귀 검증
 
+이 문서는 단계별 결정의 기록입니다. 앞쪽 절은 당시 구조를 설명하므로 GPU 경로처럼 지금은 없는 내용을 포함합니다. 현재 동작은 [README](../README.md)와 [TechnicalNotes.md](TechnicalNotes.md)를 봅니다.
+
 검증 환경: Unity 2023.2.20f1 / macOS / Metal, 2026-10-23~24.
 
 ## 보존 범위
@@ -337,7 +339,7 @@ Modifier 재진입 수정의 전후 XML·로그·소스 차이·보존 해시·�
 
 Volume 100^3(장애물 40개) 단계별 시간에서 Topology가 17.8초로 전체의 70%였다. 경계가 아닌 셀의 이웃·코너 검사를 평탄 인덱스 오프셋과 Blocked 조회로 바꿔 1.5초가 되었다. 전체 빌드는 26.1/32.3/55.4초(등록 장애물 0/10/50)에서 5.8/5.9/6.4초, 2ms 예산 빌드는 12,585에서 2,214프레임, 장애물 1개 이동 후 재빌드는 31.3에서 6.0초가 되었다.
 
-계획에서 측정 후 결정한 항목과 중단한 항목(다시 볼 조건은 [StatusAndBacklog.md](StatusAndBacklog.md) 참고):
+계획에서 측정 후 결정한 항목과 중단한 항목:
 
 - **Surface 버전·지연 플래그 제거(4단계 일부) 중단**: 버전 값은 오래된 BFS 결과 판정 외에도 Surface Source 재진입 감지, BFS 전 취소된 Goal 재시도(빌드 밖에서도 사용), 설정 무효화 후 명시적 재빌드 게이트에 쓰인다. 계획의 중단 조건에 따라 유지했다.
 - **게시 배열 재사용(7b) 보류**: Volume 빌드 중 GC가 0회였고, 재사용하면 상주 메모리가 약 50MB 늘어난다.
@@ -360,7 +362,7 @@ $env:FLOWFIELD_PERF = "1"   # 성능 프로브: 위 명령에 -testCategory Perf
 
 ## 이동 장애물 결함과 유지보수 정리 (2026-10-31)
 
-검증 환경: Unity 2023.2.20f1 / macOS / Metal(Apple M4 Pro). 커밋별 내용은 [StatusAndBacklog.md](StatusAndBacklog.md#유지보수-작업-2026-10-31)에 있다.
+검증 환경: Unity 2023.2.20f1 / macOS / Metal(Apple M4 Pro).
 
 - **낡은 BFS 결과 게시**: 이전에는 장애물 관측이 하나라도 있으면 BFS 결과를 버렸다. Goal Dirty는 이미 소비되고 Goal Tracker는 새 Goal을 기록한 뒤라, 마스크가 그대로면 Goal 변경이 사라졌고 풀이 때마다 움직이면 게시가 멈췄다. 샘플링이 최신 장애물을 다시 검사하므로 장애물만 낡은 결과는 게시한다. 이 경로를 지나는 테스트가 없어 드러나지 않았다.
 - **불확실 영역 분리**: 세대 번호만 붙이면 겹치는 영역이 합쳐지며 계속 최신 세대가 되어 지워지지 않는다. 빌드 시작 때 목록을 옮기는 방식을 택했다. 폐기된 빌드의 목록은 다음 빌드가 게시될 때 함께 지운다. 모든 빌드가 장애물을 처음부터 다시 조회하므로 안전하다.
@@ -378,9 +380,9 @@ $env:FLOWFIELD_PERF = "1"   # 성능 프로브: 위 명령에 -testCategory Perf
 
 ## 남은 작업 일괄 정리 (2026-11-01)
 
-검증 환경: Unity 2023.2.20f1 / macOS / Metal(Apple M4 Pro), Mono arm64 Mac Player. PR별 내용은 [StatusAndBacklog.md](StatusAndBacklog.md#2026-11-01-계획), 최종 수치는 [같은 문서의 Player 기준선](StatusAndBacklog.md#player-기준선-2026-11-01)에 있다. Windows 전용 작업을 뺀 나머지를 한 계획으로 묶었고, 구버전 호환과 공개 계약 유지는 요구하지 않았다.
+검증 환경: Unity 2023.2.20f1 / macOS / Metal(Apple M4 Pro), Mono arm64 Mac Player. 최종 수치는 [README의 Player 측정값](../README.md#player-측정값)에 있다. Windows 전용 작업을 뺀 나머지를 한 계획으로 묶었고, 구버전 호환과 공개 계약 유지는 요구하지 않았다.
 
-이 계획으로 위 절의 "Burst 미전환"과 현황 문서의 Player 빌드 검증, 게시 배열 재사용, 증분 장애물 갱신 보류는 뒤집혔다.
+이 계획으로 위 절의 "Burst 미전환"과 앞서 보류했던 Player 빌드 검증, 게시 배열 재사용, 증분 장애물 갱신은 뒤집혔다.
 
 - **측정부터**: Player 수치 없이 Burst와 GPU를 판단할 수 없어 측정 도구를 먼저 만들었다. 이 측정에서 `isStatic`이 Player에서 항상 false라 Surface가 벽을 무시하던 결함이 나왔다. 정적 장애물 규칙을 Rigidbody 없이 등록하지 않은 Collider로 바꿨다.
 - **pre-push 훅**: 저장소가 공개라 외부 fork가 `pull_request` 워크플로를 수정할 수 있다. Unity 라이선스가 있는 PC에 자체 호스트 러너를 두지 않고 저장소 안의 훅으로 검사한다. 켜지 않은 PC와 `--no-verify`는 막지 못한다.
@@ -406,3 +408,18 @@ PR #26~#37을 다시 검토해 찾은 결함이다. 수정 전 코드에서 재�
 - **탈출 방향 공유**: 탈출 방향은 `Blocked`로만 정해지므로, 장애물 결과를 재사용하는 빌드는 `Topology`처럼 공유하고 다시 계산하지 않는다. 측정이 실행마다 최대 2배 흔들려 개선폭은 단정하지 않았다. 2회 측정에서 Volume Goal 변경 104~132ms, 이동 Goal 초당 9.4~9.5회로 나빠지지 않았다.
 - **풀이 실패 경로 제거**: Burst 풀이는 실패를 보고하지 않는다. `failed` 콜백과 `OnBfsFailed`는 주입 백엔드 테스트에서만 쓰여 함께 지웠다. 백엔드가 시작을 거부하는 경로는 유지한다.
 - **측정 어셈블리**: `Common.FlowField.PlayerProbe`는 `UNITY_EDITOR || FLOWFIELD_PLAYER_PROBE`일 때만 컴파일한다. 측정 빌드만 define을 넘긴다.
+
+## 마무리 (2026-11-01)
+
+| 목표 | 계획 | 결과 |
+| --- | --- | --- |
+| 외부 호출 뒤 소유권 재검사 | 115줄 → 15줄 이하 | 13줄(2단계 끝 기준). 남은 13줄은 GPU 콜백용이었고 3단계에서 GPU 경로를 지웠다 |
+| Surface 세션 필드 | 28개 → 15개 이하 | 13개 |
+| 가장 큰 세션 파일 | 841줄 → 600줄 이하 | 572줄 |
+| Volume 100³ 2ms 예산 빌드 | 1,270프레임 → 절반 이하 | 132~218프레임(Player 첫 빌드) |
+| Volume 100³ Directions·BFS·Topology | 2,162ms → 절반 이하 | 워커 Job으로 옮겨 프레임 예산을 쓰지 않는다. 세 단계만 따로 다시 재지는 않았고, Player 첫 빌드 전체는 7.6초 → 2.3~3.7초 |
+| 메인 스레드 한 구간 | 2ms | Volume 2.3~5.1ms, Surface Goal 변경 2.4~3.7ms로 조금 넘는다 |
+
+마지막 검토에서 런타임에 호출자가 없는 `FlowFieldVolumeSession.Cancel`을 지우고, 등록 명령이 지연될 때만 클로저를 할당하게 했다. FlowField에는 지울 마이그레이션 코드나 사용하지 않는 직렬화 필드가 없었다. 베이크 `_formatVersion` 검사는 다른 형식을 거부하는 검증이라 유지한다.
+
+작업 현황 문서(`StatusAndBacklog.md`)는 이때 지웠다. 측정값과 확인하지 않은 범위는 README로 옮겼고, 이전 내용은 Git 기록에 있다.

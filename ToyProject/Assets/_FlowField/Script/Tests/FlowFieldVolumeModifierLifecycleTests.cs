@@ -74,7 +74,6 @@ namespace Common.FlowField.Tests
                     _session.Submit(Request(Replacement));
                     break;
                 case "fault": _session.ReportFault(new InvalidOperationException("Explicit modifier interruption")); break;
-                case "cancel": _session.Cancel(); break;
                 default: throw new ArgumentOutOfRangeException(nameof(action));
             }
         }

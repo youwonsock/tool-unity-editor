@@ -52,7 +52,7 @@ Volume3D는 Bounds 전체를 CellSize 정육면체 셀로 분할하고 `x + Widt
 
 내비게이션 계산은 Burst Job(`FlowFieldNavigationJobs.cs`)입니다. 게시 결과의 관리 배열을 고정(pin)해 포인터로 넘기므로 샘플링과 베이크 저장 형식은 그대로입니다. 모든 Job은 `FloatMode.Strict`로 컴파일해 Vector3 연산과 같은 값을 냅니다. Volume은 Obstacles 단계 뒤 Topology·Goal·BFS·방향·탈출을 Job 하나로 워커 스레드에서 실행합니다. Surface는 Goal 단계의 Topology를 메인 스레드에서 Burst로 실행하고, BFS와 방향은 `IFlowFieldSolveBackend`를 거쳐 워커 스레드에서 실행합니다. Manager는 매 프레임 완료를 확인하므로 풀이를 기다리는 프레임은 없습니다. 베이크와 테스트처럼 세션을 직접 Pump하는 쪽은 완료까지 기다립니다.
 
-2026-11-01 Player 측정에서 Burst 경로가 모든 시나리오의 최대 프레임 시간과 게시 시간에서 GPU보다 나아 Compute Shader 경로를 제거했습니다. 수치는 [StatusAndBacklog.md](StatusAndBacklog.md)에 있습니다.
+2026-11-01 Player 측정에서 Burst 경로가 모든 시나리오의 최대 프레임 시간과 게시 시간에서 GPU보다 나아 Compute Shader 경로를 제거했습니다. 수치는 [RefactoringNotes.md](RefactoringNotes.md#남은-작업-일괄-정리-2026-11-01)에 있습니다. 현재 측정값은 [README](../README.md#player-측정값)를 봅니다.
 
 Modifier 적용 대상은 두 모드가 같은 `FlowFieldVectorUtility.CanApplyModifier`로 판정합니다. 막힌 셀, Goal Anchor, 도달 불가 셀과 기본 방향이 0인 셀은 Modifier를 적용하지 않고 기본 속도 0을 유지합니다. Surface 빌드에서 BFS가 예정되면 BFS 전 합성을 생략하고, BFS 완료 후 전체를 한 번 합성합니다. Surface의 부분 합성 영역은 실제 Modifier 마스크 범위에서 계산합니다.
 
