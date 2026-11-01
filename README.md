@@ -33,6 +33,12 @@ git config core.hooksPath Tools/hooks
 Tools/run-player-probe.sh
 ```
 
+IL2CPP로 번역과 네이티브 컴파일이 되는지는 Android 빌드로 확인합니다. 기기에서 실행하지는 않습니다.
+
+```bash
+Tools/run-il2cpp-build.sh
+```
+
 ## 시스템 문서
 
 - FlowField — [README](./ToyProject/Assets/_FlowField/README.md)

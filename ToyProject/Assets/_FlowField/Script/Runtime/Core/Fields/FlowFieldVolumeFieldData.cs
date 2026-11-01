@@ -21,6 +21,8 @@ namespace Common.FlowField
         internal readonly float[] FinalSpeeds;
         internal readonly Vector3[] EscapeDirections;
         internal readonly long ResultId;
+        // Set when a view exposes these arrays, which then must never be reused.
+        internal bool HandedOut;
 
         internal FlowFieldVolumeFieldData(
             in FlowFieldVolumeRequest request,

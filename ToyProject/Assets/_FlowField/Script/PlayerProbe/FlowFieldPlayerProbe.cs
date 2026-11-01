@@ -222,6 +222,9 @@ namespace Common.FlowField.PlayerProbe
             int frames = 0;
             int gc = GC.CollectionCount(0);
             float elapsed = 0f;
+            int lastGc = gc;
+            double maxWithGc = 0d;
+            double maxWithoutGc = 0d;
             while (elapsed < seconds)
             {
                 float angle = elapsed * cellsPerSecond / radius;
@@ -234,6 +237,12 @@ namespace Common.FlowField.PlayerProbe
                 if (frameMs > 33.4d)
                     over33++;
                 frames++;
+                // The delta reports the frame before this one, as does the count below.
+                if (lastGc != GC.CollectionCount(0))
+                    maxWithGc = Math.Max(maxWithGc, frameMs);
+                else
+                    maxWithoutGc = Math.Max(maxWithoutGc, frameMs);
+                lastGc = GC.CollectionCount(0);
             }
             string scenario = $"{mode}.movingGoal";
             Record(scenario, "publicationsPerSecond", (manager.Revision - firstRevision) / elapsed);
@@ -241,6 +250,8 @@ namespace Common.FlowField.PlayerProbe
             Record(scenario, "framesOver33ms", over33);
             Record(scenario, "frames", frames);
             Record(scenario, "gcCollections", GC.CollectionCount(0) - gc);
+            Record(scenario, "maxFrameWithGcMs", maxWithGc);
+            Record(scenario, "maxFrameWithoutGcMs", maxWithoutGc);
             RecordHealth(scenario, manager);
 
             // Leave no solve running behind the next scenario.

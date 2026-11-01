@@ -61,10 +61,7 @@ namespace Common.FlowField
             long bytes = 64L;
             bytes = checked(bytes + _obstacles.SweepBufferBytes);
             bytes = checked(bytes + _cellQuery.BufferBytes);
-            bytes = checked(bytes
-                + 4L * (_spareCosts?.Length ?? 0)
-                + 4L * (_spareQueue?.Length ?? 0)
-                + (_spareInfluence?.Length ?? 0));
+            bytes = checked(bytes + _spares.Bytes);
             if (_registeredObstacleOverlapBuffer != null)
                 bytes = checked(bytes + 8L * _registeredObstacleOverlapBuffer.Length);
             bytes = checked(bytes + 8L * _modifierRegistry.Count);

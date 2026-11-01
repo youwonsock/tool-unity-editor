@@ -1,4 +1,5 @@
 using System;
+using Unity.Jobs;
 using UnityEngine;
 
 namespace Common.FlowField
@@ -40,6 +41,56 @@ namespace Common.FlowField
                 _finalSpeeds,
                 _modifierInfluence);
 
+        private unsafe bool CopyRegion(
+            int width,
+            FlowFieldWorkspace workspace,
+            bool includeBase,
+            int minX,
+            int maxX,
+            int minZ,
+            int maxZ)
+        {
+            var pins = new FlowFieldPinnedArrays(FlowFieldFieldCommitJob.PinnedArrayCount);
+            var changed = new bool[1];
+            try
+            {
+                new FlowFieldFieldCommitJob
+                {
+                    Blocked = pins.Pin(_blocked),
+                    BlockedSource = pins.Pin(workspace.Blocked),
+                    Topology = pins.Pin(_topologyMasks),
+                    TopologySource = pins.Pin(workspace.TopologyMasks),
+                    GoalFlags = pins.Pin(_goalFlags),
+                    GoalFlagsSource = pins.Pin(workspace.GoalFlags),
+                    Next = pins.Pin(_nextCells),
+                    NextSource = pins.Pin(workspace.NextCells),
+                    BaseDirections = pins.Pin(_baseDirections),
+                    BaseDirectionsSource = pins.Pin(workspace.BaseDirections),
+                    BaseSpeeds = pins.Pin(_baseSpeeds),
+                    BaseSpeedsSource = pins.Pin(workspace.BaseSpeedMultipliers),
+                    FinalDirections = pins.Pin(_finalDirections),
+                    FinalDirectionsSource = pins.Pin(workspace.FinalDirections),
+                    FinalSpeeds = pins.Pin(_finalSpeeds),
+                    FinalSpeedsSource = pins.Pin(workspace.FinalSpeedMultipliers),
+                    Influence = pins.Pin(_modifierInfluence),
+                    InfluenceSource = pins.Pin(workspace.ModifierInfluence),
+                    Changed = pins.Pin(changed),
+                    Width = width,
+                    MinX = minX,
+                    MaxX = maxX,
+                    MinZ = minZ,
+                    MaxZ = maxZ,
+                    IncludeBase = includeBase,
+                    Epsilon = Mathf.Epsilon,
+                }.Run();
+            }
+            finally
+            {
+                pins.Release();
+            }
+            return changed[0];
+        }
+
         internal bool CommitFromWorkspace(
             FlowFieldGridSpace grid,
             FlowFieldSurfaceData surface,
@@ -76,32 +127,7 @@ namespace Common.FlowField
                 minZ = Mathf.Clamp(region.MinZ, 0, grid.Depth - 1);
                 maxZ = Mathf.Clamp(region.MaxZ, 0, grid.Depth - 1);
             }
-            for (int z = minZ; z <= maxZ; z++)
-            for (int x = minX; x <= maxX; x++)
-            {
-                int i = grid.ToFlatIndex(x, z);
-                if (includeBase)
-                {
-                    any |= _blocked[i] != workspace.Blocked[i]
-                        || _topologyMasks[i] != workspace.TopologyMasks[i]
-                        || _goalFlags[i] != workspace.GoalFlags[i]
-                        || _nextCells[i] != workspace.NextCells[i]
-                        || _baseDirections[i] != workspace.BaseDirections[i]
-                        || !Mathf.Approximately(_baseSpeeds[i], workspace.BaseSpeedMultipliers[i]);
-                    _blocked[i] = workspace.Blocked[i];
-                    _topologyMasks[i] = workspace.TopologyMasks[i];
-                    _goalFlags[i] = workspace.GoalFlags[i];
-                    _nextCells[i] = workspace.NextCells[i];
-                    _baseDirections[i] = workspace.BaseDirections[i];
-                    _baseSpeeds[i] = workspace.BaseSpeedMultipliers[i];
-                }
-                any |= _finalDirections[i] != workspace.FinalDirections[i]
-                    || !Mathf.Approximately(_finalSpeeds[i], workspace.FinalSpeedMultipliers[i])
-                    || _modifierInfluence[i] != workspace.ModifierInfluence[i];
-                _finalDirections[i] = workspace.FinalDirections[i];
-                _finalSpeeds[i] = workspace.FinalSpeedMultipliers[i];
-                _modifierInfluence[i] = workspace.ModifierInfluence[i];
-            }
+            any |= CopyRegion(grid.Width, workspace, includeBase, minX, maxX, minZ, maxZ);
 
             // Equal geometry may arrive in a new immutable snapshot. Keep
             // published identity/revision aligned without inventing a cell change.

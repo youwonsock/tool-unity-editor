@@ -693,4 +693,125 @@ namespace Common.FlowField
                 && Traversable(x + Width * (z + dz));
         }
     }
+
+    /// <summary>The whole-grid influence mask of the Surface2D Goal stage.</summary>
+    [BurstCompile(FloatMode = FloatMode.Strict, FloatPrecision = FloatPrecision.Standard)]
+    internal unsafe struct FlowFieldSurfaceInfluenceJob : IJob
+    {
+        private const byte ValidSurface = 1;
+
+        [NativeDisableUnsafePtrRestriction] internal bool* Influence;
+        [NativeDisableUnsafePtrRestriction] internal byte* SurfaceFlags;
+        [NativeDisableUnsafePtrRestriction] internal float* Heights;
+
+        internal int Width;
+        internal int Depth;
+        internal float CellSize;
+        internal Vector3 Origin;
+        internal Vector3 Anchor;
+        internal float Radius;
+
+        public void Execute()
+        {
+            float radiusSqr = Radius * Radius;
+            for (int z = 0; z < Depth; z++)
+            for (int x = 0; x < Width; x++)
+            {
+                int index = x + z * Width;
+                bool inside = (SurfaceFlags[index] & ValidSurface) != 0;
+                if (inside && Radius > 0f)
+                {
+                    float dx = Origin.x + (x * CellSize + CellSize * 0.5f) - Anchor.x;
+                    float dy = Heights[index] - Anchor.y;
+                    float dz = Origin.z + (z * CellSize + CellSize * 0.5f) - Anchor.z;
+                    inside = dx * dx + dy * dy + dz * dz <= radiusSqr;
+                }
+                Influence[index] = inside;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Copies a composed region into the published field and reports whether
+    /// anything changed. The comparisons match Vector3 != and Mathf.Approximately.
+    /// </summary>
+    [BurstCompile(FloatMode = FloatMode.Strict, FloatPrecision = FloatPrecision.Standard)]
+    internal unsafe struct FlowFieldFieldCommitJob : IJob
+    {
+        [NativeDisableUnsafePtrRestriction] internal bool* Blocked;
+        [NativeDisableUnsafePtrRestriction] internal bool* BlockedSource;
+        [NativeDisableUnsafePtrRestriction] internal byte* Topology;
+        [NativeDisableUnsafePtrRestriction] internal byte* TopologySource;
+        [NativeDisableUnsafePtrRestriction] internal FlowFieldGoalFlags* GoalFlags;
+        [NativeDisableUnsafePtrRestriction] internal FlowFieldGoalFlags* GoalFlagsSource;
+        [NativeDisableUnsafePtrRestriction] internal int* Next;
+        [NativeDisableUnsafePtrRestriction] internal int* NextSource;
+        [NativeDisableUnsafePtrRestriction] internal Vector3* BaseDirections;
+        [NativeDisableUnsafePtrRestriction] internal Vector3* BaseDirectionsSource;
+        [NativeDisableUnsafePtrRestriction] internal float* BaseSpeeds;
+        [NativeDisableUnsafePtrRestriction] internal float* BaseSpeedsSource;
+        [NativeDisableUnsafePtrRestriction] internal Vector3* FinalDirections;
+        [NativeDisableUnsafePtrRestriction] internal Vector3* FinalDirectionsSource;
+        [NativeDisableUnsafePtrRestriction] internal float* FinalSpeeds;
+        [NativeDisableUnsafePtrRestriction] internal float* FinalSpeedsSource;
+        [NativeDisableUnsafePtrRestriction] internal bool* Influence;
+        [NativeDisableUnsafePtrRestriction] internal bool* InfluenceSource;
+        [NativeDisableUnsafePtrRestriction] internal bool* Changed;
+
+        internal const int PinnedArrayCount = 19;
+
+        internal int Width;
+        internal int MinX;
+        internal int MaxX;
+        internal int MinZ;
+        internal int MaxZ;
+        internal bool IncludeBase;
+        internal float Epsilon;
+
+        public void Execute()
+        {
+            bool any = false;
+            for (int z = MinZ; z <= MaxZ; z++)
+            for (int x = MinX; x <= MaxX; x++)
+            {
+                int i = x + z * Width;
+                if (IncludeBase)
+                {
+                    any |= Blocked[i] != BlockedSource[i]
+                        || Topology[i] != TopologySource[i]
+                        || GoalFlags[i] != GoalFlagsSource[i]
+                        || Next[i] != NextSource[i]
+                        || Differs(BaseDirections[i], BaseDirectionsSource[i])
+                        || !Approximately(BaseSpeeds[i], BaseSpeedsSource[i]);
+                    Blocked[i] = BlockedSource[i];
+                    Topology[i] = TopologySource[i];
+                    GoalFlags[i] = GoalFlagsSource[i];
+                    Next[i] = NextSource[i];
+                    BaseDirections[i] = BaseDirectionsSource[i];
+                    BaseSpeeds[i] = BaseSpeedsSource[i];
+                }
+                any |= Differs(FinalDirections[i], FinalDirectionsSource[i])
+                    || !Approximately(FinalSpeeds[i], FinalSpeedsSource[i])
+                    || Influence[i] != InfluenceSource[i];
+                FinalDirections[i] = FinalDirectionsSource[i];
+                FinalSpeeds[i] = FinalSpeedsSource[i];
+                Influence[i] = InfluenceSource[i];
+            }
+            *Changed = any;
+        }
+
+        private static bool Differs(Vector3 a, Vector3 b)
+        {
+            float x = a.x - b.x;
+            float y = a.y - b.y;
+            float z = a.z - b.z;
+            return !(x * x + y * y + z * z < 9.99999944E-11f);
+        }
+
+        private bool Approximately(float a, float b)
+        {
+            float largest = System.Math.Max(System.Math.Abs(a), System.Math.Abs(b));
+            return System.Math.Abs(b - a) < System.Math.Max(0.000001f * largest, Epsilon * 8f);
+        }
+    }
 }

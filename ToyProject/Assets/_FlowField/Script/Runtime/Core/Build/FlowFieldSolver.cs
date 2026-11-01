@@ -157,20 +157,32 @@ namespace Common.FlowField
             int anchorIndex,
             float influenceRadius)
         {
-            if (influenceRadius <= 0f)
+            unsafe
             {
-                for (int index = 0; index < grid.CellCount; index++)
-                    workspace.InfluenceMask[index] = surface.IsSurfaceValid(index);
-                return;
+                var pins = new FlowFieldPinnedArrays(3);
+                try
+                {
+                    new FlowFieldSurfaceInfluenceJob
+                    {
+                        Influence = pins.Pin(workspace.InfluenceMask),
+                        SurfaceFlags = pins.Pin(surface.Flags),
+                        Heights = pins.Pin(surface.Heights),
+                        Width = grid.Width,
+                        Depth = grid.Depth,
+                        CellSize = grid.CellSize,
+                        Origin = grid.Origin,
+                        Anchor = surface.GetCellCenter(grid, anchorIndex),
+                        Radius = influenceRadius,
+                    }.Run();
+                }
+                finally
+                {
+                    pins.Release();
+                }
             }
 
-            Vector3 center = surface.GetCellCenter(grid, anchorIndex);
-            float radiusSqr = influenceRadius * influenceRadius;
-            for (int index = 0; index < grid.CellCount; index++)
-            {
-                workspace.InfluenceMask[index] = surface.IsSurfaceValid(index)
-                    && (surface.GetCellCenter(grid, index) - center).sqrMagnitude <= radiusSqr;
-            }
+            if (influenceRadius <= 0f)
+                return;
 
             workspace.InfluenceMask[anchorIndex] = true;
         }

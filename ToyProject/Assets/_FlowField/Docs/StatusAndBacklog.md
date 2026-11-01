@@ -6,7 +6,7 @@
 
 | 항목 | 상태 |
 | --- | --- |
-| 테스트 | macOS·Metal(Apple M4 Pro)에서 `Common.FlowField.Tests` 397개 통과, 실패 0, 성능 프로브 12개 제외. 저장소 루트의 `Tools/run-tests.sh`로 실행한다. Windows·Direct3D 11 마지막 기록은 이번 수정 이전의 466개 |
+| 테스트 | macOS·Metal(Apple M4 Pro)에서 `Common.FlowField.Tests` 407개 통과, 실패 0, 성능 프로브 12개 제외. 저장소 루트의 `Tools/run-tests.sh`로 실행한다. Windows·Direct3D 11 마지막 기록은 이번 수정 이전의 466개 |
 | 베이크 | Surface·Volume 모두 v6만 허용. 마이그레이션 코드는 없다. 두 모드 모두 호출 스레드에서 풀이한다. 2026-11-01 샘플 Asset을 다시 구워 보니 Volume은 내용이 같았고, Surface는 GPU로 구운 방향이 최대 6e-8 달라져(경로는 같음) 새 Asset으로 바꿨다 |
 | 공개 계약 | Provider·Controller API, Manager 직렬화 설정, 씬·Prefab의 GUID 참조 유지. `FlowFieldManager.GpuFallbackReason`, `_frontierComputeShader`, `_maxGpuWaves` 제거(2026-11-01) |
 | 성능 (100³ Volume, Managed, Windows 기록) | 전체 빌드 26~55초 → 약 6초, 2ms 예산 빌드 12,585 → 2,214프레임, 장애물 1개 이동 후 재빌드 31.3 → 6.0초 |
@@ -15,36 +15,35 @@
 
 `Tools/run-player-probe.sh`로 Mono arm64 Mac Player(Apple M4 Pro, Metal, 60fps 목표)에서 측정했다. 장면은 Surface 316×316 벽 40개, Volume 100³ 장애물 40개다. 다른 작업이 함께 돌던 PC라 같은 시나리오도 실행마다 2배까지 달라진다. 비교는 프레임 시간 위주로 하고, 시간 비교는 여러 번 측정해서 한다.
 
-| 시나리오 | Managed C# | GPU | Burst 워커(현재) |
+| 시나리오 | Managed C# | GPU | 현재 |
 | --- | --- | --- | --- |
-| Surface Goal 변경, 게시까지 | 75~105ms | 274~345ms | 39~49ms |
-| Surface Goal 변경, 가장 긴 프레임 | 66~83ms | 33~66ms | 17ms |
-| Surface 장애물 이동, 게시까지 / 가장 긴 프레임 | 98~110ms / 83ms | 349~525ms / 50~66ms | 81~182ms / 17~33ms |
-| Surface Goal 초당 8셀 이동, 초당 게시 / 가장 긴 프레임 | 8.7회 / 84ms | 2.1~2.4회 / 67~100ms | 7.2회 / 33ms |
-| Volume 첫 빌드, 게시까지 / 가장 긴 프레임 | 7.6초 / 20ms | 11.5초 / 21ms | 2.3초 / 20ms |
-| Volume Goal 변경, 게시까지 / 가장 긴 프레임 | 8.1~16.1초 / 20ms | 3.9~7.9초 / 21~22ms | 0.13초 / 17ms |
+| Surface Goal 변경, 게시까지 | 75~105ms | 274~345ms | 65~115ms |
+| Surface Goal 변경, 메인 스레드 최장 구간 | 66~83ms | 재지 않음 | 2.4~3.7ms |
+| Surface 장애물 이동, 게시까지 / 최장 구간 | 98~110ms / 83ms | 349~525ms / 재지 않음 | 98~272ms / 12~15ms |
+| Surface Goal 초당 8셀 이동, 초당 게시 | 8.7회 | 2.1~2.4회 | 8.3회 |
+| Volume 첫 빌드, 게시까지 / 가장 긴 프레임 | 7.6초 / 20ms | 11.5초 / 21ms | 2.3~3.7초 / 20ms |
+| Volume Goal 변경, 게시까지 / 가장 긴 프레임 | 8.1~16.1초 / 20ms | 3.9~7.9초 / 21~22ms | 0.11~0.14초 / 17ms |
 | Volume 장애물 이동, 게시까지 | 10.5~15.4초 | 6.8~13.5초 | 0.2초 |
-| Volume Goal 초당 8셀 이동, 초당 게시 | 0~0.1회 | 0.1~0.2회 | 9.4회 |
-| 풀이 중 Release | 해당 없음 | 해당 없음 | 1ms 미만 |
-| Volume 재빌드 뒤 Mono 힙 | 109MiB | 117MiB | 109MiB |
+| Volume Modifier 값 변경, 게시까지 | 1.5~4.3초 | 1.5~3.4초 | 0.25~0.29초 |
+| Volume Goal 초당 8셀 이동, 초당 게시 / 10초간 GC / 가장 긴 프레임 | 0~0.1회 / 5~8회 / 20~25ms | 0.1~0.2회 / 7~10회 / 21~33ms | 9.5회 / 0회 / 18ms |
+| 풀이 중 Release | 해당 없음 | 해당 없음 | 2ms 미만 |
+| Volume 재빌드 뒤 Mono 힙 | 109MiB | 117MiB | 117MiB |
 
-Burst 값은 같은 날 다른 실행이다. GPU 제거를 판정한 실행에서 Burst와 GPU를 같이 재면 Surface Goal 변경 17~23ms 대 274~314ms, Volume Goal 변경 0.65초 대 3.9초였다. 제거 기준(최대 프레임 시간이 GPU보다 나쁘지 않고 총 빌드 시간이 1.1배 이내)을 모든 시나리오에서 넘겨 Compute Shader 경로를 제거했다. 이 판정은 이 Mac 하나의 결과다. Windows나 모바일 GPU에서는 재지 않았다.
+GPU 제거를 판정한 실행에서 Burst와 GPU를 같이 재면 Surface Goal 변경 17~23ms 대 274~314ms, Volume Goal 변경 0.65초 대 3.9초였다. 제거 기준(최대 프레임 시간이 GPU보다 나쁘지 않고 총 빌드 시간이 1.1배 이내)을 모든 시나리오에서 넘겨 Compute Shader 경로를 제거했다. **이 판정은 이 Mac 하나의 결과다.** Windows나 모바일 GPU에서는 재지 않았다.
 
-Surface는 이제 Volume과 같은 Scheduler에서 돌고, 끝난 풀이는 Grid가 바뀌거나 Goal이 사라진 경우가 아니면 버리지 않는다. 그 결과 움직이는 Goal의 초당 게시가 7.2회에서 9.0회가 됐다.
+Surface는 이제 Volume과 같은 Scheduler에서 돌고, 끝난 풀이는 Grid가 바뀌거나 Goal이 사라진 경우가 아니면 버리지 않는다. Volume은 추적한 변경의 영역만 다시 조회하고, Modifier 합성도 영향 범위의 셀만 돈다. 전체 빌드와 해시가 같은 것을 장애물 이동·등록·해제·파괴에서 확인한다. 추적되지 않은 Collider는 `RequestRebuild()`나 같은 요청의 재제출로 전체 조회할 때 반영된다.
 
 메인 스레드에서 한 번에 끝나는 구간의 프레임당 최장 시간(`longestPumpMs`)은 다음과 같다. 예산은 2ms다.
 
 | 시나리오 | 최장 구간 | 내용 |
 | --- | --- | --- |
-| Surface 첫 빌드 | 120ms | 표면 Raycast 전체. 한 스냅샷이 되도록 한 프레임에 실행한다 |
-| Surface 장애물 이동 | 13~25ms | 장애물 Physics 조회와 탈출 방향 |
-| Surface Goal 변경 | 4~9ms | **나눌 수 있는데 아직 나누지 않았다.** Goal 준비와 게시 복사가 포함된다 |
+| Surface 첫 빌드 | 115~120ms | 표면 Raycast 전체. 한 스냅샷이 되도록 한 프레임에 실행한다 |
+| Surface 장애물 이동 | 12~15ms | 장애물 Physics 조회와 탈출 방향. 같은 이유로 나누지 않는다 |
 | Surface Modifier 등록 | 7ms | 영향 영역 Physics 조회 |
+| Surface Goal 변경 | 2.4~3.7ms | **목표 2ms를 조금 넘는다.** Goal 준비와 게시 복사는 Burst로 옮겼고, 남은 구간은 한 덩어리로 끝나는 합성 조각과 게시다 |
 | Volume 전부 | 2~4ms | 장애물과 Modifier가 64셀씩 나뉜다 |
 
-Volume은 추적한 변경의 영역만 다시 조회한다. 장애물 이동 게시가 2.4초에서 0.2초가 됐고, 전체 빌드와 해시가 같은 것을 장애물 이동·등록·해제·파괴에서 확인한다. 추적되지 않은 Collider는 `RequestRebuild()`나 같은 요청의 재제출로 전체 조회할 때 반영된다. Modifier 합성도 영향 범위의 셀만 돈다.
-
-Surface의 장애물 이동에 남은 시간은 메인 스레드의 Physics 조회다. 움직이는 Goal에서 Volume은 10초에 GC를 334번 일으킨다. 빌드마다 배열을 새로 만들기 때문이며, 가장 긴 프레임은 24ms다.
+GC 판정: 게시 배열을 재사용하기 전 움직이는 Volume Goal은 10초에 GC를 330번 일으켰고, GC가 일어난 프레임은 28ms, 그렇지 않은 프레임은 18ms였다. 프레임 예산을 넘겨 교체된 필드의 배열을 다음 빌드가 재사용하게 했다(`FlowFieldVolumeSpareArrays`). 뷰로 내준 필드의 배열은 재사용하지 않는다.
 
 샘플 씬 두 개는 두 베이크 모드 모두 오류 없이 시작하고 나머지 두 씬도 오류가 없었다.
 
@@ -137,7 +136,7 @@ Editor Play Mode 확인: Surface 샘플은 장애물이 매 Editor 틱 움직이
 | 베이크 에디터 | `FlowFieldBakeEditorTests`가 임시 씬에서 재베이크의 `_revision` 외 차이 없음, 입력 변경 시 Asset 유지, 대상 소유권, 저장 실패 시 이전 Asset 유지를 검사한다. 조용히 실패한 저장은 Asset이 dirty로 남는 것으로 잡는다. 실제 디스크 오류는 주입한 실패로 대신했다 | 없음 |
 | Windows | 이번 수정은 Metal에서만 실행했다 | Windows·Direct3D 11에서 전체 테스트 재실행 |
 | 실제 플레이 | 실제 포인터로 Surface의 게이트·Next Goal 버튼을, 실제 키로 Surface의 Space·M·R·G·1·2·3·O·F와 Volume StaticBaked의 Space·R·O·G·F, RuntimeDynamic의 Space·O·R·G를 확인했다. Surface의 C는 입력을 받지만, 진단이 매 프레임 갱신되므로 눌러도 결과가 달라지지 않는다. 재조회 수정 뒤 RuntimeDynamic의 Space·O·R·G를 다시 확인했고, 두 HUD의 GPU 전환 이유는 값을 넣어 표시를 확인했다. RMB+WASD 자유 카메라는 확인하지 않았다. 결함 수정 뒤에는 키 입력 대신 공개 API로 Play Mode를 점검했다: Surface의 Goal 변경·Gate·비활성화 후 복귀, Volume StaticBaked 재로드, RuntimeDynamic의 Goal 변경·같은 셀 이동·꺼진 동안의 장애물 등록과 Modifier 연결. 경고와 오류는 없었다 | 필요할 때 카메라 조작과 실제 키 입력 재확인 |
-| Player 실행 | Mono arm64 Mac Player에서 위 기준선과 샘플 씬 시작을 자동으로 확인했다. 실제 입력 조작과 IL2CPP 실행은 확인하지 않았다 | IL2CPP 빌드 시도 |
+| Player 실행 | Mono arm64 Mac Player에서 위 수치와 샘플 씬 시작을 자동으로 확인했다. IL2CPP는 Android ARM64 APK 빌드까지 성공했고(`Tools/run-il2cpp-build.sh`) 기기에서 실행하지는 않았다 | IL2CPP 기기 실행 |
 | 자동 실행 | 저장소의 `pre-push` 훅이 push하는 커밋을 검사한다. 저장소마다 한 번 켜야 하고 `--no-verify`로 건너뛸 수 있다. 공개 저장소라 외부 PR 코드가 PC에서 실행될 수 있는 자체 호스트 러너는 쓰지 않는다 | 없음 |
 
 ### 성능

@@ -153,13 +153,7 @@ namespace Common.FlowField.Tests
             for (int i = 0; i < 1000 && !manager.IsReady && !manager.IsFaulted; i++)
                 manager.VolumeSession.Pump(1000d);
             Assert.That(manager.IsReady, Is.True, manager.LastError);
-            foreach (string field in new[] { "_spareCosts", "_spareQueue", "_spareInfluence" })
-            {
-                object spare = typeof(FlowFieldVolumeSession)
-                    .GetField(field, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
-                    .GetValue(manager.VolumeSession);
-                Assert.That(spare, Is.Null, field);
-            }
+            Assert.That(manager.VolumeSession.HasSpareArrays, Is.False);
             manager.Release();
         }
 
