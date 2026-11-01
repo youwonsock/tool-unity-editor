@@ -107,7 +107,11 @@ namespace Common.FlowField
             // constructing the entire Volume3D staging graph in one frame.
             switch (build.AllocationStage)
             {
-                case 0: build.Blocked ??= new bool[build.Count]; break;
+                case 0:
+                    build.Blocked ??= new bool[build.Count];
+                    if (build.PublishedBlocked != null)
+                        Array.Copy(build.PublishedBlocked, build.Blocked, build.Count);
+                    break;
                 case 1: build.Topology ??= new uint[build.Count]; break;
                 case 2: build.GoalFlags = new FlowFieldGoalFlags[build.Count]; break;
                 case 3: build.Next = new int[build.Count]; break;
@@ -137,18 +141,24 @@ namespace Common.FlowField
 
         private bool StepObstacles(BuildContext build)
         {
-            if (build.Cursor == 0)
+            if (!build.ObstaclesSynced)
+            {
                 Physics.SyncTransforms();
-            int end = Math.Min(build.Cursor + CellsPerStep, build.Count);
+                build.ObstaclesSynced = true;
+            }
+            int count = build.NextObstacleCells(_obstacleCells);
+            if (count == 0)
+                return true;
+
             FlowFieldGridSpace grid = build.Request.Grid;
             Vector3 half = ObstacleHalfExtents(grid.CellSize, build.Request.ObstacleClearance);
             _cellQuery.BeginObstacleStep(
-                FlowFieldVolumeCellQuery.StepBounds(grid, build.Cursor, end, half),
+                FlowFieldVolumeCellQuery.StepBounds(grid, _obstacleCells, count, half),
                 build.Request.ObstacleLayer,
                 _obstacles);
-            for (; build.Cursor < end; build.Cursor++)
+            for (int i = 0; i < count; i++)
             {
-                int index = build.Cursor;
+                int index = _obstacleCells[i];
                 grid.FromFlatIndex(index, out int x, out int y, out int z);
                 Vector3 center = grid.LocalToWorldCenter(x, y, z);
                 var cellBox = new Bounds(center, half * 2f);
@@ -168,48 +178,41 @@ namespace Common.FlowField
                         ref _registeredObstacleOverlapBuffer);
                 }
             }
-            return build.Cursor >= build.Count;
+            return false;
         }
 
         private bool StepModifiers(BuildContext build)
         {
-            // Without Modifiers the final field is the base field. Copying it at
-            // once costs far less than walking every cell over many frames.
-            if (build.Modifiers.Length == 0)
+            // The final field starts as the base field, so only cells a Modifier
+            // can reach need to be walked. They are rarely more than a small part.
+            if (build.ModifierCells == null)
             {
                 Array.Copy(build.Directions, build.FinalDirections, build.Count);
                 Array.Copy(build.Speeds, build.FinalSpeeds, build.Count);
-                build.Cursor = build.Count;
-                return true;
-            }
-
-            if (build.Cursor == 0 && build.Modifiers.Length > 0)
+                if (build.Modifiers.Length == 0)
+                    return true;
                 Physics.SyncTransforms();
-
-            int end = Math.Min(build.Cursor + CellsPerStep, build.Count);
-            Vector3 cellHalf = Vector3.one * FlowFieldOverlapUtility.CellHalfExtent(build.Request.Grid.CellSize);
-            if (build.Modifiers.Length > 0)
-            {
-                _cellQuery.BeginModifierStep(
-                    FlowFieldVolumeCellQuery.StepBounds(build.Request.Grid, build.Cursor, end, cellHalf),
-                    build.Modifiers);
+                build.ModifierCells = new FlowFieldCellRegionCursor(ModifierReach(build));
             }
+
+            int count = build.ModifierCells.Next(build.Request.Grid, _obstacleCells);
+            if (count == 0)
+                return true;
+
+            Vector3 cellHalf = Vector3.one * FlowFieldOverlapUtility.CellHalfExtent(build.Request.Grid.CellSize);
+            _cellQuery.BeginModifierStep(
+                FlowFieldVolumeCellQuery.StepBounds(build.Request.Grid, _obstacleCells, count, cellHalf),
+                build.Modifiers);
             using FlowFieldExecutionBoundary.OperationScope userCode = Boundary.EnterUserCode();
-            for (; build.Cursor < end; build.Cursor++)
+            for (int i = 0; i < count; i++)
             {
-                int index = build.Cursor;
+                int index = _obstacleCells[i];
                 if (!FlowFieldVectorUtility.CanApplyModifier(
                         build.Blocked[index],
                         build.GoalFlags[index],
                         build.Directions[index]))
-                {
-                    build.FinalDirections[index] = build.Directions[index];
-                    build.FinalSpeeds[index] = build.Speeds[index];
                     continue;
-                }
 
-                build.FinalDirections[index] = build.Directions[index];
-                build.FinalSpeeds[index] = build.Speeds[index];
                 build.Request.Grid.FromFlatIndex(index, out int x, out int y, out int z);
                 Vector3 center = CellCenter(build.Request.Grid, index);
                 FlowFieldVectorState current = new FlowFieldVectorState(
@@ -248,7 +251,34 @@ namespace Common.FlowField
                 build.FinalDirections[index] = current.Direction;
                 build.FinalSpeeds[index] = current.SpeedMultiplier;
             }
-            return build.Cursor >= build.Count;
+            return false;
+        }
+
+        // One region around every Modifier, so a cell is walked only once and
+        // each Modifier still applies in priority order.
+        private static Bounds[] ModifierReach(BuildContext build)
+        {
+            Bounds reach = default;
+            bool any = false;
+            foreach (FlowFieldModifierWorkItem modifier in build.Modifiers)
+            {
+                if (!FlowFieldModifierMaskBuilder.IsUsableTrigger(modifier.InfluenceCollider))
+                    continue;
+                Bounds bounds = modifier.InfluenceCollider.bounds;
+                if (any)
+                {
+                    reach.Encapsulate(bounds);
+                }
+                else
+                {
+                    reach = bounds;
+                    any = true;
+                }
+            }
+            if (!any)
+                return Array.Empty<Bounds>();
+            reach.Expand(build.Request.Grid.CellSize * 2f);
+            return new[] { reach };
         }
 
         private void CommitBuild(BuildContext build)

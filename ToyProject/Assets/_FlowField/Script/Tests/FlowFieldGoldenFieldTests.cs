@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace Common.FlowField.Tests
 {
@@ -30,6 +31,55 @@ namespace Common.FlowField.Tests
             scenario.Modifier(new Vector3(8f, 1f, 8f), new Vector3(4f, 6f, 4f), 20, -45f, 1.5f);
             scenario.Build();
             return scenario;
+        }
+
+        [TestCase("move")]
+        [TestCase("register")]
+        [TestCase("unregister")]
+        [TestCase("destroy")]
+        public void VolumeObstacleChangeMatchesAFullBuild(string change)
+        {
+            Vector3 before = new Vector3(10.5f, 4.5f, 10.5f);
+            Vector3 after = new Vector3(14.5f, 6.5f, 8.5f);
+            Vector3 size = new Vector3(3f, 3f, 5f);
+
+            string full;
+            using (FlowFieldScenarioFixture.VolumeScenario scenario = CreateVolume())
+            {
+                if (change == "move")
+                    scenario.RegisteredObstacle(after, size);
+                else if (change == "register")
+                    scenario.RegisteredObstacle(before, size);
+                scenario.Build();
+                full = scenario.Hash().ToString();
+            }
+
+            using (FlowFieldScenarioFixture.VolumeScenario scenario = CreateVolume())
+            {
+                BoxCollider obstacle = change == "register" ? null : scenario.RegisteredObstacle(before, size);
+                scenario.Build();
+                switch (change)
+                {
+                    case "move":
+                        obstacle.transform.position = after;
+                        break;
+                    case "register":
+                        scenario.RegisteredObstacle(before, size);
+                        break;
+                    case "unregister":
+                        scenario.Session.UnregisterDynamicObstacle(obstacle);
+                        Object.DestroyImmediate(obstacle.gameObject);
+                        break;
+                    case "destroy":
+                        Object.DestroyImmediate(obstacle.gameObject);
+                        break;
+                }
+                Physics.SyncTransforms();
+                scenario.Session.Pump(0.001d);
+                Assert.That(scenario.Session.IsRebuilding, Is.True, "The change must start a rebuild.");
+                scenario.Finish();
+                Assert.That(scenario.Hash().ToString(), Is.EqualTo(full));
+            }
         }
 
         [Test]
