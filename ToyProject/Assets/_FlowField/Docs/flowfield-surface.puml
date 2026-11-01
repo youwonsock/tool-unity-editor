@@ -17,7 +17,8 @@ participant "FieldStore" as P
 
 M -> S : Submit latest request
 note over M,S : Submit records input; it does not enter a nested build.
-M -> S : FixedUpdate: Pump
+M -> S : LateUpdate: observe and Submit
+note over M,S : BuildDriver.LateUpdate then pumps the session.
 S -> B : Prepare or reuse immutable Surface
 alt RuntimeDynamic
   S -> B : Prepare obstacles, topology and Goal

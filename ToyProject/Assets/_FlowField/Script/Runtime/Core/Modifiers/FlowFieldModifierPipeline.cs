@@ -31,6 +31,7 @@ namespace Common.FlowField
     {
         private readonly FlowFieldModifierRegistry _registry;
         private readonly List<FlowFieldModifierLayer> _runtimeLayers = new List<FlowFieldModifierLayer>(16);
+        private readonly FlowFieldComposeRun _composeRun = new FlowFieldComposeRun();
         private Collider[] _overlapBuffer;
 
         internal FlowFieldModifierPipeline(FlowFieldModifierRegistry registry)
@@ -150,7 +151,8 @@ namespace Common.FlowField
             entry.InfluenceRect = maskRect;
         }
 
-        internal void RebuildFinalField(
+        /// <summary>Takes the Modifier snapshots for one composition, then <see cref="StepFinalField"/> runs it.</summary>
+        internal void BeginFinalField(
             in FlowFieldModifierBuildRequest request,
             Vector3 defaultDirection,
             FlowFieldCellRect dirty,
@@ -169,29 +171,18 @@ namespace Common.FlowField
             if (!FlowFieldGridSpace.IsFinite(request.ObstacleCheckCenterOffset))
                 throw new ArgumentOutOfRangeException(nameof(request.ObstacleCheckCenterOffset));
 
-            if (!dirty.IsValid)
-                dirty = FlowFieldCellRect.Full(request.Grid);
-
             BuildRuntimeLayers(request.Grid.CellCount);
-            if (rebuildBase)
-            {
-                FlowFieldFinalFieldComposer.Compose(
-                    request.Grid,
-                    request.Surface,
-                    request.Workspace,
-                    defaultDirection,
-                    _runtimeLayers);
-            }
-            else
-            {
-                FlowFieldFinalFieldComposer.ApplyModifiers(
-                    request.Grid,
-                    request.Surface,
-                    request.Workspace,
-                    _runtimeLayers,
-                    dirty);
-            }
+            _composeRun.Begin(
+                request.Grid,
+                request.Surface,
+                request.Workspace,
+                defaultDirection,
+                _runtimeLayers,
+                dirty,
+                rebuildBase);
         }
+
+        internal bool StepFinalField(in FlowFieldBuildBudget budget) => _composeRun.Step(in budget);
 
         internal void Clear()
         {

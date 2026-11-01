@@ -21,6 +21,10 @@ namespace Common.FlowField
         private static readonly Func<double> ElapsedMilliseconds = () => Timer.Elapsed.TotalMilliseconds;
 
         internal static int Count => Operations.Count;
+        // The longest main-thread pass since the last read, for the Player probe.
+        internal static double LongestPumpMilliseconds { get; private set; }
+
+        internal static void ResetLongestPump() => LongestPumpMilliseconds = 0d;
 
         internal static void Register(IFlowFieldBuildOperation operation)
         {
@@ -96,6 +100,7 @@ namespace Common.FlowField
             finally
             {
                 _pumping = false;
+                LongestPumpMilliseconds = Math.Max(LongestPumpMilliseconds, Timer.Elapsed.TotalMilliseconds);
             }
         }
 

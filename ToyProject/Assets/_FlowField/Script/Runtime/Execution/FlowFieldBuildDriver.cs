@@ -30,7 +30,7 @@ namespace Common.FlowField
         private void LateUpdate()
         {
             if (Application.isPlaying)
-                FlowFieldBuildScheduler.PumpAll(2.0d);
+                FlowFieldBuildScheduler.PumpAll(FlowFieldBuildSettings.BudgetMilliseconds);
         }
     }
 }

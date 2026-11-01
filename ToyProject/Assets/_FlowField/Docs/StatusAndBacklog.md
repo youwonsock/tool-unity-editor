@@ -6,7 +6,7 @@
 
 | 항목 | 상태 |
 | --- | --- |
-| 테스트 | macOS·Metal(Apple M4 Pro)에서 `Common.FlowField.Tests` 389개 통과, 실패 0, 성능 프로브 12개 제외. 저장소 루트의 `Tools/run-tests.sh`로 실행한다. Windows·Direct3D 11 마지막 기록은 이번 수정 이전의 466개 |
+| 테스트 | macOS·Metal(Apple M4 Pro)에서 `Common.FlowField.Tests` 397개 통과, 실패 0, 성능 프로브 12개 제외. 저장소 루트의 `Tools/run-tests.sh`로 실행한다. Windows·Direct3D 11 마지막 기록은 이번 수정 이전의 466개 |
 | 베이크 | Surface·Volume 모두 v6만 허용. 마이그레이션 코드는 없다. 맞닿은 셀 판정을 바꾼 뒤 Surface Asset을 다시 베이크해 보니 막힌 셀 변경이 0개여서 Asset은 그대로 뒀다 |
 | 공개 계약 | Provider·Controller API, Manager 직렬화 설정, 씬·Prefab의 GUID 참조 유지. `FlowFieldManager.GpuFallbackReason`, `_frontierComputeShader`, `_maxGpuWaves` 제거(2026-11-01) |
 | 성능 (100³ Volume, Managed, Windows 기록) | 전체 빌드 26~55초 → 약 6초, 2ms 예산 빌드 12,585 → 2,214프레임, 장애물 1개 이동 후 재빌드 31.3 → 6.0초 |
@@ -29,6 +29,18 @@
 | Volume 재빌드 뒤 Mono 힙 | 109MiB | 117MiB | 109MiB |
 
 Burst 값은 같은 날 다른 실행이다. GPU 제거를 판정한 실행에서 Burst와 GPU를 같이 재면 Surface Goal 변경 17~23ms 대 274~314ms, Volume Goal 변경 0.65초 대 3.9초였다. 제거 기준(최대 프레임 시간이 GPU보다 나쁘지 않고 총 빌드 시간이 1.1배 이내)을 모든 시나리오에서 넘겨 Compute Shader 경로를 제거했다. 이 판정은 이 Mac 하나의 결과다. Windows나 모바일 GPU에서는 재지 않았다.
+
+Surface는 이제 Volume과 같은 Scheduler에서 돌고, 끝난 풀이는 Grid가 바뀌거나 Goal이 사라진 경우가 아니면 버리지 않는다. 그 결과 움직이는 Goal의 초당 게시가 7.2회에서 9.0회가 됐다.
+
+메인 스레드에서 한 번에 끝나는 구간의 프레임당 최장 시간(`longestPumpMs`)은 다음과 같다. 예산은 2ms다.
+
+| 시나리오 | 최장 구간 | 내용 |
+| --- | --- | --- |
+| Surface 첫 빌드 | 120ms | 표면 Raycast 전체. 한 스냅샷이 되도록 한 프레임에 실행한다 |
+| Surface 장애물 이동 | 13~25ms | 장애물 Physics 조회와 탈출 방향 |
+| Surface Goal 변경 | 4~9ms | **나눌 수 있는데 아직 나누지 않았다.** Goal 준비와 게시 복사가 포함된다 |
+| Surface Modifier 등록 | 7ms | 영향 영역 Physics 조회 |
+| Volume 전부 | 2~4ms | 장애물과 Modifier가 64셀씩 나뉜다 |
 
 Surface의 장애물 이동과 Volume의 장애물 이동에 남은 시간은 메인 스레드의 Physics 조회다. 움직이는 Goal에서 Volume은 10초에 GC를 334번 일으킨다. 빌드마다 배열을 새로 만들기 때문이며, 가장 긴 프레임은 24ms다.
 
@@ -115,7 +127,6 @@ Editor Play Mode 확인: Surface 샘플은 장애물이 매 Editor 틱 움직이
 
 | 문제 | 현황 | 해결 방향 |
 | --- | --- | --- |
-| Surface: Goal이 풀이보다 자주 바뀌면 풀이가 하나 걸러 버려지고, 같은 셀 안의 이동도 풀이를 무효화 | 일회성 변경의 낡은 결과를 게시하지 않는 계약의 비용. 이제 워커 스레드 경로의 기본 동작이다 | 다음 단계(Surface 단계 분할)에서 해결 |
 
 ### 검증 공백
 
@@ -156,7 +167,6 @@ Volume 100³·장애물 50개·Modifier 3개의 전체 빌드는 약 3.5초다.
 | Burst 전환 | Directions·BFS·Topology가 합계 62%지만 관리 배열 변환이 크고, Burst 동작은 Player에서 확인해야 하는데 Player 검증을 범위에서 제외했다 | Player 검증을 재개하고 Volume 전체 빌드 시간이 문제 될 때 |
 | 게시 배열 재사용 | 빌드 중 GC 0회. 재사용하면 상주 메모리가 약 50MB 늘어난다 | 실제 프로파일에서 재빌드 뒤 GC 스파이크가 문제 될 때 |
 | 증분 장애물 갱신 | 장애물 단계가 전체의 12%다. BFS·방향까지 증분이 아니면 효과가 작다 | 복잡한 Collider 장면에서 이 단계 비중이 커질 때 |
-| Surface 버전·지연 플래그 제거 | 오래된 결과 판정 외에 Source 재진입 감지, Goal 재시도, 명시적 재빌드 게이트에도 쓰인다. `FlowFieldSurfaceRebuildTracker`로 한곳에 모았다 | Surface Session을 다시 설계할 때 |
 
 ### 구조
 

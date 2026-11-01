@@ -519,6 +519,37 @@ namespace Common.FlowField.Tests
             Assert.That(manager.IsFaulted, Is.False, manager.LastError);
         }
 
+        [Test]
+        public void BuildBudgetRejectsAnUnusableValue([Values(0d, -1d, double.NaN, double.PositiveInfinity)] double value)
+        {
+            double before = FlowFieldBuildSettings.BudgetMilliseconds;
+            Assert.Throws<ArgumentOutOfRangeException>(() => FlowFieldBuildSettings.BudgetMilliseconds = value);
+            Assert.That(FlowFieldBuildSettings.BudgetMilliseconds, Is.EqualTo(before));
+        }
+
+        [UnityTest]
+        public IEnumerator SurfaceBuildsWhileTheGameTimeIsStopped()
+        {
+            yield return new EnterPlayMode();
+            FlowFieldManager manager = CreateManager(volume: false);
+            yield return WaitUntilReady(manager);
+            int revision = manager.Revision;
+            float timeScale = Time.timeScale;
+            Time.timeScale = 0f;
+            try
+            {
+                manager.SetGoal(FlowFieldGoalRequest.Position(new Vector3(0.5f, 0f, 0.5f)));
+                float deadline = Time.realtimeSinceStartup + 5f;
+                while (manager.Revision == revision && Time.realtimeSinceStartup < deadline)
+                    yield return null;
+                Assert.That(manager.Revision, Is.GreaterThan(revision), manager.LastError);
+            }
+            finally
+            {
+                Time.timeScale = timeScale;
+            }
+        }
+
         private sealed class HookModifier : IFlowFieldVectorModifier, IFlowFieldModifierSnapshot
         {
             internal Collider Collider;

@@ -37,7 +37,7 @@ FlowField는 Manager가 작성 설정과 현재 입력을 확인한 뒤 Surface2
 
 1. `FlowFieldManager`가 Bounds·CellSize·공간 모드·Goal·장애물·Modifier 설정을 수집합니다.
 2. Surface2D는 표면 데이터와 8방향 탐색을, Volume3D는 XYZ 셀과 26방향 탐색을 사용하는 모드별 요청을 실행합니다.
-3. RuntimeDynamic은 최신 입력을 수락해 처리를 예약하고, StaticBaked는 v6 Bake Asset을 로드합니다. Surface는 Manager의 `FixedUpdate`, Volume은 협력 Scheduler가 작업을 진행합니다.
+3. RuntimeDynamic은 최신 입력을 수락해 처리를 예약하고, StaticBaked는 v6 Bake Asset을 로드합니다. 두 모드 모두 협력 Scheduler가 작업을 진행합니다. 메인 스레드 예산은 프로젝트 전체에 하나이며 `FlowFieldBuildSettings.BudgetMilliseconds`(기본 2ms)로 정합니다.
 4. 계산 결과에 Default Direction과 작업별 Modifier Snapshot을 합성합니다.
 5. Surface2D는 `FlowFieldFieldStore`, Volume3D는 `FlowFieldVolumeFieldData`에 완성된 필드를 게시합니다.
 6. `IFlowFieldProvider`가 방향·속도·상태를 읽기 전용으로 제공하고, 이동 주체가 이를 자신의 업데이트에서 적용합니다.
@@ -47,7 +47,7 @@ FlowField는 Manager가 작성 설정과 현재 입력을 확인한 뒤 Surface2
 ```text
 Manager 설정·Goal·Obstacle·Modifier
   → Surface / Volume 전용 계산 요청
-  → Surface: FixedUpdate (timeScale 0이면 LateUpdate) / Volume: BuildDriver.LateUpdate
+  → BuildDriver.LateUpdate (게임 시간이 멈춰도 진행)
   → 모드별 Session의 계산 또는 StaticBaked 로드
   → Default Direction·Modifier 합성
   → Surface FieldStore / Volume 결과 저장소 게시
@@ -222,7 +222,7 @@ Manager도 함께 Fault 상태라면 Modifier를 비활성화·Release해 설정
 | Modifier 계약 | `IFlowFieldVectorModifier`, `IFlowFieldModifierSnapshot` | 메타데이터 관측과 작업별 고정 값 계산 |
 | Unity 연결 | `FlowFieldManager` | 직렬화 설정, 활성 Session, 이벤트 구독과 수명 전이 |
 | 공통 Session 경계 | `FlowFieldSessionBase` | 조회·명령·이벤트 예외 격리. 모드별 요청·배열은 자식 소유 |
-| Surface 실행 | `FlowFieldSession`, `FlowFieldSurfaceRebuildTracker` | 요청 병합, 표면 준비·BFS·합성과 원자적 결과 게시. 실행 중 BFS가 최신 입력과 맞는지 버전으로 판정 |
+| Surface 실행 | `FlowFieldSession`, `FlowFieldComposeRun` | 요청 병합, 표면 준비·BFS, 프레임에 나눈 합성과 원자적 결과 게시. 끝난 풀이는 Grid가 바뀌거나 Goal이 사라진 경우가 아니면 게시 |
 | Surface 기본 계산 | `FlowFieldSurfaceBuildPipeline`, `FlowFieldGoalPipeline`, `FlowFieldGoalTracker`, `FlowFieldObstaclePipeline` | 표면·장애물 준비, Goal 해석·변경 관측과 탐색 |
 | Surface Modifier | `FlowFieldModifierRegistry`, `FlowFieldModifierPipeline` | 등록·메타데이터 관측, 영역 갱신·Snapshot 캡처·최종 합성. 영역 버퍼는 Registry Entry에 지연 할당 |
 | Surface 게시 | `FlowFieldFieldStore` | 게시 Grid·Surface·해석된 Goal·최종 방향·속도의 단일 저장소 |
@@ -242,7 +242,7 @@ Manager도 함께 Fault 상태라면 Modifier를 비활성화·Release해 설정
 - **Surface 조회**: 일반 샘플과 해석된 Goal 메타데이터는 항상 게시 FieldStore에서 읽습니다. Modifier 합성 중의 작업 배열은 노출하지 않습니다. 장애물·탈출·연결 안전성 검사는 최신 관측을 반영해 이동을 제한할 수 있습니다. 요청 Goal과 게시 결과의 해석된 Goal은 별도 의미를 유지합니다.
 - **Volume 부분 재계산**: 입력이 같으면 Modifier 변경은 게시된 내비게이션에 Modifier만 다시 합성하고, Goal만 바뀌면 장애물 결과와 Topology를 재사용합니다. 등록·스윕으로 추적하지 않는 Collider는 다음 전체 빌드에서 반영되므로, 이런 Collider가 바뀌면 `RequestRebuild()`나 `NotifyCellsDirty()`를 호출합니다. Volume의 이 두 호출은 Goal이 함께 바뀌어도 장애물을 다시 조회합니다. `SetGoal()` 뒤에 `RequestRebuild()`를 덧붙이면 Goal 재사용 효과를 잃으므로, Goal만 바꿀 때는 `SetGoal()`만 호출합니다. Goal이 같은 셀 안에서 움직이면 결과가 같으므로 빌드하지 않습니다. 이때 Revision은 그대로이고 `FieldChanged`도 발생하지 않으며, `FlowFieldFieldInfo`의 요청 Goal만 최신 값으로 바뀝니다.
 - **Revision과 참조**: Surface Revision은 셀 데이터·Goal의 실질 변경에 따라 증가합니다. 같은 내용의 Snapshot 교체는 Revision 증가 없이 게시 Grid·Surface 참조를 갱신할 수 있습니다. Volume Revision은 완료 결과 교체 정책을 따릅니다.
-- **움직이는 장애물**: BFS나 Volume 빌드 중 장애물만 바뀌면 그 결과를 게시하고 재빌드를 예약합니다. 조회는 최신 장애물 상태를 다시 검사합니다. Volume은 이미 반영한 불확실 영역을 게시 때 지우므로, 빌드 중 장애물이 지나간 영역만 다음 게시까지 정지합니다. Surface는 Grid가 바뀐 결과를 거부하고 다시 계산합니다. Goal이 바뀐 결과도 거부하지만, 연속으로 밀리면 이미 푼 결과를 게시하고 최신 Goal을 다시 계산하므로 Goal이 풀이보다 빨리 움직여도 게시가 멈추지 않습니다. 이때 해석된 Goal은 요청 Goal보다 잠시 뒤처질 수 있습니다.
+- **움직이는 장애물**: BFS나 Volume 빌드 중 장애물만 바뀌면 그 결과를 게시하고 재빌드를 예약합니다. 조회는 최신 장애물 상태를 다시 검사합니다. Volume은 이미 반영한 불확실 영역을 게시 때 지우므로, 빌드 중 장애물이 지나간 영역만 다음 게시까지 정지합니다. Surface는 Grid가 바뀌었거나 Goal이 사라진 결과만 거부합니다. Goal이 바뀐 결과는 게시한 뒤 최신 Goal을 다시 계산하므로 Goal이 풀이보다 빨리 움직여도 게시가 멈추지 않습니다. 이때 해석된 Goal은 요청 Goal보다 잠시 뒤처질 수 있습니다.
 - **재진입 없음**: 이벤트 핸들러는 작업이 끝난 뒤 실행하고, Modifier 코드에서는 다른 작업을 시작할 수 없습니다. 작업 코드는 외부 호출 뒤에 수명을 다시 확인하지 않습니다. 늦게 도착한 GPU 콜백만 수명 세대를 비교합니다.
 - **활성·실패 처리**: `OnDisable`은 실행을 중단하고 재활성화는 현재 수명의 재계산을 요청합니다. Manager·Session Fault는 명시적인 `RequestRebuild()`로 재시도하며 Modifier 자체 Fault는 위의 별도 복구 절차를 따릅니다. 실행할 수 없는 Volume의 대기 요청은 보관하되 Scheduler에서 예산을 반복 소비하지 않습니다. 꺼진 Manager에 들어온 장애물 입력도 재활성화 때까지 빌드하지 않고, 꺼진 동안 켠 Modifier는 재활성화 때 연결합니다. 설정이 stale이어도 Modifier와 동적 장애물의 등록 해제는 할 수 있습니다.
 - **정적 입력**: 두 베이크 형식 모두 v6만 허용합니다. 다른 형식의 자동 변환·마이그레이션은 제공하지 않으므로 이전 형식 Asset은 ReBake해야 합니다. Volume3D v6은 방향·속도를 저장하지 않고 NextCell과 베이크 시점의 Default Direction에서, 탈출 방향은 셀당 1바이트의 면 인덱스에서 로드 시 재구성합니다. Surface2D v6은 높이·법선·탈출·Goal 방향을 `byte[]`로 묶어 비트 그대로 저장합니다. StaticBaked 내비게이션은 고정하며 Default Direction·Modifier는 런타임에 합성합니다. 영향 범위 밖 셀은 두 모드 모두 Manager의 현재 Default Direction을 따릅니다.
@@ -353,7 +353,7 @@ Surface2D의 X·Z 셀 수는 `floor(axisLength / CellSize + 0.5)`로 계산하�
 
 ### 검증 기록
 
-Unity 2023.2.20f1·macOS·Metal(Apple M4 Pro)에서 **회귀 테스트 389개가 모두 통과**했습니다(성능 프로브 12개 제외). Windows·Direct3D 11(AMD Radeon RX 9070)의 마지막 기록은 이번 수정 이전의 466개 통과입니다. 실제 GPU, 저장된 샘플 씬 통합 2개, PlayMode에 진입하는 Manager 통합을 포함합니다. Surface·Volume의 샘플 게시, 재진입·취소·재활성화, 장애물 안전성, Modifier 합성, 베이크 검증·저장 실패 경계와 직렬화 참조를 확인합니다.
+Unity 2023.2.20f1·macOS·Metal(Apple M4 Pro)에서 **회귀 테스트 397개가 모두 통과**했습니다(성능 프로브 12개 제외). Windows·Direct3D 11(AMD Radeon RX 9070)의 마지막 기록은 이번 수정 이전의 466개 통과입니다. 실제 GPU, 저장된 샘플 씬 통합 2개, PlayMode에 진입하는 Manager 통합을 포함합니다. Surface·Volume의 샘플 게시, 재진입·취소·재활성화, 장애물 안전성, Modifier 합성, 베이크 검증·저장 실패 경계와 직렬화 참조를 확인합니다.
 
 리팩터링 안전망으로 다음 검사가 함께 실행됩니다.
 

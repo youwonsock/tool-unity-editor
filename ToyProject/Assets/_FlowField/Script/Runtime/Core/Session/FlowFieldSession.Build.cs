@@ -19,10 +19,6 @@ namespace Common.FlowField
             try
             {
                 bool surfaceChanged = PrepareSurface(request, pending);
-                if (surfaceChanged)
-                    _rebuild.PromoteSurface();
-                else
-                    _rebuild.DropDeferredSurface();
                 // Surface preparation may invalidate every downstream stage
                 // (for example after a grid change). Include those flags in
                 // this build rather than leaving them for a later no-op tick.
@@ -74,17 +70,20 @@ namespace Common.FlowField
 
                 if ((pending & (FlowFieldDirtyFlags.ModifierValue | FlowFieldDirtyFlags.FinalRegion)) != 0)
                 {
-                    ComposeFinal(
+                    ComposeThenCommit(
                         request,
-                        FlowFieldSurfaceRebuildTracker.IsBaseDirty(pending)
+                        rebuildBase: IsBaseDirty(pending)
                             || (pending & FlowFieldDirtyFlags.DefaultDirection) != 0
-                            || !_state.BaseComposed);
+                            || !_state.BaseComposed,
+                        resultChanged: (pending & FlowFieldDirtyFlags.FinalRegion) != 0,
+                        includeBase: IsBaseDirty(pending) || !_fieldStore.IsValid);
+                    return true;
                 }
 
                 Commit(
                     request,
                     resultChanged: (pending & FlowFieldDirtyFlags.FinalRegion) != 0,
-                    includeBase: FlowFieldSurfaceRebuildTracker.IsBaseDirty(pending) || !_fieldStore.IsValid,
+                    includeBase: IsBaseDirty(pending) || !_fieldStore.IsValid,
                     finalRegion: _state.LastComposedRegion);
                 return true;
             }
@@ -234,11 +233,14 @@ namespace Common.FlowField
                     | FlowFieldDirtyFlags.ModifierValue
                     | FlowFieldDirtyFlags.DefaultDirection)) != 0;
             if (finalDirty)
-                ComposeFinal(request, rebuildBase);
+            {
+                ComposeThenCommit(request, rebuildBase, resultChanged: true, includeBase: rebuildBase);
+                return;
+            }
 
             Commit(
                 request,
-                resultChanged: finalDirty,
+                resultChanged: false,
                 includeBase: rebuildBase,
                 finalRegion: _state.LastComposedRegion);
         }
@@ -271,7 +273,6 @@ namespace Common.FlowField
 
             bool hadObstacleMask = _state.HasObstacleMask;
             FlowFieldGoalResolution goal = request.Goal;
-            bool goalChanged = rebuildGoal && _goalTracker.HasChanged(goal);
             FlowFieldBuildResult prepared = FlowFieldSurfaceBuildPipeline.PrepareBase(
                 new FlowFieldSurfaceBuildRequest(
                     new FlowFieldObstacleRequest(
@@ -292,8 +293,7 @@ namespace Common.FlowField
                 rebuildDynamic,
                 rebuildGoal);
 
-            ApplyPreparedBase(prepared, rebuildStatic, rebuildDynamic, rebuildGoal,
-                goalChanged, hadObstacleMask, ref pending);
+            ApplyPreparedBase(prepared, rebuildStatic, rebuildDynamic, rebuildGoal, hadObstacleMask, ref pending);
         }
 
         private void ApplyPreparedBase(
@@ -301,7 +301,6 @@ namespace Common.FlowField
             bool rebuildStatic,
             bool rebuildDynamic,
             bool rebuildGoal,
-            bool goalChanged,
             bool hadObstacleMask,
             ref FlowFieldDirtyFlags pending)
         {
@@ -326,25 +325,6 @@ namespace Common.FlowField
                     pending &= ~FlowFieldDirtyFlags.FinalRegion;
                     _state.DirtyFinalRegion = FlowFieldCellRect.Invalid;
                 }
-            }
-            if (rebuildStatic || rebuildDynamic)
-            {
-                // The obstacle API deliberately does not advance either
-                // version until this comparison has established that the
-                // effective mask changed.  This keeps a registration,
-                // transform notification or probe that produces the same
-                // mask completely invisible to BFS and consumers.
-                if (prepared.ObstacleMaskChanged)
-                    _rebuild.PromoteObstacle();
-                else
-                    _rebuild.DropDeferredObstacle();
-            }
-            if (rebuildGoal)
-            {
-                if (goalChanged)
-                    _rebuild.PromoteGoal();
-                else
-                    _rebuild.DropDeferredGoal();
             }
             if (prepared.ObstacleMaskChanged || !hadObstacleMask)
             {
@@ -399,14 +379,20 @@ namespace Common.FlowField
                     request.ObstacleCheckCenterOffset));
         }
 
-        private void ComposeFinal(in FlowFieldSessionRequest request, bool rebuildBase = false)
+        // Snapshots are taken here. The composition itself can continue over the
+        // next frames, while input arriving meanwhile waits for the next build.
+        private void ComposeThenCommit(
+            in FlowFieldSessionRequest request,
+            bool rebuildBase,
+            bool resultChanged,
+            bool includeBase)
         {
             FlowFieldCellRect region = _state.DirtyFinalRegion.IsValid
                 ? _state.DirtyFinalRegion
                 : FlowFieldCellRect.Full(_state.Grid);
             using (Boundary.EnterUserCode())
             {
-                _modifierPipeline.RebuildFinalField(
+                _modifierPipeline.BeginFinalField(
                     new FlowFieldModifierBuildRequest(
                         _state.Grid,
                         _state.Surface,
@@ -418,8 +404,38 @@ namespace Common.FlowField
                     rebuildBase);
             }
             _state.LastComposedRegion = rebuildBase ? FlowFieldCellRect.Full(_state.Grid) : region;
-            _state.BaseComposed |= rebuildBase;
             _state.DirtyFinalRegion = FlowFieldCellRect.Invalid;
+            _compose = new PendingCompose
+            {
+                Request = request,
+                RebuildBase = rebuildBase,
+                ResultChanged = resultChanged,
+                IncludeBase = includeBase,
+            };
+            _composing = true;
+            ContinueCompose();
+        }
+
+        private void ContinueCompose()
+        {
+            bool finished;
+            using (Boundary.EnterUserCode())
+                finished = _modifierPipeline.StepFinalField(in _frameBudget);
+            if (!finished)
+            {
+                SetLifecycle(FlowFieldSessionLifecycle.Building);
+                return;
+            }
+
+            _composing = false;
+            _state.BaseComposed |= _compose.RebuildBase;
+            Commit(
+                _compose.Request,
+                _compose.ResultChanged,
+                _compose.IncludeBase,
+                _state.LastComposedRegion);
+            _compose = default;
+            SetLifecycle(FlowFieldSessionLifecycle.Active);
         }
 
         private bool StartBfs(in FlowFieldSessionRequest request)
@@ -428,8 +444,7 @@ namespace Common.FlowField
             int generation = LifetimeGeneration;
             if (!_state.Workspace.HasActiveGoal)
             {
-                ComposeFinal(request, rebuildBase: true);
-                Commit(request, resultChanged: true, includeBase: true, finalRegion: FlowFieldCellRect.Full(_state.Grid));
+                ComposeThenCommit(request, rebuildBase: true, resultChanged: true, includeBase: true);
                 return true;
             }
 
@@ -443,7 +458,6 @@ namespace Common.FlowField
                 request.Goal.InfluenceRadius,
                 _state.Workspace.ResolvedGoalIndex);
 
-            _rebuild.BeginSolve();
             _activeRequest = request;
             SetLifecycle(FlowFieldSessionLifecycle.Building);
             bool accepted;
@@ -479,47 +493,20 @@ namespace Common.FlowField
         }
 
         /// <summary>
-        /// Shared rejection policy for successful and failed Surface2D completions.
-        /// Final-only inputs remain eligible for recomposition; changed Grid or
-        /// Goal inputs restore staging and stay pending for the next owning
-        /// update. Obstacle-only staleness does not reject a solve: rejecting
-        /// would starve publication while an obstacle keeps moving, and sampling
-        /// already re-checks the latest obstacle state against the published field.
-        /// The same starvation limits how many Goal solves in a row are rejected.
+        /// A finished solve is published even when newer input has arrived: a Goal
+        /// or obstacle that keeps moving must not starve movers of a field. The
+        /// exceptions are a replaced Grid, whose cells no longer match, and a
+        /// removed Goal, which movers must stop following.
         /// </summary>
-        private bool RejectStaleBfsResult()
+        private bool RejectFinishedSolve()
         {
-            // Grid and Goal requests stay unversioned until their stage proves
-            // a change, so the versions below can match while one is pending.
-            bool gridStale = (_state.DirtyFlags & FlowFieldDirtyFlags.Grid) != 0;
-            bool goalStale = (_state.DirtyFlags & FlowFieldDirtyFlags.Goal) != 0;
-            bool rejectGoal = _rebuild.ShouldRejectSupersededGoal(goalStale && !gridStale && !_rebuild.IsBaseStale);
-            if (_rebuild.IsBaseStale)
-            {
-                bool obstacleStale = HasStaleObstacleInput();
-                RestoreStagingAfterStaleResult(preserveObstacle: !obstacleStale);
-                if (obstacleStale)
-                {
-                    _state.HasObstacleMask = false;
-                    _state.DirtyFlags |= FlowFieldDirtyFlags.StaticObstacles
-                        | FlowFieldDirtyFlags.DynamicObstacles
-                        | FlowFieldDirtyFlags.Escape;
-                    _state.ExpandObstacleDirty(FlowFieldCellRect.Full(_state.Grid));
-                }
-                RequeueRejectedGoal();
-                SetLifecycle(FlowFieldSessionLifecycle.Active);
-                return true;
-            }
-
-            if (gridStale || rejectGoal)
-            {
-                RestoreStagingAfterStaleResult(preserveObstacle: true);
-                RequeueRejectedGoal();
-                SetLifecycle(FlowFieldSessionLifecycle.Active);
-                return true;
-            }
-
-            return false;
+            bool gridChanged = (_state.DirtyFlags & FlowFieldDirtyFlags.Grid) != 0;
+            if (!gridChanged && !_goalRemoved)
+                return false;
+            RestoreStagingAfterStaleResult(preserveObstacle: true);
+            RequeueRejectedGoal();
+            SetLifecycle(FlowFieldSessionLifecycle.Active);
+            return true;
         }
 
         /// <summary>
@@ -539,7 +526,7 @@ namespace Common.FlowField
         {
             if (_lifecycle != FlowFieldSessionLifecycle.Building)
                 return;
-            if (RejectStaleBfsResult())
+            if (RejectFinishedSolve())
                 return;
 
             bool hasNewRequest = _hasPendingRequest;
@@ -547,7 +534,7 @@ namespace Common.FlowField
             FlowFieldDirtyFlags pending = _state.DirtyFlags;
             // Obstacle or Goal input observed during this solve keeps its request
             // and dirty flags through Commit; the next owner boundary handles it.
-            _hasPendingRequest = FlowFieldSurfaceRebuildTracker.IsBaseDirty(_state.DirtyFlags);
+            _hasPendingRequest = IsBaseDirty(_state.DirtyFlags);
 
             // RequestVersion also advances for Default Direction and Modifier
             // edits. Those changes are final-only and must never invalidate a
@@ -572,16 +559,14 @@ namespace Common.FlowField
             }
             if ((pending & FlowFieldDirtyFlags.ModifierArea) != 0)
                 RebuildModifierAreaData(finalRequest);
-            ComposeFinal(finalRequest, rebuildBase: true);
-            Commit(finalRequest, resultChanged: true, includeBase: true, finalRegion: _state.LastComposedRegion);
-            SetLifecycle(FlowFieldSessionLifecycle.Active);
+            ComposeThenCommit(finalRequest, rebuildBase: true, resultChanged: true, includeBase: true);
         }
 
         private void OnBfsFailed(Exception exception)
         {
             if (_lifecycle != FlowFieldSessionLifecycle.Building)
                 return;
-            if (RejectStaleBfsResult())
+            if (RejectFinishedSolve())
                 return;
             // A failed base solve cannot be replaced by a final-only compose:
             // unlike the successful callback there is no freshly solved Goal
@@ -589,10 +574,9 @@ namespace Common.FlowField
             // changed while the backend was running (including a pending
             // Default Direction/Modifier request), then retry the same base
             // inputs without exposing a partial result.
-            if (_rebuild.IsRequestStale
-                || _hasPendingRequest
+            if (_hasPendingRequest
                 || _obstacleProbePending
-                || FlowFieldSurfaceRebuildTracker.IsBaseDirty(_state.DirtyFlags))
+                || IsBaseDirty(_state.DirtyFlags))
             {
                 RestoreStagingAfterStaleResult(preserveObstacle: true);
                 RequeueRejectedGoal();

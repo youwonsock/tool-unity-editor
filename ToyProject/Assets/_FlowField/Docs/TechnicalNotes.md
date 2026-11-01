@@ -19,11 +19,11 @@
 
 Volume은 최신 수락 `FlowFieldVolumeRequest` 한 벌과 대기 여부를 보관합니다. 작업 시작 시 이 값을 BuildContext에 고정하고, 게시 결과는 완료된 작업의 입력을 보관합니다. Manager의 자동 변경 감지는 Session의 최신 입력을 비교하며 별도 요청 캐시를 두지 않습니다. 명시적인 `RequestRebuild()`와 재활성화·재초기화는 같은 설정이어도 재계산을 요청합니다.
 
-Surface도 최신 수락 `FlowFieldSessionRequest` 한 벌과 대기 플래그를 보관합니다. Pump 시작 시 지역 값으로 캡처하고 BFS를 시작할 때 실행 중 입력으로 고정합니다. 풀이 완료 시 새 대기 입력이 있으면 최신 값을 최종 합성에 사용하며, 내비게이션 입력이 달라졌으면 기존의 버전·세대 검사로 이전 결과를 거부합니다. Submit 이전에 관측된 Default Direction은 별도 상태로 유지해 진행 중 결과에 반영합니다.
+Surface도 최신 수락 `FlowFieldSessionRequest` 한 벌과 대기 플래그를 보관합니다. Pump 시작 시 지역 값으로 캡처하고 BFS를 시작할 때 실행 중 입력으로 고정합니다. 풀이 완료 시 새 대기 입력이 있으면 최신 값을 최종 합성에 사용합니다. Submit 이전에 관측된 Default Direction은 별도 상태로 유지해 진행 중 결과에 반영합니다.
 
 Surface의 상태·게시 콜백은 수명 전이 경계입니다. Fault·Retry·Release·Suspend가 이전 콜백 세대를 무효화하며, 정리와 dirty 설정을 알림 전에 끝내 구독자가 제출한 새 요청을 보존합니다. Pump와 비동기 완료 처리 중 같은 Session의 중첩 Pump는 실행하지 않고 다음 소유자 실행 경계에 요청을 남깁니다. Dispose는 Released 알림 전에 영구 종료 상태가 됩니다.
 
-BFS 완료 시 Grid 입력이 달라졌으면 결과를 거부하고 다음 Goal 단계에서 다시 풉니다. Goal 입력이 달라진 결과는 한 번은 거부하고, 다음 풀이도 밀리면 게시한 뒤 최신 Goal을 다시 풉니다. 복원된 작업 공간은 게시된 Goal을 담으므로 Goal Tracker도 함께 비웁니다. 장애물만 바뀌었으면 결과를 게시하고 Dirty 플래그와 프로브를 유지해 다음 소유자 경계에서 처리합니다. 입력 버전 판정은 `FlowFieldSurfaceRebuildTracker`가 맡습니다.
+끝난 풀이는 새 입력이 들어와 있어도 게시합니다. 계속 움직이는 Goal이나 장애물 때문에 이동 주체가 필드를 받지 못하는 일을 막기 위해서입니다. 예외는 Grid가 바뀐 경우(셀이 맞지 않음)와 Goal이 사라진 경우(이동 주체가 더 따라가면 안 됨)뿐입니다. 이때는 작업 배열을 게시 결과로 되돌리고 다음 단계에서 다시 풉니다. Goal이 같은 셀 안에서만 움직이면 다음 Goal 단계가 변경 없음으로 끝내므로 풀이를 새로 시작하지 않습니다.
 
 Session은 수명이 끝날 때 실행 중인 풀이 Job에 취소를 요청하고 끝날 때까지 기다린 뒤 작업 배열을 재사용합니다. Job은 4,096셀마다 취소 표시를 확인하므로 기다림은 짧습니다. 게시 Grid·Surface와 해석된 Goal은 FieldStore에서만 가져오며 내부 FieldCommitted 이벤트는 인자 없이 변경된 결과의 게시만 알립니다. 일반 샘플은 합성 중 작업 배열이 아닌 게시 저장소를 읽고, 최신 장애물·탈출·연결 안전성 검사를 추가로 적용합니다.
 
@@ -102,7 +102,7 @@ README의 [핵심 흐름](Images/flowfield-uml.png)은 요청부터 조회까지
 
 [원본 이미지](Images/flowfield-surface.png) · [PlantUML 원본](flowfield-surface.puml)
 
-- `FlowFieldManager.FixedUpdate`가 현재 설정을 반영해 Submit하고 `FlowFieldSession.Pump`를 실행합니다. `FixedUpdate`가 돌지 않는 `timeScale = 0`에서는 `LateUpdate`가 같은 일을 합니다. 비동기 BFS의 완료 콜백에서도 후속 합성과 게시가 이어질 수 있습니다.
+- `FlowFieldManager.LateUpdate`가 입력을 관측하고 현재 설정을 Submit합니다. 그 뒤 `FlowFieldBuildDriver.LateUpdate`의 Scheduler가 Session을 진행합니다. 표면·장애물·Goal·Modifier 영역은 Physics 조회가 한 스냅샷이 되도록 한 프레임에 실행하고, BFS는 워커 스레드, 합성은 예산에 맞춰 여러 프레임에 나눕니다. 게임 시간이 멈춰도 같은 경로로 진행합니다.
 - Surface/base 서비스는 Surface Source, `FlowFieldSurfaceBuildPipeline`, `FlowFieldObstaclePipeline`, `FlowFieldGoalPipeline`의 준비 처리를 묶어 표시합니다. RuntimeDynamic은 변경된 기본 입력을 계산하고 StaticBaked는 검증한 v6 내비게이션을 로드합니다.
 - Modifier Registry/Pipeline은 필요할 때 영역을 갱신하고 staging에 값을 합성합니다. 내비게이션 변경으로 BFS를 수행하면 완료 후에도 현재 수락 입력의 최종 합성을 거칩니다. Modifier·Default Direction만 바뀌면 기존 내비게이션을 사용합니다.
 - 완성된 결과만 `FlowFieldFieldStore`에 반영합니다. 일반 조회는 게시된 값에서 읽고 최신 장애물·탈출·연결 안전성 검사를 더합니다. 외부 호출 후 소유권이 바뀌면 이전 작업은 게시하지 않습니다.
