@@ -74,9 +74,8 @@ namespace Common.FlowField.Tests
             }
         }
 
-        [TestCase(false)]
-        [TestCase(true)]
-        public void ReplacementRequestsSurviveAnOldBackendCompletion(bool failure)
+        [Test]
+        public void ReplacementRequestsSurviveAnOldBackendCompletion()
         {
             _session.Submit(Request(null, Vector3.forward));
             Finish();
@@ -85,18 +84,17 @@ namespace Common.FlowField.Tests
             _session.Pump();
             _session.Submit(Request(GoalB, Vector3.left));
             _session.Submit(Request(GoalC, Vector3.right));
-            if (failure) _backend.Fail(0); else _backend.Complete(0);
+            _backend.Complete(0);
             Assert.That(_session.IsFaulted, Is.False);
-            // A finished solve publishes even though newer Goals arrived; a failed one cannot.
-            int published = failure ? 0 : 1;
-            Assert.That(_session.Revision, Is.EqualTo(revision + published));
+            // A finished solve publishes even though newer Goals arrived.
+            Assert.That(_session.Revision, Is.EqualTo(revision + 1));
             Finish();
             Assert.That(_session.TryGetFieldInfo(out var info), Is.True);
             Assert.That(info.ResolvedGoalWorld, Is.EqualTo(GoalC));
             Assert.That(_session.Sample(Position).Direction, Is.EqualTo(Vector3.right));
-            Assert.That(_publications, Is.EqualTo(2 + published));
+            Assert.That(_publications, Is.EqualTo(3));
             _session.Pump();
-            Assert.That(_publications, Is.EqualTo(2 + published));
+            Assert.That(_publications, Is.EqualTo(3));
         }
 
         [TestCase("submit")]
@@ -148,8 +146,7 @@ namespace Common.FlowField.Tests
 
         [Test]
         public void LatestRequestSurvivesLifecycleAndLateCallbacks(
-            [Values("suspend", "release", "fault")] string transition,
-            [Values(false, true)] bool lateFailure)
+            [Values("suspend", "release", "fault")] string transition)
         {
             _session.Submit(Request(GoalA, Vector3.forward));
             _session.Pump();
@@ -159,7 +156,7 @@ namespace Common.FlowField.Tests
             if (transition == "fault") _session.RetryFault(); else Initialize();
             _session.Submit(Request(GoalB, Vector3.left));
             _session.Submit(Request(GoalC, Vector3.right));
-            if (lateFailure) _backend.Fail(0); else _backend.Complete(0, false);
+            _backend.Complete(0, false);
             Assert.That(_publications, Is.Zero);
             Assert.That(_session.IsFaulted, Is.False);
             Finish();
@@ -223,8 +220,7 @@ namespace Common.FlowField.Tests
             internal int Disposals;
             public void Poll(bool wait) { }
             public void Cancel() { }
-            public bool StartBfs(in FlowFieldBfsRequest request, Action<FlowFieldBfsRequest> completed,
-                Action<FlowFieldBfsRequest, Exception> failed)
+            public bool StartBfs(in FlowFieldBfsRequest request, Action<FlowFieldBfsRequest> completed)
             {
                 FlowFieldSurfaceBuildPipeline.SolveNow(request);
                 completed(request);

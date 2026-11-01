@@ -117,6 +117,35 @@ namespace Common.FlowField.Tests
         }
 
         [Test]
+        public void AGoalChangeKeepsTheEscapeDirectionsOfAFullBuild()
+        {
+            _obstacle = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _obstacle.layer = FlowFieldRegressionFixture.Layer;
+            _obstacle.transform.position = Vector3.one * 1.5f;
+            Physics.SyncTransforms();
+            var committed = typeof(FlowFieldVolumeSession).GetField(
+                "_committed",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            _session.Submit(Request(new Vector3(0.5f, 0.5f, 0.5f)));
+            Finish();
+            var full = (FlowFieldVolumeFieldData)committed.GetValue(_session);
+            Assert.That(full.EscapeDirections, Has.Some.Not.EqualTo(Vector3.zero));
+
+            Vector3 goal = new Vector3(0.5f, 2.5f, 0.5f);
+            _session.Submit(Request(goal));
+            Finish();
+            var reused = (FlowFieldVolumeFieldData)committed.GetValue(_session);
+            Assert.That(reused.EscapeDirections, Is.SameAs(full.EscapeDirections));
+            Vector3[] kept = (Vector3[])reused.EscapeDirections.Clone();
+
+            _session.Submit(Request(goal), requeryObstacles: true);
+            Finish();
+            var rebuilt = (FlowFieldVolumeFieldData)committed.GetValue(_session);
+            Assert.That(rebuilt.EscapeDirections, Is.Not.SameAs(reused.EscapeDirections));
+            Assert.That(rebuilt.EscapeDirections, Is.EqualTo(kept));
+        }
+
+        [Test]
         public void GoalChangeReusesObstaclesUntilAnExplicitRebuild()
         {
             _session.Submit(Request());

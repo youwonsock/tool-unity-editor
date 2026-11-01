@@ -36,11 +36,8 @@ namespace Common.FlowField
                 throw new InvalidOperationException("The FlowField solve backend factory returned null.");
         }
 
-        internal bool Start(
-            in FlowFieldBfsRequest request,
-            Action<FlowFieldBfsRequest> completed,
-            Action<FlowFieldBfsRequest, Exception> failed)
-            => _backend.StartBfs(request, completed, failed);
+        internal bool Start(in FlowFieldBfsRequest request, Action<FlowFieldBfsRequest> completed)
+            => _backend.StartBfs(request, completed);
 
         internal void Poll(bool wait) => _backend?.Poll(wait);
 

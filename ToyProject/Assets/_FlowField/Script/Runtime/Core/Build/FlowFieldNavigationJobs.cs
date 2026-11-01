@@ -69,6 +69,7 @@ namespace Common.FlowField
         internal int Depth;
         internal float CellSize;
         internal bool BuildTopology;
+        internal bool BuildEscape;
         internal bool HasGoal;
         internal int RequestedGoal;
         internal float GoalInfluenceRadius;
@@ -100,7 +101,7 @@ namespace Common.FlowField
             if (Cancelled)
                 return;
             RunDirections(goal);
-            if (Cancelled)
+            if (!BuildEscape || Cancelled)
                 return;
             RunEscape();
         }

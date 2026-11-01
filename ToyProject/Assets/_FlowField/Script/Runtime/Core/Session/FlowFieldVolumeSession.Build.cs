@@ -119,7 +119,7 @@ namespace Common.FlowField
                 case 5: build.Speeds = FlowFieldVolumeSpareArrays.Rent(ref _spares.Speeds, build.Count); break;
                 case 6: build.FinalDirections = FlowFieldVolumeSpareArrays.Rent(ref _spares.FinalDirections, build.Count); break;
                 case 7: build.FinalSpeeds = FlowFieldVolumeSpareArrays.Rent(ref _spares.FinalSpeeds, build.Count); break;
-                case 8: build.EscapeDirections = FlowFieldVolumeSpareArrays.Rent(ref _spares.EscapeDirections, build.Count); break;
+                case 8: build.EscapeDirections ??= FlowFieldVolumeSpareArrays.Rent(ref _spares.EscapeDirections, build.Count); break;
                 // A static bake loads its navigation and never searches.
                 case 9:
                     if (build.Request.StaticBakeData == null)

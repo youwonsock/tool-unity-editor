@@ -304,12 +304,9 @@ namespace Common.FlowField
         private Action<FlowFieldBfsRequest> _completed;
         private bool _disposed;
 
-        public bool StartBfs(
-            in FlowFieldBfsRequest request,
-            Action<FlowFieldBfsRequest> completed,
-            Action<FlowFieldBfsRequest, Exception> failed)
+        public bool StartBfs(in FlowFieldBfsRequest request, Action<FlowFieldBfsRequest> completed)
         {
-            if (_disposed || completed == null || failed == null)
+            if (_disposed || completed == null)
                 return false;
             ValidateRequest(request);
 

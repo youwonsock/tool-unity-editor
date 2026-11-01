@@ -11,7 +11,9 @@
     "overrideReferences": false,
     "precompiledReferences": [],
     "autoReferenced": false,
-    "defineConstraints": [],
+    "defineConstraints": [
+        "UNITY_EDITOR || FLOWFIELD_PLAYER_PROBE"
+    ],
     "versionDefines": [],
     "noEngineReferences": false
 }

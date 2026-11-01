@@ -91,9 +91,8 @@ namespace Common.FlowField.Tests
             FinishGoal(GoalC);
         }
 
-        [TestCase(false)]
-        [TestCase(true)]
-        public void FaultedBuildCallbackCannotCompleteTheDispatchedRetry(bool failure)
+        [Test]
+        public void FaultedBuildCallbackCannotCompleteTheDispatchedRetry()
         {
             _session.Submit(FlowFieldRegressionFixture.Request(GoalA));
             _session.Pump();
@@ -102,7 +101,7 @@ namespace Common.FlowField.Tests
             _session.Submit(FlowFieldRegressionFixture.Request(GoalC));
             _session.Pump();
             Assert.That(_backend.Calls.Count, Is.EqualTo(2));
-            if (failure) _backend.Fail(0); else _backend.Complete(0);
+            _backend.Complete(0);
             Assert.That(_session.IsRebuilding, Is.True, "The old callback must leave the retry running.");
             Assert.That(_session.Revision, Is.Zero);
             _backend.Complete(1);
@@ -210,13 +209,11 @@ namespace Common.FlowField.Tests
         {
             private bool _rejected;
 
-            public bool StartBfs(in FlowFieldBfsRequest request, Action<FlowFieldBfsRequest> completed,
-                Action<FlowFieldBfsRequest, Exception> failed)
+            public bool StartBfs(in FlowFieldBfsRequest request, Action<FlowFieldBfsRequest> completed)
             {
                 if (!_rejected)
                 {
                     _rejected = true;
-                    failed(request, new InvalidOperationException("Synchronous backend failure"));
                     return false;
                 }
                 FlowFieldSurfaceBuildPipeline.SolveNow(request);

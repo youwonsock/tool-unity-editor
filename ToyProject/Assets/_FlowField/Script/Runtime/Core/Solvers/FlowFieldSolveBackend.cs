@@ -9,10 +9,7 @@ namespace Common.FlowField
     /// </summary>
     internal interface IFlowFieldSolveBackend : IDisposable
     {
-        bool StartBfs(
-            in FlowFieldBfsRequest request,
-            Action<FlowFieldBfsRequest> completed,
-            Action<FlowFieldBfsRequest, Exception> failed);
+        bool StartBfs(in FlowFieldBfsRequest request, Action<FlowFieldBfsRequest> completed);
 
         /// <summary>Reports a finished solve. With wait set, it first waits for one to finish.</summary>
         void Poll(bool wait);

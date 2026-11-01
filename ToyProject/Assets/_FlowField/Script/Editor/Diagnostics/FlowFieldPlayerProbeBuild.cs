@@ -44,6 +44,8 @@ namespace Common.FlowField.Editor
                 target = BuildTarget.StandaloneOSX,
                 targetGroup = BuildTargetGroup.Standalone,
                 options = BuildOptions.None,
+                // The probe assembly stays out of every other Player.
+                extraScriptingDefines = new[] { "FLOWFIELD_PLAYER_PROBE" },
             });
             if (report.summary.result != BuildResult.Succeeded)
                 throw new InvalidOperationException($"Probe Player build {report.summary.result}: {report.summary.totalErrors} errors");

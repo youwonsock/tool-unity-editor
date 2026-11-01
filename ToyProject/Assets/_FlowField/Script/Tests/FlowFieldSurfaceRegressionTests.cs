@@ -241,23 +241,6 @@ namespace Common.FlowField.Tests
         }
 
         [Test]
-        public void StaleBackendFailureCannotFaultTheNewerGoalRequest()
-        {
-            Build();
-            int revision = _session.Revision;
-            _session.Submit(FlowFieldRegressionFixture.Request(GoalA));
-            _session.Pump();
-            _session.Submit(FlowFieldRegressionFixture.Request(GoalB));
-            _backend.Fail(0);
-            Assert.That(_session.IsFaulted, Is.False);
-            Assert.That(_session.Revision, Is.EqualTo(revision));
-            _session.Pump();
-            _backend.Complete(_backend.Calls.Count - 1);
-            Assert.That(_session.TryGetFieldInfo(out var info), Is.True);
-            Assert.That(info.ResolvedGoalWorld, Is.EqualTo(GoalB));
-        }
-
-        [Test]
         public void PublicationListenerCanReleaseWithoutOldCompletionReactivatingSession()
         {
             _session.FieldCommitted += () => _session.Release();
@@ -266,18 +249,6 @@ namespace Common.FlowField.Tests
             _backend.Complete(0);
             Assert.That(_session.State, Is.EqualTo(FlowFieldRuntimeState.Released));
             Assert.That(_session.TrySample(OriginCell, out _), Is.False);
-        }
-
-        [Test]
-        public void UnrecoverableBackendFailureFaultsWithoutPublishingPartialData()
-        {
-            _session.Submit(FlowFieldRegressionFixture.Request(GoalA));
-            _session.Pump();
-            _backend.Fail(0);
-            Assert.That(_session.IsFaulted, Is.True);
-            Assert.That(_session.IsReady, Is.False);
-            Assert.That(_session.Revision, Is.Zero);
-            Assert.That(_session.LastError, Does.Contain("Simulated solve failure"));
         }
 
         [Test]
@@ -643,23 +614,6 @@ namespace Common.FlowField.Tests
             for (int tick = 0; tick < 4 && !_session.IsRebuilding; tick++)
                 _session.Pump();
             Assert.That(_session.IsRebuilding, Is.True, _session.LastError);
-        }
-
-        [Test]
-        public void FailedSolveWithAnObservedObstacleRetriesTheGoal()
-        {
-            Build(GoalA);
-            RegisterObstacle(new Vector3(1.5f, 100f, 1.5f));
-            RunOwnerTicks(GoalA);
-
-            StartSolve(GoalB);
-            ObserveObstacleMove(new Vector3(1.5f, 101f, 1.5f));
-            _backend.Fail(_backend.Calls.Count - 1);
-            Assert.That(_session.IsFaulted, Is.False, _session.LastError);
-            AssertResolvedGoal(GoalA);
-
-            RunOwnerTicks(GoalB);
-            AssertResolvedGoal(GoalB);
         }
 
         private void RegisterObstacle(Vector3 position)
