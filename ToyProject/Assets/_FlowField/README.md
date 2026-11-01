@@ -207,7 +207,7 @@ Manager도 함께 Fault 상태라면 Modifier를 비활성화·Release해 설정
 
 <img src="Docs/Images/flowfield-uml.png" alt="FlowField 요청부터 결과 조회까지의 핵심 흐름" width="70%">
 
-[핵심 흐름 원본 이미지](Docs/Images/flowfield-uml.png) · [PlantUML 원본](Docs/flowfield-uml.puml) (이미지는 Burst 전환 이전에 렌더한 것으로, 최신 내용은 PlantUML 원본입니다)
+[핵심 흐름 원본 이미지](Docs/Images/flowfield-uml.png) · [PlantUML 원본](Docs/flowfield-uml.puml)
 
 핵심 흐름은 요청 수락, 모드별 실행 경계, 완성 결과 게시와 샘플 조회를 보여줍니다. 상세 흐름은 책임별 호출을 나누어 다음 문서에서 확인할 수 있습니다.
 
@@ -382,5 +382,5 @@ Unity.exe -batchmode -projectPath <ToyProject> -runTests -testPlatform EditMode 
 - 현재 씬 2개·Prefab 2개·v6 베이크 2개와 기존 GUID·직렬화 값은 유지합니다. 구버전 API 래퍼·직렬화 별칭·변환 전용 코드나 에셋은 두지 않습니다.
 - BFS는 동일 비용의 격자 이동 횟수를 최소화합니다. 속도 Modifier는 경로 비용을 바꾸지 않으며 Agent 간 충돌 회피는 이동 시스템의 책임입니다.
 - Volume의 2ms는 협력 CPU 예산입니다. Physics·Modifier 호출 한 번이나 할당이 이를 초과할 수 있으며 전체 빌드 시간의 상한은 아닙니다. 워커 스레드의 풀이 시간은 이 예산에 들지 않습니다.
-- Surface 런타임·StaticBaked 이미지는 현재 HUD로 다시 캡처했고, 나머지 기능 이미지는 기존 캡처입니다. 회귀 실행은 실제 포인터 조작·GUI 렌더링·장시간 군중 이동을 포함하지 않습니다. Surface 샘플의 실제 포인터 조작, 두 샘플의 실제 키 입력, 군중 1000개 3분 이동은 Editor에서 별도로 확인했습니다. RMB+WASD 자유 카메라는 우클릭을 누른 채 유지하는 입력을 만들 수 없어 확인하지 못했습니다. Mono Mac Player는 `Tools/run-player-probe.sh`로 실행해 확인했고, IL2CPP는 Android ARM64 APK 빌드까지만 확인했습니다.
+- Surface 런타임·StaticBaked 이미지는 현재 HUD로 다시 캡처했고, 나머지 기능 이미지는 기존 캡처입니다. 회귀 실행은 실제 포인터 조작·GUI 렌더링·장시간 군중 이동을 포함하지 않습니다. Surface 샘플의 실제 포인터 조작, 두 샘플의 실제 키 입력, 군중 1000개 3분 이동은 Editor에서 별도로 확인했습니다. RMB+WASD 자유 카메라는 우클릭을 누른 채 유지하는 입력을 만들 수 없어, 버튼 번호만 왼쪽으로 잠시 바꿔 이동·회전·해제를 확인하고 실제 우클릭 입력은 따로 확인했습니다. Mono Mac Player는 `Tools/run-player-probe.sh`로 실행해 확인했고, IL2CPP는 Android ARM64 APK 빌드까지만 확인했습니다.
 - macOS 입력 소스가 한글이면 샘플의 글자 키가 `Input.GetKeyDown`에 전달되지 않습니다(M·R·G·O로 확인). Space와 숫자 키는 동작합니다. 샘플을 조작할 때는 영문 입력 소스로 바꿉니다.

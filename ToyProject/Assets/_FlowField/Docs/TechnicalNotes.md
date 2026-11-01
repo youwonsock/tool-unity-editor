@@ -127,7 +127,7 @@ README의 [핵심 흐름](Images/flowfield-uml.png)은 요청부터 조회까지
 | Surface 상세 | [flowfield-surface.puml](flowfield-surface.puml) | [flowfield-surface.png](Images/flowfield-surface.png) |
 | Volume 상세 | [flowfield-volume.puml](flowfield-volume.puml) | [flowfield-volume.png](Images/flowfield-volume.png) |
 
-**세 이미지는 Burst 전환 이전의 그림이라 GPU 경로가 남아 있습니다.** 최신 내용은 PlantUML 원본이며, 이 PC에 PlantUML jar가 없어 다시 렌더하지 못했습니다. 현재 이미지는 v6 베이크 표기 갱신 때 PlantUML 1.2024.3·Java 8(Windows), UTF-8로 렌더했습니다. `flowfield-volume.png`는 안전 스냅샷 제거 때 macOS에서 다시 렌더했습니다. 이전 기준은 PlantUML 1.2024.6, Unity AndroidPlayer에 포함된 OpenJDK 11.0.14.1입니다. 활동도·순서도를 사용하며 Graphviz는 사용하지 않습니다. 별도 도구 경로의 PlantUML JAR를 지정하고 Docs 폴더에서 세 파일을 함께 렌더합니다. Java 실행 파일은 설치 환경에 맞는 경로를 사용합니다.
+현재 이미지는 2026-11-01 PlantUML 1.2024.6, Unity AndroidPlayer에 포함된 OpenJDK 11.0.14.1(macOS), UTF-8로 렌더했습니다. Java 임시 폴더에 쓸 수 없으면 렌더가 실패해도 종료 코드는 0이고 PNG가 0바이트가 되므로, 렌더 뒤 파일 크기를 확인합니다. 그때는 `-Djava.io.tmpdir`로 쓸 수 있는 폴더를 지정합니다. 활동도·순서도를 사용하며 Graphviz는 사용하지 않습니다. 별도 도구 경로의 PlantUML JAR를 지정하고 Docs 폴더에서 세 파일을 함께 렌더합니다. Java 실행 파일은 설치 환경에 맞는 경로를 사용합니다.
 
 ```sh
 "/Applications/Unity/Hub/Editor/2023.2.20f1/PlaybackEngines/AndroidPlayer/OpenJDK/bin/java" \

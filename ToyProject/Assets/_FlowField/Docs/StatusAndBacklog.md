@@ -148,7 +148,7 @@ Editor Play Mode 확인: Surface 샘플은 장애물이 매 Editor 틱 움직이
 | --- | --- | --- |
 | 베이크 에디터 | `FlowFieldBakeEditorTests`가 임시 씬에서 재베이크의 `_revision` 외 차이 없음, 입력 변경 시 Asset 유지, 대상 소유권, 저장 실패 시 이전 Asset 유지를 검사한다. 조용히 실패한 저장은 Asset이 dirty로 남는 것으로 잡는다. 실제 디스크 오류는 주입한 실패로 대신했다 | 없음 |
 | Windows | 이번 수정은 Metal에서만 실행했다 | Windows·Direct3D 11에서 전체 테스트 재실행 |
-| 실제 플레이 | 2026-11-01 Editor에서 실제 포인터로 Surface의 Next Goal·게이트 버튼을, 실제 키로 Surface의 Space·M·R·G·1·2·3·O와 Volume StaticBaked의 Space·O·G·R·F, RuntimeDynamic의 Space·O·G·R을 확인했다. 입력을 받아도 결과가 달라지지 않던 Surface의 C는 제거했다. Surface의 F는 눌렀지만 카메라 값의 변화를 비교하지 않았다. Inspector에 GPU 설정이 없고 경고와 오류가 없음을 확인했다. **RMB+WASD 자유 카메라는 확인하지 못했다**: 우클릭을 누른 채 유지하는 입력을 만들 수 없었다. `FlowFieldFreeCamera.cs`는 이 계획에서 바꾸지 않았다 | RMB+WASD 실제 조작 |
+| 실제 플레이 | 2026-11-01 Editor에서 실제 포인터로 Surface의 Next Goal·게이트 버튼을, 실제 키로 Surface의 Space·M·R·G·1·2·3·O와 Volume StaticBaked의 Space·O·G·R·F, RuntimeDynamic의 Space·O·G·R을 확인했다. 입력을 받아도 결과가 달라지지 않던 Surface의 C는 제거했다. Surface의 F는 눌렀지만 카메라 값의 변화를 비교하지 않았다. Inspector에 GPU 설정이 없고 경고와 오류가 없음을 확인했다. RMB+WASD 자유 카메라는 우클릭을 누른 채 유지하는 입력을 만들 수 없어 나눠서 확인했다. 이 계획에서 바꾸지 않은 `FlowFieldFreeCamera`를 버튼 번호만 왼쪽으로 잠시 바꿔(커밋하지 않음) 실제 마우스와 키로 시험했다. 시선 모드 진입과 커서 잠금, W·A·S·D·Q·E 이동, 드래그 회전, 스크롤 속도 변경, 버튼을 놓은 뒤 복귀, 버튼 없이 누른 W의 무반응을 확인했다. 진짜 우클릭이 Unity에 버튼 1의 Down·Up으로 들어오는 것은 원본 동작을 바꾸지 않고 로그로 따로 확인했다. **우클릭을 유지한 채 조작한 것은 아니고**, Shift 가속·Escape 해제·UI 위 우클릭은 시험하지 않았다 | 사람이 RMB+WASD로 한 번 조작 |
 | Player 실행 | Mono arm64 Mac Player에서 위 수치와 샘플 씬 시작을 자동으로 확인했다. IL2CPP는 Android ARM64 APK 빌드까지 성공했고(`Tools/run-il2cpp-build.sh`) 기기에서 실행하지는 않았다 | IL2CPP 기기 실행 |
 | 자동 실행 | 저장소의 `pre-push` 훅이 push하는 커밋을 검사한다. 저장소마다 한 번 켜야 하고 `--no-verify`로 건너뛸 수 있다. 공개 저장소라 외부 PR 코드가 PC에서 실행될 수 있는 자체 호스트 러너는 쓰지 않는다 | 없음 |
 
@@ -180,7 +180,6 @@ Volume 100³·장애물 50개·Modifier 3개의 전체 빌드는 약 3.5초다.
 | 항목 | 보류 이유 | 다시 볼 조건 |
 | --- | --- | --- |
 | Surface Goal 변경의 한 구간 | 2.4~3.7ms로 2ms를 넘지만 프레임은 17ms 안팎이다. 합성 조각과 게시가 한 덩어리로 끝나는 구간이다 | 실제 기기에서 프레임 저하가 보일 때 |
-| UML 이미지 다시 렌더 | 이 PC에 PlantUML jar가 없다. PNG 3장에 GPU 경로가 남아 있고 `.puml` 원본은 최신이다 | jar를 받을 수 있을 때 `TechnicalNotes.md`의 명령으로 렌더 |
 
 ### 구조
 
@@ -210,7 +209,6 @@ Volume 100³·장애물 50개·Modifier 3개의 전체 빌드는 약 3.5초다.
 1. Windows·Direct3D 11 전체 테스트 재실행
 2. GPU 제거 판단을 다른 하드웨어에서 재확인. 판정은 이 Mac(Apple M4 Pro)의 측정만 근거로 했다
 3. IL2CPP 기기 실행
-4. RMB+WASD 자유 카메라 실제 조작
-5. UML 이미지 3장 다시 렌더
+4. 사람이 RMB+WASD 자유 카메라를 한 번 조작
 
 테스트와 프로브 실행 방법은 [README.md](../README.md#검증-기록)를 따른다. 단계별 XML·로그와 프로브 CSV는 Git에서 제외되는 `ToyProject/Logs/`에 있어 작업한 PC에만 남는다.

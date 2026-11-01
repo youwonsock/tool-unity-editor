@@ -20,7 +20,7 @@ endif
 :Publish complete result\nFieldStore / VolumeFieldData;
 :IFlowFieldProvider.TrySample(position);
 if (Sample has usable\ndirection and speed?) then (move)
-  :Apply direction * base speed\n* SpeedMultiplier;
+  :Apply direction x base speed\nx SpeedMultiplier;
 else (stop)
   :Apply zero velocity;
 endif
