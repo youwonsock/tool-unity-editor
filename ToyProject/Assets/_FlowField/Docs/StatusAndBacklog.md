@@ -6,8 +6,8 @@
 
 | 항목 | 상태 |
 | --- | --- |
-| 테스트 | macOS·Metal(Apple M4 Pro)에서 `Common.FlowField.Tests` 407개 통과, 실패 0, 성능 프로브 12개 제외. 저장소 루트의 `Tools/run-tests.sh`로 실행한다. Windows·Direct3D 11 마지막 기록은 이번 수정 이전의 466개 |
-| 베이크 | Surface·Volume 모두 v6만 허용. 마이그레이션 코드는 없다. 두 모드 모두 호출 스레드에서 풀이한다. 2026-11-01 샘플 Asset을 다시 구워 보니 Volume은 내용이 같았고, Surface는 GPU로 구운 방향이 최대 6e-8 달라져(경로는 같음) 새 Asset으로 바꿨다 |
+| 테스트 | macOS·Metal(Apple M4 Pro)에서 `Common.FlowField.Tests` 414개 통과, 실패 0, 성능 프로브 12개 제외. 저장소 루트의 `Tools/run-tests.sh`로 실행한다. Windows·Direct3D 11 마지막 기록은 이번 수정 이전의 466개 |
+| 베이크 | Surface·Volume 모두 v6만 허용. 마이그레이션 코드는 없다. 베이크는 풀이가 끝날 때까지 기다린다. Surface는 호출 스레드에서 실행하고, Volume은 Job으로 예약한다. 2026-11-01 샘플 Asset을 다시 구워 보니 Volume은 내용이 같았고, Surface는 GPU로 구운 방향이 최대 6e-8 달라져(경로는 같음) 새 Asset으로 바꿨다 |
 | 공개 계약 | Provider·Controller API, Manager 직렬화 설정, 씬·Prefab의 GUID 참조 유지. `FlowFieldManager.GpuFallbackReason`, `_frontierComputeShader`, `_maxGpuWaves` 제거(2026-11-01) |
 | 성능 (100³ Volume, Managed, Windows 기록) | 전체 빌드 26~55초 → 약 6초, 2ms 예산 빌드 12,585 → 2,214프레임, 장애물 1개 이동 후 재빌드 31.3 → 6.0초 |
 
@@ -81,6 +81,7 @@ GC 판정: 게시 배열을 재사용하기 전 움직이는 Volume Goal은 10�
 | #37 | 후속 | 문서를 코드와 맞추고 계획 기록 추가 | 코드 변경 없음 |
 | #38 | 리뷰 | stale 설정 빌드 회귀, 합성 중 입력 변경, 뷰 배열 재사용, 실패 로그, 등록 누락 경고 | 재현 테스트 추가, Surface 이동 Goal 초당 9.0회 |
 | #39 | 리뷰 | 탈출 방향 공유, 측정 어셈블리 제한, 쓰이지 않는 실패 경로와 헬퍼 제거 | Volume 이동 Goal 초당 9.4~9.5회(흔들림 범위 안), IL2CPP APK 빌드 성공 |
+| #40 | 리뷰 | 성능 표의 시점과 스레드 설명을 코드에 맞춤 | 코드 변경 없음 |
 
 ### 성능·구조 개선 (2026-10-29~30)
 
@@ -177,9 +178,9 @@ Editor Play Mode 확인: Surface 샘플은 장애물이 매 Editor 틱 움직이
 
 ### 성능
 
-Apple M4 Pro·Managed 측정(`FlowFieldPerformanceProbes`). 결과 CSV는 `ToyProject/Logs/FlowFieldMaintenance/`에 있다.
+Burst 전환 전의 Apple M4 Pro·Managed 측정(`FlowFieldPerformanceProbes`)이다. 현재 수치는 위의 Player 기준선을 본다. 결과 CSV는 `ToyProject/Logs/FlowFieldMaintenance/`에 있다.
 
-| 항목 | 개선 전 | 현재 | 원인과 수정 |
+| 항목 | 개선 전 | Burst 전환 전 | 원인과 수정 |
 | --- | ---: | ---: | --- |
 | Surface 316×316 Goal 재빌드 | 425ms | 157ms | 셀마다 `CanTraverse`를 다시 부르고 Goal 준비를 두 번 했다. 준비된 Topology를 재사용하고 `CellCount`·`IsValid`를 저장한다 |
 | Volume 100³ 안전 스냅샷, 영역 1 / 64개 | 323ms / 8,872ms | 없음 | 게시 프레임에 전체 셀×영역을 검사했다. 값이 중복되어 스냅샷을 제거했다 |

@@ -27,7 +27,7 @@ Surface의 상태·게시 콜백은 수명 전이 경계입니다. Fault·Retry�
 
 Session은 수명이 끝날 때 실행 중인 풀이 Job에 취소를 요청하고 끝날 때까지 기다린 뒤 작업 배열을 재사용합니다. Job은 4,096셀마다 취소 표시를 확인하므로 기다림은 짧습니다. 게시 Grid·Surface와 해석된 Goal은 FieldStore에서만 가져오며 내부 FieldCommitted 이벤트는 인자 없이 변경된 결과의 게시만 알립니다. 일반 샘플은 합성 중 작업 배열이 아닌 게시 저장소를 읽고, 최신 장애물·탈출·연결 안전성 검사를 추가로 적용합니다.
 
-Surface 기본 준비 요청의 Grid·Surface는 장애물 요청에서 얻습니다. 준비 결과는 장애물 변경·변경 영역·이동 가능한 표면 여부·Goal 상태만 보관하고, Goal 변경 여부는 그 상태에서 계산합니다. BFS가 실제 사용하는 MaxGpuWaves·Version과 Session의 요청·기본 필드 버전은 유지합니다. Volume 스케줄러 계약은 대기 여부·작업 여부·Pump만 노출하며 취소는 Session이 소유합니다.
+Surface 기본 준비 요청의 Grid·Surface는 장애물 요청에서 얻습니다. 준비 결과는 장애물 변경·변경 영역·이동 가능한 표면 여부·Goal 상태만 보관하고, Goal 변경 여부는 그 상태에서 계산합니다. 스케줄러 계약은 대기 여부·작업 여부·Pump만 노출하며 취소는 Session이 소유합니다.
 
 RuntimeDynamic의 입력 변경은 후보를 검증해 최신 요청에 반영합니다. Surface의 Modifier 등록·변경·관측은 첫 Submit 이후 같은 대기 플래그에 처리를 예약하며 추가 RequestRebuild 없이 다음 Pump에서 합성합니다. Manager의 LateUpdate는 실행 직전 현재 작성 설정을 요청에 반영합니다. Surface Scheduler는 이렇게 제출된 요청만 빌드하므로 stale 설정이나 잘못된 설정으로는 빌드하지 않고, 대기 중에는 프레임 예산을 쓰지 않습니다. 직접 `Pump()`를 호출하는 베이크와 테스트는 호출자가 입력을 책임집니다. 명시적 RequestRebuild도 같은 제출 경로를 사용하고, 진행 중인 작업의 고정 입력은 덮어쓰지 않습니다. StaticBaked에서는 Play Mode에 Goal·장애물 변경 API나 Editor의 Bake 저장 API를 호출하지 않고 Bake Asset을 로드합니다.
 

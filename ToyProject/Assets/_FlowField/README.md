@@ -234,7 +234,7 @@ Manager도 함께 Fault 상태라면 Modifier를 비활성화·Release해 설정
 | Volume 안전성·게시 | `FlowFieldVolumeSafetyState`, `FlowFieldVolumeFieldData`, `FlowFieldVolumeSpareArrays` | 불확실 영역의 보수적 정지, 완성 결과 보관, 교체된 결과 배열 재사용. 뷰로 내보낸 결과의 배열은 재사용하지 않음 |
 | 격자·읽기 | `FlowFieldGridSpace`, `FlowFieldReadView` | 월드/셀 좌표 변환과 내부 읽기 전용 셀 조회 |
 | 정적 입력 | `FlowFieldStaticBakeData`, `FlowFieldVolumeBakeData`, `FlowFieldBakeBlob` | Surface2D·Volume3D의 v6 베이크 저장·검증 |
-| 풀이 Job | `FlowFieldVolumeSolveJob`, `FlowFieldSurfaceSolveJob`, `FlowFieldSurfaceTopologyJob`, `IFlowFieldSolveBackend` | 내비게이션 계산을 Burst Job으로 실행. 프레임을 막지 않게 워커 스레드에서 풀고 매 프레임 완료를 확인. 게시 결과는 관리 배열이므로 샘플링과 베이크는 Native 타입을 다루지 않음 |
+| 풀이 Job | `FlowFieldVolumeSolveJob`, `FlowFieldSurfaceSolveJob`, `FlowFieldSurfaceTopologyJob`, `IFlowFieldSolveBackend` | 내비게이션 계산을 Burst Job으로 실행. 풀이는 프레임을 막지 않게 워커 스레드에서 돌리고 매 프레임 완료를 확인. Surface Topology는 메인 스레드에서 실행. 게시 결과는 관리 배열이므로 샘플링과 베이크는 Native 타입을 다루지 않음 |
 | 협력 실행 | `IFlowFieldBuildOperation`, `FlowFieldBuildScheduler`, `FlowFieldBuildDriver`, `FlowFieldBuildSettings` | 실행 가능한 Surface·Volume 작업을 공통 CPU 예산(기본 2ms)으로 진행. Session 수명과 취소는 Session 소유 |
 
 ## 수명과 결과 게시
@@ -354,7 +354,7 @@ Surface2D의 X·Z 셀 수는 `floor(axisLength / CellSize + 0.5)`로 계산하�
 
 ### 검증 기록
 
-Unity 2023.2.20f1·macOS·Metal(Apple M4 Pro)에서 **회귀 테스트 407개가 모두 통과**했습니다(성능 프로브 12개 제외). Windows·Direct3D 11(AMD Radeon RX 9070)의 마지막 기록은 이번 수정 이전의 466개 통과입니다. 저장된 샘플 씬 통합 2개, PlayMode에 진입하는 Manager 통합을 포함합니다. Surface·Volume의 샘플 게시, 재진입·취소·재활성화, 장애물 안전성, Modifier 합성, 베이크 검증·저장 실패 경계와 직렬화 참조를 확인합니다.
+Unity 2023.2.20f1·macOS·Metal(Apple M4 Pro)에서 **회귀 테스트 414개가 모두 통과**했습니다(성능 프로브 12개 제외). Windows·Direct3D 11(AMD Radeon RX 9070)의 마지막 기록은 이번 수정 이전의 466개 통과입니다. 저장된 샘플 씬 통합 2개, PlayMode에 진입하는 Manager 통합을 포함합니다. Surface·Volume의 샘플 게시, 재진입·취소·재활성화, 장애물 안전성, Modifier 합성, 베이크 검증·저장 실패 경계와 직렬화 참조를 확인합니다.
 
 리팩터링 안전망으로 다음 검사가 함께 실행됩니다.
 
@@ -371,7 +371,7 @@ Unity.exe -batchmode -projectPath <ToyProject> -runTests -testPlatform EditMode 
 
 성능 프로브(`FlowFieldPerformanceProbes`, `Performance` 카테고리)는 일반 실행에서 건너뜁니다. 환경 변수 `FLOWFIELD_PERF=1`을 설정하고 `-testCategory Performance`로 실행하면 결과를 `Logs/FlowFieldPerformance/probes.csv`에 추가합니다. 단계별 변경과 결정은 [RefactoringNotes.md](Docs/RefactoringNotes.md)에, 현재 상태와 남은 과제는 [StatusAndBacklog.md](Docs/StatusAndBacklog.md)에 기록합니다. `Logs/`는 Git에서 제외되므로 새 체크아웃에서는 다시 실행해 생성합니다.
 
-| 측정(100³ Volume·장애물 40개, Managed) | 개선 전 | 현재 |
+| 측정(100³ Volume·장애물 40개, Managed) | 개선 전 | Burst 전환 전 |
 | --- | ---: | ---: |
 | 전체 빌드, 등록 장애물 0 / 10 / 50개 | 26.1 / 32.3 / 55.4초 | 5.8 / 5.9 / 6.4초 |
 | 2ms 협력 예산으로 빌드 완료까지 | 12,585프레임 | 2,214프레임 |
