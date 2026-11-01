@@ -11,8 +11,7 @@ namespace Common.FlowField.Tests
     /// </summary>
     public sealed class FlowFieldGoldenFieldTests
     {
-        // Recorded with the Managed solver. "PENDING" reports the current
-        // value as Inconclusive until a baseline run fills it in.
+        // Recorded with the Managed solver; the Burst jobs reproduce the same values.
         private const string SurfaceGolden = "576:171f76fb8107699e";
         private const string VolumeGolden = "2560:38915563690b1b65";
 
@@ -212,8 +211,6 @@ namespace Common.FlowField.Tests
             // the hash would not guard those paths.
             Assert.That(hash.Stopped, Is.GreaterThan(0), hash.Coverage);
             Assert.That(hash.Modified, Is.GreaterThan(0), hash.Coverage);
-            if (expected == "PENDING")
-                Assert.Inconclusive($"{name} golden hash not recorded yet. Current value: {actual}");
             Assert.That(actual, Is.EqualTo(expected), $"{name} published field changed.");
         }
     }

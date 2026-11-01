@@ -609,13 +609,6 @@ namespace Common.FlowField.Tests
             AssertResolvedGoal(GoalB);
         }
 
-        private void PumpUntilSolving()
-        {
-            for (int tick = 0; tick < 4 && !_session.IsRebuilding; tick++)
-                _session.Pump();
-            Assert.That(_session.IsRebuilding, Is.True, _session.LastError);
-        }
-
         private void RegisterObstacle(Vector3 position)
         {
             _colliderObject = new GameObject("Moving obstacle regression");

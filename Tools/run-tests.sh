@@ -3,7 +3,6 @@
 #
 #   Tools/run-tests.sh                                  EditMode, PlayMode and Python
 #   Tools/run-tests.sh --platform EditMode --filter 'Regex|Name'
-#   FLOWFIELD_PERF=1 Tools/run-tests.sh --platform EditMode --filter FlowFieldPerformanceProbes
 #
 # See Tools/snapshot-worktree.sh for the environment variables.
 #
