@@ -52,8 +52,8 @@ GC 판정: 게시 배열을 재사용하기 전 움직이는 Volume Goal은 10�
 | 목표 | 계획 | 결과 |
 | --- | --- | --- |
 | 외부 호출 뒤 소유권 재검사 | 115줄 → 15줄 이하 | 13줄(2단계 끝 기준). 남은 13줄은 GPU 콜백용이었고 3단계에서 GPU 경로를 지웠다. 그 뒤로 다시 세지 않았다 |
-| Surface 세션 필드 | 28개 → 15개 이하 | 12개 |
-| 가장 큰 세션 파일 | 841줄 → 600줄 이하 | 579줄 |
+| Surface 세션 필드 | 28개 → 15개 이하 | 13개 |
+| 가장 큰 세션 파일 | 841줄 → 600줄 이하 | 580줄 |
 | Volume 100³ 2ms 예산 빌드 | 1,270프레임 → 절반 이하 | 132~218프레임(Player 첫 빌드) |
 | Volume 100³ Directions·BFS·Topology | 2,162ms → 절반 이하 | 워커 Job으로 옮겨 프레임 예산을 쓰지 않는다. 세 단계만 따로 다시 재지는 않았고, Player 첫 빌드 전체는 7.6초 → 2.3~3.7초 |
 | 버려지는 풀이 | Grid 변경·Goal 제거 외 0 | 달성 |
@@ -173,6 +173,7 @@ Editor Play Mode 확인: Surface 샘플은 장애물이 매 Editor 틱 움직이
 | 베이크 에디터 | `FlowFieldBakeEditorTests`가 임시 씬에서 재베이크의 `_revision` 외 차이 없음, 입력 변경 시 Asset 유지, 대상 소유권, 저장 실패 시 이전 Asset 유지를 검사한다. 조용히 실패한 저장은 Asset이 dirty로 남는 것으로 잡는다. 실제 디스크 오류는 주입한 실패로 대신했다 | 없음 |
 | Windows | 이번 수정은 Metal에서만 실행했다 | Windows·Direct3D 11에서 전체 테스트 재실행 |
 | 실제 플레이 | 2026-11-01 Editor에서 실제 포인터로 Surface의 Next Goal·게이트 버튼을, 실제 키로 Surface의 Space·M·R·G·1·2·3·O와 Volume StaticBaked의 Space·O·G·R·F, RuntimeDynamic의 Space·O·G·R을 확인했다. 입력을 받아도 결과가 달라지지 않던 Surface의 C는 제거했다. Surface의 F는 눌렀지만 카메라 값의 변화를 비교하지 않았다. Inspector에 GPU 설정이 없고 경고와 오류가 없음을 확인했다. RMB+WASD 자유 카메라는 우클릭을 누른 채 유지하는 입력을 만들 수 없어 나눠서 확인했다. 이 계획에서 바꾸지 않은 `FlowFieldFreeCamera`를 버튼 번호만 왼쪽으로 잠시 바꿔(커밋하지 않음) 실제 마우스와 키로 시험했다. 시선 모드 진입과 커서 잠금, W·A·S·D·Q·E 이동, 드래그 회전, 스크롤 속도 변경, 버튼을 놓은 뒤 복귀, 버튼 없이 누른 W의 무반응을 확인했다. 진짜 우클릭이 Unity에 버튼 1의 Down·Up으로 들어오는 것은 원본 동작을 바꾸지 않고 로그로 따로 확인했다. **우클릭을 유지한 채 조작한 것은 아니고**, Shift 가속·Escape 해제·UI 위 우클릭은 시험하지 않았다 | 사람이 RMB+WASD로 한 번 조작 |
+| 장시간 군중 이동 | 군중 1000개 3분 이동은 2026-10-31 Editor 기록이다. 그 뒤의 Burst 전환과 구조 개편 후에는 다시 돌리지 않았다 | 현재 코드로 다시 실행 |
 | Player 실행 | Mono arm64 Mac Player에서 위 수치와 샘플 씬 시작을 자동으로 확인했다. IL2CPP는 Android ARM64 APK 빌드까지 성공했고(`Tools/run-il2cpp-build.sh`) 기기에서 실행하지는 않았다 | IL2CPP 기기 실행 |
 | 자동 실행 | 저장소의 `pre-push` 훅이 push하는 커밋을 검사한다. 저장소마다 한 번 켜야 하고 `--no-verify`로 건너뛸 수 있다. 공개 저장소라 외부 PR 코드가 PC에서 실행될 수 있는 자체 호스트 러너는 쓰지 않는다 | 없음 |
 
@@ -222,17 +223,18 @@ Volume 100³·장애물 50개·Modifier 3개의 전체 빌드는 약 3.5초다.
 - `FlowFieldRequestInbox`: 두 세션의 최신 요청과 대기 표시. Surface의 실행 중 요청 복사본은 없앴다.
 - Surface 단계: `FlowFieldSurfaceBaseStage`(표면·장애물·Goal), `FlowFieldSurfaceSolveStage`(풀이 실행), `FlowFieldSurfaceComposeStage`(합성 진행). 세션은 이 단계들의 순서와 수명만 맡는다.
 - `FlowFieldManager.Modes.cs`: Surface와 Volume의 차이. Manager 본체에는 모드 분기가 없다. `FlowFieldManager.Validation.cs`, `FlowFieldManager.Bake.cs`는 설정 검증과 베이크 연동이다.
-- 세션의 `.Build`, `.Sampling`, `.Views`, `.Memory`, `.Obstacles`는 partial 파일이다. 필드를 공유하므로 읽기 쉬워졌을 뿐 결합이 줄지는 않았다. 가장 큰 세션 파일은 `FlowFieldVolumeSession.cs`(579줄)다.
-- Surface 세션의 필드는 28개에서 12개로 줄었다.
+- 세션의 `.Build`, `.Sampling`, `.Views`, `.Memory`, `.Obstacles`는 partial 파일이다. 필드를 공유하므로 읽기 쉬워졌을 뿐 결합이 줄지는 않았다. 가장 큰 세션 파일은 `FlowFieldVolumeSession.cs`(580줄)다.
+- Surface 세션의 필드는 28개에서 13개로 줄었다.
 - 2026-11-01 `FlowFieldExecutionBoundary`로 복잡성의 근원을 없앴다: 이벤트 핸들러는 작업이 끝난 뒤 실행하고 Modifier 코드에서는 다른 작업을 시작할 수 없어, 외부 호출 뒤 소유권 재검사가 필요 없다. 외부 호출 뒤 소유권을 확인하는 줄이 115줄에서 13줄이 됐고, 남은 13줄은 늦게 도착하는 GPU 콜백용이다. 도달할 수 없게 된 재진입 테스트 케이스 224개를 지우고, Manager를 통한 거부·지연·이벤트 순서 테스트 케이스 73개를 추가했다. Modifier 계약은 getter 3개에서 `Observe()` 하나로 바뀌어 직접 구현한 코드는 고쳐야 한다.
 
 ## 다음 순서
 
-2026-11-01 계획의 10단계를 마쳤다. 남은 항목은 이 Mac에서 할 수 없거나 확인하지 못한 것들이다.
+2026-11-01 계획의 10단계와 리뷰 수정을 마쳤다. 남은 항목은 이 Mac에서 할 수 없거나 확인하지 못한 것들이다.
 
 1. Windows·Direct3D 11 전체 테스트 재실행
 2. GPU 제거 판단을 다른 하드웨어에서 재확인. 판정은 이 Mac(Apple M4 Pro)의 측정만 근거로 했다
 3. IL2CPP 기기 실행
 4. 사람이 RMB+WASD 자유 카메라를 한 번 조작
+5. 현재 코드로 장시간 군중 이동 다시 실행
 
 테스트와 프로브 실행 방법은 [README.md](../README.md#검증-기록)를 따른다. 단계별 XML·로그와 프로브 CSV는 Git에서 제외되는 `ToyProject/Logs/`에 있어 작업한 PC에만 남는다.
