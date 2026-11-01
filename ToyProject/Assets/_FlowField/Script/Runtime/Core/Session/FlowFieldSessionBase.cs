@@ -8,7 +8,7 @@ namespace Common.FlowField
     /// Mode-specific sessions own their requests, versions and result data.
     /// This base owns the shared lifecycle rules: the published state, the fault
     /// sequence, command deferral and the generation that retires queued events
-    /// and late GPU callbacks.
+    /// and late solve callbacks.
     /// </summary>
     internal abstract class FlowFieldSessionBase : IDisposable
     {
@@ -35,11 +35,10 @@ namespace Common.FlowField
         internal abstract bool IsRebuilding { get; }
         internal Exception Fault { get; private protected set; }
         internal string LastError => Fault?.Message;
-        internal string GpuFallbackReason { get; private protected set; }
         internal int Revision { get; private protected set; }
         private protected bool Disposed { get; set; }
         // Advances when the session stops being what earlier work was for:
-        // Release, Suspend and a fault. Queued events and late GPU callbacks
+        // Release, Suspend and a fault. Queued events and late solve callbacks
         // from before that point are dropped.
         private protected int LifetimeGeneration { get; private set; }
         internal abstract bool TrySample(Vector3 worldPosition, out FlowFieldSample sample);

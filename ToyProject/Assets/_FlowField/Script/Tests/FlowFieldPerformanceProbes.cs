@@ -148,62 +148,6 @@ namespace Common.FlowField.Tests
             });
         }
 
-        [UnityTest]
-        public IEnumerator VolumeGpuBuild()
-        {
-            using var scenario = CreateVolume(registeredObstacles: 10, modifiers: 0);
-            var session = new FlowFieldVolumeSession();
-            try
-            {
-                ComputeShader shader = LoadShader();
-                session.Initialize(FlowFieldBakeMode.RuntimeDynamic, shader);
-                FlowFieldVolumeRequest managed = scenario.Request();
-                var request = new FlowFieldVolumeRequest(
-                    managed.Grid, managed.WorldBounds, managed.BakeMode, managed.ObstacleLayer,
-                    managed.ObstacleClearance, managed.HasGoal, managed.GoalWorld, managed.GoalInfluenceRadius,
-                    managed.DefaultDirection, 2048, shader, null);
-                var stopwatch = Stopwatch.StartNew();
-                session.Submit(request);
-                while (session.IsRebuilding)
-                {
-                    session.Pump(1000d);
-                    yield return null;
-                }
-                Assert.That(session.IsFaulted, Is.False, session.LastError);
-                Assert.That(session.GpuFallbackReason, Is.Null);
-                Record("volume.gpu.build", "elapsedMs", stopwatch.Elapsed.TotalMilliseconds);
-            }
-            finally { session.Dispose(); }
-        }
-
-        [UnityTest]
-        public IEnumerator SurfaceGpuBuild()
-        {
-            using var scenario = new FlowFieldScenarioFixture.SurfaceScenario(SurfaceSize, SurfaceSize)
-            {
-                Goal = new Vector3(SurfaceSize - 2.5f, 0f, 2.5f),
-            };
-            var session = new FlowFieldSession(new FlowFieldFixedSurfaceSource(scenario.Surface));
-            try
-            {
-                session.Initialize(
-                    FlowFieldBakeMode.RuntimeDynamic,
-                    FlowFieldSessionSourceKind.SceneBuild,
-                    FlowFieldBfsBackendPolicy.PreferGpu,
-                    LoadShader());
-                var stopwatch = Stopwatch.StartNew();
-                session.Submit(scenario.Request());
-                session.Pump();
-                Record("surface.gpu.firstPumpBlock", "elapsedMs", stopwatch.Elapsed.TotalMilliseconds);
-                while (session.IsRebuilding)
-                    yield return null;
-                Assert.That(session.IsFaulted, Is.False, session.LastError);
-                Assert.That(session.GpuFallbackReason, Is.Null);
-                Record("surface.gpu.build", "elapsedMs", stopwatch.Elapsed.TotalMilliseconds);
-            }
-            finally { session.Dispose(); }
-        }
-
         [Test]
         public void SurfaceBakeValidation()
         {
@@ -215,14 +159,6 @@ namespace Common.FlowField.Tests
                 settings.ApplyModifiedPropertiesWithoutUndo();
             Measure("surface.bake.validate", data.NextCells.Length, () => Assert.That(data.Validate(out _), Is.True));
             Measure("surface.bake.validateAgain", data.NextCells.Length, () => Assert.That(data.Validate(out _), Is.True));
-        }
-
-        private static ComputeShader LoadShader()
-        {
-            if (!SystemInfo.supportsComputeShaders || !SystemInfo.supportsAsyncGPUReadback)
-                Assert.Ignore("Compute shaders and async readback are required.");
-            return AssetDatabase.LoadAssetAtPath<ComputeShader>(
-                "Assets/_FlowField/Script/Runtime/Core/Solvers/FlowFieldFrontier.compute");
         }
 
         [Test]
@@ -299,8 +235,8 @@ namespace Common.FlowField.Tests
             int goalIndex = -1;
             Measure("surface.stage.prepareGoal", cells, () => FlowFieldSolver.PrepareGoal(
                 grid, surface, workspace, goalX, goalZ, 0f, out goalIndex));
-            var request = new FlowFieldBfsRequest(grid, surface, workspace, true, goalX, goalZ, 0f, goalIndex, 1024);
-            Measure("surface.stage.managedBfs", cells, () => FlowFieldSurfaceBuildPipeline.BuildManaged(request));
+            var request = new FlowFieldBfsRequest(grid, surface, workspace, true, goalX, goalZ, 0f, goalIndex);
+            Measure("surface.stage.managedBfs", cells, () => FlowFieldSurfaceBuildPipeline.SolveNow(request));
             Measure("surface.stage.compose", cells, () => FlowFieldFinalFieldComposer.Compose(
                 grid, surface, workspace, Vector3.forward, Array.Empty<FlowFieldModifierLayer>()));
             workspace.Release();

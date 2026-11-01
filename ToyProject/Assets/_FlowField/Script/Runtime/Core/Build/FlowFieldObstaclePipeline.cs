@@ -61,7 +61,7 @@ namespace Common.FlowField
         private readonly List<Bounds> _dynamicBounds = new List<Bounds>(32);
         // Last observed bounds are kept separate from the last-built bounds.
         // This prevents LateUpdate from versioning the same transform change
-        // on every poll while a GPU solve is still in flight, while the
+        // on every poll while a solve is still in flight, while the
         // rebuild still receives the complete previous→latest dirty range.
         private readonly List<Bounds> _observedDynamicBounds = new List<Bounds>(32);
         private readonly HashSet<Collider> _dynamicSet = new HashSet<Collider>();

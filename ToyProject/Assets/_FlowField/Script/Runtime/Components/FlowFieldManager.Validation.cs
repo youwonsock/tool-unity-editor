@@ -32,8 +32,6 @@ namespace Common.FlowField
                 throw new ArgumentOutOfRangeException(nameof(_refreshRate));
             if (!Enum.IsDefined(typeof(FlowFieldBakeMode), _bakeMode))
                 throw new ArgumentOutOfRangeException(nameof(_bakeMode));
-            if (_maxGpuWaves < 64)
-                throw new ArgumentOutOfRangeException(nameof(_maxGpuWaves), "GPU wave limit must be at least 64.");
             if (!TryGetVolumeLayout(out Bounds volumeBounds, out FlowFieldGridSpace volumeGrid) || !volumeGrid.IsValid)
                 throw new ArgumentException("Volume Bounds and Cell Size do not produce a valid grid.", nameof(_bakeBoundsLocal));
             if (volumeGrid.CellCount > FlowFieldBakeBoundsUtility.MaxVolumeCellCount)
@@ -93,8 +91,6 @@ namespace Common.FlowField
                 throw new ArgumentOutOfRangeException(nameof(_obstacleClearance));
             if (!FlowFieldGridSpace.IsFinite(_refreshRate) || _refreshRate < MIN_REFRESH_RATE)
                 throw new ArgumentOutOfRangeException(nameof(_refreshRate));
-            if (_maxGpuWaves < 64)
-                throw new ArgumentOutOfRangeException(nameof(_maxGpuWaves), "GPU wave limit must be at least 64.");
             if (!Enum.IsDefined(typeof(FlowFieldBakeMode), _bakeMode))
                 throw new ArgumentOutOfRangeException(nameof(_bakeMode));
             if (_session.IsInitialized && BakeMode != _bakeMode)

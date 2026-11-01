@@ -2,12 +2,13 @@
     "name": "Common.FlowField.Core",
     "rootNamespace": "Common.FlowField",
     "references": [
+        "Unity.Burst",
         "Unity.Collections",
         "Unity.Mathematics"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
-    "allowUnsafeCode": false,
+    "allowUnsafeCode": true,
     "overrideReferences": false,
     "precompiledReferences": [],
     "autoReferenced": true,

@@ -20,7 +20,6 @@ namespace Common.FlowField.Editor
         private const string ScenePath = "Assets/FlowFieldPlayerProbe.unity";
         private const string VariantPrefix = "OtherBakeMode_";
         private const string OutputArgument = "-flowFieldProbeApp";
-        private const string ShaderPath = "Assets/_FlowField/Script/Runtime/Core/Solvers/FlowFieldFrontier.compute";
         private const int SurfaceSize = 316;
         private const int VolumeSize = 100;
         private const int ObstacleCount = 40;
@@ -75,10 +74,6 @@ namespace Common.FlowField.Editor
         private static void GenerateScene(string[] sampleScenes)
         {
             Scene scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
-            var shader = AssetDatabase.LoadAssetAtPath<ComputeShader>(ShaderPath);
-            if (shader == null)
-                throw new InvalidOperationException($"Missing compute shader: {ShaderPath}");
-
             GameObject ground = new GameObject("Probe ground") { layer = FlowFieldPlayerProbeLayers.Ground };
             ground.transform.position = new Vector3(SurfaceSize * 0.5f, -0.5f, SurfaceSize * 0.5f);
             ground.AddComponent<BoxCollider>().size = new Vector3(SurfaceSize, 1f, SurfaceSize);
@@ -86,10 +81,8 @@ namespace Common.FlowField.Editor
             var probe = new GameObject("Probe").AddComponent<FlowFieldPlayerProbe>();
             using (var settings = new SerializedObject(probe))
             {
-                settings.FindProperty("_surfaceManaged").objectReferenceValue = CreateSurfaceManager("Surface managed", null);
-                settings.FindProperty("_surfaceGpu").objectReferenceValue = CreateSurfaceManager("Surface GPU", shader);
-                settings.FindProperty("_volumeManaged").objectReferenceValue = CreateVolumeManager("Volume managed", null);
-                settings.FindProperty("_volumeGpu").objectReferenceValue = CreateVolumeManager("Volume GPU", shader);
+                settings.FindProperty("_surface").objectReferenceValue = CreateSurfaceManager();
+                settings.FindProperty("_volume").objectReferenceValue = CreateVolumeManager();
                 settings.FindProperty("_surfaceObstacles").objectReferenceValue = CreateSurfaceWalls();
                 settings.FindProperty("_volumeObstacles").objectReferenceValue = CreateVolumeObstacles();
                 settings.FindProperty("_surfaceSize").intValue = SurfaceSize;
@@ -106,18 +99,15 @@ namespace Common.FlowField.Editor
                 throw new InvalidOperationException($"Could not save {ScenePath}.");
         }
 
-        private static FlowFieldManager CreateSurfaceManager(string name, ComputeShader shader)
-        {
-            FlowFieldManager manager = CreateManager(name, shader, FlowFieldSpaceMode.Surface2D,
+        private static FlowFieldManager CreateSurfaceManager()
+            => CreateManager("Surface", FlowFieldSpaceMode.Surface2D,
                 new Bounds(new Vector3(SurfaceSize * 0.5f, 0f, SurfaceSize * 0.5f), new Vector3(SurfaceSize, 10f, SurfaceSize)));
-            return manager;
-        }
 
-        private static FlowFieldManager CreateVolumeManager(string name, ComputeShader shader)
-            => CreateManager(name, shader, FlowFieldSpaceMode.Volume3D,
+        private static FlowFieldManager CreateVolumeManager()
+            => CreateManager("Volume", FlowFieldSpaceMode.Volume3D,
                 new Bounds(Vector3.one * (VolumeSize * 0.5f), Vector3.one * VolumeSize));
 
-        private static FlowFieldManager CreateManager(string name, ComputeShader shader, FlowFieldSpaceMode mode, Bounds bounds)
+        private static FlowFieldManager CreateManager(string name, FlowFieldSpaceMode mode, Bounds bounds)
         {
             var managerObject = new GameObject(name);
             managerObject.SetActive(false);
@@ -129,8 +119,6 @@ namespace Common.FlowField.Editor
             settings.FindProperty("_cellSize").floatValue = 1f;
             settings.FindProperty("_groundBakeLayer").intValue = 1 << FlowFieldPlayerProbeLayers.Ground;
             settings.FindProperty("_obstacleLayer").intValue = 1 << FlowFieldPlayerProbeLayers.Obstacle;
-            settings.FindProperty("_frontierComputeShader").objectReferenceValue = shader;
-            settings.FindProperty("_maxGpuWaves").intValue = 4096;
             settings.ApplyModifiedPropertiesWithoutUndo();
             return manager;
         }

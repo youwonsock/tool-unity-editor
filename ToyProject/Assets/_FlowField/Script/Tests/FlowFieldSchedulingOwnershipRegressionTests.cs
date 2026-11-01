@@ -55,7 +55,6 @@ namespace Common.FlowField.Tests
                 settings.FindProperty("_obstacleCheckHeight").floatValue = 1f;
                 settings.FindProperty("_obstacleCheckCenterOffset").floatValue = .5f;
                 settings.FindProperty("_refreshRate").floatValue = .05f;
-                settings.FindProperty("_frontierComputeShader").objectReferenceValue = null;
                 settings.FindProperty("_showField").boolValue = false;
                 settings.ApplyModifiedPropertiesWithoutUndo();
             }
@@ -256,7 +255,7 @@ namespace Common.FlowField.Tests
             bool baked = path == "static", bfs = path == "bfs";
             session.Initialize(baked ? FlowFieldBakeMode.StaticBaked : FlowFieldBakeMode.RuntimeDynamic,
                 baked ? FlowFieldSessionSourceKind.StaticSnapshot : FlowFieldSessionSourceKind.SceneBuild,
-                bfs ? FlowFieldBfsBackendPolicy.RequireGpu : FlowFieldBfsBackendPolicy.ManagedOnly, null);
+                bfs ? FlowFieldSolvePolicy.Worker : FlowFieldSolvePolicy.Inline);
             var modifier = new Modifier { Collider = MakeInfluence() };
             if (operation != "register") session.RegisterModifierCommand(modifier);
             session.Submit(baked ? StaticRequest(CreateSnapshot()) : FlowFieldRegressionFixture.Request(
@@ -410,7 +409,7 @@ namespace Common.FlowField.Tests
             bool baked = path == "static", bfs = path == "bfs";
             session.Initialize(baked ? FlowFieldBakeMode.StaticBaked : FlowFieldBakeMode.RuntimeDynamic,
                 baked ? FlowFieldSessionSourceKind.StaticSnapshot : FlowFieldSessionSourceKind.SceneBuild,
-                bfs ? FlowFieldBfsBackendPolicy.RequireGpu : FlowFieldBfsBackendPolicy.ManagedOnly, null);
+                bfs ? FlowFieldSolvePolicy.Worker : FlowFieldSolvePolicy.Inline);
             var modifier = new Modifier { Collider = MakeInfluence() };
             session.RegisterModifierCommand(modifier);
             session.Submit(baked ? StaticRequest(CreateSnapshot()) : FlowFieldRegressionFixture.Request(
@@ -430,7 +429,7 @@ namespace Common.FlowField.Tests
         {
             using var source = new FlowFieldSession(FlowFieldRegressionFixture.Surface());
             source.Initialize(FlowFieldBakeMode.RuntimeDynamic, FlowFieldSessionSourceKind.SceneBuild,
-                FlowFieldBfsBackendPolicy.ManagedOnly, null);
+                FlowFieldSolvePolicy.Inline);
             source.Submit(FlowFieldRegressionFixture.Request()); source.Pump();
             var work = source.CommittedWorkspace;
             return new FlowFieldStaticBakeSnapshot(FlowFieldRegressionFixture.Settings, 1 << FlowFieldRegressionFixture.Layer,
@@ -440,7 +439,7 @@ namespace Common.FlowField.Tests
 
         private static FlowFieldSessionRequest StaticRequest(FlowFieldStaticBakeSnapshot snapshot)
             => FlowFieldSessionRequest.ForStaticSnapshot(FlowFieldRegressionFixture.Settings, null, snapshot,
-                1 << FlowFieldRegressionFixture.Layer, 1f, .5f, 0f, Vector3.forward, FlowFieldDirtyFlags.None, 1024);
+                1 << FlowFieldRegressionFixture.Layer, 1f, .5f, 0f, Vector3.forward, FlowFieldDirtyFlags.None);
 
         private sealed class CallbackSurfaceSource : IFlowFieldSurfaceSource
         {

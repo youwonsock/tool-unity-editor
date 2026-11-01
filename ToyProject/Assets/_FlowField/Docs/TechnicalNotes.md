@@ -8,25 +8,24 @@
 - `Common.FlowField.Runtime`: `FlowFieldManager`, Modifier 컴포넌트와 Unity 수명주기·실행 연결.
 - `Common.FlowField.Editor`: Inspector, Bake 작업, Editor 시각화와 Editor 수명 처리.
 - `Common.FlowField.Samples`: 공개 Provider·Controller를 사용하는 Agent, HUD와 샘플 카메라.
-- Compute Shader: `Assets/_FlowField/Script/Runtime/Core/Solvers/FlowFieldFrontier.compute`. Resources 폴더로 이동하지 않습니다.
 
 프로젝트 기준 Unity 버전은 2023.2.20f1입니다. Collections, Mathematics, URP, UGUI 패키지 버전과 개별 asmdef 참조는 이 문서의 기능 설명과 분리해 프로젝트 설정에서 관리합니다.
 
 ## 수명·입력·샘플링
 
-`FlowFieldManager`는 설정을 검증하고 Surface 또는 Volume Session을 준비한 다음 실행 경계에 작업을 등록합니다. `OnDisable`에서는 실행을 중단하고, `Release`·`OnDestroy`에서는 Session과 GPU 자원을 정리합니다. 최초 게시 결과가 없으면 `IsReady`가 false이며 `TrySample`은 미준비·영역 밖·안전성 검증 실패를 실패와 정지 샘플로 나타냅니다. 이동 주체는 이 결과를 정지 또는 감속으로 처리해야 합니다.
+`FlowFieldManager`는 설정을 검증하고 Surface 또는 Volume Session을 준비한 다음 실행 경계에 작업을 등록합니다. `OnDisable`에서는 실행을 중단하고, `Release`·`OnDestroy`에서는 Session을 정리하고 실행 중인 풀이 Job을 멈춥니다. 최초 게시 결과가 없으면 `IsReady`가 false이며 `TrySample`은 미준비·영역 밖·안전성 검증 실패를 실패와 정지 샘플로 나타냅니다. 이동 주체는 이 결과를 정지 또는 감속으로 처리해야 합니다.
 
 `FlowFieldSessionBase`는 공통 조회·명령 계약과 게시·상태·실패 이벤트의 예외 격리 경계입니다. 수락 입력과 수명 세대는 각 모드의 Session이 소유하며 별도의 공통 요청 복사본은 만들지 않습니다. Surface 배열·FieldStore와 Volume 작업 배열·게시 저장소도 각 자식 Session이 소유합니다.
 
 Volume은 최신 수락 `FlowFieldVolumeRequest` 한 벌과 대기 여부를 보관합니다. 작업 시작 시 이 값을 BuildContext에 고정하고, 게시 결과는 완료된 작업의 입력을 보관합니다. Manager의 자동 변경 감지는 Session의 최신 입력을 비교하며 별도 요청 캐시를 두지 않습니다. 명시적인 `RequestRebuild()`와 재활성화·재초기화는 같은 설정이어도 재계산을 요청합니다.
 
-Surface도 최신 수락 `FlowFieldSessionRequest` 한 벌과 대기 플래그를 보관합니다. Pump 시작 시 지역 값으로 캡처하고 BFS를 시작할 때 실행 중 입력으로 고정합니다. GPU 완료 시 새 대기 입력이 있으면 최신 값을 최종 합성에 사용하며, 내비게이션 입력이 달라졌으면 기존의 버전·세대 검사로 이전 결과를 거부합니다. Submit 이전에 관측된 Default Direction은 별도 상태로 유지해 진행 중 결과에 반영합니다.
+Surface도 최신 수락 `FlowFieldSessionRequest` 한 벌과 대기 플래그를 보관합니다. Pump 시작 시 지역 값으로 캡처하고 BFS를 시작할 때 실행 중 입력으로 고정합니다. 풀이 완료 시 새 대기 입력이 있으면 최신 값을 최종 합성에 사용하며, 내비게이션 입력이 달라졌으면 기존의 버전·세대 검사로 이전 결과를 거부합니다. Submit 이전에 관측된 Default Direction은 별도 상태로 유지해 진행 중 결과에 반영합니다.
 
 Surface의 상태·게시 콜백은 수명 전이 경계입니다. Fault·Retry·Release·Suspend가 이전 콜백 세대를 무효화하며, 정리와 dirty 설정을 알림 전에 끝내 구독자가 제출한 새 요청을 보존합니다. Pump와 비동기 완료 처리 중 같은 Session의 중첩 Pump는 실행하지 않고 다음 소유자 실행 경계에 요청을 남깁니다. Dispose는 Released 알림 전에 영구 종료 상태가 됩니다.
 
 BFS 완료 시 Grid 입력이 달라졌으면 결과를 거부하고 다음 Goal 단계에서 다시 풉니다. Goal 입력이 달라진 결과는 한 번은 거부하고, 다음 풀이도 밀리면 게시한 뒤 최신 Goal을 다시 풉니다. 복원된 작업 공간은 게시된 Goal을 담으므로 Goal Tracker도 함께 비웁니다. 장애물만 바뀌었으면 결과를 게시하고 Dirty 플래그와 프로브를 유지해 다음 소유자 경계에서 처리합니다. 입력 버전 판정은 `FlowFieldSurfaceRebuildTracker`가 맡습니다.
 
-BFS 요청은 Session의 기존 세대로 수명 유효성을 판정합니다. GPU 결과 적용과 Managed fallback은 작업 배열을 쓰기 전에 이 판정을 확인하고, Session도 후속 게시·실패 전달 전에 다시 확인합니다. 취소된 GPU 제출 자체의 완료 대기는 Solver가 기존 방식으로 관리하며, 취소된 결과는 작업 배열에 적용하지 않습니다. 게시 Grid·Surface와 해석된 Goal은 FieldStore에서만 가져오며 내부 FieldCommitted 이벤트는 인자 없이 변경된 결과의 게시만 알립니다. 일반 샘플은 합성 중 작업 배열이 아닌 게시 저장소를 읽고, 최신 장애물·탈출·연결 안전성 검사를 추가로 적용합니다.
+Session은 수명이 끝날 때 실행 중인 풀이 Job에 취소를 요청하고 끝날 때까지 기다린 뒤 작업 배열을 재사용합니다. Job은 4,096셀마다 취소 표시를 확인하므로 기다림은 짧습니다. 게시 Grid·Surface와 해석된 Goal은 FieldStore에서만 가져오며 내부 FieldCommitted 이벤트는 인자 없이 변경된 결과의 게시만 알립니다. 일반 샘플은 합성 중 작업 배열이 아닌 게시 저장소를 읽고, 최신 장애물·탈출·연결 안전성 검사를 추가로 적용합니다.
 
 Surface 기본 준비 요청의 Grid·Surface는 장애물 요청에서 얻습니다. 준비 결과는 장애물 변경·변경 영역·이동 가능한 표면 여부·Goal 상태만 보관하고, Goal 변경 여부는 그 상태에서 계산합니다. BFS가 실제 사용하는 MaxGpuWaves·Version과 Session의 요청·기본 필드 버전은 유지합니다. Volume 스케줄러 계약은 대기 여부·작업 여부·Pump만 노출하며 취소는 Session이 소유합니다.
 
@@ -46,29 +45,29 @@ Surface2D는 바닥 Raycast로 표면 높이·법선을 확보하고, 경사·�
 
 Volume3D는 Bounds 전체를 CellSize 정육면체 셀로 분할하고 `x + Width × (z + Depth × y)` 순서로 저장합니다. 26방향 동일 비용 BFS를 사용하고, 두 축·세 축 대각선은 중간 셀이 모두 통과 가능할 때만 연결합니다. FullVolume 표시 상한은 8,192셀, Slice 표시 상한은 4,096셀입니다. 표시 표본 수는 계산 격자나 샘플링 해상도를 변경하지 않습니다.
 
-## Modifier와 GPU
+## Modifier와 풀이 Job
 
 등록 Registry는 Modifier 참조, 유일한 Priority·Revision과 Collider 관측을 관리합니다. 별도 등록 순서 카운터나 동점 정렬 상태는 없습니다. Surface 영향 마스크·목록·영역은 Registry Entry에 지연 할당하며 별도 캐시 래퍼를 두지 않습니다. Surface Registry는 Snapshot을 만들지 않고 Modifier Pipeline이 `CaptureSnapshot()`을 호출합니다. Volume은 VolumeModifierRegistry가 Snapshot을 캡처해 Session의 작업 단계에 고정 작업 집합을 제공합니다. Snapshot은 작업 중 설정값을 고정하지만 Collider 형상·Transform을 복제하는 물리 프록시는 아닙니다.
 
-Surface Build Pipeline은 `IFlowFieldGpuBackend`를 통해 `FlowFieldComputeSolver`를 사용합니다. Volume Session은 자신의 Solver와 Volume 단계 실행을 관리합니다. `FlowFieldComputeSolver`는 GPU Backend 인터페이스의 구현 타입이 아니며 Solver가 내부 GPU·Readback 자원을 소유합니다.
+내비게이션 계산은 Burst Job(`FlowFieldNavigationJobs.cs`)입니다. 게시 결과의 관리 배열을 고정(pin)해 포인터로 넘기므로 샘플링과 베이크 저장 형식은 그대로입니다. 모든 Job은 `FloatMode.Strict`로 컴파일해 Vector3 연산과 같은 값을 냅니다. Volume은 Obstacles 단계 뒤 Topology·Goal·BFS·방향·탈출을 Job 하나로 워커 스레드에서 실행합니다. Surface는 Goal 단계의 Topology를 메인 스레드에서 Burst로 실행하고, BFS와 방향은 `IFlowFieldSolveBackend`를 거쳐 워커 스레드에서 실행합니다. Manager는 매 프레임 완료를 확인하므로 풀이를 기다리는 프레임은 없습니다. 베이크와 테스트처럼 세션을 직접 Pump하는 쪽은 완료까지 기다립니다.
 
-Compute Solver의 Control Readback 콜백은 다음 wave 배치 또는 방향 생성 Dispatch를 제출합니다. 최종 결과 콜백에서 Surface는 GPU 결과 검증과 Session의 합성·게시 경로로 이어지고, Volume은 결과 참조와 완료 신호를 기록한 뒤 Scheduler가 나누어 검증합니다. GPU를 사용할 수 없거나 결과 검증에 실패하면 동일하게 고정된 입력의 Managed 경로로 이어지고, 같은 수명 동안 Managed로 고정하며 이유를 `GpuFallbackReason`에 남깁니다. 폐기된 Volume 빌드의 Readback이 남아 있으면 해당 빌드만 Managed로 처리하고 다음 빌드에서 GPU를 다시 씁니다. Readback 요청 직후 `GL.Flush()`로 대기 중인 Dispatch를 제출합니다. 프레임을 표시하지 않는 환경(배치 모드 Direct3D 11 등)에서는 드라이버가 명령을 수백 프레임 동안 보류해 Readback이 그만큼 늦어졌기 때문입니다.
+2026-11-01 Player 측정에서 Burst 경로가 모든 시나리오의 최대 프레임 시간과 게시 시간에서 GPU보다 나아 Compute Shader 경로를 제거했습니다. 수치는 [StatusAndBacklog.md](StatusAndBacklog.md)에 있습니다.
 
 Modifier 적용 대상은 두 모드가 같은 `FlowFieldVectorUtility.CanApplyModifier`로 판정합니다. 막힌 셀, Goal Anchor, 도달 불가 셀과 기본 방향이 0인 셀은 Modifier를 적용하지 않고 기본 속도 0을 유지합니다. Surface 빌드에서 BFS가 예정되면 BFS 전 합성을 생략하고, BFS 완료 후 전체를 한 번 합성합니다. Surface의 부분 합성 영역은 실제 Modifier 마스크 범위에서 계산합니다.
 
 Unity 오버랩 쿼리는 면만 닿아도 겹침으로 칩니다. 장애물과 Modifier의 셀 판정은 모두 `FlowFieldOverlapUtility.CellHalfExtent`로 0.0001을 뺀 상자를 쓰므로, 격자에 맞춘 Collider는 맞닿은 이웃 셀을 잡지 않습니다. Clearance를 준 만큼의 확장은 그대로 적용합니다.
 
-Volume Modifier의 등록·해제·값·영역·우선순위 변경은 입력이 게시 결과와 같으면 전체 빌드 대신 Modifier 단계만 다시 실행합니다. 이때 게시된 내비게이션 배열을 읽기 전용으로 공유하고 최종 방향·속도 배열만 새로 만듭니다. Goal만 바뀌고 불확실 영역이 없으면 게시된 Blocked와 Topology를 공유하고 나머지 내비게이션 배열은 새로 계산합니다. `RequestRebuild()`와 `NotifyCellsDirty()` 같은 명시적 재빌드는 Goal이 함께 바뀌어도 장애물을 다시 조회합니다. Goal이 같은 셀 안에서만 움직이면 최신 입력만 갱신하고 빌드하지 않습니다. Surface의 Managed BFS는 Goal 단계가 만든 Topology를 재사용하며, GPU 실패 후 대체 경로만 Goal부터 다시 준비합니다.
+Volume Modifier의 등록·해제·값·영역·우선순위 변경은 입력이 게시 결과와 같으면 전체 빌드 대신 Modifier 단계만 다시 실행합니다. 이때 게시된 내비게이션 배열을 읽기 전용으로 공유하고 최종 방향·속도 배열만 새로 만듭니다. Goal만 바뀌고 불확실 영역이 없으면 게시된 Blocked와 Topology를 공유하고 나머지 내비게이션 배열은 새로 계산합니다. `RequestRebuild()`와 `NotifyCellsDirty()` 같은 명시적 재빌드는 Goal이 함께 바뀌어도 장애물을 다시 조회합니다. Goal이 같은 셀 안에서만 움직이면 최신 입력만 갱신하고 빌드하지 않습니다. Surface의 풀이 Job은 Goal 단계가 만든 Topology를 재사용합니다.
 
-Volume 작업은 `FlowFieldBuildScheduler`와 `FlowFieldBuildDriver`의 협력 실행 경계를 사용합니다. 탐색·장애물·Modifier 단계는 최대 64셀, 방향 생성과 일부 배열 처리는 최대 4,096원소 단위로 진행합니다. deadline은 단계 호출 사이에 확인하므로 한 단계의 여러 Physics·Modify 호출이나 배열 할당·게시 처리가 예산을 초과할 수 있습니다. 2ms는 협력 CPU 예산이며 프레임 실행 시간, 전체 빌드 완료 시간이나 GPU 실행 시간의 보장이 아닙니다.
+Volume 작업은 `FlowFieldBuildScheduler`와 `FlowFieldBuildDriver`의 협력 실행 경계를 사용합니다. 장애물·Modifier 단계는 최대 64셀, StaticBaked 데이터 복사는 최대 4,096원소 단위로 진행합니다. 나머지는 워커 스레드에서 실행되어 이 예산을 쓰지 않습니다. deadline은 단계 호출 사이에 확인하므로 한 단계의 여러 Physics·Modify 호출이나 배열 할당·게시 처리가 예산을 초과할 수 있습니다. 2ms는 협력 CPU 예산이며 프레임 실행 시간이나 전체 빌드 완료 시간의 보장이 아닙니다.
 
 Volume의 장애물·Modifier 단계는 `FlowFieldVolumeCellQuery`로 스텝마다 Layer 후보를 `OverlapBox` 한 번으로 모으고 등록 장애물·Modifier Collider의 Bounds를 한 번 읽습니다. 후보의 AABB(contactOffset 여유 포함)가 닿는 셀만 정확한 `CheckBox`·`OverlapsTarget`을 실행하므로 결과는 셀마다 쿼리한 것과 같습니다. 후보가 4,096개를 넘는 스텝은 셀별 쿼리로 돌아갑니다. Topology는 경계가 아닌 셀에서 `FlowFieldVolumeInteriorOffsets`의 평탄 인덱스 오프셋으로 이웃·코너 셀의 Blocked만 확인하고, 경계 셀은 `CanTraverse`를 사용합니다. 커밋된 빌드의 Costs·Queue·Influence 배열은 다음 같은 크기 빌드에서 재사용합니다.
 
-Volume의 Modifier 등록·변경 관측·Snapshot 캡처는 `FlowFieldVolumeModifierRegistry`, Physics와 무관한 탐색 연산은 `FlowFieldVolumeNavigation`, GPU 결과 검증은 `FlowFieldVolumeGpuResultValidator`가 담당합니다. `FlowFieldVolumeBuildContext`는 한 작업의 배열·진행 커서를, `FlowFieldVolumeFieldData`는 완성된 게시 결과를 보관합니다. `FlowFieldVolumeSafetyState`는 불확실 영역과 샘플링의 보수적 정지 판정을 담당합니다. 불확실 영역은 빌드 시작 때 관측 목록으로 옮겨 그 빌드를 게시할 때 지우고, 시작 후 기록된 영역은 다음 빌드까지 남깁니다. Modifier 재합성은 장애물을 조회하지 않으므로 영역을 그대로 둡니다. GPU를 기다리는 동안 Scheduler는 등록 장애물 관측만 실행하고 작업 없음으로 세어 예산을 쓰지 않습니다. `FlowFieldVolumeObstacleTracker`는 등록·미등록 Collider 관측과 스윕 버퍼를 소유하고 변경 Bounds를 Session에 동기 통지합니다. Session은 요청 수락·취소, 수명, Physics 입력, Scheduler·GPU 실행 연결과 게시 정책을 유지합니다. 단계별 회귀 검증과 보존 범위는 [RefactoringNotes.md](RefactoringNotes.md)에 기록합니다.
+Volume의 Modifier 등록·변경 관측·Snapshot 캡처는 `FlowFieldVolumeModifierRegistry`, Physics와 무관한 탐색 연산은 `FlowFieldVolumeSolveJob`이 담당합니다. `FlowFieldVolumeBuildContext`는 한 작업의 배열·진행 커서를, `FlowFieldVolumeFieldData`는 완성된 게시 결과를 보관합니다. `FlowFieldVolumeSafetyState`는 불확실 영역과 샘플링의 보수적 정지 판정을 담당합니다. 불확실 영역은 빌드 시작 때 관측 목록으로 옮겨 그 빌드를 게시할 때 지우고, 시작 후 기록된 영역은 다음 빌드까지 남깁니다. Modifier 재합성은 장애물을 조회하지 않으므로 영역을 그대로 둡니다. 풀이 Job을 기다리는 동안 Scheduler는 등록 장애물 관측만 실행하고 작업 없음으로 세어 예산을 쓰지 않습니다. `FlowFieldVolumeObstacleTracker`는 등록·미등록 Collider 관측과 스윕 버퍼를 소유하고 변경 Bounds를 Session에 동기 통지합니다. Session은 요청 수락·취소, 수명, Physics 입력, Scheduler·풀이 Job 연결과 게시 정책을 유지합니다. 단계별 회귀 검증과 보존 범위는 [RefactoringNotes.md](RefactoringNotes.md)에 기록합니다.
 
 `FlowFieldExecutionBoundary`는 FlowField가 소유하지 않은 코드를 작업 밖으로 분리합니다. 세션 이벤트는 큐에 쌓였다가 가장 바깥 작업이 끝나면 순서대로 전달되고, 전달 중 생긴 이벤트는 같은 큐에 이어 붙습니다. 각 이벤트에는 만들어진 수명 세대가 붙어 있어 `Release`·`Suspend`·Fault 이전의 이벤트는 버려지며 `Released`만 예외입니다. Modifier의 `Observe`·`CaptureSnapshot`·`Modify`를 부르는 구간은 사용자 코드 구간으로 표시합니다. 이 구간의 등록 계열 명령과 Manager의 `OnEnable`·`OnDisable`·`OnDestroy`는 큐에 넣고, 그 밖의 명령은 거부합니다. Manager는 두 세션에 경계 하나를 공유합니다. 세션을 직접 쓰는 베이크와 테스트에는 세션마다 경계가 하나씩 생깁니다. 세션 내부 호출은 이 경계를 믿으므로, 내부 명령을 Modifier에서 직접 부르는 것은 지원하지 않습니다. Dispose는 대기 요청과 최신 입력의 유효 표시도 해제합니다.
 
-비동기로 끝나는 GPU 풀이만 작업이 끝난 뒤 돌아옵니다. Surface는 시작할 때의 수명 세대와, Volume은 빌드 객체의 동일성과 비교해 늦은 결과를 버립니다.
+워커 스레드의 풀이는 수명이 끝날 때 취소하므로 늦은 결과가 남지 않습니다. Surface는 주입된 Backend의 늦은 콜백에 대비해 수명 세대도 비교합니다.
 
 ## StaticBaked와 Asset 검증
 
@@ -116,8 +115,8 @@ README의 [핵심 흐름](Images/flowfield-uml.png)은 요청부터 조회까지
 
 - Manager는 최신 요청과 관측 변경을 Session에 전달합니다. `FlowFieldBuildDriver.LateUpdate`가 `FlowFieldBuildScheduler.PumpAll`을 호출하며, Session이 실행 가능한 상태인 작업을 공통 CPU 예산 안에서 진행합니다.
 - 관측 경계는 `FlowFieldVolumeObstacleTracker`와 `FlowFieldVolumeModifierRegistry`입니다. 새 작업은 요청과 Modifier Snapshot을 고정해 `FlowFieldVolumeBuildContext`의 배열·커서를 준비합니다.
-- Build steps는 Session의 단계 실행과 `FlowFieldVolumeNavigation`, `FlowFieldComputeSolver`, `FlowFieldVolumeGpuResultValidator`를 묶어 표시합니다. RuntimeDynamic은 장애물·연결·Goal·BFS·방향·탈출 단계를, StaticBaked는 v6 기본 데이터 복사를 수행한 뒤 Modifier를 합성합니다. 각 메시지는 여러 Pump에 걸칠 수 있는 단계 처리를 요약합니다.
-- GPU 완료 신호는 결과를 기록하며 후속 Pump가 이를 검증합니다. 현재 작업의 GPU 미지원·실패는 같은 입력의 Managed 경로로 처리합니다. 완료 후 `FlowFieldVolumeFieldData`를 게시하고, 이 빌드가 관측한 불확실 영역을 `FlowFieldVolumeSafetyState`에서 지웁니다.
+- Build steps는 Session의 단계 실행과 `FlowFieldVolumeSolveJob`을 묶어 표시합니다. RuntimeDynamic은 장애물 단계 뒤 연결·Goal·BFS·방향·탈출을 Job으로, StaticBaked는 v6 기본 데이터 복사를 수행한 뒤 Modifier를 합성합니다. 각 메시지는 여러 Pump에 걸칠 수 있는 단계 처리를 요약합니다.
+- Job 완료 후 `FlowFieldVolumeFieldData`를 게시하고, 이 빌드가 관측한 불확실 영역을 `FlowFieldVolumeSafetyState`에서 지웁니다.
 - 샘플은 게시 데이터와 최신 안전성 상태를 함께 사용합니다. 불확실·위험 셀은 조회 성공 상태에서도 속도 0을 반환할 수 있으며, 취소된 작업은 새 수명의 결과를 덮어쓰지 않습니다.
 
 ## UML과 문서 이미지 갱신

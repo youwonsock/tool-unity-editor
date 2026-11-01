@@ -6,7 +6,7 @@ namespace Common.FlowField
     /// <summary>
     /// Shared owner for runtime and editor field state.  Stage algorithms stay
     /// in their existing files; this class owns only state, resource lifetime,
-    /// request coalescing and the GPU/Managed backend boundary.
+    /// request coalescing and the solve backend boundary.
     /// </summary>
     internal sealed partial class FlowFieldSession : FlowFieldSessionBase
     {
@@ -15,11 +15,11 @@ namespace Common.FlowField
         private readonly FlowFieldObstaclePipeline _obstaclePipeline = new FlowFieldObstaclePipeline();
         private readonly FlowFieldGoalTracker _goalTracker = new FlowFieldGoalTracker();
         private readonly IFlowFieldSurfaceSource _surfaceSource;
-        private readonly IFlowFieldGpuBackend _injectedGpuBackend;
-        private readonly Func<IFlowFieldGpuBackend> _gpuBackendFactory;
+        private readonly IFlowFieldSolveBackend _injectedBackend;
+        private readonly Func<IFlowFieldSolveBackend> _backendFactory;
         private FlowFieldModifierRegistry _modifierRegistry;
         private FlowFieldModifierPipeline _modifierPipeline;
-        private IFlowFieldGpuBackend _buildPipeline;
+        private IFlowFieldSolveBackend _solveBackend;
         private FlowFieldStaticBakeSnapshot _loadedStaticBakeSnapshot;
 
         private FlowFieldSessionRequest _committedRequest;
@@ -38,12 +38,8 @@ namespace Common.FlowField
         private bool _hasLatestDefaultDirection;
         private bool _configurationStale;
         private FlowFieldSessionSourceKind _sourceKind;
-        private FlowFieldBfsBackendPolicy _backendPolicy;
+        private FlowFieldSolvePolicy _solvePolicy;
         private FlowFieldSessionLifecycle _lifecycle;
-        // PreferGpu is permanently downgraded after a GPU failure for the
-        // lifetime of this Session. Release clears the flag; Suspend keeps it
-        // so a resume cannot repeatedly rediscover a broken backend.
-        private bool _managedBackendForced;
 
         internal FlowFieldGridSpace StagingGrid => _state.Grid;
         internal bool StagingSurfaceReady => _state.SurfaceReady;
@@ -103,6 +99,20 @@ namespace Common.FlowField
         /// not recursively enter the build pipeline.
         /// </summary>
         internal bool Pump()
+        {
+            // A direct caller (a bake, a test) waits for the worker thread.
+            // The Manager polls it through PumpWithoutWaiting.
+            bool built = PumpWithoutWaiting();
+            PollSolve(wait: true);
+            return built;
+        }
+
+        internal void PollSolve(bool wait)
+        {
+            _solveBackend?.Poll(wait);
+        }
+
+        internal bool PumpWithoutWaiting()
         {
             if (Disposed
                 || _lifecycle == FlowFieldSessionLifecycle.Suspended
@@ -168,7 +178,7 @@ namespace Common.FlowField
         /// <summary>
         /// Records a final-only scalar as soon as the Unity façade observes
         /// it. This closes the small window in which an inspector change can
-        /// arrive after a GPU dispatch but before its callback: the callback
+        /// arrive after a solve starts but before its callback: the callback
         /// must compose the freshly solved base with the newest default, even
         /// when no replacement request has been submitted yet.
         /// </summary>
@@ -184,7 +194,7 @@ namespace Common.FlowField
         /// <summary>
         /// Reports a non-solver failure (for example an invalid live Modifier
         /// configuration) through the same one-shot Faulted transition used
-        /// by GPU/Managed failures. The caller deliberately stays outside the
+        /// by solve failures. The caller deliberately stays outside the
         /// solver exception boundary.
         /// </summary>
         internal override void RetryFault()
@@ -228,7 +238,7 @@ namespace Common.FlowField
 
         /// <summary>
         /// Records the latest authoring grid observed by the Unity adapter.
-        /// The adapter may call this while a GPU solve is in flight; keeping
+        /// The adapter may call this while a solve is in flight; keeping
         /// the observation in the Session prevents repeated dirty increments
         /// for one transform and still captures a second transform before the
         /// active callback returns.
@@ -252,24 +262,23 @@ namespace Common.FlowField
         }
         internal FlowFieldSession(
             IFlowFieldSurfaceSource surfaceSource = null,
-            IFlowFieldGpuBackend gpuBackend = null,
-            Func<IFlowFieldGpuBackend> gpuBackendFactory = null,
+            IFlowFieldSolveBackend solveBackend = null,
+            Func<IFlowFieldSolveBackend> solveBackendFactory = null,
             FlowFieldExecutionBoundary boundary = null)
             : base(boundary)
         {
-            if (gpuBackend != null && gpuBackendFactory != null)
-                throw new ArgumentException("Specify either a GPU backend or a backend factory, not both.");
+            if (solveBackend != null && solveBackendFactory != null)
+                throw new ArgumentException("Specify either a solve backend or a backend factory, not both.");
             _surfaceSource = surfaceSource ?? FlowFieldRaycastSurfaceSource.Instance;
-            _injectedGpuBackend = gpuBackend;
-            _gpuBackendFactory = gpuBackendFactory;
+            _injectedBackend = solveBackend;
+            _backendFactory = solveBackendFactory;
             _lifecycle = FlowFieldSessionLifecycle.Uninitialized;
         }
 
         internal void Initialize(
             FlowFieldBakeMode bakeMode,
             FlowFieldSessionSourceKind sourceKind,
-            FlowFieldBfsBackendPolicy backendPolicy,
-            ComputeShader shader)
+            FlowFieldSolvePolicy solvePolicy)
         {
             if (Disposed)
                 throw new ObjectDisposedException(nameof(FlowFieldSession));
@@ -281,10 +290,10 @@ namespace Common.FlowField
             if (_lifecycle == FlowFieldSessionLifecycle.Suspended
                 && (BakeMode != bakeMode
                     || _sourceKind != sourceKind
-                    || _backendPolicy != backendPolicy))
+                    || _solvePolicy != solvePolicy))
             {
                 throw new InvalidOperationException(
-                    "FlowField bake mode, source and backend policy are fixed until Release.");
+                    "FlowField bake mode, source and solve policy are fixed until Release.");
             }
 
             // A resume performs a complete initial build from the current
@@ -300,18 +309,18 @@ namespace Common.FlowField
 
             BakeMode = bakeMode;
             _sourceKind = sourceKind;
-            _backendPolicy = backendPolicy;
+            _solvePolicy = solvePolicy;
             _modifierRegistry ??= new FlowFieldModifierRegistry();
             _modifierPipeline ??= new FlowFieldModifierPipeline(_modifierRegistry);
-            if (_buildPipeline == null
+            if (_solveBackend == null
                 && sourceKind == FlowFieldSessionSourceKind.SceneBuild
-                && backendPolicy != FlowFieldBfsBackendPolicy.ManagedOnly)
+                && solvePolicy == FlowFieldSolvePolicy.Worker)
             {
-                _buildPipeline = _gpuBackendFactory != null
-                    ? _gpuBackendFactory()
-                    : _injectedGpuBackend ?? new FlowFieldSurfaceBuildPipeline(shader);
-                if (_buildPipeline == null)
-                    throw new InvalidOperationException("The FlowField GPU backend factory returned null.");
+                _solveBackend = _backendFactory != null
+                    ? _backendFactory()
+                    : _injectedBackend ?? new FlowFieldSurfaceBuildPipeline();
+                if (_solveBackend == null)
+                    throw new InvalidOperationException("The FlowField solve backend factory returned null.");
             }
 
             Fault = null;
@@ -666,6 +675,7 @@ namespace Common.FlowField
         private void InvalidateCallbacks()
         {
             AdvanceLifetimeGeneration();
+            _solveBackend?.Cancel();
         }
 
         private protected override void AbandonWorkForFault() => InvalidateCallbacks();
@@ -753,8 +763,6 @@ namespace Common.FlowField
             _rebuild.DropDeferredGoal();
             _rebuild.ClearVersioned(FlowFieldDirtyFlags.All);
             _rebuild.ResetSupersededGoal();
-            _managedBackendForced = false;
-            GpuFallbackReason = null;
             _latestDefaultDirection = Vector3.zero;
             _hasLatestDefaultDirection = false;
             Fault = null;
@@ -773,8 +781,8 @@ namespace Common.FlowField
             // A directly injected backend is deliberately kept alive across
             // Release so the same Session can be initialized again. Permanent
             // disposal is the ownership boundary where it is finally freed.
-            if (_injectedGpuBackend != null)
-                _injectedGpuBackend.Dispose();
+            if (_injectedBackend != null)
+                _injectedBackend.Dispose();
             MarkBaseDisposed();
             SetLifecycle(FlowFieldSessionLifecycle.Released);
         }
@@ -784,18 +792,18 @@ namespace Common.FlowField
 
         private void DetachBackend()
         {
-            if (_buildPipeline == null)
+            if (_solveBackend == null)
                 return;
-            if (ReferenceEquals(_buildPipeline, _injectedGpuBackend))
+            if (ReferenceEquals(_solveBackend, _injectedBackend))
             {
                 // Keep a directly injected backend reusable for Release →
                 // Initialize. DisposePermanently is the final owner boundary.
-                _buildPipeline = null;
+                _solveBackend = null;
                 return;
             }
 
-            _buildPipeline.Dispose();
-            _buildPipeline = null;
+            _solveBackend.Dispose();
+            _solveBackend = null;
         }
 
         private void SetLifecycle(FlowFieldSessionLifecycle next)

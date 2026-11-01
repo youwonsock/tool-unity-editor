@@ -7,7 +7,7 @@ using static Common.FlowField.FlowFieldVolumeNavigation;
 namespace Common.FlowField
 {
     // Owns conservative safety state and sampling decisions. Physics observation,
-    // rebuild scheduling, GPU lifetimes and publication policy stay in the session.
+    // rebuild scheduling and publication policy stay in the session.
     internal sealed class FlowFieldVolumeSafetyState
     {
         private const int MaxUncertainBounds = 64;

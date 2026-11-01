@@ -14,7 +14,6 @@ namespace Common.FlowField
     {
         private const float MIN_REFRESH_RATE = 0.05f;
         private const float VALUE_EPSILON = 0.0001f;
-        private const int DefaultMaxGpuWaves = 1024;
 
         [Header("Surface Bake")]
         [SerializeField, Tooltip("Manager 위치 기준 월드 축 정렬 Bake 영역입니다. XZ는 Grid, Y는 Ground Ray 범위입니다.")]
@@ -27,11 +26,6 @@ namespace Common.FlowField
         [SerializeField] private float _maxStepHeight = 0.5f;
         [SerializeField, Tooltip("Surface2D 정적 모드에서 사용할 Flow Field Snapshot입니다.")] private FlowFieldStaticBakeData _staticBakeData;
         [SerializeField, Tooltip("Volume3D 정적 모드에서 사용할 v6 Flow Field Snapshot입니다.")] private FlowFieldVolumeBakeData _volumeStaticBakeData;
-
-        [Header("GPU Frontier BFS")]
-        [SerializeField] private ComputeShader _frontierComputeShader;
-        [SerializeField, Min(64), Tooltip("GPU batch wave 상한입니다. Cell Count보다 큰 값은 Cell Count로 제한됩니다.")]
-        private int _maxGpuWaves = DefaultMaxGpuWaves;
 
         [Header("Obstacles")]
         [SerializeField] private LayerMask _obstacleLayer;
@@ -111,8 +105,6 @@ namespace Common.FlowField
         public bool IsReady => ActiveSession.IsReady;
         public bool IsRebuilding => ActiveSession.IsRebuilding;
         public string LastError => ActiveSession.LastError;
-        /// <summary>GPU 계산을 끄고 Managed로 전환한 이유입니다. 전환하지 않았으면 null입니다.</summary>
-        public string GpuFallbackReason => ActiveSession.GpuFallbackReason;
         public FlowFieldBakeMode BakeMode => IsInitialized || IsFaulted
             ? ActiveSession.BakeMode
             : _bakeMode;
@@ -136,8 +128,6 @@ namespace Common.FlowField
         internal FlowFieldVolumeBakeData VolumeStaticBakeData => _volumeStaticBakeData;
         internal Bounds BakeBoundsLocal => _bakeBoundsLocal;
         internal float CellSize => _cellSize;
-        internal int MaxGpuWaves => _maxGpuWaves;
-        internal ComputeShader FrontierComputeShader => _frontierComputeShader;
         internal LayerMask ObstacleLayer => _obstacleLayer;
         internal float ObstacleCheckHeight => _obstacleCheckHeight;
         internal float ObstacleCheckCenterOffset => _obstacleCheckCenterOffset;
@@ -179,7 +169,6 @@ namespace Common.FlowField
             _bakeBoundsLocal = FlowFieldBakeBoundsUtility.DefaultLocalBounds;
             _cellSize = 0.5f;
             _groundBakeLayer = Physics.DefaultRaycastLayers;
-            _maxGpuWaves = DefaultMaxGpuWaves;
             _spaceMode = FlowFieldSpaceMode.Surface2D;
             _bakeMode = FlowFieldBakeMode.RuntimeDynamic;
             _volumeGizmoMode = FlowFieldVolumeGizmoMode.FullVolume;

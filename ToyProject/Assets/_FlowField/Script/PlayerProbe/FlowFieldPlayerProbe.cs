@@ -26,20 +26,17 @@ namespace Common.FlowField.PlayerProbe
         private const float SampleSceneSeconds = 4f;
         private const float StallSeconds = 300f;
 
-        [SerializeField] private FlowFieldManager _surfaceGpu;
-        [SerializeField] private FlowFieldManager _surfaceManaged;
-        [SerializeField] private FlowFieldManager _volumeGpu;
-        [SerializeField] private FlowFieldManager _volumeManaged;
+        [SerializeField] private FlowFieldManager _surface;
+        [SerializeField] private FlowFieldManager _volume;
         [SerializeField] private GameObject _surfaceObstacles;
         [SerializeField] private GameObject _volumeObstacles;
         [SerializeField] private string[] _sampleScenes = Array.Empty<string>();
         [SerializeField] private int _surfaceSize;
         [SerializeField] private int _volumeSize;
 
-        private readonly StringBuilder _rows = new StringBuilder("run,cpu,gpu,unity,backend,scenario,metric,value\n");
+        private readonly StringBuilder _rows = new StringBuilder("run,cpu,gpu,unity,scenario,metric,value\n");
         private string _run;
         private string _outputPath;
-        private string _backend = "none";
         private int _errors;
         private float _lastProgress;
         private bool _finished;
@@ -69,17 +66,12 @@ namespace Common.FlowField.PlayerProbe
 
         private IEnumerator Start()
         {
-            Record("environment", "computeShaders", SystemInfo.supportsComputeShaders ? 1 : 0);
-            Record("environment", "asyncReadback", SystemInfo.supportsAsyncGPUReadback ? 1 : 0);
             Record("environment", "staticFlagKept", _surfaceObstacles.transform.GetChild(0).gameObject.isStatic ? 1 : 0);
 
             yield return MeasureIdle();
-            yield return MeasureSurface(_surfaceManaged, "managed");
-            yield return MeasureSurface(_surfaceGpu, "gpu");
-            yield return MeasureVolume(_volumeManaged, "managed");
-            yield return MeasureVolume(_volumeGpu, "gpu");
+            yield return MeasureSurface(_surface);
+            yield return MeasureVolume(_volume);
 
-            _backend = "none";
             foreach (string scene in _sampleScenes)
                 yield return RunSampleScene(scene);
 
@@ -89,7 +81,6 @@ namespace Common.FlowField.PlayerProbe
         private void Finish()
         {
             _finished = true;
-            _backend = "none";
             Record("run", "errors", _errors);
             Debug.Log($"[FlowField probe] Finished with {_errors} errors: {_outputPath}");
             Application.Quit(_errors == 0 ? 0 : 1);
@@ -111,9 +102,8 @@ namespace Common.FlowField.PlayerProbe
             Record("idle", "maxFrameMs", max);
         }
 
-        private IEnumerator MeasureSurface(FlowFieldManager manager, string backend)
+        private IEnumerator MeasureSurface(FlowFieldManager manager)
         {
-            _backend = backend;
             _surfaceObstacles.SetActive(true);
             Physics.SyncTransforms();
             float far = _surfaceSize - 2.5f;
@@ -143,14 +133,13 @@ namespace Common.FlowField.PlayerProbe
 
             yield return MeasureModifier("surface", manager, _surfaceSize, 1f);
             yield return MeasureMovingGoal("surface", manager, _surfaceSize, 0.5f);
-            yield return MeasureRelease("surface", manager, moving);
+            yield return MeasureRelease("surface", manager, moving, secondGoal);
             _surfaceObstacles.SetActive(false);
             Physics.SyncTransforms();
         }
 
-        private IEnumerator MeasureVolume(FlowFieldManager manager, string backend)
+        private IEnumerator MeasureVolume(FlowFieldManager manager)
         {
-            _backend = backend;
             _volumeObstacles.SetActive(true);
             Physics.SyncTransforms();
             float far = _volumeSize - 2.5f;
@@ -169,7 +158,7 @@ namespace Common.FlowField.PlayerProbe
 
             yield return MeasureModifier("volume", manager, _volumeSize, _volumeSize * 0.5f);
             yield return MeasureMovingGoal("volume", manager, _volumeSize, _volumeSize * 0.5f);
-            yield return MeasureRelease("volume", manager, moving);
+            yield return MeasureRelease("volume", manager, moving, new Vector3(far, far, far));
             _volumeObstacles.SetActive(false);
             Physics.SyncTransforms();
         }
@@ -260,8 +249,15 @@ namespace Common.FlowField.PlayerProbe
                 yield return null;
         }
 
-        private IEnumerator MeasureRelease(string mode, FlowFieldManager manager, BoxCollider moving)
+        // Releases while a solve runs on its worker thread, which has to stop first.
+        private IEnumerator MeasureRelease(string mode, FlowFieldManager manager, BoxCollider moving, Vector3 goal)
         {
+            manager.SetGoal(FlowFieldGoalRequest.Position(goal));
+            float deadline = Time.realtimeSinceStartup + TimeoutSeconds;
+            while (!manager.IsRebuilding && Time.realtimeSinceStartup < deadline)
+                yield return null;
+            yield return new WaitForFixedUpdate();
+            Record($"{mode}.release", "whileRebuilding", manager.IsRebuilding ? 1 : 0);
             var stopwatch = Stopwatch.StartNew();
             manager.Release();
             Record($"{mode}.release", "elapsedMs", stopwatch.Elapsed.TotalMilliseconds);
@@ -332,8 +328,6 @@ namespace Common.FlowField.PlayerProbe
         {
             if (manager.IsFaulted)
                 ReportError($"{scenario} faulted: {manager.LastError}");
-            if (_backend == "gpu" && manager.GpuFallbackReason != null)
-                ReportError($"{scenario} left the GPU path: {manager.GpuFallbackReason}");
         }
 
         private IEnumerator RunSampleScene(string scene)
@@ -366,7 +360,6 @@ namespace Common.FlowField.PlayerProbe
             string scenario = $"{scene}.{manager.BakeMode}";
             Record(scenario, "ready", manager.IsReady ? 1 : 0);
             Record(scenario, "revision", manager.Revision);
-            Record(scenario, "gpuFallback", manager.GpuFallbackReason != null ? 1 : 0);
             bool hasField = manager.TryGetFieldInfo(out _);
             Record(scenario, "hasField", hasField ? 1 : 0);
             if (manager.IsFaulted || !manager.IsReady || !hasField)
@@ -398,7 +391,6 @@ namespace Common.FlowField.PlayerProbe
                 .Append(SystemInfo.processorType.Replace(',', ' ')).Append(',')
                 .Append(SystemInfo.graphicsDeviceName.Replace(',', ' ')).Append(',')
                 .Append(Application.unityVersion).Append(',')
-                .Append(_backend).Append(',')
                 .Append(scenario).Append(',')
                 .Append(metric).Append(',')
                 .Append(value.ToString("0.###", CultureInfo.InvariantCulture)).Append('\n');

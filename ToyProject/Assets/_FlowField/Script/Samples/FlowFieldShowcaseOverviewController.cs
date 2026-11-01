@@ -397,20 +397,7 @@ namespace Common.FlowField.Samples
                 + "Ramps: WEST / EAST  Y=0.0 -> Y=2.0 | ON => EAST bypass\n"
                 + $"{sampleText}  {clampText}\n"
                 + $"{_lastAction}\n"
-                + GpuFallbackLine()
                 + "Space: next Goal | G: clear Goal | M: Gate | R: rebuild | F: Focus | RMB+WASD/QE: Camera");
-        }
-
-        // The panel has room for one line; the warning log keeps the full reason.
-        private string GpuFallbackLine()
-        {
-            string reason = _manager.GpuFallbackReason;
-            if (string.IsNullOrEmpty(reason))
-                return string.Empty;
-            const int maxLength = 40;
-            return reason.Length <= maxLength
-                ? $"GPU fallback: {reason}\n"
-                : $"GPU fallback: {reason.Substring(0, maxLength)}...\n";
         }
 
         public void Release()

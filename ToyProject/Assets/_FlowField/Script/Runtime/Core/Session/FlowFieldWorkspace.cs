@@ -4,9 +4,9 @@ using UnityEngine;
 namespace Common.FlowField
 {
     /// <summary>
-    /// Managed backing for FlowField rebuild. GPU readback storage is owned by the
-    /// compute solver; a Manager owns one staging workspace and one committed
-    /// workspace so asynchronous builds cannot expose partially written data.
+    /// Managed backing for FlowField rebuild. A Manager owns one staging workspace
+    /// and one committed workspace so asynchronous builds cannot expose partially
+    /// written data.
     /// </summary>
     internal sealed class FlowFieldWorkspace
     {
@@ -27,7 +27,7 @@ namespace Common.FlowField
         internal int[] Queue { get; private set; }
         internal int[] NextCells { get; private set; }
         // Final eight-neighbour topology after Surface, obstacle, influence and
-        // diagonal-corner checks. Managed and GPU backends consume this same mask.
+        // diagonal-corner checks. The solve job consumes this mask.
         internal byte[] TopologyMasks { get; private set; }
         internal int ResolvedGoalIndex { get; private set; } = -1;
         internal bool HasActiveGoal { get; private set; }

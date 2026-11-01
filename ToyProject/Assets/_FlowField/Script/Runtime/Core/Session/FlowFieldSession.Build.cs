@@ -424,7 +424,7 @@ namespace Common.FlowField
 
         private bool StartBfs(in FlowFieldSessionRequest request)
         {
-            // A GPU callback can arrive after this lifetime has ended.
+            // A solve callback can arrive after this lifetime has ended.
             int generation = LifetimeGeneration;
             if (!_state.Workspace.HasActiveGoal)
             {
@@ -441,49 +441,27 @@ namespace Common.FlowField
                 request.Goal.LocalX,
                 request.Goal.LocalZ,
                 request.Goal.InfluenceRadius,
-                _state.Workspace.ResolvedGoalIndex,
-                FlowFieldComputeSolver.ClampMaxWaves(_state.Grid.CellCount, request.MaxGpuWaves),
-                () => IsCurrentBuild(generation));
-
-            if (_backendPolicy == FlowFieldBfsBackendPolicy.RequireGpu
-                && (_buildPipeline == null || !_buildPipeline.SupportsGpu))
-                throw new PlatformNotSupportedException("FlowField GPU backend is required but unavailable.");
+                _state.Workspace.ResolvedGoalIndex);
 
             _rebuild.BeginSolve();
             _activeRequest = request;
             SetLifecycle(FlowFieldSessionLifecycle.Building);
             bool accepted;
-            if (_backendPolicy == FlowFieldBfsBackendPolicy.ManagedOnly
-                || _managedBackendForced)
+            if (_solvePolicy == FlowFieldSolvePolicy.Inline)
             {
-                accepted = FlowFieldSurfaceBuildPipeline.BuildManaged(bfsRequest);
-                if (accepted)
-                    OnBfsCompleted();
-                return accepted;
+                FlowFieldSurfaceBuildPipeline.SolveNow(bfsRequest);
+                OnBfsCompleted();
+                return true;
             }
 
-            if (_buildPipeline == null)
-                throw new InvalidOperationException("FlowField BFS backend is not initialized.");
-
-            accepted = _buildPipeline.StartBfs(
+            accepted = _solveBackend.StartBfs(
                 bfsRequest,
                 _ => RunBfsCallback(generation, OnBfsCompleted),
-                (_, exception) => RunBfsCallback(generation, () => OnBfsFailed(exception)),
-                allowManagedFallback: _backendPolicy != FlowFieldBfsBackendPolicy.RequireGpu);
+                (_, exception) => RunBfsCallback(generation, () => OnBfsFailed(exception)));
             // A synchronous completion has already left the Building state.
             if (!accepted && IsCurrentBuild(generation))
                 throw new InvalidOperationException("FlowField BFS session could not be started.");
             return accepted;
-        }
-
-        // A missing shader passes no reason: Managed is then the configured path.
-        private void ForceManagedBackend(string reason)
-        {
-            _managedBackendForced = true;
-            if (reason == null || GpuFallbackReason != null)
-                return;
-            GpuFallbackReason = reason;
-            Debug.LogWarning($"[FlowField] Surface2D GPU 계산을 끄고 Managed로 전환합니다: {reason}");
         }
 
         private bool IsCurrentBuild(int generation)
@@ -561,9 +539,6 @@ namespace Common.FlowField
         {
             if (_lifecycle != FlowFieldSessionLifecycle.Building)
                 return;
-            if (_buildPipeline is FlowFieldSurfaceBuildPipeline productionPipeline
-                && productionPipeline.GpuDisabled)
-                ForceManagedBackend(productionPipeline.GpuFallbackReason);
             if (RejectStaleBfsResult())
                 return;
 
@@ -606,8 +581,6 @@ namespace Common.FlowField
         {
             if (_lifecycle != FlowFieldSessionLifecycle.Building)
                 return;
-            if (_backendPolicy == FlowFieldBfsBackendPolicy.PreferGpu)
-                ForceManagedBackend(exception?.Message ?? "GPU 계산에 실패했습니다.");
             if (RejectStaleBfsResult())
                 return;
             // A failed base solve cannot be replaced by a final-only compose:
@@ -626,7 +599,7 @@ namespace Common.FlowField
                 SetLifecycle(FlowFieldSessionLifecycle.Active);
                 return;
             }
-            EnterFault(exception ?? new InvalidOperationException("Managed FlowField BFS failed."));
+            EnterFault(exception ?? new InvalidOperationException("FlowField BFS failed."));
         }
 
         private bool HasStaleObstacleInput()

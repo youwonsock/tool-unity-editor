@@ -11,7 +11,7 @@ title Surface2D - request, composition and publication
 participant "Manager" as M
 participant "Session" as S
 participant "Surface / base\nservices" as B
-participant "GPU backend\n/ Solver" as G
+participant "Solve backend\n(worker Burst job)" as G
 participant "ModifierRegistry\n/ ModifierPipeline" as F
 participant "FieldStore" as P
 
@@ -23,13 +23,8 @@ alt RuntimeDynamic
   S -> B : Prepare obstacles, topology and Goal
   S -> F : Update dirty influence areas\nand compose staging as required
   opt Active Goal and navigation changed
-    alt GPU accepted
-      S -> G : Start BFS with captured input
-      G --> S : Async result / fallback completion
-    else Managed path
-      S -> B : Solve the same captured navigation input
-      B --> S : BFS / directions complete
-    end
+    S -> G : Start BFS with captured input
+    G --> S : Completion found by the next frame's poll
     S -> F : Recompose with current accepted final inputs
   end
 else StaticBaked

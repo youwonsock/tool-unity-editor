@@ -30,7 +30,7 @@ namespace Common.FlowField.Tests
 
         private void Initialize()
             => _session.Initialize(FlowFieldBakeMode.RuntimeDynamic, FlowFieldSessionSourceKind.SceneBuild,
-                FlowFieldBfsBackendPolicy.PreferGpu, null);
+                FlowFieldSolvePolicy.Worker);
 
         [TearDown]
         public void TearDown()
@@ -45,7 +45,7 @@ namespace Common.FlowField.Tests
                 goal.HasValue ? FlowFieldGoalPipeline.Resolve(FlowFieldRegressionFixture.Grid, null, true,
                     goal.Value, radius) : FlowFieldGoalResolution.None,
                 direction, FlowFieldDirtyFlags.None, FlowFieldCellRect.Invalid,
-                FlowFieldCellRect.Invalid, 1024);
+                FlowFieldCellRect.Invalid);
 
         private void Finish()
         {
@@ -174,7 +174,7 @@ namespace Common.FlowField.Tests
             [Values(false, true)] bool release)
         {
             var backends = new List<OwnershipBackend>();
-            Func<IFlowFieldGpuBackend> create = () =>
+            Func<IFlowFieldSolveBackend> create = () =>
             {
                 var value = new OwnershipBackend();
                 backends.Add(value);
@@ -187,11 +187,11 @@ namespace Common.FlowField.Tests
             try
             {
                 session.Initialize(FlowFieldBakeMode.RuntimeDynamic, FlowFieldSessionSourceKind.SceneBuild,
-                    FlowFieldBfsBackendPolicy.PreferGpu, null);
+                    FlowFieldSolvePolicy.Worker);
                 if (release) session.Release(); else session.Suspend();
                 Assert.That(backends[0].Disposals, Is.EqualTo(factory ? 1 : 0));
                 session.Initialize(FlowFieldBakeMode.RuntimeDynamic, FlowFieldSessionSourceKind.SceneBuild,
-                    FlowFieldBfsBackendPolicy.PreferGpu, null);
+                    FlowFieldSolvePolicy.Worker);
                 session.Submit(Request(GoalC, Vector3.forward));
                 session.Pump();
                 Assert.That(session.Sample(Position).Direction, Is.EqualTo(Vector3.right));
@@ -217,14 +217,15 @@ namespace Common.FlowField.Tests
             Assert.That(_backend.Calls.Count, Is.EqualTo(1));
         }
 
-        private sealed class OwnershipBackend : IFlowFieldGpuBackend
+        private sealed class OwnershipBackend : IFlowFieldSolveBackend
         {
             internal int Disposals;
-            public bool SupportsGpu => true;
+            public void Poll(bool wait) { }
+            public void Cancel() { }
             public bool StartBfs(in FlowFieldBfsRequest request, Action<FlowFieldBfsRequest> completed,
-                Action<FlowFieldBfsRequest, Exception> failed, bool allowManagedFallback = true)
+                Action<FlowFieldBfsRequest, Exception> failed)
             {
-                FlowFieldSurfaceBuildPipeline.BuildManaged(request);
+                FlowFieldSurfaceBuildPipeline.SolveNow(request);
                 completed(request);
                 return true;
             }

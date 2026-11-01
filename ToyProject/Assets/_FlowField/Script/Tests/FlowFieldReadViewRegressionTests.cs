@@ -11,7 +11,7 @@ namespace Common.FlowField.Tests
         {
             using var session = new FlowFieldSession(FlowFieldRegressionFixture.Surface());
             session.Initialize(FlowFieldBakeMode.RuntimeDynamic, FlowFieldSessionSourceKind.SceneBuild,
-                FlowFieldBfsBackendPolicy.ManagedOnly, null);
+                FlowFieldSolvePolicy.Inline);
             session.Submit(FlowFieldRegressionFixture.Request());
             session.Pump();
             var view = session.CommittedView;
@@ -35,7 +35,7 @@ namespace Common.FlowField.Tests
             var grid = FlowFieldGridSpace.FromVolumeCellGrid(Vector3.zero, 3, 3, 3, 1f);
             FlowFieldVolumeRequest Request(Vector3 direction) => new FlowFieldVolumeRequest(
                 grid, new Bounds(Vector3.one * 1.5f, Vector3.one * 3f), FlowFieldBakeMode.RuntimeDynamic,
-                1 << FlowFieldRegressionFixture.Layer, 0f, false, Vector3.zero, 0f, direction, 1024, null, null);
+                1 << FlowFieldRegressionFixture.Layer, 0f, false, Vector3.zero, 0f, direction, null);
             using var session = new FlowFieldVolumeSession();
             var errors = new FlowFieldRegressionFixture.EventFailures(session);
             session.Initialize(FlowFieldBakeMode.RuntimeDynamic);

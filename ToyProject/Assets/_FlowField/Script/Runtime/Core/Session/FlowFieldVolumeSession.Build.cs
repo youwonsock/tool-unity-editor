@@ -25,7 +25,7 @@ namespace Common.FlowField
                             build.Phase = build.Request.StaticBakeData != null
                                 ? BuildPhase.StaticData
                                 : build.ReusesObstacleQueries
-                                    ? BuildPhase.Goal
+                                    ? BuildPhase.Solve
                                     : BuildPhase.Obstacles;
                         }
                         break;
@@ -40,49 +40,14 @@ namespace Common.FlowField
                         if (StepObstacles(build))
                         {
                             build.Cursor = 0;
-                            build.Phase = BuildPhase.Topology;
+                            build.Phase = BuildPhase.Solve;
                         }
                         break;
-                    case BuildPhase.Topology:
-                        if (StepTopology(build))
-                        {
-                            build.Cursor = 0;
-                            build.Phase = BuildPhase.Goal;
-                        }
-                        break;
-                    case BuildPhase.Goal:
-                        if (StepGoal(build))
-                        {
-                            build.Cursor = 0;
-                            build.Phase = build.Request.HasGoal && build.GoalIndex >= 0
-                                ? BuildPhase.Bfs
-                                : BuildPhase.Directions;
-                        }
-                        break;
-                    case BuildPhase.Bfs:
-                        if (StepBfs(build))
-                        {
-                            build.Cursor = 0;
-                            build.Phase = BuildPhase.Directions;
-                        }
-                        else if (build.GpuPending)
-                        {
+                    case BuildPhase.Solve:
+                        if (!StepSolve(build))
                             return false;
-                        }
-                        break;
-                    case BuildPhase.Directions:
-                        if (StepDirections(build))
-                        {
-                            build.Cursor = 0;
-                            build.Phase = BuildPhase.Escape;
-                        }
-                        break;
-                    case BuildPhase.Escape:
-                        if (StepEscape(build))
-                        {
-                            build.Cursor = 0;
-                            build.Phase = BuildPhase.Modifiers;
-                        }
+                        build.Cursor = 0;
+                        build.Phase = BuildPhase.Modifiers;
                         break;
                     case BuildPhase.Modifiers:
                         if (StepModifiers(build))
@@ -93,6 +58,16 @@ namespace Common.FlowField
                 }
             }
             return false;
+        }
+
+        private bool StepSolve(BuildContext build)
+        {
+            if (!build.SolveRunning)
+                build.StartSolve();
+            if (!_waitForSolve && !build.SolveHandle.IsCompleted)
+                return false;
+            build.FinishSolve();
+            return true;
         }
 
         private bool StepStaticData(BuildContext build)
@@ -154,27 +129,10 @@ namespace Common.FlowField
                     if (build.Request.StaticBakeData == null)
                         build.Influence = RentBuildArray(ref _spareInfluence, build.Count);
                     break;
-                case 12:
-                    if (build.Request.StaticBakeData != null)
-                    {
-                        build.AllocationStage++;
-                        return true;
-                    }
-                    int end = Math.Min(build.Cursor + ArrayElementsPerStep, build.Count);
-                    for (; build.Cursor < end; build.Cursor++)
-                    {
-                        build.Next[build.Cursor] = -1;
-                        build.Costs[build.Cursor] = Unreachable;
-                    }
-                    if (build.Cursor < build.Count)
-                        return false;
-                    build.Cursor = 0;
-                    build.AllocationStage++;
-                    return true;
             }
 
             build.AllocationStage++;
-            return false;
+            return build.AllocationStage > 11;
         }
 
         private bool StepObstacles(BuildContext build)
@@ -213,183 +171,18 @@ namespace Common.FlowField
             return build.Cursor >= build.Count;
         }
 
-        private bool StepBfs(BuildContext build)
-        {
-            if (!build.GpuAttempted)
-            {
-                build.GpuAttempted = true;
-                if (TryStartGpuBfs(build))
-                {
-                    // AsyncGPUReadback owns the continuation. Do not spin the
-                    // cooperative scheduler while the request is in flight.
-                    return false;
-                }
-            }
-
-            if (build.GpuPending)
-                return false;
-
-            if (build.GpuResultPending)
-            {
-                if (!StepGpuResult(build))
-                    return false;
-                if (build.Phase != BuildPhase.Bfs)
-                    return false;
-            }
-
-            if (build.GpuFailed != null
-                && !StepGpuFallbackReset(build))
-                return false;
-
-            return FlowFieldVolumeNavigation.StepManagedBfs(build);
-        }
-
-        private bool TryStartGpuBfs(BuildContext build)
-        {
-            if (_gpuDisabled || _computeSolver == null || !_computeSolver.IsSupported
-                || build.Request.HasGoal == false || build.GoalIndex < 0)
-                return false;
-            // A discarded build's readback is still draining. Only this build
-            // falls back; the solver is free again for the next one.
-            if (_computeSolver.IsRunning)
-                return false;
-
-            long currentGpuBytes = _computeSolver.AllocatedBytes;
-            long requestedGpuBytes = FlowFieldComputeSolver.EstimateAllocationBytes(
-                build.Count,
-                volume: true);
-            long additionalGpuBytes = Math.Max(0L, requestedGpuBytes - currentGpuBytes);
-            if (checked(TrackedMemoryBytes + additionalGpuBytes) > MemoryBudgetBytes)
-            {
-                // A buffer-size change is a backend choice, not a failed
-                // field request. Continue with the managed solver under the
-                // same staged build and input snapshot.
-                DisableGpu("GPU 버퍼가 512 MiB 메모리 예산을 넘습니다.");
-                return false;
-            }
-
-            FlowFieldComputeRequest request = new FlowFieldComputeRequest(
-                build.Request.Grid,
-                build.Blocked,
-                build.Influence,
-                build.Topology,
-                build.GoalIndex,
-                build.Request.MaxGpuWaves);
-            build.GpuPending = true;
-            bool accepted;
-            try
-            {
-                accepted = _computeSolver.Start(
-                    request,
-                    (completedRequest, result) => OnGpuCompleted(build, completedRequest, result),
-                    (failedRequest, kind, exception) => OnGpuFailed(build, failedRequest, kind, exception));
-            }
-            catch (Exception exception)
-            {
-                build.GpuPending = false;
-                DisableGpu(exception.Message);
-                return false;
-            }
-
-            if (!accepted)
-            {
-                build.GpuPending = false;
-                DisableGpu("GPU 계산 요청이 거부됐습니다.");
-                return false;
-            }
-            return true;
-        }
-
-        private void DisableGpu(string reason)
-        {
-            _gpuDisabled = true;
-            if (GpuFallbackReason != null)
-                return;
-            GpuFallbackReason = reason;
-            UnityEngine.Debug.LogWarning($"[FlowField] Volume3D GPU 계산을 끄고 Managed로 전환합니다: {reason}");
-        }
-
-        private void OnGpuCompleted(
-            BuildContext build,
-            FlowFieldComputeRequest request,
-            Unity.Collections.NativeArray<GpuFlowCell> result)
-        {
-            if (_build != build)
-                return;
-            // Keep the callback bounded: the persistent readback storage is
-            // owned by FlowFieldComputeSolver until the next dispatch, while
-            // validation and CPU fallback are resumed by the scheduler.
-            build.GpuResult = result;
-            build.GpuPending = false;
-            build.GpuResultPending = true;
-            build.GpuValidationCursor = 0;
-        }
-
-        private void OnGpuFailed(
-            BuildContext build,
-            FlowFieldComputeRequest request,
-            FlowFieldComputeFailureKind kind,
-            Exception exception)
-        {
-            if (_build != build)
-                return;
-            DisableGpu(exception != null ? $"{kind}: {exception.Message}" : kind.ToString());
-            build.GpuPending = false;
-            build.GpuFailed = exception
-                ?? new InvalidOperationException($"Volume3D GPU BFS failed ({kind}).");
-            build.GpuFallbackResetCursor = 0;
-        }
-
-        private bool StepGpuResult(BuildContext build)
-        {
-            if (!build.GpuResult.IsCreated || build.GpuResult.Length != build.Count)
-            {
-                HandleGpuValidationFailure(
-                    build,
-                    new InvalidOperationException("Volume3D GPU result length does not match the active grid."));
-                return true;
-            }
-
-            int end = Math.Min(
-                build.GpuValidationCursor + ArrayElementsPerStep,
-                build.Count);
-            try
-            {
-                FlowFieldVolumeGpuResultValidator.Apply(
-                    build,
-                    build.GpuResult,
-                    build.GpuValidationCursor,
-                    end);
-            }
-            catch (Exception exception)
-            {
-                HandleGpuValidationFailure(build, exception);
-                return true;
-            }
-
-            build.GpuValidationCursor = end;
-            if (build.GpuValidationCursor < build.Count)
-                return false;
-
-            build.GpuResultPending = false;
-            build.GpuValidationCursor = 0;
-            build.Cursor = 0;
-            build.Phase = BuildPhase.Escape;
-            return true;
-        }
-
-        private void HandleGpuValidationFailure(BuildContext build, Exception exception)
-        {
-            DisableGpu(exception?.Message ?? "GPU 결과 검증에 실패했습니다.");
-            build.GpuResultPending = false;
-            build.GpuFailed = exception
-                ?? new InvalidOperationException("Volume3D GPU result validation failed.");
-            build.GpuFallbackResetCursor = 0;
-            build.Cursor = 0;
-        }
-
         private bool StepModifiers(BuildContext build)
         {
+            // Without Modifiers the final field is the base field. Copying it at
+            // once costs far less than walking every cell over many frames.
+            if (build.Modifiers.Length == 0)
+            {
+                Array.Copy(build.Directions, build.FinalDirections, build.Count);
+                Array.Copy(build.Speeds, build.FinalSpeeds, build.Count);
+                build.Cursor = build.Count;
+                return true;
+            }
+
             if (build.Cursor == 0 && build.Modifiers.Length > 0)
                 Physics.SyncTransforms();
 
@@ -482,8 +275,7 @@ namespace Common.FlowField
                 // Changes recorded after this build started stay uncertain; a
                 // continuously moving obstacle must not keep older regions unsafe.
                 _safety.ClearObservedRegions();
-                // The published field holds none of these; a completed build has
-                // no GPU readback left that could still read them.
+                // The published field holds none of these.
                 _spareCosts = build.Costs ?? _spareCosts;
                 _spareQueue = build.Queue ?? _spareQueue;
                 _spareInfluence = build.Influence ?? _spareInfluence;

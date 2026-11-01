@@ -24,7 +24,7 @@
 | GitHub | [youwonsock](https://github.com/youwonsock) |
 | 이메일 | qazwsx233434@gmail.com |
 | 프로젝트 목적 | 표면·볼륨 기반 방향장 계산, 정적 베이크, 런타임 샘플링과 Unity 실행 검증 |
-| 개발 언어 | C# 및 Compute Shader |
+| 개발 언어 | C#, Burst Job |
 | 개발 도구 | Unity 2023.2.20f1, Visual Studio 또는 Rider |
 | 샘플 표시 환경 | Universal Render Pipeline 16.0.6, UGUI (방향장 런타임과 분리) |
 | 런타임 어셈블리 | `Common.FlowField.Core`, `Common.FlowField.Runtime` |
@@ -60,7 +60,7 @@ Manager 설정·Goal·Obstacle·Modifier
 ## 사용 방법
 
 1. Unity 2023.2.20f1에서 `ToyProject`를 열고 `Assets/_FlowField/Scene/FlowFieldSample.unity` 또는 `Assets/_FlowField/Scene/FlowFieldVolume3DTest.unity`를 실행합니다.
-2. 새 씬에서는 `FlowFieldManager`의 Bounds·CellSize·공간 모드와 LayerMask를 지정하고, GPU를 사용할 경우 Compute Shader를 연결합니다. Manager Transform은 회전 없이 단위 Scale을 사용합니다. Surface2D에는 바닥 Layer와 경사·단차 조건도 필요합니다.
+2. 새 씬에서는 `FlowFieldManager`의 Bounds·CellSize·공간 모드와 LayerMask를 지정합니다. Manager Transform은 회전 없이 단위 Scale을 사용합니다. Surface2D에는 바닥 Layer와 경사·단차 조건도 필요합니다.
 3. `RuntimeDynamic`은 초기화 후 런타임 입력을 계산합니다. `StaticBaked`는 Editor에서 Bake/ReBake한 v6 Asset을 연결한 뒤 초기화합니다. Goal·장애물 설정이 바뀌면 Editor에서 다시 베이크합니다.
 4. 이동 주체는 `IFlowFieldProvider.TrySample()`의 방향·속도 배율을 자신의 업데이트에서 적용합니다. 조회 실패와 조회에 성공한 정지 샘플을 모두 처리해야 합니다.
 5. 공개 입력 명령은 `IFlowFieldController`를 사용합니다. 최신 설정의 재요청과 Manager·Session Fault 재시도에는 `RequestRebuild()`를 사용하며, 바닥·장애물 형상 변경은 아래의 갱신 API를 선택합니다. 실행 모드를 바꿀 때는 `Release()` → `SetSpaceMode()` → `Init()` 순서를 따릅니다.
@@ -226,14 +226,14 @@ Manager도 함께 Fault 상태라면 Modifier를 비활성화·Release해 설정
 | Surface 기본 계산 | `FlowFieldSurfaceBuildPipeline`, `FlowFieldGoalPipeline`, `FlowFieldGoalTracker`, `FlowFieldObstaclePipeline` | 표면·장애물 준비, Goal 해석·변경 관측과 탐색 |
 | Surface Modifier | `FlowFieldModifierRegistry`, `FlowFieldModifierPipeline` | 등록·메타데이터 관측, 영역 갱신·Snapshot 캡처·최종 합성. 영역 버퍼는 Registry Entry에 지연 할당 |
 | Surface 게시 | `FlowFieldFieldStore` | 게시 Grid·Surface·해석된 Goal·최종 방향·속도의 단일 저장소 |
-| Volume 실행 | `FlowFieldVolumeSession` | 최신 요청 수락, 작업 취소·수명, Physics·GPU·Scheduler 연결과 게시 |
+| Volume 실행 | `FlowFieldVolumeSession` | 최신 요청 수락, 작업 취소·수명, Physics·풀이 Job·Scheduler 연결과 게시 |
 | Volume 작업 | `FlowFieldVolumeBuildContext`, `FlowFieldVolumeNavigation` | 한 작업의 배열·진행 커서와 26방향 탐색 연산 |
 | Volume 셀 쿼리 | `FlowFieldVolumeCellQuery`, `FlowFieldVolumeInteriorOffsets` | 스텝(64셀)마다 Physics 후보를 한 번 모아 후보가 닿는 셀만 정확히 검사, 경계가 아닌 셀의 Topology를 평탄 인덱스 오프셋으로 계산 |
 | Volume 입력 관측 | `FlowFieldVolumeModifierRegistry`, `FlowFieldVolumeObstacleTracker` | Modifier 관측·캡처와 Collider 변경 Bounds 관측 |
-| Volume 안전성·게시 | `FlowFieldVolumeSafetyState`, `FlowFieldVolumeFieldData`, `FlowFieldVolumeGpuResultValidator` | 불확실 영역의 보수적 정지, 완성 결과 보관, GPU 결과 검증 |
+| Volume 안전성·게시 | `FlowFieldVolumeSafetyState`, `FlowFieldVolumeFieldData` | 불확실 영역의 보수적 정지, 완성 결과 보관 |
 | 격자·읽기 | `FlowFieldGridSpace`, `FlowFieldReadView` | 월드/셀 좌표 변환과 내부 읽기 전용 셀 조회 |
 | 정적 입력 | `FlowFieldStaticBakeData`, `FlowFieldVolumeBakeData`, `FlowFieldBakeBlob` | Surface2D·Volume3D의 v6 베이크 저장·검증 |
-| GPU | `IFlowFieldGpuBackend`, `FlowFieldComputeSolver` | Surface BFS 실행 경계와 Compute Shader·AsyncGPUReadback 자원. Readback 요청 직후 `GL.Flush`로 Dispatch를 제출. Solver는 Backend 인터페이스의 구현체가 아님. GPU를 끄고 Managed로 전환하면 경고를 한 번 남기고 `FlowFieldManager.GpuFallbackReason`으로 이유를 제공. 샘플 HUD에도 표시 |
+| 풀이 Job | `FlowFieldVolumeSolveJob`, `FlowFieldSurfaceSolveJob`, `FlowFieldSurfaceTopologyJob`, `IFlowFieldSolveBackend` | 내비게이션 계산을 Burst Job으로 실행. 프레임을 막지 않게 워커 스레드에서 풀고 매 프레임 완료를 확인. 게시 결과는 관리 배열이므로 샘플링과 베이크는 Native 타입을 다루지 않음 |
 | 협력 실행 | `IFlowFieldBuildOperation`, `FlowFieldBuildScheduler`, `FlowFieldBuildDriver` | 실행 가능한 Volume 작업을 2ms의 공통 CPU 예산으로 진행. Session 수명과 취소는 Session 소유 |
 
 ## 수명과 결과 게시
@@ -335,7 +335,7 @@ Editor에서 씬의 표면 또는 3D 볼륨을 미리 계산해 v6 Bake Asset으
 | Volume3D Bounds | 입력 X·Y·Z 크기는 양수여야 하며, 반올림한 축별 셀 수를 **최소 1셀로 보정**합니다. 입력 Y에 Surface2D의 별도 `0.01` 높이 하한을 적용하지 않습니다. |
 | Surface2D | `Width × Depth` 최대 **100,000셀**입니다. |
 | Volume3D | `Width × Height × Depth` 최대 **1,000,000셀**입니다. |
-| Volume 추적 메모리 | Manager별 **512MiB** 예산을 적용합니다. 기존 게시 결과, 작업 배열과 GPU 할당 등을 고려한 예상량으로 요청을 검증하고 작업 시작 시 다시 확인합니다. |
+| Volume 추적 메모리 | Manager별 **512MiB** 예산을 적용합니다. 기존 게시 결과와 작업 배열을 고려한 예상량으로 요청을 검증하고 작업 시작 시 다시 확인합니다. |
 
 Surface2D의 X·Z 셀 수는 `floor(axisLength / CellSize + 0.5)`로 계산하며 각 결과가 1 이상이어야 합니다. Volume3D의 X·Y·Z 셀 수는 `max(1, floor(axisLength / CellSize + 0.5))`로 계산합니다. 일반적인 양수 입력도 Surface에서는 반올림 결과가 0이면 거부됩니다.
 
@@ -353,13 +353,13 @@ Surface2D의 X·Z 셀 수는 `floor(axisLength / CellSize + 0.5)`로 계산하�
 
 ### 검증 기록
 
-Unity 2023.2.20f1·macOS·Metal(Apple M4 Pro)에서 **회귀 테스트 402개가 모두 통과**했습니다(성능 프로브 14개 제외). Windows·Direct3D 11(AMD Radeon RX 9070)의 마지막 기록은 이번 수정 이전의 466개 통과입니다. 실제 GPU, 저장된 샘플 씬 통합 2개, PlayMode에 진입하는 Manager 통합을 포함합니다. Surface·Volume의 샘플 게시, 재진입·취소·재활성화, 장애물 안전성, Modifier 합성, 베이크 검증·저장 실패 경계와 직렬화 참조를 확인합니다.
+Unity 2023.2.20f1·macOS·Metal(Apple M4 Pro)에서 **회귀 테스트 389개가 모두 통과**했습니다(성능 프로브 12개 제외). Windows·Direct3D 11(AMD Radeon RX 9070)의 마지막 기록은 이번 수정 이전의 466개 통과입니다. 실제 GPU, 저장된 샘플 씬 통합 2개, PlayMode에 진입하는 Manager 통합을 포함합니다. Surface·Volume의 샘플 게시, 재진입·취소·재활성화, 장애물 안전성, Modifier 합성, 베이크 검증·저장 실패 경계와 직렬화 참조를 확인합니다.
 
 리팩터링 안전망으로 다음 검사가 함께 실행됩니다.
 
-- **골든 해시**(`FlowFieldGoldenFieldTests`): 고정된 Surface·Volume 장면의 모든 셀 샘플을 1e-4 단위로 양자화한 해시입니다. GPU는 동률 이웃을 다르게 고를 수 있어 Managed 계산으로 고정합니다.
+- **골든 해시**(`FlowFieldGoldenFieldTests`): 고정된 Surface·Volume 장면의 모든 셀 샘플을 1e-4 단위로 양자화한 해시입니다.
 - **베이크 내용 해시**(`FlowFieldBakeAssetContentTests`): 두 베이크 Asset에서 런타임이 읽는 배열의 해시로, 저장 형식과 무관하게 내용이 같아야 합니다.
-- **동등성 검사**: Volume 후보 필터와 셀마다 Physics 쿼리, 내부 셀 Topology와 `CanTraverse`, v6 저장 왕복과 원래 값을 비교합니다. GPU는 큰 장면에서 Blocked와 셀별 경로 길이를 Managed와 비교합니다.
+- **동등성 검사**: Volume 후보 필터와 셀마다 Physics 쿼리, 내부 셀 Topology와 테스트에 적어 둔 통과 규칙, v6 저장 왕복과 원래 값을 비교합니다.
 
 Unity Test Runner에서 `Common.FlowField.Tests`를 선택해 EditMode 전체를 실행할 수 있습니다. Manager 통합 테스트는 이 실행 안에서 PlayMode에 진입합니다. 배치 실행은 Editor에서 열려 있지 않은 프로젝트를 대상으로 하며, 실제 GPU 검증을 위해 `-nographics`를 생략합니다.
 
@@ -380,7 +380,6 @@ Unity.exe -batchmode -projectPath <ToyProject> -runTests -testPlatform EditMode 
 측정은 한 기기의 Editor 배치 실행 기준이며 실행마다 20~30% 정도 달라질 수 있습니다. 위 표와 Surface 316×316 재빌드 약 1.1~1.3초는 Windows 기록이며, Surface 재빌드는 Topology 재사용 수정 후 Windows에서 다시 재지 않았습니다. Apple M4 Pro에서는 Volume 전체 빌드 약 3.0초(GPU 경로 약 2.8초), 2ms 예산 약 1,270프레임, Volume Goal 변경 약 2.1초, Modifier 값 변경 약 0.42초, Surface 재빌드 약 0.2초입니다.
 
 - 현재 씬 2개·Prefab 2개·v6 베이크 2개와 기존 GUID·직렬화 값은 유지합니다. 구버전 API 래퍼·직렬화 별칭·변환 전용 코드나 에셋은 두지 않습니다.
-- GPU 미지원·결과 검증 실패 시 Managed 계산은 현재 실행 경로입니다. 재계산 중 사용 가능한 게시 결과 유지와 함께 구버전 호환 기능으로 취급하지 않습니다.
 - BFS는 동일 비용의 격자 이동 횟수를 최소화합니다. 속도 Modifier는 경로 비용을 바꾸지 않으며 Agent 간 충돌 회피는 이동 시스템의 책임입니다.
-- Volume의 2ms는 협력 CPU 예산입니다. Physics·Modifier 호출 한 번이나 할당이 이를 초과할 수 있으며 전체 빌드 시간·GPU 시간의 상한은 아닙니다.
+- Volume의 2ms는 협력 CPU 예산입니다. Physics·Modifier 호출 한 번이나 할당이 이를 초과할 수 있으며 전체 빌드 시간의 상한은 아닙니다. 워커 스레드의 풀이 시간은 이 예산에 들지 않습니다.
 - Surface 런타임·StaticBaked 이미지는 현재 HUD로 다시 캡처했고, 나머지 기능 이미지는 기존 캡처입니다. 회귀 실행은 실제 포인터 조작·GUI 렌더링·Player/기기·장시간 군중 이동을 포함하지 않으며, 성능 수치는 위의 Editor 프로브 기준입니다. Surface 샘플의 실제 포인터 조작, 두 샘플의 실제 키 입력, HUD의 GPU 전환 이유 표시, 군중 1000개 3분 이동은 Editor에서 별도로 확인했습니다. RMB+WASD 자유 카메라는 확인하지 않았습니다. Player 빌드는 실행한 기록이 없습니다.

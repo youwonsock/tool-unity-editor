@@ -59,7 +59,6 @@ namespace Common.FlowField.Tests
                 settings.FindProperty("_obstacleCheckHeight").floatValue = 1f;
                 settings.FindProperty("_obstacleCheckCenterOffset").floatValue = .5f;
                 settings.FindProperty("_refreshRate").floatValue = .05f;
-                settings.FindProperty("_frontierComputeShader").objectReferenceValue = null;
                 settings.FindProperty("_showField").boolValue = false;
                 settings.ApplyModifiedPropertiesWithoutUndo();
             }
@@ -498,6 +497,26 @@ namespace Common.FlowField.Tests
             while (!manager.IsReady && !manager.IsFaulted && Time.realtimeSinceStartup < deadline)
                 yield return null;
             Assert.That(manager.IsReady, Is.True, manager.LastError);
+        }
+
+        [UnityTest]
+        public IEnumerator ReleaseStopsAWorkerSolveWithoutBlockingOnItsResult(
+            [Values(false, true)] bool volume)
+        {
+            yield return new EnterPlayMode();
+            FlowFieldManager manager = CreateManager(volume);
+            yield return WaitUntilReady(manager);
+            int revision = manager.Revision;
+            manager.SetGoal(FlowFieldGoalRequest.Position(new Vector3(0.5f, volume ? 0.5f : 0f, 0.5f)));
+            yield return null;
+
+            manager.Release();
+
+            Assert.That(manager.State, Is.EqualTo(FlowFieldRuntimeState.Released));
+            Assert.That(manager.Revision, Is.LessThanOrEqualTo(revision + 1));
+            manager.Init();
+            yield return WaitUntilReady(manager);
+            Assert.That(manager.IsFaulted, Is.False, manager.LastError);
         }
 
         private sealed class HookModifier : IFlowFieldVectorModifier, IFlowFieldModifierSnapshot

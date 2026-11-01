@@ -213,9 +213,6 @@ MonoBehaviour:
   _staticBakeData: {fileID: 0}
   _volumeStaticBakeData: {fileID: 11400000, guid: a2847e880553f22468388c0fd624691d,
     type: 2}
-  _frontierComputeShader: {fileID: 7200000, guid: 9bcae8d0ec8446a2b2e8ef1e3d0d8f45,
-    type: 3}
-  _maxGpuWaves: 1024
   _obstacleLayer:
     serializedVersion: 2
     m_Bits: 512

@@ -179,6 +179,12 @@ namespace Common.FlowField
             return normal.normalized;
         }
 
+        // For the Burst jobs, which pin these arrays and only read them.
+        internal float[] Heights => _surfaceHeights;
+        internal Vector3[] Normals => _surfaceNormals;
+        internal byte[] Flags => _surfaceFlags;
+        internal byte[] NeighborMasks => _neighborMasks;
+
         internal byte GetNeighborMask(int index)
             => IsSurfaceValid(index) ? _neighborMasks[index] : (byte)0;
 
@@ -309,11 +315,12 @@ namespace Common.FlowField
         Released,
     }
 
-    internal enum FlowFieldBfsBackendPolicy
+    internal enum FlowFieldSolvePolicy
     {
-        PreferGpu,
-        ManagedOnly,
-        RequireGpu,
+        // On a worker thread, reported through the session's backend.
+        Worker,
+        // On the calling thread: Editor previews and bakes.
+        Inline,
     }
 
     [Flags]
@@ -351,7 +358,6 @@ namespace Common.FlowField
         internal FlowFieldDirtyFlags DirtyFlags { get; }
         internal FlowFieldCellRect DirtyFinalRegion { get; }
         internal FlowFieldCellRect DirtyObstacleRegion { get; }
-        internal int MaxGpuWaves { get; }
 
         private FlowFieldSessionRequest(
             FlowFieldSessionSourceKind sourceKind,
@@ -367,8 +373,7 @@ namespace Common.FlowField
             Vector3 defaultDirection,
             FlowFieldDirtyFlags dirtyFlags,
             FlowFieldCellRect dirtyFinalRegion,
-            FlowFieldCellRect dirtyObstacleRegion,
-            int maxGpuWaves)
+            FlowFieldCellRect dirtyObstacleRegion)
         {
             SourceKind = sourceKind;
             SurfaceSettings = surfaceSettings;
@@ -385,7 +390,6 @@ namespace Common.FlowField
             DirtyFlags = dirtyFlags;
             DirtyFinalRegion = dirtyFinalRegion;
             DirtyObstacleRegion = dirtyObstacleRegion;
-            MaxGpuWaves = maxGpuWaves;
         }
 
         internal static FlowFieldSessionRequest ForSceneBuild(
@@ -399,8 +403,7 @@ namespace Common.FlowField
             Vector3 defaultDirection,
             FlowFieldDirtyFlags dirtyFlags,
             FlowFieldCellRect dirtyFinalRegion,
-            FlowFieldCellRect dirtyObstacleRegion,
-            int maxGpuWaves)
+            FlowFieldCellRect dirtyObstacleRegion)
             => new FlowFieldSessionRequest(
                 FlowFieldSessionSourceKind.SceneBuild,
                 settings,
@@ -415,8 +418,7 @@ namespace Common.FlowField
                 defaultDirection,
                 dirtyFlags,
                 dirtyFinalRegion,
-                dirtyObstacleRegion,
-                maxGpuWaves);
+                dirtyObstacleRegion);
 
         internal static FlowFieldSessionRequest ForStaticSnapshot(
             in FlowFieldSurfaceBakeSettings settings,
@@ -427,8 +429,7 @@ namespace Common.FlowField
             float obstacleCheckCenterOffset,
             float obstacleClearance,
             Vector3 defaultDirection,
-            FlowFieldDirtyFlags dirtyFlags,
-            int maxGpuWaves)
+            FlowFieldDirtyFlags dirtyFlags)
             => new FlowFieldSessionRequest(
                 FlowFieldSessionSourceKind.StaticSnapshot,
                 settings,
@@ -443,13 +444,11 @@ namespace Common.FlowField
                 defaultDirection,
                 dirtyFlags,
                 FlowFieldCellRect.Invalid,
-                FlowFieldCellRect.Invalid,
-                maxGpuWaves);
+                FlowFieldCellRect.Invalid);
 
         internal bool HasSameInputs(in FlowFieldSessionRequest other)
             => HasSameBaseInputs(other)
-                && VectorMatch(DefaultDirection, other.DefaultDirection)
-                && MaxGpuWaves == other.MaxGpuWaves;
+                && VectorMatch(DefaultDirection, other.DefaultDirection);
 
         /// <summary>
         /// Identifies the immutable field source. Goal, obstacle and final
@@ -474,8 +473,7 @@ namespace Common.FlowField
                 && GoalMatch(Goal, other.Goal);
 
         internal bool HasSameFinalInputs(in FlowFieldSessionRequest other)
-            => VectorMatch(DefaultDirection, other.DefaultDirection)
-                && MaxGpuWaves == other.MaxGpuWaves;
+            => VectorMatch(DefaultDirection, other.DefaultDirection);
 
         internal FlowFieldDirtyFlags GetInputDirtyFlags(in FlowFieldSessionRequest other)
         {
@@ -502,8 +500,6 @@ namespace Common.FlowField
                 flags |= FlowFieldDirtyFlags.Goal | FlowFieldDirtyFlags.FinalRegion;
             if (!VectorMatch(DefaultDirection, other.DefaultDirection))
                 flags |= FlowFieldDirtyFlags.DefaultDirection | FlowFieldDirtyFlags.FinalRegion;
-            if (MaxGpuWaves != other.MaxGpuWaves)
-                flags |= FlowFieldDirtyFlags.FinalRegion;
             return flags;
         }
 

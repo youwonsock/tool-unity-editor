@@ -13,8 +13,6 @@ namespace Common.FlowField
         internal Vector3 GoalWorld { get; }
         internal float GoalInfluenceRadius { get; }
         internal Vector3 DefaultDirection { get; }
-        internal int MaxGpuWaves { get; }
-        internal ComputeShader ComputeShader { get; }
         internal FlowFieldVolumeBakeData StaticBakeData { get; }
         internal int StaticBakeRevision { get; }
         internal int StaticBakeContentGeneration { get; }
@@ -30,8 +28,6 @@ namespace Common.FlowField
             Vector3 goalWorld,
             float goalInfluenceRadius,
             Vector3 defaultDirection,
-            int maxGpuWaves,
-            ComputeShader computeShader,
             FlowFieldVolumeBakeData staticBakeData,
             int bakeInputGeneration = 0)
         {
@@ -44,8 +40,6 @@ namespace Common.FlowField
             GoalWorld = goalWorld;
             GoalInfluenceRadius = goalInfluenceRadius;
             DefaultDirection = defaultDirection;
-            MaxGpuWaves = maxGpuWaves;
-            ComputeShader = computeShader;
             StaticBakeData = staticBakeData;
             StaticBakeRevision = staticBakeData != null ? staticBakeData.Revision : -1;
             StaticBakeContentGeneration = staticBakeData != null
@@ -60,8 +54,7 @@ namespace Common.FlowField
                 && BakeMode == other.BakeMode
                 && ReferenceEquals(StaticBakeData, other.StaticBakeData)
                 && StaticBakeRevision == other.StaticBakeRevision
-                && StaticBakeContentGeneration == other.StaticBakeContentGeneration
-                && ReferenceEquals(ComputeShader, other.ComputeShader);
+                && StaticBakeContentGeneration == other.StaticBakeContentGeneration;
 
         internal bool HasSameObstacleInputs(in FlowFieldVolumeRequest other)
             => HasSameGrid(other)
@@ -106,8 +99,7 @@ namespace Common.FlowField
             => FlowFieldGridSpace.Approximately(
                    DefaultDirection,
                    other.DefaultDirection,
-                   0.00000001d)
-                && MaxGpuWaves == other.MaxGpuWaves;
+                   0.00000001d);
 
         private bool HasSameGoalCell(in FlowFieldVolumeRequest other)
             => HasGoal == other.HasGoal

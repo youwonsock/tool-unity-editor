@@ -35,7 +35,7 @@ namespace Common.FlowField.Editor
         /// <summary>
         /// Cancels the active bake at the next safe callback/readback
         /// boundary. The generation is invalidated before cleanup so a late
-        /// GPU callback cannot write an Asset after the user cancels.
+        /// late callback cannot write an Asset after the user cancels.
         /// </summary>
         public static void CancelBake()
         {
@@ -251,8 +251,7 @@ namespace Common.FlowField.Editor
                     session.Initialize(
                         FlowFieldBakeMode.RuntimeDynamic,
                         FlowFieldSessionSourceKind.SceneBuild,
-                        FlowFieldBfsBackendPolicy.PreferGpu,
-                        manager.FrontierComputeShader);
+                        FlowFieldSolvePolicy.Inline);
 
                     FlowFieldGoalResolution goalSnapshot = manager.ResolveConfiguredGoal(settings.Grid);
                     bool accepted = session.Submit(FlowFieldSessionRequest.ForSceneBuild(
@@ -266,8 +265,7 @@ namespace Common.FlowField.Editor
                         manager.DefaultFlowDirection,
                         FlowFieldDirtyFlags.All,
                         FlowFieldCellRect.Full(settings.Grid),
-                        FlowFieldCellRect.Full(settings.Grid),
-                        FlowFieldComputeSolver.ClampMaxWaves(settings.Grid.CellCount, manager.MaxGpuWaves)));
+                        FlowFieldCellRect.Full(settings.Grid)));
                     if (!accepted && !session.IsFaulted)
                         throw new InvalidOperationException("Static Flow Bake session could not be started.");
                     if (session.IsFaulted)

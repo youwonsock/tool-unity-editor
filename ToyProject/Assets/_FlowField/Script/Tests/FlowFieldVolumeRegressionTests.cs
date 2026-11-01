@@ -34,7 +34,7 @@ namespace Common.FlowField.Tests
 
         private static FlowFieldVolumeRequest Request(Vector3? goal = null) => new FlowFieldVolumeRequest(
             Grid, new Bounds(Vector3.one * 1.5f, Vector3.one * 3f), FlowFieldBakeMode.RuntimeDynamic,
-            1 << FlowFieldRegressionFixture.Layer, 0f, true, goal ?? Goal, 0f, Vector3.forward, 1024, null, null);
+            1 << FlowFieldRegressionFixture.Layer, 0f, true, goal ?? Goal, 0f, Vector3.forward, null);
 
         private void Finish()
         {

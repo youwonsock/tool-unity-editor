@@ -21,7 +21,7 @@ namespace Common.FlowField.Tests
             try
             {
                 session.Initialize(FlowFieldBakeMode.RuntimeDynamic, FlowFieldSessionSourceKind.SceneBuild,
-                    FlowFieldBfsBackendPolicy.ManagedOnly, null);
+                    FlowFieldSolvePolicy.Inline);
                 session.RegisterModifierCommand(modifier);
                 modifier.ThrowFromCollider = true;
                 session.Submit(FlowFieldRegressionFixture.Request(goal));
@@ -48,7 +48,7 @@ namespace Common.FlowField.Tests
             using var session = new FlowFieldSession(FlowFieldRegressionFixture.Surface());
             var errors = new FlowFieldRegressionFixture.EventFailures(session);
             session.Initialize(FlowFieldBakeMode.StaticBaked, FlowFieldSessionSourceKind.StaticSnapshot,
-                FlowFieldBfsBackendPolicy.ManagedOnly, null);
+                FlowFieldSolvePolicy.Inline);
             var first = CreateStaticSnapshot();
             var replacement = CreateStaticSnapshot(blockedIndex: 0);
             Assert.That(replacement.Revision, Is.EqualTo(first.Revision));
@@ -78,7 +78,7 @@ namespace Common.FlowField.Tests
         {
             using var source = new FlowFieldSession(FlowFieldRegressionFixture.Surface());
             source.Initialize(FlowFieldBakeMode.RuntimeDynamic, FlowFieldSessionSourceKind.SceneBuild,
-                FlowFieldBfsBackendPolicy.ManagedOnly, null);
+                FlowFieldSolvePolicy.Inline);
             source.Submit(FlowFieldRegressionFixture.Request());
             source.Pump();
             Assert.That(source.IsReady, Is.True, source.LastError);
@@ -92,7 +92,7 @@ namespace Common.FlowField.Tests
 
         private static FlowFieldSessionRequest StaticRequest(FlowFieldStaticBakeSnapshot snapshot, Vector3 direction)
             => FlowFieldSessionRequest.ForStaticSnapshot(FlowFieldRegressionFixture.Settings, null, snapshot,
-                1 << FlowFieldRegressionFixture.Layer, 1f, 0.5f, 0f, direction, FlowFieldDirtyFlags.None, 1024);
+                1 << FlowFieldRegressionFixture.Layer, 1f, 0.5f, 0f, direction, FlowFieldDirtyFlags.None);
 
         [Test]
         public void AreaAndObstacleChangesDuringASolveBuildTheMaskOnce()
@@ -110,7 +110,7 @@ namespace Common.FlowField.Tests
             try
             {
                 session.Initialize(FlowFieldBakeMode.RuntimeDynamic, FlowFieldSessionSourceKind.SceneBuild,
-                    FlowFieldBfsBackendPolicy.RequireGpu, null);
+                    FlowFieldSolvePolicy.Worker);
                 session.RegisterModifierCommand(modifier);
                 session.Submit(request);
                 session.Pump();
