@@ -22,6 +22,11 @@ namespace Common.FlowField
         internal bool SurfaceReady => Surface != null && Surface.IsValid;
         internal bool HasObstacleMask;
         internal bool BaseComposed;
+        internal bool ConfigurationStale;
+        internal bool ObstacleProbePending;
+        // A Grid change marked by the owner before its validated Submit.
+        internal bool GridMarkedUnsubmitted;
+        internal bool GoalRemoved;
 
         public void ExpandFinalDirty(FlowFieldCellRect rect)
             => DirtyFinalRegion = FlowFieldCellRect.Union(DirtyFinalRegion, rect);

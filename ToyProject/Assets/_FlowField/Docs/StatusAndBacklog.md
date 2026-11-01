@@ -181,9 +181,12 @@ Volume 100³·장애물 50개·Modifier 3개의 전체 빌드는 약 3.5초다.
 | 100줄을 넘는 메서드 | 10개 | 0개 |
 | 외부 호출 뒤 소유권 재검사 | 약 43곳 | 약 41곳 |
 
-- `FlowFieldSessionBase`: 공개 상태, Fault 순서, 이벤트 전달, 명령 지연, 수명 세대 같은 공통 수명 규칙. 재시도와 해제의 자원 처리는 모드별로 달라 각 세션에 있다.
+- `FlowFieldSessionBase`: 두 세션이 공유하는 수명 표(`FlowFieldSessionLifecycle`), 공개 상태, Fault 순서, 이벤트 전달, 명령 지연, 수명 세대, Scheduler 등록. 재시도와 해제의 자원 처리는 모드별로 달라 각 세션에 있다.
+- `FlowFieldRequestInbox`: 두 세션의 최신 요청과 대기 표시. Surface의 실행 중 요청 복사본은 없앴다.
+- Surface 단계: `FlowFieldSurfaceBaseStage`(표면·장애물·Goal), `FlowFieldSurfaceSolveStage`(풀이 실행), `FlowFieldSurfaceComposeStage`(합성 진행). 세션은 이 단계들의 순서와 수명만 맡는다.
 - `FlowFieldManager.Modes.cs`: Surface와 Volume의 차이. Manager 본체에는 모드 분기가 없다. `FlowFieldManager.Validation.cs`, `FlowFieldManager.Bake.cs`는 설정 검증과 베이크 연동이다.
-- 세션의 `.Build`, `.Sampling`, `.Views`, `.Memory`는 partial 파일이다. 필드를 공유하므로 읽기 쉬워졌을 뿐 결합이 줄지는 않았다. `FlowFieldSession.Build.cs`(841줄)가 가장 크다.
+- 세션의 `.Build`, `.Sampling`, `.Views`, `.Memory`, `.Obstacles`는 partial 파일이다. 필드를 공유하므로 읽기 쉬워졌을 뿐 결합이 줄지는 않았다. 가장 큰 세션 파일은 `FlowFieldVolumeSession.cs`(583줄)다.
+- Surface 세션의 필드는 28개에서 12개로 줄었다.
 - 2026-11-01 `FlowFieldExecutionBoundary`로 복잡성의 근원을 없앴다: 이벤트 핸들러는 작업이 끝난 뒤 실행하고 Modifier 코드에서는 다른 작업을 시작할 수 없어, 외부 호출 뒤 소유권 재검사가 필요 없다. 외부 호출 뒤 소유권을 확인하는 줄이 115줄에서 13줄이 됐고, 남은 13줄은 늦게 도착하는 GPU 콜백용이다. 도달할 수 없게 된 재진입 테스트 케이스 224개를 지우고, Manager를 통한 거부·지연·이벤트 순서 테스트 케이스 73개를 추가했다. Modifier 계약은 getter 3개에서 `Observe()` 하나로 바뀌어 직접 구현한 코드는 고쳐야 한다.
 
 ## 다음 순서

@@ -6,6 +6,54 @@ namespace Common.FlowField
     /// <summary>Reads of the published Surface2D field.</summary>
     internal sealed partial class FlowFieldSession
     {
+        internal override bool TryGetFieldInfo(out FlowFieldFieldInfo info)
+        {
+            info = default;
+            if (!IsReady || !_fieldStore.Grid.IsValid || _fieldStore.Surface == null || !_fieldStore.Surface.IsValid)
+                return false;
+
+            bool hasRequestedGoal = false;
+            Vector3 requestedGoal = default;
+            float influenceRadius = 0f;
+            if (_requests.HasLatest)
+            {
+                if (_requests.Latest.SourceKind == FlowFieldSessionSourceKind.StaticSnapshot)
+                {
+                    FlowFieldStaticBakeSnapshot snapshot = _requests.Latest.StaticBakeSnapshot;
+                    hasRequestedGoal = snapshot != null && snapshot.HasGoal;
+                    requestedGoal = snapshot != null ? snapshot.RequestedGoalWorld : default;
+                    influenceRadius = snapshot != null ? snapshot.GoalInfluenceRadius : 0f;
+                }
+                else
+                {
+                    hasRequestedGoal = _requests.Latest.Goal.IsValid;
+                    requestedGoal = _requests.Latest.Goal.RequestedWorld;
+                    influenceRadius = _requests.Latest.Goal.InfluenceRadius;
+                }
+            }
+
+            Vector3 resolvedGoal = default;
+            bool hasResolvedGoal = _fieldStore.HasActiveGoal
+                && _fieldStore.ResolvedGoalIndex >= 0;
+            if (hasResolvedGoal)
+            {
+                resolvedGoal = _fieldStore.Surface.GetCellCenter(_fieldStore.Grid, _fieldStore.ResolvedGoalIndex);
+            }
+
+            info = new FlowFieldFieldInfo(
+                _fieldStore.Grid,
+                _fieldStore.Surface.BakeBoundsWorld,
+                FlowFieldSpaceMode.Surface2D,
+                BakeMode,
+                Revision,
+                hasRequestedGoal,
+                requestedGoal,
+                influenceRadius,
+                hasResolvedGoal,
+                resolvedGoal);
+            return info.IsValid;
+        }
+
         internal override FlowFieldSample Sample(Vector3 worldPosition)
         {
             if (!IsReady)

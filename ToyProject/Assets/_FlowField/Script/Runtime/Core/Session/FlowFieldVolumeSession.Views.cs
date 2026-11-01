@@ -100,15 +100,15 @@ namespace Common.FlowField
                 || State == FlowFieldRuntimeState.Faulted)
                 return false;
 
-            if (_hasLatestRequestedInput
-                && !_committed.Request.HasSameGrid(_latestRequestedInput))
+            if (_requests.HasLatest
+                && !_committed.Request.HasSameGrid(_requests.Latest))
                 return false;
 
             FlowFieldVolumeRequest request = _committed.Request;
             // A running build or a move within the Goal cell leaves the
             // published result behind the requested Goal, as on Surface2D.
-            FlowFieldVolumeRequest requested = _hasLatestRequestedInput && request.BakeMode != FlowFieldBakeMode.StaticBaked
-                ? _latestRequestedInput
+            FlowFieldVolumeRequest requested = _requests.HasLatest && request.BakeMode != FlowFieldBakeMode.StaticBaked
+                ? _requests.Latest
                 : request;
             Vector3 resolvedGoal = default;
             bool hasResolvedGoal = _committed.GoalIndex >= 0
@@ -148,8 +148,8 @@ namespace Common.FlowField
                 return false;
 
             VolumeFieldData field = _committed;
-            if (_hasLatestRequestedInput
-                && !field.Request.HasSameGrid(_latestRequestedInput))
+            if (_requests.HasLatest
+                && !field.Request.HasSameGrid(_requests.Latest))
                 return false;
             FlowFieldVolumeVisualizationSource source = new FlowFieldVolumeVisualizationSource(
                 field.Grid,
@@ -176,14 +176,14 @@ namespace Common.FlowField
                 || State == FlowFieldRuntimeState.Faulted)
                 return false;
 
-            if (_hasLatestRequestedInput)
+            if (_requests.HasLatest)
             {
                 source = new FlowFieldVolumeVisualizationSource(
-                    _latestRequestedInput.Grid,
-                    _latestRequestedInput.WorldBounds,
-                    _latestRequestedInput.BakeMode,
-                    _latestRequestedInput.StaticBakeData,
-                    _latestRequestedInput.StaticBakeRevision,
+                    _requests.Latest.Grid,
+                    _requests.Latest.WorldBounds,
+                    _requests.Latest.BakeMode,
+                    _requests.Latest.StaticBakeData,
+                    _requests.Latest.StaticBakeRevision,
                     _committed != null ? _committed.ResultId : 0L);
                 return source.IsValid;
             }
