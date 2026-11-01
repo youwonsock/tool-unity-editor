@@ -29,7 +29,7 @@ Session은 수명이 끝날 때 실행 중인 풀이 Job에 취소를 요청하�
 
 Surface 기본 준비 요청의 Grid·Surface는 장애물 요청에서 얻습니다. 준비 결과는 장애물 변경·변경 영역·이동 가능한 표면 여부·Goal 상태만 보관하고, Goal 변경 여부는 그 상태에서 계산합니다. BFS가 실제 사용하는 MaxGpuWaves·Version과 Session의 요청·기본 필드 버전은 유지합니다. Volume 스케줄러 계약은 대기 여부·작업 여부·Pump만 노출하며 취소는 Session이 소유합니다.
 
-RuntimeDynamic의 입력 변경은 후보를 검증해 최신 요청에 반영합니다. Surface의 Modifier 등록·변경·관측은 첫 Submit 이후 같은 대기 플래그에 처리를 예약하며 추가 RequestRebuild 없이 다음 Pump에서 합성합니다. Manager의 FixedUpdate는 실행 직전 현재 작성 설정을 요청에 반영합니다. 명시적 RequestRebuild도 같은 제출 경로를 사용하고, 진행 중인 작업의 고정 입력은 덮어쓰지 않습니다. StaticBaked에서는 Play Mode에 Goal·장애물 변경 API나 Editor의 Bake 저장 API를 호출하지 않고 Bake Asset을 로드합니다.
+RuntimeDynamic의 입력 변경은 후보를 검증해 최신 요청에 반영합니다. Surface의 Modifier 등록·변경·관측은 첫 Submit 이후 같은 대기 플래그에 처리를 예약하며 추가 RequestRebuild 없이 다음 Pump에서 합성합니다. Manager의 LateUpdate는 실행 직전 현재 작성 설정을 요청에 반영합니다. 명시적 RequestRebuild도 같은 제출 경로를 사용하고, 진행 중인 작업의 고정 입력은 덮어쓰지 않습니다. StaticBaked에서는 Play Mode에 Goal·장애물 변경 API나 Editor의 Bake 저장 API를 호출하지 않고 Bake Asset을 로드합니다.
 
 같은 Grid·Source의 읽을 수 있는 이전 결과가 있는 동안에는 해당 결과를 사용할 수 있습니다. Surface의 Revision은 실제 FieldStore 결과 변경 여부에 따라, Volume의 Revision은 완료된 결과 저장소 교체 정책에 따라 갱신됩니다. 두 모드의 Revision을 하나의 일반 규칙으로 해석하면 안 됩니다.
 
@@ -59,9 +59,9 @@ Unity 오버랩 쿼리는 면만 닿아도 겹침으로 칩니다. 장애물과 
 
 Volume Modifier의 등록·해제·값·영역·우선순위 변경은 입력이 게시 결과와 같으면 전체 빌드 대신 Modifier 단계만 다시 실행합니다. 이때 게시된 내비게이션 배열을 읽기 전용으로 공유하고 최종 방향·속도 배열만 새로 만듭니다. Goal만 바뀌고 불확실 영역이 없으면 게시된 Blocked와 Topology를 공유하고 나머지 내비게이션 배열은 새로 계산합니다. `RequestRebuild()`와 `NotifyCellsDirty()` 같은 명시적 재빌드는 Goal이 함께 바뀌어도 장애물을 다시 조회합니다. Goal이 같은 셀 안에서만 움직이면 최신 입력만 갱신하고 빌드하지 않습니다. 추적한 장애물이 바뀌면 그 영역의 셀만 다시 조회하고 나머지는 게시된 Blocked를 복사합니다. 추적되지 않은 Collider는 명시적 재빌드나 같은 요청의 재제출로 전체 조회할 때 반영됩니다. Modifier 단계는 기본 필드를 복사한 뒤 Modifier가 닿을 수 있는 범위의 셀만 돕니다. Surface의 풀이 Job은 Goal 단계가 만든 Topology를 재사용합니다.
 
-Volume 작업은 `FlowFieldBuildScheduler`와 `FlowFieldBuildDriver`의 협력 실행 경계를 사용합니다. 장애물·Modifier 단계는 최대 64셀, StaticBaked 데이터 복사는 최대 4,096원소 단위로 진행합니다. 나머지는 워커 스레드에서 실행되어 이 예산을 쓰지 않습니다. deadline은 단계 호출 사이에 확인하므로 한 단계의 여러 Physics·Modify 호출이나 배열 할당·게시 처리가 예산을 초과할 수 있습니다. 2ms는 협력 CPU 예산이며 프레임 실행 시간이나 전체 빌드 완료 시간의 보장이 아닙니다.
+Surface와 Volume 작업은 `FlowFieldBuildScheduler`와 `FlowFieldBuildDriver`의 협력 실행 경계를 사용합니다. Volume의 장애물·Modifier 단계는 최대 64셀, StaticBaked 데이터 복사는 최대 4,096원소 단위로 진행합니다. 나머지는 워커 스레드에서 실행되어 이 예산을 쓰지 않습니다. deadline은 단계 호출 사이에 확인하므로 한 단계의 여러 Physics·Modify 호출이나 배열 할당·게시 처리가 예산을 초과할 수 있습니다. 2ms는 협력 CPU 예산이며 프레임 실행 시간이나 전체 빌드 완료 시간의 보장이 아닙니다.
 
-Volume의 장애물·Modifier 단계는 `FlowFieldVolumeCellQuery`로 스텝마다 Layer 후보를 `OverlapBox` 한 번으로 모으고 등록 장애물·Modifier Collider의 Bounds를 한 번 읽습니다. 후보의 AABB(contactOffset 여유 포함)가 닿는 셀만 정확한 `CheckBox`·`OverlapsTarget`을 실행하므로 결과는 셀마다 쿼리한 것과 같습니다. 후보가 4,096개를 넘는 스텝은 셀별 쿼리로 돌아갑니다. Topology는 경계가 아닌 셀에서 `FlowFieldVolumeInteriorOffsets`의 평탄 인덱스 오프셋으로 이웃·코너 셀의 Blocked만 확인하고, 경계 셀은 `CanTraverse`를 사용합니다. 커밋된 빌드의 Costs·Queue·Influence 배열은 다음 같은 크기 빌드에서 재사용합니다.
+Volume의 장애물·Modifier 단계는 `FlowFieldVolumeCellQuery`로 스텝마다 Layer 후보를 `OverlapBox` 한 번으로 모으고 등록 장애물·Modifier Collider의 Bounds를 한 번 읽습니다. 후보의 AABB(contactOffset 여유 포함)가 닿는 셀만 정확한 `CheckBox`·`OverlapsTarget`을 실행하므로 결과는 셀마다 쿼리한 것과 같습니다. 후보가 4,096개를 넘는 스텝은 셀별 쿼리로 돌아갑니다. 추적한 장애물이 바뀌면 그 영역의 셀만 다시 조회하고 나머지는 게시된 Blocked를 복사하며, Modifier 단계는 Modifier가 닿는 범위의 셀만 돕니다(`FlowFieldCellRegionCursor`). Topology는 `FlowFieldVolumeSolveJob`이 계산합니다. 경계가 아닌 셀은 평탄 인덱스 오프셋으로 이웃·코너 셀의 Blocked만 확인하고, 경계 셀은 `CanTraverse`를 사용합니다. 커밋된 빌드의 Costs·Queue·Influence 배열은 다음 같은 크기 빌드에서 재사용합니다.
 
 Volume의 Modifier 등록·변경 관측·Snapshot 캡처는 `FlowFieldVolumeModifierRegistry`, Physics와 무관한 탐색 연산은 `FlowFieldVolumeSolveJob`이 담당합니다. `FlowFieldVolumeBuildContext`는 한 작업의 배열·진행 커서를, `FlowFieldVolumeFieldData`는 완성된 게시 결과를 보관합니다. `FlowFieldVolumeSafetyState`는 불확실 영역과 샘플링의 보수적 정지 판정을 담당합니다. 불확실 영역은 빌드 시작 때 관측 목록으로 옮겨 그 빌드를 게시할 때 지우고, 시작 후 기록된 영역은 다음 빌드까지 남깁니다. Modifier 재합성은 장애물을 조회하지 않으므로 영역을 그대로 둡니다. 풀이 Job을 기다리는 동안 Scheduler는 등록 장애물 관측만 실행하고 작업 없음으로 세어 예산을 쓰지 않습니다. `FlowFieldVolumeObstacleTracker`는 등록·미등록 Collider 관측과 스윕 버퍼를 소유하고 변경 Bounds를 Session에 동기 통지합니다. Session은 요청 수락·취소, 수명, Physics 입력, Scheduler·풀이 Job 연결과 게시 정책을 유지합니다. 단계별 회귀 검증과 보존 범위는 [RefactoringNotes.md](RefactoringNotes.md)에 기록합니다.
 
@@ -142,6 +142,7 @@ README의 [핵심 흐름](Images/flowfield-uml.png)은 요청부터 조회까지
 
 ### 기존 캡처 기록
 
+- 2026-11-01 기능 이미지 10장을 열어 현재 HUD 코드와 대조했습니다. 제거한 C 키나 GPU 전환 이유가 보이는 이미지는 없어 다시 찍지 않았습니다. Editor 이미지 4장은 HUD가 없어 글자를 대조하지 않았습니다.
 - `feature-staticbaked-surface.png`와 `feature-staticbaked-volume.png`는 각각 2D·3D StaticBaked 로드 화면으로 사용합니다.
 - `feature-surface2d-runtime-baseline.png`와 `feature-surface2d-runtime-rebuild.png`는 Surface2D RuntimeDynamic의 기본·재빌드 화면으로 사용합니다.
 - `feature-volume3d-runtime-baseline.png`와 `feature-volume3d-runtime-gate.png`는 Volume3D RuntimeDynamic의 기본·Gate 변경 화면으로 사용합니다.
