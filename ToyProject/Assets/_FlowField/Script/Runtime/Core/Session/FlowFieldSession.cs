@@ -255,6 +255,8 @@ namespace Common.FlowField
                 flags |= FlowFieldDirtyFlags.FinalRegion;
             }
             _state.DirtyFlags |= flags;
+            // The submitted request no longer covers this input.
+            _submittedForScheduler = false;
             if (finalRegion.IsValid)
                 _state.ExpandFinalDirty(finalRegion);
             if (obstacleRegion.IsValid)
@@ -275,7 +277,6 @@ namespace Common.FlowField
             if (!IsInitialized || _state.ConfigurationStale)
                 return;
             _state.ConfigurationStale = true;
-            _submittedForScheduler = false;
             MarkDirty(FlowFieldDirtyFlags.All, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
             // RuntimeState is derived from the lifecycle plus readiness. A
             // stale configuration therefore becomes Building immediately,

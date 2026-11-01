@@ -6,7 +6,7 @@
 
 | 항목 | 상태 |
 | --- | --- |
-| 테스트 | macOS·Metal(Apple M4 Pro)에서 `Common.FlowField.Tests` 414개 통과, 실패 0, 성능 프로브 12개 제외. 저장소 루트의 `Tools/run-tests.sh`로 실행한다. Windows·Direct3D 11 마지막 기록은 이번 수정 이전의 466개 |
+| 테스트 | macOS·Metal(Apple M4 Pro)에서 `Common.FlowField.Tests` 415개 통과, 실패 0, 성능 프로브 12개 제외. 저장소 루트의 `Tools/run-tests.sh`로 실행한다. Windows·Direct3D 11 마지막 기록은 이번 수정 이전의 466개 |
 | 베이크 | Surface·Volume 모두 v6만 허용. 마이그레이션 코드는 없다. 베이크는 풀이가 끝날 때까지 기다린다. Surface는 호출 스레드에서 실행하고, Volume은 Job으로 예약한다. 2026-11-01 샘플 Asset을 다시 구워 보니 Volume은 내용이 같았고, Surface는 GPU로 구운 방향이 최대 6e-8 달라져(경로는 같음) 새 Asset으로 바꿨다 |
 | 공개 계약 | Provider·Controller API, Manager 직렬화 설정, 씬·Prefab의 GUID 참조 유지. `FlowFieldManager.GpuFallbackReason`, `_frontierComputeShader`, `_maxGpuWaves` 제거(2026-11-01) |
 | 성능 (100³ Volume, Managed, Windows 기록) | 전체 빌드 26~55초 → 약 6초, 2ms 예산 빌드 12,585 → 2,214프레임, 장애물 1개 이동 후 재빌드 31.3 → 6.0초 |
@@ -17,21 +17,21 @@
 
 | 시나리오 | Managed C# | GPU | 현재 |
 | --- | --- | --- | --- |
-| Surface Goal 변경, 게시까지 | 75~105ms | 274~345ms | 65~115ms |
+| Surface Goal 변경, 게시까지 | 75~105ms | 274~345ms | 64~115ms |
 | Surface Goal 변경, 메인 스레드 최장 구간 | 66~83ms | 재지 않음 | 2.4~3.7ms |
-| Surface 장애물 이동, 게시까지 / 최장 구간 | 98~110ms / 83ms | 349~525ms / 재지 않음 | 98~272ms / 12~15ms |
-| Surface Goal 초당 8셀 이동, 초당 게시 | 8.7회 | 2.1~2.4회 | 8.3~9.0회 |
+| Surface 장애물 이동, 게시까지 / 최장 구간 | 98~110ms / 83ms | 349~525ms / 재지 않음 | 98~276ms / 12~15ms |
+| Surface Goal 초당 8셀 이동, 초당 게시 | 8.7회 | 2.1~2.4회 | 8.0~9.0회 |
 | Volume 첫 빌드, 게시까지 / 가장 긴 프레임 | 7.6초 / 20ms | 11.5초 / 21ms | 2.3~3.7초 / 20ms |
-| Volume Goal 변경, 게시까지 / 가장 긴 프레임 | 8.1~16.1초 / 20ms | 3.9~7.9초 / 21~22ms | 0.11~0.14초 / 17ms |
+| Volume Goal 변경, 게시까지 / 가장 긴 프레임 | 8.1~16.1초 / 20ms | 3.9~7.9초 / 21~22ms | 0.10~0.14초 / 17~22ms |
 | Volume 장애물 이동, 게시까지 | 10.5~15.4초 | 6.8~13.5초 | 0.2초 |
 | Volume Modifier 값 변경, 게시까지 | 1.5~4.3초 | 1.5~3.4초 | 0.25~0.29초 |
-| Volume Goal 초당 8셀 이동, 초당 게시 / 10초간 GC / 가장 긴 프레임 | 0~0.1회 / 5~8회 / 20~25ms | 0.1~0.2회 / 7~10회 / 21~33ms | 9.5회 / 0회 / 18ms |
+| Volume Goal 초당 8셀 이동, 초당 게시 / 10초간 GC / 가장 긴 프레임 | 0~0.1회 / 5~8회 / 20~25ms | 0.1~0.2회 / 7~10회 / 21~33ms | 9.1~9.5회 / 0회 / 18~19ms |
 | 풀이 중 Release | 해당 없음 | 해당 없음 | 2ms 미만 |
 | Volume 재빌드 뒤 Mono 힙 | 109MiB | 117MiB | 117MiB |
 
 GPU 제거를 판정한 실행에서 Burst와 GPU를 같이 재면 Surface Goal 변경 17~23ms 대 274~314ms, Volume Goal 변경 0.65초 대 3.9초였다. 제거 기준(최대 프레임 시간이 GPU보다 나쁘지 않고 총 빌드 시간이 1.1배 이내)을 모든 시나리오에서 넘겨 Compute Shader 경로를 제거했다. **이 판정은 이 Mac 하나의 결과다.** Windows나 모바일 GPU에서는 재지 않았다.
 
-Surface는 이제 Volume과 같은 Scheduler에서 돌고, 끝난 풀이는 Grid가 바뀌거나 Goal이 사라진 경우가 아니면 버리지 않는다. Volume은 추적한 변경의 영역만 다시 조회하고, Modifier 합성도 영향 범위의 셀만 돈다. 전체 빌드와 해시가 같은 것을 장애물 이동·등록·해제·파괴에서 확인한다. 추적되지 않은 Collider는 `RequestRebuild()`나 같은 요청의 재제출로 전체 조회할 때 반영된다.
+Surface는 이제 Volume과 같은 Scheduler에서 돌고, Manager가 제출한 요청만 빌드한다. 끝난 풀이와 합성은 Grid나 설정이 바뀌거나 Goal이 사라진 경우가 아니면 버리지 않는다. Volume은 추적한 변경의 영역만 다시 조회하고, Modifier 합성도 영향 범위의 셀만 돈다. 전체 빌드와 해시가 같은 것을 장애물 이동·등록·해제·파괴에서 확인한다. 추적되지 않은 Collider는 `RequestRebuild()`나 같은 요청의 재제출로 전체 조회할 때 반영된다.
 
 메인 스레드에서 한 번에 끝나는 구간의 프레임당 최장 시간(`longestPumpMs`)은 다음과 같다. 예산은 2ms다.
 
@@ -82,6 +82,8 @@ GC 판정: 게시 배열을 재사용하기 전 움직이는 Volume Goal은 10�
 | #38 | 리뷰 | stale 설정 빌드 회귀, 합성 중 입력 변경, 뷰 배열 재사용, 실패 로그, 등록 누락 경고 | 재현 테스트 추가, Surface 이동 Goal 초당 9.0회 |
 | #39 | 리뷰 | 탈출 방향 공유, 측정 어셈블리 제한, 쓰이지 않는 실패 경로와 헬퍼 제거 | Volume 이동 Goal 초당 9.4~9.5회(흔들림 범위 안), IL2CPP APK 빌드 성공 |
 | #40 | 리뷰 | 성능 표의 시점과 스레드 설명을 코드에 맞춤 | 코드 변경 없음 |
+| #41 | 리뷰 | 현황의 수치와 미확인 항목을 코드에 맞춤 | 코드 변경 없음 |
+| #42 | 최종 검토 | 제출 뒤 들어온 입력도 다음 제출을 기다리게 함, 예전 구조를 설명하던 문장과 측정 범위 수정 | 재현 테스트 1개 추가 |
 
 ### 성능·구조 개선 (2026-10-29~30)
 
@@ -225,7 +227,7 @@ Volume 100³·장애물 50개·Modifier 3개의 전체 빌드는 약 3.5초다.
 - `FlowFieldManager.Modes.cs`: Surface와 Volume의 차이. Manager 본체에는 모드 분기가 없다. `FlowFieldManager.Validation.cs`, `FlowFieldManager.Bake.cs`는 설정 검증과 베이크 연동이다.
 - 세션의 `.Build`, `.Sampling`, `.Views`, `.Memory`, `.Obstacles`는 partial 파일이다. 필드를 공유하므로 읽기 쉬워졌을 뿐 결합이 줄지는 않았다. 가장 큰 세션 파일은 `FlowFieldVolumeSession.cs`(580줄)다.
 - Surface 세션의 필드는 28개에서 13개로 줄었다.
-- 2026-11-01 `FlowFieldExecutionBoundary`로 복잡성의 근원을 없앴다: 이벤트 핸들러는 작업이 끝난 뒤 실행하고 Modifier 코드에서는 다른 작업을 시작할 수 없어, 외부 호출 뒤 소유권 재검사가 필요 없다. 외부 호출 뒤 소유권을 확인하는 줄이 115줄에서 13줄이 됐고, 남은 13줄은 늦게 도착하는 GPU 콜백용이다. 도달할 수 없게 된 재진입 테스트 케이스 224개를 지우고, Manager를 통한 거부·지연·이벤트 순서 테스트 케이스 73개를 추가했다. Modifier 계약은 getter 3개에서 `Observe()` 하나로 바뀌어 직접 구현한 코드는 고쳐야 한다.
+- 2026-11-01 `FlowFieldExecutionBoundary`로 복잡성의 근원을 없앴다: 이벤트 핸들러는 작업이 끝난 뒤 실행하고 Modifier 코드에서는 다른 작업을 시작할 수 없어, 외부 호출 뒤 소유권 재검사가 필요 없다. 외부 호출 뒤 소유권을 확인하는 줄이 115줄에서 13줄이 됐고, 남은 13줄은 늦게 도착하는 GPU 콜백용이었으며 3단계에서 GPU 경로와 함께 지웠다. 도달할 수 없게 된 재진입 테스트 케이스 224개를 지우고, Manager를 통한 거부·지연·이벤트 순서 테스트 케이스 73개를 추가했다. Modifier 계약은 getter 3개에서 `Observe()` 하나로 바뀌어 직접 구현한 코드는 고쳐야 한다.
 
 ## 다음 순서
 
