@@ -56,7 +56,6 @@ namespace Common.FlowField.Tests
             string before = File.ReadAllText(_assetPath);
             var blocker = new GameObject("Bake blocker");
             blocker.layer = 28;
-            blocker.isStatic = true;
             blocker.AddComponent<BoxCollider>().size = Vector3.one * 100f;
             Physics.SyncTransforms();
 

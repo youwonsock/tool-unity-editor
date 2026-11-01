@@ -471,11 +471,23 @@ namespace Common.FlowField
             if (!_obstaclePipeline.RegisterDynamicObstacle(collider))
                 return false;
             MarkDirty(
-                FlowFieldDirtyFlags.DynamicObstacles | FlowFieldDirtyFlags.Escape | FlowFieldDirtyFlags.FinalRegion,
+                ObstacleRegistrationFlags(collider),
                 dirtyRegion,
                 dirtyRegion,
                 deferBaseVersion: true);
             return true;
+        }
+
+        // Registering a Collider without a Rigidbody moves it between the static
+        // and dynamic masks, so the static mask has to give up or take its cells.
+        private static FlowFieldDirtyFlags ObstacleRegistrationFlags(Collider collider)
+        {
+            FlowFieldDirtyFlags flags = FlowFieldDirtyFlags.DynamicObstacles
+                | FlowFieldDirtyFlags.Escape
+                | FlowFieldDirtyFlags.FinalRegion;
+            if (collider != null && collider.attachedRigidbody == null)
+                flags |= FlowFieldDirtyFlags.StaticObstacles;
+            return flags;
         }
 
         internal override bool RegisterObstacleCommand(Collider collider)
@@ -502,7 +514,7 @@ namespace Common.FlowField
             if (!_obstaclePipeline.UnregisterDynamicObstacle(collider))
                 return false;
             MarkDirty(
-                FlowFieldDirtyFlags.DynamicObstacles | FlowFieldDirtyFlags.Escape | FlowFieldDirtyFlags.FinalRegion,
+                ObstacleRegistrationFlags(collider),
                 dirtyRegion,
                 dirtyRegion,
                 deferBaseVersion: true);
