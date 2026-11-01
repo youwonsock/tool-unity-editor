@@ -4,7 +4,8 @@
 #   Tools/run-tests.sh                                  EditMode, PlayMode and Python
 #   Tools/run-tests.sh --platform EditMode --filter 'Regex|Name'
 #
-# See Tools/snapshot-worktree.sh for the environment variables.
+# See Tools/snapshot-worktree.sh for the environment variables. Each Unity run
+# stops with exit code 124 after UNITY_TEST_TIMEOUT seconds (default 1800).
 #
 # TransformPathEditorUiTests need a graphical Editor and are skipped here. Run
 # them from the Test Runner window of the open Editor.
@@ -23,6 +24,7 @@ done
 source "$(dirname "$0")/snapshot-worktree.sh"
 
 status=0
+timeout=${UNITY_TEST_TIMEOUT:-1800}
 
 summarize() {
     python3 - "$1" <<'PY'
@@ -41,6 +43,30 @@ for case in run.iter("test-case"):
 PY
 }
 
+stop_unity() {
+    pkill -9 -P "$unity_pid" 2>/dev/null || true
+    kill -9 "$unity_pid" 2>/dev/null || true
+    wait "$unity_pid" 2>/dev/null || true
+}
+
+# Unity can deadlock and never exit, and macOS has no timeout command. A run in
+# the background ignores Ctrl+C, so the trap passes it on.
+run_limited() {
+    "$@" &
+    unity_pid=$!
+    trap 'stop_unity; exit 130' INT TERM
+    local deadline=$((SECONDS + timeout))
+    while kill -0 "$unity_pid" 2>/dev/null; do
+        if [ "$SECONDS" -ge "$deadline" ]; then
+            stop_unity
+            echo "Timed out after $timeout seconds."
+            return 124
+        fi
+        sleep 1
+    done
+    wait "$unity_pid"
+}
+
 run_unity() {
     local mode=$1
     local arguments=(-batchmode -projectPath "$worktree/ToyProject" -runTests -testPlatform "$mode"
@@ -49,7 +75,7 @@ run_unity() {
     rm -f "$results/$mode.xml"
     echo "== $mode"
     local code=0
-    "$unity" "${arguments[@]}" || code=$?
+    run_limited "$unity" "${arguments[@]}" || code=$?
     if [ -f "$results/$mode.xml" ]; then
         summarize "$results/$mode.xml"
     else
