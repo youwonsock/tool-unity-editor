@@ -271,6 +271,7 @@ namespace Common.FlowField.PlayerProbe
         {
             int revision = manager.Revision;
             int gc = GC.CollectionCount(0);
+            FlowFieldBuildScheduler.ResetLongestPump();
             var stopwatch = Stopwatch.StartNew();
             trigger();
             double max = 0d;
@@ -296,6 +297,7 @@ namespace Common.FlowField.PlayerProbe
             }
             double elapsed = stopwatch.Elapsed.TotalMilliseconds;
             int gcDuring = GC.CollectionCount(0) - gc;
+            double longestPump = FlowFieldBuildScheduler.LongestPumpMilliseconds;
 
             // unscaledDeltaTime reports the previous frame, so the frame that
             // did the publishing only shows up one frame later.
@@ -314,6 +316,7 @@ namespace Common.FlowField.PlayerProbe
             Record(scenario, "elapsedMs", elapsed);
             Record(scenario, "frames", frames);
             Record(scenario, "maxFrameMs", max);
+            Record(scenario, "longestPumpMs", longestPump);
             Record(scenario, "framesOver20ms", over20);
             Record(scenario, "framesOver33ms", over33);
             Record(scenario, "gcCollections", gcDuring);

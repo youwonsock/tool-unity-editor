@@ -87,15 +87,16 @@ namespace Common.FlowField.Tests
             _session.Submit(Request(GoalC, Vector3.right));
             if (failure) _backend.Fail(0); else _backend.Complete(0);
             Assert.That(_session.IsFaulted, Is.False);
-            Assert.That(_session.Revision, Is.EqualTo(revision));
-            Assert.That(_session.Sample(Position).Direction, Is.EqualTo(Vector3.forward));
+            // A finished solve publishes even though newer Goals arrived; a failed one cannot.
+            int published = failure ? 0 : 1;
+            Assert.That(_session.Revision, Is.EqualTo(revision + published));
             Finish();
             Assert.That(_session.TryGetFieldInfo(out var info), Is.True);
             Assert.That(info.ResolvedGoalWorld, Is.EqualTo(GoalC));
             Assert.That(_session.Sample(Position).Direction, Is.EqualTo(Vector3.right));
-            Assert.That(_publications, Is.EqualTo(2));
+            Assert.That(_publications, Is.EqualTo(2 + published));
             _session.Pump();
-            Assert.That(_publications, Is.EqualTo(2));
+            Assert.That(_publications, Is.EqualTo(2 + published));
         }
 
         [TestCase("submit")]

@@ -248,14 +248,6 @@ namespace Common.FlowField
             return true;
         }
 
-        private void FixedUpdate()
-        {
-            if (!Application.isPlaying || !IsInitialized || IsFaulted)
-                return;
-            using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
-            ActiveMode.OnFixedUpdate();
-        }
-
         private void OnDisable()
         {
 #if UNITY_EDITOR

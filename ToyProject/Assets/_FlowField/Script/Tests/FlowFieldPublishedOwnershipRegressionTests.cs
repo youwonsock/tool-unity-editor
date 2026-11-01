@@ -111,8 +111,8 @@ namespace Common.FlowField.Tests
             TestContext.WriteLine($"startVolume={volume}; mode={manager.SpaceMode}; ready={manager.IsReady}; scheduler={scheduled}->{FlowFieldBuildScheduler.Count}");
             Assert.That(replaced, Is.True);
             Assert.That(manager.IsReady, Is.True, manager.LastError);
-            Assert.That(FlowFieldBuildScheduler.Count, Is.EqualTo(scheduled + (volume ? 0 : 1)),
-                "Only the replacement Volume session may remain scheduled.");
+            Assert.That(FlowFieldBuildScheduler.Count, Is.EqualTo(scheduled + 1),
+                "Only the replacement session may remain scheduled.");
         }
 
         [TestCase(false)]
@@ -650,7 +650,7 @@ namespace Common.FlowField.Tests
                     Assert.That(manager.SpaceMode, Is.EqualTo(transition == "replace"
                         ? volume ? FlowFieldSpaceMode.Surface2D : FlowFieldSpaceMode.Volume3D
                         : volume ? FlowFieldSpaceMode.Volume3D : FlowFieldSpaceMode.Surface2D));
-                    Assert.That(FlowFieldBuildScheduler.Count, Is.EqualTo(scheduledBefore + (manager.SpaceMode == FlowFieldSpaceMode.Volume3D ? 1 : 0)));
+                    Assert.That(FlowFieldBuildScheduler.Count, Is.EqualTo(scheduledBefore + 1));
                 }
                 else if (transition == "dispose")
                 {

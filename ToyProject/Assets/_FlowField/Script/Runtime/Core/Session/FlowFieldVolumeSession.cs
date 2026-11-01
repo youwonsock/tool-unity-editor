@@ -9,7 +9,7 @@ using static Common.FlowField.FlowFieldVolumeNavigation;
 
 namespace Common.FlowField
 {
-    internal sealed partial class FlowFieldVolumeSession : FlowFieldSessionBase, IFlowFieldBuildOperation
+    internal sealed partial class FlowFieldVolumeSession : FlowFieldSessionBase
     {
         private const int CellsPerStep = FlowFieldVolumeNavigation.CellsPerStep;
         private const int ArrayElementsPerStep = FlowFieldVolumeNavigation.ArrayElementsPerStep;
@@ -42,7 +42,6 @@ namespace Common.FlowField
         // distinguishes that state from an explicit lifecycle suspension.
         private bool _suspendedByLifecycle;
         private static long _nextVisualizationResultId;
-        private bool _runtimeScheduled;
         // Whoever pumps directly (a bake, a test) waits for the worker thread.
         // The scheduler polls it, so no frame blocks on a solve.
         private bool _waitForSolve;
@@ -65,9 +64,9 @@ namespace Common.FlowField
             || State == FlowFieldRuntimeState.Suspended;
         internal override bool IsFaulted => State == FlowFieldRuntimeState.Faulted;
         internal override bool IsRebuilding => State == FlowFieldRuntimeState.Building;
-        internal bool IsWaitingForExternalCompletion
+        internal override bool IsWaitingForExternalCompletion
             => _build != null && _build.SolveRunning && !_build.SolveHandle.IsCompleted;
-        internal bool IsBuilding
+        internal override bool IsBuilding
             => CanPump && (IsRebuilding || HasPendingRequest);
         internal override bool IsReady => (State == FlowFieldRuntimeState.Building
                 || State == FlowFieldRuntimeState.Ready)
@@ -126,15 +125,6 @@ namespace Common.FlowField
             _buildReservationBytes = 0;
             _committedReservationBytes = 0;
             SetState(FlowFieldRuntimeState.Suspended);
-        }
-
-        internal void AttachRuntimeScheduler()
-        {
-            ThrowIfDisposed();
-            if (_runtimeScheduled)
-                return;
-            FlowFieldBuildScheduler.Register(this);
-            _runtimeScheduled = true;
         }
 
         internal bool Submit(in FlowFieldVolumeRequest request, bool requeryObstacles = false)
@@ -202,7 +192,7 @@ namespace Common.FlowField
             finally { _waitForSolve = false; }
         }
 
-        private void PumpInternal(in FlowFieldBuildBudget budget)
+        internal override void PumpInternal(in FlowFieldBuildBudget budget)
         {
             if (!CanPump)
                 return;
@@ -463,11 +453,7 @@ namespace Common.FlowField
             _hasLatestRequestedInput = false;
             _suspendedByLifecycle = false;
             _safety.ClearRegions();
-            if (_runtimeScheduled)
-            {
-                FlowFieldBuildScheduler.Unregister(this);
-                _runtimeScheduled = false;
-            }
+            DetachRuntimeScheduler();
             _obstacles.Clear();
             _registeredObstacleOverlapBuffer = null;
             _cellQuery.Clear();
@@ -590,11 +576,7 @@ namespace Common.FlowField
                 return;
             using FlowFieldExecutionBoundary.OperationScope operation = Boundary.EnterOperation();
             Disposed = true;
-            if (_runtimeScheduled)
-            {
-                FlowFieldBuildScheduler.Unregister(this);
-                _runtimeScheduled = false;
-            }
+            DetachRuntimeScheduler();
             CancelCurrentBuild();
             _hasLatestRequestedInput = false;
             _committed = null;
@@ -608,15 +590,6 @@ namespace Common.FlowField
             PublishState(FlowFieldRuntimeState.Released);
             MarkBaseDisposed();
         }
-
-        bool IFlowFieldBuildOperation.IsWaitingForExternalCompletion
-            => IsWaitingForExternalCompletion;
-
-        bool IFlowFieldBuildOperation.IsBuilding
-            => IsBuilding;
-
-        void IFlowFieldBuildOperation.PumpInternal(in FlowFieldBuildBudget budget)
-            => PumpInternal(in budget);
 
         internal void Cancel()
         {

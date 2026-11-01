@@ -32,7 +32,6 @@ namespace Common.FlowField
             internal abstract void ActivateSuspended();
             internal abstract void SubmitRebuild();
             internal abstract void ObserveInputs();
-            internal virtual void OnFixedUpdate() { }
             internal abstract void OnSettingsEdited();
             internal virtual void OnReleased() { }
             internal abstract void ValidateConfiguration(bool validateStaticGoal);
@@ -188,16 +187,14 @@ namespace Common.FlowField
                     FlowFieldDirtyFlags.None,
                     _session.DirtyFinalRegion,
                     _session.DirtyObstacleRegion));
+                _session.AttachRuntimeScheduler();
             }
 
             internal override void ObserveInputs()
             {
-                _session.PollSolve(wait: false);
                 if (!_session.ConfigurationStale && Owner.ConsumeRefreshTick())
                     ObserveDueInputs();
-                // FixedUpdate does not run while the game time is stopped.
-                if (Time.timeScale == 0f)
-                    PumpPendingRebuild();
+                SubmitPendingRebuild();
             }
 
             private void ObserveDueInputs()
@@ -256,15 +253,15 @@ namespace Common.FlowField
                     _session.MarkDirty(
                         FlowFieldDirtyFlags.Goal,
                         FlowFieldCellRect.Invalid,
-                        FlowFieldCellRect.Invalid,
-                        deferGoalVersion: true);
+                        FlowFieldCellRect.Invalid);
+                    if (!Owner.HasConfiguredGoal)
+                        _session.ObserveGoalRemoved();
                     Owner.RefreshEditorPreview();
                 }
             }
 
-            internal override void OnFixedUpdate() => PumpPendingRebuild();
-
-            private void PumpPendingRebuild()
+            // The scheduler builds it later in this frame.
+            private void SubmitPendingRebuild()
             {
                 if (!Owner.isActiveAndEnabled || !_session.IsInitialized || _session.IsFaulted)
                     return;
@@ -272,10 +269,7 @@ namespace Common.FlowField
                     return;
                 if (_session.HasPendingRequest
                     && Owner.TryCreateCurrentSessionRequest(out FlowFieldSessionRequest request))
-                {
                     _session.Submit(request);
-                    _session.PumpWithoutWaiting();
-                }
             }
 
             internal override void OnSettingsEdited()
@@ -341,18 +335,10 @@ namespace Common.FlowField
                 }
                 else if (changedFlags != FlowFieldDirtyFlags.None)
                 {
-                    bool hasObstacleChange = (changedFlags
-                        & (FlowFieldDirtyFlags.StaticObstacles
-                            | FlowFieldDirtyFlags.DynamicObstacles
-                            | FlowFieldDirtyFlags.Escape)) != 0;
-                    bool hasGoalChange = (changedFlags & FlowFieldDirtyFlags.Goal) != 0;
-                    bool hasGridChange = (changedFlags & FlowFieldDirtyFlags.Grid) != 0;
                     _session.MarkDirty(
                         changedFlags,
                         FlowFieldCellRect.Invalid,
-                        FlowFieldCellRect.Invalid,
-                        deferBaseVersion: hasObstacleChange && !hasGridChange,
-                        deferGoalVersion: hasGoalChange && !hasGridChange);
+                        FlowFieldCellRect.Invalid);
                 }
             }
 
@@ -365,8 +351,9 @@ namespace Common.FlowField
                 _session.MarkDirty(
                     FlowFieldDirtyFlags.Goal,
                     FlowFieldCellRect.Invalid,
-                    FlowFieldCellRect.Invalid,
-                    deferGoalVersion: true);
+                    FlowFieldCellRect.Invalid);
+                if (!Owner.HasConfiguredGoal)
+                    _session.ObserveGoalRemoved();
             }
 
             internal override void MarkCellsDirty()
@@ -374,8 +361,7 @@ namespace Common.FlowField
                 _session.MarkDirty(
                     FlowFieldDirtyFlags.Grid,
                     FlowFieldCellRect.Invalid,
-                    FlowFieldCellRect.Invalid,
-                    deferSurfaceVersion: true);
+                    FlowFieldCellRect.Invalid);
                 Owner.RefreshEditorPreview();
             }
 
@@ -399,8 +385,7 @@ namespace Common.FlowField
                 _session.MarkDirty(
                     FlowFieldDirtyFlags.Grid,
                     FlowFieldCellRect.Invalid,
-                    FlowFieldCellRect.Invalid,
-                    deferSurfaceVersion: true);
+                    FlowFieldCellRect.Invalid);
             }
         }
     }

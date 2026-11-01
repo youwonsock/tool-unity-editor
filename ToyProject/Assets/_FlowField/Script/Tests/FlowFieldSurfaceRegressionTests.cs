@@ -80,7 +80,7 @@ namespace Common.FlowField.Tests
         }
 
         [Test]
-        public void SupersededGoalResultCannotPublishOverLatestRequest()
+        public void ASupersededSolvePublishesAndTheLatestGoalFollows()
         {
             Build();
             int revision = _session.Revision;
@@ -88,12 +88,108 @@ namespace Common.FlowField.Tests
             _session.Pump();
             _session.Submit(FlowFieldRegressionFixture.Request(GoalB));
             _backend.Complete(0);
-            Assert.That(_session.Revision, Is.EqualTo(revision));
+            Assert.That(_session.Revision, Is.EqualTo(revision + 1));
+            Assert.That(_session.TryGetFieldInfo(out var interim), Is.True);
+            Assert.That(interim.ResolvedGoalWorld, Is.EqualTo(GoalA));
             _session.Pump();
             _backend.Complete(1);
             Assert.That(_session.TryGetFieldInfo(out var info), Is.True);
             Assert.That(info.ResolvedGoalWorld, Is.EqualTo(GoalB));
             Assert.That(_session.Sample(OriginCell).Direction, Is.EqualTo(Vector3.forward));
+        }
+
+        [Test]
+        public void RemovingTheGoalDiscardsTheRunningSolve()
+        {
+            Build(GoalA);
+            int revision = _session.Revision;
+            StartSolve(GoalB);
+            _session.Submit(FlowFieldRegressionFixture.Request());
+            _backend.Complete(_backend.Calls.Count - 1);
+            Assert.That(_session.Revision, Is.EqualTo(revision), "A solve for a removed Goal must not publish.");
+            Assert.That(_session.TryGetFieldInfo(out var info), Is.True);
+            Assert.That(info.ResolvedGoalWorld, Is.EqualTo(GoalA));
+            _session.Pump();
+            Assert.That(_session.TryGetFieldInfo(out info), Is.True);
+            Assert.That(info.HasResolvedGoal, Is.False);
+        }
+
+        [Test]
+        public void ObservedGoalRemovalDiscardsTheRunningSolveBeforeItsSubmit()
+        {
+            Build(GoalA);
+            int revision = _session.Revision;
+            StartSolve(GoalB);
+            _session.ObserveGoalRemoved();
+            _backend.Complete(_backend.Calls.Count - 1);
+            Assert.That(_session.Revision, Is.EqualTo(revision));
+        }
+
+        [Test]
+        public void AGridChangeDiscardsTheRunningSolve()
+        {
+            Build(GoalA);
+            int revision = _session.Revision;
+            StartSolve(GoalB);
+            _session.MarkDirty(FlowFieldDirtyFlags.Grid, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
+            _backend.Complete(_backend.Calls.Count - 1);
+            Assert.That(_session.Revision, Is.EqualTo(revision));
+        }
+
+        [Test]
+        public void AGoalMoveWithinItsCellDoesNotStartAnotherSolve()
+        {
+            Build(GoalA);
+            int calls = _backend.Calls.Count;
+            int revision = _session.Revision;
+            StartSolve(GoalB);
+            _session.Submit(FlowFieldRegressionFixture.Request(GoalB + new Vector3(0.2f, 0f, 0.2f)));
+            _backend.Complete(_backend.Calls.Count - 1);
+            Assert.That(_session.Revision, Is.EqualTo(revision + 1));
+            _session.Pump();
+            Assert.That(_backend.Calls.Count, Is.EqualTo(calls + 1), "The moved Goal still resolves to the solved cell.");
+            Assert.That(_session.IsRebuilding, Is.False);
+        }
+
+        [Test]
+        public void CompositionSpreadsOverFramesAndEndsWithTheSameField()
+        {
+            Build(GoalA);
+            FlowFieldVector3Field expected = FlowFieldVector3Field.Capture(_session, FlowFieldRegressionFixture.Grid);
+            _session.Submit(FlowFieldRegressionFixture.Request(GoalA, Vector3.left));
+
+            // A budget that is already spent lets each frame do one piece.
+            int frames = 0;
+            var spent = new FlowFieldBuildBudget(0d, () => 1d);
+            var operation = (IFlowFieldBuildOperation)_session;
+            operation.PumpInternal(in spent);
+            for (; frames < 1000 && _session.IsRebuilding; frames++)
+                operation.PumpInternal(in spent);
+
+            Assert.That(_session.IsReady, Is.True, _session.LastError);
+            Assert.That(_session.IsFaulted, Is.False);
+            expected.AssertEqual(FlowFieldVector3Field.Capture(_session, FlowFieldRegressionFixture.Grid));
+        }
+
+        private readonly struct FlowFieldVector3Field
+        {
+            private readonly Vector3[] _directions;
+
+            private FlowFieldVector3Field(Vector3[] directions) => _directions = directions;
+
+            internal static FlowFieldVector3Field Capture(FlowFieldSession session, FlowFieldGridSpace grid)
+            {
+                var directions = new Vector3[grid.CellCount];
+                for (int i = 0; i < directions.Length; i++)
+                {
+                    grid.FromFlatIndex(i, out int x, out int z);
+                    directions[i] = session.Sample(grid.LocalToWorldCenter(x, z)).Direction;
+                }
+                return new FlowFieldVector3Field(directions);
+            }
+
+            internal void AssertEqual(in FlowFieldVector3Field other)
+                => Assert.That(other._directions, Is.EqualTo(_directions));
         }
 
         [Test]
@@ -119,7 +215,7 @@ namespace Common.FlowField.Tests
             }
 
             Assert.That(solves, Is.EqualTo(8));
-            Assert.That(_session.Revision - revision, Is.EqualTo(4), "Every second superseded solve publishes.");
+            Assert.That(_session.Revision - revision, Is.EqualTo(8), "Every finished solve publishes.");
             Assert.That(_session.HasPendingRequest, Is.True);
 
             _session.Pump();
@@ -533,59 +629,13 @@ namespace Common.FlowField.Tests
             _session.MarkDirty(
                 FlowFieldDirtyFlags.Grid,
                 FlowFieldCellRect.Invalid,
-                FlowFieldCellRect.Invalid,
-                deferSurfaceVersion: true);
+                FlowFieldCellRect.Invalid);
             _backend.Complete(_backend.Calls.Count - 1);
             AssertResolvedGoal(GoalA);
 
             Assert.That(_session.HasPendingRequest, Is.True);
             RunOwnerTicks(GoalB);
             AssertResolvedGoal(GoalB);
-        }
-
-        [TestCase("failure")]
-        [TestCase("grid")]
-        public void OneOffGoalChangeAfterAnInterruptedRetryIsStillRejected(string interruption)
-        {
-            if (interruption == "failure")
-            {
-                _session.Release();
-                _session.Initialize(FlowFieldBakeMode.RuntimeDynamic, FlowFieldSessionSourceKind.SceneBuild,
-                    FlowFieldSolvePolicy.Worker);
-            }
-            Build(GoalA);
-
-            StartSolve(GoalB);
-            _session.Submit(FlowFieldRegressionFixture.Request(new Vector3(2.5f, 0f, 0.5f)));
-            _backend.Complete(_backend.Calls.Count - 1);
-            AssertResolvedGoal(GoalA);
-
-            Vector3 oneOffGoal = new Vector3(1.5f, 0f, 2.5f);
-            PumpUntilSolving();
-            if (interruption == "failure")
-            {
-                _session.MarkDirty(
-                    FlowFieldDirtyFlags.DefaultDirection,
-                    FlowFieldCellRect.Invalid,
-                    FlowFieldCellRect.Invalid);
-                _backend.Fail(_backend.Calls.Count - 1);
-            }
-            else
-            {
-                _session.MarkDirty(
-                    FlowFieldDirtyFlags.Grid,
-                    FlowFieldCellRect.Invalid,
-                    FlowFieldCellRect.Invalid,
-                    deferSurfaceVersion: true);
-                _backend.Complete(_backend.Calls.Count - 1);
-            }
-            Assert.That(_session.IsFaulted, Is.False, _session.LastError);
-            AssertResolvedGoal(GoalA);
-
-            PumpUntilSolving();
-            _session.Submit(FlowFieldRegressionFixture.Request(oneOffGoal));
-            _backend.Complete(_backend.Calls.Count - 1);
-            AssertResolvedGoal(GoalA);
         }
 
         private void PumpUntilSolving()

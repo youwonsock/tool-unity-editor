@@ -10,10 +10,11 @@ namespace Common.FlowField
     /// sequence, command deferral and the generation that retires queued events
     /// and late solve callbacks.
     /// </summary>
-    internal abstract class FlowFieldSessionBase : IDisposable
+    internal abstract class FlowFieldSessionBase : IDisposable, IFlowFieldBuildOperation
     {
         private protected readonly FlowFieldExecutionBoundary Boundary;
         private bool _baseDisposed;
+        private bool _runtimeScheduled;
         private FlowFieldRuntimeState _publishedState = FlowFieldRuntimeState.Uninitialized;
 
         private protected FlowFieldSessionBase(FlowFieldExecutionBoundary boundary)
@@ -91,6 +92,32 @@ namespace Common.FlowField
         private protected abstract bool RegisterObstacleNow(Collider collider);
         private protected abstract bool UnregisterObstacleNow(Collider collider);
         internal abstract void NotifyObstacleRegionDirtyCommand(Bounds worldBounds);
+
+        internal abstract bool IsWaitingForExternalCompletion { get; }
+        internal abstract bool IsBuilding { get; }
+        internal abstract void PumpInternal(in FlowFieldBuildBudget budget);
+
+        bool IFlowFieldBuildOperation.IsWaitingForExternalCompletion => IsWaitingForExternalCompletion;
+        bool IFlowFieldBuildOperation.IsBuilding => IsBuilding;
+        void IFlowFieldBuildOperation.PumpInternal(in FlowFieldBuildBudget budget) => PumpInternal(in budget);
+
+        internal void AttachRuntimeScheduler()
+        {
+            if (Disposed)
+                throw new ObjectDisposedException(GetType().Name);
+            if (_runtimeScheduled)
+                return;
+            FlowFieldBuildScheduler.Register(this);
+            _runtimeScheduled = true;
+        }
+
+        private protected void DetachRuntimeScheduler()
+        {
+            if (!_runtimeScheduled)
+                return;
+            FlowFieldBuildScheduler.Unregister(this);
+            _runtimeScheduled = false;
+        }
 
         // Lifecycle commands with the same contract in both modes. Mode
         // specific Init/request creation stays on the concrete sessions.

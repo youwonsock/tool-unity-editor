@@ -27,7 +27,12 @@ namespace Common.FlowField
         private FlowFieldGridSpace _lastObservedGrid;
         private bool _hasObservedGrid;
         private bool _obstacleProbePending;
-        private readonly FlowFieldSurfaceRebuildTracker _rebuild = new FlowFieldSurfaceRebuildTracker();
+        // A Grid change marked by the owner before its validated Submit.
+        private bool _gridMarkedUnsubmitted;
+        private bool _goalRemoved;
+        private bool _composing;
+        private PendingCompose _compose;
+        private FlowFieldBuildBudget _frameBudget = FlowFieldBuildBudget.Unlimited;
         private bool _hasPendingRequest;
         private FlowFieldSessionRequest _activeRequest;
         // Submit coalesces input here; the pending flag schedules it. Active
@@ -83,7 +88,7 @@ namespace Common.FlowField
         // Stale publications stay hidden until commit. A validated Submit
         // clears these unsubmitted flags, allowing that rebuild to be pumped.
         internal bool RequiresExplicitRebuild => _configurationStale
-            && _rebuild.HasVersionedGrid;
+            && _gridMarkedUnsubmitted;
 
         private bool HasCompatibleCommittedSource()
             => !_hasCommittedRequest
@@ -100,31 +105,53 @@ namespace Common.FlowField
         /// </summary>
         internal bool Pump()
         {
-            // A direct caller (a bake, a test) waits for the worker thread.
-            // The Manager polls it through PumpWithoutWaiting.
-            bool built = PumpWithoutWaiting();
-            PollSolve(wait: true);
+            // A direct caller (a bake, a test) waits for the worker thread. The
+            // scheduler reports nothing until a solve has finished.
+            bool built = PumpFrame(FlowFieldBuildBudget.Unlimited);
+            _solveBackend?.Poll(wait: true);
             return built;
         }
 
-        internal void PollSolve(bool wait)
-        {
-            _solveBackend?.Poll(wait);
-        }
+        internal override bool IsBuilding => CanPump && (IsRebuilding || _hasPendingRequest);
 
-        internal bool PumpWithoutWaiting()
+        // Building without composing means a solve is running elsewhere.
+        internal override bool IsWaitingForExternalCompletion
+            => _lifecycle == FlowFieldSessionLifecycle.Building && !_composing;
+
+        internal override void PumpInternal(in FlowFieldBuildBudget budget) => PumpFrame(in budget);
+
+        private bool CanPump => !Disposed
+            && (_lifecycle == FlowFieldSessionLifecycle.Active || _lifecycle == FlowFieldSessionLifecycle.Building);
+
+        private bool PumpFrame(in FlowFieldBuildBudget budget)
         {
-            if (Disposed
-                || _lifecycle == FlowFieldSessionLifecycle.Suspended
-                || _lifecycle == FlowFieldSessionLifecycle.Released
-                || _lifecycle == FlowFieldSessionLifecycle.Faulted
-                || _lifecycle == FlowFieldSessionLifecycle.Building)
-                return false;
-            if (!_hasPendingRequest)
+            if (!CanPump)
                 return false;
             using FlowFieldExecutionBoundary.OperationScope operation = Boundary.EnterOperation();
-            return BuildPending();
+            _frameBudget = budget;
+            try
+            {
+                if (_composing)
+                    ContinueCompose();
+                else
+                    _solveBackend?.Poll(wait: false);
+                return !_composing
+                    && _lifecycle != FlowFieldSessionLifecycle.Building
+                    && CanPump
+                    && _hasPendingRequest
+                    && BuildPending();
+            }
+            catch (Exception exception)
+            {
+                EnterFault(exception);
+                return false;
+            }
+            finally
+            {
+                _frameBudget = FlowFieldBuildBudget.Unlimited;
+            }
         }
+
         internal bool HasPendingObstacleProbe => _obstacleProbePending;
 
         internal override bool TryGetFieldInfo(out FlowFieldFieldInfo info)
@@ -296,17 +323,6 @@ namespace Common.FlowField
                     "FlowField bake mode, source and solve policy are fixed until Release.");
             }
 
-            // A resume performs a complete initial build from the current
-            // inputs, so deferred probes that were queued before Suspend are
-            // already represented by that build and must not be promoted a
-            // second time.
-            if (_lifecycle == FlowFieldSessionLifecycle.Suspended)
-            {
-                _rebuild.DropDeferredObstacle();
-                _rebuild.DropDeferredSurface();
-                _rebuild.DropDeferredGoal();
-            }
-
             BakeMode = bakeMode;
             _sourceKind = sourceKind;
             _solvePolicy = solvePolicy;
@@ -332,10 +348,7 @@ namespace Common.FlowField
         internal void MarkDirty(
             FlowFieldDirtyFlags flags,
             FlowFieldCellRect finalRegion,
-            FlowFieldCellRect obstacleRegion,
-            bool deferBaseVersion = false,
-            bool deferSurfaceVersion = false,
-            bool deferGoalVersion = false)
+            FlowFieldCellRect obstacleRegion)
         {
             if (flags == FlowFieldDirtyFlags.None)
                 return;
@@ -345,7 +358,7 @@ namespace Common.FlowField
             // Adding the derived flag at the point where the input is
             // versioned keeps Submit from counting the same change twice when
             // a Manager marks dirty and then submits the latest request.
-            if (FlowFieldSurfaceRebuildTracker.IsBaseDirty(flags)
+            if (IsBaseDirty(flags)
                 || (flags & (FlowFieldDirtyFlags.DefaultDirection
                     | FlowFieldDirtyFlags.ModifierArea
                     | FlowFieldDirtyFlags.ModifierValue)) != 0)
@@ -357,12 +370,16 @@ namespace Common.FlowField
                 _state.ExpandFinalDirty(finalRegion);
             if (obstacleRegion.IsValid)
                 _state.ExpandObstacleDirty(obstacleRegion);
-            _rebuild.RecordMarkDirty(flags, deferBaseVersion, deferSurfaceVersion, deferGoalVersion);
+            if ((flags & FlowFieldDirtyFlags.Grid) != 0)
+                _gridMarkedUnsubmitted = true;
             // Dirty observations reuse the latest accepted request. Initial
             // setup has no request yet and must wait for its first Submit.
             if (_hasLatestRequestedInput)
                 _hasPendingRequest = true;
         }
+
+        /// <summary>The owner cleared the Goal. A solve still running for the old one must not publish.</summary>
+        internal void ObserveGoalRemoved() => _goalRemoved = true;
 
         internal void MarkConfigurationStale()
         {
@@ -418,7 +435,8 @@ namespace Common.FlowField
 
             _latestRequestedInput = request;
             _hasLatestRequestedInput = true;
-            _rebuild.RecordSubmit(combinedFlags);
+            _gridMarkedUnsubmitted = false;
+            _goalRemoved = !request.Goal.IsValid;
             _hasPendingRequest = true;
             return true;
         }
@@ -479,8 +497,7 @@ namespace Common.FlowField
             MarkDirty(
                 ObstacleRegistrationFlags(collider),
                 dirtyRegion,
-                dirtyRegion,
-                deferBaseVersion: true);
+                dirtyRegion);
             return true;
         }
 
@@ -522,8 +539,7 @@ namespace Common.FlowField
             MarkDirty(
                 ObstacleRegistrationFlags(collider),
                 dirtyRegion,
-                dirtyRegion,
-                deferBaseVersion: true);
+                dirtyRegion);
             return true;
         }
 
@@ -552,8 +568,7 @@ namespace Common.FlowField
             MarkDirty(
                 FlowFieldDirtyFlags.DynamicObstacles | FlowFieldDirtyFlags.Escape | FlowFieldDirtyFlags.FinalRegion,
                 dirtyRegion,
-                dirtyRegion,
-                deferBaseVersion: true);
+                dirtyRegion);
         }
 
         internal override void NotifyObstacleRegionDirtyCommand(Bounds worldBounds)
@@ -625,8 +640,7 @@ namespace Common.FlowField
                     | FlowFieldDirtyFlags.Escape
                     | FlowFieldDirtyFlags.FinalRegion,
                 dirty,
-                dirty,
-                deferBaseVersion: true);
+                dirty);
             return true;
         }
 
@@ -638,8 +652,6 @@ namespace Common.FlowField
             if (!staticStillDirty)
                 clearedFlags |= FlowFieldDirtyFlags.Escape;
             _state.DirtyFlags &= ~clearedFlags;
-            _rebuild.ClearVersioned(clearedFlags);
-            _rebuild.DropDeferredObstacle();
 
             // FinalRegion is derived for an obstacle request. Remove it only
             // when no independent Goal/default/Modifier change still owns the
@@ -676,6 +688,8 @@ namespace Common.FlowField
         {
             AdvanceLifetimeGeneration();
             _solveBackend?.Cancel();
+            _composing = false;
+            _compose = default;
         }
 
         private protected override void AbandonWorkForFault() => InvalidateCallbacks();
@@ -713,8 +727,6 @@ namespace Common.FlowField
             // colliders themselves, but do not run a duplicate probe against
             // the same pose after activation.
             _obstacleProbePending = false;
-            _rebuild.DropDeferredGoal();
-            _rebuild.ResetSupersededGoal();
             _state.DirtyFlags = FlowFieldDirtyFlags.All;
             _configurationStale = false;
             SetLifecycle(FlowFieldSessionLifecycle.Suspended);
@@ -730,6 +742,7 @@ namespace Common.FlowField
         private void ReleaseResources()
         {
             InvalidateCallbacks();
+            DetachRuntimeScheduler();
             DetachBackend();
             _modifierPipeline?.Clear();
             _modifierRegistry?.Clear();
@@ -758,11 +771,8 @@ namespace Common.FlowField
             _hasPendingRequest = false;
             _hasLatestRequestedInput = false;
             _obstacleProbePending = false;
-            _rebuild.DropDeferredObstacle();
-            _rebuild.DropDeferredSurface();
-            _rebuild.DropDeferredGoal();
-            _rebuild.ClearVersioned(FlowFieldDirtyFlags.All);
-            _rebuild.ResetSupersededGoal();
+            _gridMarkedUnsubmitted = false;
+            _goalRemoved = false;
             _latestDefaultDirection = Vector3.zero;
             _hasLatestDefaultDirection = false;
             Fault = null;
@@ -804,6 +814,22 @@ namespace Common.FlowField
 
             _solveBackend.Dispose();
             _solveBackend = null;
+        }
+
+        private const FlowFieldDirtyFlags BaseDirtyMask = FlowFieldDirtyFlags.Grid
+            | FlowFieldDirtyFlags.StaticObstacles
+            | FlowFieldDirtyFlags.DynamicObstacles
+            | FlowFieldDirtyFlags.Escape
+            | FlowFieldDirtyFlags.Goal;
+
+        private static bool IsBaseDirty(FlowFieldDirtyFlags flags) => (flags & BaseDirtyMask) != 0;
+
+        private struct PendingCompose
+        {
+            internal FlowFieldSessionRequest Request;
+            internal bool RebuildBase;
+            internal bool ResultChanged;
+            internal bool IncludeBase;
         }
 
         private void SetLifecycle(FlowFieldSessionLifecycle next)
