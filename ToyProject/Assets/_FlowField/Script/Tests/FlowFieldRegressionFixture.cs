@@ -91,6 +91,7 @@ namespace Common.FlowField.Tests
             public Collider InfluenceCollider { get; set; }
             public int Priority { get; set; }
             public int Revision { get; set; }
+            public FlowFieldModifierObservation Observe() => new FlowFieldModifierObservation(InfluenceCollider, Priority, Revision);
             internal float Speed = 2f;
             public IFlowFieldModifierSnapshot CaptureSnapshot() => new Snapshot(Speed);
             private sealed class Snapshot : IFlowFieldModifierSnapshot

@@ -15,29 +15,19 @@ namespace Common.FlowField
         private readonly List<IFlowFieldVectorModifier> _modifiers = new List<IFlowFieldVectorModifier>(16);
         private readonly Dictionary<IFlowFieldVectorModifier, ModifierObservation> _modifierObservations
             = new Dictionary<IFlowFieldVectorModifier, ModifierObservation>(16);
-        private int _captureVersion;
-        private int _observationVersion;
 
         internal int Count => _modifiers.Count;
-        internal int CaptureVersion => _captureVersion;
         internal bool Contains(IFlowFieldVectorModifier modifier)
             => modifier != null && _modifiers.Contains(modifier);
 
         internal void Clear()
         {
-            InvalidateCaptures();
             _modifiers.Clear();
             _modifierObservations.Clear();
         }
 
-        internal void InvalidateCaptures()
-        {
-            unchecked { _captureVersion++; _observationVersion++; }
-        }
-
         internal bool DetectChanges()
         {
-            int version = BeginObservation();
             if (_modifiers.Count == 0)
                 return false;
             var observations = ArrayPool<ModifierObservation>.Shared.Rent(_modifiers.Count);
@@ -52,8 +42,7 @@ namespace Common.FlowField
                         changed = true;
                         continue;
                     }
-                    if (!TryReadObservation(modifier, version, out ModifierObservation current))
-                        return false;
+                    ModifierObservation current = ModifierObservation.From(modifier.Observe());
                     for (int previousIndex = _modifiers.Count - 1; previousIndex > index; previousIndex--)
                         if (!FlowFieldVectorUtility.IsMissingModifier(_modifiers[previousIndex]) && observations[previousIndex].Priority == current.Priority)
                             throw new InvalidOperationException($"Vector modifier priority {current.Priority} is duplicated.");
@@ -63,10 +52,9 @@ namespace Common.FlowField
                         changed = true;
                 }
 
-                // Only an entire, current observation may replace the cache.
+                // Only a complete observation may replace the cache.
                 if (changed)
                 {
-                    InvalidateCaptures();
                     for (int index = _modifiers.Count - 1; index >= 0; index--)
                     {
                         IFlowFieldVectorModifier modifier = _modifiers[index];
@@ -92,15 +80,11 @@ namespace Common.FlowField
         {
             if (modifier == null)
                 throw new ArgumentNullException(nameof(modifier));
-            int version = BeginObservation();
-            if (!TryReadObservation(modifier, version, out ModifierObservation observation))
-                return false;
+            ModifierObservation observation = ModifierObservation.From(modifier.Observe());
             ValidateCollider(observation.Collider);
             if (_modifiers.Contains(modifier))
                 return false;
-            if (!TryReadOtherPriorities(modifier, observation.Priority, version, out var priorities))
-                return false;
-            InvalidateCaptures();
+            Dictionary<IFlowFieldVectorModifier, int> priorities = ReadOtherPriorities(modifier, observation.Priority);
             _modifiers.Add(modifier);
             _modifierObservations[modifier] = observation;
             _modifiers.Sort((left, right) => priorities[left].CompareTo(priorities[right]));
@@ -111,7 +95,6 @@ namespace Common.FlowField
         {
             if (!_modifiers.Remove(modifier))
                 return false;
-            InvalidateCaptures();
             _modifierObservations.Remove(modifier);
             return true;
         }
@@ -127,79 +110,32 @@ namespace Common.FlowField
                 | FlowFieldModifierChange.Priority)) == 0)
                 return true;
 
-            int version = BeginObservation();
-            try
-            {
-                Collider collider = modifier.InfluenceCollider;
-                if (version != _observationVersion) return false;
-                ValidateCollider(collider);
-                if ((change & FlowFieldModifierChange.Priority) != 0)
-                {
-                    int priority = modifier.Priority;
-                    if (version != _observationVersion) return false;
-                    return TryReadOtherPriorities(modifier, priority, version, out _);
-                }
-                return true;
-            }
-            catch (Exception) when (version != _observationVersion)
-            {
-                return false;
-            }
+            FlowFieldModifierObservation observation = modifier.Observe();
+            ValidateCollider(observation.InfluenceCollider);
+            if ((change & FlowFieldModifierChange.Priority) != 0)
+                ReadOtherPriorities(modifier, observation.Priority);
+            return true;
         }
 
-        private int BeginObservation()
+        private Dictionary<IFlowFieldVectorModifier, int> ReadOtherPriorities(
+            IFlowFieldVectorModifier modifier,
+            int priority)
         {
-            unchecked { return ++_observationVersion; }
-        }
-
-        private bool TryReadObservation(
-            IFlowFieldVectorModifier modifier, int version, out ModifierObservation observation)
-        {
-            observation = default;
-            try
-            {
-                Collider collider = modifier.InfluenceCollider;
-                if (version != _observationVersion) return false;
-                int revision = modifier.Revision;
-                if (version != _observationVersion) return false;
-                int priority = modifier.Priority;
-                if (version != _observationVersion) return false;
-                observation = ModifierObservation.From(collider, revision, priority);
-                return true;
-            }
-            catch (Exception) when (version != _observationVersion)
-            {
-                return false;
-            }
-        }
-
-        private bool TryReadOtherPriorities(
-            IFlowFieldVectorModifier modifier, int priority, int version,
-            out Dictionary<IFlowFieldVectorModifier, int> priorities)
-        {
-            priorities = new Dictionary<IFlowFieldVectorModifier, int>(_modifiers.Count + 1)
+            var priorities = new Dictionary<IFlowFieldVectorModifier, int>(_modifiers.Count + 1)
             {
                 [modifier] = priority
             };
-            try
+            for (int index = 0; index < _modifiers.Count; index++)
             {
-                for (int index = 0; index < _modifiers.Count; index++)
-                {
-                    IFlowFieldVectorModifier other = _modifiers[index];
-                    if (ReferenceEquals(other, modifier))
-                        continue;
-                    int otherPriority = other.Priority;
-                    if (version != _observationVersion) return false;
-                    if (otherPriority == priority)
-                        throw new InvalidOperationException($"Vector modifier priority {priority} is duplicated.");
-                    priorities.Add(other, otherPriority);
-                }
-                return true;
+                IFlowFieldVectorModifier other = _modifiers[index];
+                if (ReferenceEquals(other, modifier))
+                    continue;
+                int otherPriority = other.Observe().Priority;
+                if (otherPriority == priority)
+                    throw new InvalidOperationException($"Vector modifier priority {priority} is duplicated.");
+                priorities.Add(other, otherPriority);
             }
-            catch (Exception) when (version != _observationVersion)
-            {
-                return false;
-            }
+            return priorities;
         }
 
         private static void ValidateCollider(Collider collider)
@@ -217,34 +153,17 @@ namespace Common.FlowField
             if (_modifiers.Count == 0)
                 return Array.Empty<FlowFieldModifierWorkItem>();
 
-            int version = _captureVersion;
             FlowFieldModifierWorkItem[] snapshots = new FlowFieldModifierWorkItem[_modifiers.Count];
             for (int index = 0; index < _modifiers.Count; index++)
             {
                 IFlowFieldVectorModifier modifier = _modifiers[index];
                 IFlowFieldModifierSnapshot snapshot = modifier.CaptureSnapshot();
-                EnsureCurrentCapture(version);
                 if (snapshot == null)
                     throw new InvalidOperationException(
                         $"FlowField modifier '{modifier.GetType().Name}' returned a null snapshot.");
-                Collider collider = modifier.InfluenceCollider;
-                EnsureCurrentCapture(version);
-                // These getters are external code. Preserve their observation
-                // order and lifetime checks without copying unused metadata
-                // into every build's work items.
-                _ = modifier.Priority;
-                EnsureCurrentCapture(version);
-                _ = modifier.Revision;
-                EnsureCurrentCapture(version);
-                snapshots[index] = new FlowFieldModifierWorkItem(snapshot, collider);
+                snapshots[index] = new FlowFieldModifierWorkItem(snapshot, modifier.Observe().InfluenceCollider);
             }
             return snapshots;
-        }
-
-        private void EnsureCurrentCapture(int version)
-        {
-            if (version != _captureVersion)
-                throw new OperationCanceledException("FlowField modifier capture was invalidated.");
         }
 
         private readonly struct ModifierObservation : IEquatable<ModifierObservation>
@@ -278,12 +197,13 @@ namespace Common.FlowField
             internal Collider Collider => _collider;
             internal int Priority => _priority;
 
-            internal static ModifierObservation From(Collider collider, int revision, int priority)
+            internal static ModifierObservation From(in FlowFieldModifierObservation observation)
             {
+                Collider collider = observation.InfluenceCollider;
                 return new ModifierObservation(
                     collider,
-                    revision,
-                    priority,
+                    observation.Revision,
+                    observation.Priority,
                     collider != null ? collider.bounds : default,
                     collider != null && collider.enabled,
                     collider != null && collider.gameObject.activeInHierarchy,

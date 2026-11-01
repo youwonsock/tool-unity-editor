@@ -6,7 +6,6 @@ namespace Common.FlowField
 {
     internal readonly struct FlowFieldModifierBuildRequest
     {
-        internal Func<bool> IsCurrent { get; }
         public FlowFieldGridSpace Grid { get; }
         public FlowFieldSurfaceData Surface { get; }
         public FlowFieldWorkspace Workspace { get; }
@@ -18,10 +17,8 @@ namespace Common.FlowField
             FlowFieldSurfaceData surface,
             FlowFieldWorkspace workspace,
             float obstacleCheckHeight,
-            float obstacleCheckCenterOffset,
-            Func<bool> isCurrent = null)
+            float obstacleCheckCenterOffset)
         {
-            IsCurrent = isCurrent;
             Grid = grid;
             Surface = surface;
             Workspace = workspace;
@@ -43,16 +40,13 @@ namespace Common.FlowField
             _registry = registry;
         }
 
-        // A false result means cancellation; an invalid changedRegion means
-        // a completed pass found no effective mask change.
-        internal bool RebuildAreaData(
-            in FlowFieldModifierBuildRequest request,
-            out FlowFieldCellRect changedRegion)
+        // An invalid result means the pass found no effective mask change.
+        internal FlowFieldCellRect RebuildAreaData(in FlowFieldModifierBuildRequest request)
         {
-            changedRegion = FlowFieldCellRect.Invalid;
+            FlowFieldCellRect changedRegion = FlowFieldCellRect.Invalid;
             ValidateAreaRequest(request);
             if (_registry.Entries.Count == 0)
-                return true;
+                return changedRegion;
 
             bool hasDirtyArea = false;
             for (int i = 0; i < _registry.Entries.Count; i++)
@@ -65,7 +59,7 @@ namespace Common.FlowField
             }
 
             if (!hasDirtyArea)
-                return true;
+                return changedRegion;
 
             Physics.SyncTransforms();
             for (int i = 0; i < _registry.Entries.Count; i++)
@@ -76,14 +70,7 @@ namespace Common.FlowField
 
                 FlowFieldCellRect previousRect = entry.InfluenceRect;
                 ResizeRuntimeMask(entry, request.Grid.CellCount);
-                Collider collider;
-                try { collider = entry.Modifier.InfluenceCollider; }
-                catch (Exception) when (request.IsCurrent?.Invoke() == false)
-                {
-                    return false;
-                }
-                if (request.IsCurrent?.Invoke() == false)
-                    return false;
+                Collider collider = entry.Modifier.Observe().InfluenceCollider;
 
                 FlowFieldModifierMaskBuilder.Build(
                     request.Grid,
@@ -117,7 +104,7 @@ namespace Common.FlowField
                 entry.AreaDirty = false;
             }
 
-            return true;
+            return changedRegion;
         }
 
         private static void ValidateAreaRequest(in FlowFieldModifierBuildRequest request)
@@ -163,7 +150,7 @@ namespace Common.FlowField
             entry.InfluenceRect = maskRect;
         }
 
-        internal bool RebuildFinalField(
+        internal void RebuildFinalField(
             in FlowFieldModifierBuildRequest request,
             Vector3 defaultDirection,
             FlowFieldCellRect dirty,
@@ -182,38 +169,27 @@ namespace Common.FlowField
             if (!FlowFieldGridSpace.IsFinite(request.ObstacleCheckCenterOffset))
                 throw new ArgumentOutOfRangeException(nameof(request.ObstacleCheckCenterOffset));
 
-            _registry.BeginComposition();
-            try
-            {
-                if (!dirty.IsValid)
-                    dirty = FlowFieldCellRect.Full(request.Grid);
+            if (!dirty.IsValid)
+                dirty = FlowFieldCellRect.Full(request.Grid);
 
-                if (!BuildRuntimeLayers(request.Grid.CellCount, request.IsCurrent))
-                    return false;
-                if (rebuildBase)
-                {
-                    return FlowFieldFinalFieldComposer.Compose(
-                        request.Grid,
-                        request.Surface,
-                        request.Workspace,
-                        defaultDirection,
-                        _runtimeLayers,
-                        request.IsCurrent);
-                }
-                else
-                {
-                    return FlowFieldFinalFieldComposer.ApplyModifiers(
-                        request.Grid,
-                        request.Surface,
-                        request.Workspace,
-                        _runtimeLayers,
-                        dirty,
-                        request.IsCurrent);
-                }
-            }
-            finally
+            BuildRuntimeLayers(request.Grid.CellCount);
+            if (rebuildBase)
             {
-                _registry.EndComposition();
+                FlowFieldFinalFieldComposer.Compose(
+                    request.Grid,
+                    request.Surface,
+                    request.Workspace,
+                    defaultDirection,
+                    _runtimeLayers);
+            }
+            else
+            {
+                FlowFieldFinalFieldComposer.ApplyModifiers(
+                    request.Grid,
+                    request.Surface,
+                    request.Workspace,
+                    _runtimeLayers,
+                    dirty);
             }
         }
 
@@ -223,7 +199,7 @@ namespace Common.FlowField
             _overlapBuffer = null;
         }
 
-        private bool BuildRuntimeLayers(int cellCount, Func<bool> isCurrent)
+        private void BuildRuntimeLayers(int cellCount)
         {
             _runtimeLayers.Clear();
             for (int i = 0; i < _registry.Entries.Count; i++)
@@ -245,8 +221,6 @@ namespace Common.FlowField
                 }
 
                 IFlowFieldModifierSnapshot snapshot = entry.Modifier.CaptureSnapshot();
-                if (isCurrent?.Invoke() == false)
-                    return false;
                 if (snapshot == null)
                     throw new InvalidOperationException(
                         $"FlowField modifier '{entry.Modifier.GetType().Name}' returned a null snapshot.");
@@ -256,7 +230,6 @@ namespace Common.FlowField
                     entry.InfluenceMask,
                     entry.InfluenceIndices));
             }
-            return true;
         }
 
         private static void ResizeRuntimeMask(

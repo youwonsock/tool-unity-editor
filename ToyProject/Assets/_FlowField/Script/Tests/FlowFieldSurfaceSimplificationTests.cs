@@ -234,47 +234,6 @@ namespace Common.FlowField.Tests
 
     public sealed class FlowFieldModifierCaptureObservationTests
     {
-        [Test]
-        public void MetadataObservationCanEndTheCaptureLifetime(
-            [Values("priority", "revision")] string property,
-            [Values(false, true)] bool throwAfterRelease)
-        {
-            var area = new GameObject("Modifier metadata observation");
-            var collider = area.AddComponent<BoxCollider>();
-            collider.isTrigger = true;
-            var session = new FlowFieldVolumeSession();
-            var errors = new FlowFieldRegressionFixture.EventFailures(session);
-            var modifier = new ObservedModifier { Collider = collider };
-            int publications = 0;
-            session.FieldCommitted += () => publications++;
-            try
-            {
-                session.Initialize(FlowFieldBakeMode.RuntimeDynamic);
-                session.RegisterModifier(modifier);
-                modifier.AfterCapture = observed =>
-                {
-                    if (observed != property) return;
-                    session.Release();
-                    if (throwAfterRelease) throw new InvalidOperationException("Old metadata observation");
-                };
-                session.Submit(FlowFieldVolumeSafetyRegressionTests.Request(
-                    FlowFieldGridSpace.FromVolumeCellGrid(Vector3.zero, 3, 3, 3, 1f)));
-                Assert.DoesNotThrow(() => session.Pump(100d));
-                Assert.That(session.State, Is.EqualTo(FlowFieldRuntimeState.Released));
-                Assert.That(session.HasPendingRequest, Is.False);
-                Assert.That(publications, Is.Zero);
-                Assert.That(modifier.Observed, Is.EqualTo(property == "priority"
-                    ? new[] { "collider", "priority" }
-                    : new[] { "collider", "priority", "revision" }));
-            }
-            finally
-            {
-                session.Dispose();
-                Object.DestroyImmediate(area);
-            }
-            errors.AssertNone();
-        }
-
         private sealed class ObservedModifier : IFlowFieldVectorModifier, IFlowFieldModifierSnapshot
         {
             internal Collider Collider;
@@ -284,6 +243,7 @@ namespace Common.FlowField.Tests
             public Collider InfluenceCollider { get { Observe("collider"); return Collider; } }
             public int Priority { get { Observe("priority"); return 100; } }
             public int Revision { get { Observe("revision"); return 0; } }
+            public FlowFieldModifierObservation Observe() => new FlowFieldModifierObservation(InfluenceCollider, Priority, Revision);
             private void Observe(string property)
             {
                 if (!_captured) return;

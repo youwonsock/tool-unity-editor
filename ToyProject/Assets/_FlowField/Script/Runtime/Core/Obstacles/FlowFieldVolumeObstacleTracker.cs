@@ -23,7 +23,6 @@ namespace Common.FlowField
         private Collider[] _obstacleSweepBuffer = new Collider[512];
 
         private readonly Action<Bounds> _markDirty;
-        private int _observationVersion;
 
         internal FlowFieldVolumeObstacleTracker(Action<Bounds> markDirty)
             => _markDirty = markDirty ?? throw new ArgumentNullException(nameof(markDirty));
@@ -32,31 +31,8 @@ namespace Common.FlowField
         internal Collider GetRegisteredObstacle(int index) => _dynamicObstacles[index];
         internal long SweepBufferBytes => 8L * _obstacleSweepBuffer.Length;
 
-        // Lifecycle transitions also invalidate passes that retain their
-        // collections (Suspend/Fault). Structural changes and nested passes
-        // invalidate the same token before an outer callback can resume.
-        internal void InvalidateObservations()
-        {
-            unchecked { _observationVersion++; }
-        }
-
-        private int BeginObservation()
-        {
-            InvalidateObservations();
-            return _observationVersion;
-        }
-
-        private bool ReportDirty(Bounds bounds, int version)
-        {
-            if (version != _observationVersion)
-                return false;
-            _markDirty(bounds);
-            return version == _observationVersion;
-        }
-
         internal void Clear()
         {
-            InvalidateObservations();
             _dynamicObstacles.Clear();
             _dynamicObstacleBounds.Clear();
             _observedObstacleBounds.Clear();
@@ -74,7 +50,6 @@ namespace Common.FlowField
             if (FindRegisteredIndex(collider) >= 0)
                 return false;
             Bounds current = collider.bounds;
-            InvalidateObservations();
             _observedObstacleBounds.Remove(collider);
             _observedObstacleStates.Remove(collider);
             _dynamicObstacles.Add(collider);
@@ -91,7 +66,6 @@ namespace Common.FlowField
             if (obstacleIndex < 0)
                 return false;
             Bounds previous = _dynamicObstacleBounds[obstacleIndex];
-            InvalidateObservations();
             _observedObstacleBounds.Remove(collider);
             _observedObstacleStates.Remove(collider);
             _dynamicObstacles.RemoveAt(obstacleIndex);
@@ -102,9 +76,8 @@ namespace Common.FlowField
             return true;
         }
 
-        internal bool DetectRegisteredChanges()
+        internal void DetectRegisteredChanges()
         {
-            int version = BeginObservation();
             for (int i = _dynamicObstacles.Count - 1; i >= 0; i--)
             {
                 Collider collider = _dynamicObstacles[i];
@@ -112,9 +85,8 @@ namespace Common.FlowField
                 {
                     Bounds removedBounds = _dynamicObstacleBounds[i];
                     if (FlowFieldGridSpace.IsFinite(removedBounds.center)
-                        && FlowFieldGridSpace.IsFinite(removedBounds.size)
-                        && !ReportDirty(removedBounds, version))
-                        return false;
+                        && FlowFieldGridSpace.IsFinite(removedBounds.size))
+                        _markDirty(removedBounds);
                     _dynamicObstacles.RemoveAt(i);
                     _dynamicObstacleBounds.RemoveAt(i);
                     _observedObstacleBounds.Remove(collider);
@@ -127,15 +99,12 @@ namespace Common.FlowField
                     || (current.size - previous.size).sqrMagnitude > 0.00000001f)
                 {
                     if (FlowFieldGridSpace.IsFinite(previous.center)
-                        && FlowFieldGridSpace.IsFinite(previous.size)
-                        && !ReportDirty(previous, version))
-                        return false;
+                        && FlowFieldGridSpace.IsFinite(previous.size))
+                        _markDirty(previous);
                     _dynamicObstacleBounds[i] = current;
-                    if (!ReportDirty(current, version))
-                        return false;
+                    _markDirty(current);
                 }
             }
-            return true;
         }
 
         private int FindRegisteredIndex(Collider collider)
@@ -146,24 +115,24 @@ namespace Common.FlowField
             return -1;
         }
 
-        internal bool DetectUnregisteredChanges(in FlowFieldVolumeRequest request)
+        internal void DetectUnregisteredChanges(in FlowFieldVolumeRequest request)
         {
             Physics.SyncTransforms();
             Bounds sweepBounds = request.WorldBounds;
             float sweepMargin = request.Grid.CellSize + request.ObstacleClearance;
             sweepBounds.Expand(Vector3.one * (sweepMargin * 2f));
             int count = SweepObstacles(sweepBounds, request.ObstacleLayer, out bool complete);
-            return ApplySweep(sweepBounds, _obstacleSweepBuffer, count, complete);
+            ApplySweep(sweepBounds, _obstacleSweepBuffer, count, complete);
         }
 
-        internal bool ApplySweep(Bounds sweepBounds, Collider[] colliders, int count, bool complete)
+        internal void ApplySweep(Bounds sweepBounds, Collider[] colliders, int count, bool complete)
         {
-            int version = BeginObservation();
             if (!complete)
             {
                 // A saturated query cannot prove removal. Retain previous
                 // observations while conservatively invalidating the swept area.
-                return ReportDirty(sweepBounds, version);
+                _markDirty(sweepBounds);
+                return;
             }
 
             _seenObstacleColliders.Clear();
@@ -179,8 +148,7 @@ namespace Common.FlowField
                 {
                     _observedObstacleBounds[collider] = current;
                     _observedObstacleStates[collider] = currentState;
-                    if (!ReportDirty(current, version))
-                        return false;
+                    _markDirty(current);
                     continue;
                 }
                 if (!_observedObstacleStates.TryGetValue(collider, out ObstacleObservation previousState)
@@ -189,15 +157,15 @@ namespace Common.FlowField
                     Bounds previousBounds = previousState.Bounds.size.sqrMagnitude > 0f
                         ? previousState.Bounds
                         : previous;
-                    if (!ReportDirty(previousBounds, version) || !ReportDirty(current, version))
-                        return false;
+                    _markDirty(previousBounds);
+                    _markDirty(current);
                     _observedObstacleBounds[collider] = current;
                     _observedObstacleStates[collider] = currentState;
                 }
             }
 
             if (_observedObstacleBounds.Count == 0)
-                return true;
+                return;
             List<Collider> removed = null;
             foreach (KeyValuePair<Collider, Bounds> pair in _observedObstacleBounds)
             {
@@ -209,17 +177,15 @@ namespace Common.FlowField
                 Bounds previous = _observedObstacleStates.TryGetValue(pair.Key, out ObstacleObservation removedState)
                     ? removedState.Bounds
                     : pair.Value;
-                if (!ReportDirty(previous, version))
-                    return false;
+                _markDirty(previous);
             }
             if (removed == null)
-                return true;
+                return;
             for (int index = 0; index < removed.Count; index++)
             {
                 _observedObstacleBounds.Remove(removed[index]);
                 _observedObstacleStates.Remove(removed[index]);
             }
-            return true;
         }
 
         private int SweepObstacles(Bounds bounds, LayerMask obstacleLayer, out bool complete)

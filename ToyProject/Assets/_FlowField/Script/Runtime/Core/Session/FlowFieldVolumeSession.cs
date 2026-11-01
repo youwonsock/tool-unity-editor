@@ -45,7 +45,6 @@ namespace Common.FlowField
         // distinguishes that state from an explicit lifecycle suspension.
         private bool _suspendedByLifecycle;
         private static long _nextVisualizationResultId;
-        private bool _pumping;
         private bool _runtimeScheduled;
         private long _buildReservationBytes;
         private long _committedReservationBytes;
@@ -53,7 +52,8 @@ namespace Common.FlowField
         private readonly Stopwatch _pumpTimer = new Stopwatch();
         private readonly Func<double> _pumpElapsedMilliseconds;
 
-        internal FlowFieldVolumeSession()
+        internal FlowFieldVolumeSession(FlowFieldExecutionBoundary boundary = null)
+            : base(boundary)
         {
             _obstacles = new FlowFieldVolumeObstacleTracker(MarkObstacleRegionDirty);
             _pumpElapsedMilliseconds = () => _pumpTimer.Elapsed.TotalMilliseconds;
@@ -145,7 +145,6 @@ namespace Common.FlowField
                     _computeSolver = null;
                 }
             }
-            InvalidateBuildGeneration();
             SetState(FlowFieldRuntimeState.Suspended);
         }
 
@@ -172,14 +171,10 @@ namespace Common.FlowField
             // building must never resurrect the older committed Goal.
             _latestRequestedInput = request;
             _hasLatestRequestedInput = true;
+            // A grid/signature change invalidates the private staging arrays
+            // immediately. A late GPU callback for the old build is ignored.
             if (_build != null && !_build.Request.HasSameGrid(request))
-            {
-                InvalidateBuildGeneration();
-                // A grid/signature change invalidates the private staging
-                // arrays immediately. If an async GPU solve belongs to the
-                // discarded build, its late callback is ignored.
                 DiscardBuild();
-            }
             if (_committed != null
                 && _committed.Request.HasSameGrid(request)
                 && (_committed.Request.ObstacleLayer.value != request.ObstacleLayer.value
@@ -216,10 +211,6 @@ namespace Common.FlowField
 
         internal void Pump(double budgetMilliseconds = DefaultBudgetMilliseconds)
         {
-            // A nested Pump would return from PumpInternal anyway; returning
-            // first keeps it from restarting the outer pump's timer.
-            if (_pumping)
-                return;
             if (budgetMilliseconds <= 0d)
                 budgetMilliseconds = DefaultBudgetMilliseconds;
             _pumpTimer.Restart();
@@ -231,52 +222,24 @@ namespace Common.FlowField
 
         private void PumpInternal(in FlowFieldBuildBudget budget)
         {
-            if (_pumping || !CanPump)
+            if (!CanPump)
                 return;
 
-            _pumping = true;
-            int pumpGeneration = OperationGeneration;
-            BuildContext activeBuild = _build;
+            using FlowFieldExecutionBoundary.OperationScope operation = Boundary.EnterOperation();
             try
             {
-                if (!_obstacles.DetectRegisteredChanges()
-                    || !CanContinuePump(pumpGeneration, activeBuild))
-                    return;
+                _obstacles.DetectRegisteredChanges();
                 if (IsWaitingForExternalCompletion)
                     return;
 
                 while (!budget.IsExpired)
                 {
-                    if (_build == null && !TryBeginPendingBuild(pumpGeneration))
+                    if (_build == null && !TryBeginPendingBuild())
+                        return;
+                    if (!StepBuild(_build, budget))
                         return;
 
-                    activeBuild = _build;
-                    if (!StepBuild(activeBuild, budget))
-                        return;
-
-                    BuildContext completedBuild = activeBuild;
-                    bool commitCallbackChangedGeneration = CommitBuild(completedBuild);
-                    if (ReferenceEquals(_build, completedBuild))
-                    {
-                        DiscardBuild();
-                    }
-                    activeBuild = null;
-                    // CommitBuild normally clears _build before invoking
-                    // user callbacks. A callback is nevertheless allowed to
-                    // Release and immediately Init/submit a new build. In
-                    // that case the old pump must not finish the new build's
-                    // lifecycle transition or consume its pending request.
-                    if (_build != null || commitCallbackChangedGeneration)
-                        return;
-                    // Commit callbacks are allowed to Release, Suspend or
-                    // submit a new request. Never let the normal completion
-                    // path overwrite that lifecycle decision with Ready.
-                    if (!CanPump)
-                        return;
-                    // A successful grid replacement can advance the generation
-                    // itself. Only that completed transition may be adopted;
-                    // callback-driven changes have already returned above.
-                    pumpGeneration = OperationGeneration;
+                    CommitBuild(_build);
                     if (_hasPendingRequest || _hasPendingModifierRecompose)
                         continue;
                     if (State == FlowFieldRuntimeState.Building)
@@ -284,33 +247,13 @@ namespace Common.FlowField
                     return;
                 }
             }
-            catch (OperationCanceledException)
-            {
-                // A lifecycle or grid-signature generation change invalidates
-                // only the private staging build. The latest coalesced request
-                // remains pending and must continue without Faulting the
-                // provider or publishing the stale result.
-                if (!CanContinuePump(pumpGeneration, activeBuild))
-                    return;
-                DiscardBuild();
-                if (_hasPendingRequest)
-                    SetState(FlowFieldRuntimeState.Building);
-            }
             catch (Exception exception)
             {
-                // An exception thrown after Release/Init, Suspend or Cancel
-                // still belongs to the old operation. It must not discard a
-                // newer request or overwrite the chosen lifecycle state.
-                if (CanContinuePump(pumpGeneration, activeBuild))
-                    ReportFault(exception);
-            }
-            finally
-            {
-                _pumping = false;
+                ReportFault(exception);
             }
         }
 
-        private bool TryBeginPendingBuild(int pumpGeneration)
+        private bool TryBeginPendingBuild()
         {
             if (!_hasPendingRequest && !_hasPendingModifierRecompose)
             {
@@ -323,8 +266,9 @@ namespace Common.FlowField
             FlowFieldVolumeRequest request = recompose ? _committed.Request : _latestRequestedInput;
             _hasPendingRequest = false;
             _hasPendingModifierRecompose = false;
-            if (!TryCaptureModifiers(pumpGeneration, out FlowFieldModifierWorkItem[] modifierSnapshots))
-                return false;
+            FlowFieldModifierWorkItem[] modifierSnapshots;
+            using (Boundary.EnterUserCode())
+                modifierSnapshots = _modifierRegistry.CaptureSnapshots();
             long reservation = EstimateBuildBytes(request.Grid.CellCount, modifierSnapshots.Length);
             if (!CanReserveForBuild(request, reservation))
                 throw new InvalidOperationException(
@@ -334,14 +278,14 @@ namespace Common.FlowField
             // A recompose queries no obstacles, so it resolves no safety region.
             if (recompose)
             {
-                _build = new BuildContext(_committed, pumpGeneration, modifierSnapshots);
+                _build = new BuildContext(_committed, modifierSnapshots);
             }
             else
             {
                 bool reuseObstacles = CanReuseObstacleQueries(request);
                 _obstacleQueryRequired = false;
                 _safety.BeginBuild();
-                _build = new BuildContext(request, pumpGeneration, modifierSnapshots);
+                _build = new BuildContext(request, modifierSnapshots);
                 if (reuseObstacles)
                 {
                     _build.ReusesObstacleQueries = true;
@@ -367,48 +311,6 @@ namespace Common.FlowField
 
         private bool CanPump => !Disposed
             && (State == FlowFieldRuntimeState.Building || State == FlowFieldRuntimeState.Ready);
-
-        private bool CanContinuePump(int generation, BuildContext build)
-            => CanPump && OperationGeneration == generation && ReferenceEquals(_build, build);
-
-        private void EnsureCurrentBuild(BuildContext build)
-        {
-            if (build == null || !CanContinuePump(build.Generation, build))
-                throw new OperationCanceledException("FlowField volume build is no longer current.");
-        }
-
-        private bool TryCaptureModifiers(int generation, out FlowFieldModifierWorkItem[] snapshots)
-        {
-            int captureVersion = _modifierRegistry.CaptureVersion;
-            try
-            {
-                snapshots = _modifierRegistry.CaptureSnapshots();
-            }
-            catch (Exception) when (!CanContinuePump(generation, null)
-                || captureVersion != _modifierRegistry.CaptureVersion)
-            {
-                snapshots = null;
-            }
-
-            if (!CanContinuePump(generation, null))
-                return false;
-            if (captureVersion == _modifierRegistry.CaptureVersion)
-                return true;
-
-            // Registration may change before the first BuildContext exists.
-            // QueueModifierChange then has no build/publication to fall back
-            // to. Retry the newest accepted input at the next owner boundary.
-            if (_hasLatestRequestedInput)
-                _hasPendingRequest = true;
-            return false;
-        }
-
-        private void InvalidateBuildGeneration()
-        {
-            AdvanceOperationGeneration();
-            _obstacles.InvalidateObservations();
-            _modifierRegistry.InvalidateCaptures();
-        }
 
         /// <summary>
         /// Takes the spare array when it has the requested size and clears it,
@@ -441,7 +343,7 @@ namespace Common.FlowField
 
         private void CancelCurrentBuild()
         {
-            InvalidateBuildGeneration();
+            AdvanceLifetimeGeneration();
             DiscardBuild();
             _hasPendingRequest = false;
             _hasPendingModifierRecompose = false;
@@ -453,7 +355,7 @@ namespace Common.FlowField
             return _obstacles.Register(collider);
         }
 
-        internal override bool RegisterObstacleCommand(Collider collider)
+        private protected override bool RegisterObstacleNow(Collider collider)
             => RegisterDynamicObstacle(collider);
 
         internal bool UnregisterDynamicObstacle(Collider collider)
@@ -462,7 +364,7 @@ namespace Common.FlowField
             return _obstacles.Unregister(collider);
         }
 
-        internal override bool UnregisterObstacleCommand(Collider collider)
+        private protected override bool UnregisterObstacleNow(Collider collider)
             => UnregisterDynamicObstacle(collider);
 
         internal void MarkObstacleRegionDirty(Bounds bounds)
@@ -499,25 +401,32 @@ namespace Common.FlowField
                 || !FlowFieldGridSpace.IsFinite(request.WorldBounds.size))
                 return;
 
+            using FlowFieldExecutionBoundary.OperationScope operation = Boundary.EnterOperation();
             _obstacles.DetectUnregisteredChanges(in request);
         }
 
         internal void DetectModifierChanges()
         {
-            if (_modifierRegistry.DetectChanges())
+            bool changed;
+            using (Boundary.EnterUserCode())
+                changed = _modifierRegistry.DetectChanges();
+            if (changed)
                 QueueModifierChange();
         }
 
         internal bool RegisterModifier(IFlowFieldVectorModifier modifier)
         {
             ThrowIfInputAvailable();
-            if (!_modifierRegistry.Register(modifier))
+            bool registered;
+            using (Boundary.EnterUserCode())
+                registered = _modifierRegistry.Register(modifier);
+            if (!registered)
                 return false;
             QueueModifierChange();
             return true;
         }
 
-        internal override bool RegisterModifierCommand(IFlowFieldVectorModifier modifier)
+        private protected override bool RegisterModifierNow(IFlowFieldVectorModifier modifier)
             => RegisterModifier(modifier);
 
         internal bool UnregisterModifier(IFlowFieldVectorModifier modifier)
@@ -529,16 +438,18 @@ namespace Common.FlowField
             return true;
         }
 
-        internal override bool UnregisterModifierCommand(IFlowFieldVectorModifier modifier)
+        private protected override bool UnregisterModifierNow(IFlowFieldVectorModifier modifier)
             => UnregisterModifier(modifier);
 
-        internal override void NotifyModifierChangedCommand(
+        private protected override void NotifyModifierChangedNow(
             IFlowFieldVectorModifier modifier,
             FlowFieldModifierChange change)
         {
             ThrowIfInputAvailable();
-            if (_modifierRegistry.ValidateModifierChange(modifier, change)
-                && change != FlowFieldModifierChange.None)
+            bool valid;
+            using (Boundary.EnterUserCode())
+                valid = _modifierRegistry.ValidateModifierChange(modifier, change);
+            if (valid && change != FlowFieldModifierChange.None)
                 QueueModifierChange();
         }
 
@@ -590,6 +501,7 @@ namespace Common.FlowField
         {
             if (!IsFaulted)
                 return;
+            AdvanceLifetimeGeneration();
             Fault = null;
             // A retry only clears the failure.  The next accepted request
             // must still build and publish before the session becomes Ready;
@@ -702,6 +614,7 @@ namespace Common.FlowField
         {
             if (Disposed)
                 return;
+            using FlowFieldExecutionBoundary.OperationScope operation = Boundary.EnterOperation();
             Disposed = true;
             if (_runtimeScheduled)
             {
@@ -720,8 +633,8 @@ namespace Common.FlowField
             ReleaseSpareBuildArrays();
             _modifierRegistry.Clear();
             _safety.ClearRegions();
-            MarkBaseDisposed();
             PublishState(FlowFieldRuntimeState.Released);
+            MarkBaseDisposed();
         }
 
         bool IFlowFieldBuildOperation.IsWaitingForExternalCompletion

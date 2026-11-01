@@ -6,7 +6,7 @@
 
 | 항목 | 상태 |
 | --- | --- |
-| 테스트 | macOS·Metal(Apple M4 Pro)에서 `Common.FlowField.Tests` 553개 통과, 실패 0, 성능 프로브 14개 제외. 저장소 루트의 `Tools/run-tests.sh`로 실행한다. Windows·Direct3D 11 마지막 기록은 이번 수정 이전의 466개 |
+| 테스트 | macOS·Metal(Apple M4 Pro)에서 `Common.FlowField.Tests` 402개 통과, 실패 0, 성능 프로브 14개 제외. 저장소 루트의 `Tools/run-tests.sh`로 실행한다. Windows·Direct3D 11 마지막 기록은 이번 수정 이전의 466개 |
 | 베이크 | Surface·Volume 모두 v6만 허용. 마이그레이션 코드는 없다. 맞닿은 셀 판정을 바꾼 뒤 Surface Asset을 다시 베이크해 보니 막힌 셀 변경이 0개여서 Asset은 그대로 뒀다 |
 | 공개 계약 | Provider·Controller API, Manager 직렬화 설정, 씬·Prefab의 GUID 참조 유지. `FlowFieldManager.GpuFallbackReason` 추가 |
 | 성능 (100³ Volume, Managed, Windows 기록) | 전체 빌드 26~55초 → 약 6초, 2ms 예산 빌드 12,585 → 2,214프레임, 장애물 1개 이동 후 재빌드 31.3 → 6.0초 |
@@ -169,10 +169,10 @@ GPU 경로(같은 장면, 배치 실행의 프레임 대기 포함)는 Surface 2
 | 100줄을 넘는 메서드 | 10개 | 0개 |
 | 외부 호출 뒤 소유권 재검사 | 약 43곳 | 약 41곳 |
 
-- `FlowFieldSessionBase`: 공개 상태, Fault 순서, 작업 세대 같은 공통 수명 규칙. 재시도와 해제의 자원 처리는 모드별로 달라 각 세션에 있다.
+- `FlowFieldSessionBase`: 공개 상태, Fault 순서, 이벤트 전달, 명령 지연, 수명 세대 같은 공통 수명 규칙. 재시도와 해제의 자원 처리는 모드별로 달라 각 세션에 있다.
 - `FlowFieldManager.Modes.cs`: Surface와 Volume의 차이. Manager 본체에는 모드 분기가 없다. `FlowFieldManager.Validation.cs`, `FlowFieldManager.Bake.cs`는 설정 검증과 베이크 연동이다.
 - 세션의 `.Build`, `.Sampling`, `.Views`, `.Memory`는 partial 파일이다. 필드를 공유하므로 읽기 쉬워졌을 뿐 결합이 줄지는 않았다. `FlowFieldSession.Build.cs`(841줄)가 가장 크다.
-- 복잡성의 근원은 남아 있다: 콜백 안의 Release·Init·Suspend를 허용해 외부 호출 뒤마다 소유권을 다시 검사한다. Modifier와 Surface Source도 외부 호출이므로 이벤트 지연 전달만으로는 사라지지 않아 진행하지 않았다.
+- 2026-11-01 `FlowFieldExecutionBoundary`로 복잡성의 근원을 없앴다: 이벤트 핸들러는 작업이 끝난 뒤 실행하고 Modifier 코드에서는 다른 작업을 시작할 수 없어, 외부 호출 뒤 소유권 재검사가 필요 없다. 외부 호출 뒤 소유권을 확인하는 줄이 115줄에서 13줄이 됐고, 남은 13줄은 늦게 도착하는 GPU 콜백용이다. 도달할 수 없게 된 재진입 테스트 케이스 224개를 지우고, Manager를 통한 거부·지연·이벤트 순서 테스트 케이스 73개를 추가했다. Modifier 계약은 getter 3개에서 `Observe()` 하나로 바뀌어 직접 구현한 코드는 고쳐야 한다.
 
 ## 다음 순서
 

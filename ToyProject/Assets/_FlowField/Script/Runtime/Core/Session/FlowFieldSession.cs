@@ -40,7 +40,6 @@ namespace Common.FlowField
         private FlowFieldSessionSourceKind _sourceKind;
         private FlowFieldBfsBackendPolicy _backendPolicy;
         private FlowFieldSessionLifecycle _lifecycle;
-        private bool _pumping;
         // PreferGpu is permanently downgraded after a GPU failure for the
         // lifetime of this Session. Release clears the flag; Suspend keeps it
         // so a resume cannot repeatedly rediscover a broken backend.
@@ -106,7 +105,6 @@ namespace Common.FlowField
         internal bool Pump()
         {
             if (Disposed
-                || _pumping
                 || _lifecycle == FlowFieldSessionLifecycle.Suspended
                 || _lifecycle == FlowFieldSessionLifecycle.Released
                 || _lifecycle == FlowFieldSessionLifecycle.Faulted
@@ -114,9 +112,8 @@ namespace Common.FlowField
                 return false;
             if (!_hasPendingRequest)
                 return false;
-            _pumping = true;
-            try { return BuildPending(); }
-            finally { _pumping = false; }
+            using FlowFieldExecutionBoundary.OperationScope operation = Boundary.EnterOperation();
+            return BuildPending();
         }
         internal bool HasPendingObstacleProbe => _obstacleProbePending;
 
@@ -256,7 +253,9 @@ namespace Common.FlowField
         internal FlowFieldSession(
             IFlowFieldSurfaceSource surfaceSource = null,
             IFlowFieldGpuBackend gpuBackend = null,
-            Func<IFlowFieldGpuBackend> gpuBackendFactory = null)
+            Func<IFlowFieldGpuBackend> gpuBackendFactory = null,
+            FlowFieldExecutionBoundary boundary = null)
+            : base(boundary)
         {
             if (gpuBackend != null && gpuBackendFactory != null)
                 throw new ArgumentException("Specify either a GPU backend or a backend factory, not both.");
@@ -415,15 +414,17 @@ namespace Common.FlowField
             return true;
         }
 
-        internal override bool RegisterModifierCommand(IFlowFieldVectorModifier modifier)
+        private protected override bool RegisterModifierNow(IFlowFieldVectorModifier modifier)
         {
             EnsureModifierServices();
-            FlowFieldModifierRegistryResult result = _modifierRegistry.Register(modifier);
+            FlowFieldModifierRegistryResult result;
+            using (Boundary.EnterUserCode())
+                result = _modifierRegistry.Register(modifier);
             ApplyModifierRegistryResult(result);
             return result.FinalDirty;
         }
 
-        internal override bool UnregisterModifierCommand(IFlowFieldVectorModifier modifier)
+        private protected override bool UnregisterModifierNow(IFlowFieldVectorModifier modifier)
         {
             EnsureModifierServices();
             FlowFieldModifierRegistryResult result = _modifierRegistry.Unregister(modifier);
@@ -434,31 +435,27 @@ namespace Common.FlowField
         internal FlowFieldModifierRegistryResult DetectModifierChanges()
         {
             EnsureModifierServices();
-            FlowFieldModifierRegistryResult result = _modifierRegistry.DetectChanges();
+            FlowFieldModifierRegistryResult result;
+            using (Boundary.EnterUserCode())
+                result = _modifierRegistry.DetectChanges();
             ApplyModifierRegistryResult(result);
             return result;
         }
 
-        internal override void NotifyModifierChangedCommand(
+        private protected override void NotifyModifierChangedNow(
             IFlowFieldVectorModifier modifier,
             FlowFieldModifierChange change)
         {
+            EnsureModifierServices();
             if ((change & (FlowFieldModifierChange.Value | FlowFieldModifierChange.Priority)) != 0)
             {
-                EnsureModifierServices();
-                FlowFieldModifierRegistryResult result = _modifierRegistry.MarkDirty(
-                    modifier,
-                    (change & FlowFieldModifierChange.Value) != 0,
-                    out bool completed);
-                if (!completed)
-                    return;
+                FlowFieldModifierRegistryResult result;
+                using (Boundary.EnterUserCode())
+                    result = _modifierRegistry.MarkDirty(modifier, (change & FlowFieldModifierChange.Value) != 0);
                 ApplyModifierRegistryResult(result);
             }
             if ((change & FlowFieldModifierChange.Area) != 0)
-            {
-                EnsureModifierServices();
                 ApplyModifierRegistryResult(_modifierRegistry.MarkAreaDirty(modifier));
-            }
         }
 
         internal bool RegisterObstacle(Collider collider, FlowFieldCellRect dirtyRegion)
@@ -490,7 +487,7 @@ namespace Common.FlowField
             return flags;
         }
 
-        internal override bool RegisterObstacleCommand(Collider collider)
+        private protected override bool RegisterObstacleNow(Collider collider)
         {
             if (ReferenceEquals(collider, null))
                 throw new ArgumentNullException(nameof(collider));
@@ -521,7 +518,7 @@ namespace Common.FlowField
             return true;
         }
 
-        internal override bool UnregisterObstacleCommand(Collider collider)
+        private protected override bool UnregisterObstacleNow(Collider collider)
         {
             if (ReferenceEquals(collider, null))
                 throw new ArgumentNullException(nameof(collider));
@@ -668,8 +665,7 @@ namespace Common.FlowField
 
         private void InvalidateCallbacks()
         {
-            AdvanceOperationGeneration();
-            _modifierRegistry?.InvalidateOperations();
+            AdvanceLifetimeGeneration();
         }
 
         private protected override void AbandonWorkForFault() => InvalidateCallbacks();
@@ -769,6 +765,7 @@ namespace Common.FlowField
         {
             if (Disposed)
                 return;
+            using FlowFieldExecutionBoundary.OperationScope operation = Boundary.EnterOperation();
             // Disposal is terminal before Released subscribers run, so they
             // cannot recreate resources or recursively dispose this owner.
             Disposed = true;

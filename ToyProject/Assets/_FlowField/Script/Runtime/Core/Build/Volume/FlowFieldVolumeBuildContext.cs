@@ -23,7 +23,6 @@ namespace Common.FlowField
     internal sealed class FlowFieldVolumeBuildContext
     {
         internal readonly FlowFieldVolumeRequest Request;
-        internal readonly int Generation;
         internal int Count => Request.Grid.CellCount;
         internal bool[] Blocked;
         internal uint[] Topology;
@@ -65,11 +64,9 @@ namespace Common.FlowField
 
         internal FlowFieldVolumeBuildContext(
             in FlowFieldVolumeRequest request,
-            int generation,
             FlowFieldModifierWorkItem[] modifiers)
         {
             Request = request;
-            Generation = generation;
             Modifiers = modifiers ?? Array.Empty<FlowFieldModifierWorkItem>();
             Phase = FlowFieldVolumeBuildPhase.Allocate;
         }
@@ -80,9 +77,8 @@ namespace Common.FlowField
         /// </summary>
         internal FlowFieldVolumeBuildContext(
             FlowFieldVolumeFieldData published,
-            int generation,
             FlowFieldModifierWorkItem[] modifiers)
-            : this(published.Request, generation, modifiers)
+            : this(published.Request, modifiers)
         {
             IsModifierRecompose = true;
             Blocked = published.Blocked;

@@ -33,44 +33,6 @@ namespace Common.FlowField.Tests
             _eventFailures.AssertNone();
         }
 
-        [TestCase("release")]
-        [TestCase("suspend")]
-        [TestCase("dispose")]
-        [TestCase("restart")]
-        public void BuildingStateSubscriberEndsTheOldBuild(string transition)
-        {
-            // Initialize already publishes Building before a result exists.
-            // Publish once so the tested transition is Ready -> Building.
-            _session.Submit(FlowFieldRegressionFixture.Request());
-            _session.Pump();
-            Assert.That(_session.IsReady, Is.True, _session.LastError);
-            bool interrupted = false;
-            _session.StateChanged += state =>
-            {
-                if (state != FlowFieldRuntimeState.Building || interrupted) return;
-                interrupted = true;
-                if (transition == "suspend") _session.Suspend();
-                else if (transition == "dispose") _session.Dispose();
-                else
-                {
-                    _session.Release();
-                    if (transition == "restart")
-                    {
-                        Initialize();
-                        _session.Submit(FlowFieldRegressionFixture.Request(GoalC));
-                    }
-                }
-            };
-            _session.Submit(FlowFieldRegressionFixture.Request(GoalA));
-            _session.Pump();
-            Assert.That(interrupted, Is.True);
-            var expected = transition == "suspend" ? FlowFieldRuntimeState.Suspended
-                : transition == "restart" ? FlowFieldRuntimeState.Building : FlowFieldRuntimeState.Released;
-            Assert.That(_session.State, Is.EqualTo(expected), "The old Pump must preserve the callback's lifecycle decision.");
-            Assert.That(_backend.Calls, Is.Empty, "The cancelled build must not dispatch into a new lifetime.");
-            if (transition == "restart") FinishGoal(GoalC);
-        }
-
         [Test]
         public void FaultedStateRestartDoesNotReportTheOldFailureToTheNewLifetime()
         {
@@ -127,69 +89,6 @@ namespace Common.FlowField.Tests
             _session.RetryFault();
             Assert.That(submitted, Is.True);
             FinishGoal(GoalC);
-        }
-
-        [TestCase("release")]
-        [TestCase("suspend")]
-        [TestCase("restart")]
-        [TestCase("fault")]
-        public void ReadyStateSubscriberCancelsTheRemainingPublication(string transition)
-        {
-            bool interrupted = false;
-            int publications = 0;
-            _session.FieldCommitted += () => publications++;
-            _session.StateChanged += state =>
-            {
-                if (state != FlowFieldRuntimeState.Ready || interrupted) return;
-                interrupted = true;
-                if (transition == "suspend") _session.Suspend();
-                else if (transition == "fault") _session.ReportFault(new InvalidOperationException("Ready boundary"));
-                else
-                {
-                    _session.Release();
-                    if (transition == "restart")
-                    {
-                        Initialize();
-                        _session.Submit(FlowFieldRegressionFixture.Request(GoalC));
-                    }
-                }
-            };
-            _session.Submit(FlowFieldRegressionFixture.Request());
-            _session.Pump();
-            Assert.That(interrupted, Is.True);
-            Assert.That(publications, Is.Zero, "An interrupted publication must not emit its remaining event.");
-            Assert.That(_session.Revision, Is.Zero);
-            if (transition == "restart")
-            {
-                FinishGoal(GoalC);
-                Assert.That(publications, Is.EqualTo(1));
-            }
-        }
-
-        [TestCase(false)]
-        [TestCase(true)]
-        public void PublicationSubscriberCannotRecursivelyPumpTheNextRequest(bool fromReadyState)
-        {
-            bool submitted = false;
-            bool nestedPump = true;
-            int publications = 0;
-            Action submit = () =>
-            {
-                if (submitted) return;
-                submitted = true;
-                _session.Submit(FlowFieldRegressionFixture.Request(GoalC));
-                nestedPump = _session.Pump();
-            };
-            _session.StateChanged += state => { if (fromReadyState && state == FlowFieldRuntimeState.Ready) submit(); };
-            _session.FieldCommitted += () => { publications++; if (!fromReadyState) submit(); };
-            _session.Submit(FlowFieldRegressionFixture.Request());
-            _session.Pump();
-            Assert.That(submitted, Is.True);
-            Assert.That(nestedPump, Is.False);
-            Assert.That(_backend.Calls, Is.Empty);
-            Assert.That(publications, Is.EqualTo(1));
-            FinishGoal(GoalC);
-            Assert.That(publications, Is.EqualTo(2));
         }
 
         [TestCase(false)]
@@ -249,29 +148,6 @@ namespace Common.FlowField.Tests
             AssertGoal(GoalC);
             Assert.That(_session.Sample(position).Direction, Is.EqualTo(expectedDirection),
                 "Final-only composition must retain the retry's navigation, even after late solver writes.");
-        }
-
-        [Test]
-        public void AsyncPublicationRestartDefersItsNestedPump()
-        {
-            bool restarted = false;
-            bool nestedPump = true;
-            _session.FieldCommitted += () =>
-            {
-                if (restarted) return;
-                restarted = true;
-                _session.Release();
-                Initialize();
-                _session.Submit(FlowFieldRegressionFixture.Request(GoalC));
-                nestedPump = _session.Pump();
-            };
-            _session.Submit(FlowFieldRegressionFixture.Request(GoalA));
-            _session.Pump();
-            _backend.Complete(0);
-            Assert.That(restarted, Is.True);
-            Assert.That(nestedPump, Is.False);
-            Assert.That(_backend.Calls.Count, Is.EqualTo(1));
-            FinishGoal(GoalC);
         }
 
         [Test]

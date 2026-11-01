@@ -19,13 +19,14 @@ namespace Common.FlowField
         [System.NonSerialized] private int _revision;
         [System.NonSerialized] private bool _validationSnapshotInitialized;
         [System.NonSerialized] private bool _isInitialized;
-        [System.NonSerialized] private bool _isChanging;
         [System.NonSerialized] private Exception _fault;
 
         public FlowFieldManager FlowFieldManager => _flowFieldManager;
         public Collider InfluenceCollider => _influenceCollider;
         public int Priority => _priority;
         public int Revision => _revision;
+        public FlowFieldModifierObservation Observe()
+            => new FlowFieldModifierObservation(_influenceCollider, _priority, _revision);
         public bool IsInitialized => _isInitialized;
         public bool IsFaulted => _fault != null;
 
@@ -119,15 +120,12 @@ namespace Common.FlowField
             if (_flowFieldManager == manager && _registeredManager == manager)
                 return;
 
-            if (_isChanging)
-                throw new InvalidOperationException("Modifier configuration cannot be changed reentrantly.");
 
             FlowFieldManager previousManager = _flowFieldManager;
             FlowFieldManager previousRegistered = _registeredManager;
             if (Application.isPlaying && isActiveAndEnabled && manager.IsFaulted)
                 throw new InvalidOperationException("Cannot assign a faulted FlowFieldManager.");
 
-            _isChanging = true;
             bool registeredWithCandidate = false;
             try
             {
@@ -168,10 +166,6 @@ namespace Common.FlowField
                 _registeredManager = previousRegistered;
                 throw;
             }
-            finally
-            {
-                _isChanging = false;
-            }
         }
 
         public void SetInfluenceCollider(Collider influenceCollider)
@@ -187,11 +181,8 @@ namespace Common.FlowField
                 throw new InvalidOperationException("Modifier must be registered before changing its collider.");
 
             ValidateInfluenceCollider(influenceCollider);
-            if (_isChanging)
-                throw new InvalidOperationException("Modifier configuration cannot be changed reentrantly.");
             Collider previous = _influenceCollider;
             int previousRevision = _revision;
-            _isChanging = true;
             try
             {
                 _influenceCollider = influenceCollider;
@@ -205,10 +196,6 @@ namespace Common.FlowField
                 _revision = previousRevision;
                 throw;
             }
-            finally
-            {
-                _isChanging = false;
-            }
         }
 
         public void SetPriority(int priority)
@@ -221,11 +208,8 @@ namespace Common.FlowField
                 && !CanChangeConfigurationWhilePlaying())
                 throw new InvalidOperationException("Modifier must be registered before changing its priority.");
 
-            if (_isChanging)
-                throw new InvalidOperationException("Modifier configuration cannot be changed reentrantly.");
             int previous = _priority;
             int previousRevision = _revision;
-            _isChanging = true;
             try
             {
                 _priority = priority;
@@ -238,10 +222,6 @@ namespace Common.FlowField
                 _priority = previous;
                 _revision = previousRevision;
                 throw;
-            }
-            finally
-            {
-                _isChanging = false;
             }
         }
 
@@ -258,8 +238,6 @@ namespace Common.FlowField
                 && !CanChangeConfigurationWhilePlaying())
                 throw new InvalidOperationException("Modifier is not registered with a FlowFieldManager.");
 
-            if (_isChanging)
-                throw new InvalidOperationException("Modifier configuration cannot be changed reentrantly.");
             int previousRevision = _revision;
             IncrementRevision();
             if (Application.isPlaying && isActiveAndEnabled && _registeredManager != null)
