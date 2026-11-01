@@ -69,30 +69,44 @@ namespace Common.FlowField
         // operation has finished. The mode-specific sessions keep their
         // different area-cache and rebuild policies behind the Now methods.
         internal bool RegisterModifierCommand(IFlowFieldVectorModifier modifier)
-            => Boundary.TryDefer(() => RunDeferred(() => RegisterModifierNow(modifier), "Modifier"))
-                || RegisterModifierNow(modifier);
+            => Boundary.IsInUserCode ? DeferRegisterModifier(modifier) : RegisterModifierNow(modifier);
 
         internal bool UnregisterModifierCommand(IFlowFieldVectorModifier modifier)
-            => Boundary.TryDefer(() => RunDeferred(() => UnregisterModifierNow(modifier)))
-                || UnregisterModifierNow(modifier);
+            => Boundary.IsInUserCode ? DeferUnregisterModifier(modifier) : UnregisterModifierNow(modifier);
 
         internal void NotifyModifierChangedCommand(IFlowFieldVectorModifier modifier, FlowFieldModifierChange change)
         {
-            if (!Boundary.TryDefer(() => RunDeferred(() =>
-                {
-                    NotifyModifierChangedNow(modifier, change);
-                    return true;
-                })))
+            if (Boundary.IsInUserCode)
+                DeferNotifyModifierChanged(modifier, change);
+            else
                 NotifyModifierChangedNow(modifier, change);
         }
 
         internal bool RegisterObstacleCommand(Collider collider)
-            => Boundary.TryDefer(() => RunDeferred(() => RegisterObstacleNow(collider), "장애물"))
-                || RegisterObstacleNow(collider);
+            => Boundary.IsInUserCode ? DeferRegisterObstacle(collider) : RegisterObstacleNow(collider);
 
         internal bool UnregisterObstacleCommand(Collider collider)
-            => Boundary.TryDefer(() => RunDeferred(() => UnregisterObstacleNow(collider)))
-                || UnregisterObstacleNow(collider);
+            => Boundary.IsInUserCode ? DeferUnregisterObstacle(collider) : UnregisterObstacleNow(collider);
+
+        // Kept apart so only a deferred call allocates the closure.
+        private bool DeferRegisterModifier(IFlowFieldVectorModifier modifier)
+            => Boundary.TryDefer(() => RunDeferred(() => RegisterModifierNow(modifier), "Modifier"));
+
+        private bool DeferUnregisterModifier(IFlowFieldVectorModifier modifier)
+            => Boundary.TryDefer(() => RunDeferred(() => UnregisterModifierNow(modifier)));
+
+        private void DeferNotifyModifierChanged(IFlowFieldVectorModifier modifier, FlowFieldModifierChange change)
+            => Boundary.TryDefer(() => RunDeferred(() =>
+            {
+                NotifyModifierChangedNow(modifier, change);
+                return true;
+            }));
+
+        private bool DeferRegisterObstacle(Collider collider)
+            => Boundary.TryDefer(() => RunDeferred(() => RegisterObstacleNow(collider), "장애물"));
+
+        private bool DeferUnregisterObstacle(Collider collider)
+            => Boundary.TryDefer(() => RunDeferred(() => UnregisterObstacleNow(collider)));
 
         // The session may have stopped by the time a deferred command runs. Stopping
         // already cleared what a removal would have changed, but a registration

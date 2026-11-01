@@ -36,7 +36,7 @@ namespace Common.FlowField.Tests
 
         [Test]
         public void DirtyInputAfterCancellationUsesTheLatestAcceptedRequest(
-            [Values("cancel", "suspend", "fault")] string transition,
+            [Values("suspend", "fault")] string transition,
             [Values("obstacle", "modifier")] string trigger,
             [Values(false, true)] bool replaceGrid)
         {
@@ -47,8 +47,7 @@ namespace Common.FlowField.Tests
                 : Grid;
             Vector3 goal = latestGrid.Origin + new Vector3(0.5f, 2.5f, 2.5f);
             _session.Submit(Request(latestGrid, goal));
-            if (transition == "cancel") _session.Cancel();
-            else if (transition == "suspend") _session.Suspend();
+            if (transition == "suspend") _session.Suspend();
             else _session.ReportFault(new InvalidOperationException("Expected request cancellation"));
             Assert.That(_session.HasPendingRequest, Is.False);
             Assert.That(_session.TryGetLatestRequestedInput(out var latest), Is.True);

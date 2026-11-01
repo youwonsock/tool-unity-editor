@@ -355,7 +355,7 @@ Surface2D의 X·Z 셀 수는 `floor(axisLength / CellSize + 0.5)`로 계산하�
 
 ### 검증 기록
 
-Unity 2023.2.20f1·macOS·Metal(Apple M4 Pro)에서 **회귀 테스트 415개가 모두 통과**했습니다(성능 프로브 12개 제외). Windows·Direct3D 11(AMD Radeon RX 9070)의 마지막 기록은 이번 수정 이전의 466개 통과입니다. 저장된 샘플 씬 통합 2개, PlayMode에 진입하는 Manager 통합을 포함합니다. Surface·Volume의 샘플 게시, 재진입·취소·재활성화, 장애물 안전성, Modifier 합성, 베이크 검증·저장 실패 경계와 직렬화 참조를 확인합니다.
+Unity 2023.2.20f1·macOS·Metal(Apple M4 Pro)에서 **회귀 테스트 411개가 모두 통과**했습니다(성능 프로브 12개 제외). Windows·Direct3D 11(AMD Radeon RX 9070)의 마지막 기록은 이번 수정 이전의 466개 통과입니다. 저장된 샘플 씬 통합 2개, PlayMode에 진입하는 Manager 통합을 포함합니다. Surface·Volume의 샘플 게시, 재진입·취소·재활성화, 장애물 안전성, Modifier 합성, 베이크 검증·저장 실패 경계와 직렬화 참조를 확인합니다.
 
 리팩터링 안전망으로 다음 검사가 함께 실행됩니다.
 
@@ -370,7 +370,7 @@ Unity.exe -batchmode -projectPath <ToyProject> -runTests -testPlatform EditMode 
   -assemblyNames Common.FlowField.Tests -testResults <results.xml> -logFile <unity.log>
 ```
 
-성능 프로브(`FlowFieldPerformanceProbes`, `Performance` 카테고리)는 일반 실행에서 건너뜁니다. 환경 변수 `FLOWFIELD_PERF=1`을 설정하고 `-testCategory Performance`로 실행하면 결과를 `Logs/FlowFieldPerformance/probes.csv`에 추가합니다. 단계별 변경과 결정은 [RefactoringNotes.md](Docs/RefactoringNotes.md)에, 현재 상태와 남은 과제는 [StatusAndBacklog.md](Docs/StatusAndBacklog.md)에 기록합니다. `Logs/`는 Git에서 제외되므로 새 체크아웃에서는 다시 실행해 생성합니다.
+성능 프로브(`FlowFieldPerformanceProbes`, `Performance` 카테고리)는 일반 실행에서 건너뜁니다. 환경 변수 `FLOWFIELD_PERF=1`을 설정하고 `-testCategory Performance`로 실행하면 결과를 `Logs/FlowFieldPerformance/probes.csv`에 추가합니다. 단계별 변경과 결정은 [RefactoringNotes.md](Docs/RefactoringNotes.md)에 기록합니다. `Logs/`는 Git에서 제외되므로 새 체크아웃에서는 다시 실행해 생성합니다.
 
 | 측정(100³ Volume·장애물 40개, Managed) | 개선 전 | Burst 전환 전 |
 | --- | ---: | ---: |
@@ -379,10 +379,48 @@ Unity.exe -batchmode -projectPath <ToyProject> -runTests -testPlatform EditMode 
 | 등록 장애물 1개 이동 후 재빌드 | 31.3초, 관리 힙 +61MiB | 6.0초, 관리 힙 +52.5MiB |
 | Volume 베이크 Asset(20×12×20) | 453,863바이트 | 106,568바이트 |
 
-측정은 한 기기의 Editor 배치 실행 기준이며 실행마다 20~30% 정도 달라질 수 있습니다. 위 표와 Surface 316×316 재빌드 약 1.1~1.3초는 Windows 기록이며, Surface 재빌드는 Topology 재사용 수정 후 Windows에서 다시 재지 않았습니다. 이 표는 Burst 전환 이전의 Managed 기록입니다. 현재 수치는 Mono Mac Player 기준으로 [StatusAndBacklog.md](Docs/StatusAndBacklog.md#player-기준선-2026-11-01)에 있습니다: Volume 첫 빌드 2.3~3.7초, Goal 변경 0.10~0.14초, Modifier 값 변경 0.25~0.29초, Surface Goal 변경 64~115ms.
+측정은 한 기기의 Editor 배치 실행 기준이며 실행마다 20~30% 정도 달라질 수 있습니다. 위 표와 Surface 316×316 재빌드 약 1.1~1.3초는 Windows 기록이며, Surface 재빌드는 Topology 재사용 수정 후 Windows에서 다시 재지 않았습니다. 이 표는 Burst 전환 이전의 Managed 기록입니다. 현재 수치는 다음 표를 봅니다.
+
+### Player 측정값
+
+`Tools/run-player-probe.sh`로 Mono arm64 Mac Player(Apple M4 Pro, Metal, 60fps 목표)에서 측정했습니다. 장면은 Surface 316×316 벽 40개, Volume 100³ 장애물 40개입니다. 다른 작업이 함께 돌던 PC라 같은 시나리오도 실행마다 2배까지 달라질 수 있습니다.
+
+| 시나리오 | 측정값 |
+| --- | --- |
+| Surface Goal 변경, 게시까지 | 64~115ms |
+| Surface 장애물 이동, 게시까지 | 98~276ms |
+| Surface Goal 초당 8셀 이동, 초당 게시 | 7.9~9.0회 |
+| Volume 첫 빌드, 게시까지 / 가장 긴 프레임 | 2.3~3.7초 / 20ms |
+| Volume Goal 변경, 게시까지 / 가장 긴 프레임 | 0.10~0.14초 / 17~22ms |
+| Volume 장애물 이동, 게시까지 | 0.2초 |
+| Volume Modifier 값 변경, 게시까지 | 0.25~0.29초 |
+| Volume Goal 초당 8셀 이동, 초당 게시 / 10초간 GC / 가장 긴 프레임 | 9.1~9.5회 / 0회 / 18~19ms |
+| 풀이 중 Release | 2ms 미만 |
+
+메인 스레드에서 한 번에 끝나는 구간의 예산은 2ms이며, 다음 구간은 이를 넘습니다.
+
+| 시나리오 | 최장 구간 | 내용 |
+| --- | --- | --- |
+| Surface 첫 빌드 | 115~120ms | 표면 Raycast 전체. 한 스냅샷이 되도록 한 프레임에 실행 |
+| Surface 장애물 이동 | 12~15ms | 장애물 Physics 조회와 탈출 방향. 같은 이유로 나누지 않음 |
+| Surface Modifier 등록 | 7ms | 영향 영역 Physics 조회 |
+| Surface Goal 변경 | 2.4~3.7ms | 한 덩어리로 끝나는 합성 조각과 게시 |
+| Volume 전부 | 2.3~5.1ms | 장애물과 Modifier를 64셀씩 나눔 |
+
+### 확인하지 않은 범위
+
+다음은 실행해 확인하지 않았습니다.
+
+- Windows·Direct3D 11 전체 테스트. 마지막 기록은 Burst 전환 이전의 466개 통과입니다.
+- IL2CPP 실행. Android ARM64 APK 빌드까지만 확인했습니다.
+- 다른 하드웨어에서의 성능. GPU 경로 제거는 이 Mac의 측정만 근거로 판단했습니다.
+- 우클릭을 유지한 채 조작하는 RMB+WASD 자유 카메라, Shift 가속, Escape 해제, UI 위 우클릭.
+- 구조 개편 후의 장시간 군중 이동.
+
+### 지원 범위
 
 - 현재 씬 2개·Prefab 2개·v6 베이크 2개와 기존 GUID·직렬화 값은 유지합니다. 구버전 API 래퍼·직렬화 별칭·변환 전용 코드나 에셋은 두지 않습니다.
 - BFS는 동일 비용의 격자 이동 횟수를 최소화합니다. 속도 Modifier는 경로 비용을 바꾸지 않으며 Agent 간 충돌 회피는 이동 시스템의 책임입니다.
 - Volume의 2ms는 협력 CPU 예산입니다. Physics·Modifier 호출 한 번이나 할당이 이를 초과할 수 있으며 전체 빌드 시간의 상한은 아닙니다. 워커 스레드의 풀이 시간은 이 예산에 들지 않습니다.
 - Surface 런타임·StaticBaked 이미지는 현재 HUD로 다시 캡처했고, 나머지 기능 이미지는 기존 캡처입니다. 회귀 실행은 실제 포인터 조작·GUI 렌더링·장시간 군중 이동을 포함하지 않습니다. Surface 샘플의 실제 포인터 조작, 두 샘플의 실제 키 입력, 군중 1000개 3분 이동은 Editor에서 별도로 확인했습니다. 군중 이동은 2026-10-31 기록으로, 그 뒤의 Burst 전환과 구조 개편 후에는 다시 돌리지 않았습니다. RMB+WASD 자유 카메라는 우클릭을 누른 채 유지하는 입력을 만들 수 없어, 버튼 번호만 왼쪽으로 잠시 바꿔 이동·회전·해제를 확인하고 실제 우클릭 입력은 따로 확인했습니다. Mono Mac Player는 `Tools/run-player-probe.sh`로 실행해 확인했고, IL2CPP는 Android ARM64 APK 빌드까지만 확인했습니다.
-- macOS 입력 소스가 한글이면 샘플의 글자 키가 `Input.GetKeyDown`에 전달되지 않습니다(M·R·G·O로 확인). Space와 숫자 키는 동작합니다. 샘플을 조작할 때는 영문 입력 소스로 바꿉니다.
+- macOS 입력 소스가 한글이면 Editor에서 샘플의 글자 키가 `Input.GetKeyDown`에 전달되지 않습니다(M·R·G·O로 확인). Space와 숫자 키는 동작하고, `Input.imeCompositionMode`를 꺼도 달라지지 않습니다. 샘플을 조작할 때는 영문 입력 소스로 바꿉니다.

@@ -567,14 +567,6 @@ namespace Common.FlowField
             SetLifecycle(FlowFieldSessionLifecycle.Released);
             MarkBaseDisposed();
         }
-
-        internal void Cancel()
-        {
-            if (Disposed)
-                return;
-            CancelCurrentBuild();
-        }
-
     }
 
 }
