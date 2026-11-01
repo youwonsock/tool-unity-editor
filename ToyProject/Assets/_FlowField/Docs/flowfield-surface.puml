@@ -1,43 +1,38 @@
 @startuml flowfield-surface
 skinparam shadowing false
-skinparam defaultFontName SansSerif
-skinparam defaultFontSize 14
+skinparam defaultFontName "Apple SD Gothic Neo"
+skinparam defaultFontSize 15
+skinparam ArrowColor #496A88
+skinparam Padding 6
 skinparam sequenceMessageAlign center
 skinparam ParticipantPadding 10
-skinparam BoxPadding 6
 hide footbox
-title Surface2D - request, composition and publication
+title Surface2D 빌드와 게시
 
 participant "Manager" as M
+participant "Scheduler" as Q
 participant "Session" as S
-participant "Surface / base\nservices" as B
-participant "Solve backend\n(worker Burst job)" as G
-participant "ModifierRegistry\n/ ModifierPipeline" as F
+participant "BaseStage" as B
+participant "풀이 Job\n(워커 스레드)" as J
+participant "ComposeStage" as C
 participant "FieldStore" as P
 
-M -> S : Submit latest request
-note over M,S : Submit records input; it does not enter a nested build.
-M -> S : LateUpdate: observe and Submit
-note over M,S : BuildDriver.LateUpdate then pumps the session\non the shared scheduler budget.
-S -> B : Prepare or reuse immutable Surface
+M -> S : LateUpdate: 입력 관측, Submit
+Q -> S : PumpInternal(예산)
+note over Q,S : 제출된 요청만 빌드한다
 alt RuntimeDynamic
-  S -> B : Prepare obstacles, topology and Goal
-  S -> F : Update dirty influence areas\nand compose staging as required
-  opt Active Goal and navigation changed
-    S -> G : Start BFS with captured input
-    G --> S : Completion found by the next frame's poll
-    S -> F : Recompose with current accepted final inputs
+  S -> B : 표면·장애물·Goal 준비\n(Physics는 한 프레임에)
+  opt 내비게이션이 바뀜
+    S -> J : BFS 시작
+    J --> S : 다음 Pump에서 완료 확인
   end
 else StaticBaked
-  S -> B : Load validated v6 navigation snapshot
-  S -> F : Update dirty areas and compose final values
+  S -> B : 검증한 v6 내비게이션 로드
 end
-note over S,F : User code runs inside the execution boundary: it cannot start other work,\nand events are queued until the outermost operation ends.
-S -> P : Commit complete arrays, Surface and resolved Goal
-P --> S : Effective result changed?
-S --> M : FieldChanged when publication changes
-M -> S : Provider.TrySample(position)
-S -> P : Read committed final values
-note over S,P : Session also applies current obstacle / escape / topology safety.\nFinal-only changes reuse navigation and skip an unnecessary BFS.
-S --> M : Sample or stopped / unavailable result
+S -> C : Modifier 합성 (프레임에 나눔)
+S -> P : 완성된 결과 게시
+S --> M : FieldChanged (작업이 끝난 뒤)
+M -> S : TrySample(위치)
+S -> P : 게시 값 읽기
+note over S,P : 최신 장애물·탈출 안전성 검사를 더한다
 @enduml
