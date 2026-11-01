@@ -263,7 +263,7 @@ namespace Common.TransformPath.Tests
             for (int i = 0; i < frames; i++)
             {
                 _driver.Tick(DeltaTime, DeltaTime, _frame++);
-                Assert.That(_driver.LastException, Is.Null);
+                Assert.That(_driver.Faults, Is.Empty);
                 foreach (PathFollower follower in followers)
                 {
                     Vector3 position = follower.transform.position;

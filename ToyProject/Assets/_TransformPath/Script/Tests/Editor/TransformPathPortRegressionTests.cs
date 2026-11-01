@@ -38,7 +38,7 @@ namespace Common.TransformPath.Tests
             driver.Register(manager);
             driver.Tick(0.2f, 0.2f, 0);
 
-            Assert.That(driver.LastException, Is.Null);
+            Assert.That(driver.Faults, Is.Empty);
             Assert.That(queued.GlobalNormalizedTime, Is.GreaterThan(0f));
             Assert.That(queued.IsRegistered, Is.True);
         }

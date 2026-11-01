@@ -125,7 +125,7 @@ namespace Common.TransformPath.Tests
             driver.Register(earlier);
             driver.Tick(0.1f);
             Assert.That(later.TickCount, Is.Zero);
-            Assert.That(driver.LastException, Is.Null);
+            Assert.That(driver.Faults, Is.Empty);
         }
 
         [Test]
@@ -192,7 +192,7 @@ namespace Common.TransformPath.Tests
             driver.Register(failing);
             driver.Register(later);
             driver.Tick(0.1f);
-            Assert.That(driver.LastException, Is.SameAs(failure));
+            Assert.That(driver.Faults[0], Is.SameAs(failure));
             Assert.That(failing.FaultPlaybackId, Is.EqualTo(1UL));
             Assert.That(later.TickCount, Is.EqualTo(1));
         }

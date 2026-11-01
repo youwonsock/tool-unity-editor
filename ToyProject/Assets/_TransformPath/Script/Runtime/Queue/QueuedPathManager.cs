@@ -680,7 +680,7 @@ namespace Common.TransformPath
             QueueEntry removedEntry = _entries[index];
             IQueuedPathAgent agent = removedEntry.Agent;
             // GetAgent exposes queue order between driver frames as well. Keep the
-            // remaining order stable when a sale transition removes the head.
+            // remaining order stable when the head leaves.
             _entries.RemoveAt(index);
             _indices.Remove(agent);
             for (int i = index; i < _entries.Count; i++)

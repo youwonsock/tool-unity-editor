@@ -53,10 +53,8 @@ namespace Common.TransformPath
                 Time.deltaTime,
                 Time.unscaledDeltaTime,
                 Time.frameCount);
-            if (_driver.LastException != null)
-            {
-                Debug.LogException(_driver.LastException, this);
-            }
+            for (int i = 0; i < _driver.Faults.Count; i++)
+                Debug.LogException(_driver.Faults[i], this);
         }
 
         private void OnDestroy()

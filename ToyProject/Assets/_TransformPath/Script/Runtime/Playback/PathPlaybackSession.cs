@@ -49,6 +49,14 @@ namespace Common.TransformPath
 
         #region Public Methods
 
+        // Playback that reaches the start of a path or segment by itself still
+        // has every event of it ahead, including one exactly at the start.
+        public void RestartEventCursor()
+        {
+            NextEventIndex = 0;
+        }
+
+        // A Seek skips the target position and everything before it.
         public void ResetEventCursor(IPathEventSource source, float progress)
         {
             NextEventIndex = 0;
