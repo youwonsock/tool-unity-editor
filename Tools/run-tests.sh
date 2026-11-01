@@ -1,15 +1,11 @@
 #!/usr/bin/env bash
-# Runs the Unity tests against a snapshot of the current working tree inside a
-# separate Git worktree, so an open Unity Editor keeps its project lock.
-# Ignored files are left out, which also proves a fresh checkout is sufficient.
+# Runs the Unity tests against a snapshot of the current working tree.
 #
 #   Tools/run-tests.sh                                  EditMode, PlayMode and Python
 #   Tools/run-tests.sh --platform EditMode --filter 'Regex|Name'
 #   FLOWFIELD_PERF=1 Tools/run-tests.sh --platform EditMode --filter FlowFieldPerformanceProbes
 #
-# UNITY_PATH           Unity executable (default: the Hub install of the project version)
-# UNITY_TEST_WORKTREE  Reused test worktree (default: under TMPDIR, keeps its Library)
-# UNITY_TEST_RESULTS   Folder for XML results and logs (default: <worktree>-results)
+# See Tools/snapshot-worktree.sh for the environment variables.
 #
 # TransformPathEditorUiTests need a graphical Editor and are skipped here. Run
 # them from the Test Runner window of the open Editor.
@@ -25,24 +21,7 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-root=$(git rev-parse --show-toplevel)
-version=$(sed -n 's/^m_EditorVersion: //p' "$root/ToyProject/ProjectSettings/ProjectVersion.txt")
-unity=${UNITY_PATH:-/Applications/Unity/Hub/Editor/$version/Unity.app/Contents/MacOS/Unity}
-worktree=${UNITY_TEST_WORKTREE:-${TMPDIR:-/tmp}/tool-unity-editor-tests}
-results=${UNITY_TEST_RESULTS:-$worktree-results}
-mkdir -p "$results"
-
-[ -e "$worktree/.git" ] || git -C "$root" worktree add -q --detach "$worktree" HEAD
-
-# A temporary index captures tracked edits and new files without touching the
-# real index, the stash or any branch.
-index=$(mktemp "${TMPDIR:-/tmp}/run-tests-index.XXXXXX")
-rm -f "$index"
-trap 'rm -f "$index"' EXIT
-GIT_INDEX_FILE=$index git -C "$root" add -A
-tree=$(GIT_INDEX_FILE=$index git -C "$root" write-tree)
-git -C "$worktree" read-tree -u --reset "$tree"
-git -C "$worktree" clean -fdq
+source "$(dirname "$0")/snapshot-worktree.sh"
 
 status=0
 
@@ -90,7 +69,8 @@ esac
 if [ "$platform" = all ] && [ -z "$filter" ]; then
     echo "== Python"
     PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
-        -s "$root/ToyProject/Assets/_OptimizeTool/Docs/Performance" -p 'test_*.py' || status=$?
+        -s "$worktree/ToyProject/Assets/_OptimizeTool/Docs/Performance" -p 'test_*.py' || status=$?
 fi
 
+git -C "$worktree" clean -fdqX -- ToyProject/Assets
 exit "$status"
