@@ -19,6 +19,20 @@ Tools/run-tests.sh
 
 현재 작업 트리의 스냅샷을 별도 Git worktree에서 실행하므로 Unity Editor를 연 채로 돌릴 수 있습니다. EditMode, PlayMode, OptimizeTool Python 테스트를 차례로 실행하며, 옵션은 스크립트 첫머리에 있습니다. 그래픽 Editor가 필요한 `TransformPathEditorUiTests`는 여기서 건너뛰므로 Editor의 Test Runner에서 실행합니다.
 
+GitHub Actions는 쓰지 않습니다. Unity 라이선스와 GPU가 있는 개발 Mac에서 push 전에 검사합니다. 저장소마다 한 번 켭니다.
+
+```bash
+git config core.hooksPath Tools/hooks
+```
+
+`pre-push` 훅은 push하는 커밋을 그대로 꺼내 전체 테스트를 실행하고, 실패하면 push를 막습니다. `ToyProject`와 `Tools`가 바뀌지 않은 push는 건너뜁니다. 작업 중인 파일은 검사에 섞이지 않으며, 급할 때는 `git push --no-verify`로 건너뜁니다.
+
+실제 Player에서의 프레임 시간과 샘플 씬 동작은 별도로 측정합니다. Player 창이 열리고, 결과는 CSV로 남습니다.
+
+```bash
+Tools/run-player-probe.sh
+```
+
 ## 시스템 문서
 
 - FlowField — [README](./ToyProject/Assets/_FlowField/README.md)

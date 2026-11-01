@@ -122,7 +122,7 @@ Editor Play Mode 확인: Surface 샘플은 장애물이 매 Editor 틱 움직이
 | 실제 플레이 | 실제 포인터로 Surface의 게이트·Next Goal 버튼을, 실제 키로 Surface의 Space·M·R·G·1·2·3·O·F와 Volume StaticBaked의 Space·R·O·G·F, RuntimeDynamic의 Space·O·R·G를 확인했다. Surface의 C는 입력을 받지만, 진단이 매 프레임 갱신되므로 눌러도 결과가 달라지지 않는다. 재조회 수정 뒤 RuntimeDynamic의 Space·O·R·G를 다시 확인했고, 두 HUD의 GPU 전환 이유는 값을 넣어 표시를 확인했다. RMB+WASD 자유 카메라는 확인하지 않았다. 결함 수정 뒤에는 키 입력 대신 공개 API로 Play Mode를 점검했다: Surface의 Goal 변경·Gate·비활성화 후 복귀, Volume StaticBaked 재로드, RuntimeDynamic의 Goal 변경·같은 셀 이동·꺼진 동안의 장애물 등록과 Modifier 연결. 경고와 오류는 없었다 | 필요할 때 카메라 조작과 실제 키 입력 재확인 |
 | GPU 경로 | 골든 해시는 Managed 고정이다. 동률 이웃이 다를 수 있어 큰 장면(64×48, 32×12×32)은 Blocked와 셀별 경로 길이를 Managed와 비교한다. Modifier 합성 결과는 비교하지 않는다. GPU 빌드 시간은 배치 실행의 프레임 대기를 포함한 수치만 있다 | 프레임 끊김은 Player 검증을 재개할 때 비교 |
 | Player 실행 | Mono arm64 Mac Player에서 위 기준선과 샘플 씬 시작을 자동으로 확인했다. 실제 입력 조작과 IL2CPP 실행은 확인하지 않았다 | IL2CPP 빌드 시도 |
-| 자동 실행 | 저장소에 CI 설정이 없다. Unity 라이선스에 로그인한 PC에서 수동으로 실행한다 | 자체 호스트 러너 등 검토 |
+| 자동 실행 | 저장소의 `pre-push` 훅이 push하는 커밋을 검사한다. 저장소마다 한 번 켜야 하고 `--no-verify`로 건너뛸 수 있다. 공개 저장소라 외부 PR 코드가 PC에서 실행될 수 있는 자체 호스트 러너는 쓰지 않는다 | 없음 |
 
 ### 성능
 
