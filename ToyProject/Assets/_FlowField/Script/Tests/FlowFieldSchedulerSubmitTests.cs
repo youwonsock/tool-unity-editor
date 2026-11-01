@@ -141,6 +141,22 @@ namespace Common.FlowField.Tests
         }
 
         [Test]
+        public void InputAfterASubmitWaitsForTheNextOne()
+        {
+            Build(GoalA);
+            _session.Submit(FlowFieldRegressionFixture.Request(GoalB));
+            Pump();
+            int solves = _backend.Calls.Count;
+            _session.Submit(FlowFieldRegressionFixture.Request(GoalB));
+            _session.MarkDirty(FlowFieldDirtyFlags.Goal, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
+
+            _backend.Complete(solves - 1);
+            Pump();
+
+            Assert.That(_session.DirtyFlags & FlowFieldDirtyFlags.Goal, Is.Not.EqualTo(FlowFieldDirtyFlags.None));
+        }
+
+        [Test]
         public void DirectPumpIsNotHeld()
         {
             Build(GoalA);

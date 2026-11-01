@@ -29,6 +29,7 @@
 | 샘플 표시 환경 | Universal Render Pipeline 16.0.6, UGUI (방향장 런타임과 분리) |
 | 런타임 어셈블리 | `Common.FlowField.Core`, `Common.FlowField.Runtime` |
 | 에디터·샘플 어셈블리 | `Common.FlowField.Editor`, `Common.FlowField.Samples` |
+| 측정 어셈블리 | `Common.FlowField.PlayerProbe` (Editor와 측정 빌드 전용) |
 | 회귀 테스트 어셈블리 | `Common.FlowField.Tests` (Editor 전용) |
 
 ## 프로젝트 요약
@@ -243,7 +244,7 @@ Manager도 함께 Fault 상태라면 Modifier를 비활성화·Release해 설정
 - **Surface 조회**: 일반 샘플과 해석된 Goal 메타데이터는 항상 게시 FieldStore에서 읽습니다. Modifier 합성 중의 작업 배열은 노출하지 않습니다. 장애물·탈출·연결 안전성 검사는 최신 관측을 반영해 이동을 제한할 수 있습니다. 요청 Goal과 게시 결과의 해석된 Goal은 별도 의미를 유지합니다.
 - **Volume 부분 재계산**: 입력이 같으면 Modifier 변경은 게시된 내비게이션에 Modifier만 다시 합성하고, Goal만 바뀌면 장애물 결과와 Topology를 재사용합니다. 등록·스윕으로 추적하지 않는 Collider는 다음 전체 빌드에서 반영되므로, 이런 Collider가 바뀌면 `RequestRebuild()`나 `NotifyCellsDirty()`를 호출합니다. Volume의 이 두 호출은 Goal이 함께 바뀌어도 장애물을 다시 조회합니다. `SetGoal()` 뒤에 `RequestRebuild()`를 덧붙이면 Goal 재사용 효과를 잃으므로, Goal만 바꿀 때는 `SetGoal()`만 호출합니다. Goal이 같은 셀 안에서 움직이면 결과가 같으므로 빌드하지 않습니다. 이때 Revision은 그대로이고 `FieldChanged`도 발생하지 않으며, `FlowFieldFieldInfo`의 요청 Goal만 최신 값으로 바뀝니다.
 - **Revision과 참조**: Surface Revision은 셀 데이터·Goal의 실질 변경에 따라 증가합니다. 같은 내용의 Snapshot 교체는 Revision 증가 없이 게시 Grid·Surface 참조를 갱신할 수 있습니다. Volume Revision은 완료 결과 교체 정책을 따릅니다.
-- **움직이는 장애물**: BFS나 Volume 빌드 중 장애물만 바뀌면 그 결과를 게시하고 재빌드를 예약합니다. 조회는 최신 장애물 상태를 다시 검사합니다. Volume은 이미 반영한 불확실 영역을 게시 때 지우므로, 빌드 중 장애물이 지나간 영역만 다음 게시까지 정지합니다. Surface는 Grid가 바뀌었거나 Goal이 사라진 결과만 거부합니다. Goal이 바뀐 결과는 게시한 뒤 최신 Goal을 다시 계산하므로 Goal이 풀이보다 빨리 움직여도 게시가 멈추지 않습니다. 이때 해석된 Goal은 요청 Goal보다 잠시 뒤처질 수 있습니다.
+- **움직이는 장애물**: BFS나 Volume 빌드 중 장애물만 바뀌면 그 결과를 게시하고 재빌드를 예약합니다. 조회는 최신 장애물 상태를 다시 검사합니다. Volume은 이미 반영한 불확실 영역을 게시 때 지우므로, 빌드 중 장애물이 지나간 영역만 다음 게시까지 정지합니다. Surface는 Grid나 설정이 바뀌었거나 Goal이 사라진 풀이·합성 결과만 거부합니다. Goal이 바뀐 결과는 게시한 뒤 최신 Goal을 다시 계산하므로 Goal이 풀이보다 빨리 움직여도 게시가 멈추지 않습니다. 이때 해석된 Goal은 요청 Goal보다 잠시 뒤처질 수 있습니다.
 - **재진입 없음**: 이벤트 핸들러는 작업이 끝난 뒤 실행하고, Modifier 코드에서는 다른 작업을 시작할 수 없습니다. 작업 코드는 외부 호출 뒤에 수명을 다시 확인하지 않습니다. 대기 중인 이벤트만 만들어진 수명 세대를 비교하고, `Released`는 항상 전달합니다.
 - **활성·실패 처리**: `OnDisable`은 실행을 중단하고 재활성화는 현재 수명의 재계산을 요청합니다. Manager·Session Fault는 명시적인 `RequestRebuild()`로 재시도하며 Modifier 자체 Fault는 위의 별도 복구 절차를 따릅니다. 실행할 수 없는 Volume의 대기 요청은 보관하되 Scheduler에서 예산을 반복 소비하지 않습니다. 꺼진 Manager에 들어온 장애물 입력도 재활성화 때까지 빌드하지 않고, 꺼진 동안 켠 Modifier는 재활성화 때 연결합니다. 설정이 stale이어도 Modifier와 동적 장애물의 등록 해제는 할 수 있습니다.
 - **정적 입력**: 두 베이크 형식 모두 v6만 허용합니다. 다른 형식의 자동 변환·마이그레이션은 제공하지 않으므로 이전 형식 Asset은 ReBake해야 합니다. Volume3D v6은 방향·속도를 저장하지 않고 NextCell과 베이크 시점의 Default Direction에서, 탈출 방향은 셀당 1바이트의 면 인덱스에서 로드 시 재구성합니다. Surface2D v6은 높이·법선·탈출·Goal 방향을 `byte[]`로 묶어 비트 그대로 저장합니다. StaticBaked 내비게이션은 고정하며 Default Direction·Modifier는 런타임에 합성합니다. 영향 범위 밖 셀은 두 모드 모두 Manager의 현재 Default Direction을 따릅니다.
@@ -354,7 +355,7 @@ Surface2D의 X·Z 셀 수는 `floor(axisLength / CellSize + 0.5)`로 계산하�
 
 ### 검증 기록
 
-Unity 2023.2.20f1·macOS·Metal(Apple M4 Pro)에서 **회귀 테스트 414개가 모두 통과**했습니다(성능 프로브 12개 제외). Windows·Direct3D 11(AMD Radeon RX 9070)의 마지막 기록은 이번 수정 이전의 466개 통과입니다. 저장된 샘플 씬 통합 2개, PlayMode에 진입하는 Manager 통합을 포함합니다. Surface·Volume의 샘플 게시, 재진입·취소·재활성화, 장애물 안전성, Modifier 합성, 베이크 검증·저장 실패 경계와 직렬화 참조를 확인합니다.
+Unity 2023.2.20f1·macOS·Metal(Apple M4 Pro)에서 **회귀 테스트 415개가 모두 통과**했습니다(성능 프로브 12개 제외). Windows·Direct3D 11(AMD Radeon RX 9070)의 마지막 기록은 이번 수정 이전의 466개 통과입니다. 저장된 샘플 씬 통합 2개, PlayMode에 진입하는 Manager 통합을 포함합니다. Surface·Volume의 샘플 게시, 재진입·취소·재활성화, 장애물 안전성, Modifier 합성, 베이크 검증·저장 실패 경계와 직렬화 참조를 확인합니다.
 
 리팩터링 안전망으로 다음 검사가 함께 실행됩니다.
 
@@ -378,7 +379,7 @@ Unity.exe -batchmode -projectPath <ToyProject> -runTests -testPlatform EditMode 
 | 등록 장애물 1개 이동 후 재빌드 | 31.3초, 관리 힙 +61MiB | 6.0초, 관리 힙 +52.5MiB |
 | Volume 베이크 Asset(20×12×20) | 453,863바이트 | 106,568바이트 |
 
-측정은 한 기기의 Editor 배치 실행 기준이며 실행마다 20~30% 정도 달라질 수 있습니다. 위 표와 Surface 316×316 재빌드 약 1.1~1.3초는 Windows 기록이며, Surface 재빌드는 Topology 재사용 수정 후 Windows에서 다시 재지 않았습니다. 이 표는 Burst 전환 이전의 Managed 기록입니다. 현재 수치는 Mono Mac Player 기준으로 [StatusAndBacklog.md](Docs/StatusAndBacklog.md#player-기준선-2026-11-01)에 있습니다: Volume 첫 빌드 2.3~3.7초, Goal 변경 0.11~0.14초, Modifier 값 변경 0.25~0.29초, Surface Goal 변경 65~115ms.
+측정은 한 기기의 Editor 배치 실행 기준이며 실행마다 20~30% 정도 달라질 수 있습니다. 위 표와 Surface 316×316 재빌드 약 1.1~1.3초는 Windows 기록이며, Surface 재빌드는 Topology 재사용 수정 후 Windows에서 다시 재지 않았습니다. 이 표는 Burst 전환 이전의 Managed 기록입니다. 현재 수치는 Mono Mac Player 기준으로 [StatusAndBacklog.md](Docs/StatusAndBacklog.md#player-기준선-2026-11-01)에 있습니다: Volume 첫 빌드 2.3~3.7초, Goal 변경 0.10~0.14초, Modifier 값 변경 0.25~0.29초, Surface Goal 변경 64~115ms.
 
 - 현재 씬 2개·Prefab 2개·v6 베이크 2개와 기존 GUID·직렬화 값은 유지합니다. 구버전 API 래퍼·직렬화 별칭·변환 전용 코드나 에셋은 두지 않습니다.
 - BFS는 동일 비용의 격자 이동 횟수를 최소화합니다. 속도 Modifier는 경로 비용을 바꾸지 않으며 Agent 간 충돌 회피는 이동 시스템의 책임입니다.
