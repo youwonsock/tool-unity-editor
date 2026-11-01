@@ -19,11 +19,7 @@ namespace Common.FlowField
         private Collider[] _registeredObstacleOverlapBuffer;
         private readonly int[] _obstacleCells = new int[CellsPerStep];
         private readonly FlowFieldVolumeCellQuery _cellQuery = new FlowFieldVolumeCellQuery();
-        // Build-only search arrays of the last committed build, reused by the
-        // next build of the same size (published arrays are never reused).
-        private int[] _spareCosts;
-        private int[] _spareQueue;
-        private bool[] _spareInfluence;
+        private readonly FlowFieldVolumeSpareArrays _spares = new FlowFieldVolumeSpareArrays();
         private readonly FlowFieldVolumeModifierRegistry _modifierRegistry = new FlowFieldVolumeModifierRegistry();
         private readonly FlowFieldVolumeSafetyState _safety = new FlowFieldVolumeSafetyState();
 
@@ -95,6 +91,8 @@ namespace Common.FlowField
                 return Mathf.Clamp01(((int)_build.Phase + Mathf.Clamp01(local)) / phaseCount);
             }
         }
+
+        internal bool HasSpareArrays => !_spares.IsEmpty;
 
         internal void Initialize(FlowFieldBakeMode bakeMode)
         {
@@ -236,7 +234,11 @@ namespace Common.FlowField
             // A recompose queries no obstacles, so it resolves no safety region.
             if (recompose)
             {
-                _build = new BuildContext(_committed, modifierSnapshots);
+                _build = new BuildContext(
+                    _committed,
+                    modifierSnapshots,
+                    FlowFieldVolumeSpareArrays.Rent(ref _spares.FinalDirections, request.Grid.CellCount),
+                    FlowFieldVolumeSpareArrays.Rent(ref _spares.FinalSpeeds, request.Grid.CellCount));
             }
             else
             {
@@ -280,27 +282,6 @@ namespace Common.FlowField
                 && _safety.UncertainRegionCount == 0
                 && _committed.Request.HasSameObstacleInputs(request)
                 && !_committed.Request.HasSameGoal(request);
-
-        /// <summary>
-        /// Takes the spare array when it has the requested size and clears it,
-        /// which leaves it in the same state as a new allocation.
-        /// </summary>
-        private static T[] RentBuildArray<T>(ref T[] spare, int count)
-        {
-            T[] array = spare;
-            spare = null;
-            if (array == null || array.Length != count)
-                return new T[count];
-            Array.Clear(array, 0, count);
-            return array;
-        }
-
-        private void ReleaseSpareBuildArrays()
-        {
-            _spareCosts = null;
-            _spareQueue = null;
-            _spareInfluence = null;
-        }
 
         private void DiscardBuild()
         {
@@ -454,7 +435,7 @@ namespace Common.FlowField
             _obstacles.Clear();
             _registeredObstacleOverlapBuffer = null;
             _cellQuery.Clear();
-            ReleaseSpareBuildArrays();
+            _spares.Clear();
             _modifierRegistry.Clear();
             SetLifecycle(FlowFieldSessionLifecycle.Released);
         }
@@ -579,7 +560,7 @@ namespace Common.FlowField
             _obstacles.Clear();
             _registeredObstacleOverlapBuffer = null;
             _cellQuery.Clear();
-            ReleaseSpareBuildArrays();
+            _spares.Clear();
             _modifierRegistry.Clear();
             _safety.ClearRegions();
             SetLifecycle(FlowFieldSessionLifecycle.Released);

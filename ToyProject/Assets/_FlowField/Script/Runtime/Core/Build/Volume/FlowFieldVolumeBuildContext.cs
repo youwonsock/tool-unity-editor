@@ -125,7 +125,9 @@ namespace Common.FlowField
         /// </summary>
         internal FlowFieldVolumeBuildContext(
             FlowFieldVolumeFieldData published,
-            FlowFieldModifierWorkItem[] modifiers)
+            FlowFieldModifierWorkItem[] modifiers,
+            Vector3[] finalDirections,
+            float[] finalSpeeds)
             : this(published.Request, modifiers)
         {
             IsModifierRecompose = true;
@@ -137,8 +139,8 @@ namespace Common.FlowField
             Speeds = published.BaseSpeeds;
             EscapeDirections = published.EscapeDirections;
             GoalIndex = published.GoalIndex;
-            FinalDirections = new Vector3[Count];
-            FinalSpeeds = new float[Count];
+            FinalDirections = finalDirections;
+            FinalSpeeds = finalSpeeds;
             Phase = FlowFieldVolumeBuildPhase.Modifiers;
         }
 

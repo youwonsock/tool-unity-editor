@@ -49,6 +49,22 @@ namespace Common.FlowField.Editor
                 throw new InvalidOperationException($"Probe Player build {report.summary.result}: {report.summary.totalErrors} errors");
         }
 
+        internal static void BuildIl2cppCheck()
+        {
+            PlayerSettings.SetScriptingBackend(BuildTargetGroup.Android, ScriptingImplementation.IL2CPP);
+            PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;
+            BuildReport report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
+            {
+                scenes = EditorBuildSettings.scenes.Where(scene => scene.enabled).Select(scene => scene.path).ToArray(),
+                locationPathName = ReadOutput(),
+                target = BuildTarget.Android,
+                targetGroup = BuildTargetGroup.Android,
+                options = BuildOptions.None,
+            });
+            if (report.summary.result != BuildResult.Succeeded)
+                throw new InvalidOperationException($"IL2CPP build {report.summary.result}: {report.summary.totalErrors} errors");
+        }
+
         // Saves a copy of a FlowField sample in its other bake mode, so the
         // Player starts that mode through the normal scene startup.
         private static string[] CreateModeVariant(string scenePath)

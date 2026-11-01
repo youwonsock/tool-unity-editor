@@ -108,30 +108,30 @@ namespace Common.FlowField
             switch (build.AllocationStage)
             {
                 case 0:
-                    build.Blocked ??= new bool[build.Count];
+                    build.Blocked ??= FlowFieldVolumeSpareArrays.Rent(ref _spares.Blocked, build.Count);
                     if (build.PublishedBlocked != null)
                         Array.Copy(build.PublishedBlocked, build.Blocked, build.Count);
                     break;
-                case 1: build.Topology ??= new uint[build.Count]; break;
-                case 2: build.GoalFlags = new FlowFieldGoalFlags[build.Count]; break;
-                case 3: build.Next = new int[build.Count]; break;
-                case 4: build.Directions = new Vector3[build.Count]; break;
-                case 5: build.Speeds = new float[build.Count]; break;
-                case 6: build.FinalDirections = new Vector3[build.Count]; break;
-                case 7: build.FinalSpeeds = new float[build.Count]; break;
-                case 8: build.EscapeDirections = new Vector3[build.Count]; break;
+                case 1: build.Topology ??= FlowFieldVolumeSpareArrays.Rent(ref _spares.Topology, build.Count); break;
+                case 2: build.GoalFlags = FlowFieldVolumeSpareArrays.Rent(ref _spares.GoalFlags, build.Count); break;
+                case 3: build.Next = FlowFieldVolumeSpareArrays.Rent(ref _spares.Next, build.Count); break;
+                case 4: build.Directions = FlowFieldVolumeSpareArrays.Rent(ref _spares.Directions, build.Count); break;
+                case 5: build.Speeds = FlowFieldVolumeSpareArrays.Rent(ref _spares.Speeds, build.Count); break;
+                case 6: build.FinalDirections = FlowFieldVolumeSpareArrays.Rent(ref _spares.FinalDirections, build.Count); break;
+                case 7: build.FinalSpeeds = FlowFieldVolumeSpareArrays.Rent(ref _spares.FinalSpeeds, build.Count); break;
+                case 8: build.EscapeDirections = FlowFieldVolumeSpareArrays.Rent(ref _spares.EscapeDirections, build.Count); break;
                 // A static bake loads its navigation and never searches.
                 case 9:
                     if (build.Request.StaticBakeData == null)
-                        build.Costs = RentBuildArray(ref _spareCosts, build.Count);
+                        build.Costs = FlowFieldVolumeSpareArrays.Rent(ref _spares.Costs, build.Count);
                     break;
                 case 10:
                     if (build.Request.StaticBakeData == null)
-                        build.Queue = RentBuildArray(ref _spareQueue, build.Count);
+                        build.Queue = FlowFieldVolumeSpareArrays.Rent(ref _spares.Queue, build.Count);
                     break;
                 case 11:
                     if (build.Request.StaticBakeData == null)
-                        build.Influence = RentBuildArray(ref _spareInfluence, build.Count);
+                        build.Influence = FlowFieldVolumeSpareArrays.Rent(ref _spares.Influence, build.Count);
                     break;
             }
 
@@ -297,6 +297,7 @@ namespace Common.FlowField
                 build.GoalIndex,
                 Interlocked.Increment(ref _nextVisualizationResultId));
 
+            _spares.Retire(_committed, next);
             _committed = next;
             Revision++;
             _committedReservationBytes = EstimateCommittedBytes(build.Count);
@@ -306,9 +307,9 @@ namespace Common.FlowField
                 // continuously moving obstacle must not keep older regions unsafe.
                 _safety.ClearObservedRegions();
                 // The published field holds none of these.
-                _spareCosts = build.Costs ?? _spareCosts;
-                _spareQueue = build.Queue ?? _spareQueue;
-                _spareInfluence = build.Influence ?? _spareInfluence;
+                _spares.Costs = build.Costs ?? _spares.Costs;
+                _spares.Queue = build.Queue ?? _spares.Queue;
+                _spares.Influence = build.Influence ?? _spares.Influence;
             }
             _build = null;
             _buildReservationBytes = 0;

@@ -74,6 +74,49 @@ namespace Common.FlowField.Tests
         }
 
         [Test]
+        public void AViewKeepsItsArraysAcrossLaterBuilds()
+        {
+            _session.Submit(Request(new Vector3(0.5f, 0.5f, 0.5f)));
+            Finish();
+            Assert.That(_session.TryGetView(out _, out bool[] blocked, out Vector3[] directions, out float[] speeds), Is.True);
+            Vector3[] directionsBefore = (Vector3[])directions.Clone();
+            float[] speedsBefore = (float[])speeds.Clone();
+
+            for (int goal = 0; goal < 4; goal++)
+            {
+                _session.Submit(Request(new Vector3(2.5f - goal % 2, 2.5f, 0.5f + goal % 3)));
+                Finish();
+            }
+
+            Assert.That(_session.TryGetView(out _, out _, out Vector3[] latest, out _), Is.True);
+            Assert.That(latest, Is.Not.SameAs(directions));
+            Assert.That(directions, Is.EqualTo(directionsBefore), "A later build wrote into arrays a view still holds.");
+            Assert.That(speeds, Is.EqualTo(speedsBefore));
+            Assert.That(blocked, Is.Not.Null);
+        }
+
+        [Test]
+        public void AReplacedFieldNobodyHoldsIsReusedByTheNextBuild()
+        {
+            _session.Submit(Request(new Vector3(0.5f, 0.5f, 0.5f)));
+            Finish();
+            Assert.That(_session.HasSpareArrays, Is.True, "The build's search arrays stay for the next one.");
+            var committed = typeof(FlowFieldVolumeSession).GetField(
+                "_committed",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            var first = (FlowFieldVolumeFieldData)committed.GetValue(_session);
+
+            _session.Submit(Request(new Vector3(2.5f, 2.5f, 0.5f)));
+            Finish();
+            _session.Submit(Request(new Vector3(0.5f, 2.5f, 2.5f)));
+            Finish();
+
+            var third = (FlowFieldVolumeFieldData)committed.GetValue(_session);
+            Assert.That(third.FinalDirections, Is.SameAs(first.FinalDirections));
+            Assert.That(third.NextCells, Is.SameAs(first.NextCells));
+        }
+
+        [Test]
         public void GoalChangeReusesObstaclesUntilAnExplicitRebuild()
         {
             _session.Submit(Request());

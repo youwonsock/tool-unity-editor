@@ -83,6 +83,7 @@ namespace Common.FlowField
             speeds = null;
             if (_committed == null)
                 return false;
+            _committed.HandedOut = true;
             grid = _committed.Grid;
             blocked = _committed.Blocked;
             directions = _committed.FinalDirections;
@@ -151,6 +152,7 @@ namespace Common.FlowField
             if (_requests.HasLatest
                 && !field.Request.HasSameGrid(_requests.Latest))
                 return false;
+            field.HandedOut = true;
             FlowFieldVolumeVisualizationSource source = new FlowFieldVolumeVisualizationSource(
                 field.Grid,
                 field.Request.WorldBounds,
