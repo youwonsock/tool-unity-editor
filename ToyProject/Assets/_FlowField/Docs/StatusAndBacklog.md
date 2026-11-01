@@ -7,7 +7,7 @@
 | 항목 | 상태 |
 | --- | --- |
 | 테스트 | macOS·Metal(Apple M4 Pro)에서 `Common.FlowField.Tests` 397개 통과, 실패 0, 성능 프로브 12개 제외. 저장소 루트의 `Tools/run-tests.sh`로 실행한다. Windows·Direct3D 11 마지막 기록은 이번 수정 이전의 466개 |
-| 베이크 | Surface·Volume 모두 v6만 허용. 마이그레이션 코드는 없다. 맞닿은 셀 판정을 바꾼 뒤 Surface Asset을 다시 베이크해 보니 막힌 셀 변경이 0개여서 Asset은 그대로 뒀다 |
+| 베이크 | Surface·Volume 모두 v6만 허용. 마이그레이션 코드는 없다. 두 모드 모두 호출 스레드에서 풀이한다. 2026-11-01 샘플 Asset을 다시 구워 보니 Volume은 내용이 같았고, Surface는 GPU로 구운 방향이 최대 6e-8 달라져(경로는 같음) 새 Asset으로 바꿨다 |
 | 공개 계약 | Provider·Controller API, Manager 직렬화 설정, 씬·Prefab의 GUID 참조 유지. `FlowFieldManager.GpuFallbackReason`, `_frontierComputeShader`, `_maxGpuWaves` 제거(2026-11-01) |
 | 성능 (100³ Volume, Managed, Windows 기록) | 전체 빌드 26~55초 → 약 6초, 2ms 예산 빌드 12,585 → 2,214프레임, 장애물 1개 이동 후 재빌드 31.3 → 6.0초 |
 
@@ -132,7 +132,7 @@ Editor Play Mode 확인: Surface 샘플은 장애물이 매 Editor 틱 움직이
 
 | 항목 | 현황 | 할 일 |
 | --- | --- | --- |
-| 베이크 에디터 | `FlowFieldBakeEditorTests`가 임시 씬에서 재베이크의 `_revision` 외 차이 없음, 입력 변경 시 Asset 유지, 대상 소유권을 검사한다. 저장 실패 복구는 주입할 방법이 없어 검사하지 않는다 | 필요할 때 저장 실패 경로 검증 |
+| 베이크 에디터 | `FlowFieldBakeEditorTests`가 임시 씬에서 재베이크의 `_revision` 외 차이 없음, 입력 변경 시 Asset 유지, 대상 소유권, 저장 실패 시 이전 Asset 유지를 검사한다. 조용히 실패한 저장은 Asset이 dirty로 남는 것으로 잡는다. 실제 디스크 오류는 주입한 실패로 대신했다 | 없음 |
 | Windows | 이번 수정은 Metal에서만 실행했다 | Windows·Direct3D 11에서 전체 테스트 재실행 |
 | 실제 플레이 | 실제 포인터로 Surface의 게이트·Next Goal 버튼을, 실제 키로 Surface의 Space·M·R·G·1·2·3·O·F와 Volume StaticBaked의 Space·R·O·G·F, RuntimeDynamic의 Space·O·R·G를 확인했다. Surface의 C는 입력을 받지만, 진단이 매 프레임 갱신되므로 눌러도 결과가 달라지지 않는다. 재조회 수정 뒤 RuntimeDynamic의 Space·O·R·G를 다시 확인했고, 두 HUD의 GPU 전환 이유는 값을 넣어 표시를 확인했다. RMB+WASD 자유 카메라는 확인하지 않았다. 결함 수정 뒤에는 키 입력 대신 공개 API로 Play Mode를 점검했다: Surface의 Goal 변경·Gate·비활성화 후 복귀, Volume StaticBaked 재로드, RuntimeDynamic의 Goal 변경·같은 셀 이동·꺼진 동안의 장애물 등록과 Modifier 연결. 경고와 오류는 없었다 | 필요할 때 카메라 조작과 실제 키 입력 재확인 |
 | Player 실행 | Mono arm64 Mac Player에서 위 기준선과 샘플 씬 시작을 자동으로 확인했다. 실제 입력 조작과 IL2CPP 실행은 확인하지 않았다 | IL2CPP 빌드 시도 |
