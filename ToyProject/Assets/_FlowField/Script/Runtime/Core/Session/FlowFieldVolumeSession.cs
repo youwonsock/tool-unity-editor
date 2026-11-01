@@ -28,15 +28,12 @@ namespace Common.FlowField
 
         private VolumeFieldData _committed;
         private BuildContext _build;
-        // The latest accepted input is also the next build input when pending.
-        // A running BuildContext and published FieldData retain their own inputs.
-        private bool _hasPendingRequest;
+        private readonly FlowFieldRequestInbox<FlowFieldVolumeRequest> _requests
+            = new FlowFieldRequestInbox<FlowFieldVolumeRequest>();
         // Modifier changes reuse the published navigation unless a full build is pending.
         private bool _hasPendingModifierRecompose;
         // An explicit rebuild re-queries obstacles even when only the Goal changed.
         private bool _obstacleQueryRequired;
-        private FlowFieldVolumeRequest _latestRequestedInput;
-        private bool _hasLatestRequestedInput;
         // Initialization uses Suspended as a staging state, but the first
         // accepted request must still be able to start a build. This flag
         // distinguishes that state from an explicit lifecycle suspension.
@@ -59,19 +56,9 @@ namespace Common.FlowField
         }
 
         internal override FlowFieldSpaceMode SpaceMode => FlowFieldSpaceMode.Volume3D;
-        internal override bool IsInitialized => State == FlowFieldRuntimeState.Building
-            || State == FlowFieldRuntimeState.Ready
-            || State == FlowFieldRuntimeState.Suspended;
-        internal override bool IsFaulted => State == FlowFieldRuntimeState.Faulted;
-        internal override bool IsRebuilding => State == FlowFieldRuntimeState.Building;
         internal override bool IsWaitingForExternalCompletion
             => _build != null && _build.SolveRunning && !_build.SolveHandle.IsCompleted;
-        internal override bool IsBuilding
-            => CanPump && (IsRebuilding || HasPendingRequest);
-        internal override bool IsReady => (State == FlowFieldRuntimeState.Building
-                || State == FlowFieldRuntimeState.Ready)
-            && _committed != null
-            && !IsFaulted;
+        internal override bool IsReady => CanPump && _committed != null;
         internal long TrackedMemoryBytes
         {
             get
@@ -83,11 +70,11 @@ namespace Common.FlowField
             }
         }
         internal FlowFieldGridSpace Grid => _committed?.Grid ?? _build?.Request.Grid ?? default;
-        internal bool HasPendingRequest => _hasPendingRequest || _hasPendingModifierRecompose || _build != null;
+        internal override bool HasPendingRequest => _requests.Pending || _hasPendingModifierRecompose || _build != null;
         internal bool TryGetLatestRequestedInput(out FlowFieldVolumeRequest request)
         {
-            request = _latestRequestedInput;
-            return _hasLatestRequestedInput;
+            request = _requests.Latest;
+            return _requests.HasLatest;
         }
 
         internal bool ContainsModifier(IFlowFieldVectorModifier modifier)
@@ -98,7 +85,7 @@ namespace Common.FlowField
             get
             {
                 if (_build == null)
-                    return _hasPendingRequest || _hasPendingModifierRecompose ? 0f : 1f;
+                    return _requests.Pending || _hasPendingModifierRecompose ? 0f : 1f;
                 if (_build.Phase == BuildPhase.Complete)
                     return 1f;
 
@@ -115,16 +102,14 @@ namespace Common.FlowField
                 throw new InvalidOperationException("FlowField volume session is already initialized.");
             BakeMode = bakeMode;
             Fault = null;
-            _hasLatestRequestedInput = false;
-            _latestRequestedInput = default;
-            _hasPendingRequest = false;
+            _requests.Clear();
             _hasPendingModifierRecompose = false;
             _obstacleQueryRequired = false;
             _safety.ClearRegions();
             _suspendedByLifecycle = false;
             _buildReservationBytes = 0;
             _committedReservationBytes = 0;
-            SetState(FlowFieldRuntimeState.Suspended);
+            SetLifecycle(FlowFieldSessionLifecycle.Suspended);
         }
 
         internal bool Submit(in FlowFieldVolumeRequest request, bool requeryObstacles = false)
@@ -139,8 +124,8 @@ namespace Common.FlowField
             // Keep the last accepted request independently of the committed
             // field.  A dirty notification that arrives while another Goal is
             // building must never resurrect the older committed Goal.
-            _latestRequestedInput = request;
-            _hasLatestRequestedInput = true;
+            _requests.Latest = request;
+            _requests.HasLatest = true;
             // A grid/signature change invalidates the private staging arrays
             // immediately.
             if (_build != null && !_build.Request.HasSameGrid(request))
@@ -152,7 +137,7 @@ namespace Common.FlowField
                 _safety.InvalidateRegion(request.WorldBounds);
             if (goalMovedWithinCell)
                 return true;
-            _hasPendingRequest = true;
+            _requests.Pending = true;
             EnterBuildingUnlessStopped();
             return true;
         }
@@ -164,7 +149,7 @@ namespace Common.FlowField
         /// </summary>
         private bool IsGoalMoveWithinCell(in FlowFieldVolumeRequest request)
         {
-            if (_obstacleQueryRequired || _hasPendingRequest || request.BakeMode == FlowFieldBakeMode.StaticBaked)
+            if (_obstacleQueryRequired || _requests.Pending || request.BakeMode == FlowFieldBakeMode.StaticBaked)
                 return false;
             if (_build == null && _committed == null)
                 return false;
@@ -176,7 +161,7 @@ namespace Common.FlowField
         private void EnterBuildingUnlessStopped()
         {
             if (!IsFaulted && (State != FlowFieldRuntimeState.Suspended || !_suspendedByLifecycle))
-                SetState(FlowFieldRuntimeState.Building);
+                SetLifecycle(FlowFieldSessionLifecycle.Building);
         }
 
         internal void Pump(double budgetMilliseconds = DefaultBudgetMilliseconds)
@@ -212,10 +197,10 @@ namespace Common.FlowField
                         return;
 
                     CommitBuild(_build);
-                    if (_hasPendingRequest || _hasPendingModifierRecompose)
+                    if (_requests.Pending || _hasPendingModifierRecompose)
                         continue;
-                    if (State == FlowFieldRuntimeState.Building)
-                        SetState(FlowFieldRuntimeState.Ready);
+                    if (IsRebuilding)
+                        SetLifecycle(FlowFieldSessionLifecycle.Active);
                     return;
                 }
             }
@@ -227,16 +212,16 @@ namespace Common.FlowField
 
         private bool TryBeginPendingBuild()
         {
-            if (!_hasPendingRequest && !_hasPendingModifierRecompose)
+            if (!_requests.Pending && !_hasPendingModifierRecompose)
             {
-                if (_committed != null && State == FlowFieldRuntimeState.Building)
-                    SetState(FlowFieldRuntimeState.Ready);
+                if (_committed != null && IsRebuilding)
+                    SetLifecycle(FlowFieldSessionLifecycle.Active);
                 return false;
             }
 
-            bool recompose = !_hasPendingRequest;
-            FlowFieldVolumeRequest request = recompose ? _committed.Request : _latestRequestedInput;
-            _hasPendingRequest = false;
+            bool recompose = !_requests.Pending;
+            FlowFieldVolumeRequest request = recompose ? _committed.Request : _requests.Latest;
+            _requests.Pending = false;
             _hasPendingModifierRecompose = false;
             FlowFieldModifierWorkItem[] modifierSnapshots;
             using (Boundary.EnterUserCode())
@@ -281,9 +266,6 @@ namespace Common.FlowField
                 && _committed.Request.HasSameObstacleInputs(request)
                 && !_committed.Request.HasSameGoal(request);
 
-        private bool CanPump => !Disposed
-            && (State == FlowFieldRuntimeState.Building || State == FlowFieldRuntimeState.Ready);
-
         /// <summary>
         /// Takes the spare array when it has the requested size and clears it,
         /// which leaves it in the same state as a new allocation.
@@ -317,7 +299,7 @@ namespace Common.FlowField
         {
             AdvanceLifetimeGeneration();
             DiscardBuild();
-            _hasPendingRequest = false;
+            _requests.Pending = false;
             _hasPendingModifierRecompose = false;
         }
 
@@ -343,15 +325,15 @@ namespace Common.FlowField
         {
             if (!FlowFieldGridSpace.IsFinite(bounds.center) || !FlowFieldGridSpace.IsFinite(bounds.size))
                 throw new ArgumentOutOfRangeException(nameof(bounds));
-            FlowFieldVolumeRequest request = _latestRequestedInput;
+            FlowFieldVolumeRequest request = _requests.Latest;
             float margin = request.Grid.IsValid
                 ? request.Grid.CellSize + request.ObstacleClearance
                 : 1f;
             _safety.MarkDirty(bounds, margin);
-            if (_hasPendingRequest)
+            if (_requests.Pending)
                 return;
-            _hasPendingRequest = _hasLatestRequestedInput && request.Grid.IsValid;
-            if (_hasPendingRequest)
+            _requests.Pending = _requests.HasLatest && request.Grid.IsValid;
+            if (_requests.Pending)
                 EnterBuildingUnlessStopped();
         }
 
@@ -365,9 +347,9 @@ namespace Common.FlowField
                 || IsFaulted
                 || BakeMode == FlowFieldBakeMode.StaticBaked)
                 return;
-            FlowFieldVolumeRequest request = _hasLatestRequestedInput
-                ? _latestRequestedInput
-                : _build?.Request ?? _committed?.Request ?? _latestRequestedInput;
+            FlowFieldVolumeRequest request = _requests.HasLatest
+                ? _requests.Latest
+                : _build?.Request ?? _committed?.Request ?? _requests.Latest;
             if (!request.Grid.IsValid
                 || !FlowFieldGridSpace.IsFinite(request.WorldBounds.center)
                 || !FlowFieldGridSpace.IsFinite(request.WorldBounds.size))
@@ -431,7 +413,7 @@ namespace Common.FlowField
                 return;
             _suspendedByLifecycle = true;
             CancelCurrentBuild();
-            SetState(FlowFieldRuntimeState.Suspended);
+            SetLifecycle(FlowFieldSessionLifecycle.Suspended);
         }
 
         internal void Resume()
@@ -439,7 +421,7 @@ namespace Common.FlowField
             if (State != FlowFieldRuntimeState.Suspended)
                 return;
             _suspendedByLifecycle = false;
-            SetState(FlowFieldRuntimeState.Building);
+            SetLifecycle(FlowFieldSessionLifecycle.Building);
         }
 
         internal override void Release()
@@ -450,7 +432,7 @@ namespace Common.FlowField
             Fault = null;
             _committed = null;
             _committedReservationBytes = 0;
-            _hasLatestRequestedInput = false;
+            _requests.HasLatest = false;
             _suspendedByLifecycle = false;
             _safety.ClearRegions();
             DetachRuntimeScheduler();
@@ -459,7 +441,7 @@ namespace Common.FlowField
             _cellQuery.Clear();
             ReleaseSpareBuildArrays();
             _modifierRegistry.Clear();
-            SetState(FlowFieldRuntimeState.Released);
+            SetLifecycle(FlowFieldSessionLifecycle.Released);
         }
 
         internal override void RetryFault()
@@ -471,38 +453,38 @@ namespace Common.FlowField
             // A retry only clears the failure.  The next accepted request
             // must still build and publish before the session becomes Ready;
             // never expose a transient Ready state with no valid result.
-            SetState(_suspendedByLifecycle
-                ? FlowFieldRuntimeState.Suspended
-                : FlowFieldRuntimeState.Building);
+            SetLifecycle(_suspendedByLifecycle
+                ? FlowFieldSessionLifecycle.Suspended
+                : FlowFieldSessionLifecycle.Building);
         }
 
         private protected override void AbandonWorkForFault() => CancelCurrentBuild();
 
-        private protected override void ApplyFaultedState() => SetState(FlowFieldRuntimeState.Faulted);
+        private protected override void ApplyFaultedState() => SetLifecycle(FlowFieldSessionLifecycle.Faulted);
 
         private void QueueModifierChange()
         {
             // Before the first BuildContext exists, interrupted capture owns
             // the retry. Otherwise the latest input must win over the older
             // active or published input, even after pending work was canceled.
-            if (!_hasPendingRequest && _committed == null && _build == null)
+            if (!_requests.Pending && _committed == null && _build == null)
                 return;
             // Modifiers only affect the final composition. Unobserved colliders
             // wait for the next full build, as Surface2D already does.
-            if (!_hasPendingRequest
+            if (!_requests.Pending
                 && _committed != null
-                && _hasLatestRequestedInput
-                && _committed.Request.HasSameResult(_latestRequestedInput))
+                && _requests.HasLatest
+                && _committed.Request.HasSameResult(_requests.Latest))
             {
                 _hasPendingModifierRecompose = true;
                 EnterBuildingUnlessStopped();
                 return;
             }
-            if (_hasLatestRequestedInput)
+            if (_requests.HasLatest)
             {
                 // The latest input was already accepted, and a Goal move within
                 // its cell must not make Submit skip this build.
-                _hasPendingRequest = true;
+                _requests.Pending = true;
                 EnterBuildingUnlessStopped();
             }
             else if (_committed != null)
@@ -513,8 +495,6 @@ namespace Common.FlowField
 
         private static Vector3 ObstacleHalfExtents(float cellSize, float clearance)
             => Vector3.one * FlowFieldOverlapUtility.CellHalfExtent(cellSize, clearance);
-
-        private void SetState(FlowFieldRuntimeState state) => PublishState(state);
 
         private void ThrowIfInputAvailable()
         {
@@ -578,7 +558,7 @@ namespace Common.FlowField
             Disposed = true;
             DetachRuntimeScheduler();
             CancelCurrentBuild();
-            _hasLatestRequestedInput = false;
+            _requests.HasLatest = false;
             _committed = null;
             _committedReservationBytes = 0;
             _obstacles.Clear();
@@ -587,7 +567,7 @@ namespace Common.FlowField
             ReleaseSpareBuildArrays();
             _modifierRegistry.Clear();
             _safety.ClearRegions();
-            PublishState(FlowFieldRuntimeState.Released);
+            SetLifecycle(FlowFieldSessionLifecycle.Released);
             MarkBaseDisposed();
         }
 

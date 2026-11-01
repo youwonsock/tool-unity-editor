@@ -29,11 +29,29 @@ namespace Common.FlowField
 
         internal abstract FlowFieldSpaceMode SpaceMode { get; }
         internal FlowFieldBakeMode BakeMode { get; private protected set; }
-        internal virtual FlowFieldRuntimeState State => _publishedState;
-        internal abstract bool IsInitialized { get; }
-        internal abstract bool IsFaulted { get; }
+        internal FlowFieldSessionLifecycle Lifecycle { get; private set; }
+
+        internal FlowFieldRuntimeState State => Lifecycle switch
+        {
+            FlowFieldSessionLifecycle.Active => IsReady
+                ? FlowFieldRuntimeState.Ready
+                : FlowFieldRuntimeState.Building,
+            FlowFieldSessionLifecycle.Building => FlowFieldRuntimeState.Building,
+            FlowFieldSessionLifecycle.Suspended => FlowFieldRuntimeState.Suspended,
+            FlowFieldSessionLifecycle.Faulted => FlowFieldRuntimeState.Faulted,
+            FlowFieldSessionLifecycle.Released => FlowFieldRuntimeState.Released,
+            _ => FlowFieldRuntimeState.Uninitialized,
+        };
+
+        internal bool IsInitialized => Lifecycle == FlowFieldSessionLifecycle.Active
+            || Lifecycle == FlowFieldSessionLifecycle.Building
+            || Lifecycle == FlowFieldSessionLifecycle.Suspended;
+        internal bool IsFaulted => Lifecycle == FlowFieldSessionLifecycle.Faulted;
+        internal bool IsRebuilding => Lifecycle == FlowFieldSessionLifecycle.Building;
+        private protected bool CanPump => !Disposed
+            && (Lifecycle == FlowFieldSessionLifecycle.Active || Lifecycle == FlowFieldSessionLifecycle.Building);
         internal abstract bool IsReady { get; }
-        internal abstract bool IsRebuilding { get; }
+        internal abstract bool HasPendingRequest { get; }
         internal Exception Fault { get; private protected set; }
         internal string LastError => Fault?.Message;
         internal int Revision { get; private protected set; }
@@ -94,7 +112,7 @@ namespace Common.FlowField
         internal abstract void NotifyObstacleRegionDirtyCommand(Bounds worldBounds);
 
         internal abstract bool IsWaitingForExternalCompletion { get; }
-        internal abstract bool IsBuilding { get; }
+        internal bool IsBuilding => CanPump && (IsRebuilding || HasPendingRequest);
         internal abstract void PumpInternal(in FlowFieldBuildBudget budget);
 
         bool IFlowFieldBuildOperation.IsWaitingForExternalCompletion => IsWaitingForExternalCompletion;
@@ -148,8 +166,17 @@ namespace Common.FlowField
             unchecked { LifetimeGeneration++; }
         }
 
-        private protected void PublishState(FlowFieldRuntimeState state)
+        private protected void SetLifecycle(FlowFieldSessionLifecycle next)
         {
+            if (Lifecycle == next)
+                return;
+            Lifecycle = next;
+            PublishRuntimeState();
+        }
+
+        private protected void PublishRuntimeState()
+        {
+            FlowFieldRuntimeState state = State;
             if (_publishedState == state)
                 return;
             // A session that never started has nothing for a subscriber to end.

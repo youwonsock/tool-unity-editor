@@ -34,6 +34,8 @@ namespace Common.FlowField
         private readonly FlowFieldComposeRun _composeRun = new FlowFieldComposeRun();
         private Collider[] _overlapBuffer;
 
+        internal FlowFieldModifierRegistry Registry => _registry;
+
         internal FlowFieldModifierPipeline(FlowFieldModifierRegistry registry)
         {
             if (registry == null)
@@ -188,6 +190,7 @@ namespace Common.FlowField
         {
             _runtimeLayers.Clear();
             _overlapBuffer = null;
+            _registry.Clear();
         }
 
         private void BuildRuntimeLayers(int cellCount)

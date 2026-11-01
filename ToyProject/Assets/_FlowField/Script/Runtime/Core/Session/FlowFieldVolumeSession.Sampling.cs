@@ -23,8 +23,8 @@ namespace Common.FlowField
             // previous publication immediately. Ordinary Goal/obstacle
             // rebuilds keep the last same-source result available until the
             // replacement is committed.
-            if (_hasLatestRequestedInput
-                && !field.Request.HasSameGrid(_latestRequestedInput))
+            if (_requests.HasLatest
+                && !field.Request.HasSameGrid(_requests.Latest))
                 return false;
             if (!field.Grid.ContainsWorldPosition(worldPosition)
                 || !field.Grid.TryWorldToLocal(worldPosition, out int x, out int y, out int z))
