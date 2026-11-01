@@ -55,7 +55,7 @@ Manager 설정·Goal·Obstacle·Modifier
   → 이동 주체의 이동·감속 적용
 ```
 
-모드별 Session이 최신 수락 입력·실행 중 입력·게시 결과를 소유합니다. `FlowFieldSessionBase`는 공통 조회·명령·이벤트 경계를 제공하며 공통 요청 복사본은 두지 않습니다. 같은 Grid·Source에서 읽을 수 있는 게시 결과는 다음 계산 중에도 유지합니다. 구체적인 수명·입력·Revision 정책은 아래의 [수명과 결과 게시](#수명과-결과-게시)와 [TechnicalNotes.md](Docs/TechnicalNotes.md)에 정리합니다.
+모드별 Session이 최신 수락 입력·실행 중 입력·게시 결과를 소유합니다. `FlowFieldSessionBase`는 수명 표·공개 상태·이벤트 전달·Scheduler 등록을 공유하고, 최신 요청과 대기 표시는 `FlowFieldRequestInbox`가 맡습니다. 같은 Grid·Source에서 읽을 수 있는 게시 결과는 다음 계산 중에도 유지합니다. 구체적인 수명·입력·Revision 정책은 아래의 [수명과 결과 게시](#수명과-결과-게시)와 [TechnicalNotes.md](Docs/TechnicalNotes.md)에 정리합니다.
 
 ## 사용 방법
 
@@ -207,7 +207,7 @@ Manager도 함께 Fault 상태라면 Modifier를 비활성화·Release해 설정
 
 <img src="Docs/Images/flowfield-uml.png" alt="FlowField 요청부터 결과 조회까지의 핵심 흐름" width="70%">
 
-[핵심 흐름 원본 이미지](Docs/Images/flowfield-uml.png) · [PlantUML 원본](Docs/flowfield-uml.puml)
+[핵심 흐름 원본 이미지](Docs/Images/flowfield-uml.png) · [PlantUML 원본](Docs/flowfield-uml.puml) (이미지는 Burst 전환 이전에 렌더한 것으로, 최신 내용은 PlantUML 원본입니다)
 
 핵심 흐름은 요청 수락, 모드별 실행 경계, 완성 결과 게시와 샘플 조회를 보여줍니다. 상세 흐름은 책임별 호출을 나누어 다음 문서에서 확인할 수 있습니다.
 
@@ -221,20 +221,20 @@ Manager도 함께 Fault 상태라면 Modifier를 비활성화·Release해 설정
 | 공개 조회·명령 | `IFlowFieldProvider`, `IFlowFieldController` | 게시 결과 조회, 초기화·해제·재빌드와 입력 변경 |
 | Modifier 계약 | `IFlowFieldVectorModifier`, `IFlowFieldModifierSnapshot` | 메타데이터 관측과 작업별 고정 값 계산 |
 | Unity 연결 | `FlowFieldManager` | 직렬화 설정, 활성 Session, 이벤트 구독과 수명 전이 |
-| 공통 Session 경계 | `FlowFieldSessionBase` | 조회·명령·이벤트 예외 격리. 모드별 요청·배열은 자식 소유 |
-| Surface 실행 | `FlowFieldSession`, `FlowFieldComposeRun` | 요청 병합, 표면 준비·BFS, 프레임에 나눈 합성과 원자적 결과 게시. 끝난 풀이는 Grid가 바뀌거나 Goal이 사라진 경우가 아니면 게시 |
+| 공통 Session 경계 | `FlowFieldSessionBase`, `FlowFieldSessionLifecycle`, `FlowFieldRequestInbox` | 수명 표·공개 상태·이벤트 전달·Scheduler 등록, 최신 요청과 대기 표시. 모드별 배열은 자식 소유 |
+| Surface 실행 | `FlowFieldSession`, `FlowFieldSurfaceBaseStage`, `FlowFieldSurfaceSolveStage`, `FlowFieldSurfaceComposeStage`, `FlowFieldComposeRun` | 단계 순서와 수명, 표면·장애물·Goal 준비, 풀이 실행, 프레임에 나눈 합성과 원자적 결과 게시. 끝난 풀이는 Grid가 바뀌거나 Goal이 사라진 경우가 아니면 게시 |
 | Surface 기본 계산 | `FlowFieldSurfaceBuildPipeline`, `FlowFieldGoalPipeline`, `FlowFieldGoalTracker`, `FlowFieldObstaclePipeline` | 표면·장애물 준비, Goal 해석·변경 관측과 탐색 |
 | Surface Modifier | `FlowFieldModifierRegistry`, `FlowFieldModifierPipeline` | 등록·메타데이터 관측, 영역 갱신·Snapshot 캡처·최종 합성. 영역 버퍼는 Registry Entry에 지연 할당 |
 | Surface 게시 | `FlowFieldFieldStore` | 게시 Grid·Surface·해석된 Goal·최종 방향·속도의 단일 저장소 |
 | Volume 실행 | `FlowFieldVolumeSession` | 최신 요청 수락, 작업 취소·수명, Physics·풀이 Job·Scheduler 연결과 게시 |
 | Volume 작업 | `FlowFieldVolumeBuildContext`, `FlowFieldVolumeNavigation` | 한 작업의 배열·진행 커서와 26방향 탐색 연산 |
-| Volume 셀 쿼리 | `FlowFieldVolumeCellQuery`, `FlowFieldVolumeInteriorOffsets` | 스텝(64셀)마다 Physics 후보를 한 번 모아 후보가 닿는 셀만 정확히 검사, 경계가 아닌 셀의 Topology를 평탄 인덱스 오프셋으로 계산 |
+| Volume 셀 쿼리 | `FlowFieldVolumeCellQuery`, `FlowFieldCellRegionCursor` | 스텝(64셀)마다 Physics 후보를 한 번 모아 후보가 닿는 셀만 정확히 검사. 추적한 변경과 Modifier 영향 범위의 셀만 순회 |
 | Volume 입력 관측 | `FlowFieldVolumeModifierRegistry`, `FlowFieldVolumeObstacleTracker` | Modifier 관측·캡처와 Collider 변경 Bounds 관측 |
-| Volume 안전성·게시 | `FlowFieldVolumeSafetyState`, `FlowFieldVolumeFieldData` | 불확실 영역의 보수적 정지, 완성 결과 보관 |
+| Volume 안전성·게시 | `FlowFieldVolumeSafetyState`, `FlowFieldVolumeFieldData`, `FlowFieldVolumeSpareArrays` | 불확실 영역의 보수적 정지, 완성 결과 보관, 교체된 결과 배열 재사용. 뷰로 내보낸 결과의 배열은 재사용하지 않음 |
 | 격자·읽기 | `FlowFieldGridSpace`, `FlowFieldReadView` | 월드/셀 좌표 변환과 내부 읽기 전용 셀 조회 |
 | 정적 입력 | `FlowFieldStaticBakeData`, `FlowFieldVolumeBakeData`, `FlowFieldBakeBlob` | Surface2D·Volume3D의 v6 베이크 저장·검증 |
 | 풀이 Job | `FlowFieldVolumeSolveJob`, `FlowFieldSurfaceSolveJob`, `FlowFieldSurfaceTopologyJob`, `IFlowFieldSolveBackend` | 내비게이션 계산을 Burst Job으로 실행. 프레임을 막지 않게 워커 스레드에서 풀고 매 프레임 완료를 확인. 게시 결과는 관리 배열이므로 샘플링과 베이크는 Native 타입을 다루지 않음 |
-| 협력 실행 | `IFlowFieldBuildOperation`, `FlowFieldBuildScheduler`, `FlowFieldBuildDriver` | 실행 가능한 Volume 작업을 2ms의 공통 CPU 예산으로 진행. Session 수명과 취소는 Session 소유 |
+| 협력 실행 | `IFlowFieldBuildOperation`, `FlowFieldBuildScheduler`, `FlowFieldBuildDriver`, `FlowFieldBuildSettings` | 실행 가능한 Surface·Volume 작업을 공통 CPU 예산(기본 2ms)으로 진행. Session 수명과 취소는 Session 소유 |
 
 ## 수명과 결과 게시
 
@@ -243,7 +243,7 @@ Manager도 함께 Fault 상태라면 Modifier를 비활성화·Release해 설정
 - **Volume 부분 재계산**: 입력이 같으면 Modifier 변경은 게시된 내비게이션에 Modifier만 다시 합성하고, Goal만 바뀌면 장애물 결과와 Topology를 재사용합니다. 등록·스윕으로 추적하지 않는 Collider는 다음 전체 빌드에서 반영되므로, 이런 Collider가 바뀌면 `RequestRebuild()`나 `NotifyCellsDirty()`를 호출합니다. Volume의 이 두 호출은 Goal이 함께 바뀌어도 장애물을 다시 조회합니다. `SetGoal()` 뒤에 `RequestRebuild()`를 덧붙이면 Goal 재사용 효과를 잃으므로, Goal만 바꿀 때는 `SetGoal()`만 호출합니다. Goal이 같은 셀 안에서 움직이면 결과가 같으므로 빌드하지 않습니다. 이때 Revision은 그대로이고 `FieldChanged`도 발생하지 않으며, `FlowFieldFieldInfo`의 요청 Goal만 최신 값으로 바뀝니다.
 - **Revision과 참조**: Surface Revision은 셀 데이터·Goal의 실질 변경에 따라 증가합니다. 같은 내용의 Snapshot 교체는 Revision 증가 없이 게시 Grid·Surface 참조를 갱신할 수 있습니다. Volume Revision은 완료 결과 교체 정책을 따릅니다.
 - **움직이는 장애물**: BFS나 Volume 빌드 중 장애물만 바뀌면 그 결과를 게시하고 재빌드를 예약합니다. 조회는 최신 장애물 상태를 다시 검사합니다. Volume은 이미 반영한 불확실 영역을 게시 때 지우므로, 빌드 중 장애물이 지나간 영역만 다음 게시까지 정지합니다. Surface는 Grid가 바뀌었거나 Goal이 사라진 결과만 거부합니다. Goal이 바뀐 결과는 게시한 뒤 최신 Goal을 다시 계산하므로 Goal이 풀이보다 빨리 움직여도 게시가 멈추지 않습니다. 이때 해석된 Goal은 요청 Goal보다 잠시 뒤처질 수 있습니다.
-- **재진입 없음**: 이벤트 핸들러는 작업이 끝난 뒤 실행하고, Modifier 코드에서는 다른 작업을 시작할 수 없습니다. 작업 코드는 외부 호출 뒤에 수명을 다시 확인하지 않습니다. 늦게 도착한 GPU 콜백만 수명 세대를 비교합니다.
+- **재진입 없음**: 이벤트 핸들러는 작업이 끝난 뒤 실행하고, Modifier 코드에서는 다른 작업을 시작할 수 없습니다. 작업 코드는 외부 호출 뒤에 수명을 다시 확인하지 않습니다. 대기 중인 이벤트만 만들어진 수명 세대를 비교하고, `Released`는 항상 전달합니다.
 - **활성·실패 처리**: `OnDisable`은 실행을 중단하고 재활성화는 현재 수명의 재계산을 요청합니다. Manager·Session Fault는 명시적인 `RequestRebuild()`로 재시도하며 Modifier 자체 Fault는 위의 별도 복구 절차를 따릅니다. 실행할 수 없는 Volume의 대기 요청은 보관하되 Scheduler에서 예산을 반복 소비하지 않습니다. 꺼진 Manager에 들어온 장애물 입력도 재활성화 때까지 빌드하지 않고, 꺼진 동안 켠 Modifier는 재활성화 때 연결합니다. 설정이 stale이어도 Modifier와 동적 장애물의 등록 해제는 할 수 있습니다.
 - **정적 입력**: 두 베이크 형식 모두 v6만 허용합니다. 다른 형식의 자동 변환·마이그레이션은 제공하지 않으므로 이전 형식 Asset은 ReBake해야 합니다. Volume3D v6은 방향·속도를 저장하지 않고 NextCell과 베이크 시점의 Default Direction에서, 탈출 방향은 셀당 1바이트의 면 인덱스에서 로드 시 재구성합니다. Surface2D v6은 높이·법선·탈출·Goal 방향을 `byte[]`로 묶어 비트 그대로 저장합니다. StaticBaked 내비게이션은 고정하며 Default Direction·Modifier는 런타임에 합성합니다. 영향 범위 밖 셀은 두 모드 모두 Manager의 현재 Default Direction을 따릅니다.
 
@@ -353,7 +353,7 @@ Surface2D의 X·Z 셀 수는 `floor(axisLength / CellSize + 0.5)`로 계산하�
 
 ### 검증 기록
 
-Unity 2023.2.20f1·macOS·Metal(Apple M4 Pro)에서 **회귀 테스트 407개가 모두 통과**했습니다(성능 프로브 12개 제외). Windows·Direct3D 11(AMD Radeon RX 9070)의 마지막 기록은 이번 수정 이전의 466개 통과입니다. 실제 GPU, 저장된 샘플 씬 통합 2개, PlayMode에 진입하는 Manager 통합을 포함합니다. Surface·Volume의 샘플 게시, 재진입·취소·재활성화, 장애물 안전성, Modifier 합성, 베이크 검증·저장 실패 경계와 직렬화 참조를 확인합니다.
+Unity 2023.2.20f1·macOS·Metal(Apple M4 Pro)에서 **회귀 테스트 407개가 모두 통과**했습니다(성능 프로브 12개 제외). Windows·Direct3D 11(AMD Radeon RX 9070)의 마지막 기록은 이번 수정 이전의 466개 통과입니다. 저장된 샘플 씬 통합 2개, PlayMode에 진입하는 Manager 통합을 포함합니다. Surface·Volume의 샘플 게시, 재진입·취소·재활성화, 장애물 안전성, Modifier 합성, 베이크 검증·저장 실패 경계와 직렬화 참조를 확인합니다.
 
 리팩터링 안전망으로 다음 검사가 함께 실행됩니다.
 
@@ -361,7 +361,7 @@ Unity 2023.2.20f1·macOS·Metal(Apple M4 Pro)에서 **회귀 테스트 407개가
 - **베이크 내용 해시**(`FlowFieldBakeAssetContentTests`): 두 베이크 Asset에서 런타임이 읽는 배열의 해시로, 저장 형식과 무관하게 내용이 같아야 합니다.
 - **동등성 검사**: Volume 후보 필터와 셀마다 Physics 쿼리, 내부 셀 Topology와 테스트에 적어 둔 통과 규칙, v6 저장 왕복과 원래 값을 비교합니다.
 
-Unity Test Runner에서 `Common.FlowField.Tests`를 선택해 EditMode 전체를 실행할 수 있습니다. Manager 통합 테스트는 이 실행 안에서 PlayMode에 진입합니다. 배치 실행은 Editor에서 열려 있지 않은 프로젝트를 대상으로 하며, 실제 GPU 검증을 위해 `-nographics`를 생략합니다.
+Unity Test Runner에서 `Common.FlowField.Tests`를 선택해 EditMode 전체를 실행할 수 있습니다. Manager 통합 테스트는 이 실행 안에서 PlayMode에 진입합니다. 배치 실행은 Editor에서 열려 있지 않은 프로젝트를 대상으로 합니다.
 
 ```powershell
 Unity.exe -batchmode -projectPath <ToyProject> -runTests -testPlatform EditMode `
@@ -377,9 +377,10 @@ Unity.exe -batchmode -projectPath <ToyProject> -runTests -testPlatform EditMode 
 | 등록 장애물 1개 이동 후 재빌드 | 31.3초, 관리 힙 +61MiB | 6.0초, 관리 힙 +52.5MiB |
 | Volume 베이크 Asset(20×12×20) | 453,863바이트 | 106,568바이트 |
 
-측정은 한 기기의 Editor 배치 실행 기준이며 실행마다 20~30% 정도 달라질 수 있습니다. 위 표와 Surface 316×316 재빌드 약 1.1~1.3초는 Windows 기록이며, Surface 재빌드는 Topology 재사용 수정 후 Windows에서 다시 재지 않았습니다. Apple M4 Pro에서는 Volume 전체 빌드 약 3.0초(GPU 경로 약 2.8초), 2ms 예산 약 1,270프레임, Volume Goal 변경 약 2.1초, Modifier 값 변경 약 0.42초, Surface 재빌드 약 0.2초입니다.
+측정은 한 기기의 Editor 배치 실행 기준이며 실행마다 20~30% 정도 달라질 수 있습니다. 위 표와 Surface 316×316 재빌드 약 1.1~1.3초는 Windows 기록이며, Surface 재빌드는 Topology 재사용 수정 후 Windows에서 다시 재지 않았습니다. 이 표는 Burst 전환 이전의 Managed 기록입니다. 현재 수치는 Mono Mac Player 기준으로 [StatusAndBacklog.md](Docs/StatusAndBacklog.md#player-기준선-2026-11-01)에 있습니다: Volume 첫 빌드 2.3~3.7초, Goal 변경 0.11~0.14초, Modifier 값 변경 0.25~0.29초, Surface Goal 변경 65~115ms.
 
 - 현재 씬 2개·Prefab 2개·v6 베이크 2개와 기존 GUID·직렬화 값은 유지합니다. 구버전 API 래퍼·직렬화 별칭·변환 전용 코드나 에셋은 두지 않습니다.
 - BFS는 동일 비용의 격자 이동 횟수를 최소화합니다. 속도 Modifier는 경로 비용을 바꾸지 않으며 Agent 간 충돌 회피는 이동 시스템의 책임입니다.
 - Volume의 2ms는 협력 CPU 예산입니다. Physics·Modifier 호출 한 번이나 할당이 이를 초과할 수 있으며 전체 빌드 시간의 상한은 아닙니다. 워커 스레드의 풀이 시간은 이 예산에 들지 않습니다.
-- Surface 런타임·StaticBaked 이미지는 현재 HUD로 다시 캡처했고, 나머지 기능 이미지는 기존 캡처입니다. 회귀 실행은 실제 포인터 조작·GUI 렌더링·Player/기기·장시간 군중 이동을 포함하지 않으며, 성능 수치는 위의 Editor 프로브 기준입니다. Surface 샘플의 실제 포인터 조작, 두 샘플의 실제 키 입력, HUD의 GPU 전환 이유 표시, 군중 1000개 3분 이동은 Editor에서 별도로 확인했습니다. RMB+WASD 자유 카메라는 확인하지 않았습니다. Player 빌드는 실행한 기록이 없습니다.
+- Surface 런타임·StaticBaked 이미지는 현재 HUD로 다시 캡처했고, 나머지 기능 이미지는 기존 캡처입니다. 회귀 실행은 실제 포인터 조작·GUI 렌더링·장시간 군중 이동을 포함하지 않습니다. Surface 샘플의 실제 포인터 조작, 두 샘플의 실제 키 입력, 군중 1000개 3분 이동은 Editor에서 별도로 확인했습니다. RMB+WASD 자유 카메라는 우클릭을 누른 채 유지하는 입력을 만들 수 없어 확인하지 못했습니다. Mono Mac Player는 `Tools/run-player-probe.sh`로 실행해 확인했고, IL2CPP는 Android ARM64 APK 빌드까지만 확인했습니다.
+- macOS 입력 소스가 한글이면 샘플의 글자 키가 `Input.GetKeyDown`에 전달되지 않습니다(M·R·G·O로 확인). Space와 숫자 키는 동작합니다. 샘플을 조작할 때는 영문 입력 소스로 바꿉니다.

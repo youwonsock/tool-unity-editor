@@ -18,7 +18,7 @@ participant "FieldStore" as P
 M -> S : Submit latest request
 note over M,S : Submit records input; it does not enter a nested build.
 M -> S : LateUpdate: observe and Submit
-note over M,S : BuildDriver.LateUpdate then pumps the session.
+note over M,S : BuildDriver.LateUpdate then pumps the session\non the shared scheduler budget.
 S -> B : Prepare or reuse immutable Surface
 alt RuntimeDynamic
   S -> B : Prepare obstacles, topology and Goal
@@ -32,7 +32,7 @@ else StaticBaked
   S -> B : Load validated v6 navigation snapshot
   S -> F : Update dirty areas and compose final values
 end
-note over S,F : Getter / CaptureSnapshot / Modify calls check ownership on return.\nCancelled work cannot publish into a replacement lifetime.
+note over S,F : User code runs inside the execution boundary: it cannot start other work,\nand events are queued until the outermost operation ends.
 S -> P : Commit complete arrays, Surface and resolved Goal
 P --> S : Effective result changed?
 S --> M : FieldChanged when publication changes

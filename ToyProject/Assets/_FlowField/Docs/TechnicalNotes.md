@@ -9,7 +9,7 @@
 - `Common.FlowField.Editor`: Inspector, Bake 작업, Editor 시각화와 Editor 수명 처리.
 - `Common.FlowField.Samples`: 공개 Provider·Controller를 사용하는 Agent, HUD와 샘플 카메라.
 
-프로젝트 기준 Unity 버전은 2023.2.20f1입니다. Collections, Mathematics, URP, UGUI 패키지 버전과 개별 asmdef 참조는 이 문서의 기능 설명과 분리해 프로젝트 설정에서 관리합니다.
+프로젝트 기준 Unity 버전은 2023.2.20f1입니다. Burst, Collections, Mathematics, URP, UGUI 패키지 버전과 개별 asmdef 참조는 이 문서의 기능 설명과 분리해 프로젝트 설정에서 관리합니다.
 
 ## 수명·입력·샘플링
 
@@ -127,7 +127,7 @@ README의 [핵심 흐름](Images/flowfield-uml.png)은 요청부터 조회까지
 | Surface 상세 | [flowfield-surface.puml](flowfield-surface.puml) | [flowfield-surface.png](Images/flowfield-surface.png) |
 | Volume 상세 | [flowfield-volume.puml](flowfield-volume.puml) | [flowfield-volume.png](Images/flowfield-volume.png) |
 
-현재 이미지는 v6 베이크 표기 갱신 때 PlantUML 1.2024.3·Java 8(Windows), UTF-8로 렌더했습니다. `flowfield-volume.png`는 안전 스냅샷 제거 때 macOS에서 다시 렌더했습니다. 이전 기준은 PlantUML 1.2024.6, Unity AndroidPlayer에 포함된 OpenJDK 11.0.14.1입니다. 활동도·순서도를 사용하며 Graphviz는 사용하지 않습니다. 별도 도구 경로의 PlantUML JAR를 지정하고 Docs 폴더에서 세 파일을 함께 렌더합니다. Java 실행 파일은 설치 환경에 맞는 경로를 사용합니다.
+**세 이미지는 Burst 전환 이전의 그림이라 GPU 경로가 남아 있습니다.** 최신 내용은 PlantUML 원본이며, 이 PC에 PlantUML jar가 없어 다시 렌더하지 못했습니다. 현재 이미지는 v6 베이크 표기 갱신 때 PlantUML 1.2024.3·Java 8(Windows), UTF-8로 렌더했습니다. `flowfield-volume.png`는 안전 스냅샷 제거 때 macOS에서 다시 렌더했습니다. 이전 기준은 PlantUML 1.2024.6, Unity AndroidPlayer에 포함된 OpenJDK 11.0.14.1입니다. 활동도·순서도를 사용하며 Graphviz는 사용하지 않습니다. 별도 도구 경로의 PlantUML JAR를 지정하고 Docs 폴더에서 세 파일을 함께 렌더합니다. Java 실행 파일은 설치 환경에 맞는 경로를 사용합니다.
 
 ```sh
 "/Applications/Unity/Hub/Editor/2023.2.20f1/PlaybackEngines/AndroidPlayer/OpenJDK/bin/java" \

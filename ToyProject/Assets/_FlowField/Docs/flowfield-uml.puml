@@ -11,7 +11,7 @@ title FlowField - core flow
 start
 :FlowFieldManager\nAccept / coalesce latest request;
 if (Space mode?) then (Surface2D)
-  :Manager.LateUpdate Submit\nBuildDriver pumps FlowFieldSession;
+  :Manager.LateUpdate Submit\nBuildDriver.LateUpdate\nBuildScheduler.PumpAll;
 else (Volume3D)
   :BuildDriver.LateUpdate\nBuildScheduler.PumpAll;
 endif
