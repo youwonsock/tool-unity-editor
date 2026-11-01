@@ -90,23 +90,29 @@ namespace Common.FlowField
 
         // Kept apart so only a deferred call allocates the closure.
         private bool DeferRegisterModifier(IFlowFieldVectorModifier modifier)
-            => Boundary.TryDefer(() => RunDeferred(() => RegisterModifierNow(modifier), "Modifier"));
+            => Defer(() => RegisterModifierNow(modifier), "Modifier");
 
         private bool DeferUnregisterModifier(IFlowFieldVectorModifier modifier)
-            => Boundary.TryDefer(() => RunDeferred(() => UnregisterModifierNow(modifier)));
+            => Defer(() => UnregisterModifierNow(modifier));
 
         private void DeferNotifyModifierChanged(IFlowFieldVectorModifier modifier, FlowFieldModifierChange change)
-            => Boundary.TryDefer(() => RunDeferred(() =>
+            => Defer(() =>
             {
                 NotifyModifierChangedNow(modifier, change);
                 return true;
-            }));
+            });
 
         private bool DeferRegisterObstacle(Collider collider)
-            => Boundary.TryDefer(() => RunDeferred(() => RegisterObstacleNow(collider), "장애물"));
+            => Defer(() => RegisterObstacleNow(collider), "장애물");
 
         private bool DeferUnregisterObstacle(Collider collider)
-            => Boundary.TryDefer(() => RunDeferred(() => UnregisterObstacleNow(collider)));
+            => Defer(() => UnregisterObstacleNow(collider));
+
+        private bool Defer(Func<bool> command, string registration = null)
+        {
+            Boundary.Defer(() => RunDeferred(command, registration));
+            return true;
+        }
 
         // The session may have stopped by the time a deferred command runs. Stopping
         // already cleared what a removal would have changed, but a registration
