@@ -533,7 +533,6 @@ namespace Common.FlowField
         private void ForwardSessionEvents(FlowFieldSessionBase session)
         {
             session.FieldCommitted += OnSessionFieldCommitted;
-            session.Failed += OnSessionFailed;
             session.StateChanged += OnSessionStateChanged;
             session.EventFailed += OnSessionEventFailed;
         }
@@ -541,14 +540,14 @@ namespace Common.FlowField
         private void OnSessionFieldCommitted()
             => FieldChanged?.Invoke();
 
-        private void OnSessionFailed(Exception exception)
-        {
-            if (exception != null)
-                Debug.LogError($"[{nameof(FlowFieldManager)}] FlowField build failed: {exception.Message}", this);
-        }
-
+        // Logged before forwarding: a handler may retry at once, which retires
+        // the session's Failed event along with the rest of that lifetime.
         private void OnSessionStateChanged(FlowFieldRuntimeState state)
-            => StateChanged?.Invoke(state);
+        {
+            if (state == FlowFieldRuntimeState.Faulted && !string.IsNullOrEmpty(LastError))
+                Debug.LogError($"[{nameof(FlowFieldManager)}] FlowField build failed: {LastError}", this);
+            StateChanged?.Invoke(state);
+        }
 
         private void OnSessionEventFailed(Exception exception)
         {

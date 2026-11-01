@@ -297,6 +297,10 @@ namespace Common.FlowField
                 build.GoalIndex,
                 Interlocked.Increment(ref _nextVisualizationResultId));
 
+            // A viewed Blocked array stays out of the spares through every field sharing it.
+            next.HandedOut = _committed != null
+                && _committed.HandedOut
+                && ReferenceEquals(_committed.Blocked, next.Blocked);
             _spares.Retire(_committed, next);
             _committed = next;
             Revision++;

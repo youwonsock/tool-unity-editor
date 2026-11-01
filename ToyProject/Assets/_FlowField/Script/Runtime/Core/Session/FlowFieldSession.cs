@@ -23,6 +23,9 @@ namespace Common.FlowField
         private FlowFieldSessionRequest? _committedRequest;
         private Vector3? _latestDefaultDirection;
         private FlowFieldSessionSourceKind _sourceKind;
+        // Only the Manager can tell that its current settings are valid, so the
+        // scheduler builds nothing until it has submitted them. Dirty input waits.
+        private bool _submittedForScheduler;
 
         internal FlowFieldGridSpace StagingGrid => _state.Grid;
         internal bool StagingSurfaceReady => _state.SurfaceReady;
@@ -72,13 +75,17 @@ namespace Common.FlowField
             return built;
         }
 
-        // Building without composing means a solve is running elsewhere.
+        // Building without composing means a solve is running elsewhere. Input
+        // nobody has submitted yet waits for the Manager in the same way.
         internal override bool IsWaitingForExternalCompletion
-            => Lifecycle == FlowFieldSessionLifecycle.Building && !_composeStage.IsRunning;
+            => !_composeStage.IsRunning
+                && (Lifecycle == FlowFieldSessionLifecycle.Building
+                    || _requests.Pending && !_submittedForScheduler);
 
-        internal override void PumpInternal(in FlowFieldBuildBudget budget) => PumpFrame(in budget);
+        internal override void PumpInternal(in FlowFieldBuildBudget budget)
+            => PumpFrame(in budget, requireSubmit: true);
 
-        private bool PumpFrame(in FlowFieldBuildBudget budget)
+        private bool PumpFrame(in FlowFieldBuildBudget budget, bool requireSubmit = false)
         {
             if (!CanPump)
                 return false;
@@ -87,13 +94,23 @@ namespace Common.FlowField
             try
             {
                 if (_composeStage.IsRunning)
-                    ContinueCompose();
+                {
+                    // Input can only change between frames, so checking here
+                    // covers everything that arrived since the last piece.
+                    if (RejectOutdatedWork())
+                        _composeStage.Clear();
+                    else
+                        ContinueCompose();
+                }
                 else
+                {
                     _solveStage.Poll(wait: false);
+                }
                 return !_composeStage.IsRunning
                     && Lifecycle != FlowFieldSessionLifecycle.Building
                     && CanPump
                     && _requests.Pending
+                    && (_submittedForScheduler || !requireSubmit)
                     && BuildPending();
             }
             catch (Exception exception)
@@ -258,6 +275,7 @@ namespace Common.FlowField
             if (!IsInitialized || _state.ConfigurationStale)
                 return;
             _state.ConfigurationStale = true;
+            _submittedForScheduler = false;
             MarkDirty(FlowFieldDirtyFlags.All, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
             // RuntimeState is derived from the lifecycle plus readiness. A
             // stale configuration therefore becomes Building immediately,
@@ -306,6 +324,7 @@ namespace Common.FlowField
                 _state.ExpandObstacleDirty(request.DirtyObstacleRegion);
 
             _requests.Accept(request);
+            _submittedForScheduler = true;
             _state.GridMarkedUnsubmitted = false;
             _state.GoalRemoved = !request.Goal.IsValid;
             return true;
@@ -452,6 +471,7 @@ namespace Common.FlowField
             _state.DirtyObstacleRegion = FlowFieldCellRect.Invalid;
             _state.ResolvedDefaultDirection = Vector3.zero;
             _requests.Clear();
+            _submittedForScheduler = false;
             _state.ObstacleProbePending = false;
             _state.GridMarkedUnsubmitted = false;
             _state.GoalRemoved = false;

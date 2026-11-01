@@ -65,7 +65,7 @@ Manager 설정·Goal·Obstacle·Modifier
 4. 이동 주체는 `IFlowFieldProvider.TrySample()`의 방향·속도 배율을 자신의 업데이트에서 적용합니다. 조회 실패와 조회에 성공한 정지 샘플을 모두 처리해야 합니다.
 5. 공개 입력 명령은 `IFlowFieldController`를 사용합니다. 최신 설정의 재요청과 Manager·Session Fault 재시도에는 `RequestRebuild()`를 사용하며, 바닥·장애물 형상 변경은 아래의 갱신 API를 선택합니다. 실행 모드를 바꿀 때는 `Release()` → `SetSpaceMode()` → `Init()` 순서를 따릅니다.
 
-`RequestRebuild()`는 계산 완료를 보장하는 동기 호출이 아닙니다. Surface의 Modifier 등록·값/영역 변경·자동 관측은 첫 요청 수락 이후 기존 요청에 처리를 예약하므로 매번 추가 호출할 필요가 없습니다. Manager는 Surface 작업 직전 현재 설정을 다시 정규화합니다. Grid·Source 무효화로 명시적 재빌드가 필요한 상태에서는 유효한 새 요청을 제출해야 처리를 재개합니다.
+`RequestRebuild()`는 계산 완료를 보장하는 동기 호출이 아닙니다. Surface의 Modifier 등록·값/영역 변경·자동 관측은 첫 요청 수락 이후 기존 요청에 처리를 예약하므로 매번 추가 호출할 필요가 없습니다. Manager는 Surface 작업 직전 현재 설정을 다시 정규화합니다. Grid·Source 무효화로 명시적 재빌드가 필요한 상태에서는 유효한 새 요청을 제출해야 처리를 재개합니다. Scheduler는 Manager가 제출한 Surface 요청만 빌드하므로, 풀이 중에 바뀐 Goal은 풀이가 끝난 뒤 다음 제출에서 반영됩니다.
 
 ### 샘플 반환값과 이동 예제
 
@@ -158,6 +158,7 @@ Modifier는 막힌 셀, Goal Anchor, 도달할 수 없는 셀과 기본 방향�
 | --- | --- |
 | `TrySample` 등 읽기 | 바로 실행합니다 |
 | `RegisterVectorModifier`, `UnregisterVectorModifier`, `NotifyModifierChanged`, `RegisterDynamicObstacle`, `UnregisterDynamicObstacle` | 진행 중인 작업이 끝난 뒤 실행합니다. 그 사이 Session이 멈췄다면 실행하지 않습니다 |
+| 위 등록 명령의 반환값 | `true`는 접수되었다는 뜻입니다. 처리 전에 Session이 Fault나 해제로 멈추면 등록은 버려지고 경고를 남깁니다 |
 | Manager를 끄거나 파괴하는 호출 | `OnDisable`, `OnDestroy`의 처리를 작업이 끝난 뒤로 미룹니다 |
 | `Init`, `RequestRebuild`, `Release`, `SetSpaceMode`, `SetGoal`, `NotifyCellsDirty`, `NotifyObstacleRegionDirty` | `InvalidOperationException`을 던집니다. 잡지 않으면 Session이 Fault 상태가 됩니다 |
 
@@ -222,7 +223,7 @@ Manager도 함께 Fault 상태라면 Modifier를 비활성화·Release해 설정
 | Modifier 계약 | `IFlowFieldVectorModifier`, `IFlowFieldModifierSnapshot` | 메타데이터 관측과 작업별 고정 값 계산 |
 | Unity 연결 | `FlowFieldManager` | 직렬화 설정, 활성 Session, 이벤트 구독과 수명 전이 |
 | 공통 Session 경계 | `FlowFieldSessionBase`, `FlowFieldSessionLifecycle`, `FlowFieldRequestInbox` | 수명 표·공개 상태·이벤트 전달·Scheduler 등록, 최신 요청과 대기 표시. 모드별 배열은 자식 소유 |
-| Surface 실행 | `FlowFieldSession`, `FlowFieldSurfaceBaseStage`, `FlowFieldSurfaceSolveStage`, `FlowFieldSurfaceComposeStage`, `FlowFieldComposeRun` | 단계 순서와 수명, 표면·장애물·Goal 준비, 풀이 실행, 프레임에 나눈 합성과 원자적 결과 게시. 끝난 풀이는 Grid가 바뀌거나 Goal이 사라진 경우가 아니면 게시 |
+| Surface 실행 | `FlowFieldSession`, `FlowFieldSurfaceBaseStage`, `FlowFieldSurfaceSolveStage`, `FlowFieldSurfaceComposeStage`, `FlowFieldComposeRun` | 단계 순서와 수명, 표면·장애물·Goal 준비, 풀이 실행, 프레임에 나눈 합성과 원자적 결과 게시. 끝난 풀이와 합성은 Grid나 설정이 바뀌거나 Goal이 사라진 경우가 아니면 게시 |
 | Surface 기본 계산 | `FlowFieldSurfaceBuildPipeline`, `FlowFieldGoalPipeline`, `FlowFieldGoalTracker`, `FlowFieldObstaclePipeline` | 표면·장애물 준비, Goal 해석·변경 관측과 탐색 |
 | Surface Modifier | `FlowFieldModifierRegistry`, `FlowFieldModifierPipeline` | 등록·메타데이터 관측, 영역 갱신·Snapshot 캡처·최종 합성. 영역 버퍼는 Registry Entry에 지연 할당 |
 | Surface 게시 | `FlowFieldFieldStore` | 게시 Grid·Surface·해석된 Goal·최종 방향·속도의 단일 저장소 |

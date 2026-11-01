@@ -300,6 +300,25 @@ namespace Common.FlowField.Tests
         }
 
         [Test]
+        public void RetryingFromAFaultedHandlerStillLogsTheFailure([Values(false, true)] bool volume)
+        {
+            FlowFieldManager manager = CreateManager(volume);
+            Build(manager);
+            manager.StateChanged += state =>
+            {
+                if (state == FlowFieldRuntimeState.Faulted)
+                    manager.RequestRebuild();
+            };
+            LogAssert.Expect(LogType.Error, "[FlowFieldManager] FlowField build failed: Intentional failure");
+
+            FlowFieldSessionBase session = volume ? manager.VolumeSession : manager.SurfaceSession;
+            session.ReportFault(new InvalidOperationException("Intentional failure"));
+
+            Assert.That(manager.IsFaulted, Is.False);
+            manager.Release();
+        }
+
+        [Test]
         public void SamplingIsAllowedInModifierCode([Values(false, true)] bool volume)
         {
             FlowFieldManager manager = CreateManager(volume);
