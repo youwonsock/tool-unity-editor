@@ -227,7 +227,7 @@ Manager도 함께 Fault 상태라면 Modifier를 비활성화·Release해 설정
 | Surface Modifier | `FlowFieldModifierRegistry`, `FlowFieldModifierPipeline` | 등록·메타데이터 관측, 영역 갱신·Snapshot 캡처·최종 합성. 영역 버퍼는 Registry Entry에 지연 할당 |
 | Surface 게시 | `FlowFieldFieldStore` | 게시 Grid·Surface·해석된 Goal·최종 방향·속도의 단일 저장소 |
 | Volume 실행 | `FlowFieldVolumeSession` | 최신 요청 수락, 작업 취소·수명, Physics·풀이 Job·Scheduler 연결과 게시 |
-| Volume 작업 | `FlowFieldVolumeBuildContext`, `FlowFieldVolumeNavigation` | 한 작업의 배열·진행 커서와 26방향 탐색 연산 |
+| Volume 작업 | `FlowFieldVolumeBuildContext`, `FlowFieldVolumeNavigation` | 한 작업의 배열·진행 커서와 셀 중심 좌표. 26방향 탐색은 `FlowFieldVolumeSolveJob`이 맡음 |
 | Volume 셀 쿼리 | `FlowFieldVolumeCellQuery`, `FlowFieldCellRegionCursor` | 스텝(64셀)마다 Physics 후보를 한 번 모아 후보가 닿는 셀만 정확히 검사. 추적한 변경과 Modifier 영향 범위의 셀만 순회 |
 | Volume 입력 관측 | `FlowFieldVolumeModifierRegistry`, `FlowFieldVolumeObstacleTracker` | Modifier 관측·캡처와 Collider 변경 Bounds 관측 |
 | Volume 안전성·게시 | `FlowFieldVolumeSafetyState`, `FlowFieldVolumeFieldData`, `FlowFieldVolumeSpareArrays` | 불확실 영역의 보수적 정지, 완성 결과 보관, 교체된 결과 배열 재사용. 뷰로 내보낸 결과의 배열은 재사용하지 않음 |
@@ -382,5 +382,5 @@ Unity.exe -batchmode -projectPath <ToyProject> -runTests -testPlatform EditMode 
 - 현재 씬 2개·Prefab 2개·v6 베이크 2개와 기존 GUID·직렬화 값은 유지합니다. 구버전 API 래퍼·직렬화 별칭·변환 전용 코드나 에셋은 두지 않습니다.
 - BFS는 동일 비용의 격자 이동 횟수를 최소화합니다. 속도 Modifier는 경로 비용을 바꾸지 않으며 Agent 간 충돌 회피는 이동 시스템의 책임입니다.
 - Volume의 2ms는 협력 CPU 예산입니다. Physics·Modifier 호출 한 번이나 할당이 이를 초과할 수 있으며 전체 빌드 시간의 상한은 아닙니다. 워커 스레드의 풀이 시간은 이 예산에 들지 않습니다.
-- Surface 런타임·StaticBaked 이미지는 현재 HUD로 다시 캡처했고, 나머지 기능 이미지는 기존 캡처입니다. 회귀 실행은 실제 포인터 조작·GUI 렌더링·장시간 군중 이동을 포함하지 않습니다. Surface 샘플의 실제 포인터 조작, 두 샘플의 실제 키 입력, 군중 1000개 3분 이동은 Editor에서 별도로 확인했습니다. RMB+WASD 자유 카메라는 우클릭을 누른 채 유지하는 입력을 만들 수 없어, 버튼 번호만 왼쪽으로 잠시 바꿔 이동·회전·해제를 확인하고 실제 우클릭 입력은 따로 확인했습니다. Mono Mac Player는 `Tools/run-player-probe.sh`로 실행해 확인했고, IL2CPP는 Android ARM64 APK 빌드까지만 확인했습니다.
+- Surface 런타임·StaticBaked 이미지는 현재 HUD로 다시 캡처했고, 나머지 기능 이미지는 기존 캡처입니다. 회귀 실행은 실제 포인터 조작·GUI 렌더링·장시간 군중 이동을 포함하지 않습니다. Surface 샘플의 실제 포인터 조작, 두 샘플의 실제 키 입력, 군중 1000개 3분 이동은 Editor에서 별도로 확인했습니다. 군중 이동은 2026-10-31 기록으로, 그 뒤의 Burst 전환과 구조 개편 후에는 다시 돌리지 않았습니다. RMB+WASD 자유 카메라는 우클릭을 누른 채 유지하는 입력을 만들 수 없어, 버튼 번호만 왼쪽으로 잠시 바꿔 이동·회전·해제를 확인하고 실제 우클릭 입력은 따로 확인했습니다. Mono Mac Player는 `Tools/run-player-probe.sh`로 실행해 확인했고, IL2CPP는 Android ARM64 APK 빌드까지만 확인했습니다.
 - macOS 입력 소스가 한글이면 샘플의 글자 키가 `Input.GetKeyDown`에 전달되지 않습니다(M·R·G·O로 확인). Space와 숫자 키는 동작합니다. 샘플을 조작할 때는 영문 입력 소스로 바꿉니다.
