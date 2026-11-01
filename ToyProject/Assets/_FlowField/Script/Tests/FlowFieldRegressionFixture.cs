@@ -75,15 +75,13 @@ namespace Common.FlowField.Tests
             {
                 internal FlowFieldBfsRequest Request;
                 internal Action<FlowFieldBfsRequest> Completed;
-                internal Action<FlowFieldBfsRequest, Exception> Failed;
                 internal bool Cancelled;
             }
 
             internal readonly List<Pending> Calls = new List<Pending>();
-            public bool StartBfs(in FlowFieldBfsRequest request, Action<FlowFieldBfsRequest> completed,
-                Action<FlowFieldBfsRequest, Exception> failed)
+            public bool StartBfs(in FlowFieldBfsRequest request, Action<FlowFieldBfsRequest> completed)
             {
-                Calls.Add(new Pending { Request = request, Completed = completed, Failed = failed });
+                Calls.Add(new Pending { Request = request, Completed = completed });
                 return true;
             }
 
@@ -103,7 +101,6 @@ namespace Common.FlowField.Tests
                 call.Completed(call.Request);
             }
 
-            internal void Fail(int index) => Calls[index].Failed(Calls[index].Request, new InvalidOperationException("Simulated solve failure"));
             public void Dispose() { } // Retain callbacks to exercise late completion after release.
         }
 

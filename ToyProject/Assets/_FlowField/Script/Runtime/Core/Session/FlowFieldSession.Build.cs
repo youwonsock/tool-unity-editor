@@ -253,10 +253,7 @@ namespace Common.FlowField
                 return true;
             }
 
-            bool accepted = _solveStage.Start(
-                bfsRequest,
-                _ => RunBfsCallback(generation, OnBfsCompleted),
-                (_, exception) => RunBfsCallback(generation, () => OnBfsFailed(exception)));
+            bool accepted = _solveStage.Start(bfsRequest, _ => RunBfsCallback(generation));
             // A synchronous completion has already left the Building state.
             if (!accepted && IsCurrentBuild(generation))
                 throw new InvalidOperationException("FlowField BFS session could not be started.");
@@ -268,12 +265,12 @@ namespace Common.FlowField
                 && generation == LifetimeGeneration
                 && Lifecycle == FlowFieldSessionLifecycle.Building;
 
-        private void RunBfsCallback(int generation, Action callback)
+        private void RunBfsCallback(int generation)
         {
             if (!IsCurrentBuild(generation))
                 return;
             using FlowFieldExecutionBoundary.OperationScope operation = Boundary.EnterOperation();
-            try { callback(); }
+            try { OnBfsCompleted(); }
             catch (Exception exception) { EnterFault(exception); }
         }
 
@@ -290,7 +287,7 @@ namespace Common.FlowField
             bool goalRemoved = _state.GoalRemoved && _state.Workspace.HasActiveGoal;
             if (!gridChanged && !goalRemoved)
                 return false;
-            RestoreStagingAfterStaleResult(preserveObstacle: true);
+            RestoreStagingAfterStaleResult();
             RequeueRejectedGoal();
             SetLifecycle(FlowFieldSessionLifecycle.Active);
             return true;
@@ -340,31 +337,7 @@ namespace Common.FlowField
             ComposeThenCommit(finalRequest, rebuildBase: true, resultChanged: true, includeBase: true);
         }
 
-        private void OnBfsFailed(Exception exception)
-        {
-            if (Lifecycle != FlowFieldSessionLifecycle.Building)
-                return;
-            if (RejectOutdatedWork())
-                return;
-            // A failed base solve cannot be replaced by a final-only compose:
-            // unlike the successful callback there is no freshly solved Goal
-            // graph to preserve. Requeue the Goal stage whenever the request
-            // changed while the backend was running (including a pending
-            // Default Direction/Modifier request), then retry the same base
-            // inputs without exposing a partial result.
-            if (_requests.Pending
-                || _state.ObstacleProbePending
-                || IsBaseDirty(_state.DirtyFlags))
-            {
-                RestoreStagingAfterStaleResult(preserveObstacle: true);
-                RequeueRejectedGoal();
-                SetLifecycle(FlowFieldSessionLifecycle.Active);
-                return;
-            }
-            EnterFault(exception ?? new InvalidOperationException("FlowField BFS failed."));
-        }
-
-        private void RestoreStagingAfterStaleResult(bool preserveObstacle = false)
+        private void RestoreStagingAfterStaleResult()
         {
             bool sameSignature = _fieldStore.IsValid
                 && _state.Workspace.Capacity == _fieldStore.Capacity
@@ -374,10 +347,7 @@ namespace Common.FlowField
                 && SurfacesEqual(_fieldStore.Surface, _state.Surface);
             if (sameSignature)
             {
-                if (preserveObstacle)
-                    _fieldStore.CopyGoalAndFieldToWorkspace(_state.Workspace);
-                else
-                    _fieldStore.CopyToWorkspace(_state.Workspace);
+                _fieldStore.CopyGoalAndFieldToWorkspace(_state.Workspace);
             }
             else if (_state.Workspace.Capacity > 0)
             {
