@@ -47,9 +47,12 @@ namespace Common.FlowField
         {
             if (!IsInUserCode)
                 return false;
-            _deferredCommands.Enqueue(command);
+            Defer(command);
             return true;
         }
+
+        /// <summary>Queues a command for a caller that has already checked <see cref="IsInUserCode"/>.</summary>
+        internal void Defer(Action command) => _deferredCommands.Enqueue(command);
 
         internal void Publish(in QueuedEvent queuedEvent)
         {
