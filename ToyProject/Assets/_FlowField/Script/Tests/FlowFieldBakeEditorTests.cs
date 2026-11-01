@@ -50,6 +50,48 @@ namespace Common.FlowField.Tests
         [UnityTest] public IEnumerator VolumeBakePreservesTheAssetWhenInputChanges() => CheckInputChange(volume: true);
 
         [UnityTest]
+        public IEnumerator AFailedSaveKeepsThePreviousBake(
+            [Values(false, true)] bool volume,
+            [Values(true, false)] bool saveThrows)
+        {
+            FlowFieldManager manager = CreateManager(volume);
+            FlowFieldSurfaceBakeEditor.BakeAndAssign(manager);
+            yield return WaitForLog(CompleteLog);
+            string baked = File.ReadAllText(_assetPath);
+            int revision = BakeRevision(manager, volume);
+
+            using (var settings = new SerializedObject(manager))
+            {
+                settings.FindProperty("_obstacleClearance").floatValue += 0.25f;
+                settings.ApplyModifiedPropertiesWithoutUndo();
+            }
+            // A write that fails quietly leaves the Asset dirty.
+            FlowFieldBakeAssetUtility.SaveOverride = asset =>
+            {
+                if (saveThrows)
+                    throw new IOException("Intentional save failure");
+            };
+            LogAssert.ignoreFailingMessages = true;
+            try
+            {
+                FlowFieldSurfaceBakeEditor.BakeAndAssign(manager);
+                yield return WaitForLog(saveThrows ? "Intentional save failure" : "Could not save");
+            }
+            finally
+            {
+                FlowFieldBakeAssetUtility.SaveOverride = null;
+                LogAssert.ignoreFailingMessages = false;
+            }
+
+            Assert.That(File.ReadAllText(_assetPath), Is.EqualTo(baked));
+            Assert.That(BakeRevision(manager, volume), Is.EqualTo(revision), "The in-memory Asset must be rolled back too.");
+            Assert.That(volume ? (Object)manager.VolumeStaticBakeData : manager.StaticBakeData, Is.Not.Null);
+        }
+
+        private static int BakeRevision(FlowFieldManager manager, bool volume)
+            => volume ? manager.VolumeStaticBakeData.Revision : manager.StaticBakeData.Revision;
+
+        [UnityTest]
         public IEnumerator BakeRejectsAGoalWithoutAWalkableCellAndKeepsEarlierUndo([Values(false, true)] bool volume)
         {
             FlowFieldManager manager = CreateManager(volume);
