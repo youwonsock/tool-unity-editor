@@ -355,7 +355,6 @@ Windows 배치 실행 예:
 & "C:\Program Files\Unity\Hub\Editor\2023.2.20f1\Editor\Unity.exe" -batchmode -projectPath <ToyProject> `
   -runTests -testPlatform EditMode -assemblyNames Common.FlowField.Tests `
   -testResults <results.xml> -logFile <unity.log>
-$env:FLOWFIELD_PERF = "1"   # 성능 프로브: 위 명령에 -testCategory Performance 추가
 ```
 
 단계별 XML·로그와 프로브 CSV는 Git에서 제외되는 `ToyProject/Logs/FlowFieldImprovement/`, `ToyProject/Logs/FlowFieldPerformance/`에 보관했다.
@@ -417,9 +416,9 @@ PR #26~#37을 다시 검토해 찾은 결함이다. 수정 전 코드에서 재�
 | Surface 세션 필드 | 28개 → 15개 이하 | 13개 |
 | 가장 큰 세션 파일 | 841줄 → 600줄 이하 | 572줄 |
 | Volume 100³ 2ms 예산 빌드 | 1,270프레임 → 절반 이하 | 132~218프레임(Player 첫 빌드) |
-| Volume 100³ Directions·BFS·Topology | 2,162ms → 절반 이하 | 워커 Job으로 옮겨 프레임 예산을 쓰지 않는다. 세 단계만 따로 다시 재지는 않았고, Player 첫 빌드 전체는 7.6초 → 2.3~3.7초 |
-| 메인 스레드 한 구간 | 2ms | Volume 2.3~5.1ms, Surface Goal 변경 2.4~3.7ms로 조금 넘는다 |
+| Volume 100³ Directions·BFS·Topology | 2,162ms → 절반 이하 | 워커 Job으로 옮겨 프레임 예산을 쓰지 않는다. 세 단계만 따로 다시 재지는 않았고, Player 첫 빌드 전체는 7.6초 → 1.7~3.7초 |
+| 메인 스레드 한 구간 | 2ms | Volume 1.9~5.1ms, Surface Goal 변경 2.0~3.7ms로 조금 넘을 수 있다 |
 
 마지막 검토에서 런타임에 호출자가 없는 `FlowFieldVolumeSession.Cancel`을 지우고, 등록 명령이 지연될 때만 클로저를 할당하게 했다. FlowField에는 지울 마이그레이션 코드나 사용하지 않는 직렬화 필드가 없었다. 베이크 `_formatVersion` 검사는 다른 형식을 거부하는 검증이라 유지한다.
 
-작업 현황 문서(`StatusAndBacklog.md`)는 이때 지웠다. 측정값과 확인하지 않은 범위는 README로 옮겼고, 이전 내용은 Git 기록에 있다.
+성능 프로브(`FlowFieldPerformanceProbes`)는 모든 실행에서 건너뛰고 Player 측정으로 대체되어 지웠고, 호출되지 않는 테스트 도우미와 해시 미기록 경로도 지웠다. 작업 현황 문서(`StatusAndBacklog.md`)는 이때 지웠다. 측정값과 확인하지 않은 범위는 README로 옮겼고, 이전 내용은 Git 기록에 있다.

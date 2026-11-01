@@ -56,7 +56,7 @@ Manager 설정·Goal·Obstacle·Modifier
   → 이동 주체의 이동·감속 적용
 ```
 
-모드별 Session이 최신 수락 입력·실행 중 입력·게시 결과를 소유합니다. `FlowFieldSessionBase`는 수명 표·공개 상태·이벤트 전달·Scheduler 등록을 공유하고, 최신 요청과 대기 표시는 `FlowFieldRequestInbox`가 맡습니다. 같은 Grid·Source에서 읽을 수 있는 게시 결과는 다음 계산 중에도 유지합니다. 구체적인 수명·입력·Revision 정책은 아래의 [수명과 결과 게시](#수명과-결과-게시)와 [TechnicalNotes.md](Docs/TechnicalNotes.md)에 정리합니다.
+모드별 Session이 최신 수락 입력과 게시 결과를 소유합니다. Volume은 실행 중 입력을 BuildContext에 고정하고, Surface는 준비한 작업 배열로 풀고 최신 요청으로 합성합니다. `FlowFieldSessionBase`는 수명 표·공개 상태·이벤트 전달·Scheduler 등록을 공유하고, 최신 요청과 대기 표시는 `FlowFieldRequestInbox`가 맡습니다. 같은 Grid·Source에서 읽을 수 있는 게시 결과는 다음 계산 중에도 유지합니다. 구체적인 수명·입력·Revision 정책은 아래의 [수명과 결과 게시](#수명과-결과-게시)와 [TechnicalNotes.md](Docs/TechnicalNotes.md)에 정리합니다.
 
 ## 사용 방법
 
@@ -240,7 +240,7 @@ Manager도 함께 Fault 상태라면 Modifier를 비활성화·Release해 설정
 
 ## 수명과 결과 게시
 
-- **수락·실행·게시 입력**: 최신 요청은 다음 작업을, 실행 중 입력은 해당 계산을, 게시 입력은 현재 공개 결과를 설명합니다. 서로 다른 시점의 소유권이며 연속 요청은 최신 값과 대기 플래그로 병합합니다.
+- **수락·실행·게시 입력**: 최신 요청은 다음 작업을, 게시 입력은 현재 공개 결과를 설명합니다. Volume은 작업이 시작될 때 입력을 고정하고, Surface는 실행 중 요청 복사본 없이 풀이가 끝나면 최신 요청으로 합성합니다. 연속 요청은 최신 값과 대기 플래그로 병합합니다.
 - **Surface 조회**: 일반 샘플과 해석된 Goal 메타데이터는 항상 게시 FieldStore에서 읽습니다. Modifier 합성 중의 작업 배열은 노출하지 않습니다. 장애물·탈출·연결 안전성 검사는 최신 관측을 반영해 이동을 제한할 수 있습니다. 요청 Goal과 게시 결과의 해석된 Goal은 별도 의미를 유지합니다.
 - **Volume 부분 재계산**: 입력이 같으면 Modifier 변경은 게시된 내비게이션에 Modifier만 다시 합성하고, Goal만 바뀌면 장애물 결과와 Topology를 재사용합니다. 등록·스윕으로 추적하지 않는 Collider는 다음 전체 빌드에서 반영되므로, 이런 Collider가 바뀌면 `RequestRebuild()`나 `NotifyCellsDirty()`를 호출합니다. Volume의 이 두 호출은 Goal이 함께 바뀌어도 장애물을 다시 조회합니다. `SetGoal()` 뒤에 `RequestRebuild()`를 덧붙이면 Goal 재사용 효과를 잃으므로, Goal만 바꿀 때는 `SetGoal()`만 호출합니다. Goal이 같은 셀 안에서 움직이면 결과가 같으므로 빌드하지 않습니다. 이때 Revision은 그대로이고 `FieldChanged`도 발생하지 않으며, `FlowFieldFieldInfo`의 요청 Goal만 최신 값으로 바뀝니다.
 - **Revision과 참조**: Surface Revision은 셀 데이터·Goal의 실질 변경에 따라 증가합니다. 같은 내용의 Snapshot 교체는 Revision 증가 없이 게시 Grid·Surface 참조를 갱신할 수 있습니다. Volume Revision은 완료 결과 교체 정책을 따릅니다.
@@ -355,7 +355,7 @@ Surface2D의 X·Z 셀 수는 `floor(axisLength / CellSize + 0.5)`로 계산하�
 
 ### 검증 기록
 
-Unity 2023.2.20f1·macOS·Metal(Apple M4 Pro)에서 **회귀 테스트 411개가 모두 통과**했습니다(성능 프로브 12개 제외). Windows·Direct3D 11(AMD Radeon RX 9070)의 마지막 기록은 이번 수정 이전의 466개 통과입니다. 저장된 샘플 씬 통합 2개, PlayMode에 진입하는 Manager 통합을 포함합니다. Surface·Volume의 샘플 게시, 재진입·취소·재활성화, 장애물 안전성, Modifier 합성, 베이크 검증·저장 실패 경계와 직렬화 참조를 확인합니다.
+Unity 2023.2.20f1·macOS·Metal(Apple M4 Pro)에서 **회귀 테스트 411개가 모두 통과**했습니다. Windows·Direct3D 11(AMD Radeon RX 9070)의 마지막 기록은 이번 수정 이전의 466개 통과입니다. 저장된 샘플 씬 통합 2개, PlayMode에 진입하는 Manager 통합을 포함합니다. Surface·Volume의 샘플 게시, 재진입·취소·재활성화, 장애물 안전성, Modifier 합성, 베이크 검증·저장 실패 경계와 직렬화 참조를 확인합니다.
 
 리팩터링 안전망으로 다음 검사가 함께 실행됩니다.
 
@@ -370,7 +370,7 @@ Unity.exe -batchmode -projectPath <ToyProject> -runTests -testPlatform EditMode 
   -assemblyNames Common.FlowField.Tests -testResults <results.xml> -logFile <unity.log>
 ```
 
-성능 프로브(`FlowFieldPerformanceProbes`, `Performance` 카테고리)는 일반 실행에서 건너뜁니다. 환경 변수 `FLOWFIELD_PERF=1`을 설정하고 `-testCategory Performance`로 실행하면 결과를 `Logs/FlowFieldPerformance/probes.csv`에 추가합니다. 단계별 변경과 결정은 [RefactoringNotes.md](Docs/RefactoringNotes.md)에 기록합니다. `Logs/`는 Git에서 제외되므로 새 체크아웃에서는 다시 실행해 생성합니다.
+단계별 변경과 결정은 [RefactoringNotes.md](Docs/RefactoringNotes.md)에 기록합니다.
 
 | 측정(100³ Volume·장애물 40개, Managed) | 개선 전 | Burst 전환 전 |
 | --- | ---: | ---: |
@@ -387,25 +387,25 @@ Unity.exe -batchmode -projectPath <ToyProject> -runTests -testPlatform EditMode 
 
 | 시나리오 | 측정값 |
 | --- | --- |
-| Surface Goal 변경, 게시까지 | 64~115ms |
-| Surface 장애물 이동, 게시까지 | 98~276ms |
-| Surface Goal 초당 8셀 이동, 초당 게시 | 7.9~9.0회 |
-| Volume 첫 빌드, 게시까지 / 가장 긴 프레임 | 2.3~3.7초 / 20ms |
-| Volume Goal 변경, 게시까지 / 가장 긴 프레임 | 0.10~0.14초 / 17~22ms |
-| Volume 장애물 이동, 게시까지 | 0.2초 |
-| Volume Modifier 값 변경, 게시까지 | 0.25~0.29초 |
+| Surface Goal 변경, 게시까지 | 46~115ms |
+| Surface 장애물 이동, 게시까지 | 98~314ms |
+| Surface Goal 초당 8셀 이동, 초당 게시 | 7.9~9.1회 |
+| Volume 첫 빌드, 게시까지 / 가장 긴 프레임 | 1.7~3.7초 / 20ms |
+| Volume Goal 변경, 게시까지 / 가장 긴 프레임 | 0.08~0.14초 / 17~22ms |
+| Volume 장애물 이동, 게시까지 | 0.16~0.21초 |
+| Volume Modifier 값 변경, 게시까지 | 0.20~0.29초 |
 | Volume Goal 초당 8셀 이동, 초당 게시 / 10초간 GC / 가장 긴 프레임 | 9.1~9.5회 / 0회 / 18~19ms |
 | 풀이 중 Release | 2ms 미만 |
 
-메인 스레드에서 한 번에 끝나는 구간의 예산은 2ms이며, 다음 구간은 이를 넘습니다.
+메인 스레드에서 한 번에 끝나는 구간의 예산은 2ms이며, 다음 구간은 이를 넘을 수 있습니다.
 
 | 시나리오 | 최장 구간 | 내용 |
 | --- | --- | --- |
 | Surface 첫 빌드 | 115~120ms | 표면 Raycast 전체. 한 스냅샷이 되도록 한 프레임에 실행 |
-| Surface 장애물 이동 | 12~15ms | 장애물 Physics 조회와 탈출 방향. 같은 이유로 나누지 않음 |
-| Surface Modifier 등록 | 7ms | 영향 영역 Physics 조회 |
-| Surface Goal 변경 | 2.4~3.7ms | 한 덩어리로 끝나는 합성 조각과 게시 |
-| Volume 전부 | 2.3~5.1ms | 장애물과 Modifier를 64셀씩 나눔 |
+| Surface 장애물 이동 | 10~15ms | 장애물 Physics 조회와 탈출 방향. 같은 이유로 나누지 않음 |
+| Surface Modifier 등록 | 3~7ms | 영향 영역 Physics 조회 |
+| Surface Goal 변경 | 2.0~3.7ms | 한 덩어리로 끝나는 합성 조각과 게시 |
+| Volume 전부 | 1.9~5.1ms | 장애물과 Modifier를 64셀씩 나눔 |
 
 ### 확인하지 않은 범위
 

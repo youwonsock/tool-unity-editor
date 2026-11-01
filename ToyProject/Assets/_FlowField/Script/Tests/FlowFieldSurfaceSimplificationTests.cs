@@ -232,25 +232,5 @@ namespace Common.FlowField.Tests
 
     public sealed class FlowFieldModifierCaptureObservationTests
     {
-        private sealed class ObservedModifier : IFlowFieldVectorModifier, IFlowFieldModifierSnapshot
-        {
-            internal Collider Collider;
-            internal Action<string> AfterCapture;
-            internal readonly List<string> Observed = new List<string>();
-            private bool _captured;
-            public Collider InfluenceCollider { get { Observe("collider"); return Collider; } }
-            public int Priority { get { Observe("priority"); return 100; } }
-            public int Revision { get { Observe("revision"); return 0; } }
-            public FlowFieldModifierObservation Observe() => new FlowFieldModifierObservation(InfluenceCollider, Priority, Revision);
-            private void Observe(string property)
-            {
-                if (!_captured) return;
-                Observed.Add(property);
-                AfterCapture?.Invoke(property);
-            }
-            public IFlowFieldModifierSnapshot CaptureSnapshot() { _captured = true; return this; }
-            public FlowFieldVectorState Modify(in FlowFieldVectorState current,
-                in FlowFieldVectorModifierContext context) => current;
-        }
     }
 }

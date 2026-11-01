@@ -441,31 +441,6 @@ namespace Common.FlowField.Tests
             => FlowFieldSessionRequest.ForStaticSnapshot(FlowFieldRegressionFixture.Settings, null, snapshot,
                 1 << FlowFieldRegressionFixture.Layer, 1f, .5f, 0f, Vector3.forward, FlowFieldDirtyFlags.None);
 
-        private sealed class CallbackSurfaceSource : IFlowFieldSurfaceSource
-        {
-            internal Action OnBuild;
-            internal bool ReturnNullOnce, ReturnInvalidOnce, DynamicGrid;
-            public FlowFieldSurfaceData Build(in FlowFieldSurfaceBakeSettings settings)
-            {
-                OnBuild?.Invoke();
-                if (ReturnNullOnce) { ReturnNullOnce = false; return null; }
-                if (ReturnInvalidOnce)
-                {
-                    ReturnInvalidOnce = false;
-                    return FlowFieldSurfaceData.FromRuntime(settings, new FlowFieldSurfaceBakeResult(settings.Grid.CellCount), 1);
-                }
-                if (!DynamicGrid) return FlowFieldRegressionFixture.Surface().Build(settings);
-                var result = new FlowFieldSurfaceBakeResult(settings.Grid.CellCount);
-                for (int index = 0; index < settings.Grid.CellCount; index++) result.SetSurface(index, 0f, Vector3.up);
-                for (int index = 0; index < settings.Grid.CellCount; index++)
-                {
-                    settings.Grid.FromFlatIndex(index, out int x, out int z);
-                    FlowFieldSurfaceBaker.BuildNeighborMask(settings, result, index, x, z);
-                }
-                return FlowFieldSurfaceData.FromRuntime(settings, result, 1);
-            }
-        }
-
         private sealed class Modifier : IFlowFieldVectorModifier
         {
             internal Collider Collider;

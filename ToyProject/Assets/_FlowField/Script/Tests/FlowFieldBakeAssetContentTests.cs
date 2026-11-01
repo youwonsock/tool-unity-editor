@@ -57,8 +57,6 @@ namespace Common.FlowField.Tests
         private static void AssertGolden(string name, string actual, string expected)
         {
             TestContext.Progress.WriteLine($"[FlowField bake content] {name} = {actual}");
-            if (expected == "PENDING")
-                Assert.Inconclusive($"{name} content hash not recorded yet. Current value: {actual}");
             Assert.That(actual, Is.EqualTo(expected), $"{name} content changed.");
         }
 
