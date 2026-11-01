@@ -25,7 +25,7 @@ namespace Common.FlowField.Tests
         }
         private void Initialize()
             => _session.Initialize(FlowFieldBakeMode.RuntimeDynamic, FlowFieldSessionSourceKind.SceneBuild,
-                FlowFieldBfsBackendPolicy.PreferGpu, null);
+                FlowFieldSolvePolicy.Worker);
         [TearDown]
         public void TearDown()
         {
@@ -133,7 +133,7 @@ namespace Common.FlowField.Tests
                     1 << FlowFieldRegressionFixture.Layer, 1f, 0.5f, 0f, false,
                     FlowFieldGoalPipeline.Resolve(FlowFieldRegressionFixture.Grid, null, true, goal, 10f),
                     direction, FlowFieldDirtyFlags.None, FlowFieldCellRect.Invalid,
-                    FlowFieldCellRect.Invalid, 1024);
+                    FlowFieldCellRect.Invalid);
             _session.Submit(Request(GoalA, Vector3.forward));
             _session.Pump();
             _session.ReportFault(new InvalidOperationException("Cancel old solve"));
@@ -169,7 +169,7 @@ namespace Common.FlowField.Tests
             _session.Pump();
             Assert.That(retried, Is.True);
             Assert.That(_session.IsFaulted, Is.False, _session.LastError);
-            _session.Pump(); // PreferGpu retries with the managed backend.
+            _session.Pump();
             AssertGoal(GoalC);
         }
 
@@ -206,66 +206,25 @@ namespace Common.FlowField.Tests
             Assert.That(info.ResolvedGoalWorld, Is.EqualTo(goal));
         }
 
-        [UnityTest]
-        public IEnumerator CancelledGpuResultCannotWriteStaging()
-            => VerifyCancelledGpuWrite(width: 3);
-
-        [UnityTest]
-        public IEnumerator CancelledGpuWaveLimitCannotStartManagedFallback()
-            => VerifyCancelledGpuWrite(width: 80);
-
-        private static IEnumerator VerifyCancelledGpuWrite(int width)
+        private sealed class RejectingBackend : IFlowFieldSolveBackend
         {
-            var shader = AssetDatabase.LoadAssetAtPath<ComputeShader>(
-                "Assets/_FlowField/Script/Runtime/Core/Solvers/FlowFieldFrontier.compute");
-            using (var backend = new FlowFieldSurfaceBuildPipeline(shader))
-            {
-                if (!backend.SupportsGpu) Assert.Ignore("Compute shaders and async readback are required.");
-                var grid = FlowFieldGridSpace.FromCellGrid(Vector3.zero, width, 1, 1f);
-                var settings = new FlowFieldSurfaceBakeSettings(grid,
-                    new Bounds(new Vector3(width * 0.5f, 0f, 0.5f), new Vector3(width, 4f, 1f)),
-                    1 << FlowFieldRegressionFixture.Layer, 45f, 0.5f);
-                var baked = new FlowFieldSurfaceBakeResult(grid.CellCount);
-                for (int i = 0; i < grid.CellCount; i++) baked.SetSurface(i, 0f, Vector3.up);
-                for (int i = 0; i < grid.CellCount; i++)
-                    FlowFieldSurfaceBaker.BuildNeighborMask(settings, baked, i, i, 0);
-                var surface = FlowFieldSurfaceData.FromRuntime(settings, baked, 1);
-                var workspace = new FlowFieldWorkspace();
-                workspace.Resize(grid.CellCount);
-                try
-                {
-                    Assert.That(FlowFieldSolver.PrepareGoal(grid, surface, workspace, width - 1, 0, 0f, out int goal), Is.True);
-                    var expectedNext = (int[])workspace.NextCells.Clone();
-                    var expectedDirections = (Vector3[])workspace.GoalDirections.Clone();
-                    bool current = true;
-                    int checks = 0;
-                    int notifications = 0;
-                    var request = new FlowFieldBfsRequest(grid, surface, workspace, true,
-                        width - 1, 0, 0f, goal, 64, () => { checks++; return current; });
-                    Assert.That(backend.StartBfs(request, _ => notifications++, (_, __) => notifications++), Is.True);
-                    Assert.That(checks, Is.EqualTo(1), "The build must reach the asynchronous GPU boundary.");
-                    current = false;
-                    double deadline = EditorApplication.timeSinceStartup + 30d;
-                    while (checks == 1 && EditorApplication.timeSinceStartup < deadline) yield return null;
-                    Assert.That(checks, Is.GreaterThan(1), "GPU completion did not check request ownership.");
-                    Assert.That(notifications, Is.Zero);
-                    Assert.That(workspace.NextCells, Is.EqualTo(expectedNext));
-                    Assert.That(workspace.GoalDirections, Is.EqualTo(expectedDirections));
-                    Assert.That(backend.GpuDisabled, Is.False, "A cancelled result must not downgrade the next build.");
-                }
-                finally { workspace.Release(); }
-            }
-        }
+            private bool _rejected;
 
-        private sealed class RejectingBackend : IFlowFieldGpuBackend
-        {
-            public bool SupportsGpu => true;
             public bool StartBfs(in FlowFieldBfsRequest request, Action<FlowFieldBfsRequest> completed,
-                Action<FlowFieldBfsRequest, Exception> failed, bool allowManagedFallback = true)
+                Action<FlowFieldBfsRequest, Exception> failed)
             {
-                failed(request, new InvalidOperationException("Synchronous backend failure"));
-                return false;
+                if (!_rejected)
+                {
+                    _rejected = true;
+                    failed(request, new InvalidOperationException("Synchronous backend failure"));
+                    return false;
+                }
+                FlowFieldSurfaceBuildPipeline.SolveNow(request);
+                completed(request);
+                return true;
             }
+            public void Poll(bool wait) { }
+            public void Cancel() { }
             public void Dispose() { }
         }
     }

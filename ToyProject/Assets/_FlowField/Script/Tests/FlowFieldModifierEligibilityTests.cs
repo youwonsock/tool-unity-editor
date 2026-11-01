@@ -76,7 +76,7 @@ namespace Common.FlowField.Tests
             Vector3 goal = Vector3.one * 2.5f;
             session.Submit(new FlowFieldVolumeRequest(
                 grid, new Bounds(Vector3.one * 1.5f, Vector3.one * 3f), FlowFieldBakeMode.RuntimeDynamic,
-                1 << FlowFieldRegressionFixture.Layer, 0f, true, goal, 0f, Vector3.forward, 1024, null, null));
+                1 << FlowFieldRegressionFixture.Layer, 0f, true, goal, 0f, Vector3.forward, null));
             for (int i = 0; i < 100 && session.IsRebuilding; i++)
                 session.Pump(10d);
             Assert.That(session.IsReady, Is.True, session.LastError);
@@ -96,8 +96,7 @@ namespace Common.FlowField.Tests
             session.Initialize(
                 FlowFieldBakeMode.RuntimeDynamic,
                 FlowFieldSessionSourceKind.SceneBuild,
-                FlowFieldBfsBackendPolicy.ManagedOnly,
-                null);
+                FlowFieldSolvePolicy.Inline);
             return session;
         }
 

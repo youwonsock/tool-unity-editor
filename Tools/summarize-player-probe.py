@@ -7,9 +7,8 @@ from collections import OrderedDict
 scenarios = OrderedDict()
 with open(sys.argv[1], newline="") as source:
     for row in csv.DictReader(source):
-        key = (row["backend"], row["scenario"])
-        scenarios.setdefault(key, OrderedDict())[row["metric"]] = row["value"]
+        scenarios.setdefault(row["scenario"], OrderedDict())[row["metric"]] = row["value"]
 
-for (backend, scenario), metrics in scenarios.items():
+for scenario, metrics in scenarios.items():
     values = " ".join(f"{metric}={value}" for metric, value in metrics.items())
-    print(f"{backend:8}{scenario:42}{values}")
+    print(f"{scenario:42}{values}")

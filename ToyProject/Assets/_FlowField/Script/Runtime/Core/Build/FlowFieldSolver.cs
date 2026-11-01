@@ -1,4 +1,5 @@
 using System;
+using Unity.Jobs;
 using UnityEngine;
 
 namespace Common.FlowField
@@ -144,16 +145,10 @@ namespace Common.FlowField
             int goalIndex)
         {
             ValidateWorkspace(grid, surface, workspace);
-            Span<int> neighborOffsets = stackalloc int[FlowFieldNeighborUtility.Count];
-            for (int direction = 0; direction < FlowFieldNeighborUtility.Count; direction++)
-            {
-                neighborOffsets[direction] = FlowFieldNeighborUtility.DeltaX[direction]
-                    + grid.Width * FlowFieldNeighborUtility.DeltaZ[direction];
-            }
-            BuildIntegration(grid, workspace, goalIndex, neighborOffsets);
-            BuildGoalDirections(grid, surface, workspace, goalIndex, neighborOffsets);
+            FlowFieldSurfaceSolve solve = FlowFieldSurfaceSolve.Create(grid, surface, workspace, goalIndex);
+            try { solve.Job.Run(); }
+            finally { solve.Release(); }
         }
-
 
         private static void BuildInfluenceMask(
             FlowFieldGridSpace grid,
@@ -178,134 +173,6 @@ namespace Common.FlowField
             }
 
             workspace.InfluenceMask[anchorIndex] = true;
-        }
-
-        private static void BuildIntegration(
-            FlowFieldGridSpace grid,
-            FlowFieldWorkspace workspace,
-            int goalIndex,
-            ReadOnlySpan<int> neighborOffsets)
-        {
-            int[] costs = workspace.Costs;
-            int[] queue = workspace.Queue;
-            byte[] topology = workspace.TopologyMasks;
-            for (int index = 0; index < grid.CellCount; index++)
-                costs[index] = UNREACHABLE;
-
-            int head = 0;
-            int tail = 0;
-            costs[goalIndex] = 0;
-            queue[tail++] = goalIndex;
-            while (head < tail)
-            {
-                int current = queue[head++];
-                int candidate = costs[current] + 1;
-                int mask = topology[current];
-                for (int directionIndex = 0; directionIndex < neighborOffsets.Length; directionIndex++)
-                {
-                    // A topology bit proves the move stays in bounds and traversable.
-                    if ((mask & (1 << directionIndex)) == 0)
-                        continue;
-
-                    int neighbor = current + neighborOffsets[directionIndex];
-                    if (candidate >= costs[neighbor])
-                        continue;
-
-                    costs[neighbor] = candidate;
-                    queue[tail++] = neighbor;
-                }
-            }
-        }
-
-        private static void BuildGoalDirections(
-            FlowFieldGridSpace grid,
-            FlowFieldSurfaceData surface,
-            FlowFieldWorkspace workspace,
-            int goalIndex,
-            ReadOnlySpan<int> neighborOffsets)
-        {
-            int[] costs = workspace.Costs;
-            byte[] topology = workspace.TopologyMasks;
-            grid.FromFlatIndex(goalIndex, out int goalX, out int goalZ);
-            for (int index = 0; index < grid.CellCount; index++)
-            {
-                workspace.NextCells[index] = !surface.IsSurfaceValid(index)
-                    ? -2
-                    : workspace.Blocked[index]
-                        ? -2
-                        : !workspace.InfluenceMask[index]
-                            ? -1
-                            : -3;
-                if (!FlowFieldGraphTraversal.IsCellTraversable(surface, workspace, index)
-                    || workspace.Costs[index] == UNREACHABLE)
-                {
-                    if (FlowFieldGraphTraversal.IsCellTraversable(surface, workspace, index))
-                    {
-                        workspace.GoalFlags[index] = FlowFieldGoalFlags.Unreachable;
-                        workspace.NextCells[index] = -3;
-                    }
-                    continue;
-                }
-
-                workspace.GoalFlags[index] = FlowFieldGoalFlags.Directed;
-                if (index == goalIndex)
-                {
-                    workspace.GoalFlags[index] |= FlowFieldGoalFlags.Anchor;
-                    workspace.GoalDirections[index] = Vector3.zero;
-                    workspace.NextCells[index] = index;
-                    continue;
-                }
-
-                grid.FromFlatIndex(index, out int x, out int z);
-                int bestIndex = -1;
-                int bestGoalScore = 0;
-                bool hasBest = false;
-                int previousWave = costs[index] - 1;
-                int mask = topology[index];
-                for (int directionIndex = 0; directionIndex < neighborOffsets.Length; directionIndex++)
-                {
-                    if ((mask & (1 << directionIndex)) == 0)
-                        continue;
-
-                    // Every edge has cost one. Selecting exactly the previous
-                    // wave prevents zero-cost cycles. Among those candidates,
-                    // prefer the one that is closest to the resolved Goal in
-                    // XZ; flat index is the deterministic final tie-breaker.
-                    int neighbor = index + neighborOffsets[directionIndex];
-                    if (costs[neighbor] != previousWave)
-                        continue;
-
-                    int goalScore = FlowFieldGraphTraversal.CalculateGoalAlignmentScore(
-                        x,
-                        z,
-                        goalX,
-                        goalZ,
-                        FlowFieldNeighborUtility.DeltaX[directionIndex],
-                        FlowFieldNeighborUtility.DeltaZ[directionIndex]);
-                    if (!hasBest
-                        || goalScore > bestGoalScore
-                        || goalScore == bestGoalScore && neighbor < bestIndex)
-                    {
-                        bestGoalScore = goalScore;
-                        bestIndex = neighbor;
-                        hasBest = true;
-                    }
-                }
-
-                if (bestIndex < 0)
-                {
-                    workspace.GoalFlags[index] = FlowFieldGoalFlags.Unreachable;
-                    workspace.NextCells[index] = -3;
-                    continue;
-                }
-
-                Vector3 currentPosition = surface.GetCellCenter(grid, index);
-                Vector3 nextPosition = surface.GetCellCenter(grid, bestIndex);
-                Vector3 normal = surface.GetSurfaceNormal(index);
-                Vector3 projected = Vector3.ProjectOnPlane(nextPosition - currentPosition, normal);
-                workspace.GoalDirections[index] = FlowFieldGraphTraversal.NormalizeOrZero(projected);
-                workspace.NextCells[index] = bestIndex;
-            }
         }
 
         private static void ValidateWorkspace(
@@ -347,31 +214,32 @@ namespace Common.FlowField
                 || workspace.TopologyMasks.Length != grid.CellCount)
                 throw new System.ArgumentException("Topology mask workspace capacity must match the grid.", nameof(workspace));
 
-            System.Array.Clear(workspace.TopologyMasks, 0, workspace.TopologyMasks.Length);
-            for (int index = 0; index < grid.CellCount; index++)
+            unsafe
             {
-                if (!IsCellTraversable(surface, workspace, index))
-                    continue;
-
-                grid.FromFlatIndex(index, out int x, out int z);
-                byte mask = 0;
-                for (int directionIndex = 0; directionIndex < FlowFieldNeighborUtility.Count; directionIndex++)
+                var pins = new FlowFieldPinnedArrays(5);
+                try
                 {
-                    if (CanTraverse(
-                            grid,
-                            surface,
-                            workspace,
-                            index,
-                            x,
-                            z,
-                            directionIndex,
-                            out _))
+                    var job = new FlowFieldSurfaceTopologyJob
                     {
-                        mask |= (byte)(1 << directionIndex);
+                        Topology = pins.Pin(workspace.TopologyMasks),
+                        Blocked = pins.Pin(workspace.Blocked),
+                        Influence = pins.Pin(workspace.InfluenceMask),
+                        SurfaceFlags = pins.Pin(surface.Flags),
+                        NeighborMasks = pins.Pin(surface.NeighborMasks),
+                        Width = grid.Width,
+                        Depth = grid.Depth,
+                    };
+                    for (int direction = 0; direction < FlowFieldNeighborUtility.SurfaceCount; direction++)
+                    {
+                        job.DeltaX[direction] = FlowFieldNeighborUtility.DeltaX[direction];
+                        job.DeltaZ[direction] = FlowFieldNeighborUtility.DeltaZ[direction];
                     }
+                    job.Run();
                 }
-
-                workspace.TopologyMasks[index] = mask;
+                finally
+                {
+                    pins.Release();
+                }
             }
         }
 

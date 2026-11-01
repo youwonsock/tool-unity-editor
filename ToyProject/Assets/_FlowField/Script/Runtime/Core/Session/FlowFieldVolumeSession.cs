@@ -15,7 +15,6 @@ namespace Common.FlowField
         private const int ArrayElementsPerStep = FlowFieldVolumeNavigation.ArrayElementsPerStep;
         private const double DefaultBudgetMilliseconds = 2.0;
         private const long MemoryBudgetBytes = 512L * 1024L * 1024L;
-        private const int Unreachable = FlowFieldVolumeNavigation.Unreachable;
         private readonly FlowFieldVolumeObstacleTracker _obstacles;
         private Collider[] _registeredObstacleOverlapBuffer;
         private readonly FlowFieldVolumeCellQuery _cellQuery = new FlowFieldVolumeCellQuery();
@@ -27,8 +26,6 @@ namespace Common.FlowField
         private readonly FlowFieldVolumeModifierRegistry _modifierRegistry = new FlowFieldVolumeModifierRegistry();
         private readonly FlowFieldVolumeSafetyState _safety = new FlowFieldVolumeSafetyState();
 
-        private FlowFieldComputeSolver _computeSolver;
-        private bool _gpuDisabled;
         private VolumeFieldData _committed;
         private BuildContext _build;
         // The latest accepted input is also the next build input when pending.
@@ -46,6 +43,9 @@ namespace Common.FlowField
         private bool _suspendedByLifecycle;
         private static long _nextVisualizationResultId;
         private bool _runtimeScheduled;
+        // Whoever pumps directly (a bake, a test) waits for the worker thread.
+        // The scheduler polls it, so no frame blocks on a solve.
+        private bool _waitForSolve;
         private long _buildReservationBytes;
         private long _committedReservationBytes;
 
@@ -66,7 +66,7 @@ namespace Common.FlowField
         internal override bool IsFaulted => State == FlowFieldRuntimeState.Faulted;
         internal override bool IsRebuilding => State == FlowFieldRuntimeState.Building;
         internal bool IsWaitingForExternalCompletion
-            => _build != null && _build.GpuPending;
+            => _build != null && _build.SolveRunning && !_build.SolveHandle.IsCompleted;
         internal bool IsBuilding
             => CanPump && (IsRebuilding || HasPendingRequest);
         internal override bool IsReady => (State == FlowFieldRuntimeState.Building
@@ -80,7 +80,6 @@ namespace Common.FlowField
                 return checked(
                     _buildReservationBytes
                     + _committedReservationBytes
-                    + (_computeSolver?.AllocatedBytes ?? 0L)
                     + EstimateAuxiliaryBytes());
             }
         }
@@ -104,22 +103,19 @@ namespace Common.FlowField
                 if (_build.Phase == BuildPhase.Complete)
                     return 1f;
 
-                const float phaseCount = 9f;
-                int done = _build.Phase == BuildPhase.Bfs ? _build.Head : _build.Cursor;
-                float local = _build.Count <= 0 ? 0f : (float)done / _build.Count;
+                float phaseCount = (float)BuildPhase.Complete;
+                float local = _build.Count <= 0 ? 0f : (float)_build.Cursor / _build.Count;
                 return Mathf.Clamp01(((int)_build.Phase + Mathf.Clamp01(local)) / phaseCount);
             }
         }
 
-        internal void Initialize(FlowFieldBakeMode bakeMode, ComputeShader computeShader = null)
+        internal void Initialize(FlowFieldBakeMode bakeMode)
         {
             ThrowIfDisposed();
             if (IsInitialized)
                 throw new InvalidOperationException("FlowField volume session is already initialized.");
             BakeMode = bakeMode;
             Fault = null;
-            _gpuDisabled = false;
-            GpuFallbackReason = null;
             _hasLatestRequestedInput = false;
             _latestRequestedInput = default;
             _hasPendingRequest = false;
@@ -129,22 +125,6 @@ namespace Common.FlowField
             _suspendedByLifecycle = false;
             _buildReservationBytes = 0;
             _committedReservationBytes = 0;
-            _computeSolver?.Dispose();
-            _computeSolver = null;
-            if (computeShader != null)
-            {
-                try
-                {
-                    _computeSolver = new FlowFieldComputeSolver(computeShader);
-                    if (!_computeSolver.IsSupported)
-                        DisableGpu("Compute Shader 또는 AsyncGPUReadback을 지원하지 않습니다.");
-                }
-                catch (Exception exception)
-                {
-                    DisableGpu(exception.Message);
-                    _computeSolver = null;
-                }
-            }
             SetState(FlowFieldRuntimeState.Suspended);
         }
 
@@ -172,7 +152,7 @@ namespace Common.FlowField
             _latestRequestedInput = request;
             _hasLatestRequestedInput = true;
             // A grid/signature change invalidates the private staging arrays
-            // immediately. A late GPU callback for the old build is ignored.
+            // immediately.
             if (_build != null && !_build.Request.HasSameGrid(request))
                 DiscardBuild();
             if (_committed != null
@@ -217,7 +197,9 @@ namespace Common.FlowField
             FlowFieldBuildBudget budget = new FlowFieldBuildBudget(
                 budgetMilliseconds,
                 _pumpElapsedMilliseconds);
-            PumpInternal(in budget);
+            _waitForSolve = true;
+            try { PumpInternal(in budget); }
+            finally { _waitForSolve = false; }
         }
 
         private void PumpInternal(in FlowFieldBuildBudget budget)
@@ -229,7 +211,7 @@ namespace Common.FlowField
             try
             {
                 _obstacles.DetectRegisteredChanges();
-                if (IsWaitingForExternalCompletion)
+                if (IsWaitingForExternalCompletion && !_waitForSolve)
                     return;
 
                 while (!budget.IsExpired)
@@ -480,15 +462,12 @@ namespace Common.FlowField
             _committedReservationBytes = 0;
             _hasLatestRequestedInput = false;
             _suspendedByLifecycle = false;
-            GpuFallbackReason = null;
             _safety.ClearRegions();
             if (_runtimeScheduled)
             {
                 FlowFieldBuildScheduler.Unregister(this);
                 _runtimeScheduled = false;
             }
-            _computeSolver?.Dispose();
-            _computeSolver = null;
             _obstacles.Clear();
             _registeredObstacleOverlapBuffer = null;
             _cellQuery.Clear();
@@ -514,11 +493,6 @@ namespace Common.FlowField
         private protected override void AbandonWorkForFault() => CancelCurrentBuild();
 
         private protected override void ApplyFaultedState() => SetState(FlowFieldRuntimeState.Faulted);
-
-        // A bake session stays on the deterministic Managed path by design, so
-        // this records no fallback reason.
-        internal void UseManagedBackendForBake()
-            => _gpuDisabled = true;
 
         private void QueueModifierChange()
         {
@@ -625,8 +599,6 @@ namespace Common.FlowField
             _hasLatestRequestedInput = false;
             _committed = null;
             _committedReservationBytes = 0;
-            _computeSolver?.Dispose();
-            _computeSolver = null;
             _obstacles.Clear();
             _registeredObstacleOverlapBuffer = null;
             _cellQuery.Clear();

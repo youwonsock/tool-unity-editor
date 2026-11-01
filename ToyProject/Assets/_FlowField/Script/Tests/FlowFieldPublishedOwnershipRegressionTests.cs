@@ -63,7 +63,6 @@ namespace Common.FlowField.Tests
                 settings.FindProperty("_groundBakeLayer").intValue = 1 << FlowFieldRegressionFixture.Layer;
                 settings.FindProperty("_obstacleLayer").intValue = 1 << 28;
                 settings.FindProperty("_showField").boolValue = false;
-                settings.FindProperty("_frontierComputeShader").objectReferenceValue = null;
                 settings.ApplyModifiedPropertiesWithoutUndo();
             }
             if (activate) root.SetActive(true);
@@ -123,7 +122,7 @@ namespace Common.FlowField.Tests
             using var session = new FlowFieldSession(FlowFieldRegressionFixture.Surface());
             session.Initialize(baked ? FlowFieldBakeMode.StaticBaked : FlowFieldBakeMode.RuntimeDynamic,
                 baked ? FlowFieldSessionSourceKind.StaticSnapshot : FlowFieldSessionSourceKind.SceneBuild,
-                FlowFieldBfsBackendPolicy.ManagedOnly, null);
+                FlowFieldSolvePolicy.Inline);
             var modifier = new Modifier { Collider = Influence() };
             session.RegisterModifierCommand(modifier);
             session.Submit(baked ? StaticRequest(Snapshot(false)) : FlowFieldRegressionFixture.Request());
@@ -158,7 +157,7 @@ namespace Common.FlowField.Tests
             var backend = new FlowFieldRegressionFixture.DeferredBackend();
             using var session = new FlowFieldSession(FlowFieldRegressionFixture.Surface(), backend);
             session.Initialize(FlowFieldBakeMode.RuntimeDynamic, FlowFieldSessionSourceKind.SceneBuild,
-                FlowFieldBfsBackendPolicy.RequireGpu, null);
+                FlowFieldSolvePolicy.Worker);
             session.Submit(FlowFieldRegressionFixture.Request(a)); session.Pump(); backend.Complete(0);
             int revision = session.Revision;
             session.Submit(FlowFieldRegressionFixture.Request(b)); session.Pump();
@@ -179,7 +178,7 @@ namespace Common.FlowField.Tests
         {
             using var session = new FlowFieldSession(FlowFieldRegressionFixture.Surface());
             session.Initialize(FlowFieldBakeMode.StaticBaked, FlowFieldSessionSourceKind.StaticSnapshot,
-                FlowFieldBfsBackendPolicy.ManagedOnly, null);
+                FlowFieldSolvePolicy.Inline);
             session.Submit(StaticRequest(Snapshot(true))); session.Pump();
             Assert.That(session.IsReady, Is.True, session.LastError);
             Assert.That(session.TryGetFieldInfo(out var info), Is.True);
@@ -213,7 +212,7 @@ namespace Common.FlowField.Tests
         {
             using var session = new FlowFieldSession(FlowFieldRegressionFixture.Surface());
             session.Initialize(FlowFieldBakeMode.RuntimeDynamic, FlowFieldSessionSourceKind.SceneBuild,
-                FlowFieldBfsBackendPolicy.ManagedOnly, null);
+                FlowFieldSolvePolicy.Inline);
             var modifier = new Modifier { Collider = Influence(), Speed = 1f };
             session.RegisterModifierCommand(modifier);
             var goal = new Vector3(2.5f, 0f, 2.5f);
@@ -246,7 +245,7 @@ namespace Common.FlowField.Tests
                 heights, normals, flags, neighbors, first.Surface.ValidCellCount, 42);
             using var builder = new FlowFieldSession(FlowFieldRegressionFixture.Surface());
             builder.Initialize(FlowFieldBakeMode.RuntimeDynamic, FlowFieldSessionSourceKind.SceneBuild,
-                FlowFieldBfsBackendPolicy.ManagedOnly, null);
+                FlowFieldSolvePolicy.Inline);
             builder.Submit(FlowFieldRegressionFixture.Request()); builder.Pump();
             var work = builder.CommittedWorkspace;
             var replacement = new FlowFieldStaticBakeSnapshot(FlowFieldRegressionFixture.Settings,
@@ -254,12 +253,12 @@ namespace Common.FlowField.Tests
                 work.Blocked, work.EscapeDirections, work.TopologyMasks, work.GoalFlags, work.GoalDirections, work.NextCells);
             using var session = new FlowFieldSession(FlowFieldRegressionFixture.Surface());
             session.Initialize(FlowFieldBakeMode.StaticBaked, FlowFieldSessionSourceKind.StaticSnapshot,
-                FlowFieldBfsBackendPolicy.ManagedOnly, null);
+                FlowFieldSolvePolicy.Inline);
             session.Submit(StaticRequest(first)); session.Pump();
             int revision = session.Revision;
             session.Submit(FlowFieldSessionRequest.ForStaticSnapshot(FlowFieldRegressionFixture.Settings, null, replacement,
                 1 << FlowFieldRegressionFixture.Layer, 1f, .5f, 0f, Vector3.forward,
-                explicitSurfaceRebuild ? FlowFieldDirtyFlags.All : FlowFieldDirtyFlags.None, 1024));
+                explicitSurfaceRebuild ? FlowFieldDirtyFlags.All : FlowFieldDirtyFlags.None));
             Assert.That(session.Sample(new Vector3(.5f, 0f, .5f)).SpeedMultiplier, Is.EqualTo(1f));
             session.Pump();
             Assert.That(session.IsReady, Is.True, session.LastError);
@@ -276,7 +275,7 @@ namespace Common.FlowField.Tests
             var grid = FlowFieldGridSpace.FromVolumeCellGrid(Vector3.zero, 3, 3, 3, 1f);
             FlowFieldVolumeRequest Request(Vector3 direction) => new FlowFieldVolumeRequest(grid,
                 new Bounds(Vector3.one * 1.5f, Vector3.one * 3f), FlowFieldBakeMode.RuntimeDynamic,
-                1 << FlowFieldRegressionFixture.Layer, 0f, false, Vector3.zero, 0f, direction, 1024, null, null);
+                1 << FlowFieldRegressionFixture.Layer, 0f, false, Vector3.zero, 0f, direction, null);
             using var paused = new FlowFieldVolumeSession();
             using var runnable = new FlowFieldVolumeSession();
             paused.Initialize(FlowFieldBakeMode.RuntimeDynamic); runnable.Initialize(FlowFieldBakeMode.RuntimeDynamic);
@@ -285,12 +284,13 @@ namespace Common.FlowField.Tests
             FlowFieldBuildScheduler.Register(waiting); FlowFieldBuildScheduler.Register(active);
             try
             {
+                // The other session starts its solve in this pass, which earns one more visit.
                 FlowFieldBuildScheduler.PumpAll(10d);
-                Assert.That(runnable.IsReady, Is.True, runnable.LastError);
-                Assert.That(waiting.Calls, Is.LessThanOrEqualTo(1));
+                Assert.That(waiting.Calls, Is.LessThanOrEqualTo(2));
+                FlowFieldRegressionFixture.PumpSchedulerUntil(() => runnable.IsReady);
                 Assert.That(paused.HasPendingRequest, Is.True);
-                paused.Resume(); FlowFieldBuildScheduler.PumpAll(10d);
-                Assert.That(paused.IsReady, Is.True, paused.LastError);
+                paused.Resume();
+                FlowFieldRegressionFixture.PumpSchedulerUntil(() => paused.IsReady);
                 Assert.That(paused.Sample(Vector3.one * .5f).Direction, Is.EqualTo(Vector3.right));
             }
             finally { FlowFieldBuildScheduler.Unregister(waiting); FlowFieldBuildScheduler.Unregister(active); }
@@ -681,7 +681,8 @@ namespace Common.FlowField.Tests
         private static IEnumerator WaitReady(FlowFieldManager manager)
         {
             float deadline = Time.realtimeSinceStartup + 3f;
-            while (!manager.IsReady && !manager.IsFaulted && Time.realtimeSinceStartup < deadline) yield return null;
+            while ((!manager.IsReady || manager.IsRebuilding) && !manager.IsFaulted && Time.realtimeSinceStartup < deadline)
+                yield return null;
             Assert.That(manager.IsReady, Is.True, manager.LastError);
         }
 
@@ -713,7 +714,7 @@ namespace Common.FlowField.Tests
         {
             using var source = new FlowFieldSession(FlowFieldRegressionFixture.Surface());
             source.Initialize(FlowFieldBakeMode.RuntimeDynamic, FlowFieldSessionSourceKind.SceneBuild,
-                FlowFieldBfsBackendPolicy.ManagedOnly, null);
+                FlowFieldSolvePolicy.Inline);
             var position = new Vector3(2.5f, 0f, 2.5f);
             source.Submit(FlowFieldRegressionFixture.Request(goal ? (Vector3?)position : null)); source.Pump();
             var work = source.CommittedWorkspace;
@@ -723,7 +724,7 @@ namespace Common.FlowField.Tests
         }
         private static FlowFieldSessionRequest StaticRequest(FlowFieldStaticBakeSnapshot snapshot)
             => FlowFieldSessionRequest.ForStaticSnapshot(FlowFieldRegressionFixture.Settings, null, snapshot,
-                1 << FlowFieldRegressionFixture.Layer, 1f, .5f, 0f, Vector3.forward, FlowFieldDirtyFlags.None, 1024);
+                1 << FlowFieldRegressionFixture.Layer, 1f, .5f, 0f, Vector3.forward, FlowFieldDirtyFlags.None);
         private sealed class Modifier : IFlowFieldVectorModifier
         {
             internal Collider Collider; internal float Speed = 2f; internal int Version; internal Action Callback;

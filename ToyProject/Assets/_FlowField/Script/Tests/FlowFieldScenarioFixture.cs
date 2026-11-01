@@ -8,9 +8,7 @@ namespace Common.FlowField.Tests
 {
     /// <summary>
     /// Deterministic multi-cell scenes shared by the golden field hashes and
-    /// the explicit performance probes. Both sessions use the Managed solver:
-    /// the GPU validator accepts any equal-cost successor, so GPU tie-breaks
-    /// are not part of the golden contract.
+    /// the explicit performance probes.
     /// </summary>
     internal static class FlowFieldScenarioFixture
     {
@@ -123,8 +121,7 @@ namespace Common.FlowField.Tests
                 Session.Initialize(
                     FlowFieldBakeMode.RuntimeDynamic,
                     FlowFieldSessionSourceKind.SceneBuild,
-                    FlowFieldBfsBackendPolicy.ManagedOnly,
-                    null);
+                    FlowFieldSolvePolicy.Inline);
             }
 
             internal float HeightAt(float x) => Mathf.Floor(x) * Rise;
@@ -169,8 +166,7 @@ namespace Common.FlowField.Tests
                     DefaultDirection,
                     FlowFieldDirtyFlags.None,
                     FlowFieldCellRect.Invalid,
-                    FlowFieldCellRect.Invalid,
-                    1024);
+                    FlowFieldCellRect.Invalid);
 
             internal void Build()
             {
@@ -203,7 +199,7 @@ namespace Common.FlowField.Tests
 
         /// <summary>
         /// A Volume3D box with layer obstacles, optional registered obstacles
-        /// and modifiers. Managed only (no compute shader).
+        /// and modifiers.
         /// </summary>
         internal sealed class VolumeScenario : IDisposable
         {
@@ -261,8 +257,6 @@ namespace Common.FlowField.Tests
                     Goal,
                     GoalInfluenceRadius,
                     DefaultDirection,
-                    1024,
-                    null,
                     null);
 
             /// <summary>Submits and pumps to completion; returns the number of Pump calls.</summary>

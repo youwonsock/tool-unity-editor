@@ -88,7 +88,6 @@ namespace Common.FlowField.Tests
             Assert.That(scenario.Session.TryExport(out FlowFieldVolumeRequest request, out bool[] blocked,
                 out uint[] topology, out _, out _, out _, out _, out _), Is.True);
 
-            var build = new FlowFieldVolumeBuildContext(request, null) { Blocked = blocked };
             for (int index = 0; index < request.Grid.CellCount; index++)
             {
                 if (blocked[index])
@@ -97,11 +96,33 @@ namespace Common.FlowField.Tests
                 uint expected = 0u;
                 for (int direction = 0; direction < FlowFieldNeighborUtility.VolumeCount; direction++)
                 {
-                    if (FlowFieldVolumeNavigation.CanTraverse(build, index, x, y, z, direction, out _))
+                    if (CanTraverse(request.Grid, blocked, x, y, z, direction))
                         expected |= 1u << direction;
                 }
                 Assert.That(topology[index], Is.EqualTo(expected), $"cell ({x}, {y}, {z})");
             }
+        }
+
+        // The traversal rule written out cell by cell, to check the solve job's offsets against.
+        private static bool CanTraverse(FlowFieldGridSpace grid, bool[] blocked, int x, int y, int z, int direction)
+        {
+            int dx = FlowFieldNeighborUtility.DeltaX[direction];
+            int dy = FlowFieldNeighborUtility.DeltaY[direction];
+            int dz = FlowFieldNeighborUtility.DeltaZ[direction];
+            if (!grid.IsLocalInBounds(x + dx, y + dy, z + dz) || blocked[grid.ToFlatIndex(x + dx, y + dy, z + dz)])
+                return false;
+            for (int sx = 0; sx <= (dx == 0 ? 0 : 1); sx++)
+            for (int sy = 0; sy <= (dy == 0 ? 0 : 1); sy++)
+            for (int sz = 0; sz <= (dz == 0 ? 0 : 1); sz++)
+            {
+                int ix = x + sx * dx;
+                int iy = y + sy * dy;
+                int iz = z + sz * dz;
+                bool isEitherEnd = sx == 0 && sy == 0 && sz == 0 || ix == x + dx && iy == y + dy && iz == z + dz;
+                if (!isEitherEnd && (!grid.IsLocalInBounds(ix, iy, iz) || blocked[grid.ToFlatIndex(ix, iy, iz)]))
+                    return false;
+            }
+            return true;
         }
 
         private static void AddSphere(FlowFieldScenarioFixture.VolumeScenario scenario, Vector3 center, float radius, int layer)

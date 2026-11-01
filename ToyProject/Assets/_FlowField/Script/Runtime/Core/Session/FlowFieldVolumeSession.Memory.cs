@@ -25,20 +25,9 @@ namespace Common.FlowField
             if (_buildReservationBytes > 0)
                 current -= _buildReservationBytes;
 
-            long currentGpu = _computeSolver?.AllocatedBytes ?? 0L;
-            long possibleGpu = currentGpu;
-            if (!_gpuDisabled && _computeSolver != null && _computeSolver.IsSupported)
-            {
-                long candidateGpu = FlowFieldComputeSolver.EstimateAllocationBytes(
-                    request.Grid.CellCount,
-                    volume: true);
-                possibleGpu = Math.Max(possibleGpu, candidateGpu);
-            }
-
             return checked(
                 current
-                + replacementBuildReservation
-                + (possibleGpu - currentGpu));
+                + replacementBuildReservation);
         }
 
         private static long EstimateBuildBytes(int count, int modifierCount)

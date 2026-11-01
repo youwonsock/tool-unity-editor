@@ -22,7 +22,7 @@ namespace Common.FlowField.Tests
             _session = new FlowFieldSession(_source, _backend);
             _eventFailures = new FlowFieldRegressionFixture.EventFailures(_session);
             _session.Initialize(FlowFieldBakeMode.RuntimeDynamic, FlowFieldSessionSourceKind.SceneBuild,
-                FlowFieldBfsBackendPolicy.PreferGpu, null);
+                FlowFieldSolvePolicy.Worker);
         }
 
         [TearDown]
@@ -156,6 +156,7 @@ namespace Common.FlowField.Tests
             Assert.That(_session.IsFaulted, Is.False);
             Assert.That(_session.Revision, Is.EqualTo(revision));
             _session.Pump();
+            _backend.Complete(_backend.Calls.Count - 1);
             Assert.That(_session.TryGetFieldInfo(out var info), Is.True);
             Assert.That(info.ResolvedGoalWorld, Is.EqualTo(GoalB));
         }
@@ -180,7 +181,7 @@ namespace Common.FlowField.Tests
             Assert.That(_session.IsFaulted, Is.True);
             Assert.That(_session.IsReady, Is.False);
             Assert.That(_session.Revision, Is.Zero);
-            Assert.That(_session.LastError, Does.Contain("Simulated GPU failure"));
+            Assert.That(_session.LastError, Does.Contain("Simulated solve failure"));
         }
 
         [Test]
@@ -296,7 +297,7 @@ namespace Common.FlowField.Tests
         private static FlowFieldSessionRequest RequestWithClearance(float clearance)
             => FlowFieldSessionRequest.ForSceneBuild(FlowFieldRegressionFixture.Settings,
                 1 << FlowFieldRegressionFixture.Layer, 1f, 0.5f, clearance, false, FlowFieldGoalResolution.None,
-                Vector3.forward, FlowFieldDirtyFlags.None, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid, 1024);
+                Vector3.forward, FlowFieldDirtyFlags.None, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
 
         [TestCase(false, 0f, 1)]
         [TestCase(true, 0f, 1)]
@@ -548,10 +549,9 @@ namespace Common.FlowField.Tests
         {
             if (interruption == "failure")
             {
-                // PreferGpu leaves the deferred backend after a failure.
                 _session.Release();
                 _session.Initialize(FlowFieldBakeMode.RuntimeDynamic, FlowFieldSessionSourceKind.SceneBuild,
-                    FlowFieldBfsBackendPolicy.RequireGpu, null);
+                    FlowFieldSolvePolicy.Worker);
             }
             Build(GoalA);
 
@@ -606,7 +606,6 @@ namespace Common.FlowField.Tests
             ObserveObstacleMove(new Vector3(1.5f, 101f, 1.5f));
             _backend.Fail(_backend.Calls.Count - 1);
             Assert.That(_session.IsFaulted, Is.False, _session.LastError);
-            Assert.That(_session.GpuFallbackReason, Does.Contain("Simulated GPU failure"));
             AssertResolvedGoal(GoalA);
 
             RunOwnerTicks(GoalB);

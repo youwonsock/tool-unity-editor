@@ -109,7 +109,7 @@ namespace Common.FlowField.Tests
                 };
                 _session.Submit(Request(Grid));
                 other.Submit(Request(Grid));
-                for (int i = 0; i < 100 && !other.IsReady; i++) FlowFieldBuildScheduler.PumpAll(10d);
+                FlowFieldRegressionFixture.PumpSchedulerUntil(() => other.IsReady);
                 Assert.That(_session.State, Is.EqualTo(FlowFieldRuntimeState.Released));
                 Assert.That(other.IsReady, Is.True, other.LastError);
                 Assert.That(other.Revision, Is.EqualTo(1));
@@ -137,7 +137,7 @@ namespace Common.FlowField.Tests
                 };
                 _session.Submit(Request(Grid));
                 other.Submit(Request(Grid));
-                for (int i = 0; i < 100 && (!_session.IsReady || !other.IsReady); i++) FlowFieldBuildScheduler.PumpAll(10d);
+                FlowFieldRegressionFixture.PumpSchedulerUntil(() => _session.IsReady && other.IsReady);
                 Assert.That(beforeNested, Is.GreaterThanOrEqualTo(0));
                 Assert.That(afterNested, Is.EqualTo(beforeNested));
                 Assert.That(_session.Revision, Is.EqualTo(1));
@@ -165,7 +165,6 @@ namespace Common.FlowField.Tests
                 settings.FindProperty("_bakeBoundsLocal").boundsValue = new Bounds(Vector3.one * 1.5f, Vector3.one * 3f);
                 settings.FindProperty("_cellSize").floatValue = 1f;
                 settings.FindProperty("_obstacleLayer").intValue = 1 << FlowFieldRegressionFixture.Layer;
-                settings.FindProperty("_frontierComputeShader").objectReferenceValue = null;
                 settings.FindProperty("_showField").boolValue = false;
                 settings.ApplyModifiedPropertiesWithoutUndo();
             }

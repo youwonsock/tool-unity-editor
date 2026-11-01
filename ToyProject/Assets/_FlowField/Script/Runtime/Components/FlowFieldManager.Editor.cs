@@ -125,8 +125,7 @@ namespace Common.FlowField
             _editorPreviewSession.Initialize(
                 BakeMode,
                 sourceKind,
-                FlowFieldBfsBackendPolicy.ManagedOnly,
-                null);
+                FlowFieldSolvePolicy.Inline);
 
             RegisterEditorModifiers(_editorPreviewSession);
             FlowFieldSurfaceBakeSettings settings = CreateSurfaceBakeSettings();

@@ -21,7 +21,7 @@ namespace Common.FlowField.Tests
         private static FlowFieldVolumeRequest VolumeRequest(Vector3 direction)
             => new FlowFieldVolumeRequest(FlowFieldGridSpace.FromVolumeCellGrid(Vector3.zero,3,3,3,1f),
                 new Bounds(Vector3.one * 1.5f, Vector3.one * 3f),FlowFieldBakeMode.RuntimeDynamic,
-                1 << FlowFieldRegressionFixture.Layer,0f,false,Vector3.zero,0f,direction,1024,null,null);
+                1 << FlowFieldRegressionFixture.Layer,0f,false,Vector3.zero,0f,direction,null);
         private static void Finish(FlowFieldVolumeSession session)
         {
             for (int i=0;i<100 && session.IsRebuilding;i++) session.Pump(10d);
@@ -40,7 +40,7 @@ namespace Common.FlowField.Tests
         {
             using var source = new FlowFieldSession(FlowFieldRegressionFixture.Surface());
             source.Initialize(FlowFieldBakeMode.RuntimeDynamic,FlowFieldSessionSourceKind.SceneBuild,
-                FlowFieldBfsBackendPolicy.ManagedOnly,null);
+                FlowFieldSolvePolicy.Inline);
             var asset=ScriptableObject.CreateInstance<FlowFieldStaticBakeData>();
             try
             {
@@ -54,7 +54,7 @@ namespace Common.FlowField.Tests
                 FlowFieldSessionRequest Request() => FlowFieldSessionRequest.ForStaticSnapshot(
                     FlowFieldRegressionFixture.Settings,asset,asset.CreateSnapshot(FlowFieldRegressionFixture.Settings,
                         1<<FlowFieldRegressionFixture.Layer,1f,.5f,0f),1<<FlowFieldRegressionFixture.Layer,
-                    1f,.5f,0f,Vector3.forward,FlowFieldDirtyFlags.None,1024);
+                    1f,.5f,0f,Vector3.forward,FlowFieldDirtyFlags.None);
                 Bake(null);
                 var before = Request();
                 var unchanged = Request();
@@ -63,7 +63,7 @@ namespace Common.FlowField.Tests
                 using var session = new FlowFieldSession(FlowFieldRegressionFixture.Surface());
                 var errors = new FlowFieldRegressionFixture.EventFailures(session);
                 session.Initialize(FlowFieldBakeMode.StaticBaked, FlowFieldSessionSourceKind.StaticSnapshot,
-                    FlowFieldBfsBackendPolicy.ManagedOnly, null);
+                    FlowFieldSolvePolicy.Inline);
                 session.Submit(before); session.Pump();
                 Assert.That(session.IsReady, Is.True, session.LastError);
                 int revision = session.Revision;
@@ -108,7 +108,7 @@ namespace Common.FlowField.Tests
             FlowFieldSessionBase owner = volume ? (FlowFieldSessionBase)volumeSession : surfaceSession;
             if (volume) volumeSession.Initialize(FlowFieldBakeMode.RuntimeDynamic);
             else surfaceSession.Initialize(FlowFieldBakeMode.RuntimeDynamic, FlowFieldSessionSourceKind.SceneBuild,
-                FlowFieldBfsBackendPolicy.ManagedOnly, null);
+                FlowFieldSolvePolicy.Inline);
             var first = new Modifier { Collider = _collider, Order = 1 };
             var second = new Modifier { Collider = _collider, Order = 2 };
             owner.RegisterModifierCommand(first); owner.RegisterModifierCommand(second);

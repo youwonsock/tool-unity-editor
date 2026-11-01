@@ -41,7 +41,7 @@ namespace Common.FlowField.Tests
             => FlowFieldSessionRequest.ForSceneBuild(Settings, 1 << Layer, 1f, 0.5f, 0f, false,
                 goal.HasValue ? FlowFieldGoalPipeline.Resolve(Grid, null, true, goal.Value, 0f) : FlowFieldGoalResolution.None,
                 direction ?? Vector3.forward, FlowFieldDirtyFlags.None, FlowFieldCellRect.Invalid,
-                FlowFieldCellRect.Invalid, 1024);
+                FlowFieldCellRect.Invalid);
 
         // Production event boundaries isolate subscriber exceptions. Assert
         // from the test owner after pumping/disposal, never from EventFailed.
@@ -57,32 +57,53 @@ namespace Common.FlowField.Tests
                     "A session event callback failed: " + string.Join("\n", _failures));
         }
 
-        internal sealed class DeferredBackend : IFlowFieldGpuBackend
+        // A solve runs on a worker thread, so the scheduler can need real time.
+        internal static void PumpSchedulerUntil(Func<bool> done)
+        {
+            double deadline = UnityEditor.EditorApplication.timeSinceStartup + 10d;
+            while (!done() && UnityEditor.EditorApplication.timeSinceStartup < deadline)
+            {
+                FlowFieldBuildScheduler.PumpAll(10d);
+                System.Threading.Thread.Sleep(1);
+            }
+            Assert.That(done(), Is.True, "The scheduler did not finish in time.");
+        }
+
+        internal sealed class DeferredBackend : IFlowFieldSolveBackend
         {
             internal sealed class Pending
             {
                 internal FlowFieldBfsRequest Request;
                 internal Action<FlowFieldBfsRequest> Completed;
                 internal Action<FlowFieldBfsRequest, Exception> Failed;
+                internal bool Cancelled;
             }
 
             internal readonly List<Pending> Calls = new List<Pending>();
-            public bool SupportsGpu => true;
             public bool StartBfs(in FlowFieldBfsRequest request, Action<FlowFieldBfsRequest> completed,
-                Action<FlowFieldBfsRequest, Exception> failed, bool allowManagedFallback = true)
+                Action<FlowFieldBfsRequest, Exception> failed)
             {
                 Calls.Add(new Pending { Request = request, Completed = completed, Failed = failed });
                 return true;
             }
 
+            public void Poll(bool wait) { }
+
+            public void Cancel()
+            {
+                foreach (Pending call in Calls)
+                    call.Cancelled = true;
+            }
+
+            // A cancelled solve writes nothing, but a late callback may still arrive.
             internal void Complete(int index, bool solve = true)
             {
                 Pending call = Calls[index];
-                if (solve) FlowFieldSurfaceBuildPipeline.BuildManaged(call.Request);
+                if (solve && !call.Cancelled) FlowFieldSurfaceBuildPipeline.SolveNow(call.Request);
                 call.Completed(call.Request);
             }
 
-            internal void Fail(int index) => Calls[index].Failed(Calls[index].Request, new InvalidOperationException("Simulated GPU failure"));
+            internal void Fail(int index) => Calls[index].Failed(Calls[index].Request, new InvalidOperationException("Simulated solve failure"));
             public void Dispose() { } // Retain callbacks to exercise late completion after release.
         }
 

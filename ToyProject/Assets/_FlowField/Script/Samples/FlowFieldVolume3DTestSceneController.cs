@@ -132,8 +132,6 @@ namespace Common.FlowField.Samples
                 GUILayout.Label($"Last error: {_lastException.Message}");
             if (!string.IsNullOrEmpty(_manager.LastError))
                 GUILayout.Label($"Manager error: {_manager.LastError}");
-            if (!string.IsNullOrEmpty(_manager.GpuFallbackReason))
-                GUILayout.Label($"GPU fallback: {_manager.GpuFallbackReason}");
             GUILayout.EndArea();
         }
 

@@ -196,7 +196,7 @@ namespace Common.FlowField
                         // Treat this observation as the latest input even before
                         // the next composition runs. Otherwise an unchanged
                         // collider would be reported dirty on every poll while a
-                        // GPU solve is in flight. The area flag remains set, so
+                        // solve is in flight. The area flag remains set, so
                         // the subsequent build still recomputes its mask.
                         UpdateColliderSnapshot(entry, collider);
                         if (collider != null)

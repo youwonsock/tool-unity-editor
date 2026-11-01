@@ -72,8 +72,6 @@ namespace Common.FlowField
                 ConfiguredGoalWorld,
                 _goalInfluenceRadius,
                 _defaultFlowDirection,
-                _maxGpuWaves,
-                _frontierComputeShader,
                 bakeData,
                 CaptureBakeInputGeneration());
 
@@ -110,8 +108,7 @@ namespace Common.FlowField
             FlowFieldVolumeSession session = new FlowFieldVolumeSession();
             try
             {
-                session.Initialize(FlowFieldBakeMode.RuntimeDynamic, null);
-                session.UseManagedBackendForBake();
+                session.Initialize(FlowFieldBakeMode.RuntimeDynamic);
                 session.Submit(request);
                 return session;
             }
@@ -148,7 +145,6 @@ namespace Common.FlowField
             FlowFieldCellRect dirtyFinalRegion,
             FlowFieldCellRect dirtyObstacleRegion)
         {
-            int maxWaves = FlowFieldComputeSolver.ClampMaxWaves(settings.Grid.CellCount, _maxGpuWaves);
             if (BakeMode == FlowFieldBakeMode.StaticBaked)
             {
                 return FlowFieldSessionRequest.ForStaticSnapshot(
@@ -160,8 +156,7 @@ namespace Common.FlowField
                     _obstacleCheckCenterOffset,
                     _obstacleClearance,
                     _defaultFlowDirection,
-                    dirtyFlags,
-                    maxWaves);
+                    dirtyFlags);
             }
 
             return FlowFieldSessionRequest.ForSceneBuild(
@@ -175,8 +170,7 @@ namespace Common.FlowField
                 _defaultFlowDirection,
                 dirtyFlags,
                 dirtyFinalRegion,
-                dirtyObstacleRegion,
-                maxWaves);
+                dirtyObstacleRegion);
         }
 
         private bool TryCreateCurrentSessionRequest(out FlowFieldSessionRequest request)
@@ -348,10 +342,6 @@ namespace Common.FlowField
                 hash = hash * 31 + _obstacleCheckCenterOffset.GetHashCode();
                 hash = hash * 31 + _obstacleClearance.GetHashCode();
                 hash = hash * 31 + _defaultFlowDirection.GetHashCode();
-                hash = hash * 31 + _maxGpuWaves;
-                hash = hash * 31 + (_frontierComputeShader != null
-                    ? _frontierComputeShader.GetInstanceID()
-                    : 0);
                 hash = hash * 31 + (_goalTransform != null
                     ? _goalTransform.GetInstanceID()
                     : 0);

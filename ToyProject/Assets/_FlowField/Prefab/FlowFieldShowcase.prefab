@@ -7688,9 +7688,6 @@ MonoBehaviour:
   _maxSurfaceSlope: 45
   _maxStepHeight: 0.5
   _staticBakeData: {fileID: 0}
-  _frontierComputeShader: {fileID: 7200000, guid: 9bcae8d0ec8446a2b2e8ef1e3d0d8f45,
-    type: 3}
-  _maxGpuWaves: 1024
   _obstacleLayer:
     serializedVersion: 2
     m_Bits: 512

@@ -36,14 +36,14 @@ namespace Common.FlowField.Tests
         }
 
         internal static FlowFieldVolumeRequest Request(FlowFieldGridSpace grid, bool hasGoal = true,
-            Vector3? goal = null, Vector3? direction = null, ComputeShader shader = null,
+            Vector3? goal = null, Vector3? direction = null,
             FlowFieldVolumeBakeData bake = null)
             => new FlowFieldVolumeRequest(grid,
                 new Bounds(grid.Origin + new Vector3(grid.WorldSizeX, grid.WorldSizeY, grid.WorldSizeZ) * 0.5f,
                     new Vector3(grid.WorldSizeX, grid.WorldSizeY, grid.WorldSizeZ)),
                 bake != null ? FlowFieldBakeMode.StaticBaked : FlowFieldBakeMode.RuntimeDynamic,
                 1 << FlowFieldRegressionFixture.Layer, 0f, hasGoal, goal ?? Goal, 0f,
-                direction ?? Vector3.forward, 1024, shader, bake);
+                direction ?? Vector3.forward, bake);
 
         // A synthetic deadline permits one scheduler step without a wall-clock race.
         internal static void PumpOneStep(FlowFieldVolumeSession session)
@@ -124,7 +124,7 @@ namespace Common.FlowField.Tests
         {
             var grid = FlowFieldGridSpace.FromVolumeCellGrid(new Vector3(-3f, 2f, 7f), 9, 5, 7, 0.5f);
             var request = new FlowFieldVolumeRequest(grid, new Bounds(new Vector3(-0.75f, 3.25f, 8.75f), new Vector3(4.5f, 2.5f, 3.5f)),
-                FlowFieldBakeMode.RuntimeDynamic, 1 << FlowFieldRegressionFixture.Layer, 0f, false, default, 0f, Vector3.forward, 1024, null, null);
+                FlowFieldBakeMode.RuntimeDynamic, 1 << FlowFieldRegressionFixture.Layer, 0f, false, default, 0f, Vector3.forward, null);
             var field = new FlowFieldVolumeFieldData(request, new bool[grid.CellCount], null, null, null, null, null, null, null, null, -1, 1);
             var safety = new FlowFieldVolumeSafetyState();
             var regions = new[]
@@ -448,15 +448,14 @@ namespace Common.FlowField.Tests
                 other.AttachRuntimeScheduler();
                 _session.Submit(Request(Grid));
                 other.Submit(Request(Grid));
-                for (int i = 0; i < 100 && (_session.IsRebuilding || other.IsRebuilding); i++)
-                    FlowFieldBuildScheduler.PumpAll(10d);
+                FlowFieldRegressionFixture.PumpSchedulerUntil(() => !_session.IsRebuilding && !other.IsRebuilding);
                 Assert.That(_session.IsReady && other.IsReady, Is.True);
                 var before = other.Sample(OldCell);
                 _session.MarkObstacleRegionDirty(new Bounds(OldCell, Vector3.one * 0.1f));
                 AssertStopped(OldCell);
                 Assert.That(other.Sample(OldCell).Direction, Is.EqualTo(before.Direction));
                 Assert.That(other.Sample(OldCell).SpeedMultiplier, Is.EqualTo(before.SpeedMultiplier));
-                for (int i = 0; i < 100 && _session.IsRebuilding; i++) FlowFieldBuildScheduler.PumpAll(10d);
+                FlowFieldRegressionFixture.PumpSchedulerUntil(() => !_session.IsRebuilding);
                 Assert.That(_session.IsRebuilding, Is.False);
             }
             finally { other.Dispose(); }

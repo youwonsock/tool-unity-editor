@@ -27,9 +27,9 @@ loop Runnable work at the scheduler boundary
     S -> B : Create context with accepted request\nand per-build arrays / cursors
   end
   alt RuntimeDynamic
-    S -> B : Advance obstacle, topology and Goal phases
-    S -> B : Advance BFS, directions and escape phases
-    note over S,B : Navigation helpers / Solver / GPU validator participate.\nGPU completion records a result; later Pump steps validate it.\nManaged fallback uses the same captured navigation input.
+    S -> B : Advance the obstacle phase
+    S -> B : Run topology, Goal, BFS, directions and escape\nas one Burst job on a worker thread
+    note over S,B : Each Pump polls the job; no frame waits for it.
   else StaticBaked
     S -> B : Copy validated v6 base data in chunks
   end

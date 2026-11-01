@@ -220,12 +220,10 @@ namespace Common.FlowField.Tests
                 Vector3.zero,
                 0f,
                 Vector3.forward,
-                1024,
-                null,
                 null);
 
             _session = new FlowFieldVolumeSession();
-            _session.Initialize(FlowFieldBakeMode.StaticBaked, null);
+            _session.Initialize(FlowFieldBakeMode.StaticBaked);
 
             Assert.Throws<System.InvalidOperationException>(() => _session.Submit(request));
             Assert.That(_session.IsFaulted, Is.False);
@@ -253,12 +251,10 @@ namespace Common.FlowField.Tests
                 goal,
                 0f,
                 Vector3.forward,
-                1024,
-                null,
                 null);
 
             _session = new FlowFieldVolumeSession();
-            _session.Initialize(FlowFieldBakeMode.RuntimeDynamic, null);
+            _session.Initialize(FlowFieldBakeMode.RuntimeDynamic);
             _session.Submit(request);
             for (int iteration = 0; iteration < 100 && _session.IsRebuilding; iteration++)
                 _session.Pump(10d);

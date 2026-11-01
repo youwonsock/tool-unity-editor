@@ -29,7 +29,7 @@ namespace Common.FlowField.Tests
                 {
                     var concrete = (FlowFieldSession)session;
                     concrete.Initialize(FlowFieldBakeMode.RuntimeDynamic, FlowFieldSessionSourceKind.SceneBuild,
-                        FlowFieldBfsBackendPolicy.PreferGpu, null);
+                        FlowFieldSolvePolicy.Worker);
                     concrete.Submit(FlowFieldRegressionFixture.Request(new Vector3(2.5f, 0f, 2.5f)));
                     concrete.Pump();
                     backend.Complete(0);

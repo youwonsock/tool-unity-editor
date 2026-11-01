@@ -57,7 +57,7 @@ namespace Common.FlowField
             internal override void Initialize()
             {
                 Owner._attachedSession = _session;
-                _session.Initialize(Owner._bakeMode, Owner._frontierComputeShader);
+                _session.Initialize(Owner._bakeMode);
                 Owner._requiresActivationRebuild = !Owner.isActiveAndEnabled;
                 if (Owner._requiresActivationRebuild)
                     _session.Suspend();
@@ -172,11 +172,11 @@ namespace Common.FlowField
                 FlowFieldSessionSourceKind sourceKind = Owner.BakeMode == FlowFieldBakeMode.StaticBaked
                     ? FlowFieldSessionSourceKind.StaticSnapshot
                     : FlowFieldSessionSourceKind.SceneBuild;
-                FlowFieldBfsBackendPolicy policy = Application.isPlaying
-                    ? FlowFieldBfsBackendPolicy.PreferGpu
-                    : FlowFieldBfsBackendPolicy.ManagedOnly;
+                FlowFieldSolvePolicy policy = Application.isPlaying
+                    ? FlowFieldSolvePolicy.Worker
+                    : FlowFieldSolvePolicy.Inline;
                 Owner._attachedSession = _session;
-                _session.Initialize(Owner._bakeMode, sourceKind, policy, Owner._frontierComputeShader);
+                _session.Initialize(Owner._bakeMode, sourceKind, policy);
                 Owner.ReattachActiveModifiers();
             }
 
@@ -192,6 +192,7 @@ namespace Common.FlowField
 
             internal override void ObserveInputs()
             {
+                _session.PollSolve(wait: false);
                 if (!_session.ConfigurationStale && Owner.ConsumeRefreshTick())
                     ObserveDueInputs();
                 // FixedUpdate does not run while the game time is stopped.
@@ -273,7 +274,7 @@ namespace Common.FlowField
                     && Owner.TryCreateCurrentSessionRequest(out FlowFieldSessionRequest request))
                 {
                     _session.Submit(request);
-                    _session.Pump();
+                    _session.PumpWithoutWaiting();
                 }
             }
 
@@ -294,7 +295,7 @@ namespace Common.FlowField
                 }
 
                 // Keep the latest final-only scalar visible to a solve callback
-                // even when the inspector edit lands between GPU dispatch and
+                // even when the inspector edit lands between the solve starting and
                 // the next RequestRebuild scheduling tick.
                 _session.ObserveDefaultDirection(current.DefaultDirection);
 
