@@ -1,46 +1,42 @@
 @startuml flowfield-volume
 skinparam shadowing false
-skinparam defaultFontName SansSerif
-skinparam defaultFontSize 14
+skinparam defaultFontName "Apple SD Gothic Neo"
+skinparam defaultFontSize 15
+skinparam ArrowColor #496A88
+skinparam Padding 6
 skinparam sequenceMessageAlign center
 skinparam ParticipantPadding 10
-skinparam BoxPadding 6
 hide footbox
-title Volume3D - cooperative build and safe publication
+title Volume3D 빌드와 게시
 
 participant "Manager" as M
-participant "BuildDriver\n/ Scheduler" as Q
+participant "Scheduler" as Q
 participant "VolumeSession" as S
-participant "ObstacleTracker\n/ ModifierRegistry" as O
-participant "Build steps\n/ BuildContext" as B
-participant "SafetyState\n/ FieldData" as P
+participant "Tracker·Registry" as O
+participant "BuildContext\n·풀이 Job" as B
+participant "SafetyState\n·FieldData" as P
 
-M -> S : Submit / coalesce latest request
-M -> S : LateUpdate: observe live changes
-S -> O : Observe Collider and Modifier metadata
-note over Q,S : BuildDriver.LateUpdate supplies a shared 2ms CPU budget.\nSuspended / faulted work does not consume repeated turns.
-loop Runnable work at the scheduler boundary
-  Q -> S : PumpInternal(budget)
-  S -> O : Observe registered inputs
-  opt Starting a pending build
-    S -> O : Capture fixed Modifier snapshots
-    S -> B : Create context with accepted request\nand per-build arrays / cursors
+M -> S : 최신 요청 제출
+loop 실행 가능한 동안
+  Q -> S : PumpInternal(예산)
+  S -> O : 장애물·Modifier 관측
+  opt 새 빌드 시작
+    S -> O : Modifier Snapshot 고정
+    S -> B : 요청을 BuildContext에 고정
   end
   alt RuntimeDynamic
-    S -> B : Advance the obstacle phase\n(changed regions only when tracked)
-    S -> B : Run topology, Goal, BFS, directions and escape\nas one Burst job on a worker thread
-    note over S,B : Each Pump polls the job; no frame waits for it.
+    S -> B : 장애물 단계 (64셀씩)
+    S -> B : Topology·Goal·BFS·방향·탈출\n(워커 스레드 Burst Job)
   else StaticBaked
-    S -> B : Copy validated v6 base data in chunks
+    S -> B : v6 기본 데이터 복사
   end
-  S -> B : Advance Modifier composition phase
-  opt Build complete
-    S -> P : Commit complete field and clear observed safety regions
-    S --> M : FieldChanged
+  S -> B : Modifier 합성 (64셀씩)
+  opt 빌드 완료
+    S -> P : 결과 게시, 반영한 불확실 영역 해제
+    S --> M : FieldChanged (작업이 끝난 뒤)
   end
 end
-note over S,O : User code runs inside the execution boundary: it cannot start other work,\nand events are queued until the outermost operation ends.
-M -> S : Provider.TrySample(position)
-S -> P : Read committed field + latest safety limits
-S --> M : Sample; unsafe / unknown cells can be stopped with true
+M -> S : TrySample(위치)
+S -> P : 게시 값 + 최신 안전성 상태
+note over S,P : 불확실 셀은 true와 속도 0을 돌려줄 수 있다
 @enduml

@@ -1,28 +1,29 @@
 @startuml flowfield-uml
 skinparam shadowing false
-skinparam defaultFontName SansSerif
-skinparam defaultFontSize 16
+skinparam defaultFontName "Apple SD Gothic Neo"
+skinparam defaultFontSize 15
+skinparam ArrowColor #496A88
+skinparam Padding 6
 skinparam activityBackgroundColor #EEF5FB
 skinparam activityBorderColor #496A88
-skinparam ArrowColor #496A88
-skinparam Padding 8
-title FlowField - core flow
+title FlowField 핵심 흐름
 
 start
-:FlowFieldManager\nAccept / coalesce latest request;
-if (Space mode?) then (Surface2D)
-  :Manager.LateUpdate Submit\nBuildDriver.LateUpdate\nBuildScheduler.PumpAll;
-else (Volume3D)
-  :BuildDriver.LateUpdate\nBuildScheduler.PumpAll;
+:FlowFieldManager\n설정·Goal·장애물·Modifier 수집;
+:최신 요청 수락\n연속 요청은 하나로 병합;
+:BuildDriver.LateUpdate\nScheduler가 공통 예산(기본 2ms)으로 Session 실행;
+if (실행 모드) then (RuntimeDynamic)
+  :표면·장애물 준비\nBFS는 워커 스레드의 Burst Job;
+else (StaticBaked)
+  :검증한 v6 Bake 로드\nPhysics·BFS 없음;
 endif
-:Session prepares navigation\nor loads a v6 bake;
-:Compose Default Direction\nand Modifier snapshots;
-:Publish complete result\nFieldStore / VolumeFieldData;
-:IFlowFieldProvider.TrySample(position);
-if (Sample has usable\ndirection and speed?) then (move)
-  :Apply direction x base speed\nx SpeedMultiplier;
-else (stop)
-  :Apply zero velocity;
+:Default Direction·Modifier 합성;
+:완성된 결과만 게시;
+:이동 주체가 TrySample로 조회;
+if (방향과 속도 배율이 유효?) then (예)
+  :방향 × 이동 속도 × SpeedMultiplier;
+else (아니오)
+  :정지;
 endif
 stop
 @enduml

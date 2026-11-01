@@ -1,0 +1,45 @@
+@startuml flowfield-structure
+!pragma layout smetana
+skinparam shadowing false
+skinparam defaultFontName "Apple SD Gothic Neo"
+skinparam defaultFontSize 15
+skinparam ArrowColor #496A88
+skinparam Padding 6
+skinparam classBackgroundColor #EEF5FB
+skinparam classBorderColor #496A88
+hide empty members
+hide circle
+title FlowField 구조
+
+class "IFlowFieldController\n: IFlowFieldProvider" as API <<interface>>
+class FlowFieldManager
+class FlowFieldExecutionBoundary
+class FlowFieldBuildDriver
+class FlowFieldBuildScheduler
+interface IFlowFieldBuildOperation
+abstract class FlowFieldSessionBase
+class "FlowFieldSession (Surface2D)" as Surface {
+  SurfaceBaseStage
+  SurfaceSolveStage
+  SurfaceComposeStage
+  FieldStore
+}
+class "FlowFieldVolumeSession (Volume3D)" as Volume {
+  VolumeObstacleTracker
+  VolumeModifierRegistry
+  VolumeBuildContext
+  VolumeSafetyState
+  VolumeFieldData
+}
+
+FlowFieldManager .up.|> API
+FlowFieldManager --> Surface
+FlowFieldManager --> Volume
+FlowFieldManager --> FlowFieldExecutionBoundary
+Surface --|> FlowFieldSessionBase
+Volume --|> FlowFieldSessionBase
+FlowFieldSessionBase --> FlowFieldExecutionBoundary
+FlowFieldSessionBase ..|> IFlowFieldBuildOperation
+FlowFieldBuildScheduler --> IFlowFieldBuildOperation
+FlowFieldBuildDriver -right-> FlowFieldBuildScheduler
+@enduml
