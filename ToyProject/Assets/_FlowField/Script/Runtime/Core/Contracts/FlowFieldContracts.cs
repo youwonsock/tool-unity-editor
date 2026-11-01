@@ -226,11 +226,33 @@ namespace Common.FlowField
 
     }
 
+    /// <summary>What a Modifier reports each time the session polls it.</summary>
+    public readonly struct FlowFieldModifierObservation
+    {
+        public Collider InfluenceCollider { get; }
+        public int Priority { get; }
+        public int Revision { get; }
+
+        public FlowFieldModifierObservation(Collider influenceCollider, int priority, int revision)
+        {
+            InfluenceCollider = influenceCollider;
+            Priority = priority;
+            Revision = revision;
+        }
+    }
+
+    /// <summary>
+    /// <see cref="Observe"/>, <see cref="CaptureSnapshot"/> and
+    /// <see cref="IFlowFieldModifierSnapshot.Modify"/> run inside a FlowField
+    /// operation. Calling RegisterVectorModifier, UnregisterVectorModifier,
+    /// NotifyModifierChanged, RegisterDynamicObstacle or UnregisterDynamicObstacle
+    /// from them takes effect after that operation. Other Manager commands
+    /// throw InvalidOperationException. Sampling is allowed.
+    /// </summary>
     public interface IFlowFieldVectorModifier
     {
-        Collider InfluenceCollider { get; }
-        int Priority { get; }
-        int Revision { get; }
+        /// <summary>Called often while polling, so it should not allocate.</summary>
+        FlowFieldModifierObservation Observe();
 
         /// <summary>
         /// Captures the value calculation for one build.  The returned object

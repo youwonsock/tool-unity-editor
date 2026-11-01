@@ -51,38 +51,29 @@ namespace Common.FlowField
         }
 
         private readonly List<Entry> _entries = new List<Entry>(16);
-        private int _operationVersion;
 
         internal IReadOnlyList<Entry> Entries => _entries;
-        internal int OperationVersion => _operationVersion;
-        internal bool IsComposing { get; private set; }
 
         internal FlowFieldModifierRegistryResult Register(IFlowFieldVectorModifier modifier)
         {
             if (FlowFieldVectorUtility.IsMissingModifier(modifier))
                 throw new ArgumentNullException(nameof(modifier));
-            int version = BeginOperation();
-            return RegisterImmediately(modifier, version);
+            return RegisterImmediately(modifier);
         }
 
         internal FlowFieldModifierRegistryResult Unregister(IFlowFieldVectorModifier modifier)
         {
             if (FlowFieldVectorUtility.IsMissingModifier(modifier))
                 throw new ArgumentNullException(nameof(modifier));
-            BeginOperation();
-
             return UnregisterImmediately(modifier);
         }
 
         internal FlowFieldModifierRegistryResult MarkDirty(
             IFlowFieldVectorModifier modifier,
-            bool valueNotified,
-            out bool completed)
+            bool valueNotified)
         {
-            completed = false;
             if (FlowFieldVectorUtility.IsMissingModifier(modifier))
                 throw new ArgumentNullException(nameof(modifier));
-            int version = BeginOperation();
             Entry entry = Find(modifier);
             if (entry == null)
                 throw new InvalidOperationException("Modifier is not registered.");
@@ -90,8 +81,10 @@ namespace Common.FlowField
             bool finalDirty = false;
             bool valueDirty = false;
             bool priorityChanged = false;
-            if (!TryReadMetadata(modifier, version, out Collider collider, out int priority, out int revision))
-                return default;
+            FlowFieldModifierObservation observation = modifier.Observe();
+            Collider collider = observation.InfluenceCollider;
+            int priority = observation.Priority;
+            int revision = observation.Revision;
             ValidateConfiguration(collider);
             if (entry.Priority != priority && HasPriorityConflict(modifier, priority))
                 throw new InvalidOperationException($"Vector modifier priority {priority} is duplicated.");
@@ -114,7 +107,6 @@ namespace Common.FlowField
             FlowFieldCellRect dirty = entry.InfluenceRect;
             if (priorityChanged)
                 dirty = UnionAllInfluenceRects();
-            completed = true;
             return new FlowFieldModifierRegistryResult(false, valueDirty, finalDirty, dirty);
         }
 
@@ -122,7 +114,6 @@ namespace Common.FlowField
         {
             if (FlowFieldVectorUtility.IsMissingModifier(modifier))
                 throw new ArgumentNullException(nameof(modifier));
-            BeginOperation();
             Entry entry = Find(modifier);
             if (entry == null)
                 throw new InvalidOperationException("Modifier is not registered.");
@@ -137,12 +128,11 @@ namespace Common.FlowField
 
         internal FlowFieldModifierRegistryResult DetectChanges()
         {
-            int version = BeginOperation();
-            // Keep tentative observations local: nested observation owns its own
-            // values and no cache is changed until every getter has completed.
+            // No cache changes until every Modifier has answered, so one that
+            // throws leaves the earlier observations in place.
             if (_entries.Count == 0)
                 return default;
-            var observations = ArrayPool<(Collider collider, int priority, int revision)>.Shared.Rent(_entries.Count);
+            var observations = ArrayPool<FlowFieldModifierObservation>.Shared.Rent(_entries.Count);
             try
             {
                 for (int i = 0; i < _entries.Count; i++)
@@ -150,13 +140,12 @@ namespace Common.FlowField
                     IFlowFieldVectorModifier modifier = _entries[i].Modifier;
                     if (FlowFieldVectorUtility.IsMissingModifier(modifier))
                         continue;
-                    if (!TryReadMetadata(modifier, version, out Collider collider, out int priority, out int revision))
-                        return default;
-                    ValidateConfiguration(collider);
+                    FlowFieldModifierObservation observation = modifier.Observe();
+                    ValidateConfiguration(observation.InfluenceCollider);
                     for (int previous = 0; previous < i; previous++)
-                        if (!FlowFieldVectorUtility.IsMissingModifier(_entries[previous].Modifier) && observations[previous].priority == priority)
-                            throw new InvalidOperationException($"Vector modifier priority {priority} is duplicated.");
-                    observations[i] = (collider, priority, revision);
+                        if (!FlowFieldVectorUtility.IsMissingModifier(_entries[previous].Modifier) && observations[previous].Priority == observation.Priority)
+                            throw new InvalidOperationException($"Vector modifier priority {observation.Priority} is duplicated.");
+                    observations[i] = observation;
                 }
                 bool areaDirty = false;
                 bool valueDirty = false;
@@ -178,7 +167,9 @@ namespace Common.FlowField
                         continue;
                     }
 
-                    var (collider, priority, revision) = observations[i];
+                    Collider collider = observations[i].InfluenceCollider;
+                    int priority = observations[i].Priority;
+                    int revision = observations[i].Revision;
 
                     if (entry.Priority != priority)
                     {
@@ -226,15 +217,9 @@ namespace Common.FlowField
             }
             finally
             {
-                ArrayPool<(Collider, int, int)>.Shared.Return(observations, clearArray: true);
+                ArrayPool<FlowFieldModifierObservation>.Shared.Return(observations, clearArray: true);
             }
         }
-
-        internal void BeginComposition()
-            => IsComposing = true;
-
-        internal void EndComposition()
-            => IsComposing = false;
 
         internal void MarkAllAreasDirty()
         {
@@ -269,26 +254,23 @@ namespace Common.FlowField
 
         internal void Clear()
         {
-            InvalidateOperations();
             for (int i = 0; i < _entries.Count; i++)
                 _entries[i].ReleaseArea();
             _entries.Clear();
-            IsComposing = false;
         }
 
-        private FlowFieldModifierRegistryResult RegisterImmediately(IFlowFieldVectorModifier modifier, int version)
+        private FlowFieldModifierRegistryResult RegisterImmediately(IFlowFieldVectorModifier modifier)
         {
             if (Find(modifier) != null)
                 throw new InvalidOperationException("Modifier is already registered.");
 
-            if (!TryReadMetadata(modifier, version, out Collider collider, out int priority, out int revision))
-                return default;
-
+            FlowFieldModifierObservation observation = modifier.Observe();
+            Collider collider = observation.InfluenceCollider;
             ValidateConfiguration(collider);
-            if (HasPriorityConflict(modifier, priority))
-                throw new InvalidOperationException($"Vector modifier priority {priority} is duplicated.");
+            if (HasPriorityConflict(modifier, observation.Priority))
+                throw new InvalidOperationException($"Vector modifier priority {observation.Priority} is duplicated.");
 
-            Entry entry = new Entry(modifier, collider, priority, revision);
+            Entry entry = new Entry(modifier, collider, observation.Priority, observation.Revision);
             UpdateColliderSnapshot(entry, collider);
             _entries.Add(entry);
             _entries.Sort(CompareEntries);
@@ -346,28 +328,6 @@ namespace Common.FlowField
             return false;
         }
 
-        private bool TryReadMetadata(
-            IFlowFieldVectorModifier modifier, int version,
-            out Collider collider, out int priority, out int revision)
-        {
-            collider = null;
-            priority = revision = 0;
-            try
-            {
-                collider = modifier.InfluenceCollider;
-                if (version != _operationVersion) return false;
-                priority = modifier.Priority;
-                if (version != _operationVersion) return false;
-                revision = modifier.Revision;
-                return version == _operationVersion;
-            }
-            catch (Exception) when (version != _operationVersion)
-            {
-                // A canceled getter cannot fault the replacement lifetime.
-                return false;
-            }
-        }
-
         private static int CompareEntries(Entry left, Entry right)
             => left.Priority.CompareTo(right.Priority);
 
@@ -383,19 +343,6 @@ namespace Common.FlowField
             }
 
             return null;
-        }
-
-        private int BeginOperation()
-        {
-            if (IsComposing)
-                throw new InvalidOperationException("Modifier registry cannot be changed while composing.");
-            InvalidateOperations();
-            return _operationVersion;
-        }
-
-        internal void InvalidateOperations()
-        {
-            unchecked { _operationVersion++; }
         }
 
         private static bool HasColliderSnapshotChanged(Entry entry, Collider collider)

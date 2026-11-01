@@ -48,6 +48,7 @@ namespace Common.FlowField.Tests
             public Collider InfluenceCollider { get; set; }
             public int Priority { get; set; }
             public int Revision { get; set; }
+            public FlowFieldModifierObservation Observe() => new FlowFieldModifierObservation(InfluenceCollider, Priority, Revision);
             internal float Angle = 30f;
             internal float Speed = 0.5f;
 

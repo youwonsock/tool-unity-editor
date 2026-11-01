@@ -730,6 +730,7 @@ namespace Common.FlowField.Tests
             public Collider InfluenceCollider => Collider;
             public int Priority => 1;
             public int Revision => Version;
+            public FlowFieldModifierObservation Observe() => new FlowFieldModifierObservation(InfluenceCollider, Priority, Revision);
             public IFlowFieldModifierSnapshot CaptureSnapshot() => new ValueSnapshot(Speed, Callback);
         }
         private sealed class ValueSnapshot : IFlowFieldModifierSnapshot

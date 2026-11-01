@@ -16,7 +16,6 @@ namespace Common.FlowField
         {
             while (!budget.IsExpired)
             {
-                EnsureCurrentBuild(build);
                 switch (build.Phase)
                 {
                     case BuildPhase.Allocate:
@@ -92,8 +91,6 @@ namespace Common.FlowField
                     case BuildPhase.Complete:
                         return true;
                 }
-
-                EnsureCurrentBuild(build);
             }
             return false;
         }
@@ -317,7 +314,7 @@ namespace Common.FlowField
             FlowFieldComputeRequest request,
             Unity.Collections.NativeArray<GpuFlowCell> result)
         {
-            if (Disposed || _build != build || build.Generation != OperationGeneration)
+            if (_build != build)
                 return;
             // Keep the callback bounded: the persistent readback storage is
             // owned by FlowFieldComputeSolver until the next dispatch, while
@@ -334,7 +331,7 @@ namespace Common.FlowField
             FlowFieldComputeFailureKind kind,
             Exception exception)
         {
-            if (Disposed || _build != build || build.Generation != OperationGeneration)
+            if (_build != build)
                 return;
             DisableGpu(exception != null ? $"{kind}: {exception.Message}" : kind.ToString());
             build.GpuPending = false;
@@ -404,6 +401,7 @@ namespace Common.FlowField
                     FlowFieldVolumeCellQuery.StepBounds(build.Request.Grid, build.Cursor, end, cellHalf),
                     build.Modifiers);
             }
+            using FlowFieldExecutionBoundary.OperationScope userCode = Boundary.EnterUserCode();
             for (; build.Cursor < end; build.Cursor++)
             {
                 int index = build.Cursor;
@@ -451,7 +449,6 @@ namespace Common.FlowField
                         build.Request.Grid,
                         (build.GoalFlags[index] & FlowFieldGoalFlags.Directed) != 0);
                     FlowFieldVectorState candidate = modifier.Snapshot.Modify(in current, in context);
-                    EnsureCurrentBuild(build);
                     FlowFieldVectorUtility.ValidateVolumeModifierOutput(candidate);
                     current = candidate;
                 }
@@ -461,11 +458,8 @@ namespace Common.FlowField
             return build.Cursor >= build.Count;
         }
 
-        private bool CommitBuild(BuildContext build)
+        private void CommitBuild(BuildContext build)
         {
-            if (build == null || !CanContinuePump(build.Generation, build))
-                return false;
-
             VolumeFieldData next = new VolumeFieldData(
                 build.Request,
                 build.Blocked,
@@ -479,8 +473,6 @@ namespace Common.FlowField
                 build.EscapeDirections,
                 build.GoalIndex,
                 Interlocked.Increment(ref _nextVisualizationResultId));
-
-            bool gridChanged = _committed != null && !_committed.Request.HasSameGrid(build.Request);
 
             _committed = next;
             Revision++;
@@ -498,15 +490,7 @@ namespace Common.FlowField
             }
             _build = null;
             _buildReservationBytes = 0;
-            if (gridChanged)
-                InvalidateBuildGeneration();
-
-            // Publish only after every private reference, revision and
-            // lifecycle field has been made internally consistent. A
-            // listener may Release, Suspend or submit another request.
-            int callbackGeneration = OperationGeneration;
             NotifyFieldCommitted();
-            return OperationGeneration != callbackGeneration;
         }
     }
 }

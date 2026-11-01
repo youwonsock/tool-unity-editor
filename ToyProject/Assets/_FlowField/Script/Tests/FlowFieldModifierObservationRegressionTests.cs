@@ -29,82 +29,6 @@ namespace Common.FlowField.Tests
         }
 
         [Test]
-        public void ObservationGetterRestartDoesNotContinueTheOldRegistry(
-            [Values(false,true)] bool volume,[Values(false,true)] bool restart)
-        {
-            using var surfaceSession = new FlowFieldSession(FlowFieldRegressionFixture.Surface());
-            using var volumeSession = new FlowFieldVolumeSession();
-            FlowFieldSessionBase owner = volume ? (FlowFieldSessionBase)volumeSession : surfaceSession;
-            var events = new FlowFieldRegressionFixture.EventFailures(owner);
-            void Initialize()
-            {
-                if(volume) volumeSession.Initialize(FlowFieldBakeMode.RuntimeDynamic);
-                else surfaceSession.Initialize(FlowFieldBakeMode.RuntimeDynamic,FlowFieldSessionSourceKind.SceneBuild,
-                    FlowFieldBfsBackendPolicy.ManagedOnly,null);
-            }
-            Initialize();
-            var first = new Modifier { Collider = _collider, Order = 1 };
-            var second = new Modifier { Collider = _collider, Order = 2 };
-            owner.RegisterModifierCommand(first);owner.RegisterModifierCommand(second);
-            bool entered = false;
-            second.ReadRevision = () =>
-            {
-                if(entered)return;entered=true;
-                if(!restart)return;
-                if(volume)volumeSession.Release();else surfaceSession.Release();
-                Initialize();
-                if(volume)volumeSession.Submit(VolumeRequest(Vector3.right));
-                else surfaceSession.Submit(FlowFieldRegressionFixture.Request(direction:Vector3.right));
-            };
-            Exception error = null;
-            try { if(volume)volumeSession.DetectModifierChanges();else surfaceSession.DetectModifierChanges(); }
-            catch(Exception e){error=e;}
-            Assert.That(entered,Is.True);
-            Assert.That(error,Is.Null,"An old observation must stop after a getter restarts its owner.");
-            if(restart)
-            {
-                if(volume)Finish(volumeSession);else surfaceSession.Pump();
-                Assert.That(owner.Sample(Vector3.one * 0.5f).Direction,Is.EqualTo(Vector3.right));
-                Assert.That(owner.Sample(Vector3.one * 0.5f).SpeedMultiplier,Is.EqualTo(1f));
-            }
-            events.AssertNone();
-        }
-
-        [Test]
-        public void VolumeRegistrationGetterReleaseDoesNotLeakIntoTheNextLifetime()
-        {
-            using var session = new FlowFieldVolumeSession();
-            session.Initialize(FlowFieldBakeMode.RuntimeDynamic);
-            bool entered=false;
-            var modifier=new Modifier { Collider=_collider,Order=1 };
-            modifier.ReadCollider=()=>{if(entered)return;entered=true;session.Release();};
-            session.RegisterModifier(modifier);
-            Assert.That(entered,Is.True);
-            Assert.That(session.State,Is.EqualTo(FlowFieldRuntimeState.Released));
-            session.Initialize(FlowFieldBakeMode.RuntimeDynamic);
-            session.Submit(VolumeRequest(Vector3.forward));Finish(session);
-            Assert.That(session.Sample(Vector3.one*0.5f).SpeedMultiplier,Is.EqualTo(1f),
-                "Released registration must not survive without registering in the new lifetime.");
-        }
-
-        [Test]
-        public void SurfaceRegistrationGetterReentryDoesNotDuplicateTheModifier()
-        {
-            using var session = new FlowFieldSession(FlowFieldRegressionFixture.Surface());
-            session.Initialize(FlowFieldBakeMode.RuntimeDynamic,FlowFieldSessionSourceKind.SceneBuild,
-                FlowFieldBfsBackendPolicy.ManagedOnly,null);
-            bool entered=false;
-            var modifier=new Modifier { Collider=_collider,Order=1 };
-            modifier.ReadCollider=()=>{if(entered)return;entered=true;session.RegisterModifierCommand(modifier);};
-            session.RegisterModifierCommand(modifier);
-            session.Submit(FlowFieldRegressionFixture.Request());session.Pump();
-            Assert.That(entered,Is.True);
-            Assert.That(session.IsReady,Is.True,session.LastError);
-            Assert.That(session.Sample(new Vector3(.5f,0f,.5f)).SpeedMultiplier,Is.EqualTo(2f),
-                "One registered modifier must be composed once.");
-        }
-
-        [Test]
         public void SurfaceRequestKeepsTheCapturedBakeVersionWhenAssetIsReapplied()
             => CheckCapturedBakeVersion(false);
 
@@ -174,95 +98,6 @@ namespace Common.FlowField.Tests
                 errors.AssertNone();
             }
             finally {UnityEngine.Object.DestroyImmediate(asset);}
-        }
-
-        [Test]
-        public void MetadataGetterLifetimeChangesStopRegistrationAndObservation(
-            [Values(false, true)] bool volume,
-            [Values("register", "observe")] string operation,
-            [Values("collider", "priority", "revision")] string getter,
-            [Values("restart", "restart-throw", "fault", "suspend")] string transition)
-            => CheckMetadataBoundary(volume, operation, getter, transition);
-
-        [Test]
-        public void NotificationGetterCannotFaultOrDirtyAReplacementLifetime(
-            [Values(false, true)] bool volume,
-            [Values("collider", "priority")] string getter,
-            [Values("restart", "restart-throw")] string transition)
-            => CheckMetadataBoundary(volume, "notify", getter, transition);
-
-        private void CheckMetadataBoundary(bool volume, string operation, string getter, string transition)
-        {
-            using var surfaceSession = new FlowFieldSession(FlowFieldRegressionFixture.Surface());
-            using var volumeSession = new FlowFieldVolumeSession();
-            FlowFieldSessionBase owner = volume ? (FlowFieldSessionBase)volumeSession : surfaceSession;
-            var events = new FlowFieldRegressionFixture.EventFailures(owner);
-            void Initialize()
-            {
-                if (volume) volumeSession.Initialize(FlowFieldBakeMode.RuntimeDynamic);
-                else surfaceSession.Initialize(FlowFieldBakeMode.RuntimeDynamic, FlowFieldSessionSourceKind.SceneBuild,
-                    FlowFieldBfsBackendPolicy.ManagedOnly, null);
-            }
-            void Submit()
-            {
-                if (volume) volumeSession.Submit(VolumeRequest(Vector3.right));
-                else surfaceSession.Submit(FlowFieldRegressionFixture.Request(direction: Vector3.right));
-            }
-            Initialize();
-            var first = new Modifier { Collider = _collider, Order = 1 };
-            var target = new Modifier { Collider = _collider, Order = 2 };
-            owner.RegisterModifierCommand(first);
-            if (operation != "register") owner.RegisterModifierCommand(target);
-            int publications = 0, failures = 0, callbacks = 0;
-            owner.FieldCommitted += () => publications++;
-            owner.Failed += _ => failures++;
-            Action callback = () =>
-            {
-                if (callbacks++ > 0) return;
-                if (transition == "fault")
-                {
-                    if (volume) volumeSession.ReportFault(new InvalidOperationException("Expected metadata fault"));
-                    else surfaceSession.ReportFault(new InvalidOperationException("Expected metadata fault"));
-                }
-                else if (transition == "suspend")
-                {
-                    if (volume) volumeSession.Suspend(); else surfaceSession.Suspend();
-                }
-                else
-                {
-                    if (volume) volumeSession.Release(); else surfaceSession.Release();
-                    Initialize(); Submit();
-                }
-                if (transition == "restart-throw") throw new InvalidOperationException("Old metadata failure");
-            };
-            if (getter == "collider") target.ReadCollider = callback;
-            else if (getter == "priority") target.ReadPriority = callback;
-            else target.ReadRevision = callback;
-            Exception error = null;
-            try
-            {
-                if (operation == "register") owner.RegisterModifierCommand(target);
-                else if (operation == "notify") owner.NotifyModifierChangedCommand(target,
-                    FlowFieldModifierChange.Value | FlowFieldModifierChange.Priority | FlowFieldModifierChange.Area);
-                else if (volume) volumeSession.DetectModifierChanges();
-                else surfaceSession.DetectModifierChanges();
-            }
-            catch (Exception exception) { error = exception; }
-            Assert.That(callbacks, Is.EqualTo(1), "A cancelled observation must not call the getter again.");
-            Assert.That(error, Is.Null, "An old getter exception must not reach the Manager fault handler.");
-            Assert.That(failures, Is.EqualTo(transition == "fault" ? 1 : 0));
-            Assert.That(publications, Is.Zero);
-            if (transition.StartsWith("restart"))
-            {
-                if (volume) Finish(volumeSession); else surfaceSession.Pump();
-                Assert.That(owner.IsReady, Is.True, owner.LastError);
-                Assert.That(owner.Sample(Vector3.one * .5f).Direction, Is.EqualTo(Vector3.right));
-                Assert.That(owner.Sample(Vector3.one * .5f).SpeedMultiplier, Is.EqualTo(1f));
-                Assert.That(publications, Is.EqualTo(1));
-            }
-            else Assert.That(owner.State, Is.EqualTo(transition == "fault"
-                ? FlowFieldRuntimeState.Faulted : FlowFieldRuntimeState.Suspended));
-            events.AssertNone();
         }
 
         [Test]
@@ -359,6 +194,7 @@ namespace Common.FlowField.Tests
             public Collider InfluenceCollider {get{ReadCollider?.Invoke();return Collider;}}
             public int Priority { get { ReadPriority?.Invoke(); return Order; } }
             public int Revision {get{ReadRevision?.Invoke();return 0;}}
+            public FlowFieldModifierObservation Observe() => new FlowFieldModifierObservation(InfluenceCollider, Priority, Revision);
             public IFlowFieldModifierSnapshot CaptureSnapshot()=>this;
             public FlowFieldVectorState Modify(in FlowFieldVectorState state,in FlowFieldVectorModifierContext context)
                 =>new FlowFieldVectorState(state.Direction,state.SpeedMultiplier*2f);

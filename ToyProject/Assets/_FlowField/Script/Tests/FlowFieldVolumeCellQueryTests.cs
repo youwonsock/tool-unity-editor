@@ -88,7 +88,7 @@ namespace Common.FlowField.Tests
             Assert.That(scenario.Session.TryExport(out FlowFieldVolumeRequest request, out bool[] blocked,
                 out uint[] topology, out _, out _, out _, out _, out _), Is.True);
 
-            var build = new FlowFieldVolumeBuildContext(request, 0, null) { Blocked = blocked };
+            var build = new FlowFieldVolumeBuildContext(request, null) { Blocked = blocked };
             for (int index = 0; index < request.Grid.CellCount; index++)
             {
                 if (blocked[index])

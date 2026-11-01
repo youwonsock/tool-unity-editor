@@ -66,9 +66,9 @@ Volume의 장애물·Modifier 단계는 `FlowFieldVolumeCellQuery`로 스텝마�
 
 Volume의 Modifier 등록·변경 관측·Snapshot 캡처는 `FlowFieldVolumeModifierRegistry`, Physics와 무관한 탐색 연산은 `FlowFieldVolumeNavigation`, GPU 결과 검증은 `FlowFieldVolumeGpuResultValidator`가 담당합니다. `FlowFieldVolumeBuildContext`는 한 작업의 배열·진행 커서를, `FlowFieldVolumeFieldData`는 완성된 게시 결과를 보관합니다. `FlowFieldVolumeSafetyState`는 불확실 영역과 샘플링의 보수적 정지 판정을 담당합니다. 불확실 영역은 빌드 시작 때 관측 목록으로 옮겨 그 빌드를 게시할 때 지우고, 시작 후 기록된 영역은 다음 빌드까지 남깁니다. Modifier 재합성은 장애물을 조회하지 않으므로 영역을 그대로 둡니다. GPU를 기다리는 동안 Scheduler는 등록 장애물 관측만 실행하고 작업 없음으로 세어 예산을 쓰지 않습니다. `FlowFieldVolumeObstacleTracker`는 등록·미등록 Collider 관측과 스윕 버퍼를 소유하고 변경 Bounds를 Session에 동기 통지합니다. Session은 요청 수락·취소, 수명, Physics 입력, Scheduler·GPU 실행 연결과 게시 정책을 유지합니다. 단계별 회귀 검증과 보존 범위는 [RefactoringNotes.md](RefactoringNotes.md)에 기록합니다.
 
-장애물 관측의 동기 알림 중 수명이나 등록 집합이 바뀌면 Tracker의 관측 토큰을 무효화하고 이전 관측을 중단합니다. 중첩 관측도 이전 순회를 취소합니다. Session은 등록 관측 이후 세대와 실행 가능 상태를 다시 확인하므로, Release·재초기화 콜백 뒤 이전 Pump가 새 수명의 요청을 처리하지 않습니다. Dispose는 대기 요청과 최신 입력의 유효 표시도 해제합니다.
+`FlowFieldExecutionBoundary`는 FlowField가 소유하지 않은 코드를 작업 밖으로 분리합니다. 세션 이벤트는 큐에 쌓였다가 가장 바깥 작업이 끝나면 순서대로 전달되고, 전달 중 생긴 이벤트는 같은 큐에 이어 붙습니다. 각 이벤트에는 만들어진 수명 세대가 붙어 있어 `Release`·`Suspend`·Fault 이전의 이벤트는 버려지며 `Released`만 예외입니다. Modifier의 `Observe`·`CaptureSnapshot`·`Modify`를 부르는 구간은 사용자 코드 구간으로 표시합니다. 이 구간의 등록 계열 명령과 Manager의 `OnEnable`·`OnDisable`·`OnDestroy`는 큐에 넣고, 그 밖의 명령은 거부합니다. Manager는 두 세션에 경계 하나를 공유합니다. 세션을 직접 쓰는 베이크와 테스트에는 세션마다 경계가 하나씩 생깁니다. 세션 내부 호출은 이 경계를 믿으므로, 내부 명령을 Modifier에서 직접 부르는 것은 지원하지 않습니다. Dispose는 대기 요청과 최신 입력의 유효 표시도 해제합니다.
 
-Volume의 `CaptureSnapshot()` 호출 전 세대와 캡처 토큰을 보관하고, 등록 집합 변경으로 무효화된 캡처는 최신 입력으로 다음 실행 경계에서 다시 시도합니다. `Modify()` 반환 직후에는 작업 참조와 세대·수명을 검사해 오래된 결과를 셀에 쓰지 않습니다. 같은 Session의 중첩 Pump는 중단하며, 이전 작업의 예외·취소 처리가 새 요청이나 새 수명의 상태를 지우지 않도록 소유권을 확인합니다. 빌드 세대·관측·캡처 무효화와 작업 폐기·요청 취소는 Volume의 공통 내부 함수로 모았습니다.
+비동기로 끝나는 GPU 풀이만 작업이 끝난 뒤 돌아옵니다. Surface는 시작할 때의 수명 세대와, Volume은 빌드 객체의 동일성과 비교해 늦은 결과를 버립니다.
 
 ## StaticBaked와 Asset 검증
 

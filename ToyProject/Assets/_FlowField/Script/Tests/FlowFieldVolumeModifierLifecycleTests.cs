@@ -80,169 +80,6 @@ namespace Common.FlowField.Tests
         }
 
         [Test]
-        public void ModifierLifetimeChangesStopTheOldOperation(
-            [Values("capture", "modify")] string stage,
-            [Values("release", "suspend", "dispose", "restart", "fault", "cancel")] string action,
-            [Values(false, true)] bool throwAfterChange)
-        {
-            PublishInitial();
-            int revision = _session.Revision;
-            int publications = 0;
-            int failures = 0;
-            int calls = 0;
-            bool interrupted = false;
-            _session.FieldCommitted += () => publications++;
-            _session.Failed += _ => failures++;
-            Arm(stage, () =>
-            {
-                calls++;
-                if (interrupted) return;
-                interrupted = true;
-                ChangeLifetime(action);
-                if (throwAfterChange) throw new InvalidOperationException("Exception from the old modifier operation");
-            });
-            _session.Submit(Request());
-
-            Assert.DoesNotThrow(() => _session.Pump(100d));
-            Assert.That(calls, Is.EqualTo(1), "No further modifier calls may run after this operation is invalidated.");
-            Assert.That(publications, Is.Zero);
-            Assert.That(_session.Revision, Is.EqualTo(revision));
-            Assert.That(failures, Is.EqualTo(action == "fault" ? 1 : 0));
-            if (action == "restart")
-            {
-                Assert.That(_session.State, Is.EqualTo(FlowFieldRuntimeState.Building));
-                Assert.That(_session.HasPendingRequest, Is.True);
-                Assert.That(_session.IsReady, Is.False);
-                Assert.That(_session.TryGetLatestRequestedInput(out var latest), Is.True);
-                Assert.That(latest.Grid.Origin, Is.EqualTo(Replacement.Origin));
-                FlowFieldVolumeSafetyRegressionTests.Finish(_session);
-                Assert.That(publications, Is.EqualTo(1));
-                Assert.That(_session.TrySample(Replacement.Origin + Position, out _), Is.True);
-            }
-            else if (action == "suspend")
-            {
-                Assert.That(_session.State, Is.EqualTo(FlowFieldRuntimeState.Suspended));
-                Assert.That(_session.HasPendingRequest, Is.False);
-                _session.Resume();
-                _session.Submit(Request());
-                FlowFieldVolumeSafetyRegressionTests.Finish(_session);
-            }
-            else if (action == "fault")
-            {
-                Assert.That(_session.State, Is.EqualTo(FlowFieldRuntimeState.Faulted));
-                Assert.That(_session.LastError, Does.Contain("Explicit modifier interruption"));
-                Assert.That(_session.HasPendingRequest, Is.False);
-            }
-            else if (action == "cancel")
-            {
-                Assert.That(_session.IsFaulted, Is.False);
-                Assert.That(_session.HasPendingRequest, Is.False);
-                Assert.That(_session.Sample(Position).SpeedMultiplier, Is.EqualTo(2f));
-                _session.Submit(Request());
-                FlowFieldVolumeSafetyRegressionTests.Finish(_session);
-            }
-            else
-            {
-                Assert.That(_session.State, Is.EqualTo(FlowFieldRuntimeState.Released));
-                Assert.That(_session.HasPendingRequest, Is.False);
-                Assert.That(_session.TryGetLatestRequestedInput(out _), Is.False);
-                Assert.That(_session.IsReady, Is.False);
-            }
-        }
-
-        [Test]
-        public void NestedPumpDoesNotAdvanceTheSameOperation([Values("capture", "modify")] string stage)
-        {
-            PublishInitial();
-            int revision = _session.Revision;
-            int publications = 0;
-            bool entered = false;
-            FlowFieldRuntimeState innerState = FlowFieldRuntimeState.Uninitialized;
-            int innerRevision = -1;
-            _session.FieldCommitted += () => publications++;
-            Arm(stage, () =>
-            {
-                if (entered) return;
-                entered = true;
-                _session.Pump(100d);
-                innerState = _session.State;
-                innerRevision = _session.Revision;
-            });
-            _session.Submit(Request());
-            FlowFieldVolumeSafetyRegressionTests.Finish(_session);
-            Assert.That(entered, Is.True);
-            Assert.That(innerState, Is.EqualTo(FlowFieldRuntimeState.Building));
-            Assert.That(innerRevision, Is.EqualTo(revision));
-            Assert.That(publications, Is.EqualTo(1));
-            Assert.That(_session.Sample(Position).SpeedMultiplier, Is.EqualTo(2f));
-        }
-
-        [Test]
-        public void CaptureRegistrationChangesRetryACompleteCurrentSet(
-            [Values("remove_self", "remove_other", "add")] string change,
-            [Values(false, true)] bool previouslyPublished)
-        {
-            var second = NewModifier(200, 3f);
-            var third = NewModifier(300, 5f);
-            _session.RegisterModifier(second);
-            if (previouslyPublished) PublishInitial();
-            int publications = 0;
-            bool changed = false;
-            _session.FieldCommitted += () => publications++;
-            _modifier.OnCapture = () =>
-            {
-                if (changed) return;
-                changed = true;
-                if (change == "remove_self") _session.UnregisterModifier(_modifier);
-                else if (change == "remove_other") _session.UnregisterModifier(second);
-                else _session.RegisterModifier(third);
-            };
-            _session.Submit(Request());
-            Assert.DoesNotThrow(() => _session.Pump(100d));
-            Assert.That(changed, Is.True);
-            Assert.That(publications, Is.Zero, "A partially captured set must never be published.");
-            Assert.That(_session.IsFaulted, Is.False, _session.LastError);
-            Assert.That(_session.HasPendingRequest, Is.True);
-            FlowFieldVolumeSafetyRegressionTests.Finish(_session);
-            Assert.That(publications, Is.EqualTo(1));
-            Assert.That(_session.Sample(Position).SpeedMultiplier,
-                Is.EqualTo(change == "remove_self" ? 3f : change == "remove_other" ? 2f : 30f));
-        }
-
-        [Test]
-        public void ExceptionFromAnInvalidatedCapturePreservesTheNewRegistrationRequest()
-        {
-            PublishInitial();
-            bool changed = false;
-            _modifier.OnCapture = () =>
-            {
-                if (changed) return;
-                changed = true;
-                _session.UnregisterModifier(_modifier);
-                throw new InvalidOperationException("Exception from removed modifier capture");
-            };
-            _session.Submit(Request());
-            Assert.DoesNotThrow(() => _session.Pump(100d));
-            Assert.That(_session.IsFaulted, Is.False, _session.LastError);
-            Assert.That(_session.HasPendingRequest, Is.True);
-            FlowFieldVolumeSafetyRegressionTests.Finish(_session);
-            Assert.That(_session.Sample(Position).SpeedMultiplier, Is.EqualTo(1f));
-        }
-
-        [Test]
-        public void NullSnapshotFromAnOldLifetimeDoesNotFaultItsReplacement([Values("release", "restart")] string action)
-        {
-            PublishInitial();
-            _modifier.ReturnNull = true;
-            _modifier.OnCapture = () => ChangeLifetime(action);
-            _session.Submit(Request());
-            Assert.DoesNotThrow(() => _session.Pump(100d));
-            Assert.That(_session.IsFaulted, Is.False, _session.LastError);
-            Assert.That(_session.State, Is.EqualTo(action == "release" ? FlowFieldRuntimeState.Released : FlowFieldRuntimeState.Building));
-            if (action == "restart") FlowFieldVolumeSafetyRegressionTests.Finish(_session);
-        }
-
-        [Test]
         public void ActiveModifierExceptionsStillFaultExactlyOnce([Values("capture", "modify")] string stage)
         {
             PublishInitial();
@@ -291,27 +128,6 @@ namespace Common.FlowField.Tests
         }
 
         [Test]
-        public void CaptureMutationKeepsTheNewestPendingGoal()
-        {
-            PublishInitial();
-            var latestGoal = new Vector3(0.5f, 2.5f, 2.5f);
-            bool changed = false;
-            _modifier.OnCapture = () =>
-            {
-                if (changed) return;
-                changed = true;
-                _session.Submit(Request(goal: latestGoal));
-                _session.UnregisterModifier(_modifier);
-            };
-            _session.Submit(Request());
-            _session.Pump(100d);
-            Assert.That(_session.HasPendingRequest, Is.True);
-            FlowFieldVolumeSafetyRegressionTests.Finish(_session);
-            Assert.That(_session.TryGetFieldInfo(out var info), Is.True);
-            Assert.That(info.ResolvedGoalWorld, Is.EqualTo(latestGoal));
-        }
-
-        [Test]
         public void PumpGuardIsPerSession()
         {
             using (var other = new FlowFieldVolumeSession())
@@ -332,6 +148,7 @@ namespace Common.FlowField.Tests
             public Collider InfluenceCollider { get; set; }
             public int Priority { get; set; }
             public int Revision => 0;
+            public FlowFieldModifierObservation Observe() => new FlowFieldModifierObservation(InfluenceCollider, Priority, Revision);
             internal float Speed;
             internal bool ReturnNull;
             internal Action OnCapture;

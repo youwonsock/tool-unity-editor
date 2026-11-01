@@ -28,9 +28,9 @@ namespace Common.FlowField
 
             internal abstract FlowFieldSessionBase Session { get; }
             internal virtual bool ConfigurationStale => false;
-            internal abstract void Initialize(int version);
-            internal abstract bool ActivateSuspended(int version);
-            internal abstract void SubmitRebuild(int version);
+            internal abstract void Initialize();
+            internal abstract void ActivateSuspended();
+            internal abstract void SubmitRebuild();
             internal abstract void ObserveInputs();
             internal virtual void OnFixedUpdate() { }
             internal abstract void OnSettingsEdited();
@@ -54,41 +54,29 @@ namespace Common.FlowField
 
             internal override FlowFieldSessionBase Session => _session;
 
-            internal override void Initialize(int version)
+            internal override void Initialize()
             {
-                // Attach before Initialize so consumers observe the complete
-                // lifecycle, including the first Uninitialized → Suspended →
-                // Ready transition and any immediate fault.
-                Owner.AttachSessionCallbacks(_session);
+                Owner._attachedSession = _session;
                 _session.Initialize(Owner._bakeMode, Owner._frontierComputeShader);
-                if (!Owner.OwnsLifecycleOperation(_session, version))
-                    return;
                 Owner._requiresActivationRebuild = !Owner.isActiveAndEnabled;
                 if (Owner._requiresActivationRebuild)
                     _session.Suspend();
-                if (!Owner.OwnsLifecycleOperation(_session, version))
-                    return;
                 Owner.RequestRebuild();
-                if (Owner.OwnsLifecycleOperation(_session, version))
-                    Owner.ReattachActiveModifiers();
+                Owner.ReattachActiveModifiers();
             }
 
-            internal override bool ActivateSuspended(int version)
+            internal override void ActivateSuspended()
             {
                 Owner._requiresActivationRebuild = false;
                 _session.Resume();
-                if (!Owner.OwnsLifecycleOperation(_session, version))
-                    return false;
                 // A Modifier enabled during the suspension could not register.
                 Owner.ReattachActiveModifiers();
-                return Owner.OwnsLifecycleOperation(_session, version);
             }
 
-            internal override void SubmitRebuild(int version)
+            internal override void SubmitRebuild()
             {
                 Owner.QueueVolumeRequest(force: true, requeryObstacles: true);
-                if (Owner.OwnsLifecycleOperation(_session, version))
-                    _session.AttachRuntimeScheduler();
+                _session.AttachRuntimeScheduler();
             }
 
             internal override void ObserveInputs()
@@ -164,24 +152,22 @@ namespace Common.FlowField
             internal override FlowFieldSessionBase Session => _session;
             internal override bool ConfigurationStale => _session.ConfigurationStale;
 
-            internal override void Initialize(int version)
+            internal override void Initialize()
             {
-                if (!InitializeSession(version))
-                    return;
+                InitializeSession();
                 Owner._requiresActivationRebuild = !Owner.isActiveAndEnabled;
                 if (Owner._requiresActivationRebuild)
                     _session.Suspend();
-                if (Owner.OwnsLifecycleOperation(_session, version))
-                    Owner.RequestRebuild();
+                Owner.RequestRebuild();
             }
 
-            internal override bool ActivateSuspended(int version)
+            internal override void ActivateSuspended()
             {
                 Owner._requiresActivationRebuild = false;
-                return InitializeSession(version);
+                InitializeSession();
             }
 
-            private bool InitializeSession(int version)
+            private void InitializeSession()
             {
                 FlowFieldSessionSourceKind sourceKind = Owner.BakeMode == FlowFieldBakeMode.StaticBaked
                     ? FlowFieldSessionSourceKind.StaticSnapshot
@@ -189,19 +175,12 @@ namespace Common.FlowField
                 FlowFieldBfsBackendPolicy policy = Application.isPlaying
                     ? FlowFieldBfsBackendPolicy.PreferGpu
                     : FlowFieldBfsBackendPolicy.ManagedOnly;
-                Owner.AttachSessionCallbacks(_session);
-                // Attach before Initialize so consumers observe the initial
-                // Uninitialized → Building transition as well as later Ready and
-                // Faulted transitions. Reattaching Modifiers remains after the
-                // Session has created its registry.
+                Owner._attachedSession = _session;
                 _session.Initialize(Owner._bakeMode, sourceKind, policy, Owner._frontierComputeShader);
-                if (!Owner.OwnsLifecycleOperation(_session, version))
-                    return false;
                 Owner.ReattachActiveModifiers();
-                return Owner.OwnsLifecycleOperation(_session, version);
             }
 
-            internal override void SubmitRebuild(int version)
+            internal override void SubmitRebuild()
             {
                 FlowFieldSurfaceBakeSettings settings = Owner.CreateSurfaceBakeSettings();
                 _session.Submit(Owner.CreateSurfaceRequest(
@@ -209,15 +188,6 @@ namespace Common.FlowField
                     FlowFieldDirtyFlags.None,
                     _session.DirtyFinalRegion,
                     _session.DirtyObstacleRegion));
-
-                // A backend can fail synchronously (for example a RequireGpu
-                // probe or an injected test backend). Treat that exactly like
-                // a rejected request even when the backend reported that it
-                // accepted a callback before transitioning the Session.
-                if (version == Owner._lifecycleVersion
-                    && ReferenceEquals(Owner._attachedSession, _session)
-                    && _session.IsFaulted)
-                    throw new InvalidOperationException($"{nameof(FlowFieldManager)} rebuild failed.", _session.Fault);
             }
 
             internal override void ObserveInputs()

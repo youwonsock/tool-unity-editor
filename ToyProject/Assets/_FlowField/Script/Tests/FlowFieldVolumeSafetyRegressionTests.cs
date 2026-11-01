@@ -215,17 +215,16 @@ namespace Common.FlowField.Tests
             AssertStopped(NewCell);
             Assert.That(_session.Revision, Is.EqualTo(revision));
             int publications = 0;
-            _session.FieldCommitted += () =>
-            {
-                if (++publications != 1) return;
-                // The first publication still uses the obstacle snapshot from
-                // before the move. Both regions must remain unsafe until the
-                // queued replacement is published, including inside callbacks.
-                Assert.That(IsBlocked(OldCell), Is.True);
-                Assert.That(IsBlocked(NewCell), Is.False);
-                AssertStopped(OldCell);
-                AssertStopped(NewCell);
-            };
+            _session.FieldCommitted += () => publications++;
+            for (int i = 0; i < 100000 && _session.Revision == revision; i++)
+                PumpOneStep(_session);
+            // The first publication still uses the obstacle snapshot from before
+            // the move. Both regions stay unsafe until the replacement publishes.
+            Assert.That(_session.Revision, Is.EqualTo(revision + 1));
+            Assert.That(IsBlocked(OldCell), Is.True);
+            Assert.That(IsBlocked(NewCell), Is.False);
+            AssertStopped(OldCell);
+            AssertStopped(NewCell);
             Finish(_session);
             Assert.That(publications, Is.EqualTo(2));
             Assert.That(IsBlocked(OldCell), Is.False);

@@ -66,8 +66,11 @@ namespace Common.FlowField
         [SerializeField] private FlowFieldVolumeSliceAxis _volumeGizmoSliceAxis = FlowFieldVolumeSliceAxis.Y;
         [SerializeField, Tooltip("-1이면 단면 중앙을 사용합니다.")] private int _volumeGizmoSlice = -1;
 
-        private readonly FlowFieldSession _session = new FlowFieldSession();
-        private readonly FlowFieldVolumeSession _volumeSession = new FlowFieldVolumeSession();
+        // Both sessions share one boundary, so the Manager's events keep their
+        // order and a Modifier of either mode sees the same command rules.
+        private readonly FlowFieldExecutionBoundary _boundary = new FlowFieldExecutionBoundary();
+        private readonly FlowFieldSession _session;
+        private readonly FlowFieldVolumeSession _volumeSession;
         private float _refreshTimer;
         private bool _hasExplicitGoal;
         private Vector3 _explicitGoalWorld;
@@ -76,6 +79,14 @@ namespace Common.FlowField
         [NonSerialized] private int _bakeInputGeneration;
         [NonSerialized] private int _lastBakeInputHash;
         [NonSerialized] private bool _hasBakeInputHash;
+
+        public FlowFieldManager()
+        {
+            _session = new FlowFieldSession(boundary: _boundary);
+            _volumeSession = new FlowFieldVolumeSession(_boundary);
+            ForwardSessionEvents(_session);
+            ForwardSessionEvents(_volumeSession);
+        }
 
         private FlowFieldSessionBase ActiveSession
         {
@@ -120,6 +131,7 @@ namespace Common.FlowField
             => ActiveSession.TryGetFieldInfo(out info);
 
         internal FlowFieldVolumeSession VolumeSession => _volumeSession;
+        internal FlowFieldSession SurfaceSession => _session;
         internal FlowFieldStaticBakeData StaticBakeData => _staticBakeData;
         internal FlowFieldVolumeBakeData VolumeStaticBakeData => _volumeStaticBakeData;
         internal Bounds BakeBoundsLocal => _bakeBoundsLocal;
@@ -191,15 +203,18 @@ namespace Common.FlowField
             InvalidateEditorPreview();
             FlowFieldEditorVisualizationBridge.Register(this);
 #endif
-            if (!Application.isPlaying || !_requiresActivationRebuild)
+            if (!Application.isPlaying || _boundary.TryDefer(ResumeAfterEnable))
                 return;
+            ResumeAfterEnable();
+        }
 
-            FlowFieldSessionBase owner = ActiveSession;
-            if (!owner.IsInitialized)
+        private void ResumeAfterEnable()
+        {
+            if (!_requiresActivationRebuild || !ActiveSession.IsInitialized)
                 return;
-            int version = BeginLifecycleOperation();
-            if (ActiveMode.ActivateSuspended(version))
-                RequestRebuild();
+            using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
+            ActiveMode.ActivateSuspended();
+            RequestRebuild();
         }
 
         private void OnValidate()
@@ -219,6 +234,7 @@ namespace Common.FlowField
         {
             if (!Application.isPlaying || !IsInitialized || IsFaulted)
                 return;
+            using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
             try
             {
                 ActiveMode.ObserveInputs();
@@ -247,6 +263,7 @@ namespace Common.FlowField
         {
             if (!Application.isPlaying || !IsInitialized || IsFaulted)
                 return;
+            using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
             ActiveMode.OnFixedUpdate();
         }
 
@@ -255,9 +272,14 @@ namespace Common.FlowField
 #if UNITY_EDITOR
             FlowFieldEditorVisualizationBridge.Unregister(this);
 #endif
-            if (!Application.isPlaying)
+            if (!Application.isPlaying || _boundary.TryDefer(SuspendAfterDisable))
                 return;
-            BeginLifecycleOperation();
+            SuspendAfterDisable();
+        }
+
+        private void SuspendAfterDisable()
+        {
+            using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
             _requiresActivationRebuild = true;
             ActiveSession.Suspend();
             _refreshTimer = 0f;
@@ -265,18 +287,25 @@ namespace Common.FlowField
 
         private void OnDestroy()
         {
-            BeginLifecycleOperation();
 #if UNITY_EDITOR
             ReleaseEditorPreview();
             FlowFieldEditorVisualizationBridge.Unregister(this);
 #endif
-            DetachSessionCallbacks();
+            if (!_boundary.TryDefer(DisposeSessions))
+                DisposeSessions();
+        }
+
+        private void DisposeSessions()
+        {
+            using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
             _session.DisposePermanently();
             _volumeSession.Dispose();
+            _attachedSession = null;
         }
 
         public void Init()
         {
+            _boundary.ThrowIfInUserCode(nameof(Init));
             if (IsInitialized && _spaceMode != SpaceMode)
                 throw new InvalidOperationException("FlowField Space Mode cannot change during an active Init session. Release and Init again.");
             if (IsFaulted)
@@ -286,29 +315,27 @@ namespace Common.FlowField
             if (IsInitialized)
                 return;
             ValidateConfiguration();
-            ActiveMode.Initialize(BeginLifecycleOperation());
+            using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
+            ActiveMode.Initialize();
         }
 
         public void RequestRebuild()
         {
-            int version = _lifecycleVersion;
+            _boundary.ThrowIfInUserCode(nameof(RequestRebuild));
+            using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
             FlowFieldSessionBase owner = ActiveSession;
             bool retryingFault = owner.IsFaulted;
             if (retryingFault)
             {
                 owner.RetryFault();
-                if (!OwnsLifecycleOperation(owner, version))
-                    return;
                 if (_requiresActivationRebuild)
                 {
                     // A fault skipped or replaced the suspension, so restore
                     // it. OnEnable cannot resume a Faulted session, which
                     // leaves the activation to a retry made while enabled.
                     owner.Suspend();
-                    if (!OwnsLifecycleOperation(owner, version))
-                        return;
-                    if (isActiveAndEnabled && !ActiveMode.ActivateSuspended(version))
-                        return;
+                    if (isActiveAndEnabled)
+                        ActiveMode.ActivateSuspended();
                 }
             }
             try
@@ -321,14 +348,14 @@ namespace Common.FlowField
                 // baked Goal signature, while later rebuilds validate only the
                 // loaded snapshot settings and recompose it.
                 ValidateConfiguration(validateStaticGoal: false);
-                ActiveMode.SubmitRebuild(version);
+                ActiveMode.SubmitRebuild();
             }
             catch (Exception exception)
             {
                 // If a retry fails during validation or request submission,
                 // retain a diagnosable Faulted state instead of leaving an
                 // initialized but unusable Session with no LastError.
-                if (retryingFault && OwnsLifecycleOperation(owner, version))
+                if (retryingFault)
                     owner.ReportFault(exception);
                 throw;
             }
@@ -336,14 +363,15 @@ namespace Common.FlowField
 
         public void Release()
         {
+            _boundary.ThrowIfInUserCode(nameof(Release));
             FlowFieldSessionBase owner = ActiveSession;
             if (!owner.IsInitialized && !owner.IsFaulted)
                 return;
+            using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
             ModeDriver mode = ActiveMode;
-            BeginLifecycleOperation();
             DetachActiveModifiers();
             owner.Release();
-            DetachReleasedSession(owner);
+            _attachedSession = null;
             _refreshTimer = 0f;
             mode.OnReleased();
         }
@@ -415,6 +443,7 @@ namespace Common.FlowField
 
         public void SetSpaceMode(FlowFieldSpaceMode mode)
         {
+            _boundary.ThrowIfInUserCode(nameof(SetSpaceMode));
             if (!Enum.IsDefined(typeof(FlowFieldSpaceMode), mode))
                 throw new ArgumentOutOfRangeException(nameof(mode));
             if (IsInitialized || IsFaulted)
@@ -457,6 +486,7 @@ namespace Common.FlowField
 
         public void NotifyObstacleRegionDirty(Bounds worldBounds)
         {
+            _boundary.ThrowIfInUserCode(nameof(NotifyObstacleRegionDirty));
             ThrowIfInputAllowedForMode();
             if (!FlowFieldGridSpace.IsFinite(worldBounds.center)
                 || !FlowFieldGridSpace.IsFinite(worldBounds.size))
@@ -469,6 +499,7 @@ namespace Common.FlowField
 
         public void SetGoal(in FlowFieldGoalRequest request)
         {
+            _boundary.ThrowIfInUserCode(nameof(SetGoal));
             ThrowIfInputAllowedForMode();
             if (BakeMode == FlowFieldBakeMode.StaticBaked)
                 throw new InvalidOperationException("Runtime Goal changes are not allowed in StaticBaked mode.");
@@ -504,6 +535,7 @@ namespace Common.FlowField
 
         public void NotifyCellsDirty()
         {
+            _boundary.ThrowIfInUserCode(nameof(NotifyCellsDirty));
             ThrowIfInputAllowedForMode();
             if (BakeMode == FlowFieldBakeMode.StaticBaked)
                 throw new InvalidOperationException("Cell regeneration is not allowed in StaticBaked mode.");
@@ -515,46 +547,14 @@ namespace Common.FlowField
             ActiveMode.MarkConfigurationStale();
         }
 
-        // This is the facade's synchronous initialization/activation attempt,
-        // not the Volume build generation (which also changes on valid commits).
-        private int _lifecycleVersion;
-
-        private int BeginLifecycleOperation()
+        // Subscribed for the Manager's whole life: a queued Released must still
+        // arrive after the Manager has moved on from that session.
+        private void ForwardSessionEvents(FlowFieldSessionBase session)
         {
-            unchecked { return ++_lifecycleVersion; }
-        }
-
-        private bool OwnsLifecycleOperation(FlowFieldSessionBase owner, int version)
-            => version == _lifecycleVersion && ReferenceEquals(_attachedSession, owner) && owner.IsInitialized;
-
-        private void AttachSessionCallbacks(FlowFieldSessionBase session)
-        {
-            if (ReferenceEquals(_attachedSession, session))
-                return;
-            DetachSessionCallbacks();
-            _attachedSession = session;
-            _attachedSession.FieldCommitted += OnSessionFieldCommitted;
-            _attachedSession.Failed += OnSessionFailed;
-            _attachedSession.StateChanged += OnSessionStateChanged;
-            _attachedSession.EventFailed += OnSessionEventFailed;
-        }
-
-        private void DetachReleasedSession(FlowFieldSessionBase session)
-        {
-            if (ReferenceEquals(_attachedSession, session)
-                && session.State == FlowFieldRuntimeState.Released)
-                DetachSessionCallbacks();
-        }
-
-        private void DetachSessionCallbacks()
-        {
-            if (_attachedSession == null)
-                return;
-            _attachedSession.FieldCommitted -= OnSessionFieldCommitted;
-            _attachedSession.Failed -= OnSessionFailed;
-            _attachedSession.StateChanged -= OnSessionStateChanged;
-            _attachedSession.EventFailed -= OnSessionEventFailed;
-            _attachedSession = null;
+            session.FieldCommitted += OnSessionFieldCommitted;
+            session.Failed += OnSessionFailed;
+            session.StateChanged += OnSessionStateChanged;
+            session.EventFailed += OnSessionEventFailed;
         }
 
         private void OnSessionFieldCommitted()

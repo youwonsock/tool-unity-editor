@@ -132,63 +132,6 @@ namespace Common.FlowField.Tests
             Assert.That(manager.Revision, Is.EqualTo(baseline + 1));
         }
 
-        [TestCase(false)]
-        [TestCase(true)]
-        public void AreaGetterUnregistrationDoesNotFaultAcceptedRemoval(bool throwAfterRemoval)
-        {
-            var collider = MakeInfluence();
-            using var session = new FlowFieldSession(FlowFieldRegressionFixture.Surface());
-            session.Initialize(FlowFieldBakeMode.RuntimeDynamic, FlowFieldSessionSourceKind.SceneBuild,
-                FlowFieldBfsBackendPolicy.ManagedOnly, null);
-            var modifier = new Modifier { Collider = collider };
-            session.RegisterModifierCommand(modifier);
-            bool entered = false;
-            modifier.ReadCollider = () =>
-            {
-                if (entered) return;
-                entered = true;
-                session.UnregisterModifierCommand(modifier);
-                if (throwAfterRemoval) throw new InvalidOperationException("Canceled area getter");
-            };
-            session.Submit(FlowFieldRegressionFixture.Request());
-            session.Pump();
-            TestContext.WriteLine($"entered={entered}; state={session.State}; error={session.LastError}");
-            Assert.That(entered, Is.True);
-            Assert.That(session.IsFaulted, Is.False, session.LastError);
-            session.Submit(FlowFieldRegressionFixture.Request());
-            session.Pump();
-            Assert.That(session.Sample(new Vector3(.5f, 0f, .5f)).SpeedMultiplier, Is.EqualTo(1f));
-        }
-
-        [Test]
-        public void SurfaceSourceRestartPreservesTheReplacementRequest()
-        {
-            var source = new CallbackSurfaceSource();
-            using var session = new FlowFieldSession(source);
-            void Initialize() => session.Initialize(FlowFieldBakeMode.RuntimeDynamic, FlowFieldSessionSourceKind.SceneBuild,
-                FlowFieldBfsBackendPolicy.ManagedOnly, null);
-            Initialize();
-            int publications = 0;
-            session.FieldCommitted += () => publications++;
-            bool entered = false;
-            source.OnBuild = () =>
-            {
-                if (entered) return;
-                entered = true;
-                session.Release(); Initialize();
-                session.Submit(FlowFieldRegressionFixture.Request(direction: Vector3.right));
-            };
-            session.Submit(FlowFieldRegressionFixture.Request());
-            session.Pump();
-            Assert.That(entered, Is.True);
-            Assert.That(publications, Is.Zero);
-            session.Pump();
-            TestContext.WriteLine($"state={session.State}; error={session.LastError}; pending={session.HasPendingRequest}; dirty={session.DirtyFlags}; ready={session.IsReady}");
-            Assert.That(session.IsReady, Is.True, session.LastError);
-            Assert.That(session.Sample(new Vector3(.5f, 0f, .5f)).Direction, Is.EqualTo(Vector3.right));
-            Assert.That(publications, Is.EqualTo(1));
-        }
-
         [UnityTest]
         public IEnumerator SupportedModeSwitchKeepsManagerCallbacksAttachedToTheNewSession()
         {
@@ -342,116 +285,6 @@ namespace Common.FlowField.Tests
             errors.AssertNone();
         }
 
-        [Test]
-        public void AreaMutationCancelsOldMaskAndRetriesAcceptedInputs(
-            [Values("scene", "static", "bfs", "pre-bfs")] string path,
-            [Values("unregister", "unregister-throw", "register", "observe")] string mutation)
-        {
-            var source = FlowFieldRegressionFixture.Surface();
-            var backend = new FlowFieldRegressionFixture.DeferredBackend();
-            using var session = new FlowFieldSession(source, backend);
-            var errors = new FlowFieldRegressionFixture.EventFailures(session);
-            bool baked = path == "static", bfs = path == "bfs";
-            session.Initialize(baked ? FlowFieldBakeMode.StaticBaked : FlowFieldBakeMode.RuntimeDynamic,
-                baked ? FlowFieldSessionSourceKind.StaticSnapshot : FlowFieldSessionSourceKind.SceneBuild,
-                (bfs || path == "pre-bfs") ? FlowFieldBfsBackendPolicy.RequireGpu : FlowFieldBfsBackendPolicy.ManagedOnly, null);
-            var modifier = new Modifier { Collider = MakeInfluence() };
-            var extra = new Modifier { Collider = modifier.Collider, Order = 2, Speed = 3f };
-            session.RegisterModifierCommand(modifier);
-            session.Submit(baked ? StaticRequest(CreateSnapshot()) : FlowFieldRegressionFixture.Request(
-                (bfs || path == "pre-bfs") ? (Vector3?)new Vector3(2.5f, 0f, 2.5f) : null));
-            if (bfs)
-            {
-                session.Pump();
-                session.NotifyModifierChangedCommand(modifier, FlowFieldModifierChange.Area);
-            }
-            int calls = 0, publications = 0;
-            session.FieldCommitted += () => publications++;
-            modifier.ReadCollider = () =>
-            {
-                if (calls++ > 0) return;
-                if (mutation.StartsWith("unregister")) session.UnregisterModifierCommand(modifier);
-                else if (mutation == "register") session.RegisterModifierCommand(extra);
-                else { modifier.Speed = 3f; modifier.RevisionValue++; session.DetectModifierChanges(); }
-                if (mutation.EndsWith("throw")) throw new InvalidOperationException("Canceled area metadata");
-            };
-            if (bfs) backend.Complete(0); else session.Pump();
-            Assert.That(calls, Is.GreaterThan(0));
-            Assert.That(session.IsFaulted, Is.False, session.LastError);
-            Assert.That(publications, Is.Zero, "The interrupted mask must not publish.");
-            session.Pump();
-            if (path == "pre-bfs")
-            {
-                Assert.That(backend.Calls.Count, Is.EqualTo(1));
-                backend.Complete(0);
-            }
-            Assert.That(session.IsReady, Is.True, session.LastError);
-            float expected = mutation.StartsWith("unregister") ? 1f : mutation == "register" ? 6f : 3f;
-            Assert.That(session.Sample(new Vector3(.5f, 0f, .5f)).SpeedMultiplier, Is.EqualTo(expected));
-            Assert.That(publications, Is.EqualTo(1));
-            Assert.That(source.BuildCount, Is.EqualTo(baked ? 0 : 1));
-            Assert.That(backend.Calls.Count, Is.EqualTo(bfs || path == "pre-bfs" ? 1 : 0));
-            if (bfs || path == "pre-bfs")
-            {
-                Assert.That(session.TryGetFieldInfo(out var info), Is.True);
-                Assert.That(info.ResolvedGoalWorld, Is.EqualTo(new Vector3(2.5f, 0f, 2.5f)));
-                Assert.That(session.Sample(new Vector3(.5f, 0f, .5f)).Direction, Is.Not.EqualTo(Vector3.forward));
-            }
-            session.Pump();
-            Assert.That(publications, Is.EqualTo(1));
-            errors.AssertNone();
-        }
-
-        [Test]
-        public void SourceBoundaryPreservesLifetimeAndLatestInput(
-            [Values("restart", "restart-throw", "suspend", "resume", "fault", "retry", "release", "dispose", "throw")] string transition)
-        {
-            var source = new CallbackSurfaceSource();
-            using var session = new FlowFieldSession(source);
-            var errors = new FlowFieldRegressionFixture.EventFailures(session);
-            void Initialize() => session.Initialize(FlowFieldBakeMode.RuntimeDynamic, FlowFieldSessionSourceKind.SceneBuild,
-                FlowFieldBfsBackendPolicy.ManagedOnly, null);
-            Initialize();
-            int calls = 0, publications = 0, failures = 0;
-            session.FieldCommitted += () => publications++;
-            session.Failed += _ => failures++;
-            bool next = transition.StartsWith("restart") || transition == "resume" || transition == "retry";
-            source.OnBuild = () =>
-            {
-                if (calls++ > 0) return;
-                if (transition == "throw") throw new InvalidOperationException("Current source error");
-                if (transition == "fault" || transition == "retry")
-                {
-                    session.ReportFault(new InvalidOperationException("Expected source fault"));
-                    if (transition == "retry") session.RetryFault();
-                }
-                else if (transition == "suspend" || transition == "resume")
-                {
-                    session.Suspend(); if (transition == "resume") Initialize();
-                }
-                else if (transition == "dispose") session.Dispose();
-                else { session.Release(); if (transition.StartsWith("restart")) Initialize(); }
-                if (next) session.Submit(FlowFieldRegressionFixture.Request(direction: Vector3.right));
-                if (transition == "restart-throw") throw new InvalidOperationException("Canceled source error");
-            };
-            session.Submit(FlowFieldRegressionFixture.Request());
-            session.Pump();
-            Assert.That(calls, Is.EqualTo(1));
-            Assert.That(publications, Is.Zero);
-            Assert.That(failures, Is.EqualTo(transition == "fault" || transition == "retry" || transition == "throw" ? 1 : 0));
-            if (next)
-            {
-                Assert.That(session.HasPendingRequest, Is.True);
-                session.Pump();
-                Assert.That(session.IsReady, Is.True, session.LastError);
-                Assert.That(session.Sample(new Vector3(.5f, 0f, .5f)).Direction, Is.EqualTo(Vector3.right));
-                Assert.That(publications, Is.EqualTo(1));
-            }
-            else Assert.That(session.State, Is.EqualTo(transition == "fault" || transition == "throw"
-                ? FlowFieldRuntimeState.Faulted : transition == "suspend" ? FlowFieldRuntimeState.Suspended : FlowFieldRuntimeState.Released));
-            errors.AssertNone();
-        }
-
         [UnityTest]
         public IEnumerator RoundTripModeSwitchesKeepOnePublicationPerBuild()
         {
@@ -569,33 +402,6 @@ namespace Common.FlowField.Tests
             Assert.That(registry.Entries[0].Modifier, Is.SameAs(first));
         }
 
-        [TestCase(false)]
-        [TestCase(true)]
-        public void CanceledSourceReturnIsIgnoredBeforePayloadValidation(bool invalidSurface)
-        {
-            var source = new CallbackSurfaceSource();
-            using var session = new FlowFieldSession(source);
-            void Initialize() => session.Initialize(FlowFieldBakeMode.RuntimeDynamic, FlowFieldSessionSourceKind.SceneBuild,
-                FlowFieldBfsBackendPolicy.ManagedOnly, null);
-            Initialize();
-            bool entered = false;
-            source.OnBuild = () =>
-            {
-                if (entered) return; entered = true;
-                source.ReturnNullOnce = !invalidSurface;
-                source.ReturnInvalidOnce = invalidSurface;
-                session.Release(); Initialize();
-                session.Submit(FlowFieldRegressionFixture.Request(direction: Vector3.right));
-            };
-            session.Submit(FlowFieldRegressionFixture.Request()); session.Pump();
-            Assert.That(entered, Is.True);
-            Assert.That(session.IsFaulted, Is.False, session.LastError);
-            Assert.That(session.HasPendingRequest, Is.True);
-            session.Pump();
-            Assert.That(session.IsReady, Is.True, session.LastError);
-            Assert.That(session.Sample(new Vector3(.5f, 0f, .5f)).Direction, Is.EqualTo(Vector3.right));
-        }
-
         [Test]
         public void CurrentAreaGetterErrorStillFaultsExactlyOnce([Values("scene", "static", "bfs")] string path)
         {
@@ -618,48 +424,6 @@ namespace Common.FlowField.Tests
             Assert.That(session.LastError, Does.Contain("Current area failure"));
             session.Pump();
             Assert.That(failures, Is.EqualTo(1));
-        }
-
-        [Test]
-        public void SourceSubmissionKeepsTheLatestAcceptedInput(
-            [Values("direction", "goal", "grid")] string change, [Values(false, true)] bool throwAfterSubmit)
-        {
-            var source = new CallbackSurfaceSource { DynamicGrid = true };
-            using var session = new FlowFieldSession(source);
-            session.Initialize(FlowFieldBakeMode.RuntimeDynamic, FlowFieldSessionSourceKind.SceneBuild,
-                FlowFieldBfsBackendPolicy.ManagedOnly, null);
-            var grid = change == "grid" ? FlowFieldGridSpace.FromCellGrid(new Vector3(10f, 0f, 0f), 3, 3, 1f)
-                : FlowFieldRegressionFixture.Grid;
-            var settings = new FlowFieldSurfaceBakeSettings(grid,
-                new Bounds(grid.Origin + new Vector3(1.5f, 0f, 1.5f), new Vector3(3f, 4f, 3f)),
-                1 << FlowFieldRegressionFixture.Layer, 45f, .5f);
-            var goal = change == "goal" ? FlowFieldGoalPipeline.Resolve(grid, null, true, new Vector3(2.5f, 0f, 2.5f), 0f)
-                : FlowFieldGoalResolution.None;
-            var latest = FlowFieldSessionRequest.ForSceneBuild(settings, 1 << FlowFieldRegressionFixture.Layer,
-                1f, .5f, 0f, false, goal, Vector3.right, FlowFieldDirtyFlags.None,
-                FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid, 1024);
-            bool entered = false;
-            source.OnBuild = () =>
-            {
-                if (entered) return; entered = true;
-                session.Submit(latest);
-                if (throwAfterSubmit) throw new InvalidOperationException("Replaced source request");
-            };
-            int publications = 0;
-            session.FieldCommitted += () => publications++;
-            session.Submit(FlowFieldRegressionFixture.Request()); session.Pump();
-            Assert.That(entered, Is.True);
-            Assert.That(session.IsFaulted, Is.False, session.LastError);
-            Assert.That(publications, Is.Zero, "Superseded source preparation must stop before publication.");
-            session.Pump();
-            Assert.That(session.IsReady, Is.True, session.LastError);
-            Assert.That(session.TryGetFieldInfo(out var info), Is.True);
-            Assert.That(info.Grid.Origin, Is.EqualTo(grid.Origin));
-            var sample = session.Sample(grid.Origin + new Vector3(.5f, 0f, .5f));
-            Assert.That(sample.HasCell, Is.True);
-            if (change == "goal") Assert.That(info.ResolvedGoalWorld, Is.EqualTo(new Vector3(2.5f, 0f, 2.5f)));
-            else Assert.That(sample.Direction, Is.EqualTo(Vector3.right));
-            Assert.That(publications, Is.EqualTo(1));
         }
 
         private static FlowFieldStaticBakeSnapshot CreateSnapshot()
@@ -713,6 +477,7 @@ namespace Common.FlowField.Tests
             public Collider InfluenceCollider { get { ReadCollider?.Invoke(); return Collider; } }
             public int Priority => Order;
             public int Revision => RevisionValue;
+            public FlowFieldModifierObservation Observe() => new FlowFieldModifierObservation(InfluenceCollider, Priority, Revision);
             public IFlowFieldModifierSnapshot CaptureSnapshot() => new Snapshot(Speed);
         }
         private sealed class Snapshot : IFlowFieldModifierSnapshot
