@@ -196,10 +196,10 @@ namespace Common.FlowField
             return true;
         }
 
-        internal static void PumpAll(double budgetMilliseconds = EditorBudgetMilliseconds)
+        internal static bool PumpAll(double budgetMilliseconds = EditorBudgetMilliseconds)
         {
             if (Managers.Count == 0 || budgetMilliseconds <= 0d)
-                return;
+                return false;
 
             Stopwatch timer = Stopwatch.StartNew();
             bool changed = false;
@@ -233,6 +233,7 @@ namespace Common.FlowField
                 UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
                 SceneView.RepaintAll();
             }
+            return changed;
         }
 
         internal static void Draw(FlowFieldManager manager)
@@ -368,6 +369,8 @@ namespace Common.FlowField
             FlowFieldManager manager = state.Manager;
             if (manager == null)
                 return false;
+            // Setting a status clears the request, so read it first.
+            bool refreshRequested = state.RefreshRequested;
 
             if (manager.SpaceMode != FlowFieldSpaceMode.Volume3D)
             {
@@ -388,7 +391,7 @@ namespace Common.FlowField
             {
                 SetUnavailable(state, "RuntimeDynamic은 실행 후 Volume3D 벡터를 표시합니다.",
                     FlowFieldVolumeVisualizationStatusCode.RuntimeOnly);
-                return state.RefreshRequested;
+                return refreshRequested;
             }
 
             FlowFieldVolumeBakeData asset = manager.VolumeStaticBakeData;
@@ -417,7 +420,7 @@ namespace Common.FlowField
                     state,
                     string.IsNullOrEmpty(metadataReason) ? goalReason : metadataReason,
                     FlowFieldVolumeVisualizationStatusCode.Invalid);
-                return state.RefreshRequested;
+                return refreshRequested;
             }
 
             AssetState assetState = GetAssetState(asset, grid);
@@ -453,7 +456,7 @@ namespace Common.FlowField
                     FlowFieldVolumeVisualizationStatusCode.Invalid);
                 state.ValidationProgress = 1f;
                 // The Inspector still shows the progress until the next repaint.
-                return validationFinished || state.RefreshRequested;
+                return validationFinished || refreshRequested;
             }
 
             if (!asset.TryGetView(grid, out bool[] blocked, out Vector3[] directions, out float[] speeds))
@@ -476,13 +479,15 @@ namespace Common.FlowField
                 speeds);
             SetView(state, manager, view, "베이크 기본 필드가 표시 중입니다.",
                 FlowFieldVolumeVisualizationStatusCode.Valid);
-            return state.RefreshRequested;
+            return validationFinished || refreshRequested;
         }
 
         private static bool PumpRuntime(
             FlowFieldManager manager,
             ManagerState state)
         {
+            bool refreshRequested = state.RefreshRequested;
+            FlowFieldVolumeVisualizationStatusCode previousCode = state.Code;
             bool hasRequestedSource = manager.TryGetVolumeVisualizationSource(
                 out FlowFieldVolumeVisualizationSource requestedSource);
             bool hasView = manager.TryGetVolumeVisualizationView(out FlowFieldReadView view);
@@ -499,7 +504,7 @@ namespace Common.FlowField
                     manager.IsRebuilding
                         ? FlowFieldVolumeVisualizationStatusCode.Rebuilding
                         : FlowFieldVolumeVisualizationStatusCode.Valid);
-                return state.RefreshRequested;
+                return refreshRequested || state.Code != previousCode;
             }
 
             state.HasSelection = false;
@@ -510,7 +515,8 @@ namespace Common.FlowField
                 ? "새 Volume3D 격자를 준비 중이므로 이전 벡터를 숨겼습니다."
                 : "게시된 Volume3D 결과가 없습니다.";
             state.ValidationProgress = 0f;
-            return state.RefreshRequested;
+            state.RefreshRequested = false;
+            return refreshRequested || state.Code != previousCode;
         }
 
         private static void SetView(

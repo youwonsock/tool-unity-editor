@@ -477,9 +477,9 @@ namespace Common.FlowField
             return new Bounds(
                 bounds.center,
                 new Vector3(
-                    SnapHorizontalSize(bounds.size.x, resolvedCellSize),
-                    SnapHorizontalSize(bounds.size.y, resolvedCellSize),
-                    SnapHorizontalSize(bounds.size.z, resolvedCellSize)));
+                    SnapVolumeAxis(bounds.size.x, resolvedCellSize),
+                    SnapVolumeAxis(bounds.size.y, resolvedCellSize),
+                    SnapVolumeAxis(bounds.size.z, resolvedCellSize)));
         }
 
         public static Bounds SnapResizedKeepingOppositeFace(
@@ -500,17 +500,20 @@ namespace Common.FlowField
             float cellSize,
             bool snapY)
         {
-            Bounds resolvedPrevious = snapY
-                ? SnapVolumeCenterAnchored(previous, cellSize)
-                : SnapCenterAnchored(previous, cellSize);
-            Bounds resolvedCandidate = snapY
-                ? SnapVolumeCenterAnchored(candidate, cellSize)
-                : SnapCenterAnchored(candidate, cellSize);
             if (!FlowFieldGridSpace.IsFinite(previous.center)
                 || !FlowFieldGridSpace.IsFinite(previous.size)
                 || !FlowFieldGridSpace.IsFinite(candidate.center)
                 || !FlowFieldGridSpace.IsFinite(candidate.size))
                 throw new System.ArgumentOutOfRangeException(nameof(candidate));
+            Bounds resolvedPrevious = snapY
+                ? SnapVolumeCenterAnchored(previous, cellSize)
+                : SnapCenterAnchored(previous, cellSize);
+            // A dragged handle can pass through zero. The smallest box is one cell.
+            Vector3 smallest = new Vector3(cellSize, snapY ? cellSize : MinBoundsHeight, cellSize);
+            var limited = new Bounds(candidate.center, Vector3.Max(candidate.size, smallest));
+            Bounds resolvedCandidate = snapY
+                ? SnapVolumeCenterAnchored(limited, cellSize)
+                : SnapCenterAnchored(limited, cellSize);
 
             Vector3 previousMin = resolvedPrevious.min;
             Vector3 previousMax = resolvedPrevious.max;
@@ -730,6 +733,14 @@ namespace Common.FlowField
                 return false;
             count = (int)rounded;
             return true;
+        }
+
+        // Matches TryCreateVolumeWorldLayout, where a thin axis still holds one cell.
+        private static float SnapVolumeAxis(float size, float cellSize)
+        {
+            if (!TryCalculateVolumeAxisCellCount(size, cellSize, out int count))
+                throw new System.ArgumentOutOfRangeException(nameof(size));
+            return count * cellSize;
         }
 
         private static float SnapHorizontalSize(float size, float cellSize)
