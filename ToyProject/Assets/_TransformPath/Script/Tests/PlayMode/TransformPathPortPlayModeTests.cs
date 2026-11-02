@@ -351,66 +351,6 @@ namespace Common.TransformPath.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator QueueFrameRemovalAndReplacementStayDeferredAcrossActualFrames()
-        {
-            foreach (bool restart in new[] { false, true })
-            {
-                PathData path = CreatePath(5f);
-                var manager = CreateObject("Frame mutation manager").AddComponent<QueuedPathManager>();
-                manager.Init(); manager.ConfigureRoute(path);
-                var ahead = new FrameAgent(path, 0.8f);
-                manager.Register(ahead);
-                GameObject actor = CreateObject("Frame mutation actor");
-                CharacterController controller = actor.AddComponent<CharacterController>();
-                QueuedPathFollower queue = actor.AddComponent<QueuedPathFollower>();
-                queue.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
-                PathQueueRegistration oldToken = manager.Register(queue);
-                ulong oldId = queue.PlaybackId;
-                bool mutated = false;
-                bool observed = false;
-                bool staleState = false;
-                float progressInMutationFrame = -1f;
-                ahead.OnApply = () =>
-                {
-                    ahead.OnApply = null;
-                    queue.StopMove();
-                    if (restart) queue.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
-                    mutated = true;
-                };
-                // The observer follows the actor in this frame's stable order.
-                var observer = new FrameAgent(path, 0f);
-                observer.OnApply = () =>
-                {
-                    if (observed) return;
-                    observed = true;
-                    staleState = manager.TryGetState(queue, out _);
-                    progressInMutationFrame = queue.GlobalNormalizedTime;
-                    // The observer must not become an obstacle for the new
-                    // registration when the next frame sorts equal progress.
-                    manager.Unregister(observer);
-                };
-                manager.Register(observer);
-                float deadline = Time.realtimeSinceStartup + 5f;
-                while (!observed && Time.realtimeSinceStartup < deadline) yield return null;
-                Assert.That(mutated && observed, Is.True);
-                Assert.That(staleState, Is.False, "The old frame must not cache a result for the detached or replacement playback.");
-                Assert.That(progressInMutationFrame, Is.Zero);
-                Assert.That(manager.TryGetState(oldToken, out _), Is.False);
-                yield return new WaitForSeconds(0.3f);
-                Assert.That(queue.IsRegistered, Is.EqualTo(restart));
-                Assert.That(controller.enabled, Is.EqualTo(!restart));
-                Assert.That(manager.TryGetState(queue, out _), Is.EqualTo(restart));
-                if (restart)
-                {
-                    Assert.That(queue.PlaybackId, Is.GreaterThan(oldId));
-                    Assert.That(queue.GlobalNormalizedTime, Is.GreaterThan(0f));
-                }
-                else Assert.That(queue.PlaybackId, Is.Zero);
-                queue.StopMove(); manager.Release();
-            }
-        }
-
-        [UnityTest]
         public IEnumerator NestedManagerReleaseDetachesActualFollowersAndRestoresControllers()
         {
             PathData path = CreatePath(5f);

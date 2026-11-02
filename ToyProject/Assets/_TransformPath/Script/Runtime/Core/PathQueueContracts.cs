@@ -119,8 +119,8 @@ namespace Common.TransformPath
     }
 
     /// <summary>
-    /// Called from inside the manager's work. An implementation must not issue
-    /// queue commands from these members.
+    /// Called from inside the manager's work. An implementation can read the
+    /// manager from these members, but changing the queue throws.
     /// </summary>
     public interface IQueuedPathAgent
     {
