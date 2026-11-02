@@ -147,21 +147,7 @@ namespace Common.TransformPath.Tests
         [Test]
         public void AnEventListenerSeesTheEffectOfThatEvent()
         {
-            var resume = ScriptableObject.CreateInstance<PathEventSettingSO>();
-            _objects.Add(resume);
-            resume.UseModifyPathMoveSpeed = true;
-            resume.MoveSpeedTargetValue = 2f;
-            var pause = ScriptableObject.CreateInstance<PathEventSettingSO>();
-            _objects.Add(pause);
-            pause.EventName = "pause";
-            pause.UseModifyPathMoveSpeed = true;
-            pause.MoveSpeedTargetValue = 0f;
-            pause.UseDelayedEvents = true;
-            pause.DelayedEvents.Add(new PathEventSettingSO.DelayedEventEntry { Delay = 1f, EventSetting = resume });
-            PathData path = CreatePath(10f);
-            typeof(PathData).GetField("_pathEvents", BindingFlags.NonPublic | BindingFlags.Instance)
-                .SetValue(path, new List<PathEventEntry> { new PathEventEntry { NormalizedTime = 0.1f, EventSetting = pause } });
-            path.Rebuild();
+            PathData path = CreatePausingPath(out _);
             PathFollower follower = CreateFollower();
             var seen = new List<EPathFollowerState>();
             follower.GetComponent<PathEventHandler>().OnEventDispatched += _ => seen.Add(follower.State);
@@ -479,21 +465,7 @@ namespace Common.TransformPath.Tests
         [Test]
         public void APauseEventLeavesTheFollowerWhereItReportsToBe()
         {
-            var resume = ScriptableObject.CreateInstance<PathEventSettingSO>();
-            _objects.Add(resume);
-            resume.UseModifyPathMoveSpeed = true;
-            resume.MoveSpeedTargetValue = 2f;
-            var pause = ScriptableObject.CreateInstance<PathEventSettingSO>();
-            _objects.Add(pause);
-            pause.EventName = "pause";
-            pause.UseModifyPathMoveSpeed = true;
-            pause.MoveSpeedTargetValue = 0f;
-            pause.UseDelayedEvents = true;
-            pause.DelayedEvents.Add(new PathEventSettingSO.DelayedEventEntry { Delay = 1f, EventSetting = resume });
-            PathData path = CreatePath(10f);
-            typeof(PathData).GetField("_pathEvents", BindingFlags.NonPublic | BindingFlags.Instance)
-                .SetValue(path, new List<PathEventEntry> { new PathEventEntry { NormalizedTime = 0.1f, EventSetting = pause } });
-            path.Rebuild();
+            PathData path = CreatePausingPath(out _);
             PathFollower follower = CreateFollower();
             float heardAt = -1f;
             follower.GetComponent<PathEventHandler>().OnEventDispatched += _ => heardAt = follower.transform.position.x;
@@ -505,6 +477,318 @@ namespace Common.TransformPath.Tests
             Assert.That(follower.NormalizedTime, Is.EqualTo(0.2f).Within(0.0001f));
             Assert.That(follower.transform.position.x, Is.EqualTo(2f).Within(0.001f));
             Assert.That(heardAt, Is.EqualTo(2f).Within(0.001f), "The listener sees the same position.");
+        }
+
+        // Each test below fails if the named entry point stops opening an operation.
+
+        [TestCase("Pause")]
+        [TestCase("Resume")]
+        [TestCase("Stop")]
+        [TestCase("Init")]
+        public void AFollowerListenerHearsAStateAQueueListenerMovesOnFrom(string command)
+        {
+            QueuedPathFollower queue = CreateQueue();
+            PathFollower follower = queue.UnderlyingFollower;
+            PathPlaybackRequest request = PathPlaybackRequest.Single(CreatePath(100f));
+            EPathFollowerState target = EPathFollowerState.Ready;
+            Action run = () => follower.StopMove();
+            Action moveOn = () => queue.StartFreePlayback(request);
+            switch (command)
+            {
+                case "Pause":
+                    queue.StartFreePlayback(request);
+                    target = EPathFollowerState.Paused;
+                    run = () => queue.PauseMove();
+                    moveOn = () => queue.ResumeMove();
+                    break;
+                case "Resume":
+                    queue.StartFreePlayback(request);
+                    queue.PauseMove();
+                    target = EPathFollowerState.Moving;
+                    run = () => queue.ResumeMove();
+                    moveOn = () => queue.PauseMove();
+                    break;
+                case "Stop":
+                    queue.StartFreePlayback(request);
+                    break;
+                case "Init":
+                    follower.Release();
+                    run = () => follower.Init();
+                    break;
+            }
+            var heard = new List<EPathFollowerState>();
+            follower.StateChanged += heard.Add;
+            bool moved = false;
+            queue.StateChanged += state =>
+            {
+                if (state == target && !moved)
+                {
+                    moved = true;
+                    moveOn();
+                }
+            };
+
+            run();
+
+            Assert.That(heard, Does.Contain(target));
+        }
+
+        [Test]
+        public void AListenerSeesAFollowerReleaseFinished()
+        {
+            PathFollower follower = CreateFollower();
+            follower.StartPlayback(PathPlaybackRequest.Single(CreatePath(100f)));
+            bool? initializedWhenHeard = null;
+            follower.StateChanged += state =>
+            {
+                if (state == EPathFollowerState.Ready)
+                    initializedWhenHeard = follower.IsInitialized;
+            };
+
+            follower.Release();
+
+            Assert.That(initializedWhenHeard, Is.False);
+        }
+
+        [Test]
+        public void AListenerSeesAQueueInitFinished()
+        {
+            var queue = Create<QueuedPathFollower>("Agent");
+            bool? initializedWhenHeard = null;
+            queue.StateChanged += _ => initializedWhenHeard = queue.IsInitialized;
+
+            queue.Init();
+
+            Assert.That(initializedWhenHeard, Is.True);
+        }
+
+        [Test]
+        public void AListenerSeesAFreeStartThatHadToInitFirst()
+        {
+            var queue = Create<QueuedPathFollower>("Agent");
+            var states = new List<EPathFollowerState>();
+            queue.StateChanged += _ => states.Add(queue.State);
+
+            queue.StartFreePlayback(PathPlaybackRequest.Single(CreatePath(100f)));
+
+            Assert.That(states[0], Is.EqualTo(EPathFollowerState.Moving));
+        }
+
+        [Test]
+        public void AListenerCanDetachAQueuedStart()
+        {
+            PathData path = CreatePath(100f);
+            QueuedPathManager manager = CreateManager(path);
+            QueuedPathFollower queue = CreateQueue();
+            queue.StateChanged += state =>
+            {
+                if (state == EPathFollowerState.Moving)
+                    queue.DetachQueue();
+            };
+
+            Assert.DoesNotThrow(() => queue.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path)));
+
+            Assert.That(queue.IsRegistered, Is.False);
+            Assert.That(queue.State, Is.EqualTo(EPathFollowerState.Moving));
+        }
+
+        [Test]
+        public void AQueueTickRaisesItsNotificationsTogether()
+        {
+            PathData path = CreatePath(100f);
+            QueuedPathManager manager = CreateManager(path);
+            QueuedPathFollower queue = CreateQueue();
+            var speeds = new List<float>();
+            queue.OnBlocked += _ => queue.StopMove();
+            queue.OnSpeedChanged += (_, speed) => speeds.Add(speed);
+            queue.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            var driver = new PathRuntimeDriver();
+            driver.Register(manager);
+            driver.Register(queue);
+
+            driver.Tick(0.01f, 0.01f, 1);
+
+            Assert.That(queue.State, Is.EqualTo(EPathFollowerState.Ready));
+            Assert.That(speeds, Has.Count.EqualTo(1), "The stop came after the tick had raised both.");
+        }
+
+        [Test]
+        public void AManagerReleaseDetachesEveryAgentBeforeListenersRun()
+        {
+            PathData path = CreatePath(100f);
+            QueuedPathManager manager = CreateManager(path);
+            QueuedPathFollower first = StartQueued(manager, path);
+            QueuedPathFollower second = StartQueued(manager, path);
+            first.StateChanged += state =>
+            {
+                if (state == EPathFollowerState.Ready)
+                    manager.Release();
+            };
+
+            manager.Release();
+
+            Assert.That(first.State, Is.EqualTo(EPathFollowerState.Ready));
+            Assert.That(second.State, Is.EqualTo(EPathFollowerState.Ready));
+        }
+
+        [Test]
+        public void ARouteChangeDetachesEveryAgentBeforeListenersRun()
+        {
+            PathData path = CreatePath(100f);
+            QueuedPathManager manager = CreateManager(path);
+            QueuedPathFollower first = StartQueued(manager, path);
+            QueuedPathFollower second = StartQueued(manager, path);
+            first.StateChanged += state =>
+            {
+                if (state == EPathFollowerState.Ready)
+                    manager.Release();
+            };
+
+            manager.ConfigureRoute(CreatePath(50f));
+
+            Assert.That(second.State, Is.EqualTo(EPathFollowerState.Ready));
+            Assert.That(manager.RouteProvider, Is.Null, "The listener's Release came after the new route.");
+        }
+
+        [Test]
+        public void AManagerFrameDetachesEveryAgentBeforeListenersRun()
+        {
+            PathData path = CreatePath(100f);
+            QueuedPathManager manager = CreateManager(path);
+            QueuedPathFollower first = StartQueued(manager, path);
+            QueuedPathFollower second = StartQueued(manager, path);
+            first.StateChanged += state =>
+            {
+                if (state == EPathFollowerState.Ready)
+                    manager.Release();
+            };
+            var driver = new PathRuntimeDriver();
+            driver.Register(manager);
+            path.Release();
+
+            driver.Tick(0.01f, 0.01f, 1);
+
+            Assert.That(driver.Faults, Is.Empty);
+            Assert.That(second.State, Is.EqualTo(EPathFollowerState.Ready));
+        }
+
+        [Test]
+        public void ARegisterThatSeesANewRouteDetachesEveryAgentBeforeListenersRun()
+        {
+            PathData firstPath = CreatePath(50f);
+            PathData secondPath = CreatePath(50f);
+            var route = Create<MultiPathData>("Route");
+            route.ConfigureSegments(new[]
+            {
+                new PathSegmentDescriptor(firstPath, firstPath.MovementSettings, false),
+                new PathSegmentDescriptor(secondPath, secondPath.MovementSettings, false),
+            });
+            var manager = Create<QueuedPathManager>("Manager");
+            manager.Init();
+            manager.ConfigureRoute(route);
+            QueuedPathFollower first = CreateQueue();
+            QueuedPathFollower second = CreateQueue();
+            first.StartQueuedPlayback(manager, PathPlaybackRequest.Sequence(route));
+            second.StartQueuedPlayback(manager, PathPlaybackRequest.Sequence(route));
+            first.StateChanged += state =>
+            {
+                if (state == EPathFollowerState.Ready)
+                    manager.Release();
+            };
+            route.ConfigureSegments(new[]
+            {
+                new PathSegmentDescriptor(secondPath, secondPath.MovementSettings, false),
+                new PathSegmentDescriptor(firstPath, firstPath.MovementSettings, false),
+            });
+            var newcomer = new ScriptedAgent(route);
+
+            manager.Register(newcomer);
+
+            Assert.That(second.State, Is.EqualTo(EPathFollowerState.Ready));
+            Assert.That(newcomer.Detached, Is.EqualTo(1), "The listener's Release came after the registration.");
+        }
+
+        [Test]
+        public void AListenerCanRegisterAgainAfterAnUnregister()
+        {
+            PathData path = CreatePath(100f);
+            QueuedPathManager manager = CreateManager(path);
+            QueuedPathFollower queue = StartQueued(manager, path);
+            PathPlaybackRequest request = PathPlaybackRequest.Single(path);
+            queue.StateChanged += state =>
+            {
+                if (state == EPathFollowerState.Ready)
+                    queue.StartQueuedPlayback(manager, request);
+            };
+
+            manager.Unregister(queue);
+
+            Assert.That(queue.IsRegistered, Is.True);
+            Assert.That(manager.AgentCount, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void AListenerSeesTheEffectOfADelayedEvent()
+        {
+            PathData path = CreatePausingPath(out PathEventSettingSO pause);
+            pause.DelayedEvents[0].EventSetting.EventName = "resume";
+            path.Rebuild();
+            PathFollower follower = CreateFollower();
+            var handler = follower.GetComponent<PathEventHandler>();
+            var seen = new List<EPathFollowerState>();
+            handler.OnEventDispatched += name =>
+            {
+                if (name == "resume")
+                    seen.Add(follower.State);
+            };
+            follower.StartPlayback(PathPlaybackRequest.Single(path));
+            follower.Tick(2f);
+
+            handler.Tick(1.5f, 1.5f, Time.frameCount + 1);
+
+            Assert.That(seen, Is.EqualTo(new[] { EPathFollowerState.Moving }));
+        }
+
+        [Test]
+        public void AListenerSeesTheEffectOfAManualEvent()
+        {
+            CreatePausingPath(out PathEventSettingSO pause);
+            PathFollower follower = CreateFollower();
+            var handler = follower.GetComponent<PathEventHandler>();
+            var seen = new List<EPathFollowerState>();
+            handler.OnEventDispatched += _ => seen.Add(follower.State);
+            follower.StartPlayback(PathPlaybackRequest.Single(CreatePath(100f)));
+
+            handler.HandleEvent(pause);
+
+            Assert.That(seen, Is.EqualTo(new[] { EPathFollowerState.Paused }));
+        }
+
+        private QueuedPathFollower StartQueued(QueuedPathManager manager, PathData path)
+        {
+            QueuedPathFollower queue = CreateQueue();
+            queue.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            return queue;
+        }
+
+        private PathData CreatePausingPath(out PathEventSettingSO pause)
+        {
+            var resume = ScriptableObject.CreateInstance<PathEventSettingSO>();
+            _objects.Add(resume);
+            resume.UseModifyPathMoveSpeed = true;
+            resume.MoveSpeedTargetValue = 2f;
+            pause = ScriptableObject.CreateInstance<PathEventSettingSO>();
+            _objects.Add(pause);
+            pause.EventName = "pause";
+            pause.UseModifyPathMoveSpeed = true;
+            pause.MoveSpeedTargetValue = 0f;
+            pause.UseDelayedEvents = true;
+            pause.DelayedEvents.Add(new PathEventSettingSO.DelayedEventEntry { Delay = 1f, EventSetting = resume });
+            PathData path = CreatePath(10f);
+            typeof(PathData).GetField("_pathEvents", BindingFlags.NonPublic | BindingFlags.Instance)
+                .SetValue(path, new List<PathEventEntry> { new PathEventEntry { NormalizedTime = 0.1f, EventSetting = pause } });
+            path.Rebuild();
+            return path;
         }
 
         private static void RunCommand(
