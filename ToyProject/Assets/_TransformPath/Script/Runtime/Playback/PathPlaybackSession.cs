@@ -44,6 +44,27 @@ namespace Common.TransformPath
             ? Provider as IPathSequenceProvider
             : null;
 
+        public bool IsSequence => Kind == EPathPlaybackKind.Sequence;
+
+        // A route is the segments of a sequence, or the whole provider as one segment.
+        public int SegmentCount => IsSequence ? Snapshot.Count : 1;
+
+        public float GetLength(int segment) => IsSequence ? Snapshot.GetLength(segment) : Provider.PathLength;
+
+        public IPathEventSource GetEventSource(int segment) => IsSequence ? Snapshot.GetEventSource(segment) : EventSource;
+
+        public Vector3 Sample(int segment, float progress) => IsSequence ? Snapshot.Sample(segment, progress) : Provider.Sample(progress);
+
+        public float GetGlobalProgress(int segment, float progress) => IsSequence ? Snapshot.GetGlobalProgress(segment, progress) : progress;
+
+        public float GetLocalProgress(int segment, float globalProgress) => IsSequence ? Snapshot.GetLocalProgress(segment, globalProgress) : Mathf.Clamp01(globalProgress);
+
+        public int FindSegment(float globalProgress) => IsSequence ? Snapshot.FindSegment(globalProgress) : 0;
+
+        public PathMovementSettings GetMovementSettings(int segment) => IsSequence ? Snapshot.GetDescriptor(segment).MovementSettings : MovementSettings;
+
+        public bool PreservesPreviousSpeed(int segment) => IsSequence && Snapshot.GetDescriptor(segment).PreservePreviousSpeed;
+
         #endregion
 
 
@@ -101,6 +122,15 @@ namespace Common.TransformPath
             if (!EventSource.HasSameContent(nextEvents))
                 return EPathSnapshotRefreshDecision.StopEventsChanged;
             return EPathSnapshotRefreshDecision.Refresh;
+        }
+
+        public void ApplyRefresh(PathSequenceSnapshot nextSequence, PathEventSourceSnapshot nextEvents)
+        {
+            ProviderRevision = Provider.Revision;
+            if (IsSequence)
+                Snapshot = nextSequence;
+            else
+                EventSource = nextEvents;
         }
 
         internal static PathPlaybackSession CreateOrReuse(

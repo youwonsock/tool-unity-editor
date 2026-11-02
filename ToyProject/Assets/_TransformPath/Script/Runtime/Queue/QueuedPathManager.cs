@@ -83,7 +83,6 @@ namespace Common.TransformPath
         private int _routeRevision;
         private int _registrationSequence;
         private ulong _registrationId;
-        private bool _runtimeDriverRegistered;
 
         #endregion
 
@@ -192,7 +191,6 @@ namespace Common.TransformPath
             {
                 Init();
                 PathRuntimeDriverBehaviour.Instance.Register(this);
-                _runtimeDriverRegistered = true;
             }
         }
 
@@ -202,22 +200,15 @@ namespace Common.TransformPath
                 return;
             if (!_isInitialized)
                 Init();
-            if (!_runtimeDriverRegistered)
-            {
-                PathRuntimeDriverBehaviour.Instance.Register(this);
-                _runtimeDriverRegistered = true;
-            }
+            PathRuntimeDriverBehaviour.Instance.Register(this);
         }
 
         private void OnDisable()
         {
             if (!Application.isPlaying)
                 return;
-            if (_runtimeDriverRegistered && PathRuntimeDriverBehaviour.HasInstance)
-            {
+            if (PathRuntimeDriverBehaviour.HasInstance)
                 PathRuntimeDriverBehaviour.Instance.Unregister(this);
-                _runtimeDriverRegistered = false;
-            }
             Release();
         }
 
@@ -302,11 +293,8 @@ namespace Common.TransformPath
 
         private void OnDestroy()
         {
-            if (_runtimeDriverRegistered && PathRuntimeDriverBehaviour.HasInstance)
-            {
+            if (PathRuntimeDriverBehaviour.HasInstance)
                 PathRuntimeDriverBehaviour.Instance.Unregister(this);
-                _runtimeDriverRegistered = false;
-            }
             Release();
         }
 
