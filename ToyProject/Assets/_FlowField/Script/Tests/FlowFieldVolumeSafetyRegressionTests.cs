@@ -417,6 +417,79 @@ namespace Common.FlowField.Tests
             Assert.That(_session.Revision, Is.GreaterThan(revision));
         }
 
+        [TestCase("resume")]
+        [TestCase("retry")]
+        public void AStoppedSessionDoesNotServeItsOldFieldUntilARebuildPublishes(string transition)
+        {
+            Build();
+            int revision = _session.Revision;
+            if (transition == "resume")
+            {
+                _session.Suspend();
+                _session.Resume();
+            }
+            else
+            {
+                _session.ReportFault(new InvalidOperationException("Expected fault"));
+                _session.RetryFault();
+            }
+
+            Assert.That(_session.State, Is.EqualTo(FlowFieldRuntimeState.Building));
+            Assert.That(_session.IsReady, Is.False);
+            Assert.That(_session.TrySample(OldCell, out _), Is.False);
+            Assert.That(_session.TryGetFieldInfo(out _), Is.False);
+            Assert.That(_session.TryExport(out _, out _, out _, out _, out _, out _, out _, out _, out _), Is.False);
+            Assert.That(_session.ClampPositionToGrid(Vector3.one * 100f).Position.x, Is.LessThan(Grid.WorldSizeX));
+
+            // Nobody has to ask again: the session still owes its latest request.
+            Finish(_session);
+            Assert.That(_session.Revision, Is.GreaterThan(revision));
+            Assert.That(_session.TrySample(OldCell, out _), Is.True);
+        }
+
+        [Test]
+        public void AGoalRemovedDuringABuildIsNeverPublished()
+        {
+            Build();
+            int commits = 0;
+            _session.FieldCommitted += () => commits++;
+            _session.Submit(Request(Grid, goal: new Vector3(0.5f, 3.5f, 7.5f)));
+            PumpOneStep(_session);
+            Assert.That(_session.IsRebuilding, Is.True);
+
+            _session.Submit(Request(Grid, hasGoal: false));
+            Finish(_session);
+
+            Assert.That(commits, Is.EqualTo(1), "Only the build without the Goal may publish.");
+            Assert.That(_session.TryExport(out var published, out _, out _, out _, out _, out _, out _, out _, out _), Is.True);
+            Assert.That(published.HasGoal, Is.False);
+        }
+
+        [TestCase("release")]
+        [TestCase("dispose")]
+        public void EndingTheSessionForgetsItsLatestRequest(string ending)
+        {
+            Build();
+            if (ending == "release") _session.Release(); else _session.Dispose();
+
+            Assert.That(_session.TryGetLatestRequestedInput(out var request), Is.False);
+            Assert.That(request.Grid.IsValid, Is.False, "A released session must not keep the request and its Bake asset.");
+        }
+
+        [Test]
+        public void ObstacleInputChangesKeepTheUncertainRegionsBounded()
+        {
+            var state = new FlowFieldVolumeSafetyState();
+            for (int i = 0; i < 200; i++)
+                state.InvalidateRegion(new Bounds(Vector3.right * (i * 10f), Vector3.one));
+            Assert.That(state.UncertainRegionCount, Is.LessThanOrEqualTo(64));
+
+            state.ClearRegions();
+            for (int i = 0; i < 200; i++)
+                state.InvalidateRegion(new Bounds(Vector3.zero, Vector3.one));
+            Assert.That(state.UncertainRegionCount, Is.EqualTo(1));
+        }
+
         [Test]
         public void StaticBakedFollowsTheCurrentDefaultDirection()
         {
