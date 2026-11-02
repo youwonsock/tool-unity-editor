@@ -8,7 +8,7 @@
 | --- | --- |
 | 사용자 코드를 작업 밖으로 분리 (`FlowFieldExecutionBoundary`) | 복잡성의 근원이 빌드 도중 수명을 바꾸는 콜백이었습니다. 이벤트를 작업 뒤에 전달하고 Modifier 안의 수명 명령을 거부해, 외부 호출 뒤 소유권 재검사를 115줄에서 없앴습니다 |
 | Manager가 제출한 요청만 빌드 | Scheduler가 이전 요청으로 빌드하면 잘못된 설정이 그대로 풀렸습니다 |
-| Volume 책임을 Tracker, Registry, SafetyState, BuildContext로 분리 | 2,812줄 Session을 책임별로 나눴습니다. 가장 큰 세션 파일은 이제 572줄입니다 |
+| Volume 책임을 Tracker, Registry, SafetyState, BuildContext로 분리 | 2,812줄 Session을 책임별로 나눴습니다. 가장 큰 세션 파일은 이제 588줄입니다 |
 | Surface는 빌드 단계만 클래스로 분리 | partial 파일은 필드를 공유해 읽기만 쉬워질 뿐 결합이 줄지 않습니다 |
 | 호환 코드를 두지 않음 | 구버전 API 래퍼, 직렬화 별칭, 마이그레이션 코드가 없습니다. 베이크 `_formatVersion` 검사는 다른 형식을 거부하는 검증이라 유지합니다 |
 
@@ -32,3 +32,6 @@ v6은 마이그레이션 없이 전환해 다시 Bake했습니다. 내용 해시
 
 - **샘플 직렬화 필드의 기반 클래스 이동 취소:** 기반 클래스는 Agent 수명만 소유하고, 필드의 타입과 기본값이 샘플마다 다릅니다.
 - **CI 러너 미도입:** 공개 저장소라 외부 fork가 워크플로를 수정할 수 있어, 저장소의 pre-push 훅으로 검사합니다. 훅을 켜지 않은 PC와 `--no-verify`는 막지 못합니다.
+- **`OnValidate`의 핸들러 실행 유지:** Play 중 Inspector에서 값을 바꾸면 `OnValidate` 안에서 요청이 제출되고 `StateChanged` 핸들러가 돌 수 있습니다. Inspector 편집에서만 생기는 경로이고, 미루려면 편집 반영 시점이 달라져서 그대로 둡니다.
+- **Surface 조회 초과 처리 미통일:** 한 번의 조회에 겹치는 장애물이 4,096개에 이르면 Volume은 셀별 검사로 넘어가지만 Surface는 Session이 Fault 납니다. 일부만 쓰면 장애물을 놓치므로 조용히 넘기지 않습니다. 샘플과 측정에서 나오지 않는 규모라 셀별 검사를 더하지 않았습니다.
+- **파괴된 Influence Collider의 Fault 유지:** Modifier의 설정 오류로 보고 Fault를 냅니다. 무시하면 영향 영역이 조용히 사라집니다.
