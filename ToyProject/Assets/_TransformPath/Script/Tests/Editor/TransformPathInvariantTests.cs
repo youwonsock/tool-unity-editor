@@ -146,6 +146,26 @@ namespace Common.TransformPath.Tests
             Assert.That(comparedWith.GetValue(replaced), NUnit.Framework.Is.Null);
         }
 
+        // The sample's seek buttons and curve change rely on this.
+        [Test]
+        public void SeekingAfterPlaybackEndedOnlyMovesTheFollower()
+        {
+            var follower = Create<PathFollower>("Follower");
+            follower.Init();
+            follower.StartPlayback(PathPlaybackRequest.Single(CreatePath(Vector3.zero, Vector3.right * 10f)));
+            follower.Tick(20f);
+            Assert.That(follower.State, NUnit.Framework.Is.EqualTo(EPathFollowerState.Completed));
+
+            PathCommandReceipt receipt = follower.Seek(0.5f);
+
+            Assert.That(receipt.Changed, NUnit.Framework.Is.True);
+            Assert.That(receipt.PlaybackId, NUnit.Framework.Is.EqualTo(0UL));
+            Assert.That(follower.transform.position.x, NUnit.Framework.Is.EqualTo(5f).Within(0.001f));
+            follower.Tick(1f);
+            Assert.That(follower.State, NUnit.Framework.Is.EqualTo(EPathFollowerState.Completed));
+            Assert.That(follower.transform.position.x, NUnit.Framework.Is.EqualTo(5f).Within(0.001f));
+        }
+
         [Test]
         public void ReplacedEventSnapshotsDoNotKeepTheirPredecessorsAlive()
         {

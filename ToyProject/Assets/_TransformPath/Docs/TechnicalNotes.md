@@ -16,7 +16,7 @@
 
 ## 수명 규칙
 
-- **외부 코드:** 공개 명령과 Tick은 `PathExecutionBoundary.Enter()`로 작업을 엽니다. 가장 바깥 작업이 끝나면 쌓인 리스너와 수신기를 선입선출로 호출합니다. 호출 중 생긴 알림은 큐 끝에 붙어 중첩되지 않습니다.
+- **외부 코드:** 공개 명령과 Tick은 `PathExecutionBoundary.Enter()`로 작업을 엽니다. 가장 바깥 작업이 끝나면 쌓인 리스너와 수신기를 선입선출로 호출합니다. 호출 중 생긴 알림은 큐 끝에 붙어 중첩되지 않습니다. 호출 직전에 구독 여부를 다시 확인하고, 한 번에 10만 건을 넘으면 오류를 기록하고 남은 알림을 버립니다.
 - **내부 관찰:** `QueuedPathFollower`는 작업 안에서 반응해야 하므로 `PathFollower`의 `ObservedStateChanged`, `ObservedSegmentChanged`, `ObservedCompleted`, `LoopBoundary`를 동기로 받습니다. 시작을 거부하면 리스너는 남은 상태만 듣습니다.
 - **PlaybackId:** 재생을 시작할 때마다 새로 발급하고 Seek와 Pause에서는 유지합니다. 재생이 끝나면 0입니다.
 - **StateRevision:** 명령이 재생 상태를 바꿀 때마다 올립니다. Seek는 위치가 바뀔 때만 올립니다.
@@ -29,8 +29,8 @@
 
 - `PathPlaybackSession`은 Single과 Sequence의 차이를 경로 접근자(`GetLength`, `GetEventSource`, `Sample`, `FindSegment`, `GetMovementSettings` 등) 뒤에 숨깁니다. 같은 Provider와 Revision이면 다음 시작에서 재사용합니다.
 - `PathPlaybackCursor`는 위치, 잔여 시간, Speed, Duration을 소유합니다. 완료 판정은 이벤트 처리 뒤의 현재 Duration을 씁니다.
-- `PathSequenceSnapshot.TryGetCurrent`는 Provider와 Revision별로 스냅샷 하나를 공유합니다. 불변 객체이므로 같은 시퀀스의 Follower가 함께 씁니다. 이전 스냅샷과의 비교 결과를 기억하되, 교체할 때 그 참조를 끊어 스냅샷이 줄줄이 남지 않게 합니다.
-- 시작은 후보 Session을 지역 변수로 준비해 전달합니다. 시작 직전 Provider가 바뀌었으면 다시 검증합니다.
+- `PathSequenceSnapshot.TryGetCurrent`와 `PathEventSourceSnapshot.GetCurrent`는 Provider와 Revision별로 스냅샷 하나를 공유합니다. 불변 객체이므로 같은 경로의 Follower가 함께 씁니다. 새 스냅샷이 이전 스냅샷과의 비교 결과를 기억하고, 교체될 때 그 참조를 끊어 스냅샷이 줄줄이 남지 않게 합니다.
+- 시작은 후보 Session을 지역 변수로 준비해 전달합니다. 그 사이 외부 코드가 실행되지 않으므로 다시 검증하지 않습니다.
 
 ### Seek
 
@@ -57,8 +57,9 @@ Moving 상태의 다음 Tick에 `EvaluateRefresh`로 판단하므로 Pause 중�
 
 <img src="Images/transformpath-queue.png" alt="Queue 등록부터 프레임 계산과 해제까지의 순서" width="80%">
 
+- **Agent 호출:** Manager는 Agent 멤버를 호출하는 동안 `Register`, `Unregister`, `ConfigureRoute`, `Release`를 `InvalidOperationException`으로 거부합니다. `QueuedPathFollower`는 이 안에서 Queue를 바꾸지 않습니다.
 - **소유권:** `QueuedPathManager.Register`가 발급한 `PathQueueRegistration`이 등록을 나타냅니다. 토큰의 `RouteRevision`은 등록 당시 값이고 `PathQueueConstraint.RouteRevision`은 그 계산의 값입니다. 기하가 바뀌어도 등록은 유지하며, 구간 구조가 바뀌면 모든 Agent를 해제합니다.
-- **계산:** Manager는 프레임마다 진행도를 복사해 정렬하고, 앞 Agent부터 거리, 대기, 속도 배율, 진행 상한을 계산합니다(`PathQueueCoordinator`). 재생이 끝난 등록은 앞 Agent로 치지 않습니다. 정렬과 목록은 할당하지 않습니다.
+- **계산:** Manager는 프레임마다 진행도를 복사해 정렬하고, 앞 Agent부터 거리, 대기, 속도 배율, 진행 상한을 계산합니다(`PathQueueCoordinator`). 재생이 끝난 등록은 앞 Agent로 치지 않습니다. 정렬과 목록은 할당하지 않고, 인덱스는 순서가 바뀐 프레임에만 다시 만듭니다.
 - **적용:** 다른 재생이나 경로 버전, 이전 프레임의 결과는 `QueuedPathFollower`와 `PathQueueConstraintState`가 버립니다. 등록 직후와 Seek 뒤에는 첫 결과가 올 때까지 멈춥니다.
 - **완화:** `PathQueueSession.Step`이 수동 대기, 재출발 지연, 추가 간격, 속도 보간을 계산합니다.
 - **위반:** `ConstraintViolation`은 시작 때 지정한 진행 상한만 봅니다. Manager의 상한은 앞 Agent를 따라 움직이므로, 재개나 경로 단축으로 넘어선 Agent는 기다립니다.
