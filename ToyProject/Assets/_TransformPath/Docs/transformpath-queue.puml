@@ -1,0 +1,39 @@
+@startuml transformpath-queue
+skinparam shadowing false
+skinparam defaultFontName "Apple SD Gothic Neo"
+skinparam defaultFontSize 15
+skinparam ArrowColor #496A88
+skinparam Padding 6
+skinparam sequenceParticipantBackgroundColor #EEF5FB
+skinparam sequenceParticipantBorderColor #496A88
+skinparam sequenceLifeLineBorderColor #496A88
+hide footbox
+title Queue 등록과 프레임 계산
+
+participant QueuedPathFollower as Queue
+participant PathQueueSession as Session
+participant QueuedPathManager as Manager
+participant PathFollower as Follower
+
+== 시작 ==
+Queue -> Follower : StartPreparedPlayback
+Queue -> Session : TryAcquire
+Session -> Manager : Register
+Manager --> Session : PathQueueRegistration
+Session -> Follower : AttachQueueConstraint
+note right of Follower : 첫 결과가 올 때까지 대기
+
+== 매 프레임 ==
+Manager -> Manager : 진행도 복사와 정렬\n앞 Agent부터 간격 계산
+Manager -> Queue : ApplyQueueState
+Queue -> Follower : ApplyQueueConstraint
+note right of Follower : 다른 경로 버전이나\n이전 프레임의 결과는 버림
+Queue -> Session : Step\n대기, 재출발 지연, 속도 완화
+Queue -> Follower : ApplyQueueConstraint
+Follower -> Follower : 제약 안에서 이동
+
+== 끝 ==
+Queue -> Session : Release(사유)
+Session -> Manager : Unregister
+Manager -> Queue : OnQueueDetached
+@enduml

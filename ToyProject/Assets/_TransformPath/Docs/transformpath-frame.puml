@@ -1,0 +1,32 @@
+@startuml transformpath-frame
+skinparam shadowing false
+skinparam defaultFontName "Apple SD Gothic Neo"
+skinparam defaultFontSize 15
+skinparam ArrowColor #496A88
+skinparam Padding 6
+skinparam activityBackgroundColor #EEF5FB
+skinparam activityBorderColor #496A88
+title TransformPath 재생과 프레임 흐름
+
+start
+:StartPlayback(PathPlaybackRequest)\nSingle · Aggregate · Sequence;
+:PathPlaybackSession 준비와 검증\n이동 설정과 이벤트를 스냅샷으로 고정;
+:PathFollower 시작\n새 PlaybackId, 초기 위치 적용;
+repeat
+  :PathRuntimeDriver.Tick\n대상 · PlaybackId · 등록 버전 고정;
+  :PathEventHandler (-200)\n지연 이벤트, 값 보간, TimeScale;
+  :QueuedPathManager (-180)\n앞 Agent, 간격, 감속, 진행 상한 계산;
+  :QueuedPathFollower (-110)\n대기, 재출발 지연, 속도 완화;
+  :PathFollower (-100)\n경로 변경 확인, 이동, 이벤트 통과, 구간 전환;
+repeat while (재생 중?) is (예) not (아니오)
+:끝점 위치와 남은 이벤트 처리\n재생 효과 정리, CharacterController 복원;
+:StateChanged(Completed) → Completed;
+stop
+
+floating note right
+  각 Tick과 공개 명령이 끝날 때마다
+  PathExecutionBoundary가
+  모아 둔 리스너와 수신기를
+  순서대로 호출합니다.
+end note
+@enduml

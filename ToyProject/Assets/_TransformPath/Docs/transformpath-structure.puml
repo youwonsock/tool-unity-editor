@@ -1,0 +1,55 @@
+@startuml transformpath-structure
+!pragma layout smetana
+skinparam shadowing false
+skinparam defaultFontName "Apple SD Gothic Neo"
+skinparam defaultFontSize 15
+skinparam ArrowColor #496A88
+skinparam Padding 6
+skinparam classBackgroundColor #EEF5FB
+skinparam classBorderColor #496A88
+hide empty members
+hide circle
+title TransformPath 구조
+
+interface IPathProvider
+class "PathData\nMultiPathData" as Providers
+class PathRuntimeDriver
+class "IPathFollower" as Follower <<interface>>
+class QueuedPathFollower
+class PathFollower {
+  PathPlaybackCursor
+  PathQueueConstraintState
+}
+class PathPlaybackSession {
+  PathSequenceSnapshot
+  PathEventSourceSnapshot
+}
+class PathEventHandler {
+  PathEventScheduler
+  PathScalarAdjustment
+}
+class PathTimeScaleCoordinator
+class PathQueueSession
+class QueuedPathManager
+class PathQueueCoordinator <<static>>
+class PathExecutionBoundary <<static>>
+
+Providers .up.|> IPathProvider
+PathFollower .up.|> Follower
+QueuedPathFollower .up.|> Follower
+QueuedPathFollower --> PathFollower : 재생 위임
+QueuedPathFollower --> PathQueueSession
+PathQueueSession --> QueuedPathManager : 등록
+QueuedPathManager --> PathQueueCoordinator
+PathFollower --> PathPlaybackSession
+PathPlaybackSession --> IPathProvider
+PathFollower --> PathEventHandler
+PathEventHandler --> PathTimeScaleCoordinator
+PathRuntimeDriver --> PathFollower : 순서 -100
+PathRuntimeDriver --> QueuedPathFollower : 순서 -110
+PathRuntimeDriver --> QueuedPathManager : 순서 -180
+PathRuntimeDriver --> PathEventHandler : 순서 -200
+PathFollower ..> PathExecutionBoundary : 알림
+QueuedPathFollower ..> PathExecutionBoundary : 알림
+PathEventHandler ..> PathExecutionBoundary : 알림
+@enduml
