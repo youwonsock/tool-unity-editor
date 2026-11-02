@@ -848,7 +848,8 @@ namespace Common.FlowField.Editor
                 throw new InvalidOperationException(
                     $"{modeName} Bake target '{assetPath}' already exists and is not assigned to this Manager. "
                     + "Choose a new asset or explicitly assign the existing asset before baking.");
-            if (typedAsset != null && assignedAsset != typedAsset)
+            // With no reference, the path is this Manager's own, as after Clear Bake.
+            if (typedAsset != null && assignedAsset != null && assignedAsset != typedAsset)
                 throw new InvalidOperationException(
                     $"{modeName} Bake target '{assetPath}' is shared by another reference. "
                     + "Create a separate Bake Asset before overwriting it.");

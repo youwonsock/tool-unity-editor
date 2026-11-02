@@ -168,11 +168,93 @@ namespace Common.FlowField.Tests
                 Assert.DoesNotThrow(() => FlowFieldBakeAssetUtility.ValidateTargetOwnership(assigned, assigned, assigned, "own", "Test"));
                 Assert.Throws<InvalidOperationException>(() => FlowFieldBakeAssetUtility.ValidateTargetOwnership(null, null, other, "foreign", "Test"));
                 Assert.Throws<InvalidOperationException>(() => FlowFieldBakeAssetUtility.ValidateTargetOwnership(assigned, other, other, "shared", "Test"));
+                // With no reference, the target is this Manager's own stable path.
+                Assert.DoesNotThrow(() => FlowFieldBakeAssetUtility.ValidateTargetOwnership(null, other, other, "own path", "Test"));
             }
             finally
             {
                 Object.DestroyImmediate(assigned);
                 Object.DestroyImmediate(other);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator BakingAgainAfterClearBakeReusesTheManagersOwnAsset([Values(false, true)] bool volume)
+        {
+            FlowFieldManager manager = CreateManager(volume);
+            FlowFieldSurfaceBakeEditor.ClearReference(manager);
+            string path = volume
+                ? FlowFieldBakeAssetUtility.ResolveVolumeAssetPath(manager)
+                : FlowFieldBakeAssetUtility.ResolveStaticAssetPath(manager);
+            try
+            {
+                FlowFieldSurfaceBakeEditor.BakeAndAssign(manager);
+                yield return WaitForLog(CompleteLog);
+                FlowFieldSurfaceBakeEditor.ClearReference(manager);
+
+                FlowFieldSurfaceBakeEditor.BakeAndAssign(manager);
+                yield return WaitForLog(CompleteLog);
+
+                Object assigned = volume ? (Object)manager.VolumeStaticBakeData : manager.StaticBakeData;
+                Assert.That(AssetDatabase.GetAssetPath(assigned), Is.EqualTo(path));
+            }
+            finally
+            {
+                AssetDatabase.DeleteAsset(path);
+            }
+        }
+
+        [Test]
+        public void ResizingBelowOneCellKeepsOneCellAndTheOppositeFace()
+        {
+            var previous = new Bounds(new Vector3(2f, 2f, 2f), new Vector3(4f, 4f, 4f));
+            var thin = new Bounds(new Vector3(0.05f, 2f, 2f), new Vector3(0.1f, 4f, 4f));
+            Bounds surface = FlowFieldBakeBoundsUtility.SnapResizedKeepingOppositeFace(previous, thin, 1f);
+            Assert.That(surface.size, Is.EqualTo(new Vector3(1f, 4f, 4f)));
+            Assert.That(surface.min.x, Is.EqualTo(0f));
+
+            var flat = new Bounds(new Vector3(2f, 0f, 2f), new Vector3(4f, 0f, 4f));
+            Assert.That(FlowFieldBakeBoundsUtility.SnapResizedKeepingOppositeFace(previous, flat, 1f).size.y,
+                Is.EqualTo(FlowFieldBakeBoundsUtility.MinBoundsHeight));
+
+            Bounds volume = FlowFieldBakeBoundsUtility.SnapVolumeResizedKeepingOppositeFace(previous, flat, 1f);
+            Assert.That(volume.size, Is.EqualTo(new Vector3(4f, 1f, 4f)));
+        }
+
+        [Test]
+        public void VolumeBoundsThinnerThanACellSnapLikeTheirLayout()
+        {
+            var thin = new Bounds(Vector3.zero, new Vector3(4f, 0.1f, 4f));
+            Assert.That(FlowFieldBakeBoundsUtility.TryCreateVolumeWorldLayout(Vector3.zero, thin, 1f, out _, out FlowFieldGridSpace grid), Is.True);
+            Assert.That(grid.Height, Is.EqualTo(1));
+            Assert.That(FlowFieldBakeBoundsUtility.SnapVolumeCenterAnchored(thin, 1f).size, Is.EqualTo(new Vector3(4f, 1f, 4f)));
+        }
+
+        [UnityTest]
+        public IEnumerator FinishingAValidationRepaintsOnce()
+        {
+            FlowFieldManager manager = CreateManager(true);
+            FlowFieldSurfaceBakeEditor.BakeAndAssign(manager);
+            yield return WaitForLog(CompleteLog);
+            FlowFieldVolumeVisualizationEditor.InvalidateAll();
+            FlowFieldVolumeVisualizationEditor.Register(manager);
+            try
+            {
+                bool repainted = false;
+                FlowFieldVolumeVisualizationStatus status = default;
+                for (int i = 0; i < 1000 && status.Code != FlowFieldVolumeVisualizationStatusCode.Valid; i++)
+                {
+                    // Short enough for one step, so the result reports that step alone.
+                    repainted = FlowFieldVolumeVisualizationEditor.PumpAll(0.01d);
+                    Assert.That(FlowFieldVolumeVisualizationEditor.TryGetStatus(manager, out status), Is.True);
+                }
+                Assert.That(status.Code, Is.EqualTo(FlowFieldVolumeVisualizationStatusCode.Valid), status.Message);
+                Assert.That(repainted, Is.True, "The Inspector still shows the validation progress.");
+                Assert.That(FlowFieldVolumeVisualizationEditor.PumpAll(0.01d), Is.False);
+            }
+            finally
+            {
+                FlowFieldVolumeVisualizationEditor.Unregister(manager);
             }
         }
 

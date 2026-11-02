@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using Common.FlowField.Editor;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
@@ -647,6 +648,29 @@ namespace Common.FlowField.Tests
 
             Assert.That(manager.IsReady, Is.True, manager.LastError);
             manager.Release();
+        }
+
+        [UnityTest]
+        public IEnumerator AVolumeWithoutAResultRepaintsOnlyWhenItsStatusChanges()
+        {
+            yield return new EnterPlayMode();
+            FlowFieldManager manager = CreateManager(true);
+            yield return WaitUntilReady(manager);
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex("build failed"));
+            manager.VolumeSession.ReportFault(new InvalidOperationException("Expected fault"));
+
+            FlowFieldVolumeVisualizationEditor.RequestRefresh(manager);
+            Assert.That(FlowFieldVolumeVisualizationEditor.PumpAll(0.01d), Is.True);
+            Assert.That(FlowFieldVolumeVisualizationEditor.PumpAll(0.01d), Is.False, "A faulted Volume must not repaint every Editor update.");
+
+            manager.RequestRebuild();
+            Assert.That(FlowFieldVolumeVisualizationEditor.PumpAll(0.01d), Is.True, "Rebuilding is a new status.");
+            Assert.That(FlowFieldVolumeVisualizationEditor.PumpAll(0.01d), Is.False);
+
+            Pump(manager);
+            Assert.That(manager.IsReady, Is.True, manager.LastError);
+            Assert.That(FlowFieldVolumeVisualizationEditor.PumpAll(0.01d), Is.True, "The new field is a new status.");
+            Assert.That(FlowFieldVolumeVisualizationEditor.PumpAll(0.01d), Is.False);
         }
 
         [UnityTest]
