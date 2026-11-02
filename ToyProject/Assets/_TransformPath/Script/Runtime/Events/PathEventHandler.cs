@@ -258,11 +258,6 @@ namespace Common.TransformPath
             }
         }
 
-        public void CancelAllDelayedEvents()
-        {
-            _scheduler.Clear();
-        }
-
         internal void CancelMovementAdjustments()
         {
             _scalarAdjustment.Cancel();

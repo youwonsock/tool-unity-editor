@@ -49,15 +49,5 @@ namespace Common.TransformPath
         public List<DelayedEventEntry> DelayedEvents = new List<DelayedEventEntry>();
 
         #endregion
-
-
-        #region Unity Events
-
-        private void OnValidate()
-        {
-            // Serialized values are validated at the event dispatch boundary.
-        }
-
-        #endregion
     }
 }

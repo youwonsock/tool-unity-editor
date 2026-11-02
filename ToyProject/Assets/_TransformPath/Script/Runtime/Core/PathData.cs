@@ -186,18 +186,6 @@ namespace Common.TransformPath
                 Rebuild();
         }
 
-        public void SetSegmentCount(int segmentCount)
-        {
-            if (segmentCount < MIN_PATH_POINTS)
-                throw new ArgumentOutOfRangeException(nameof(segmentCount));
-            if (_segmentCount == segmentCount)
-                return;
-
-            _segmentCount = segmentCount;
-            if (_isInitialized)
-                Rebuild();
-        }
-
         /// <summary>Copies the authoring control points without exposing internal lists.</summary>
         public bool CopyControlPoints(List<Vector3> destination, bool clearDestination = true)
         {

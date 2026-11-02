@@ -110,11 +110,6 @@ namespace Common.TransformPath
             get => _duration;
         }
 
-        /// <summary>
-        /// 재생 중 경로 진행 방향으로 회전을 추종하는지 여부.
-        /// </summary>
-        public bool RotateToPathDirection => _rotateToPathDirection;
-
         public event Action<EPathFollowerState> StateChanged
         {
             add
