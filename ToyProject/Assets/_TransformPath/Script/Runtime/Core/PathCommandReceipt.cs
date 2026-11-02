@@ -7,14 +7,6 @@ namespace Common.TransformPath
         public bool Changed { get; }
         internal ulong OwnerId { get; }
 
-        public PathCommandReceipt(
-            ulong playbackId,
-            ulong stateRevision,
-            bool changed)
-            : this(0UL, playbackId, stateRevision, changed)
-        {
-        }
-
         internal PathCommandReceipt(
             ulong ownerId,
             ulong playbackId,

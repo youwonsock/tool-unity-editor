@@ -63,27 +63,14 @@ namespace Common.TransformPath
             return EPathEventIntent.None;
         }
 
-        public static PathCommandReceipt ApplyLifecycle(
+        public static void ApplyLifecycle(
             EPathEventIntent intent,
             IPathFollower follower)
         {
-            if (follower == null)
-                return default(PathCommandReceipt);
-
-            switch (intent)
-            {
-                case EPathEventIntent.Pause:
-                    return follower.PauseMove();
-                case EPathEventIntent.Resume:
-                    if (follower.State == EPathFollowerState.Paused)
-                        return follower.ResumeMove();
-                    break;
-            }
-
-            return new PathCommandReceipt(
-                follower.PlaybackId,
-                follower.StateRevision,
-                false);
+            if (intent == EPathEventIntent.Pause)
+                follower.PauseMove();
+            else if (intent == EPathEventIntent.Resume && follower.State == EPathFollowerState.Paused)
+                follower.ResumeMove();
         }
     }
 }

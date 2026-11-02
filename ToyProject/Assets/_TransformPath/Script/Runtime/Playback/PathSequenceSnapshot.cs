@@ -14,12 +14,12 @@ namespace Common.TransformPath
         private readonly float[] _lengths;
         private readonly float[] _starts;
         private readonly float _totalLength;
+        private int _providerRevision;
         private PathSequenceSnapshot _comparedWith;
         private bool _comparedSame;
 
         private static readonly ConditionalWeakTable<IPathSequenceProvider, PathSequenceSnapshot> Latest =
             new ConditionalWeakTable<IPathSequenceProvider, PathSequenceSnapshot>();
-        private int _providerRevision;
 
         #endregion
 
@@ -44,11 +44,17 @@ namespace Common.TransformPath
         {
             error = null;
             int revision = provider.Revision;
-            if (Latest.TryGetValue(provider, out snapshot) && snapshot._providerRevision == revision)
+            if (Latest.TryGetValue(provider, out PathSequenceSnapshot latest) && latest._providerRevision == revision)
+            {
+                snapshot = latest;
                 return true;
+            }
             if (!TryCreate(provider, out snapshot, out error))
                 return false;
             snapshot._providerRevision = revision;
+            // Otherwise a path that keeps changing chains every snapshot it had.
+            if (latest != null)
+                latest._comparedWith = null;
             Latest.Remove(provider);
             Latest.Add(provider, snapshot);
             return true;
