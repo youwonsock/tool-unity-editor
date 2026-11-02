@@ -56,7 +56,7 @@ public sealed class FlowFieldReadmeMover : MonoBehaviour
 <img src="Docs/Images/flowfield-structure.png" alt="FlowField 주요 타입의 구조" width="100%">
 
 - **Manager**는 설정을 검증하고 최신 요청을 Session에 넘깁니다. 호출은 계산 완료를 보장하지 않습니다.
-- **Session**은 모드별로 계산하고 완성된 결과만 게시합니다. 다음 계산 중에도 이전 결과를 계속 읽을 수 있습니다.
+- **Session**은 모드별로 계산하고 완성된 결과만 게시합니다. 다음 계산 중에도 이전 결과를 계속 읽을 수 있습니다. 다만 Manager를 다시 켜거나 Fault를 재시도한 뒤에는 새 결과가 게시될 때까지 읽을 수 없습니다.
 - **Scheduler**는 프로젝트 전체에서 하나의 예산(`FlowFieldBuildSettings.BudgetMilliseconds`, 기본 2ms)으로 작업을 진행합니다. 풀이는 워커 스레드에서 돌아 프레임을 막지 않습니다.
 - **Execution Boundary**는 이벤트와 Modifier 코드를 작업 밖으로 분리합니다.
 
@@ -102,7 +102,7 @@ Surface는 Manager가 제출한 요청만 빌드하므로, 풀이 중에 바뀐 
 
 ## Fault 복구
 
-- **Manager·Session Fault:** 원인을 고친 뒤 `manager.RequestRebuild()`
+- **Manager·Session Fault:** 원인을 고친 뒤 `manager.RequestRebuild()`. 새 결과가 게시될 때까지 `IsReady`와 `TrySample`은 false입니다. Fault 중에 끄거나 켠 Modifier는 이 빌드에 반영됩니다.
 - **Modifier 자체 Fault:** Manager 재빌드로 풀리지 않으므로 아래 순서를 따릅니다.
 
 ```csharp
@@ -124,7 +124,7 @@ finally
 
 ### 베이킹
 
-씬을 미리 계산해 v6 Asset으로 저장하고, 런타임은 Physics와 BFS 없이 로드합니다. Default Direction과 Modifier는 로드 뒤 합성합니다. 다른 형식은 거부하므로 다시 Bake해야 합니다.
+씬을 미리 계산해 v6 Asset으로 저장하고, 런타임은 Physics와 BFS 없이 로드합니다. Default Direction과 Modifier는 로드 뒤 합성합니다. 다른 형식은 거부하므로 다시 Bake해야 합니다. **Clear Bake**는 참조만 지우며, 다시 Bake하면 이 Manager의 기존 Asset을 덮어씁니다.
 
 <p align="center">
   <img src="Docs/Images/feature-staticbaked-surface.png" alt="Surface2D StaticBaked 로드 결과" width="48%">
