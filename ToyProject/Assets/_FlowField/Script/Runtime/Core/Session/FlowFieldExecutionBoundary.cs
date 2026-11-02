@@ -13,6 +13,10 @@ namespace Common.FlowField
     /// </summary>
     internal sealed class FlowFieldExecutionBoundary
     {
+        // Far above what a frame raises. Handlers that keep triggering each other
+        // would otherwise hang the player here, with no frame and no log.
+        private const int MAX_WORK_PER_DRAIN = 100000;
+
         private readonly Queue<Action> _deferredCommands = new Queue<Action>(4);
         private readonly Queue<QueuedEvent> _events = new Queue<QueuedEvent>(8);
         private int _operationDepth;
@@ -75,10 +79,19 @@ namespace Common.FlowField
             if (_operationDepth > 0 || _draining)
                 return;
             _draining = true;
+            int done = 0;
             try
             {
                 while (true)
                 {
+                    if (_deferredCommands.Count + _events.Count > 0 && ++done > MAX_WORK_PER_DRAIN)
+                    {
+                        Debug.LogError($"FlowField handlers raised more than {MAX_WORK_PER_DRAIN} commands and events in a row. "
+                            + $"Dropping {_deferredCommands.Count + _events.Count} of them.");
+                        _deferredCommands.Clear();
+                        _events.Clear();
+                        return;
+                    }
                     if (_deferredCommands.Count > 0)
                         RunDeferredCommand(_deferredCommands.Dequeue());
                     else if (_events.Count > 0)
