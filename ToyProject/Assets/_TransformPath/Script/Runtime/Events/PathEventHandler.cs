@@ -17,8 +17,7 @@ namespace Common.TransformPath
         private bool _isInitialized;
         private readonly PathScalarAdjustment _scalarAdjustment = new PathScalarAdjustment();
         private ulong _eventBatchId;
-        private Action<string> _onEventDispatched;
-        private Delegate[] _onEventDispatchedInvocationList;
+        private PathListeners<Action<string>> _onEventDispatched;
         private bool _runtimeDriverRegistered;
         private int _currentFrameId;
 
@@ -33,16 +32,8 @@ namespace Common.TransformPath
 
         public event Action<string> OnEventDispatched
         {
-            add
-            {
-                _onEventDispatched += value;
-                _onEventDispatchedInvocationList = _onEventDispatched?.GetInvocationList();
-            }
-            remove
-            {
-                _onEventDispatched -= value;
-                _onEventDispatchedInvocationList = _onEventDispatched?.GetInvocationList();
-            }
+            add => _onEventDispatched.Add(value);
+            remove => _onEventDispatched.Remove(value);
         }
 
         public void Init()
@@ -405,7 +396,7 @@ namespace Common.TransformPath
                 || _eventBatchId != expectedEventBatchId)
                 return false;
 
-            Delegate[] listeners = _onEventDispatchedInvocationList;
+            Delegate[] listeners = _onEventDispatched.Invocations;
             if (listeners == null)
                 return true;
 

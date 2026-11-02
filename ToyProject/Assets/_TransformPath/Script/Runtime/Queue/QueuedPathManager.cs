@@ -53,19 +53,6 @@ namespace Common.TransformPath
             }
         }
 
-        private sealed class QueueEntryComparer : IComparer<QueueEntry>
-        {
-            public static readonly QueueEntryComparer INSTANCE = new QueueEntryComparer();
-
-            public int Compare(QueueEntry left, QueueEntry right)
-            {
-                int progress = right.Progress.CompareTo(left.Progress);
-                return progress != 0
-                    ? progress
-                    : left.RegistrationSequence.CompareTo(right.RegistrationSequence);
-            }
-        }
-
         private struct QueueFrameEntry
         {
             public IQueuedPathAgent Agent;
@@ -267,7 +254,7 @@ namespace Common.TransformPath
 
             for (int i = 0; i < _entries.Count; i++)
                 _entries[i].Progress = Mathf.Clamp01(_entries[i].Agent.GlobalNormalizedTime);
-            _entries.Sort(QueueEntryComparer.INSTANCE);
+            SortEntries();
             _indices.Clear();
             for (int i = 0; i < _entries.Count; i++)
                 _indices[_entries[i].Agent] = i;
@@ -645,6 +632,31 @@ namespace Common.TransformPath
 
             entry.Set(agent, registrationSequence, registration);
             return entry;
+        }
+
+        // Leaders first. List.Sort allocates on every call here, and the order
+        // barely changes between frames, which insertion sort handles in one pass.
+        private void SortEntries()
+        {
+            for (int i = 1; i < _entries.Count; i++)
+            {
+                QueueEntry entry = _entries[i];
+                int j = i - 1;
+                while (j >= 0 && IsAhead(entry, _entries[j]))
+                {
+                    _entries[j + 1] = _entries[j];
+                    j--;
+                }
+                _entries[j + 1] = entry;
+            }
+        }
+
+        private static bool IsAhead(QueueEntry left, QueueEntry right)
+        {
+            int progress = right.Progress.CompareTo(left.Progress);
+            return progress != 0
+                ? progress < 0
+                : left.RegistrationSequence < right.RegistrationSequence;
         }
 
         private bool TryGetCurrentEntry(QueueFrameEntry frameEntry, out QueueEntry entry)

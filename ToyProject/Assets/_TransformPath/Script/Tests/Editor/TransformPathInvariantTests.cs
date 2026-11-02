@@ -56,6 +56,55 @@ namespace Common.TransformPath.Tests
             Assert.That(() => follower.Tick(0.016f), Is.Not.AllocatingGCMemory());
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void AQueueFrameDoesNotAllocate(bool listening)
+        {
+            PathRuntimeDriver driver = CreateQueueInSlowdown(listening, out QueuedPathManager manager, out QueuedPathFollower behind);
+            float before = behind.CurrentSpeedMultiplier;
+            int frame = 1000;
+            Assert.That(() => driver.Tick(0.016f, 0.016f, frame++), Is.Not.AllocatingGCMemory());
+            Assert.That(behind.CurrentSpeedMultiplier, NUnit.Framework.Is.Not.EqualTo(before), "The speed has to change for this to mean anything.");
+            Assert.That(manager.AgentCount, NUnit.Framework.Is.EqualTo(2));
+        }
+
+        // The leader pulls away inside the slowdown zone, so the agent behind
+        // changes its speed multiplier every frame.
+        private PathRuntimeDriver CreateQueueInSlowdown(bool listening, out QueuedPathManager manager, out QueuedPathFollower behind)
+        {
+            PathData path = CreatePath(Vector3.zero, Vector3.right * 1000f);
+            manager = Create<QueuedPathManager>("Manager");
+            manager.Init();
+            manager.DefaultSpacing = 1.5f;
+            manager.SlowdownStartDistance = 100f;
+            manager.ConfigureRoute(path);
+            var driver = new PathRuntimeDriver();
+            driver.Register(manager);
+            behind = null;
+            int notified = 0;
+            for (int i = 0; i < 2; i++)
+            {
+                behind = Create<QueuedPathFollower>("Agent");
+                behind.Init();
+                behind.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+                behind.Seek(0.02f - i * 0.01f);
+                if (listening)
+                {
+                    behind.OnSpeedChanged += (_, __) => notified++;
+                    behind.OnBlocked += _ => notified++;
+                    behind.OnResumed += _ => notified++;
+                }
+                driver.Register(behind);
+                driver.Register(behind.UnderlyingFollower);
+                driver.Register(behind.GetComponent<PathEventHandler>());
+            }
+            int frame = 1;
+            for (int i = 0; i < 60; i++)
+                driver.Tick(0.016f, 0.016f, frame++);
+            Assert.That(driver.Faults, NUnit.Framework.Is.Empty);
+            return driver;
+        }
+
         [Test]
         public void AnEventAtTheStartFiresWhenPlaybackLeavesIt()
         {
