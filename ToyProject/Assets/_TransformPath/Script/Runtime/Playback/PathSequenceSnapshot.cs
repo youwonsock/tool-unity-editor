@@ -90,8 +90,7 @@ namespace Common.TransformPath
                         descriptor.Provider,
                         PathMovementSettingsUtility.Clone(descriptor.MovementSettings),
                         descriptor.PreservePreviousSpeed);
-                    eventSources[i] = PathEventSourceSnapshot.Create(
-                        descriptor.Provider as IPathEventSource);
+                    eventSources[i] = PathEventSourceSnapshot.GetCurrent(descriptor.Provider);
                     lengths[i] = provider.GetSegmentLength(i);
                     float declaredStart = provider.GetSegmentStartDistance(i);
                     starts[i] = totalLength;

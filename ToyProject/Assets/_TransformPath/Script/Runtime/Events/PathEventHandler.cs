@@ -17,6 +17,7 @@ namespace Common.TransformPath
         private bool _isInitialized;
         private readonly PathScalarAdjustment _scalarAdjustment = new PathScalarAdjustment();
         private readonly PathListeners _onEventDispatched = new PathListeners();
+        private readonly HashSet<PathEventDefinition> _validationSet = new HashSet<PathEventDefinition>();
         private int _currentFrameId;
 
         [SerializeField] private MonoBehaviour _receiverObject;
@@ -191,7 +192,7 @@ namespace Common.TransformPath
                     pathEvent.Definition,
                     follower,
                     false,
-                    new HashSet<PathEventDefinition>(),
+                    NextValidationSet(),
                     moveType,
                     EPathFollowerState.Moving);
             }
@@ -217,7 +218,7 @@ namespace Common.TransformPath
                         pathEvent.Definition,
                         follower,
                         false,
-                        new HashSet<PathEventDefinition>(),
+                        NextValidationSet(),
                         moveType,
                         EPathFollowerState.Moving);
                 }
@@ -258,7 +259,7 @@ namespace Common.TransformPath
 
             using var operation = PathExecutionBoundary.Enter();
             _boundFollower = follower;
-            PathEventDefinitionValidator.ValidateDefinition(definition, follower, resumeOnly, new HashSet<PathEventDefinition>());
+            PathEventDefinitionValidator.ValidateDefinition(definition, follower, resumeOnly, NextValidationSet());
             _scheduler.Clear();
             ulong playbackId = follower.PlaybackId;
             try
@@ -281,6 +282,13 @@ namespace Common.TransformPath
                 }
                 throw;
             }
+        }
+
+        // A failed validation leaves its definitions behind.
+        private HashSet<PathEventDefinition> NextValidationSet()
+        {
+            _validationSet.Clear();
+            return _validationSet;
         }
 
         private void ProcessEvent(
