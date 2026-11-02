@@ -40,6 +40,10 @@ namespace Common.TransformPath
             public float Amount;
         }
 
+        // Far above what a frame raises. Listeners that keep raising each other
+        // would otherwise hang the player here, with no frame and no log.
+        private const int MAX_NOTIFICATIONS_PER_DRAIN = 100000;
+
         private static readonly Queue<Notification> Pending = new Queue<Notification>(32);
         // A receiver is called directly. This stands in for its one listener.
         private static readonly Delegate[] ReceiverSlot = new Delegate[1];
@@ -114,10 +118,18 @@ namespace Common.TransformPath
             if (_draining)
                 return;
             _draining = true;
+            int delivered = 0;
             try
             {
                 while (Pending.Count > 0)
                 {
+                    if (++delivered > MAX_NOTIFICATIONS_PER_DRAIN)
+                    {
+                        Debug.LogError($"Path listeners raised more than {MAX_NOTIFICATIONS_PER_DRAIN} notifications in a row. Dropping {Pending.Count} of them.");
+                        Pending.Clear();
+                        break;
+                    }
+
                     Notification notification = Pending.Dequeue();
                     for (int i = 0; i < notification.Listeners.Length; i++)
                     {

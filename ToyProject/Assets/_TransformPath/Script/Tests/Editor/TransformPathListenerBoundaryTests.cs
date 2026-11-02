@@ -172,6 +172,182 @@ namespace Common.TransformPath.Tests
             Assert.That(seen, Is.EqualTo(new[] { EPathFollowerState.Paused }));
         }
 
+        [Test]
+        public void AManagerFaultDetachesEveryAgentBeforeListenersRun()
+        {
+            PathData path = CreatePath(100f);
+            QueuedPathManager manager = CreateManager(path);
+            QueuedPathFollower first = CreateQueue();
+            QueuedPathFollower second = CreateQueue();
+            first.StateChanged += state =>
+            {
+                if (state == EPathFollowerState.Ready)
+                    manager.Release();
+            };
+            first.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            second.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            manager.Register(new ScriptedAgent(path) { OnApply = () => throw new InvalidOperationException("Agent failure") });
+            var driver = new PathRuntimeDriver();
+            driver.Register(manager);
+
+            driver.Tick(0.1f, 0.1f, 1);
+
+            Assert.That(driver.Faults, Has.Count.EqualTo(1));
+            Assert.That(first.State, Is.EqualTo(EPathFollowerState.Ready));
+            Assert.That(second.State, Is.EqualTo(EPathFollowerState.Ready), "A listener's Release must not cut the detach loop short.");
+        }
+
+        [TestCase("Unregister")]
+        [TestCase("Register")]
+        [TestCase("ConfigureRoute")]
+        [TestCase("Release")]
+        public void AnAgentCannotChangeTheQueueDuringTheManagerFrame(string command)
+        {
+            PathData path = CreatePath(100f);
+            PathData otherPath = CreatePath(50f);
+            QueuedPathManager manager = CreateManager(path);
+            var acting = new ScriptedAgent(path) { Progress = 0.5f };
+            var behind = new ScriptedAgent(path);
+            Exception refused = null;
+            acting.OnApply = () => refused = Assert.Catch(() => RunCommand(command, manager, acting, new ScriptedAgent(path), otherPath));
+            manager.Register(acting);
+            manager.Register(behind);
+            var driver = new PathRuntimeDriver();
+            driver.Register(manager);
+
+            driver.Tick(0.1f, 0.1f, 1);
+
+            Assert.That(refused, Is.TypeOf<InvalidOperationException>());
+            Assert.That(driver.Faults, Is.Empty);
+            Assert.That(manager.AgentCount, Is.EqualTo(2));
+            Assert.That(behind.Applied, Is.EqualTo(1), "The agent behind still gets its result.");
+        }
+
+        [Test]
+        public void AnAgentCannotChangeTheQueueWhileBeingDetached()
+        {
+            PathData path = CreatePath(100f);
+            QueuedPathManager manager = CreateManager(path);
+            var acting = new ScriptedAgent(path);
+            var other = new ScriptedAgent(path);
+            Exception refused = null;
+            acting.OnDetach = () => refused = Assert.Catch(manager.Release);
+            manager.Register(acting);
+            manager.Register(other);
+
+            manager.Release();
+
+            Assert.That(refused, Is.TypeOf<InvalidOperationException>());
+            Assert.That(other.Detached, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void AnAgentCanReadTheQueueDuringTheManagerFrame()
+        {
+            PathData path = CreatePath(100f);
+            QueuedPathManager manager = CreateManager(path);
+            var agent = new ScriptedAgent(path);
+            IQueuedPathAgent first = null;
+            bool hasState = false;
+            agent.OnApply = () =>
+            {
+                first = manager.GetAgent(0);
+                hasState = manager.TryGetState(agent, out _);
+            };
+            manager.Register(agent);
+            var driver = new PathRuntimeDriver();
+            driver.Register(manager);
+
+            driver.Tick(0.1f, 0.1f, 1);
+
+            Assert.That(driver.Faults, Is.Empty);
+            Assert.That(first, Is.SameAs(agent));
+            Assert.That(hasState, Is.True);
+        }
+
+        [Test]
+        public void ListenersThatKeepRaisingEachOtherAreStopped()
+        {
+            PathFollower follower = CreateFollower();
+            PathPlaybackRequest request = PathPlaybackRequest.Single(CreatePath(10f));
+            int calls = 0;
+            Action<EPathFollowerState> listener = null;
+            listener = state =>
+            {
+                // Keeps a build without the limit from hanging the test run.
+                if (++calls > 300000)
+                {
+                    follower.StateChanged -= listener;
+                    return;
+                }
+                if (state == EPathFollowerState.Moving)
+                    follower.StopMove();
+                else if (state == EPathFollowerState.Ready)
+                    follower.StartPlayback(request);
+            };
+            follower.StateChanged += listener;
+
+            LogAssert.Expect(LogType.Error, new Regex("notifications"));
+            follower.StartPlayback(request);
+
+            Assert.That(calls, Is.LessThanOrEqualTo(100000));
+            int later = 0;
+            follower.StateChanged -= listener;
+            follower.StateChanged += _ => later++;
+            follower.StopMove();
+            follower.StartPlayback(request);
+            Assert.That(later, Is.GreaterThan(0), "Notifications work again after the limit.");
+        }
+
+        private static void RunCommand(
+            string command,
+            QueuedPathManager manager,
+            IQueuedPathAgent acting,
+            IQueuedPathAgent newcomer,
+            PathData otherPath)
+        {
+            switch (command)
+            {
+                case "Unregister": manager.Unregister(acting); break;
+                case "Register": manager.Register(newcomer); break;
+                case "ConfigureRoute": manager.ConfigureRoute(otherPath); break;
+                case "Release": manager.Release(); break;
+            }
+        }
+
+        private sealed class ScriptedAgent : IQueuedPathAgent
+        {
+            public ScriptedAgent(IPathProvider provider) { QueueProvider = provider; }
+            public Action OnApply;
+            public Action OnDetach;
+            public int Applied;
+            public int Detached;
+            public float Progress;
+            public ulong PlaybackId => 1UL;
+            public IPathProvider QueueProvider { get; }
+            public bool IsMoving => true;
+            public float GlobalNormalizedTime => Progress;
+            public int SnapshotRevision => QueueProvider.Revision;
+            public PathQueueAgentSettings QueueSettings => new PathQueueAgentSettings(1.5f, true, true, true);
+            public void ApplyQueueState(PathQueueRegistration registration, PathQueueState state) { Applied++; OnApply?.Invoke(); }
+            public void OnQueueDetached(PathQueueRegistration registration, EPathQueueDetachReason reason) { Detached++; OnDetach?.Invoke(); }
+        }
+
+        private QueuedPathManager CreateManager(PathData path)
+        {
+            var manager = Create<QueuedPathManager>("Manager");
+            manager.Init();
+            manager.ConfigureRoute(path);
+            return manager;
+        }
+
+        private QueuedPathFollower CreateQueue()
+        {
+            var queue = Create<QueuedPathFollower>("Agent");
+            queue.Init();
+            return queue;
+        }
+
         private GameObject CreateObject(string name)
         {
             var item = new GameObject(name);

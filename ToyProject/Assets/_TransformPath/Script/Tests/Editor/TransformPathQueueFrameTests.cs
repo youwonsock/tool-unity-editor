@@ -54,22 +54,6 @@ namespace Common.TransformPath.Tests
             Assert.That(manager.TryGetState(nextToken, out _), Is.False);
         }
 
-        [Test]
-        public void SelfDetachDoesNotRestorePublishedStateAfterCallback()
-        {
-            PathData path = CreatePath();
-            QueuedPathManager manager = CreateManager(path);
-            var agent = new Agent(path, 0.5f);
-            PathQueueRegistration token = manager.Register(agent);
-            agent.OnApply = () => manager.Unregister(token);
-            Tick(manager, 100);
-            Assert.That(agent.ApplyCount, Is.EqualTo(1));
-            Assert.That(manager.AgentCount, Is.Zero);
-            Assert.That(manager.TryGetState(agent, out _), Is.False);
-            Tick(manager, 101);
-            Assert.That(agent.ApplyCount, Is.EqualTo(1));
-        }
-
         private sealed class Agent : IQueuedPathAgent
         {
             public Agent(IPathProvider path, float progress) { QueueProvider = path; GlobalNormalizedTime = progress; }

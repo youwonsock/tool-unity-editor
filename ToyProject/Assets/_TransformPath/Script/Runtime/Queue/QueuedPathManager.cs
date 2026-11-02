@@ -83,6 +83,7 @@ namespace Common.TransformPath
         private int _routeRevision;
         private int _registrationSequence;
         private ulong _registrationId;
+        private int _agentCallDepth;
 
         #endregion
 
@@ -164,6 +165,7 @@ namespace Common.TransformPath
 
         public void Release()
         {
+            ThrowIfInsideAgentCall();
             using var operation = PathExecutionBoundary.Enter();
             Exception firstException = null;
             try
@@ -234,6 +236,19 @@ namespace Common.TransformPath
             if (_routeProvider.Revision != _observedRouteRevision)
                 RefreshRouteRevision();
 
+            _agentCallDepth++;
+            try
+            {
+                CalculateAgentStates(frameId);
+            }
+            finally
+            {
+                _agentCallDepth--;
+            }
+        }
+
+        private void CalculateAgentStates(int frameId)
+        {
             for (int i = 0; i < _entries.Count; i++)
                 _entries[i].Progress = Mathf.Clamp01(_entries[i].Agent.GlobalNormalizedTime);
             SortEntries();
@@ -288,6 +303,7 @@ namespace Common.TransformPath
             ulong playbackId,
             System.Exception exception)
         {
+            using var operation = PathExecutionBoundary.Enter();
             StopAllAgents(EPathQueueDetachReason.ManagerReleased);
         }
 
@@ -305,6 +321,7 @@ namespace Common.TransformPath
 
         public void ConfigureRoute(IPathProvider provider)
         {
+            ThrowIfInsideAgentCall();
             if (provider == null)
                 throw new ArgumentNullException(nameof(provider));
             if (!PathProviderUtility.TryValidateReady(provider, out string error))
@@ -345,6 +362,7 @@ namespace Common.TransformPath
 
         public PathQueueRegistration Register(IQueuedPathAgent agent)
         {
+            ThrowIfInsideAgentCall();
             using var operation = PathExecutionBoundary.Enter();
             ValidateRegistration(agent);
             // A registration can arrive after the provider raised PathChanged but
@@ -360,9 +378,7 @@ namespace Common.TransformPath
                     return existing;
 
                 RemoveEntryAt(existingIndex);
-                agent.OnQueueDetached(
-                    existing,
-                    EPathQueueDetachReason.Replaced);
+                NotifyDetached(agent, existing, EPathQueueDetachReason.Replaced);
             }
 
             PathQueueRegistration registration = new PathQueueRegistration(
@@ -387,6 +403,7 @@ namespace Common.TransformPath
         {
             if (!registration.IsValid)
                 return false;
+            ThrowIfInsideAgentCall();
             using var operation = PathExecutionBoundary.Enter();
             int index = FindRegistrationIndex(registration);
             if (index < 0)
@@ -395,9 +412,7 @@ namespace Common.TransformPath
             IQueuedPathAgent removedAgent = removedEntry.Agent;
             PathQueueRegistration removedRegistration = removedEntry.Registration;
             RemoveEntryAt(index);
-            removedAgent.OnQueueDetached(
-                removedRegistration,
-                reason);
+            NotifyDetached(removedAgent, removedRegistration, reason);
             return true;
         }
 
@@ -424,6 +439,31 @@ namespace Common.TransformPath
 
 
         #region Private Methods
+
+        // The manager is walking its lists while an agent runs, so an agent may
+        // read the queue but not change it.
+        private void ThrowIfInsideAgentCall()
+        {
+            if (_agentCallDepth > 0)
+                throw new InvalidOperationException(
+                    "A queue agent must not change the queue from its own members.");
+        }
+
+        private void NotifyDetached(
+            IQueuedPathAgent agent,
+            PathQueueRegistration registration,
+            EPathQueueDetachReason reason)
+        {
+            _agentCallDepth++;
+            try
+            {
+                agent.OnQueueDetached(registration, reason);
+            }
+            finally
+            {
+                _agentCallDepth--;
+            }
+        }
 
         private void ValidateRegistration(IQueuedPathAgent agent)
         {
@@ -519,7 +559,7 @@ namespace Common.TransformPath
                 QueueEntry entry = _detachedEntries[i];
                 try
                 {
-                    entry.Agent.OnQueueDetached(entry.Registration, reason);
+                    NotifyDetached(entry.Agent, entry.Registration, reason);
                 }
                 catch (Exception exception)
                 {
