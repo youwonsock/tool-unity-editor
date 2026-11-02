@@ -102,7 +102,7 @@ namespace Common.TransformPath
             if (Sequence != null)
             {
                 if (Sequence.SegmentCount != Snapshot.Count
-                    || !PathSequenceSnapshot.TryCreate(Sequence, out nextSequence, out _)
+                    || !PathSequenceSnapshot.TryGetCurrent(Sequence, out nextSequence, out _)
                     || !nextSequence.HasSamePlaybackDefinition(Snapshot))
                     return EPathSnapshotRefreshDecision.StopSequenceChanged;
                 return EPathSnapshotRefreshDecision.Refresh;
@@ -265,7 +265,7 @@ namespace Common.TransformPath
                 && current.CanReuseSequence(provider, provider.Revision))
                 return current;
 
-            if (!PathSequenceSnapshot.TryCreate(
+            if (!PathSequenceSnapshot.TryGetCurrent(
                     provider,
                     out PathSequenceSnapshot snapshot,
                     out string error))
