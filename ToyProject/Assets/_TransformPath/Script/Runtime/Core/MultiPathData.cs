@@ -561,7 +561,7 @@ namespace Common.TransformPath
 
         private void NotifyPathChanged()
         {
-            PathChanged?.Invoke();
+            PathProviderUtility.RaisePathChanged(PathChanged);
         }
 
         private void ReportBuildFailure(string message)

@@ -108,7 +108,7 @@ namespace Common.TransformPath.Tests
         }
 
         [Test]
-        public void QueueCallbackSnapshotSurvivesListenerRemoval()
+        public void QueueListenerRemovedDuringANotificationIsNotCalled()
         {
             QueuedPathFollower queue = CreateQueue();
             var calls = new List<string>();
@@ -121,7 +121,7 @@ namespace Common.TransformPath.Tests
             queue.StateChanged += second;
             queue.StartFreePlayback(PathPlaybackRequest.Single(CreatePath()));
             queue.PauseMove();
-            CollectionAssert.AreEqual(new[] { "first:Moving", "second:Moving", "first:Paused" }, calls);
+            CollectionAssert.AreEqual(new[] { "first:Moving", "first:Paused" }, calls);
         }
 
         [Test]

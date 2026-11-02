@@ -52,9 +52,9 @@ namespace Common.TransformPath.Tests
         [TestCase("Commands", "2450:a5efe30ec0e5361f")]
         [TestCase("PathChange", "2917:02cfd0f1e505d3a8")]
         [TestCase("EventEffects", "5864:c39b13e54045f688")]
-        [TestCase("Queue", "25777:6cf004659f94959a")]
-        [TestCase("QueueCapAndHold", "11313:61a3fcb63d52621e")]
-        [TestCase("QueueSequenceTime", "19956:7bd14b8cfd5d0de1")]
+        [TestCase("Queue", "25812:c032078b0cfb7e72")]
+        [TestCase("QueueCapAndHold", "11334:4fe8eb1ee784c056")]
+        [TestCase("QueueSequenceTime", "19977:e2673de3b9214029")]
         public void TraceMatches(string scenario, string expected)
         {
             typeof(TransformPathGoldenTraceTests)

@@ -46,17 +46,18 @@ namespace Common.TransformPath
         private QueuedPathManager _activeManager;
         private EQueueParticipationMode _queueParticipationMode;
         private float _lastReportedSpeedMultiplier = 1f;
+        private bool _reportedBlocked;
         private PathQueueState? _managerState;
         private float _requestedMaxGlobalNormalizedTime = 1f;
         private bool _suppressDetachStop;
-        private PathListeners<Action<QueuedPathFollower>> _onBlocked;
-        private PathListeners<Action<QueuedPathFollower>> _onResumed;
-        private PathListeners<Action<QueuedPathFollower>> _onCompleted;
-        private PathListeners<Action<QueuedPathFollower, float>> _onSpeedChanged;
-        private PathListeners<Action<EPathFollowerState>> _stateChanged;
-        private PathListeners<Action<int>> _segmentChanged;
-        private PathListeners<Action> _completed;
-        private PathListeners<Action<QueuedPathFollower, EPathQueueDetachReason>> _queueInvalidated;
+        private readonly PathListeners _onBlocked = new PathListeners();
+        private readonly PathListeners _onResumed = new PathListeners();
+        private readonly PathListeners _onCompleted = new PathListeners();
+        private readonly PathListeners _onSpeedChanged = new PathListeners();
+        private readonly PathListeners _stateChanged = new PathListeners();
+        private readonly PathListeners _segmentChanged = new PathListeners();
+        private readonly PathListeners _completed = new PathListeners();
+        private readonly PathListeners _queueInvalidated = new PathListeners();
 
         #endregion
 
@@ -220,8 +221,10 @@ namespace Common.TransformPath
                 return default(PathCommandReceipt);
 
             using var operation = PathExecutionBoundary.Enter();
-            if (_queue.IsRegistered && _pathFollower != null)
-                _pathFollower.StopMove();
+            // Still subscribed, so this queue hears the stop and tells its listeners.
+            PathCommandReceipt receipt = _pathFollower == null
+                ? default(PathCommandReceipt)
+                : _pathFollower.Release();
             UnregisterFromManager();
             if (_pathFollower != null)
             {
@@ -234,9 +237,7 @@ namespace Common.TransformPath
             _managerState = null;
             _queue.IsBlocked = false;
             _queue.SpeedMultiplier = 1f;
-            return _pathFollower == null
-                ? default(PathCommandReceipt)
-                : _pathFollower.Release();
+            return receipt;
         }
 
         private void Reset()
@@ -305,12 +306,11 @@ namespace Common.TransformPath
                 return;
             }
 
-            bool wasBlocked = _queue.IsBlocked;
             _queue.Step(deltaTime, _managerState.HasValue, _managerState.GetValueOrDefault(),
                 GetSpacing(), _resumeMovementDelay, _unblockHysteresis, _speedSmoothRate);
             ApplyCurrentConstraint();
             UpdateAnimator();
-            ReportStateChanges(wasBlocked, _queue.IsBlocked);
+            ReportStateChanges();
         }
 
         void IPathRuntimeFaultHandler.HandleRuntimeFault(
@@ -506,7 +506,7 @@ namespace Common.TransformPath
                 _pathFollower.StopMove();
             }
             if (notifyInvalidation)
-                PathExecutionBoundary.PublishQueueInvalidated(_queueInvalidated.Invocations, this, reason);
+                PathExecutionBoundary.PublishQueueInvalidated(_queueInvalidated, this, reason);
         }
 
         #endregion
@@ -600,18 +600,19 @@ namespace Common.TransformPath
                         : EPathQueueDetachReason.Explicit);
                 // A pause may have held the presentation without a registration.
                 _queue.IsBlocked = false;
+                _reportedBlocked = false;
                 _queue.SpeedMultiplier = 1f;
                 UpdateAnimator();
             }
 
             // Registering can refuse the start and stop the playback again.
             if (State == state)
-                PathExecutionBoundary.PublishState(_stateChanged.Invocations, state);
+                PathExecutionBoundary.PublishState(_stateChanged, state);
         }
 
         private void HandleUnderlyingSegmentChanged(int segmentIndex)
         {
-            PathExecutionBoundary.PublishSegment(_segmentChanged.Invocations, segmentIndex);
+            PathExecutionBoundary.PublishSegment(_segmentChanged, segmentIndex);
         }
 
         private void ApplyPausedState()
@@ -648,14 +649,15 @@ namespace Common.TransformPath
             ResetConstraintState();
             // Forward the underlying playback lifecycle event as well as the
             // queue-specific callback.
-            PathExecutionBoundary.PublishPlain(_completed.Invocations);
-            PathExecutionBoundary.PublishQueue(_onCompleted.Invocations, this);
+            PathExecutionBoundary.PublishPlain(_completed);
+            PathExecutionBoundary.PublishQueue(_onCompleted, this);
         }
 
         private void ResetConstraintState()
         {
             _queue.ManualBlock = false;
             _queue.IsBlocked = false;
+            _reportedBlocked = false;
             _managerState = null;
             _queue.SpeedMultiplier = 1f;
             _queue.ResumeDelayRemaining = 0f;
@@ -715,16 +717,19 @@ namespace Common.TransformPath
             UpdateAnimator();
         }
 
-        private void ReportStateChanges(bool wasBlocked, bool blocked)
+        private void ReportStateChanges()
         {
-            if (blocked != wasBlocked)
-                PathExecutionBoundary.PublishQueue(blocked ? _onBlocked.Invocations : _onResumed.Invocations, this);
+            if (_queue.IsBlocked != _reportedBlocked)
+            {
+                _reportedBlocked = _queue.IsBlocked;
+                PathExecutionBoundary.PublishQueue(_reportedBlocked ? _onBlocked : _onResumed, this);
+            }
             if (!Mathf.Approximately(
                     _lastReportedSpeedMultiplier,
                     _queue.SpeedMultiplier))
             {
                 _lastReportedSpeedMultiplier = _queue.SpeedMultiplier;
-                PathExecutionBoundary.PublishQueueSpeed(_onSpeedChanged.Invocations, this, _queue.SpeedMultiplier);
+                PathExecutionBoundary.PublishQueueSpeed(_onSpeedChanged, this, _queue.SpeedMultiplier);
             }
         }
 

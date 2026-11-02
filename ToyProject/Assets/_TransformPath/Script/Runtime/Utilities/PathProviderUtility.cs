@@ -1,4 +1,5 @@
 using System;
+using UnityEngine;
 
 namespace Common.TransformPath
 {
@@ -6,6 +7,28 @@ namespace Common.TransformPath
     internal static class PathProviderUtility
     {
         #region Public Methods
+
+        /// <summary>
+        /// A route that follows the path listens here too. One failing listener
+        /// must not keep it from rebuilding, or fail the Rebuild that raised this.
+        /// </summary>
+        public static void RaisePathChanged(Action listeners)
+        {
+            if (listeners == null)
+                return;
+            Delegate[] invocations = listeners.GetInvocationList();
+            for (int i = 0; i < invocations.Length; i++)
+            {
+                try
+                {
+                    ((Action)invocations[i])();
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogException(exception);
+                }
+            }
+        }
 
         public static bool TryValidateReady(IPathProvider provider, out string error)
         {

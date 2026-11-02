@@ -16,7 +16,7 @@ namespace Common.TransformPath
         private IPathFollower _boundFollower;
         private bool _isInitialized;
         private readonly PathScalarAdjustment _scalarAdjustment = new PathScalarAdjustment();
-        private PathListeners<Action<string>> _onEventDispatched;
+        private readonly PathListeners _onEventDispatched = new PathListeners();
         private int _currentFrameId;
 
         [SerializeField] private MonoBehaviour _receiverObject;
@@ -295,7 +295,7 @@ namespace Common.TransformPath
             if (!string.IsNullOrEmpty(definition.EventName))
             {
                 PathExecutionBoundary.PublishEventReceiver(_receiver, definition.EventName, follower);
-                PathExecutionBoundary.PublishEventName(_onEventDispatched.Invocations, definition.EventName);
+                PathExecutionBoundary.PublishEventName(_onEventDispatched, definition.EventName);
             }
 
             if (intent == EPathEventIntent.Pause)

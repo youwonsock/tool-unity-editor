@@ -299,6 +299,183 @@ namespace Common.TransformPath.Tests
             Assert.That(later, Is.GreaterThan(0), "Notifications work again after the limit.");
         }
 
+        [Test]
+        public void AListenerRemovedBeforeItsNotificationIsNotCalled()
+        {
+            PathFollower follower = CreateFollower();
+            int completed = 0;
+            Action onCompleted = () => completed++;
+            follower.Completed += onCompleted;
+            follower.StateChanged += state =>
+            {
+                if (state == EPathFollowerState.Completed)
+                    follower.Completed -= onCompleted;
+            };
+            follower.StartPlayback(PathPlaybackRequest.Single(CreatePath(1f)));
+
+            follower.Tick(5f);
+
+            Assert.That(follower.State, Is.EqualTo(EPathFollowerState.Completed));
+            Assert.That(completed, Is.Zero);
+        }
+
+        [Test]
+        public void AListenerRemovedByAnEarlierOneOfTheSameEventIsNotCalled()
+        {
+            PathFollower follower = CreateFollower();
+            int later = 0;
+            Action second = () => later++;
+            follower.Completed += () => follower.Completed -= second;
+            follower.Completed += second;
+            follower.StartPlayback(PathPlaybackRequest.Single(CreatePath(1f)));
+
+            follower.Tick(5f);
+
+            Assert.That(later, Is.Zero);
+        }
+
+        [Test]
+        public void AListenerAddedAfterANotificationWasRaisedDoesNotHearIt()
+        {
+            PathFollower follower = CreateFollower();
+            int late = 0;
+            int completed = 0;
+            follower.Completed += () => completed++;
+            follower.StateChanged += state =>
+            {
+                if (state == EPathFollowerState.Completed)
+                    follower.Completed += () => late++;
+            };
+            follower.StartPlayback(PathPlaybackRequest.Single(CreatePath(1f)));
+
+            follower.Tick(5f);
+
+            Assert.That(completed, Is.EqualTo(1));
+            Assert.That(late, Is.Zero);
+        }
+
+        [Test]
+        public void AFailingPathChangedListenerLeavesTheRouteBuilt()
+        {
+            PathData child = CreatePath(10f);
+            PathData other = CreatePath(10f);
+            int later = 0;
+            child.PathChanged += () => throw new InvalidOperationException("Path listener failure");
+            var route = Create<MultiPathData>("Route");
+            route.ConfigureSegments(new[]
+            {
+                new PathSegmentDescriptor(child, child.MovementSettings, false),
+                new PathSegmentDescriptor(other, other.MovementSettings, false),
+            });
+            child.PathChanged += () => later++;
+            int revision = route.Revision;
+            PathFollower follower = CreateFollower();
+            follower.StartPlayback(PathPlaybackRequest.Sequence(route));
+
+            LogAssert.Expect(LogType.Exception, new Regex("Path listener failure"));
+            Assert.DoesNotThrow(() => child.ConfigureControlPoints(new[] { Vector3.zero, Vector3.right * 20f }));
+
+            Assert.That(later, Is.EqualTo(1));
+            Assert.That(route.IsReady, Is.True, "The failure must not keep the route from rebuilding.");
+            Assert.That(route.Revision, Is.GreaterThan(revision));
+            follower.Tick(0.1f);
+            Assert.That(follower.State, Is.EqualTo(EPathFollowerState.Moving));
+        }
+
+        [Test]
+        public void BlockedAndResumedFollowIsBlockedInPairs()
+        {
+            PathData path = CreatePath(100f);
+            QueuedPathManager manager = CreateManager(path);
+            QueuedPathFollower queue = CreateQueue();
+            var heard = new List<string>();
+            queue.OnBlocked += _ => heard.Add("blocked");
+            queue.OnResumed += _ => heard.Add("resumed");
+            var driver = new PathRuntimeDriver();
+            driver.Register(manager);
+            driver.Register(queue);
+            driver.Register(queue.UnderlyingFollower);
+            int frame = 1;
+            void Run(int frames)
+            {
+                for (int i = 0; i < frames; i++)
+                    driver.Tick(0.02f, 0.02f, frame++);
+            }
+
+            queue.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            Run(10);
+            Assert.That(queue.IsBlocked, Is.False);
+            Assert.That(heard, Is.EqualTo(new[] { "blocked", "resumed" }), "Waiting for the first result counts as blocked.");
+
+            heard.Clear();
+            queue.ForceBlock();
+            Run(1);
+            Assert.That(heard, Is.EqualTo(new[] { "blocked" }));
+
+            queue.ForceUnblock();
+            Run(10);
+            Assert.That(queue.IsBlocked, Is.False);
+            Assert.That(heard, Is.EqualTo(new[] { "blocked", "resumed" }));
+        }
+
+        [Test]
+        public void AStopWhileBlockedDoesNotCarryOverToTheNextPlayback()
+        {
+            PathData path = CreatePath(100f);
+            QueuedPathManager manager = CreateManager(path);
+            QueuedPathFollower queue = CreateQueue();
+            var heard = new List<string>();
+            queue.OnBlocked += _ => heard.Add("blocked");
+            queue.OnResumed += _ => heard.Add("resumed");
+            var driver = new PathRuntimeDriver();
+            driver.Register(manager);
+            driver.Register(queue);
+            driver.Register(queue.UnderlyingFollower);
+
+            queue.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            driver.Tick(0.01f, 0.01f, 1);
+            Assert.That(heard, Is.EqualTo(new[] { "blocked" }));
+            queue.StopMove();
+
+            heard.Clear();
+            queue.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            driver.Tick(0.01f, 0.01f, 2);
+            Assert.That(heard, Is.EqualTo(new[] { "blocked" }), "The new playback reports its own wait.");
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void ReleasingAQueueFollowerTellsItsListeners(bool paused)
+        {
+            QueuedPathFollower queue = CreateQueue();
+            queue.StartFreePlayback(PathPlaybackRequest.Single(CreatePath(100f)));
+            if (paused)
+                queue.PauseMove();
+            var states = new List<EPathFollowerState>();
+            queue.StateChanged += states.Add;
+
+            queue.Release();
+
+            Assert.That(states, Is.EqualTo(new[] { EPathFollowerState.Ready, EPathFollowerState.Uninitialized }));
+        }
+
+        [Test]
+        public void ReleasingARegisteredQueueFollowerLeavesTheManager()
+        {
+            PathData path = CreatePath(100f);
+            QueuedPathManager manager = CreateManager(path);
+            QueuedPathFollower queue = CreateQueue();
+            queue.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            var states = new List<EPathFollowerState>();
+            queue.StateChanged += states.Add;
+
+            queue.Release();
+
+            Assert.That(manager.AgentCount, Is.Zero);
+            Assert.That(queue.IsRegistered, Is.False);
+            Assert.That(states, Is.EqualTo(new[] { EPathFollowerState.Ready, EPathFollowerState.Uninitialized }));
+        }
+
         private static void RunCommand(
             string command,
             QueuedPathManager manager,
