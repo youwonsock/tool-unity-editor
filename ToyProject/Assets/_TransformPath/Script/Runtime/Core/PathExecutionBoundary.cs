@@ -33,6 +33,7 @@ namespace Common.TransformPath
         {
             public ENotification Kind;
             public Delegate[] Listeners;
+            public PathListeners Owner;
             public object Source;
             public IPathEventReceiver Receiver;
             public string Text;
@@ -64,26 +65,26 @@ namespace Common.TransformPath
             return default(OperationScope);
         }
 
-        internal static void PublishState(Delegate[] listeners, EPathFollowerState state)
-            => Publish(new Notification { Kind = ENotification.State, Listeners = listeners, Number = (int)state });
+        internal static void PublishState(PathListeners listeners, EPathFollowerState state)
+            => Publish(listeners, new Notification { Kind = ENotification.State, Number = (int)state });
 
-        internal static void PublishSegment(Delegate[] listeners, int segment)
-            => Publish(new Notification { Kind = ENotification.Segment, Listeners = listeners, Number = segment });
+        internal static void PublishSegment(PathListeners listeners, int segment)
+            => Publish(listeners, new Notification { Kind = ENotification.Segment, Number = segment });
 
-        internal static void PublishPlain(Delegate[] listeners)
-            => Publish(new Notification { Kind = ENotification.Plain, Listeners = listeners });
+        internal static void PublishPlain(PathListeners listeners)
+            => Publish(listeners, new Notification { Kind = ENotification.Plain });
 
-        internal static void PublishQueue(Delegate[] listeners, QueuedPathFollower follower)
-            => Publish(new Notification { Kind = ENotification.Queue, Listeners = listeners, Source = follower });
+        internal static void PublishQueue(PathListeners listeners, QueuedPathFollower follower)
+            => Publish(listeners, new Notification { Kind = ENotification.Queue, Source = follower });
 
-        internal static void PublishQueueSpeed(Delegate[] listeners, QueuedPathFollower follower, float speed)
-            => Publish(new Notification { Kind = ENotification.QueueSpeed, Listeners = listeners, Source = follower, Amount = speed });
+        internal static void PublishQueueSpeed(PathListeners listeners, QueuedPathFollower follower, float speed)
+            => Publish(listeners, new Notification { Kind = ENotification.QueueSpeed, Source = follower, Amount = speed });
 
-        internal static void PublishQueueInvalidated(Delegate[] listeners, QueuedPathFollower follower, EPathQueueDetachReason reason)
-            => Publish(new Notification { Kind = ENotification.QueueInvalidated, Listeners = listeners, Source = follower, Number = (int)reason });
+        internal static void PublishQueueInvalidated(PathListeners listeners, QueuedPathFollower follower, EPathQueueDetachReason reason)
+            => Publish(listeners, new Notification { Kind = ENotification.QueueInvalidated, Source = follower, Number = (int)reason });
 
-        internal static void PublishEventName(Delegate[] listeners, string name)
-            => Publish(new Notification { Kind = ENotification.EventName, Listeners = listeners, Text = name });
+        internal static void PublishEventName(PathListeners listeners, string name)
+            => Publish(listeners, new Notification { Kind = ENotification.EventName, Text = name });
 
         internal static void PublishEventReceiver(IPathEventReceiver receiver, string name, IPathPlaybackState playback)
         {
@@ -91,8 +92,10 @@ namespace Common.TransformPath
                 Enqueue(new Notification { Kind = ENotification.EventReceiver, Listeners = ReceiverSlot, Receiver = receiver, Source = playback, Text = name });
         }
 
-        private static void Publish(in Notification notification)
+        private static void Publish(PathListeners listeners, Notification notification)
         {
+            notification.Listeners = listeners.Invocations;
+            notification.Owner = listeners;
             if (notification.Listeners != null)
                 Enqueue(notification);
         }
@@ -133,9 +136,13 @@ namespace Common.TransformPath
                     Notification notification = Pending.Dequeue();
                     for (int i = 0; i < notification.Listeners.Length; i++)
                     {
+                        Delegate listener = notification.Listeners[i];
+                        // It may have unsubscribed while the notification waited.
+                        if (notification.Owner != null && !notification.Owner.StillHas(notification.Listeners, listener))
+                            continue;
                         try
                         {
-                            Invoke(notification, notification.Listeners[i]);
+                            Invoke(notification, listener);
                         }
                         catch (Exception exception)
                         {

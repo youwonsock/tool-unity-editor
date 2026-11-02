@@ -52,9 +52,9 @@ namespace Common.TransformPath
         [NonSerialized] private ulong _playbackId;
         [NonSerialized] private ulong _stateRevision;
         private IPathFollower _eventTarget;
-        private PathListeners<Action<int>> _segmentChanged;
-        private PathListeners<Action<EPathFollowerState>> _stateChanged;
-        private PathListeners<Action> _completed;
+        private readonly PathListeners _segmentChanged = new PathListeners();
+        private readonly PathListeners _stateChanged = new PathListeners();
+        private readonly PathListeners _completed = new PathListeners();
 
         #endregion
 
@@ -641,7 +641,7 @@ namespace Common.TransformPath
             if (_playbackSession.IsSequence)
             {
                 ObservedSegmentChanged?.Invoke(index);
-                PathExecutionBoundary.PublishSegment(_segmentChanged.Invocations, index);
+                PathExecutionBoundary.PublishSegment(_segmentChanged, index);
             }
         }
 
@@ -665,7 +665,7 @@ namespace Common.TransformPath
             TryRestoreCharacterController();
             SetState(EPathFollowerState.Completed);
             ObservedCompleted?.Invoke();
-            PathExecutionBoundary.PublishPlain(_completed.Invocations);
+            PathExecutionBoundary.PublishPlain(_completed);
         }
 
         private bool RefreshProviderSnapshotIfNeeded()
@@ -802,7 +802,7 @@ namespace Common.TransformPath
             // The queue adapter can stop a start it refuses. Listeners then hear
             // only the state that stands.
             if (_state == state)
-                PathExecutionBoundary.PublishState(_stateChanged.Invocations, state);
+                PathExecutionBoundary.PublishState(_stateChanged, state);
         }
 
         // Path playback uses 0 for pause and 1 for moving/ready; no stored speed restore.
