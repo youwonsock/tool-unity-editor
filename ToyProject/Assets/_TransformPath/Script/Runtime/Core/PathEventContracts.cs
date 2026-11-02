@@ -239,6 +239,8 @@ namespace Common.TransformPath
 
         private readonly PathRuntimeEvent[] _events;
         private int _providerRevision;
+        private PathEventSourceSnapshot _comparedWith;
+        private bool _comparedSame;
 
         public int EventCount => _events.Length;
 
@@ -269,6 +271,9 @@ namespace Common.TransformPath
 
             PathEventSourceSnapshot snapshot = Create(source);
             snapshot._providerRevision = revision;
+            // Otherwise a path that keeps changing chains every snapshot it had.
+            if (latest != null)
+                latest._comparedWith = null;
             Latest.Remove(provider);
             Latest.Add(provider, snapshot);
             return snapshot;
@@ -294,8 +299,20 @@ namespace Common.TransformPath
 
         internal bool HasSameContent(PathEventSourceSnapshot other)
         {
-            return other != null
-                && (ReferenceEquals(this, other) || PathRuntimeEvent.AreSame(_events, other._events));
+            if (other == null)
+                return false;
+            if (ReferenceEquals(this, other))
+                return true;
+            // Never remembered: the shared empty snapshot lives forever.
+            if (_events.Length == 0)
+                return other._events.Length == 0;
+            // Every follower of a path asks the same question when it changes.
+            if (!ReferenceEquals(other, _comparedWith))
+            {
+                _comparedSame = PathRuntimeEvent.AreSame(_events, other._events);
+                _comparedWith = other;
+            }
+            return _comparedSame;
         }
 
     }

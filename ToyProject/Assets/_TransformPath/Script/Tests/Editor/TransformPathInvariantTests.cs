@@ -147,6 +147,28 @@ namespace Common.TransformPath.Tests
         }
 
         [Test]
+        public void ReplacedEventSnapshotsDoNotKeepTheirPredecessorsAlive()
+        {
+            PathData path = CreatePath(Vector3.zero, Vector3.right, 0.5f);
+            PathPlaybackRequest request = PathPlaybackRequest.Single(path);
+            FieldInfo comparedWith = typeof(PathEventSourceSnapshot).GetField("_comparedWith", BindingFlags.NonPublic | BindingFlags.Instance);
+            var playing = new List<PathPlaybackSession>();
+            for (int i = 2; i < 5; i++)
+            {
+                PathPlaybackSession session = PathPlaybackSession.CreateOrReuse(request, null);
+                playing.Add(session);
+                path.ConfigureControlPoints(new[] { Vector3.zero, Vector3.right * i });
+                Assert.That(session.EvaluateRefresh(out _, out _), NUnit.Framework.Is.EqualTo(EPathSnapshotRefreshDecision.Refresh));
+            }
+
+            path.ConfigureControlPoints(new[] { Vector3.zero, Vector3.right * 9f });
+            PathPlaybackSession.CreateOrReuse(request, null);
+
+            foreach (PathPlaybackSession session in playing)
+                Assert.That(comparedWith.GetValue(session.EventSource), NUnit.Framework.Is.Null);
+        }
+
+        [Test]
         public void AFollowerTickDoesNotAllocate()
         {
             var follower = Create<PathFollower>("Follower");

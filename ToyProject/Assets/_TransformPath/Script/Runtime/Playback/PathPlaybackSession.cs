@@ -119,7 +119,7 @@ namespace Common.TransformPath
             // Compare the same stable ordering used when playback was prepared.
             // Return this candidate so a successful refresh does not copy it twice.
             nextEvents = PathEventSourceSnapshot.GetCurrent(Provider);
-            if (!EventSource.HasSameContent(nextEvents))
+            if (!nextEvents.HasSameContent(EventSource))
                 return EPathSnapshotRefreshDecision.StopEventsChanged;
             return EPathSnapshotRefreshDecision.Refresh;
         }
