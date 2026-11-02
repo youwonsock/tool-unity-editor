@@ -48,7 +48,6 @@ namespace Common.TransformPath
         private float _lastReportedSpeedMultiplier = 1f;
         private PathQueueState? _managerState;
         private float _requestedMaxGlobalNormalizedTime = 1f;
-        private bool _runtimeDriverRegistered;
         private bool _suppressDetachStop;
         private PathListeners<Action<QueuedPathFollower>> _onBlocked;
         private PathListeners<Action<QueuedPathFollower>> _onResumed;
@@ -251,7 +250,6 @@ namespace Common.TransformPath
             {
                 Init();
                 PathRuntimeDriverBehaviour.Instance.Register(this);
-                _runtimeDriverRegistered = true;
             }
         }
 
@@ -261,30 +259,20 @@ namespace Common.TransformPath
                 return;
             if (!_isInitialized)
                 Init();
-            if (!_runtimeDriverRegistered)
-            {
-                PathRuntimeDriverBehaviour.Instance.Register(this);
-                _runtimeDriverRegistered = true;
-            }
+            PathRuntimeDriverBehaviour.Instance.Register(this);
         }
 
         private void OnDisable()
         {
-            if (_runtimeDriverRegistered && PathRuntimeDriverBehaviour.HasInstance)
-            {
+            if (PathRuntimeDriverBehaviour.HasInstance)
                 PathRuntimeDriverBehaviour.Instance.Unregister(this);
-                _runtimeDriverRegistered = false;
-            }
             UnregisterFromManager();
         }
 
         private void OnDestroy()
         {
-            if (_runtimeDriverRegistered && PathRuntimeDriverBehaviour.HasInstance)
-            {
+            if (PathRuntimeDriverBehaviour.HasInstance)
                 PathRuntimeDriverBehaviour.Instance.Unregister(this);
-                _runtimeDriverRegistered = false;
-            }
             Release();
         }
 

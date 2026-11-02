@@ -52,7 +52,7 @@ namespace Common.TransformPath.Tests
             follower.LoopBoundary += () =>
             {
                 loops++;
-                Assert.That(follower.NormalizedTime, Is.EqualTo(kind == "Sequence" ? 0f : 1f));
+                Assert.That(follower.NormalizedTime, Is.EqualTo(0f));
                 Assert.That(controller.enabled, Is.False);
             };
             follower.StateChanged += state => { if (state == EPathFollowerState.Completed) calls.Add("state:completed"); };

@@ -17,7 +17,6 @@ namespace Common.TransformPath
         private bool _isInitialized;
         private readonly PathScalarAdjustment _scalarAdjustment = new PathScalarAdjustment();
         private PathListeners<Action<string>> _onEventDispatched;
-        private bool _runtimeDriverRegistered;
         private int _currentFrameId;
 
         [SerializeField] private MonoBehaviour _receiverObject;
@@ -62,7 +61,6 @@ namespace Common.TransformPath
             {
                 Init();
                 PathRuntimeDriverBehaviour.Instance.Register(this);
-                _runtimeDriverRegistered = true;
             }
         }
 
@@ -72,33 +70,23 @@ namespace Common.TransformPath
                 return;
             if (!_isInitialized)
                 Init();
-            if (!_runtimeDriverRegistered)
-            {
-                PathRuntimeDriverBehaviour.Instance.Register(this);
-                _runtimeDriverRegistered = true;
-            }
+            PathRuntimeDriverBehaviour.Instance.Register(this);
         }
 
         private void OnDisable()
         {
             if (Application.isPlaying)
             {
-                if (_runtimeDriverRegistered && PathRuntimeDriverBehaviour.HasInstance)
-                {
+                if (PathRuntimeDriverBehaviour.HasInstance)
                     PathRuntimeDriverBehaviour.Instance.Unregister(this);
-                    _runtimeDriverRegistered = false;
-                }
                 Release();
             }
         }
 
         private void OnDestroy()
         {
-            if (_runtimeDriverRegistered && PathRuntimeDriverBehaviour.HasInstance)
-            {
+            if (PathRuntimeDriverBehaviour.HasInstance)
                 PathRuntimeDriverBehaviour.Instance.Unregister(this);
-                _runtimeDriverRegistered = false;
-            }
             Release();
         }
 

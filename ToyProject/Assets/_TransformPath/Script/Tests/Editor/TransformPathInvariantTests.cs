@@ -46,6 +46,34 @@ namespace Common.TransformPath.Tests
             Assert.That(follower.NormalizedTime, NUnit.Framework.Is.EqualTo(0.5f).Within(0.001f));
         }
 
+        // Sequence segments restart from their settings; a Single lap does not.
+        [Test]
+        public void ALapOfASinglePlaybackKeepsTheValuesSetDuringTheLastOne()
+        {
+            var follower = Create<PathFollower>("Follower");
+            follower.Init();
+            follower.StartPlayback(PathPlaybackRequest.Single(CreatePath(Vector3.zero, Vector3.right), true));
+            follower.SetSpeed(3f);
+            follower.Tick(1f);
+            Assert.That(follower.Speed, NUnit.Framework.Is.EqualTo(3f));
+        }
+
+        [Test]
+        public void ALongFrameOfALoopingSinglePlaybackIsCappedLikeASequence()
+        {
+            int laps = 0;
+            var follower = Create<PathFollower>("Follower");
+            follower.Init();
+            follower.LoopBoundary += () => laps++;
+            follower.StartPlayback(PathPlaybackRequest.Single(CreatePath(Vector3.zero, Vector3.right), true));
+
+            follower.Tick(100.5f);
+            Assert.That(laps, NUnit.Framework.Is.EqualTo(65));
+            follower.Tick(0.00001f);
+            Assert.That(laps, NUnit.Framework.Is.EqualTo(100));
+            Assert.That(follower.NormalizedTime, NUnit.Framework.Is.EqualTo(0.5f).Within(0.001f));
+        }
+
         [Test]
         public void AFollowerTickDoesNotAllocate()
         {
