@@ -43,7 +43,8 @@ namespace Common.TransformPath
             new Dictionary<IPathRuntimeTickable, ulong>(32);
         private ulong _nextRegistrationVersion;
 
-        public Exception LastException { get; private set; }
+        // What went wrong in the last Tick. Each item failing still lets the others run.
+        public List<Exception> Faults { get; } = new List<Exception>();
 
         public void Register(IPathRuntimeTickable item)
         {
@@ -75,7 +76,7 @@ namespace Common.TransformPath
             int frameId)
         {
             _frameEntries.Clear();
-            LastException = null;
+            Faults.Clear();
             for (int i = 0; i < _items.Count; i++)
             {
                 IPathRuntimeTickable item = _items[i];
@@ -100,8 +101,7 @@ namespace Common.TransformPath
                 }
                 catch (Exception exception)
                 {
-                    if (LastException == null)
-                        LastException = exception;
+                    Faults.Add(exception);
                     if (item is IPathRuntimeFaultHandler faultHandler)
                     {
                         try
@@ -112,10 +112,8 @@ namespace Common.TransformPath
                         }
                         catch (Exception)
                         {
-                            // Keep the fault that interrupted the runtime
-                            // work visible to the Unity bridge. Cleanup is
-                            // best-effort and must not hide the original
-                            // callback or tick exception.
+                            // Cleanup is best-effort and must not hide the
+                            // fault that interrupted the runtime work.
                         }
                     }
                 }

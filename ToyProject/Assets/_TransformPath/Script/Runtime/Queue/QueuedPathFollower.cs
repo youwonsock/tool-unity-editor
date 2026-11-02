@@ -778,8 +778,7 @@ namespace Common.TransformPath
             UnregisterFromManager(EPathQueueDetachReason.Completed);
             ResetConstraintState();
             // Forward the underlying playback lifecycle event as well as the
-            // queue-specific callback. CounterPathAgent subscribes to the
-            // IPathFollower-style event to advance its sale/exit state.
+            // queue-specific callback.
             if (!InvokeCallbacks(
                 _completedInvocationList,
                 callback => ((Action)callback)()))

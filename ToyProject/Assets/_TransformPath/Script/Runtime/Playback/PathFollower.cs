@@ -564,6 +564,8 @@ namespace Common.TransformPath
 
         private PathCommandReceipt SeekTo(int segmentIndex, float local)
         {
+            if (!_playbackSession.Provider.IsReady)
+                throw new InvalidOperationException("Seek requires a ready path provider.");
             if (_currentSegmentIndex == segmentIndex
                 && Mathf.Abs(_normalizedTime - local) <= EPSILON)
                 return CreateReceipt(false);
@@ -726,9 +728,6 @@ namespace Common.TransformPath
             if (session.Kind == EPathPlaybackKind.Sequence)
             {
                 ConfigureSequenceSegment(0, 0f, false);
-                session.ResetEventCursor(
-                    session.Snapshot.GetEventSource(0),
-                    0f);
             }
             else
             {
@@ -738,10 +737,8 @@ namespace Common.TransformPath
                 else
                     _duration = session.MovementSettings.Value;
                 _timeCurve = session.MovementSettings.TimeCurve;
-                session.ResetEventCursor(
-                    session.EventSource,
-                    0f);
             }
+            session.RestartEventCursor();
             ClearConstraintState();
             _isMoving = true;
             _playbackRevision++;
@@ -929,7 +926,7 @@ namespace Common.TransformPath
             _segmentDistance = 0f;
             _normalizedTime = 0f;
             _globalNormalizedTime = 0f;
-            _playbackSession.ResetEventCursor(source, 0f);
+            _playbackSession.RestartEventCursor();
             return true;
         }
 
@@ -950,9 +947,7 @@ namespace Common.TransformPath
             _globalNormalizedTime = _playbackSession.Snapshot.GetGlobalProgress(index, 0f);
             PathSegmentDescriptor descriptor = _playbackSession.Snapshot.GetDescriptor(index);
             ConfigureSequenceSegment(index, previousNominalSpeed, descriptor.PreservePreviousSpeed);
-            _playbackSession.ResetEventCursor(
-                _playbackSession.Snapshot.GetEventSource(index),
-                0f);
+            _playbackSession.RestartEventCursor();
             if (loopBoundary)
             {
                 InvokeLoopBoundary(tickRevision);

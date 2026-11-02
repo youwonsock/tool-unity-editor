@@ -197,7 +197,7 @@ namespace Common.TransformPath.Tests
             Exception fault = null;
             Run(driver, () =>
             {
-                fault ??= driver.LastException;
+                fault ??= driver.Faults.Count > 0 ? driver.Faults[0] : null;
                 return fault != null;
             });
 
@@ -269,7 +269,7 @@ namespace Common.TransformPath.Tests
             for (int i = 0; i < 40; i++)
             {
                 Step(driver);
-                Assert.That(driver.LastException, Is.Null);
+                Assert.That(driver.Faults, Is.Empty);
             }
 
             Assert.That(follower.CurrentSegmentIndex, Is.EqualTo(1));
@@ -329,7 +329,7 @@ namespace Common.TransformPath.Tests
         {
             Run(driver, () => first.State == EPathFollowerState.Completed
                 && second.State == EPathFollowerState.Completed);
-            Assert.That(driver.LastException, Is.Null);
+            Assert.That(driver.Faults, Is.Empty);
         }
 
         private PathRuntimeDriver Driver(QueuedPathManager manager, params QueuedPathFollower[] actors)
