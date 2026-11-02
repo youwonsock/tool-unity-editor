@@ -75,6 +75,29 @@ namespace Common.TransformPath.Tests
         }
 
         [Test]
+        public void FollowersOfOneSequenceShareItsSnapshotUntilItChanges()
+        {
+            PathData first = CreatePath(Vector3.zero, Vector3.right);
+            PathData second = CreatePath(Vector3.right, Vector3.right * 2f);
+            var route = Create<MultiPathData>("Route");
+            route.ConfigureSegments(new[]
+            {
+                new PathSegmentDescriptor(first, first.MovementSettings, false),
+                new PathSegmentDescriptor(second, second.MovementSettings, false),
+            });
+            PathPlaybackRequest request = PathPlaybackRequest.Sequence(route);
+            PathPlaybackSession one = PathPlaybackSession.CreateOrReuse(request, null);
+            PathPlaybackSession other = PathPlaybackSession.CreateOrReuse(request, null);
+            Assert.That(other.Snapshot, NUnit.Framework.Is.SameAs(one.Snapshot));
+
+            first.ConfigureControlPoints(new[] { Vector3.zero, Vector3.right * 3f });
+            PathPlaybackSession later = PathPlaybackSession.CreateOrReuse(request, null);
+            Assert.That(later.Snapshot, NUnit.Framework.Is.Not.SameAs(one.Snapshot));
+            Assert.That(later.Snapshot.GetLength(0), NUnit.Framework.Is.EqualTo(3f).Within(0.001f));
+            Assert.That(one.Snapshot.GetLength(0), NUnit.Framework.Is.EqualTo(1f).Within(0.001f), "A snapshot in use never changes.");
+        }
+
+        [Test]
         public void AFollowerTickDoesNotAllocate()
         {
             var follower = Create<PathFollower>("Follower");

@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.CompilerServices;
 using UnityEngine;
 
 namespace Common.TransformPath
@@ -13,6 +14,12 @@ namespace Common.TransformPath
         private readonly float[] _lengths;
         private readonly float[] _starts;
         private readonly float _totalLength;
+        private PathSequenceSnapshot _comparedWith;
+        private bool _comparedSame;
+
+        private static readonly ConditionalWeakTable<IPathSequenceProvider, PathSequenceSnapshot> Latest =
+            new ConditionalWeakTable<IPathSequenceProvider, PathSequenceSnapshot>();
+        private int _providerRevision;
 
         #endregion
 
@@ -26,7 +33,28 @@ namespace Common.TransformPath
 
         #region Public Methods
 
-        public static bool TryCreate(
+        /// <summary>
+        /// The snapshot of this provider's current revision. It never changes, so
+        /// every follower of the sequence can use the same one.
+        /// </summary>
+        public static bool TryGetCurrent(
+            IPathSequenceProvider provider,
+            out PathSequenceSnapshot snapshot,
+            out string error)
+        {
+            error = null;
+            int revision = provider.Revision;
+            if (Latest.TryGetValue(provider, out snapshot) && snapshot._providerRevision == revision)
+                return true;
+            if (!TryCreate(provider, out snapshot, out error))
+                return false;
+            snapshot._providerRevision = revision;
+            Latest.Remove(provider);
+            Latest.Add(provider, snapshot);
+            return true;
+        }
+
+        private static bool TryCreate(
             IPathSequenceProvider provider,
             out PathSequenceSnapshot snapshot,
             out string error)
@@ -148,7 +176,18 @@ namespace Common.TransformPath
                 : Mathf.Clamp01((distance - _starts[index]) / _lengths[index]);
         }
 
+        // Every follower of a sequence asks the same question when it changes.
         public bool HasSamePlaybackDefinition(PathSequenceSnapshot other)
+        {
+            if (!ReferenceEquals(other, _comparedWith))
+            {
+                _comparedSame = CompareDefinition(other);
+                _comparedWith = other;
+            }
+            return _comparedSame;
+        }
+
+        private bool CompareDefinition(PathSequenceSnapshot other)
         {
             if (other == null || other.Count != Count)
                 return false;
