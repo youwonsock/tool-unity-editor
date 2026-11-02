@@ -258,8 +258,8 @@ namespace Common.FlowField
                 throw new System.ArgumentOutOfRangeException(nameof(world));
 
             double epsilon = Math.Max(MIN_CLAMP_EPSILON, CellSize * 0.0001f);
-            world.x = (float)Math.Max(Origin.x, Math.Min((double)Origin.x + WorldSizeX - epsilon, world.x));
-            world.z = (float)Math.Max(Origin.z, Math.Min((double)Origin.z + WorldSizeZ - epsilon, world.z));
+            world.x = ClampAxis(world.x, Origin.x, WorldSizeX, epsilon);
+            world.z = ClampAxis(world.z, Origin.z, WorldSizeZ, epsilon);
             return world;
         }
 
@@ -271,10 +271,24 @@ namespace Common.FlowField
                 throw new ArgumentOutOfRangeException(nameof(world));
 
             double epsilon = Math.Max(MIN_CLAMP_EPSILON, CellSize * 0.0001f);
-            world.x = (float)Math.Max(Origin.x, Math.Min((double)Origin.x + WorldSizeX - epsilon, world.x));
-            world.y = (float)Math.Max(Origin.y, Math.Min((double)Origin.y + WorldSizeY - epsilon, world.y));
-            world.z = (float)Math.Max(Origin.z, Math.Min((double)Origin.z + WorldSizeZ - epsilon, world.z));
+            world.x = ClampAxis(world.x, Origin.x, WorldSizeX, epsilon);
+            world.y = ClampAxis(world.y, Origin.y, WorldSizeY, epsilon);
+            world.z = ClampAxis(world.z, Origin.z, WorldSizeZ, epsilon);
             return world;
+        }
+
+        // The upper edge belongs to no cell, and rounding back to float can land
+        // on it at large coordinates. Step down to the float below it.
+        private static float ClampAxis(float value, float origin, float size, double epsilon)
+        {
+            double upper = (double)origin + size;
+            float clamped = (float)Math.Max(origin, Math.Min(upper - epsilon, value));
+            if (clamped < upper)
+                return clamped;
+            if (clamped == 0f)
+                return -float.Epsilon;
+            int bits = Unity.Mathematics.math.asint(clamped);
+            return Unity.Mathematics.math.asfloat(clamped > 0f ? bits - 1 : bits + 1);
         }
 
         public bool MatchesBounds(FlowFieldGridSpace other)
