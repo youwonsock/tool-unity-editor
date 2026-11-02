@@ -239,9 +239,14 @@ namespace Common.TransformPath
             {
                 float consumed = AdvanceOnce(remaining, out bool transitioned);
 
-                // A Pause event or the end of the path stops the tick here.
+                // A Pause event or the end of the path stops the tick here. The end
+                // has already applied its position.
                 if (!_isMoving)
+                {
+                    if (_state == EPathFollowerState.Paused)
+                        ApplyCurrentPosition();
                     return;
+                }
                 if (transitioned)
                     transitionCount++;
                 if (consumed <= EPSILON && !transitioned)

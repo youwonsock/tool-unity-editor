@@ -51,7 +51,7 @@ namespace Common.TransformPath.Tests
         [TestCase("SequenceLoopShort", "2832:ddee91763e017928")]
         [TestCase("Commands", "2450:a5efe30ec0e5361f")]
         [TestCase("PathChange", "2917:02cfd0f1e505d3a8")]
-        [TestCase("EventEffects", "5864:c39b13e54045f688")]
+        [TestCase("EventEffects", "5864:6e8a2bfa5452f4d0")]
         [TestCase("Queue", "25812:c032078b0cfb7e72")]
         [TestCase("QueueCapAndHold", "11334:4fe8eb1ee784c056")]
         [TestCase("QueueSequenceTime", "19977:e2673de3b9214029")]
