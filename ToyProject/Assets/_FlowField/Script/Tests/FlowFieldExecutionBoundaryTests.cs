@@ -539,6 +539,202 @@ namespace Common.FlowField.Tests
         }
 
         [Test]
+        public void ObservingAModifierOnRegistrationOrChangeIsModifierCode(
+            [Values(false, true)] bool volume,
+            [Values("register", "notify")] string call)
+        {
+            FlowFieldManager manager = CreateManager(volume);
+            HookModifier modifier = CreateModifier();
+            Build(manager);
+            if (call == "notify")
+            {
+                manager.RegisterVectorModifier(modifier);
+                Pump(manager);
+            }
+            Exception rejected = null;
+            modifier.OnObserve = () =>
+            {
+                try { manager.RequestRebuild(); }
+                catch (Exception exception) { rejected = exception; }
+            };
+
+            if (call == "register")
+                manager.RegisterVectorModifier(modifier);
+            else
+                manager.NotifyModifierChanged(modifier, FlowFieldModifierChange.Value);
+
+            modifier.OnObserve = null;
+            Assert.That(rejected, Is.TypeOf<InvalidOperationException>());
+            manager.Release();
+        }
+
+        [Test]
+        public void ReadingAModifierAreaDuringASurfaceBuildIsModifierCode()
+        {
+            FlowFieldManager manager = CreateManager(false);
+            HookModifier modifier = CreateModifier();
+            Build(manager);
+            manager.RegisterVectorModifier(modifier);
+            int accepted = 0;
+            int rejected = 0;
+            modifier.OnObserve = () =>
+            {
+                try
+                {
+                    manager.RequestRebuild();
+                    accepted++;
+                }
+                catch (InvalidOperationException)
+                {
+                    rejected++;
+                }
+            };
+
+            Pump(manager);
+
+            modifier.OnObserve = null;
+            Assert.That(accepted, Is.Zero);
+            Assert.That(rejected, Is.GreaterThan(0));
+            manager.Release();
+        }
+
+        [Test]
+        public void AHandlerCanReleaseTheManagerWhileARetryStarts([Values(false, true)] bool volume)
+        {
+            FlowFieldManager manager = CreateManager(volume);
+            Build(manager);
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex("build failed"));
+            FlowFieldSessionBase session = volume ? manager.VolumeSession : (FlowFieldSessionBase)manager.SurfaceSession;
+            session.ReportFault(new InvalidOperationException("Expected fault"));
+            bool released = false;
+            manager.StateChanged += state =>
+            {
+                if (state != FlowFieldRuntimeState.Building || released)
+                    return;
+                released = true;
+                manager.Release();
+            };
+
+            Assert.DoesNotThrow(manager.RequestRebuild);
+
+            Assert.That(released, Is.True);
+            Assert.That(manager.State, Is.EqualTo(FlowFieldRuntimeState.Released));
+        }
+
+        [Test]
+        public void ARestartFromAReleasedHandlerKeepsItsSession([Values(false, true)] bool volume)
+        {
+            FlowFieldManager manager = CreateManager(volume);
+            Build(manager);
+            bool restarted = false;
+            manager.StateChanged += state =>
+            {
+                if (state != FlowFieldRuntimeState.Released || restarted)
+                    return;
+                restarted = true;
+                manager.Init();
+            };
+            manager.Release();
+            Pump(manager);
+
+            // Only the attached session keeps answering once the serialized mode differs.
+            using (var settings = new SerializedObject(manager))
+            {
+                settings.FindProperty("_spaceMode").enumValueIndex =
+                    (int)(volume ? FlowFieldSpaceMode.Surface2D : FlowFieldSpaceMode.Volume3D);
+                settings.ApplyModifiedPropertiesWithoutUndo();
+            }
+
+            Assert.That(manager.IsReady, Is.True, manager.LastError);
+            manager.Release();
+        }
+
+        [UnityTest]
+        public IEnumerator AHandlerSeesEveryInputObservedInTheSameFrame()
+        {
+            yield return new EnterPlayMode();
+            FlowFieldManager manager = CreateManager(true);
+            HookModifier modifier = CreateModifier();
+            GameObject goal = MakeObject("Boundary goal");
+            goal.transform.position = Vector3.one * .5f;
+            using (var settings = new SerializedObject(manager))
+            {
+                settings.FindProperty("_goalTransform").objectReferenceValue = goal.transform;
+                settings.ApplyModifiedPropertiesWithoutUndo();
+            }
+            yield return WaitUntilReady(manager);
+            manager.RegisterVectorModifier(modifier);
+            yield return WaitUntilReady(manager);
+
+            Vector3 moved = Vector3.one * 2.5f;
+            Vector3? seen = null;
+            manager.StateChanged += state =>
+            {
+                if (state != FlowFieldRuntimeState.Building || seen.HasValue)
+                    return;
+                Assert.That(manager.VolumeSession.TryGetLatestRequestedInput(out FlowFieldVolumeRequest latest), Is.True);
+                seen = latest.GoalWorld;
+            };
+            goal.transform.position = moved;
+            modifier.Bump();
+
+            float deadline = Time.realtimeSinceStartup + 3f;
+            while (!seen.HasValue && Time.realtimeSinceStartup < deadline)
+                yield return null;
+
+            Assert.That(seen, Is.EqualTo(moved));
+        }
+
+        [Test]
+        public void HandlersThatKeepRaisingEventsAreCutOff()
+        {
+            var boundary = new FlowFieldExecutionBoundary();
+            using var session = new FlowFieldVolumeSession(boundary);
+            var raised = new FlowFieldExecutionBoundary.QueuedEvent(
+                session,
+                FlowFieldExecutionBoundary.EventKind.StateChanged,
+                0,
+                FlowFieldRuntimeState.Released);
+            int runs = 0;
+            session.StateChanged += _ =>
+            {
+                if (++runs < 1000000)
+                    boundary.Publish(raised);
+            };
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex("in a row"));
+
+            boundary.Publish(raised);
+            Assert.That(runs, Is.EqualTo(100000));
+
+            using (boundary.EnterOperation()) { }
+            Assert.That(runs, Is.EqualTo(100000), "The dropped events must not come back.");
+        }
+
+        [Test]
+        public void WorkThatKeepsQueueingItselfIsCutOff()
+        {
+            var boundary = new FlowFieldExecutionBoundary();
+            int runs = 0;
+            Action again = null;
+            // The limit keeps a failure of this test from hanging the Editor.
+            again = () =>
+            {
+                if (++runs < 1000000)
+                    boundary.Defer(again);
+            };
+            boundary.Defer(again);
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex("in a row"));
+            using (boundary.EnterOperation()) { }
+            Assert.That(runs, Is.EqualTo(100000));
+
+            bool ranAfterwards = false;
+            boundary.Defer(() => ranAfterwards = true);
+            using (boundary.EnterOperation()) { }
+            Assert.That(runs, Is.EqualTo(100000), "The dropped work must not come back.");
+            Assert.That(ranAfterwards, Is.True);
+        }
+
+        [Test]
         public void BuildBudgetRejectsAnUnusableValue([Values(0d, -1d, double.NaN, double.PositiveInfinity)] double value)
         {
             double before = FlowFieldBuildSettings.BudgetMilliseconds;
