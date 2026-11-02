@@ -373,23 +373,9 @@ namespace Common.FlowField
 
         private void UnregisterFromCurrentManager()
         {
-            if (_registeredManager != null && _registeredManager.IsInitialized)
-            {
-                if (_registeredManager.IsFaulted)
-                {
-                    // A Faulted Manager rejects public input calls, but a
-                    // component must still be able to disable/destroy itself
-                    // without producing a second exception. Remove the
-                    // registry entry directly; the failed field is already
-                    // discarded by the Session.
-                    try { _registeredManager.UnregisterVectorModifier(this); }
-                    catch { }
-                }
-                else
-                {
-                    _registeredManager.UnregisterVectorModifier(this);
-                }
-            }
+            if (_registeredManager != null
+                && (_registeredManager.IsInitialized || _registeredManager.IsFaulted))
+                _registeredManager.UnregisterVectorModifier(this);
             _registeredManager = null;
         }
 

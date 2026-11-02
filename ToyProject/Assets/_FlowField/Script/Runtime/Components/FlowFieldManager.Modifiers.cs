@@ -4,11 +4,16 @@ namespace Common.FlowField
 {
     public partial class FlowFieldManager
     {
+        private bool _reattachingForRetry;
+
         public bool RegisterVectorModifier(IFlowFieldVectorModifier modifier)
         {
             if (modifier == null)
                 throw new ArgumentNullException(nameof(modifier));
-            ThrowIfInputAllowedForMode();
+            if (_reattachingForRetry)
+                ThrowIfLifecycleUnavailable();
+            else
+                ThrowIfInputAllowedForMode();
             return ActiveSession.RegisterModifierCommand(modifier);
         }
 
@@ -17,8 +22,10 @@ namespace Common.FlowField
             if (modifier == null)
                 return false;
             // Removal needs no valid configuration; a component must be able
-            // to detach while the Manager waits for an explicit rebuild.
-            ThrowIfLifecycleUnavailable();
+            // to detach while the Manager waits for an explicit rebuild or a
+            // retry, which would otherwise keep applying it.
+            if (!IsFaulted)
+                ThrowIfLifecycleUnavailable();
             return ActiveSession.UnregisterModifierCommand(modifier);
         }
 

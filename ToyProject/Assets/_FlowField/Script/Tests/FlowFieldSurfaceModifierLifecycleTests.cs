@@ -43,6 +43,49 @@ namespace Common.FlowField.Tests
         }
 
         [Test]
+        public void RemovingAModifierDuringAFaultQueuesNoWork([Values(false, true)] bool volume)
+        {
+            var owner = new GameObject("Modifier removed during a fault") { layer = FlowFieldRegressionFixture.Layer };
+            var collider = owner.AddComponent<BoxCollider>();
+            collider.isTrigger = true;
+            collider.size = Vector3.one * 20f;
+            var modifier = new FlowFieldRegressionFixture.Modifier { InfluenceCollider = collider, Priority = 100 };
+            Physics.SyncTransforms();
+            FlowFieldSessionBase session;
+            if (volume)
+            {
+                var volumeSession = new FlowFieldVolumeSession();
+                session = volumeSession;
+                volumeSession.Initialize(FlowFieldBakeMode.RuntimeDynamic);
+                volumeSession.RegisterModifierCommand(modifier);
+                volumeSession.Submit(FlowFieldVolumeSafetyRegressionTests.Request(FlowFieldVolumeSafetyRegressionTests.Grid));
+                FlowFieldVolumeSafetyRegressionTests.Finish(volumeSession);
+            }
+            else
+            {
+                var surfaceSession = new FlowFieldSession(FlowFieldRegressionFixture.Surface());
+                session = surfaceSession;
+                surfaceSession.Initialize(FlowFieldBakeMode.RuntimeDynamic, FlowFieldSessionSourceKind.SceneBuild,
+                    FlowFieldSolvePolicy.Inline);
+                surfaceSession.RegisterModifierCommand(modifier);
+                surfaceSession.Submit(FlowFieldRegressionFixture.Request(new Vector3(2.5f, 0f, 2.5f)));
+                surfaceSession.Pump();
+            }
+            try
+            {
+                Assert.That(session.IsReady, Is.True, session.LastError);
+                session.ReportFault(new InvalidOperationException("Expected fault"));
+                session.UnregisterModifierCommand(modifier);
+                Assert.That(session.HasPendingRequest, Is.False);
+            }
+            finally
+            {
+                session.Dispose();
+                UnityEngine.Object.DestroyImmediate(owner);
+            }
+        }
+
+        [Test]
         public void StaticSnapshotIdentityReloadsChangedDataEvenWithTheSameRevision()
         {
             using var session = new FlowFieldSession(FlowFieldRegressionFixture.Surface());

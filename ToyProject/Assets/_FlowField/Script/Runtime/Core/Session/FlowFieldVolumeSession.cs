@@ -384,10 +384,14 @@ namespace Common.FlowField
 
         internal bool UnregisterModifier(IFlowFieldVectorModifier modifier)
         {
-            ThrowIfInputAvailable();
+            ThrowIfDisposed();
+            if (!IsInitialized && !IsFaulted)
+                throw new InvalidOperationException("FlowField volume session is unavailable.");
             if (!_modifierRegistry.Unregister(modifier))
                 return false;
-            QueueModifierChange();
+            // A retry builds everything again.
+            if (!IsFaulted)
+                QueueModifierChange();
             return true;
         }
 

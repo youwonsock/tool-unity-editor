@@ -599,6 +599,81 @@ namespace Common.FlowField.Tests
             Assert.That(manager.IsReady, Is.True, manager.LastError);
         }
 
+        [UnityTest] public IEnumerator SurfaceModifierDisabledDuringAFaultStaysOffAfterTheRetry() => ModifierDisabledDuringAFault(false);
+        [UnityTest] public IEnumerator VolumeModifierDisabledDuringAFaultStaysOffAfterTheRetry() => ModifierDisabledDuringAFault(true);
+        [UnityTest] public IEnumerator SurfaceModifierEnabledDuringAFaultAppliesAfterTheRetry() => ModifierEnabledDuringAFault(false);
+        [UnityTest] public IEnumerator VolumeModifierEnabledDuringAFaultAppliesAfterTheRetry() => ModifierEnabledDuringAFault(true);
+
+        private IEnumerator ModifierDisabledDuringAFault(bool volume)
+            => ExpectNoLoggedExceptions(() => ModifierDisabledDuringAFaultSteps(volume));
+
+        private IEnumerator ModifierDisabledDuringAFaultSteps(bool volume)
+        {
+            yield return new EnterPlayMode();
+            var manager = Manager(volume);
+            yield return WaitReady(manager);
+            GameObject area = SpeedModifierArea(manager);
+
+            yield return WaitPublished(manager, () => area.SetActive(true));
+            Assert.That(SpeedAtTheCenter(manager), Is.EqualTo(0.5f).Within(0.001f));
+
+            ReportFault(manager, volume);
+            area.SetActive(false);
+            yield return WaitPublished(manager, manager.RequestRebuild);
+            Assert.That(SpeedAtTheCenter(manager), Is.EqualTo(1f).Within(0.001f));
+
+            yield return WaitPublished(manager, () => area.SetActive(true));
+            Assert.That(SpeedAtTheCenter(manager), Is.EqualTo(0.5f).Within(0.001f));
+        }
+
+        private IEnumerator ModifierEnabledDuringAFault(bool volume)
+            => ExpectNoLoggedExceptions(() => ModifierEnabledDuringAFaultSteps(volume));
+
+        private IEnumerator ModifierEnabledDuringAFaultSteps(bool volume)
+        {
+            yield return new EnterPlayMode();
+            var manager = Manager(volume);
+            yield return WaitReady(manager);
+            GameObject area = SpeedModifierArea(manager);
+
+            ReportFault(manager, volume);
+            area.SetActive(true);
+            yield return WaitPublished(manager, manager.RequestRebuild);
+            Assert.That(SpeedAtTheCenter(manager), Is.EqualTo(0.5f).Within(0.001f));
+        }
+
+        private GameObject SpeedModifierArea(FlowFieldManager manager)
+        {
+            var area = Make("Fault modifier");
+            area.SetActive(false);
+            area.transform.position = FlowFieldRegressionFixture.Settings.BakeBounds.center;
+            var box = area.AddComponent<BoxCollider>();
+            box.isTrigger = true;
+            box.size = Vector3.one * 20f;
+            var modifier = area.AddComponent<FlowFieldSpeedModifier>();
+            modifier.SetFlowFieldManager(manager);
+            modifier.SetInfluenceCollider(box);
+            modifier.SetPriority(100);
+            modifier.SetSpeedMultiplier(0.5f);
+            Physics.SyncTransforms();
+            return area;
+        }
+
+        private static float SpeedAtTheCenter(FlowFieldManager manager)
+            => manager.Sample(FlowFieldRegressionFixture.Settings.BakeBounds.center).SpeedMultiplier;
+
+        private static IEnumerator WaitPublished(FlowFieldManager manager, Action change)
+        {
+            int revision = manager.Revision;
+            change();
+            float deadline = Time.realtimeSinceStartup + 3f;
+            while ((manager.Revision == revision || !manager.IsReady || manager.IsRebuilding)
+                && !manager.IsFaulted && Time.realtimeSinceStartup < deadline)
+                yield return null;
+            Assert.That(manager.Revision, Is.GreaterThan(revision), manager.LastError);
+            Assert.That(manager.IsReady, Is.True, manager.LastError);
+        }
+
         [UnityTest] public IEnumerator SurfaceInitializationCallbacksPreserveSelectedLifetime() => ManagerBoundary(false, false);
         [UnityTest] public IEnumerator VolumeInitializationCallbacksPreserveSelectedLifetime() => ManagerBoundary(true, false);
         [UnityTest] public IEnumerator SurfaceReactivationCallbacksPreserveSelectedLifetime() => ManagerBoundary(false, true);
