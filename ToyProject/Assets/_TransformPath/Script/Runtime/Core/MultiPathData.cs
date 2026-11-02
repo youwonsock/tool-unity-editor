@@ -131,18 +131,6 @@ namespace Common.TransformPath
                 NotifyPathChanged();
         }
 
-        /// <summary>Switches the provider back to its serialized authoring input.</summary>
-        public void UseAuthoringSegments()
-        {
-            if (!_usingRuntimeInput)
-                return;
-
-            _usingRuntimeInput = false;
-            _runtimeDescriptors = null;
-            if (!TryBuild(out string error))
-                ReportBuildFailure(error);
-        }
-
         public PathSegmentAuthoring GetAuthoringSegment(int index)
         {
             if (_segments == null || index < 0 || index >= _segments.Count)

@@ -949,10 +949,5 @@ namespace Common.TransformPath
         }
 
         #endregion
-
-
-        #region Explicit Interface Implementation
-
-        #endregion
     }
 }
