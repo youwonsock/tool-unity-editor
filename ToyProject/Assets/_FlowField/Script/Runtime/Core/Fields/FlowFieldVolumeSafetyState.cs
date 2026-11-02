@@ -42,7 +42,7 @@ namespace Common.FlowField
 
         // An obstacle mask/clearance change invalidates the complete volume.
         // Preserve its distinct policy: no dirty-region expansion.
-        internal void InvalidateRegion(Bounds bounds) => _uncertainBounds.Add(bounds);
+        internal void InvalidateRegion(Bounds bounds) => AddBounds(_uncertainBounds, bounds);
 
         internal void MarkDirty(Bounds bounds, float margin)
         {

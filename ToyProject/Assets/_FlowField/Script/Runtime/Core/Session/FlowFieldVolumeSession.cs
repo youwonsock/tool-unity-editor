@@ -66,7 +66,8 @@ namespace Common.FlowField
                     + EstimateAuxiliaryBytes());
             }
         }
-        internal FlowFieldGridSpace Grid => _committed?.Grid ?? _build?.Request.Grid ?? default;
+        internal FlowFieldGridSpace Grid
+            => _committed?.Grid ?? _build?.Request.Grid ?? (_requests.HasLatest ? _requests.Latest.Grid : default);
         internal override bool HasPendingRequest => _requests.Pending || _hasPendingModifierRecompose || _build != null;
         internal bool TryGetLatestRequestedInput(out FlowFieldVolumeRequest request)
         {
@@ -126,8 +127,9 @@ namespace Common.FlowField
             _requests.Latest = request;
             _requests.HasLatest = true;
             // A grid/signature change invalidates the private staging arrays
-            // immediately.
-            if (_build != null && !_build.Request.HasSameGrid(request))
+            // immediately, and a removed Goal must not publish once more.
+            if (_build != null
+                && (!_build.Request.HasSameGrid(request) || _build.Request.HasGoal && !request.HasGoal))
                 DiscardBuild();
             if (_committed != null
                 && _committed.Request.HasSameGrid(request)
@@ -410,6 +412,7 @@ namespace Common.FlowField
                 return;
             _suspendedByLifecycle = true;
             CancelCurrentBuild();
+            DropCommittedField();
             SetLifecycle(FlowFieldSessionLifecycle.Suspended);
         }
 
@@ -418,7 +421,16 @@ namespace Common.FlowField
             if (State != FlowFieldRuntimeState.Suspended)
                 return;
             _suspendedByLifecycle = false;
+            _requests.Pending = _requests.HasLatest;
             SetLifecycle(FlowFieldSessionLifecycle.Building);
+        }
+
+        // The world may have changed while nothing observed it, so the session
+        // is not Ready again until a new build publishes.
+        private void DropCommittedField()
+        {
+            _committed = null;
+            _committedReservationBytes = 0;
         }
 
         internal override void Release()
@@ -427,9 +439,8 @@ namespace Common.FlowField
                 return;
             CancelCurrentBuild();
             Fault = null;
-            _committed = null;
-            _committedReservationBytes = 0;
-            _requests.HasLatest = false;
+            DropCommittedField();
+            _requests.Clear();
             _suspendedByLifecycle = false;
             _safety.ClearRegions();
             DetachRuntimeScheduler();
@@ -447,9 +458,11 @@ namespace Common.FlowField
                 return;
             AdvanceLifetimeGeneration();
             Fault = null;
-            // A retry only clears the failure.  The next accepted request
+            // A retry only clears the failure.  The latest accepted request
             // must still build and publish before the session becomes Ready;
             // never expose a transient Ready state with no valid result.
+            DropCommittedField();
+            _requests.Pending = _requests.HasLatest;
             SetLifecycle(_suspendedByLifecycle
                 ? FlowFieldSessionLifecycle.Suspended
                 : FlowFieldSessionLifecycle.Building);
@@ -555,9 +568,8 @@ namespace Common.FlowField
             Disposed = true;
             DetachRuntimeScheduler();
             CancelCurrentBuild();
-            _requests.HasLatest = false;
-            _committed = null;
-            _committedReservationBytes = 0;
+            _requests.Clear();
+            DropCommittedField();
             _obstacles.Clear();
             _registeredObstacleOverlapBuffer = null;
             _cellQuery.Clear();
