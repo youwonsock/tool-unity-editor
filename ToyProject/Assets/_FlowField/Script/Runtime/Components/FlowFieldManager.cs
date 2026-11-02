@@ -329,6 +329,10 @@ namespace Common.FlowField
                 // baked Goal signature, while later rebuilds validate only the
                 // loaded snapshot settings and recompose it.
                 ValidateConfiguration(validateStaticGoal: false);
+                // A Modifier enabled during the fault could not register. It
+                // joins before the Submit, so this build already includes it.
+                if (retryingFault)
+                    ReattachModifiersForRetry();
                 ActiveMode.SubmitRebuild();
             }
             catch (Exception exception)
@@ -553,6 +557,14 @@ namespace Common.FlowField
         {
             if (exception != null)
                 Debug.LogException(exception, this);
+        }
+
+        // A retried Surface session stays stale until it commits.
+        private void ReattachModifiersForRetry()
+        {
+            _reattachingForRetry = true;
+            try { ReattachActiveModifiers(); }
+            finally { _reattachingForRetry = false; }
         }
 
         private void ReattachActiveModifiers()

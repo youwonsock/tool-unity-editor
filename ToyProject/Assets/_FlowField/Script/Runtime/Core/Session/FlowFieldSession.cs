@@ -345,7 +345,9 @@ namespace Common.FlowField
         {
             EnsureModifierServices();
             FlowFieldModifierRegistryResult result = _modifierPipeline.Registry.Unregister(modifier);
-            ApplyModifierRegistryResult(result);
+            // A retry builds everything again.
+            if (!IsFaulted)
+                ApplyModifierRegistryResult(result);
             return result.FinalDirty;
         }
 
