@@ -2,7 +2,6 @@
     "Symbols": [
         "ctor Common.TransformPath.MultiPathData()",
         "ctor Common.TransformPath.PathBuildSettings(Common.TransformPath.EPathCurveType curveType=Linear,System.Int32 segmentCount=500)",
-        "ctor Common.TransformPath.PathCommandReceipt(System.UInt64 playbackId,System.UInt64 stateRevision,System.Boolean changed)",
         "ctor Common.TransformPath.PathData()",
         "ctor Common.TransformPath.PathDataLineRenderer()",
         "ctor Common.TransformPath.PathDelayedEventDefinition(System.Single delay,Common.TransformPath.PathEventDefinition definition)",

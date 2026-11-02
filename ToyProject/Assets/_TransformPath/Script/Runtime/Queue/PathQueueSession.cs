@@ -4,7 +4,7 @@ namespace Common.TransformPath
 {
     /// <summary>
     /// Owns one queue's registration, constraint attachment, and hold/restart
-    /// state. Releases retain the old token across reentrant callbacks.
+    /// state.
     /// </summary>
     internal sealed class PathQueueSession
     {

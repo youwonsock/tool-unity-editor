@@ -138,8 +138,7 @@ namespace Common.TransformPath
             }
             catch
             {
-                // The driver reports the original callback failure. Cleanup
-                // continues even when a state listener also throws.
+                // The driver reports the original failure.
             }
         }
 

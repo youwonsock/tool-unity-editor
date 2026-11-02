@@ -93,12 +93,5 @@ namespace Common.TransformPath.Tests
             return path;
         }
 
-        private QueuedPathManager CreateManager(PathData path)
-        {
-            var manager = Create("Manager").AddComponent<QueuedPathManager>();
-            manager.Init();
-            manager.ConfigureRoute(path);
-            return manager;
-        }
     }
 }

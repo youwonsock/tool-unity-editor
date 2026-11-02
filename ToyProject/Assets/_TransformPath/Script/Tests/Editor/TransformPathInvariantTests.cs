@@ -97,6 +97,31 @@ namespace Common.TransformPath.Tests
             Assert.That(one.Snapshot.GetLength(0), NUnit.Framework.Is.EqualTo(1f).Within(0.001f), "A snapshot in use never changes.");
         }
 
+        // Each snapshot remembers the one it was last compared with. A path that
+        // keeps changing must not build a chain of every snapshot it ever had.
+        [Test]
+        public void ReplacedSnapshotsDoNotKeepTheirPredecessorsAlive()
+        {
+            PathData path = CreatePath(Vector3.zero, Vector3.right);
+            var route = Create<MultiPathData>("Route");
+            route.ConfigureSegments(new[] { new PathSegmentDescriptor(path, path.MovementSettings, false) });
+            FieldInfo comparedWith = typeof(PathSequenceSnapshot).GetField("_comparedWith", BindingFlags.NonPublic | BindingFlags.Instance);
+            PathSequenceSnapshot previous = null;
+            PathSequenceSnapshot replaced = null;
+            for (int i = 2; i < 5; i++)
+            {
+                PathSequenceSnapshot.TryGetCurrent(route, out PathSequenceSnapshot current, out _);
+                if (previous != null)
+                    current.HasSamePlaybackDefinition(previous);
+                replaced = previous;
+                previous = current;
+                path.ConfigureControlPoints(new[] { Vector3.zero, Vector3.right * i });
+            }
+            PathSequenceSnapshot.TryGetCurrent(route, out _, out _);
+            Assert.That(comparedWith.GetValue(previous), NUnit.Framework.Is.Null);
+            Assert.That(comparedWith.GetValue(replaced), NUnit.Framework.Is.Null);
+        }
+
         [Test]
         public void AFollowerTickDoesNotAllocate()
         {
