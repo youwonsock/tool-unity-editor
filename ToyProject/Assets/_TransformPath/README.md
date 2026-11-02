@@ -73,7 +73,7 @@ public sealed class TransformPathReadmeExample : MonoBehaviour
 | `SetSpeed(value)` | 현재 구간이 `SpeedBased`일 때, `0.001..9999` |
 | `SetDuration(value)` | 현재 구간이 `TimeBased`일 때, `0.001..9999` |
 
-조건을 어기면 `InvalidOperationException`, 값이 범위 밖이거나 유한하지 않으면 `ArgumentOutOfRangeException`이 발생합니다.
+조건을 어기면 `InvalidOperationException`, 값이 범위 밖이거나 유한하지 않으면 `ArgumentOutOfRangeException`이 발생합니다. 재생 세션은 첫 `StartPlayback`부터 `Release`까지 남습니다. 재생이 끝난 뒤의 `Seek`는 위치만 옮기고, `SetSpeed`와 `SetDuration`은 값만 바꾸며, 어느 쪽도 재생을 다시 시작하지 않습니다.
 
 - **Seek:** 건너뛴 이벤트를 실행하지 않고 `SegmentChanged`도 보내지 않습니다. `Seek(1f)`는 즉시 완료하지 않고 다음 이동 Tick에서 판정합니다.
 - **경로 변경:** 런타임에 제어점 Transform을 옮기면 `path.Rebuild()`를 호출합니다. `PathEventSettingSO`를 바꿔도 마찬가지입니다. 기하만 바뀌면 재생이 이어지고, 사용 중인 이동 설정이나 이벤트, 시퀀스 구성이 바뀌면 재생이 멈춥니다.
@@ -86,9 +86,10 @@ public sealed class TransformPathReadmeExample : MonoBehaviour
 
 - 콜백 안에서 모든 명령을 쓸 수 있습니다. 그 명령의 알림은 대기열 끝에 붙으므로 콜백이 중첩되지 않습니다.
 - 콜백이 실행될 때는 이벤트 효과와 초기 위치가 이미 반영되어 있습니다. 앞선 콜백이 상태를 바꿨을 수 있으니 인자보다 현재 상태를 읽습니다.
+- 대기 중에 구독을 해제한 리스너는 호출되지 않습니다. 발행 뒤에 구독한 리스너는 그 알림을 듣지 않습니다.
 - 콜백 예외는 Console에 기록만 되고 재생과 다른 콜백을 멈추지 않습니다.
-- `PathData.PathChanged`만 예외로 `Rebuild` 안에서 바로 호출됩니다.
-- 직접 구현한 `IQueuedPathAgent`의 멤버 안에서는 Queue 명령을 호출하지 않습니다. Manager가 Agent 목록을 순회하는 중입니다.
+- `PathData`와 `MultiPathData`의 `PathChanged`만 예외로 변경 작업 안에서 바로 호출됩니다. 이 콜백의 예외도 기록만 됩니다.
+- 직접 구현한 `IQueuedPathAgent`의 멤버에서 Queue를 바꾸면 `InvalidOperationException`이 발생합니다. Manager가 Agent 목록을 순회하는 중입니다. 읽기는 할 수 있습니다.
 
 ## Queue
 
@@ -107,6 +108,8 @@ Agent와 Manager는 같은 Provider 인스턴스를 써야 합니다. 세 번째
 | `DetachQueue` | 재생을 유지하고 Queue만 해제 |
 
 간격 1.5, 감속 시작 거리 3, 최소 속도 배율 0.1, 재출발 지연 0.1초, 추가 간격 0.3, 속도 보간율 5가 기본값이며 Inspector에서 바꿉니다.
+
+`OnBlocked`와 `OnResumed`는 Tick에서 관찰한 `IsBlocked`의 변화와 짝을 이룹니다. 시작, Seek, Loop 뒤의 첫 결과 대기도 포함하며, 대기가 한 Tick 안에 끝나면 둘 다 오지 않습니다. `ForceBlock`의 알림은 다음 Tick에 옵니다.
 
 `QueueInvalidated`는 경로가 준비되지 않았거나(`ProviderInvalid`), Manager가 해제되었거나(`ManagerReleased`), 지정한 최대 진행률을 넘었을 때(`ConstraintViolation`) 옵니다. 앞 Agent와의 간격이 부족한 것은 위반이 아니라 대기입니다.
 
