@@ -166,6 +166,28 @@ namespace Common.FlowField.Tests
             Assert.That(after[0], Is.EqualTo(before[0]));
         }
 
+        [TestCase(0f, 1f)]
+        [TestCase(2000f, 1f)]
+        [TestCase(-3000f, 1f)]
+        [TestCase(250f, 0.1f)]
+        [TestCase(1000f, 0.5f)]
+        public void AClampedPositionStaysInsideTheGrid(float origin, float cellSize)
+        {
+            FlowFieldGridSpace surface = FlowFieldGridSpace.FromCellGrid(Vector3.one * origin, 100, 100, cellSize);
+            Vector3 surfaceClamped = surface.ClampWorldXZ(Vector3.one * 1000000f);
+            Assert.That(surface.TryWorldToLocal(surfaceClamped, out int surfaceX, out int surfaceZ), Is.True);
+            Assert.That((surfaceX, surfaceZ), Is.EqualTo((99, 99)));
+
+            FlowFieldGridSpace volume = FlowFieldGridSpace.FromVolumeCellGrid(Vector3.one * origin, 100, 100, 100, cellSize);
+            Vector3 volumeClamped = volume.ClampWorldXYZ(Vector3.one * 1000000f);
+            Assert.That(volume.TryWorldToLocal(volumeClamped, out int x, out int y, out int z), Is.True);
+            Assert.That((x, y, z), Is.EqualTo((99, 99, 99)));
+
+            Vector3 inside = Vector3.one * (origin + cellSize * 50.5f);
+            Assert.That(volume.ClampWorldXYZ(inside), Is.EqualTo(inside));
+            Assert.That(volume.ClampWorldXYZ(Vector3.one * -1000000f), Is.EqualTo(Vector3.one * origin));
+        }
+
         [Test]
         public void VolumeLayoutRejectsOversizedAndClampsTinyPositiveBoundsToOneCell()
         {
