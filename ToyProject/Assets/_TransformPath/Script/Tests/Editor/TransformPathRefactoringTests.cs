@@ -196,7 +196,7 @@ namespace Common.TransformPath.Tests
 
         [TestCase(false)]
         [TestCase(true)]
-        public void SequenceCarriesFrameTimeAndHonorsPauseFromBoundaryCallback(bool pause)
+        public void SequenceCarriesFrameTimeAndAppliesAListenerPauseAfterTheTick(bool pause)
         {
             var paths = new PathData[5];
             for (int i = 0; i < paths.Length; i++)
@@ -213,18 +213,10 @@ namespace Common.TransformPath.Tests
             };
             follower.StartPlayback(PathPlaybackRequest.Sequence(CreateRoute(paths)));
             follower.Tick(0.35f);
-            if (pause)
-            {
-                CollectionAssert.AreEqual(new[] { 1 }, segments);
-                Assert.That(follower.State, Is.EqualTo(EPathFollowerState.Paused));
-                Assert.That(follower.GlobalNormalizedTime, Is.EqualTo(0.2f).Within(0.00001f));
-            }
-            else
-            {
-                CollectionAssert.AreEqual(new[] { 1, 2, 3 }, segments);
-                Assert.That(follower.CurrentSegmentIndex, Is.EqualTo(3));
-                Assert.That(follower.NormalizedTime, Is.EqualTo(0.5f).Within(0.00001f));
-            }
+            CollectionAssert.AreEqual(new[] { 1, 2, 3 }, segments);
+            Assert.That(follower.CurrentSegmentIndex, Is.EqualTo(3));
+            Assert.That(follower.NormalizedTime, Is.EqualTo(0.5f).Within(0.00001f));
+            Assert.That(follower.State, Is.EqualTo(pause ? EPathFollowerState.Paused : EPathFollowerState.Moving));
         }
 
         [Test]

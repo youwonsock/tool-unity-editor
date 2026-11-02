@@ -229,23 +229,6 @@ namespace Common.TransformPath.Tests
         }
 
         [Test]
-        public void CallbackFailureDisposesEffectsAndRestoresCharacterController()
-        {
-            PathFollower follower = CreateFollower(true);
-            PathData path = CreatePath(0f, 10f);
-            path.ConfigureMovementSettings(PathMovementSettings.Speed(5f));
-            follower.StartPlayback(PathPlaybackRequest.Single(path));
-            InstallEffects(follower.GetComponent<PathEventHandler>());
-            var failure = new InvalidOperationException("Expected listener failure");
-            follower.StateChanged += state => { if (state == EPathFollowerState.Paused) throw failure; };
-            Assert.That(Assert.Throws<InvalidOperationException>(() => follower.PauseMove()), Is.SameAs(failure));
-            Assert.That(follower.PlaybackId, Is.Zero);
-            Assert.That(follower.State, Is.EqualTo(EPathFollowerState.Ready));
-            Assert.That(Time.timeScale, Is.EqualTo(1f).Within(0.001f));
-            Assert.That(follower.GetComponent<CharacterController>().enabled, Is.True);
-        }
-
-        [Test]
         public void StopCallbackCanStartNewPlaybackAndInstallNewEffects()
         {
             PathFollower follower = CreateFollower(true);

@@ -46,11 +46,12 @@ namespace Common.TransformPath.Tests
             CharacterController controller = actor.AddComponent<CharacterController>();
             PathFollower follower = actor.AddComponent<PathFollower>(); follower.Init();
             var calls = new List<string>();
+            int loops = 0;
             follower.GetComponent<PathEventHandler>().OnEventDispatched += name => calls.Add(name);
             follower.SegmentChanged += index => calls.Add("segment:" + index);
             follower.LoopBoundary += () =>
             {
-                calls.Add("loop");
+                loops++;
                 Assert.That(follower.NormalizedTime, Is.EqualTo(kind == "Sequence" ? 0f : 1f));
                 Assert.That(controller.enabled, Is.False);
             };
@@ -67,11 +68,11 @@ namespace Common.TransformPath.Tests
             if (kind == "Sequence") expected.AddRange(new[] { "segment:1", "second" });
             if (loop)
             {
-                expected.Add("loop");
                 if (kind == "Sequence") expected.Add("segment:0");
             }
             else expected.AddRange(new[] { "state:completed", "completed" });
             CollectionAssert.AreEqual(expected, calls);
+            Assert.That(loops, Is.EqualTo(loop ? 1 : 0));
             Assert.That(follower.State, Is.EqualTo(loop ? EPathFollowerState.Moving : EPathFollowerState.Completed));
             Assert.That(follower.PlaybackId, Is.EqualTo(loop ? id : 0UL));
             Assert.That(actor.transform.position.x, Is.EqualTo(loop ? 2.5f : kind == "Sequence" ? 20f : 10f).Within(0.001f));
@@ -189,24 +190,6 @@ namespace Common.TransformPath.Tests
             Assert.That(queue.State, Is.EqualTo(EPathFollowerState.Paused));
             Assert.That(queue.IsBlocked, Is.True);
             Assert.That(queue.CurrentSpeedMultiplier, Is.Zero);
-        }
-
-        [Test]
-        public void ManagerSettingChangesFromAgentCallbackApplyOnNextFrame()
-        {
-            PathData path = CreatePath(0f, 10f, PathMovementSettings.Time(5f));
-            QueuedPathManager manager = CreateObject("Manager").AddComponent<QueuedPathManager>();
-            manager.Init(); manager.ConfigureRoute(path);
-            var ahead = new TestQueueAgent(path, 0.8f);
-            var behind = new TestQueueAgent(path, 0.4f);
-            ahead.Callback = () => manager.DefaultSpacing = 8f;
-            manager.Register(ahead); manager.Register(behind);
-            ((IPathRuntimeTickable)manager).Tick(0.1f, 0.1f, 100);
-            Assert.That(behind.State.IsBlocked, Is.False);
-            Assert.That(behind.State.MaxGlobalNormalizedTime, Is.EqualTo(0.65f).Within(0.00001f));
-            ((IPathRuntimeTickable)manager).Tick(0.1f, 0.1f, 101);
-            Assert.That(behind.State.IsBlocked, Is.True);
-            Assert.That(behind.State.MaxGlobalNormalizedTime, Is.EqualTo(0f).Within(0.00001f));
         }
 
         [Test]

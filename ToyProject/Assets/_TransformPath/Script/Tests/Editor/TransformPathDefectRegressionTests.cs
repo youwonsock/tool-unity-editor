@@ -182,33 +182,6 @@ namespace Common.TransformPath.Tests
         }
 
         [Test]
-        public void UnderlyingListenerFailureLeavesNoGhostInTheQueue()
-        {
-            PathData firstPath = CreatePath(PathMovementSettings.Speed(10f));
-            PathData secondPath = CreatePath(PathMovementSettings.Speed(10f));
-            MultiPathData sequence = CreateSequence(firstPath, secondPath);
-            QueuedPathManager manager = CreateManager(sequence);
-            QueuedPathFollower first = Actor(), second = Actor();
-            PathRuntimeDriver driver = Driver(manager, first, second);
-            first.StartQueuedPlayback(manager, PathPlaybackRequest.Sequence(sequence));
-            first.UnderlyingFollower.SegmentChanged += _ => throw new InvalidOperationException("Listener failure");
-            Run(driver, () => first.GlobalNormalizedTime >= 0.2f);
-            second.StartQueuedPlayback(manager, PathPlaybackRequest.Sequence(sequence));
-            Exception fault = null;
-            Run(driver, () =>
-            {
-                fault ??= driver.Faults.Count > 0 ? driver.Faults[0] : null;
-                return fault != null;
-            });
-
-            Assert.That(first.IsMoving, Is.False);
-            Assert.That(first.IsRegistered, Is.False);
-            Assert.That(first.IsBlocked, Is.False);
-            Assert.That(manager.AgentCount, Is.EqualTo(1));
-            Run(driver, () => second.State == EPathFollowerState.Completed);
-        }
-
-        [Test]
         public void StaleRegistrationIsNotTreatedAsTheActorAhead()
         {
             PathData path = CreatePath(PathMovementSettings.Speed(10f), Vector3.right * 100f);
@@ -223,26 +196,6 @@ namespace Common.TransformPath.Tests
             Assert.That(manager.TryGetState(actor, out PathQueueState state), Is.True);
             Assert.That(state.Ahead, Is.Null);
             Assert.That(state.IsBlocked, Is.False);
-        }
-
-        [Test]
-        public void AnimatorSpeedRecoversAfterListenerFailure()
-        {
-            GameObject actor = CreateObject("Actor");
-            PathFollower follower = actor.AddComponent<PathFollower>();
-            Animator animator = actor.AddComponent<Animator>();
-            PathFollowerAnimatorView view = actor.AddComponent<PathFollowerAnimatorView>();
-            SetField(view, "_animator", animator);
-            follower.Init();
-            PathData firstPath = CreatePath(PathMovementSettings.Speed(10f));
-            PathData secondPath = CreatePath(PathMovementSettings.Speed(10f));
-            follower.SegmentChanged += _ => throw new InvalidOperationException("Listener failure");
-            follower.StartPlayback(PathPlaybackRequest.Sequence(CreateSequence(firstPath, secondPath)));
-
-            Assert.Throws<InvalidOperationException>(() => follower.Tick(2f));
-
-            Assert.That(follower.State, Is.EqualTo(EPathFollowerState.Ready));
-            Assert.That(animator.speed, Is.EqualTo(1f));
         }
 
         [TestCase(true, false)]

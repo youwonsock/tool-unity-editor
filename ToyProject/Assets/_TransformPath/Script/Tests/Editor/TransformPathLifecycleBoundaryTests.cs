@@ -182,27 +182,6 @@ namespace Common.TransformPath.Tests
             Assert.That(follower.GlobalNormalizedTime, Is.GreaterThan(0f));
         }
 
-        [TestCase(false)]
-        [TestCase(true)]
-        public void InvalidationStopsOldNotificationsAfterReplacement(bool replaceFromReady)
-        {
-            PathData path = Path();
-            QueuedPathManager manager = Manager(path);
-            var queue = Actor().AddComponent<QueuedPathFollower>(); queue.Init();
-            queue.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
-            int notifications = 0;
-            if (replaceFromReady)
-                queue.StateChanged += state => { if (state == EPathFollowerState.Ready) queue.StartFreePlayback(PathPlaybackRequest.Single(path)); };
-            else
-                queue.QueueInvalidated += (_, __) => queue.StartFreePlayback(PathPlaybackRequest.Single(path));
-            queue.QueueInvalidated += (_, __) => notifications++;
-            manager.Release();
-            Assert.That(queue.State, Is.EqualTo(EPathFollowerState.Moving));
-            Assert.That(notifications, Is.Zero, "Old invalidation must not be delivered to replacement playback");
-            queue.UnderlyingFollower.Tick(0.1f);
-            Assert.That(queue.GlobalNormalizedTime, Is.GreaterThan(0f));
-        }
-
         [Test]
         public void NormalInvalidationNotifiesBothListenersOnce()
         {

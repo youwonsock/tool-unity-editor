@@ -118,6 +118,10 @@ namespace Common.TransformPath
         void ReleaseQueueConstraint(PathQueueRegistration registration);
     }
 
+    /// <summary>
+    /// Called from inside the manager's work. An implementation must not issue
+    /// queue commands from these members.
+    /// </summary>
     public interface IQueuedPathAgent
     {
         ulong PlaybackId { get; }

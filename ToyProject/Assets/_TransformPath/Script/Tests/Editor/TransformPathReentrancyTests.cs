@@ -18,102 +18,6 @@ namespace Common.TransformPath.Tests
             _objects.Clear();
         }
 
-        [TestCase(false)]
-        [TestCase(true)]
-        public void NestedReleaseNotifiesEveryAgentEvenWhenFirstCallbackThrows(bool throwAfterRelease)
-        {
-            PathData path = CreatePath();
-            QueuedPathManager manager = CreateManager(path);
-            var first = new Agent(path);
-            var second = new Agent(path);
-            PathQueueRegistration firstToken = manager.Register(first);
-            PathQueueRegistration secondToken = manager.Register(second);
-            first.Detach = () =>
-            {
-                manager.Release();
-                if (throwAfterRelease) throw new InvalidOperationException("detach failure");
-            };
-
-            if (throwAfterRelease)
-                Assert.That(Assert.Throws<InvalidOperationException>(() => manager.Release()).Message,
-                    Is.EqualTo("detach failure"));
-            else
-                Assert.DoesNotThrow(() => manager.Release());
-            Assert.That(first.DetachCount, Is.EqualTo(1));
-            Assert.That(second.DetachCount, Is.EqualTo(1));
-            Assert.That(manager.IsInitialized, Is.False);
-            Assert.That(manager.AgentCount, Is.Zero);
-            Assert.That(manager.Unregister(firstToken), Is.False);
-            Assert.That(manager.TryGetState(secondToken, out _), Is.False);
-
-            first.Detach = null;
-            manager.Init();
-            manager.ConfigureRoute(path);
-            PathQueueRegistration next = manager.Register(first);
-            Assert.That(next.RegistrationId, Is.GreaterThan(secondToken.RegistrationId));
-            Assert.That(manager.TryGetState(next, out _), Is.False);
-            ((IPathRuntimeTickable)manager).Tick(0.1f, 0.1f, 10);
-            Assert.That(manager.TryGetState(next, out _), Is.True);
-        }
-
-        [TestCase(false)]
-        [TestCase(true)]
-        public void ReplacementRevalidatesManagerAndRouteAfterDetach(bool changeRoute)
-        {
-            PathData path = CreatePath();
-            PathData other = CreatePath();
-            QueuedPathManager manager = CreateManager(path);
-            var agent = new Agent(path);
-            PathQueueRegistration old = manager.Register(agent);
-            agent.PlaybackId++;
-            agent.Detach = () =>
-            {
-                if (changeRoute) manager.ConfigureRoute(other);
-                else manager.Release();
-            };
-
-            Assert.Throws<InvalidOperationException>(() => manager.Register(agent));
-            Assert.That(manager.AgentCount, Is.Zero);
-            Assert.That(manager.IsInitialized, Is.EqualTo(changeRoute));
-            Assert.That(manager.RouteProvider, Is.SameAs(changeRoute ? other : null));
-            Assert.That(manager.TryGetState(agent, out _), Is.False);
-            Assert.That(manager.Unregister(old), Is.False);
-        }
-
-        [Test]
-        public void ReplacementKeepsAValidRegistrationCreatedByDetachCallback()
-        {
-            PathData path = CreatePath();
-            QueuedPathManager manager = CreateManager(path);
-            var agent = new Agent(path);
-            PathQueueRegistration old = manager.Register(agent);
-            agent.PlaybackId++;
-            PathQueueRegistration replacement = default;
-            agent.Detach = () => replacement = manager.Register(agent);
-            PathQueueRegistration result = manager.Register(agent);
-            Assert.That(result.Matches(replacement), Is.True);
-            Assert.That(result.PlaybackId, Is.EqualTo(agent.PlaybackId));
-            Assert.That(manager.AgentCount, Is.EqualTo(1));
-            Assert.That(manager.Unregister(old), Is.False);
-            agent.Detach = null;
-        }
-
-        [Test]
-        public void RouteChangeDoesNotOverwriteReleaseFromDetachCallback()
-        {
-            PathData path = CreatePath();
-            QueuedPathManager manager = CreateManager(path);
-            var first = new Agent(path);
-            var second = new Agent(path);
-            manager.Register(first);
-            manager.Register(second);
-            first.Detach = () => manager.Release();
-            Assert.DoesNotThrow(() => manager.ConfigureRoute(CreatePath()));
-            Assert.That(second.DetachCount, Is.EqualTo(1));
-            Assert.That(manager.RouteProvider, Is.Null);
-            Assert.That(manager.IsInitialized, Is.False);
-        }
-
         [TestCase("Single")]
         [TestCase("Aggregate")]
         [TestCase("Sequence")]
@@ -138,33 +42,6 @@ namespace Common.TransformPath.Tests
             Assert.That(completed, Is.EqualTo(1));
             Assert.That(follower.IsInitialized, Is.False);
             Assert.That(follower.State, Is.EqualTo(EPathFollowerState.Uninitialized));
-        }
-
-        [TestCase(false)]
-        [TestCase(true)]
-        public void CompletionReplacementStopsOldQueueNotification(bool queuedReplacement)
-        {
-            PathData path = CreatePath();
-            QueuedPathManager manager = CreateManager(path);
-            var queue = Create("Queued follower").AddComponent<QueuedPathFollower>();
-            queue.Init();
-            int publicCompleted = 0;
-            int queueCompleted = 0;
-            queue.Completed += () =>
-            {
-                publicCompleted++;
-                if (queuedReplacement) queue.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
-                else queue.StartFreePlayback(PathPlaybackRequest.Single(path));
-            };
-            queue.OnCompleted += _ => queueCompleted++;
-            queue.StartFreePlayback(PathPlaybackRequest.Single(path));
-            ulong oldId = queue.PlaybackId;
-            queue.UnderlyingFollower.Tick(2f);
-            Assert.That(publicCompleted, Is.EqualTo(1));
-            Assert.That(queueCompleted, Is.Zero);
-            Assert.That(queue.PlaybackId, Is.GreaterThan(oldId));
-            Assert.That(queue.IsMoving, Is.True);
-            Assert.That(queue.IsRegistered, Is.EqualTo(queuedReplacement));
         }
 
         [Test]

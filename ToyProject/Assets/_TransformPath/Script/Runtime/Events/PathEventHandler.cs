@@ -16,7 +16,6 @@ namespace Common.TransformPath
         private IPathFollower _boundFollower;
         private bool _isInitialized;
         private readonly PathScalarAdjustment _scalarAdjustment = new PathScalarAdjustment();
-        private ulong _eventBatchId;
         private PathListeners<Action<string>> _onEventDispatched;
         private bool _runtimeDriverRegistered;
         private int _currentFrameId;
@@ -119,31 +118,20 @@ namespace Common.TransformPath
             if (!_isInitialized)
                 return;
 
-            int frame = frameId;
-            _currentFrameId = frame;
-            UpdateTimeScale(unscaledDeltaTime, frame);
-            _scalarAdjustment.Tick(deltaTime, frame);
-            _scheduler.Advance(deltaTime, frame);
+            using var operation = PathExecutionBoundary.Enter();
+            _currentFrameId = frameId;
+            UpdateTimeScale(unscaledDeltaTime, frameId);
+            _scalarAdjustment.Tick(deltaTime, frameId);
+            _scheduler.Advance(deltaTime, frameId);
 
-            while (_scheduler.TryDequeueDue(frame, out PathEventScheduler.ScheduledEvent item))
+            while (_scheduler.TryDequeueDue(frameId, out PathEventScheduler.ScheduledEvent item))
             {
-                if (item.Follower == null
-                    || item.Follower.PlaybackId != item.PlaybackId
-                    || item.EventBatchId != _eventBatchId)
+                if (item.Follower == null || item.Follower.PlaybackId != item.PlaybackId)
                     continue;
 
-                ulong before = item.Follower.PlaybackId;
-                ulong beforeStateRevision = item.Follower.StateRevision;
-                ulong beforeBatch = _eventBatchId;
-                ProcessEvent(
-                    item.Definition,
-                    item.Follower,
-                    item.ResumeOnly,
-                    before,
-                    item.EventBatchId);
-                if (item.Follower.PlaybackId != before
-                    || item.Follower.StateRevision != beforeStateRevision
-                    || _eventBatchId != beforeBatch)
+                ulong stateRevision = item.Follower.StateRevision;
+                ProcessEvent(item.Definition, item.Follower, item.ResumeOnly);
+                if (item.Follower.StateRevision != stateRevision)
                     break;
             }
         }
@@ -281,18 +269,14 @@ namespace Common.TransformPath
             if (follower == null)
                 throw new ArgumentNullException(nameof(follower));
 
+            using var operation = PathExecutionBoundary.Enter();
             _boundFollower = follower;
             PathEventDefinitionValidator.ValidateDefinition(definition, follower, resumeOnly, new HashSet<PathEventDefinition>());
             _scheduler.Clear();
             ulong playbackId = follower.PlaybackId;
             try
             {
-                ProcessEvent(
-                    definition,
-                    follower,
-                    resumeOnly,
-                    playbackId,
-                    ++_eventBatchId);
+                ProcessEvent(definition, follower, resumeOnly);
             }
             catch
             {
@@ -315,44 +299,24 @@ namespace Common.TransformPath
         private void ProcessEvent(
             PathEventDefinition definition,
             IPathFollower follower,
-            bool resumeOnly,
-            ulong expectedPlaybackId,
-            ulong eventBatchId)
+            bool resumeOnly)
         {
-            if (follower == null || follower.PlaybackId != expectedPlaybackId)
-                return;
-            if (eventBatchId != _eventBatchId)
-                return;
-
             EPathEventIntent intent = PathEventRuntime.ResolveIntent(
                 definition,
                 follower,
                 resumeOnly);
-            ulong callbackStateRevision = follower.StateRevision;
-            if (!DispatchPathEvent(
-                    definition.EventName,
-                    follower,
-                    expectedPlaybackId,
-                    callbackStateRevision,
-                    eventBatchId))
-                return;
+            if (!string.IsNullOrEmpty(definition.EventName))
+            {
+                PathExecutionBoundary.PublishEventReceiver(_receiver, definition.EventName, follower);
+                PathExecutionBoundary.PublishEventName(_onEventDispatched.Invocations, definition.EventName);
+            }
 
             if (intent == EPathEventIntent.Pause)
                 _scalarAdjustment.Cancel();
-            PathCommandReceipt lifecycleReceipt = PathEventRuntime.ApplyLifecycle(
-                intent,
-                follower);
-            if (lifecycleReceipt.PlaybackId != expectedPlaybackId
-                || lifecycleReceipt.StateRevision != follower.StateRevision
-                || follower.PlaybackId != expectedPlaybackId
-                || eventBatchId != _eventBatchId)
-                return;
+            PathEventRuntime.ApplyLifecycle(intent, follower);
 
             if (definition.UseTimeScaleAdjust)
                 StartTimeScale(definition, follower);
-            if (follower.PlaybackId != expectedPlaybackId
-                || eventBatchId != _eventBatchId)
-                return;
 
             if (intent == EPathEventIntent.ChangeValue
                 || intent == EPathEventIntent.Resume)
@@ -369,54 +333,13 @@ namespace Common.TransformPath
                         definition.MoveDurationAdjustCurve);
             }
 
-            if (follower.PlaybackId != expectedPlaybackId
-                || eventBatchId != _eventBatchId)
-                return;
-            EnqueueDelayedEvents(
-                definition,
-                follower,
-                intent == EPathEventIntent.Pause,
-                expectedPlaybackId,
-                eventBatchId);
-        }
-
-        private bool DispatchPathEvent(
-            string eventName,
-            IPathFollower follower,
-            ulong expectedPlaybackId,
-            ulong expectedStateRevision,
-            ulong expectedEventBatchId)
-        {
-            if (string.IsNullOrEmpty(eventName))
-                return true;
-
-            _receiver?.ReceivePathEvent(eventName, follower);
-            if (follower.PlaybackId != expectedPlaybackId
-                || follower.StateRevision != expectedStateRevision
-                || _eventBatchId != expectedEventBatchId)
-                return false;
-
-            Delegate[] listeners = _onEventDispatched.Invocations;
-            if (listeners == null)
-                return true;
-
-            for (int i = 0; i < listeners.Length; i++)
-            {
-                ((Action<string>)listeners[i])(eventName);
-                if (follower.PlaybackId != expectedPlaybackId
-                    || follower.StateRevision != expectedStateRevision
-                    || _eventBatchId != expectedEventBatchId)
-                    return false;
-            }
-            return true;
+            EnqueueDelayedEvents(definition, follower, intent == EPathEventIntent.Pause);
         }
 
         private void EnqueueDelayedEvents(
             PathEventDefinition definition,
             IPathFollower follower,
-            bool pauseEvent,
-            ulong playbackId,
-            ulong eventBatchId)
+            bool pauseEvent)
         {
             IReadOnlyList<PathDelayedEventDefinition> delayed = definition.DelayedEvents;
             for (int i = 0; i < delayed.Count; i++)
@@ -425,18 +348,9 @@ namespace Common.TransformPath
                 bool resumeOnly = pauseEvent && i == 0;
                 if (entry.Delay <= 0f)
                 {
-                    ulong beforePlaybackId = follower.PlaybackId;
-                    ulong beforeStateRevision = follower.StateRevision;
-                    ulong beforeBatch = _eventBatchId;
-                    ProcessEvent(
-                        entry.Definition,
-                        follower,
-                        resumeOnly,
-                        playbackId,
-                        eventBatchId);
-                    if (follower.PlaybackId != beforePlaybackId
-                        || follower.StateRevision != beforeStateRevision
-                        || _eventBatchId != beforeBatch)
+                    ulong stateRevision = follower.StateRevision;
+                    ProcessEvent(entry.Definition, follower, resumeOnly);
+                    if (follower.StateRevision != stateRevision)
                         return;
                     continue;
                 }
@@ -447,8 +361,7 @@ namespace Common.TransformPath
                     entry.Delay,
                     resumeOnly,
                     _currentFrameId > 0 ? _currentFrameId : Time.frameCount,
-                    playbackId,
-                    eventBatchId);
+                    follower.PlaybackId);
             }
         }
 
