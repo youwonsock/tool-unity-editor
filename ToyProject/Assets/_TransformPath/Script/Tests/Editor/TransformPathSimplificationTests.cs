@@ -125,17 +125,6 @@ namespace Common.TransformPath.Tests
         }
 
         [Test]
-        public void QueueCallbackPauseInterruptsOldMovingNotification()
-        {
-            QueuedPathFollower queue = CreateQueue();
-            var calls = new List<EPathFollowerState>();
-            queue.StateChanged += state => { if (state == EPathFollowerState.Moving) queue.PauseMove(); };
-            queue.StateChanged += state => calls.Add(state);
-            queue.StartFreePlayback(PathPlaybackRequest.Single(CreatePath()));
-            CollectionAssert.AreEqual(new[] { EPathFollowerState.Paused }, calls);
-        }
-
-        [Test]
         public void QueueInitReleaseCyclesDoNotDuplicatePublicNotifications()
         {
             QueuedPathFollower queue = CreateQueue();

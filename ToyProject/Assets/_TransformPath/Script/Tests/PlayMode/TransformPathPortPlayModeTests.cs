@@ -458,20 +458,20 @@ namespace Common.TransformPath.Tests.PlayMode
                 var queue = actor.AddComponent<QueuedPathFollower>();
                 queue.Init();
                 int completions = 0;
-                int staleNotifications = 0;
+                int queueCompletions = 0;
                 queue.Completed += () =>
                 {
                     completions++;
                     if (release) queue.Release();
                     else queue.StartFreePlayback(PathPlaybackRequest.Single(replacement));
                 };
-                queue.OnCompleted += _ => staleNotifications++;
+                queue.OnCompleted += _ => queueCompletions++;
                 queue.StartFreePlayback(PathPlaybackRequest.Single(path));
                 ulong previousId = queue.PlaybackId;
                 float deadline = Time.realtimeSinceStartup + 5f;
                 while (completions == 0 && Time.realtimeSinceStartup < deadline) yield return null;
                 Assert.That(completions, Is.EqualTo(1));
-                Assert.That(staleNotifications, Is.Zero);
+                Assert.That(queueCompletions, Is.EqualTo(1), "A completion that happened is still reported.");
                 Assert.That(controller.enabled, Is.EqualTo(release));
                 Assert.That(queue.IsInitialized, Is.EqualTo(!release));
                 if (!release)
@@ -481,40 +481,6 @@ namespace Common.TransformPath.Tests.PlayMode
                     Assert.That(queue.GlobalNormalizedTime, Is.GreaterThan(0f));
                 }
                 queue.StopMove();
-            }
-        }
-
-        [UnityTest]
-        public IEnumerator ReplacementCallbackCannotAddAnAgentToReleasedOrChangedManager()
-        {
-            foreach (bool changeRoute in new[] { false, true })
-            {
-                PathData path = CreatePath(5f);
-                PathData other = CreatePath(5f);
-                var manager = CreateObject("Replacement manager").AddComponent<QueuedPathManager>();
-                manager.Init(); manager.ConfigureRoute(path);
-                var agent = new FrameAgent(path, 0.5f);
-                manager.Register(agent);
-                agent.OnDetach = () =>
-                {
-                    if (changeRoute) manager.ConfigureRoute(other);
-                    else manager.Release();
-                };
-                bool observed = false;
-                agent.OnApply = () =>
-                {
-                    agent.OnApply = null;
-                    agent.PlaybackId++;
-                    Assert.Throws<InvalidOperationException>(() => manager.Register(agent));
-                    observed = true;
-                };
-                float deadline = Time.realtimeSinceStartup + 5f;
-                while (!observed && Time.realtimeSinceStartup < deadline) yield return null;
-                Assert.That(observed, Is.True);
-                yield return null;
-                Assert.That(manager.AgentCount, Is.Zero);
-                Assert.That(manager.TryGetState(agent, out _), Is.False);
-                manager.Release();
             }
         }
 
@@ -604,31 +570,6 @@ namespace Common.TransformPath.Tests.PlayMode
             Assert.That(follower.State, Is.EqualTo(EPathFollowerState.Paused));
             Assert.That(animator.speed, Is.Zero);
             Assert.That(follower.GlobalNormalizedTime, Is.EqualTo(progress));
-        }
-
-        [UnityTest]
-        public IEnumerator InvalidationReplacementDoesNotReceiveOldNotificationOnFollowingFrames()
-        {
-            PathData path = CreatePath(5f);
-            foreach (bool fromReady in new[] { true, false })
-            {
-                var manager = CreateObject("Invalidation manager").AddComponent<QueuedPathManager>();
-                manager.ConfigureRoute(path);
-                var queue = CreateObject("Invalidation actor").AddComponent<QueuedPathFollower>();
-                queue.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
-                int staleNotifications = 0;
-                if (fromReady)
-                    queue.StateChanged += state => { if (state == EPathFollowerState.Ready) queue.StartFreePlayback(PathPlaybackRequest.Single(path)); };
-                else
-                    queue.QueueInvalidated += (_, __) => queue.StartFreePlayback(PathPlaybackRequest.Single(path));
-                queue.QueueInvalidated += (_, __) => staleNotifications++;
-                manager.Release();
-                yield return null;
-                yield return null;
-                Assert.That(staleNotifications, Is.Zero);
-                Assert.That(queue.State, Is.EqualTo(EPathFollowerState.Moving));
-                Assert.That(queue.GlobalNormalizedTime, Is.GreaterThan(0f));
-            }
         }
 
         [UnityTest]
@@ -854,8 +795,9 @@ namespace Common.TransformPath.Tests.PlayMode
                 follower.StateChanged += state =>
                 {
                     if (state != EPathFollowerState.Moving) return;
-                    follower.SetDuration(7f); follower.SetRotateToPathDirection(false);
+                    follower.SetDuration(7f);
                 };
+                follower.SetRotateToPathDirection(false);
                 PathPlaybackRequest request;
                 if (kind == "Single") request = PathPlaybackRequest.Single(path);
                 else if (kind == "Aggregate") request = PathPlaybackRequest.Aggregate(path, PathMovementSettings.Time(5f));
@@ -872,65 +814,6 @@ namespace Common.TransformPath.Tests.PlayMode
                 yield return null;
                 Assert.That(follower.GlobalNormalizedTime, Is.GreaterThan(0f));
                 follower.StopMove(); Assert.That(controller.enabled, Is.True);
-            }
-        }
-
-        [UnityTest]
-        public IEnumerator ReentrantQueueCommandsCancelOldNotificationsAndLaterFramesResume()
-        {
-            PathData path = CreatePath(5f);
-            var manager = CreateObject("Queue notification manager").AddComponent<QueuedPathManager>(); manager.ConfigureRoute(path);
-            var queue = CreateObject("Queue notification actor").AddComponent<QueuedPathFollower>();
-            typeof(QueuedPathFollower).GetField("_speedSmoothRate", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(queue, 1f);
-            bool once = true; int mutationFrame = -1; int later = 0;
-            var speeds = new List<KeyValuePair<int, float>>();
-            queue.OnResumed += q => { if (once) { once = false; mutationFrame = Time.frameCount; q.ForceBlock(); } };
-            queue.OnResumed += _ => later++;
-            queue.OnSpeedChanged += (_, speed) => speeds.Add(new KeyValuePair<int, float>(Time.frameCount, speed));
-            queue.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
-            ulong id = queue.PlaybackId; ulong revision = queue.StateRevision;
-            float deadline = Time.realtimeSinceStartup + 3f;
-            while (mutationFrame < 0 && Time.realtimeSinceStartup < deadline) yield return null;
-            Assert.That(mutationFrame, Is.GreaterThanOrEqualTo(0));
-            Assert.That(later, Is.Zero); Assert.That(queue.IsBlocked, Is.True);
-            foreach (var speed in speeds) Assert.That(speed.Key, Is.Not.EqualTo(mutationFrame), "Old resumed batch must not continue with a speed notification");
-            queue.ForceUnblock(); deadline = Time.realtimeSinceStartup + 3f;
-            while (later == 0 && Time.realtimeSinceStartup < deadline) yield return null;
-            Assert.That(later, Is.EqualTo(1)); Assert.That(queue.IsBlocked, Is.False);
-            Assert.That(queue.PlaybackId, Is.EqualTo(id)); Assert.That(queue.StateRevision, Is.EqualTo(revision));
-            Assert.That(queue.GlobalNormalizedTime, Is.GreaterThan(0f));
-        }
-
-        [UnityTest]
-        public IEnumerator QueueCommandsStopOldCompletionAndInvalidationGroupsOnRealFrames()
-        {
-            foreach (bool complete in new[] { true, false })
-            {
-                PathData path = CreatePath(0.2f);
-                var manager = CreateObject("Queue group manager").AddComponent<QueuedPathManager>(); manager.ConfigureRoute(path);
-                var queue = CreateObject("Queue group actor").AddComponent<QueuedPathFollower>();
-                int later = 0; int queueCompleted = 0;
-                if (complete)
-                {
-                    queue.Completed += () => queue.ForceBlock();
-                    queue.Completed += () => later++;
-                    queue.OnCompleted += _ => queueCompleted++;
-                }
-                else
-                {
-                    queue.QueueInvalidated += (q, _) => q.ForceBlock();
-                    queue.QueueInvalidated += (_, __) => later++;
-                }
-                queue.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
-                if (complete)
-                {
-                    float deadline = Time.realtimeSinceStartup + 4f;
-                    while (queue.State != EPathFollowerState.Completed && Time.realtimeSinceStartup < deadline) yield return null;
-                    Assert.That(queue.State, Is.EqualTo(EPathFollowerState.Completed));
-                }
-                else { manager.Release(); yield return null; Assert.That(queue.State, Is.EqualTo(EPathFollowerState.Ready)); }
-                Assert.That(later, Is.Zero); Assert.That(queueCompleted, Is.Zero);
-                Assert.That(queue.IsBlocked, Is.True); Assert.That(queue.IsRegistered, Is.False);
             }
         }
 

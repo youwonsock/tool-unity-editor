@@ -50,9 +50,6 @@ namespace Common.TransformPath
         private float _requestedMaxGlobalNormalizedTime = 1f;
         private bool _runtimeDriverRegistered;
         private bool _suppressDetachStop;
-        // Queue commands can change notification meaning without changing the
-        // underlying follower's PlaybackId or public StateRevision.
-        private ulong _notificationRevision;
         private PathListeners<Action<QueuedPathFollower>> _onBlocked;
         private PathListeners<Action<QueuedPathFollower>> _onResumed;
         private PathListeners<Action<QueuedPathFollower>> _onCompleted;
@@ -194,6 +191,7 @@ namespace Common.TransformPath
                     ? default(PathCommandReceipt)
                     : _pathFollower.Init();
 
+            using var operation = PathExecutionBoundary.Enter();
             if (_pathFollower == null)
                 TryGetComponent(out _pathFollower);
             if (_pathFollower == null)
@@ -203,16 +201,14 @@ namespace Common.TransformPath
             if (_manager == null)
                 _manager = GetComponentInParent<QueuedPathManager>();
 
-            _pathFollower.StateChanged -= HandleUnderlyingStateChanged;
-            _pathFollower.StateChanged += HandleUnderlyingStateChanged;
-            _pathFollower.SegmentChanged -= HandleUnderlyingSegmentChanged;
-            _pathFollower.SegmentChanged += HandleUnderlyingSegmentChanged;
-            _pathFollower.Completed -= HandleUnderlyingCompleted;
-            _pathFollower.Completed += HandleUnderlyingCompleted;
+            _pathFollower.ObservedStateChanged -= HandleUnderlyingStateChanged;
+            _pathFollower.ObservedStateChanged += HandleUnderlyingStateChanged;
+            _pathFollower.ObservedSegmentChanged -= HandleUnderlyingSegmentChanged;
+            _pathFollower.ObservedSegmentChanged += HandleUnderlyingSegmentChanged;
+            _pathFollower.ObservedCompleted -= HandleUnderlyingCompleted;
+            _pathFollower.ObservedCompleted += HandleUnderlyingCompleted;
             _pathFollower.LoopBoundary -= HandleUnderlyingLoopBoundary;
             _pathFollower.LoopBoundary += HandleUnderlyingLoopBoundary;
-            _pathFollower.PlaybackAborted -= HandleUnderlyingPlaybackAborted;
-            _pathFollower.PlaybackAborted += HandleUnderlyingPlaybackAborted;
             PathCommandReceipt receipt = _pathFollower.Init();
             _pathFollower.SetEventTarget(this);
             _isInitialized = true;
@@ -224,24 +220,16 @@ namespace Common.TransformPath
             if (!_isInitialized && !_queue.IsRegistered)
                 return default(PathCommandReceipt);
 
-            _notificationRevision++;
-            // Registered releases already stop through the detach callback.
-            // Stop explicitly so its receipt can protect a replacement before
-            // unsubscribing the facade or releasing the underlying follower.
+            using var operation = PathExecutionBoundary.Enter();
             if (_queue.IsRegistered && _pathFollower != null)
-            {
-                PathCommandReceipt stopReceipt = _pathFollower.StopMove();
-                if (PlaybackId != stopReceipt.PlaybackId)
-                    return stopReceipt;
-            }
+                _pathFollower.StopMove();
             UnregisterFromManager();
             if (_pathFollower != null)
             {
-                _pathFollower.StateChanged -= HandleUnderlyingStateChanged;
-                _pathFollower.SegmentChanged -= HandleUnderlyingSegmentChanged;
-                _pathFollower.Completed -= HandleUnderlyingCompleted;
+                _pathFollower.ObservedStateChanged -= HandleUnderlyingStateChanged;
+                _pathFollower.ObservedSegmentChanged -= HandleUnderlyingSegmentChanged;
+                _pathFollower.ObservedCompleted -= HandleUnderlyingCompleted;
                 _pathFollower.LoopBoundary -= HandleUnderlyingLoopBoundary;
-                _pathFollower.PlaybackAborted -= HandleUnderlyingPlaybackAborted;
             }
             _isInitialized = false;
             _managerState = null;
@@ -312,6 +300,7 @@ namespace Common.TransformPath
         {
             if (!_isInitialized || _pathFollower == null || !_pathFollower.IsMoving)
                 return;
+            using var operation = PathExecutionBoundary.Enter();
             if (_queueParticipationMode == EQueueParticipationMode.Queued && !TryRegisterWithManager())
                 return;
 
@@ -367,6 +356,7 @@ namespace Common.TransformPath
             PathPlaybackRequest request,
             float maxGlobalNormalizedTime = 1f)
         {
+            using var operation = PathExecutionBoundary.Enter();
             PathPlaybackSession session = PrepareRequestForManager(manager, request);
             if (manager.RouteProvider == null)
                 manager.ConfigureRoute(request.Provider);
@@ -380,15 +370,8 @@ namespace Common.TransformPath
             _requestedMaxGlobalNormalizedTime = Mathf.Clamp01(maxGlobalNormalizedTime);
 
             PathCommandReceipt receipt = _pathFollower.StartPreparedPlayback(request, session);
-            if (!receipt.Changed)
-                return receipt;
             // Replacing an already-moving playback does not emit StateChanged.
-            // Use the same registration path, only if the requested participation
-            // is still current after callbacks (Pause and Detach also win).
-            if (PlaybackId == receipt.PlaybackId && IsMoving
-                && _queueParticipationMode == EQueueParticipationMode.Queued
-                && ReferenceEquals(_activeManager, manager)
-                && !TryRegisterWithManager())
+            if (receipt.Changed && IsMoving && !TryRegisterWithManager())
                 throw new InvalidOperationException(
                     "The playback could not acquire its queue constraint ownership.");
             return receipt;
@@ -396,6 +379,7 @@ namespace Common.TransformPath
 
         public PathCommandReceipt StartFreePlayback(PathPlaybackRequest request)
         {
+            using var operation = PathExecutionBoundary.Enter();
             if (!_isInitialized)
                 Init();
             if (!_isInitialized || _pathFollower == null)
@@ -405,23 +389,16 @@ namespace Common.TransformPath
             _queueParticipationMode = EQueueParticipationMode.Detached;
             _activeManager = null;
             _requestedMaxGlobalNormalizedTime = 1f;
-            // Prepare free-playback state before notifications can run a newer
-            // command. There is no old Start postprocessing after the callback.
             ResetConstraintState();
             return _pathFollower.StartPreparedPlayback(request, session);
         }
 
         public PathCommandReceipt StopMove()
         {
-            PathQueueRegistration registration = _queue.Registration;
+            using var operation = PathExecutionBoundary.Enter();
             PathCommandReceipt receipt = _pathFollower == null
                 ? default(PathCommandReceipt)
                 : _pathFollower.StopMove();
-            // Ready callbacks may start another playback and acquire a new
-            // registration. The old command must not reset that execution.
-            if (PlaybackId != receipt.PlaybackId
-                || (_queue.IsRegistered && !registration.Matches(_queue.Registration)))
-                return receipt;
             UnregisterFromManager(EPathQueueDetachReason.Stopped);
             _queueParticipationMode = EQueueParticipationMode.Detached;
             _activeManager = null;
@@ -453,7 +430,6 @@ namespace Common.TransformPath
 
         public void ForceBlock()
         {
-            _notificationRevision++;
             _queue.ManualBlock = true;
             _queue.ResumeDelayRemaining = _resumeMovementDelay;
             _queue.IsBlocked = true;
@@ -464,7 +440,6 @@ namespace Common.TransformPath
 
         public void ForceUnblock()
         {
-            _notificationRevision++;
             _queue.ManualBlock = false;
             _queue.ResumeDelayRemaining = _resumeMovementDelay;
             ApplyCurrentConstraint();
@@ -505,7 +480,6 @@ namespace Common.TransformPath
                 || CurrentProvider == null || state.RouteRevision != CurrentProvider.Revision
                 || (_managerState.HasValue && state.FrameId < _managerState.Value.FrameId))
                 return;
-            _notificationRevision++;
             _managerState = state;
             ApplyCurrentConstraint();
         }
@@ -518,7 +492,6 @@ namespace Common.TransformPath
                 || !registration.Matches(_queue.Registration))
                 return;
 
-            _notificationRevision++;
             _queue.Forget(registration);
             if (_pathFollower is IPathConstraintTarget constraintTarget)
                 constraintTarget.ReleaseQueueConstraint(registration);
@@ -542,15 +515,10 @@ namespace Common.TransformPath
                 && _pathFollower != null
                 && _pathFollower.State == EPathFollowerState.Moving)
             {
-                ulong notificationRevision = _notificationRevision;
-                PathCommandReceipt receipt = _pathFollower.StopMove();
-                if (PlaybackId != receipt.PlaybackId || StateRevision != receipt.StateRevision
-                    || _notificationRevision != notificationRevision)
-                    return;
+                _pathFollower.StopMove();
             }
             if (notifyInvalidation)
-                InvokeCallbacks(_queueInvalidated.Invocations, (this, reason),
-                    (callback, args) => ((Action<QueuedPathFollower, EPathQueueDetachReason>)callback)(args.Item1, args.Item2));
+                PathExecutionBoundary.PublishQueueInvalidated(_queueInvalidated.Invocations, this, reason);
         }
 
         #endregion
@@ -623,8 +591,6 @@ namespace Common.TransformPath
 
         private void HandleUnderlyingStateChanged(EPathFollowerState state)
         {
-            ulong playbackId = PlaybackId;
-            ulong stateRevision = StateRevision;
             if (state == EPathFollowerState.Moving)
             {
                 if (_queueParticipationMode == EQueueParticipationMode.Queued)
@@ -650,21 +616,18 @@ namespace Common.TransformPath
                 UpdateAnimator();
             }
 
-            if (PlaybackId != playbackId || StateRevision != stateRevision || State != state)
-                return;
-            InvokeCallbacks(_stateChanged.Invocations, state,
-                (callback, value) => ((Action<EPathFollowerState>)callback)(value));
+            // Registering can refuse the start and stop the playback again.
+            if (State == state)
+                PathExecutionBoundary.PublishState(_stateChanged.Invocations, state);
         }
 
         private void HandleUnderlyingSegmentChanged(int segmentIndex)
         {
-            InvokeCallbacks(_segmentChanged.Invocations, segmentIndex,
-                (callback, value) => ((Action<int>)callback)(value));
+            PathExecutionBoundary.PublishSegment(_segmentChanged.Invocations, segmentIndex);
         }
 
         private void ApplyPausedState()
         {
-            _notificationRevision++;
             if (_queueParticipationMode == EQueueParticipationMode.Queued)
                 UnregisterFromManager(EPathQueueDetachReason.Paused);
             _queue.IsBlocked = true;
@@ -691,28 +654,18 @@ namespace Common.TransformPath
             TryRegisterWithManager();
         }
 
-        private void HandleUnderlyingPlaybackAborted()
-        {
-            UnregisterFromManager();
-            _queue.IsBlocked = false;
-            _queue.SpeedMultiplier = 1f;
-            UpdateAnimator();
-        }
-
         private void HandleUnderlyingCompleted()
         {
             UnregisterFromManager(EPathQueueDetachReason.Completed);
             ResetConstraintState();
             // Forward the underlying playback lifecycle event as well as the
             // queue-specific callback.
-            if (!InvokeCallbacks(_completed.Invocations, 0, (callback, _) => ((Action)callback)()))
-                return;
-            InvokeCallbacks(_onCompleted.Invocations, this, InvokeQueueCallback);
+            PathExecutionBoundary.PublishPlain(_completed.Invocations);
+            PathExecutionBoundary.PublishQueue(_onCompleted.Invocations, this);
         }
 
         private void ResetConstraintState()
         {
-            _notificationRevision++;
             _queue.ManualBlock = false;
             _queue.IsBlocked = false;
             _managerState = null;
@@ -756,7 +709,6 @@ namespace Common.TransformPath
             if (!receipt.Changed || !_queue.IsRegistered)
                 return receipt;
 
-            _notificationRevision++;
             _managerState = null;
             _queue.IsBlocked = true;
             _queue.SpeedMultiplier = 0f;
@@ -767,7 +719,6 @@ namespace Common.TransformPath
 
         private void AwaitFirstQueueResult()
         {
-            _notificationRevision++;
             _managerState = null;
             _queue.IsBlocked = true;
             _queue.ResumeDelayRemaining = _resumeMovementDelay;
@@ -779,53 +730,14 @@ namespace Common.TransformPath
         private void ReportStateChanges(bool wasBlocked, bool blocked)
         {
             if (blocked != wasBlocked)
-            {
-                if (!InvokeCallbacks(blocked ? _onBlocked.Invocations : _onResumed.Invocations, this, InvokeQueueCallback))
-                    return;
-            }
+                PathExecutionBoundary.PublishQueue(blocked ? _onBlocked.Invocations : _onResumed.Invocations, this);
             if (!Mathf.Approximately(
                     _lastReportedSpeedMultiplier,
                     _queue.SpeedMultiplier))
             {
                 _lastReportedSpeedMultiplier = _queue.SpeedMultiplier;
-                InvokeCallbacks(_onSpeedChanged.Invocations, (this, _queue.SpeedMultiplier),
-                    (callback, args) => ((Action<QueuedPathFollower, float>)callback)(args.Item1, args.Item2));
+                PathExecutionBoundary.PublishQueueSpeed(_onSpeedChanged.Invocations, this, _queue.SpeedMultiplier);
             }
-        }
-
-        private static readonly Action<Delegate, QueuedPathFollower> InvokeQueueCallback =
-            (callback, follower) => ((Action<QueuedPathFollower>)callback)(follower);
-
-        // The value goes through a parameter so that notifying allocates nothing.
-        private bool InvokeCallbacks<T>(
-            Delegate[] callbacks,
-            T value,
-            Action<Delegate, T> invoke)
-        {
-            if (callbacks == null)
-                return true;
-
-            ulong playbackId = PlaybackId;
-            ulong stateRevision = StateRevision;
-            ulong notificationRevision = _notificationRevision;
-            for (int i = 0; i < callbacks.Length; i++)
-            {
-                try
-                {
-                    invoke(callbacks[i], value);
-                }
-                catch
-                {
-                    if (PlaybackId == playbackId)
-                        UnregisterFromManager();
-                    throw;
-                }
-                if (PlaybackId != playbackId
-                    || StateRevision != stateRevision
-                    || _notificationRevision != notificationRevision)
-                    return false;
-            }
-            return true;
         }
 
         private void UpdateAnimator()
@@ -853,7 +765,6 @@ namespace Common.TransformPath
                 UnregisterFromManager(reason);
             else
             {
-                _notificationRevision++;
                 _managerState = null;
                 _queue.IsBlocked = false;
                 HandleDetachedPlayback(reason);

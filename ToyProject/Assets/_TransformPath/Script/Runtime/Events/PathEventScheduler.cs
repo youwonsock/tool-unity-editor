@@ -15,7 +15,6 @@ namespace Common.TransformPath
             public PathEventDefinition Definition;
             public IPathFollower Follower;
             public ulong PlaybackId;
-            public ulong EventBatchId;
             public float RemainingTime;
             public bool ResumeOnly;
             public int StartFrame;
@@ -55,15 +54,13 @@ namespace Common.TransformPath
             float delay,
             bool resumeOnly,
             int startFrame,
-            ulong playbackId,
-            ulong eventBatchId)
+            ulong playbackId)
         {
             _scheduledEvents.Add(new ScheduledEvent
             {
                 Definition = definition,
                 Follower = follower,
                 PlaybackId = playbackId,
-                EventBatchId = eventBatchId,
                 RemainingTime = delay,
                 ResumeOnly = resumeOnly,
                 StartFrame = startFrame,

@@ -57,7 +57,6 @@ namespace Common.TransformPath
         private float _segmentElapsed;
         private float _segmentDistance;
         private float _pendingDeltaTime;
-        private int _playbackRevision;
         private static ulong _nextPlaybackOwnerId;
         private readonly ulong _playbackOwnerId = ++_nextPlaybackOwnerId;
         [NonSerialized] private ulong _nextPlaybackId;
@@ -72,7 +71,6 @@ namespace Common.TransformPath
         private int _queueConstraintFrameId = -1;
         private bool _runtimeDriverRegistered;
         private PathListeners<Action<int>> _segmentChanged;
-        private PathListeners<Action> _loopBoundary;
         private PathListeners<Action<EPathFollowerState>> _stateChanged;
         private PathListeners<Action> _completed;
 
@@ -116,15 +114,12 @@ namespace Common.TransformPath
             add => _segmentChanged.Add(value);
             remove => _segmentChanged.Remove(value);
         }
-        // Listener failures end playback without StateChanged, because a second
-        // public notification could fail again. The queue adapter still has to
-        // give up the ownership of the playback that ended.
-        internal event Action PlaybackAborted;
-        internal event Action LoopBoundary
-        {
-            add => _loopBoundary.Add(value);
-            remove => _loopBoundary.Remove(value);
-        }
+        // The queue adapter reacts inside the operation that changed the state.
+        // Public listeners wait until that operation has returned.
+        internal event Action<EPathFollowerState> ObservedStateChanged;
+        internal event Action<int> ObservedSegmentChanged;
+        internal event Action ObservedCompleted;
+        internal event Action LoopBoundary;
         public event Action Completed
         {
             add => _completed.Add(value);
@@ -141,6 +136,7 @@ namespace Common.TransformPath
             if (_isInitialized)
                 return CreateReceipt(false);
 
+            using var operation = PathExecutionBoundary.Enter();
             if (_pathEventHandler == null)
                 TryGetComponent(out _pathEventHandler);
             if (_animatorView == null)
@@ -154,10 +150,9 @@ namespace Common.TransformPath
 
             _isInitialized = true;
             _state = EPathFollowerState.Ready;
-            _playbackRevision++;
             _stateRevision++;
             PathCommandReceipt receipt = CreateReceipt(true);
-            InvokeStateChanged(_state);
+            NotifyStateChanged(_state);
             return receipt;
         }
 
@@ -166,13 +161,8 @@ namespace Common.TransformPath
             if (!_isInitialized && _playbackSession == null)
                 return CreateReceipt(false);
 
-            PathCommandReceipt stopReceipt = StopMove();
-            if (PlaybackId != 0)
-            {
-                // A StateChanged callback may have started a new playback.
-                // The release that ended the previous playback must not tear it down.
-                return stopReceipt;
-            }
+            using var operation = PathExecutionBoundary.Enter();
+            StopMove();
             _playbackSession = null;
             _isInitialized = false;
             _stateRevision++;
@@ -255,13 +245,13 @@ namespace Common.TransformPath
         {
             if (!_isInitialized || !_isMoving || _playbackSession == null)
                 return;
+            using var operation = PathExecutionBoundary.Enter();
             if (!RefreshProviderSnapshotIfNeeded())
                 return;
 
             if (deltaTime <= 0f)
                 return;
 
-            int tickRevision = _playbackRevision;
             if (_queueBlocked)
             {
                 _pendingDeltaTime = 0f;
@@ -276,17 +266,15 @@ namespace Common.TransformPath
 
             int transitionCount = 0;
             while (remaining > EPSILON
-                && _isMoving
                 && transitionCount < MAX_SEGMENT_TRANSITIONS_PER_TICK)
             {
                 bool transitioned = false;
                 float consumed = _playbackSession.Sequence == null
-                    ? TickSingle(remaining, tickRevision)
-                    : TickSequence(remaining, tickRevision, out transitioned);
+                    ? TickSingle(remaining)
+                    : TickSequence(remaining, out transitioned);
 
-                // Events and completion callbacks can release the session or
-                // replace playback. Check the execution before touching it again.
-                if (!_isMoving || _playbackRevision != tickRevision)
+                // A Pause event or the end of the path stops the tick here.
+                if (!_isMoving)
                     return;
                 if (transitioned)
                     transitionCount++;
@@ -295,8 +283,7 @@ namespace Common.TransformPath
                 remaining -= consumed;
             }
 
-            if (_isMoving
-                && remaining > EPSILON
+            if (remaining > EPSILON
                 && transitionCount >= MAX_SEGMENT_TRANSITIONS_PER_TICK)
                 _pendingDeltaTime = remaining;
 
@@ -309,6 +296,7 @@ namespace Common.TransformPath
         {
             if (playbackId == 0 || PlaybackId != playbackId)
                 return;
+            using var operation = PathExecutionBoundary.Enter();
             try
             {
                 StopMove();
@@ -440,6 +428,7 @@ namespace Common.TransformPath
             if (_state == EPathFollowerState.Uninitialized
                 || _state == EPathFollowerState.Ready)
                 return CreateReceipt(false);
+            using var operation = PathExecutionBoundary.Enter();
             StopPlaybackOnly();
             EndPlayback();
             PathCommandReceipt receipt = CreateReceipt(true);
@@ -456,9 +445,9 @@ namespace Common.TransformPath
             if (!_isMoving)
                 return CreateReceipt(false);
 
+            using var operation = PathExecutionBoundary.Enter();
             _isMoving = false;
             _pendingDeltaTime = 0f;
-            _playbackRevision++;
             _stateRevision++;
             _pathEventHandler?.CancelMovementAdjustments();
             PathCommandReceipt receipt = CreateReceipt(true);
@@ -474,8 +463,8 @@ namespace Common.TransformPath
                 || _state != EPathFollowerState.Paused)
                 return CreateReceipt(false);
 
+            using var operation = PathExecutionBoundary.Enter();
             _isMoving = true;
-            _playbackRevision++;
             _stateRevision++;
             PathCommandReceipt receipt = CreateReceipt(true);
             ApplyAnimatorSpeed(1f);
@@ -532,7 +521,6 @@ namespace Common.TransformPath
             // A changed position owns a new tick boundary, but keeps PlaybackId.
             // Both seek APIs discard the old frame's remaining movement budget.
             _pendingDeltaTime = 0f;
-            _playbackRevision++;
             _queueConstraintFrameId = -1;
             if (_queueConstraintRegistration.IsValid)
                 SetConstraintState(true, 0f, 0f);
@@ -670,6 +658,7 @@ namespace Common.TransformPath
             PathPlaybackSession session,
             bool loop)
         {
+            using var operation = PathExecutionBoundary.Enter();
             if (PlaybackId != 0)
             {
                 _playbackId = 0;
@@ -700,29 +689,22 @@ namespace Common.TransformPath
             session.RestartEventCursor();
             ClearConstraintState();
             _isMoving = true;
-            _playbackRevision++;
             _playbackId = ++_nextPlaybackId;
             _stateRevision++;
             _resourcePlaybackId = _playbackId;
             PathCommandReceipt receipt = CreateReceipt(true);
-            int beginRevision = _playbackRevision;
             TrySuppressCharacterController();
-            // Commit presentation before notifying. Nested commands own any
-            // subsequent change, even when a callback only adjusts movement.
             ApplyAnimatorSpeed(1f);
             SetState(EPathFollowerState.Moving);
-            // Value/rotation settings may change without replacing this start.
-            // Stop, Pause, Seek and replacement playback end its tick boundary.
-            if (_playbackRevision != beginRevision || PlaybackId != receipt.PlaybackId)
-            {
+            // The queue adapter can refuse the start inside SetState.
+            if (_isMoving)
+                ApplyCurrentPosition();
+            else
                 TryRestoreCharacterController();
-                return receipt;
-            }
-            ApplyCurrentPosition();
             return receipt;
         }
 
-        private float TickSingle(float availableTime, int tickRevision)
+        private float TickSingle(float availableTime)
         {
             float multiplier = _queueSpeedMultiplier;
             bool timeBased = _moveType == EPathMoveType.TimeBased;
@@ -758,19 +740,17 @@ namespace Common.TransformPath
 
             _normalizedTime = step.Progress;
             _globalNormalizedTime = _normalizedTime;
-            DispatchEvents(_playbackSession.EventSource, _normalizedTime, tickRevision);
-            if (_playbackRevision != tickRevision)
+            DispatchEvents(_playbackSession.EventSource, _normalizedTime);
+            if (_state != EPathFollowerState.Moving)
                 return step.ConsumedTime;
 
-            if (_queueMaxGlobalNormalizedTime >= 1f && HasReachedSegmentEnd(boundaryPosition)
-                && !TryProcessPlaybackBoundary(tickRevision, out _))
-                return step.ConsumedTime;
+            if (_queueMaxGlobalNormalizedTime >= 1f && HasReachedSegmentEnd(boundaryPosition))
+                TryProcessPlaybackBoundary(out _);
             return Mathf.Max(step.ConsumedTime, EPSILON);
         }
 
         private float TickSequence(
             float availableTime,
-            int tickRevision,
             out bool transitioned)
         {
             transitioned = false;
@@ -825,15 +805,14 @@ namespace Common.TransformPath
                 _normalizedTime));
             DispatchEvents(
                 snapshot.GetEventSource(_currentSegmentIndex),
-                _normalizedTime,
-                tickRevision);
-            if (_playbackRevision != tickRevision)
+                _normalizedTime);
+            if (_state != EPathFollowerState.Moving)
                 return Mathf.Max(consume, EPSILON);
 
             float boundaryProgress = snapshot.GetGlobalProgress(_currentSegmentIndex, 1f);
             bool boundaryAllowed = boundaryProgress <= _queueMaxGlobalNormalizedTime;
             if (boundaryAllowed && HasReachedSegmentEnd(snapshot.GetLength(_currentSegmentIndex)))
-                TryProcessPlaybackBoundary(tickRevision, out transitioned);
+                TryProcessPlaybackBoundary(out transitioned);
 
             return Mathf.Max(consume, EPSILON);
         }
@@ -847,7 +826,7 @@ namespace Common.TransformPath
                 : _segmentDistance >= segmentLength - EPSILON;
         }
 
-        private bool TryProcessPlaybackBoundary(int tickRevision, out bool transitioned)
+        private void TryProcessPlaybackBoundary(out bool transitioned)
         {
             transitioned = false;
             bool sequence = _playbackSession.Sequence != null;
@@ -863,40 +842,36 @@ namespace Common.TransformPath
             if (!hasNextSegment && !_loop)
             {
                 CompletePlayback(source);
-                return true;
+                return;
             }
 
-            if (!ApplyBoundaryPositionAndFlushEvents(source, tickRevision))
-                return false;
+            if (!ApplyBoundaryPositionAndFlushEvents(source))
+                return;
             if (sequence)
             {
-                AdvanceToSegment(hasNextSegment ? _currentSegmentIndex + 1 : 0,
-                    tickRevision, !hasNextSegment);
+                AdvanceToSegment(hasNextSegment ? _currentSegmentIndex + 1 : 0, !hasNextSegment);
                 transitioned = true;
-                return true;
+                return;
             }
 
             // Single/Aggregate notify at the endpoint. Sequence resets its
             // segment before notifying; preserve that observable distinction.
-            InvokeLoopBoundary(tickRevision);
-            if (_playbackRevision != tickRevision)
-                return false;
+            LoopBoundary?.Invoke();
             _segmentElapsed = 0f;
             _segmentDistance = 0f;
             _normalizedTime = 0f;
             _globalNormalizedTime = 0f;
             _playbackSession.RestartEventCursor();
-            return true;
         }
 
-        private bool ApplyBoundaryPositionAndFlushEvents(IPathEventSource source, int tickRevision)
+        private bool ApplyBoundaryPositionAndFlushEvents(IPathEventSource source)
         {
             ApplyCurrentPosition();
-            FlushEvents(source, tickRevision);
-            return _playbackRevision == tickRevision;
+            DispatchEvents(source, 1f);
+            return _state == EPathFollowerState.Moving;
         }
 
-        private void AdvanceToSegment(int index, int tickRevision, bool loopBoundary)
+        private void AdvanceToSegment(int index, bool loopBoundary)
         {
             float previousNominalSpeed = GetCurrentNominalSpeed();
             _currentSegmentIndex = index;
@@ -908,12 +883,9 @@ namespace Common.TransformPath
             ConfigureSequenceSegment(index, previousNominalSpeed, descriptor.PreservePreviousSpeed);
             _playbackSession.RestartEventCursor();
             if (loopBoundary)
-            {
-                InvokeLoopBoundary(tickRevision);
-                if (_playbackRevision != tickRevision)
-                    return;
-            }
-            InvokeSegmentChanged(index, tickRevision);
+                LoopBoundary?.Invoke();
+            ObservedSegmentChanged?.Invoke(index);
+            PathExecutionBoundary.PublishSegment(_segmentChanged.Invocations, index);
         }
 
         private void ConfigureSequenceSegment(
@@ -976,9 +948,7 @@ namespace Common.TransformPath
             _pendingDeltaTime = 0f;
             _normalizedTime = 1f;
             _globalNormalizedTime = 1f;
-            _playbackRevision++;
-            int completionRevision = _playbackRevision;
-            if (!ApplyBoundaryPositionAndFlushEvents(source, completionRevision))
+            if (!ApplyBoundaryPositionAndFlushEvents(source))
             {
                 TryRestoreCharacterController();
                 return;
@@ -986,9 +956,8 @@ namespace Common.TransformPath
             EndPlayback();
             TryRestoreCharacterController();
             SetState(EPathFollowerState.Completed);
-            if (_playbackRevision != completionRevision)
-                return;
-            InvokeCompleted();
+            ObservedCompleted?.Invoke();
+            PathExecutionBoundary.PublishPlain(_completed.Invocations);
         }
 
         private bool RefreshProviderSnapshotIfNeeded()
@@ -1110,8 +1079,7 @@ namespace Common.TransformPath
 
         private void DispatchEvents(
             IPathEventSource source,
-            float progress,
-            int tickRevision)
+            float progress)
         {
             if (_playbackSession == null
                 || source == null)
@@ -1129,14 +1097,9 @@ namespace Common.TransformPath
                 _pathEventHandler?.HandleEvent(
                     entry.Definition,
                     _eventTarget ?? this);
-                if (_playbackRevision != tickRevision)
+                if (_state != EPathFollowerState.Moving)
                     return;
             }
-        }
-
-        private void FlushEvents(IPathEventSource source, int tickRevision)
-        {
-            DispatchEvents(source, 1f, tickRevision);
         }
 
         private void EnsureInitialized()
@@ -1164,7 +1127,6 @@ namespace Common.TransformPath
         {
             _isMoving = false;
             _pendingDeltaTime = 0f;
-            _playbackRevision++;
             ApplyAnimatorSpeed(0f);
         }
 
@@ -1194,11 +1156,6 @@ namespace Common.TransformPath
 
         private void ReleasePlaybackResources(ulong playbackId)
         {
-            // An older playback must not clear effects or constraints installed by
-            // a replacement playback during a callback.
-            if (PlaybackId != 0 && PlaybackId != playbackId)
-                return;
-
             try
             {
                 _pathEventHandler?.CancelPlaybackEffects(playbackId);
@@ -1220,78 +1177,22 @@ namespace Common.TransformPath
             if (_state == state)
                 return;
             _state = state;
-            InvokeStateChanged(state);
+            NotifyStateChanged(state);
+        }
+
+        private void NotifyStateChanged(EPathFollowerState state)
+        {
+            ObservedStateChanged?.Invoke(state);
+            // The queue adapter can stop a start it refuses. Listeners then hear
+            // only the state that stands.
+            if (_state == state)
+                PathExecutionBoundary.PublishState(_stateChanged.Invocations, state);
         }
 
         // Path playback uses 0 for pause and 1 for moving/ready; no stored speed restore.
         private void ApplyAnimatorSpeed(float value)
         {
             _animatorView?.ApplyPlaybackSpeed(value);
-        }
-
-        private void InvokeStateChanged(EPathFollowerState value)
-        {
-            InvokeCallbacks(_stateChanged.Invocations, _playbackRevision, value,
-                (listener, state) => ((Action<EPathFollowerState>)listener)(state));
-        }
-
-        private void InvokeSegmentChanged(int value, int tickRevision)
-        {
-            InvokeCallbacks(_segmentChanged.Invocations, tickRevision, value,
-                (listener, segment) => ((Action<int>)listener)(segment));
-        }
-
-        private void InvokeLoopBoundary(int tickRevision)
-        {
-            InvokeCallbacks(_loopBoundary.Invocations, tickRevision, 0,
-                (listener, _) => ((Action)listener)());
-        }
-
-        private void InvokeCompleted()
-        {
-            InvokeCallbacks(_completed.Invocations, _playbackRevision, 0,
-                (listener, _) => ((Action)listener)());
-        }
-
-        private void InvokeCallbacks<T>(
-            Delegate[] listeners, int revision, T value, Action<Delegate, T> invoke)
-        {
-            if (listeners == null)
-                return;
-
-            ulong playbackId = PlaybackId;
-            ulong stateRevision = StateRevision;
-            for (int i = 0; i < listeners.Length; i++)
-            {
-                try
-                {
-                    invoke(listeners[i], value);
-                }
-                catch
-                {
-                    CleanupAfterCallbackFailure(playbackId);
-                    throw;
-                }
-                if (_playbackRevision != revision
-                    || PlaybackId != playbackId
-                    || StateRevision != stateRevision)
-                    return;
-            }
-        }
-
-        private void CleanupAfterCallbackFailure(ulong failedPlaybackId)
-        {
-            if (failedPlaybackId == 0 || PlaybackId != failedPlaybackId)
-                return;
-
-            StopPlaybackOnly();
-            EndPlayback();
-            ApplyAnimatorSpeed(1f);
-            _state = _isInitialized
-                ? EPathFollowerState.Ready
-                : EPathFollowerState.Uninitialized;
-            TryRestoreCharacterController();
-            PlaybackAborted?.Invoke();
         }
 
         private void TrySuppressCharacterController()

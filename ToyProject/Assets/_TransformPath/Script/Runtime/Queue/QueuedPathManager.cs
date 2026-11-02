@@ -53,13 +53,6 @@ namespace Common.TransformPath
             }
         }
 
-        private struct QueueFrameEntry
-        {
-            public IQueuedPathAgent Agent;
-            public PathQueueRegistration Registration;
-            public float Progress;
-        }
-
         #endregion
 
 
@@ -78,7 +71,6 @@ namespace Common.TransformPath
         [SerializeField] private AnimationCurve _slowdownCurve = null;
 
         private readonly List<QueueEntry> _entries = new List<QueueEntry>(100);
-        private readonly List<QueueFrameEntry> _frameEntries = new List<QueueFrameEntry>(100);
         private readonly List<QueueEntry> _entryPool = new List<QueueEntry>(100);
         private readonly List<QueueEntry> _detachedEntries = new List<QueueEntry>(100);
         private readonly Dictionary<IQueuedPathAgent, int> _indices = new Dictionary<IQueuedPathAgent, int>(100);
@@ -92,7 +84,6 @@ namespace Common.TransformPath
         private int _registrationSequence;
         private ulong _registrationId;
         private bool _runtimeDriverRegistered;
-        private bool _isStopping;
 
         #endregion
 
@@ -174,6 +165,7 @@ namespace Common.TransformPath
 
         public void Release()
         {
+            using var operation = PathExecutionBoundary.Enter();
             Exception firstException = null;
             try
             {
@@ -241,6 +233,7 @@ namespace Common.TransformPath
         {
             if (!_isInitialized || _routeProvider == null)
                 return;
+            using var operation = PathExecutionBoundary.Enter();
             if (!_routeProvider.IsReady)
             {
                 StopAllAgents(EPathQueueDetachReason.ProviderInvalid);
@@ -249,8 +242,6 @@ namespace Common.TransformPath
 
             if (_routeProvider.Revision != _observedRouteRevision)
                 RefreshRouteRevision();
-            if (!_isInitialized || _routeProvider == null)
-                return;
 
             for (int i = 0; i < _entries.Count; i++)
                 _entries[i].Progress = Mathf.Clamp01(_entries[i].Agent.GlobalNormalizedTime);
@@ -259,7 +250,8 @@ namespace Common.TransformPath
             for (int i = 0; i < _entries.Count; i++)
                 _indices[_entries[i].Agent] = i;
 
-            _frameEntries.Clear();
+            float routeLength = Mathf.Max(_routeProvider.PathLength, 0.001f);
+            QueueEntry ahead = null;
             for (int i = 0; i < _entries.Count; i++)
             {
                 QueueEntry entry = _entries[i];
@@ -268,65 +260,36 @@ namespace Common.TransformPath
                 // releases it, but no other agent may wait behind it.
                 if (entry.Agent.PlaybackId != entry.Registration.PlaybackId)
                     continue;
-                _frameEntries.Add(new QueueFrameEntry
-                {
-                    Agent = entry.Agent,
-                    Registration = entry.Registration,
-                    Progress = entry.Progress,
-                });
-            }
-
-            float routeLength = Mathf.Max(_routeProvider.PathLength, 0.001f);
-            // Keep one frame's settings stable when an agent callback edits
-            // the manager. The next tick consumes those changes.
-            float defaultSpacing = _defaultSpacing;
-            bool enableGradualSlowdown = _enableGradualSlowdown;
-            float slowdownStartDistance = _slowdownStartDistance;
-            float minSpeedMultiplier = _minSpeedMultiplier;
-            AnimationCurve slowdownCurve = _slowdownCurve;
-            for (int i = 0; i < _frameEntries.Count; i++)
-            {
-                QueueFrameEntry frameEntry = _frameEntries[i];
-                if (!TryGetCurrentEntry(frameEntry, out _))
-                    continue;
-                IQueuedPathAgent agent = frameEntry.Agent;
-                IQueuedPathAgent ahead = i == 0 ? null : _frameEntries[i - 1].Agent;
-                float progress = frameEntry.Progress;
                 float? distance = ahead == null
                     ? (float?)null
-                    : Mathf.Max(0f, (_frameEntries[i - 1].Progress - progress) * routeLength);
-                PathQueueAgentSettings settings = agent.QueueSettings;
-                float spacing = PathQueueCoordinator.GetSpacing(settings, defaultSpacing);
-                bool revisionBlocked = agent.SnapshotRevision != _routeRevision;
+                    : Mathf.Max(0f, (ahead.Progress - entry.Progress) * routeLength);
+                PathQueueAgentSettings settings = entry.Agent.QueueSettings;
+                float spacing = PathQueueCoordinator.GetSpacing(settings, _defaultSpacing);
+                bool revisionBlocked = entry.Agent.SnapshotRevision != _routeRevision;
                 bool spacingBlocked = distance.HasValue && distance.Value <= spacing;
-                bool blocked = revisionBlocked || spacingBlocked;
                 float multiplier = PathQueueCoordinator.CalculateSpeedMultiplier(
-                    enableGradualSlowdown && settings.EnableGradualSlowdown,
+                    _enableGradualSlowdown && settings.EnableGradualSlowdown,
                     distance,
                     spacing,
-                    slowdownStartDistance,
-                    minSpeedMultiplier,
-                    slowdownCurve);
-                float maxProgress = ahead == null
-                    || !settings.EnableOvertakeProtection
+                    _slowdownStartDistance,
+                    _minSpeedMultiplier,
+                    _slowdownCurve);
+                float maxProgress = ahead == null || !settings.EnableOvertakeProtection
                     ? 1f
-                    : Mathf.Clamp01(_frameEntries[i - 1].Progress - spacing / routeLength);
+                    : Mathf.Clamp01(ahead.Progress - spacing / routeLength);
 
                 PathQueueState state = new PathQueueState(
-                    ahead,
+                    ahead?.Agent,
                     distance,
-                    blocked,
+                    revisionBlocked || spacingBlocked,
                     multiplier,
                     maxProgress,
                     _routeRevision,
-                    frameEntry.Registration.PlaybackId,
+                    entry.Registration.PlaybackId,
                     frameId);
-                // An earlier agent callback may detach or replace this
-                // registration. Contract getters can also invoke user code.
-                if (!TryGetCurrentEntry(frameEntry, out QueueEntry current))
-                    continue;
-                current.State = state;
-                agent.ApplyQueueState(frameEntry.Registration, state);
+                entry.State = state;
+                entry.Agent.ApplyQueueState(entry.Registration, state);
+                ahead = entry;
             }
         }
 
@@ -362,8 +325,8 @@ namespace Common.TransformPath
             if (ReferenceEquals(_routeProvider, provider))
                 return;
 
+            using var operation = PathExecutionBoundary.Enter();
             Exception firstException = null;
-            IPathProvider previousProvider = _routeProvider;
             if (_routeProvider != null)
             {
                 _routeProvider.PathChanged -= HandleRouteChanged;
@@ -375,14 +338,6 @@ namespace Common.TransformPath
                 {
                     firstException = exception;
                 }
-            }
-            // A detach callback can release or reconfigure the manager. Do not
-            // overwrite that newer command with this pending route change.
-            if (!ReferenceEquals(_routeProvider, previousProvider))
-            {
-                if (firstException != null)
-                    throw firstException;
-                return;
             }
             _routeProvider = provider;
             _routeProvider.PathChanged += HandleRouteChanged;
@@ -402,16 +357,13 @@ namespace Common.TransformPath
 
         public PathQueueRegistration Register(IQueuedPathAgent agent)
         {
+            using var operation = PathExecutionBoundary.Enter();
             ValidateRegistration(agent);
-            // A registration created from a callback can arrive after the
-            // provider raised PathChanged but before this manager's next
-            // driver frame.  Consume that revision first so the token and
-            // the next calculation carry the same route identity.
+            // A registration can arrive after the provider raised PathChanged but
+            // before this manager's next driver frame. Consume that revision first
+            // so the token and the next calculation carry the same route identity.
             if (_routeProvider.Revision != _observedRouteRevision)
-            {
                 RefreshRouteRevision();
-                ValidateRegistration(agent);
-            }
             if (_indices.TryGetValue(agent, out int existingIndex))
             {
                 PathQueueRegistration existing =
@@ -423,9 +375,6 @@ namespace Common.TransformPath
                 agent.OnQueueDetached(
                     existing,
                     EPathQueueDetachReason.Replaced);
-                ValidateRegistration(agent);
-                if (_indices.TryGetValue(agent, out int reentrantIndex))
-                    return _entries[reentrantIndex].Registration;
             }
 
             PathQueueRegistration registration = new PathQueueRegistration(
@@ -450,6 +399,7 @@ namespace Common.TransformPath
         {
             if (!registration.IsValid)
                 return false;
+            using var operation = PathExecutionBoundary.Enter();
             int index = FindRegistrationIndex(registration);
             if (index < 0)
                 return false;
@@ -457,9 +407,6 @@ namespace Common.TransformPath
             IQueuedPathAgent removedAgent = removedEntry.Agent;
             PathQueueRegistration removedRegistration = removedEntry.Registration;
             RemoveEntryAt(index);
-            // Remove the entry before notifying the agent. A callback may
-            // register a new execution, and that new token must not be
-            // mistaken for the registration being detached.
             removedAgent.OnQueueDetached(
                 removedRegistration,
                 reason);
@@ -494,8 +441,6 @@ namespace Common.TransformPath
         {
             if (!_isInitialized)
                 throw new InvalidOperationException("QueuedPathManager is not initialized.");
-            if (_isStopping)
-                throw new InvalidOperationException("QueuedPathManager is releasing its registrations.");
             if (agent == null)
                 throw new ArgumentNullException(nameof(agent));
             if (_routeProvider == null || !ReferenceEquals(agent.QueueProvider, _routeProvider))
@@ -518,15 +463,12 @@ namespace Common.TransformPath
 
         private void RefreshRouteRevision()
         {
-            IPathProvider provider = _routeProvider;
             bool sameStructure = IsSameRouteStructure();
             _routeRevision = _routeProvider.Revision;
             _observedRouteRevision = _routeProvider.Revision;
             if (!sameStructure)
             {
                 StopAllAgents();
-                if (!ReferenceEquals(_routeProvider, provider))
-                    return;
                 CaptureRouteStructure();
             }
         }
@@ -579,38 +521,25 @@ namespace Common.TransformPath
         private void StopAllAgents(
             EPathQueueDetachReason reason = EPathQueueDetachReason.ManagerReleased)
         {
-            // The outer batch already owns every removed registration. A nested
-            // Release/ConfigureRoute must not clear its pending notifications.
-            if (_isStopping)
-                return;
             _detachedEntries.Clear();
             _detachedEntries.AddRange(_entries);
             _entries.Clear();
             _indices.Clear();
             Exception firstException = null;
-            _isStopping = true;
-            try
+            for (int i = 0; i < _detachedEntries.Count; i++)
             {
-                for (int i = 0; i < _detachedEntries.Count; i++)
+                QueueEntry entry = _detachedEntries[i];
+                try
                 {
-                    try
-                    {
-                        _detachedEntries[i].Agent.OnQueueDetached(
-                            _detachedEntries[i].Registration,
-                            reason);
-                    }
-                    catch (Exception exception)
-                    {
-                        firstException ??= exception;
-                    }
-                    RecycleEntry(_detachedEntries[i]);
+                    entry.Agent.OnQueueDetached(entry.Registration, reason);
                 }
+                catch (Exception exception)
+                {
+                    firstException ??= exception;
+                }
+                RecycleEntry(entry);
             }
-            finally
-            {
-                _isStopping = false;
-                _detachedEntries.Clear();
-            }
+            _detachedEntries.Clear();
             if (firstException != null)
                 throw firstException;
         }
@@ -657,22 +586,6 @@ namespace Common.TransformPath
             return progress != 0
                 ? progress < 0
                 : left.RegistrationSequence < right.RegistrationSequence;
-        }
-
-        private bool TryGetCurrentEntry(QueueFrameEntry frameEntry, out QueueEntry entry)
-        {
-            if (_indices.TryGetValue(frameEntry.Agent, out int index))
-            {
-                QueueEntry current = _entries[index];
-                if (current.Registration.Matches(frameEntry.Registration)
-                    && frameEntry.Agent.PlaybackId == frameEntry.Registration.PlaybackId)
-                {
-                    entry = current;
-                    return true;
-                }
-            }
-            entry = null;
-            return false;
         }
 
         private int FindRegistrationIndex(PathQueueRegistration registration)

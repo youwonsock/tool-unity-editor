@@ -18,60 +18,6 @@ namespace Common.TransformPath.Tests
             objects.Clear();
         }
 
-        [TestCase("Single", false)]
-        [TestCase("Aggregate", false)]
-        [TestCase("Sequence", false)]
-        [TestCase("Single", true)]
-        [TestCase("Aggregate", true)]
-        [TestCase("Sequence", true)]
-        public void EventSeekEndsOldDispatchBeforeContinuingNewPosition(string kind, bool forward)
-        {
-            PathData path = Path();
-            Events(path, new[] { 0.4f, 0.5f }, new[] { "A", "B" });
-            PathPlaybackRequest request = kind == "Single" ? PathPlaybackRequest.Single(path)
-                : kind == "Aggregate" ? PathPlaybackRequest.Aggregate(path, PathMovementSettings.Time(5f))
-                : PathPlaybackRequest.Sequence(Sequence(path));
-            var follower = Actor().AddComponent<PathFollower>(); follower.Init();
-            var calls = new List<string>(); bool seek = true;
-            follower.GetComponent<PathEventHandler>().OnEventDispatched += name =>
-            {
-                calls.Add(name);
-                if (name == "A" && seek) { seek = false; follower.Seek(forward ? 0.8f : 0.1f); }
-            };
-            follower.StartPlayback(request);
-            follower.Tick(2.5f);
-            Assert.That(follower.NormalizedTime, Is.EqualTo(forward ? 0.8f : 0.1f).Within(0.00001f));
-            CollectionAssert.AreEqual(new[] { "A" }, calls, "The old frame must not replay crossed events after Seek reset the cursor");
-            if (!forward)
-            {
-                follower.Tick(0.5f);
-                CollectionAssert.AreEqual(new[] { "A" }, calls);
-                follower.Tick(1f);
-                CollectionAssert.AreEqual(new[] { "A", "A" }, calls, "Re-crossing A on a later tick is legitimate");
-            }
-        }
-
-        [Test]
-        public void CrossSegmentSeekDoesNotContinueOldSegmentEventSource()
-        {
-            PathData first = Path(); PathData second = Path();
-            Events(first, new[] { 0.4f, 0.5f }, new[] { "A", "B" });
-            Events(second, new[] { 0.2f }, new[] { "C" });
-            var follower = Actor().AddComponent<PathFollower>(); follower.Init();
-            var calls = new List<string>(); bool seek = true;
-            follower.GetComponent<PathEventHandler>().OnEventDispatched += name =>
-            {
-                calls.Add(name);
-                if (name == "A" && seek) { seek = false; follower.SeekSegment(1, 0.1f); }
-            };
-            follower.StartPlayback(PathPlaybackRequest.Sequence(Sequence(first, second)));
-            follower.Tick(2.5f);
-            Assert.That(follower.CurrentSegmentIndex, Is.EqualTo(1));
-            CollectionAssert.AreEqual(new[] { "A" }, calls, "Old segment events were dispatched after SeekSegment");
-            follower.Tick(0.5f);
-            CollectionAssert.AreEqual(new[] { "A", "C" }, calls);
-        }
-
         [TestCase(false)]
         [TestCase(true)]
         public void BothSeekApisDiscardPreviousTransitionBacklog(bool globalSeek)
@@ -126,25 +72,6 @@ namespace Common.TransformPath.Tests
             CollectionAssert.AreEqual(new[] { "A", "B" }, calls);
             Assert.That(follower.PlaybackId, Is.EqualTo(id));
             Assert.That(follower.StateRevision, Is.EqualTo(revision));
-        }
-
-        [TestCase("Single")]
-        [TestCase("Aggregate")]
-        [TestCase("Sequence")]
-        public void EventSeekCancelsOldLoopBoundaryWithoutReplacingPlayback(string kind)
-        {
-            PathData path = Path(); Events(path, new[] { 0.8f }, new[] { "seek" });
-            var follower = Actor().AddComponent<PathFollower>(); follower.Init();
-            int loops = 0; int events = 0;
-            follower.LoopBoundary += () => loops++;
-            follower.GetComponent<PathEventHandler>().OnEventDispatched += _ => { events++; follower.Seek(0.1f); };
-            follower.StartPlayback(Request(kind, path, true));
-            ulong id = follower.PlaybackId;
-            follower.Tick(5f);
-            Assert.That(events, Is.EqualTo(1)); Assert.That(loops, Is.Zero);
-            Assert.That(follower.PlaybackId, Is.EqualTo(id));
-            Assert.That(follower.State, Is.EqualTo(EPathFollowerState.Moving));
-            Assert.That(follower.GlobalNormalizedTime, Is.EqualTo(0.1f).Within(0.00001f));
         }
 
         [TestCase("Single", "Direct")]

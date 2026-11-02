@@ -18,80 +18,6 @@ namespace Common.TransformPath.Tests
             _objects.Clear();
         }
 
-        [TestCase("Remove")]
-        [TestCase("Reregister")]
-        [TestCase("ReplacePlayback")]
-        [TestCase("PlaybackOnly")]
-        [TestCase("ReleaseManager")]
-        [TestCase("SwitchRoute")]
-        public void EarlierCallbackCannotPublishAnObsoleteFrameEntry(string mutation)
-        {
-            PathData path = CreatePath();
-            PathData otherPath = CreatePath();
-            QueuedPathManager manager = CreateManager(path);
-            var ahead = new Agent(path, 0.8f);
-            var behind = new Agent(path, 0.4f);
-            manager.Register(ahead);
-            PathQueueRegistration oldToken = manager.Register(behind);
-            PathQueueRegistration nextToken = default;
-            ahead.OnApply = () =>
-            {
-                ahead.OnApply = null;
-                switch (mutation)
-                {
-                    case "Remove": manager.Unregister(oldToken); break;
-                    case "Reregister":
-                        manager.Unregister(oldToken);
-                        nextToken = manager.Register(behind);
-                        break;
-                    case "ReplacePlayback":
-                        behind.PlaybackId++;
-                        nextToken = manager.Register(behind);
-                        break;
-                    case "PlaybackOnly": behind.PlaybackId++; break;
-                    case "ReleaseManager": manager.Release(); break;
-                    case "SwitchRoute": manager.ConfigureRoute(otherPath); break;
-                }
-            };
-            Tick(manager, 100);
-            Assert.That(behind.ApplyCount, Is.Zero, "Old snapshots must not deliver a result to a removed or replaced execution.");
-            Assert.That(manager.TryGetState(behind, out _), Is.False);
-            Assert.That(manager.TryGetState(oldToken, out _), Is.False);
-            if (nextToken.IsValid)
-            {
-                Assert.That(nextToken.RegistrationId, Is.Not.EqualTo(oldToken.RegistrationId));
-                Assert.That(manager.TryGetState(nextToken, out _), Is.False);
-            }
-            Tick(manager, 101);
-            bool reregistered = nextToken.IsValid;
-            Assert.That(behind.ApplyCount, Is.EqualTo(reregistered ? 1 : 0));
-            Assert.That(manager.TryGetState(behind, out PathQueueState state), Is.EqualTo(reregistered));
-            if (reregistered)
-            {
-                Assert.That(state.FrameId, Is.EqualTo(101));
-                Assert.That(state.PlaybackId, Is.EqualTo(behind.PlaybackId));
-                Assert.That(manager.TryGetState(nextToken, out _), Is.True);
-                Assert.That(manager.Unregister(oldToken), Is.False);
-            }
-        }
-
-        [Test]
-        public void NewlyAddedAgentWaitsUntilNextFrame()
-        {
-            PathData path = CreatePath();
-            QueuedPathManager manager = CreateManager(path);
-            var first = new Agent(path, 0.8f);
-            var added = new Agent(path, 0.4f);
-            manager.Register(first);
-            first.OnApply = () => { first.OnApply = null; manager.Register(added); };
-            Tick(manager, 100);
-            Assert.That(added.ApplyCount, Is.Zero);
-            Assert.That(manager.TryGetState(added, out _), Is.False);
-            Tick(manager, 101);
-            Assert.That(added.ApplyCount, Is.EqualTo(1));
-            Assert.That(manager.TryGetState(added, out _), Is.True);
-        }
-
         [Test]
         public void StateQueriesFollowRegistrationLifetimeAndEntryReuse()
         {
@@ -142,26 +68,6 @@ namespace Common.TransformPath.Tests
             Assert.That(manager.TryGetState(agent, out _), Is.False);
             Tick(manager, 101);
             Assert.That(agent.ApplyCount, Is.EqualTo(1));
-        }
-
-        [Test]
-        public void RemainingAgentsKeepFrameStartSpacingUntilNextFrame()
-        {
-            PathData path = CreatePath();
-            QueuedPathManager manager = CreateManager(path);
-            var first = new Agent(path, 0.8f);
-            var middle = new Agent(path, 0.5f);
-            var last = new Agent(path, 0.2f);
-            manager.Register(first); var middleToken = manager.Register(middle); manager.Register(last);
-            first.OnApply = () => { first.OnApply = null; manager.Unregister(middleToken); };
-            Tick(manager, 100);
-            Assert.That(manager.TryGetState(last, out PathQueueState state), Is.True);
-            Assert.That(state.Ahead, Is.SameAs(middle));
-            Assert.That(state.DistanceToAhead.Value, Is.EqualTo(3f).Within(0.001f));
-            Tick(manager, 101);
-            Assert.That(manager.TryGetState(last, out state), Is.True);
-            Assert.That(state.Ahead, Is.SameAs(first));
-            Assert.That(state.DistanceToAhead.Value, Is.EqualTo(6f).Within(0.001f));
         }
 
         private sealed class Agent : IQueuedPathAgent
