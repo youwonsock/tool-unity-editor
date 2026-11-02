@@ -53,22 +53,14 @@ namespace Common.TransformPath
         // Queue commands can change notification meaning without changing the
         // underlying follower's PlaybackId or public StateRevision.
         private ulong _notificationRevision;
-        private Action<QueuedPathFollower> _onBlocked;
-        private Action<QueuedPathFollower> _onResumed;
-        private Action<QueuedPathFollower> _onCompleted;
-        private Action<QueuedPathFollower, float> _onSpeedChanged;
-        private Delegate[] _onBlockedInvocationList;
-        private Delegate[] _onResumedInvocationList;
-        private Delegate[] _onCompletedInvocationList;
-        private Delegate[] _onSpeedChangedInvocationList;
-        private Action<EPathFollowerState> _stateChanged;
-        private Action<int> _segmentChanged;
-        private Action _completed;
-        private Action<QueuedPathFollower, EPathQueueDetachReason> _queueInvalidated;
-        private Delegate[] _stateChangedInvocationList;
-        private Delegate[] _segmentChangedInvocationList;
-        private Delegate[] _completedInvocationList;
-        private Delegate[] _queueInvalidatedInvocationList;
+        private PathListeners<Action<QueuedPathFollower>> _onBlocked;
+        private PathListeners<Action<QueuedPathFollower>> _onResumed;
+        private PathListeners<Action<QueuedPathFollower>> _onCompleted;
+        private PathListeners<Action<QueuedPathFollower, float>> _onSpeedChanged;
+        private PathListeners<Action<EPathFollowerState>> _stateChanged;
+        private PathListeners<Action<int>> _segmentChanged;
+        private PathListeners<Action> _completed;
+        private PathListeners<Action<QueuedPathFollower, EPathQueueDetachReason>> _queueInvalidated;
 
         #endregion
 
@@ -144,114 +136,50 @@ namespace Common.TransformPath
 
         public event Action<QueuedPathFollower> OnBlocked
         {
-            add
-            {
-                _onBlocked += value;
-                _onBlockedInvocationList = _onBlocked?.GetInvocationList();
-            }
-            remove
-            {
-                _onBlocked -= value;
-                _onBlockedInvocationList = _onBlocked?.GetInvocationList();
-            }
+            add => _onBlocked.Add(value);
+            remove => _onBlocked.Remove(value);
         }
 
         public event Action<QueuedPathFollower> OnResumed
         {
-            add
-            {
-                _onResumed += value;
-                _onResumedInvocationList = _onResumed?.GetInvocationList();
-            }
-            remove
-            {
-                _onResumed -= value;
-                _onResumedInvocationList = _onResumed?.GetInvocationList();
-            }
+            add => _onResumed.Add(value);
+            remove => _onResumed.Remove(value);
         }
 
         public event Action<QueuedPathFollower> OnCompleted
         {
-            add
-            {
-                _onCompleted += value;
-                _onCompletedInvocationList = _onCompleted?.GetInvocationList();
-            }
-            remove
-            {
-                _onCompleted -= value;
-                _onCompletedInvocationList = _onCompleted?.GetInvocationList();
-            }
+            add => _onCompleted.Add(value);
+            remove => _onCompleted.Remove(value);
         }
 
         public event Action<QueuedPathFollower, float> OnSpeedChanged
         {
-            add
-            {
-                _onSpeedChanged += value;
-                _onSpeedChangedInvocationList = _onSpeedChanged?.GetInvocationList();
-            }
-            remove
-            {
-                _onSpeedChanged -= value;
-                _onSpeedChangedInvocationList = _onSpeedChanged?.GetInvocationList();
-            }
+            add => _onSpeedChanged.Add(value);
+            remove => _onSpeedChanged.Remove(value);
         }
 
         public event Action<EPathFollowerState> StateChanged
         {
-            add
-            {
-                _stateChanged += value;
-                _stateChangedInvocationList = _stateChanged?.GetInvocationList();
-            }
-            remove
-            {
-                _stateChanged -= value;
-                _stateChangedInvocationList = _stateChanged?.GetInvocationList();
-            }
+            add => _stateChanged.Add(value);
+            remove => _stateChanged.Remove(value);
         }
 
         public event Action<int> SegmentChanged
         {
-            add
-            {
-                _segmentChanged += value;
-                _segmentChangedInvocationList = _segmentChanged?.GetInvocationList();
-            }
-            remove
-            {
-                _segmentChanged -= value;
-                _segmentChangedInvocationList = _segmentChanged?.GetInvocationList();
-            }
+            add => _segmentChanged.Add(value);
+            remove => _segmentChanged.Remove(value);
         }
 
         public event Action Completed
         {
-            add
-            {
-                _completed += value;
-                _completedInvocationList = _completed?.GetInvocationList();
-            }
-            remove
-            {
-                _completed -= value;
-                _completedInvocationList = _completed?.GetInvocationList();
-            }
+            add => _completed.Add(value);
+            remove => _completed.Remove(value);
         }
 
         public event Action<QueuedPathFollower, EPathQueueDetachReason> QueueInvalidated
         {
-            add
-            {
-                _queueInvalidated += value;
-                _queueInvalidatedInvocationList = _queueInvalidated?.GetInvocationList();
-            }
-            remove
-            {
-                _queueInvalidated -= value;
-                _queueInvalidatedInvocationList = _queueInvalidated?.GetInvocationList();
-            }
+            add => _queueInvalidated.Add(value);
+            remove => _queueInvalidated.Remove(value);
         }
 
         #endregion
@@ -621,8 +549,8 @@ namespace Common.TransformPath
                     return;
             }
             if (notifyInvalidation)
-                InvokeCallbacks(_queueInvalidatedInvocationList,
-                    callback => ((Action<QueuedPathFollower, EPathQueueDetachReason>)callback)(this, reason));
+                InvokeCallbacks(_queueInvalidated.Invocations, (this, reason),
+                    (callback, args) => ((Action<QueuedPathFollower, EPathQueueDetachReason>)callback)(args.Item1, args.Item2));
         }
 
         #endregion
@@ -724,16 +652,14 @@ namespace Common.TransformPath
 
             if (PlaybackId != playbackId || StateRevision != stateRevision || State != state)
                 return;
-            InvokeCallbacks(
-                _stateChangedInvocationList,
-                callback => ((Action<EPathFollowerState>)callback)(state));
+            InvokeCallbacks(_stateChanged.Invocations, state,
+                (callback, value) => ((Action<EPathFollowerState>)callback)(value));
         }
 
         private void HandleUnderlyingSegmentChanged(int segmentIndex)
         {
-            InvokeCallbacks(
-                _segmentChangedInvocationList,
-                callback => ((Action<int>)callback)(segmentIndex));
+            InvokeCallbacks(_segmentChanged.Invocations, segmentIndex,
+                (callback, value) => ((Action<int>)callback)(value));
         }
 
         private void ApplyPausedState()
@@ -779,13 +705,9 @@ namespace Common.TransformPath
             ResetConstraintState();
             // Forward the underlying playback lifecycle event as well as the
             // queue-specific callback.
-            if (!InvokeCallbacks(
-                _completedInvocationList,
-                callback => ((Action)callback)()))
+            if (!InvokeCallbacks(_completed.Invocations, 0, (callback, _) => ((Action)callback)()))
                 return;
-            InvokeCallbacks(
-                _onCompletedInvocationList,
-                callback => ((Action<QueuedPathFollower>)callback)(this));
+            InvokeCallbacks(_onCompleted.Invocations, this, InvokeQueueCallback);
         }
 
         private void ResetConstraintState()
@@ -858,37 +780,27 @@ namespace Common.TransformPath
         {
             if (blocked != wasBlocked)
             {
-                if (blocked)
-                {
-                    if (!InvokeCallbacks(
-                        _onBlockedInvocationList,
-                        callback => ((Action<QueuedPathFollower>)callback)(this)))
-                        return;
-                }
-                else
-                {
-                    if (!InvokeCallbacks(
-                        _onResumedInvocationList,
-                        callback => ((Action<QueuedPathFollower>)callback)(this)))
-                        return;
-                }
+                if (!InvokeCallbacks(blocked ? _onBlocked.Invocations : _onResumed.Invocations, this, InvokeQueueCallback))
+                    return;
             }
             if (!Mathf.Approximately(
                     _lastReportedSpeedMultiplier,
                     _queue.SpeedMultiplier))
             {
                 _lastReportedSpeedMultiplier = _queue.SpeedMultiplier;
-                InvokeCallbacks(
-                    _onSpeedChangedInvocationList,
-                    callback => ((Action<QueuedPathFollower, float>)callback)(
-                        this,
-                        _queue.SpeedMultiplier));
+                InvokeCallbacks(_onSpeedChanged.Invocations, (this, _queue.SpeedMultiplier),
+                    (callback, args) => ((Action<QueuedPathFollower, float>)callback)(args.Item1, args.Item2));
             }
         }
 
-        private bool InvokeCallbacks(
+        private static readonly Action<Delegate, QueuedPathFollower> InvokeQueueCallback =
+            (callback, follower) => ((Action<QueuedPathFollower>)callback)(follower);
+
+        // The value goes through a parameter so that notifying allocates nothing.
+        private bool InvokeCallbacks<T>(
             Delegate[] callbacks,
-            Action<Delegate> invoke)
+            T value,
+            Action<Delegate, T> invoke)
         {
             if (callbacks == null)
                 return true;
@@ -900,7 +812,7 @@ namespace Common.TransformPath
             {
                 try
                 {
-                    invoke(callbacks[i]);
+                    invoke(callbacks[i], value);
                 }
                 catch
                 {

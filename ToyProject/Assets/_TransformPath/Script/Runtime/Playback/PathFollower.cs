@@ -71,14 +71,10 @@ namespace Common.TransformPath
         private PathQueueRegistration _queueConstraintRegistration;
         private int _queueConstraintFrameId = -1;
         private bool _runtimeDriverRegistered;
-        private Action<int> _segmentChanged;
-        private Delegate[] _segmentChangedInvocationList;
-        private Action _loopBoundary;
-        private Delegate[] _loopBoundaryInvocationList;
-        private Action<EPathFollowerState> _stateChanged;
-        private Delegate[] _stateChangedInvocationList;
-        private Action _completed;
-        private Delegate[] _completedInvocationList;
+        private PathListeners<Action<int>> _segmentChanged;
+        private PathListeners<Action> _loopBoundary;
+        private PathListeners<Action<EPathFollowerState>> _stateChanged;
+        private PathListeners<Action> _completed;
 
         #endregion
 
@@ -112,29 +108,13 @@ namespace Common.TransformPath
 
         public event Action<EPathFollowerState> StateChanged
         {
-            add
-            {
-                _stateChanged += value;
-                _stateChangedInvocationList = _stateChanged?.GetInvocationList();
-            }
-            remove
-            {
-                _stateChanged -= value;
-                _stateChangedInvocationList = _stateChanged?.GetInvocationList();
-            }
+            add => _stateChanged.Add(value);
+            remove => _stateChanged.Remove(value);
         }
         public event Action<int> SegmentChanged
         {
-            add
-            {
-                _segmentChanged += value;
-                _segmentChangedInvocationList = _segmentChanged?.GetInvocationList();
-            }
-            remove
-            {
-                _segmentChanged -= value;
-                _segmentChangedInvocationList = _segmentChanged?.GetInvocationList();
-            }
+            add => _segmentChanged.Add(value);
+            remove => _segmentChanged.Remove(value);
         }
         // Listener failures end playback without StateChanged, because a second
         // public notification could fail again. The queue adapter still has to
@@ -142,29 +122,13 @@ namespace Common.TransformPath
         internal event Action PlaybackAborted;
         internal event Action LoopBoundary
         {
-            add
-            {
-                _loopBoundary += value;
-                _loopBoundaryInvocationList = _loopBoundary?.GetInvocationList();
-            }
-            remove
-            {
-                _loopBoundary -= value;
-                _loopBoundaryInvocationList = _loopBoundary?.GetInvocationList();
-            }
+            add => _loopBoundary.Add(value);
+            remove => _loopBoundary.Remove(value);
         }
         public event Action Completed
         {
-            add
-            {
-                _completed += value;
-                _completedInvocationList = _completed?.GetInvocationList();
-            }
-            remove
-            {
-                _completed -= value;
-                _completedInvocationList = _completed?.GetInvocationList();
-            }
+            add => _completed.Add(value);
+            remove => _completed.Remove(value);
         }
 
         #endregion
@@ -1267,25 +1231,25 @@ namespace Common.TransformPath
 
         private void InvokeStateChanged(EPathFollowerState value)
         {
-            InvokeCallbacks(_stateChangedInvocationList, _playbackRevision, value,
+            InvokeCallbacks(_stateChanged.Invocations, _playbackRevision, value,
                 (listener, state) => ((Action<EPathFollowerState>)listener)(state));
         }
 
         private void InvokeSegmentChanged(int value, int tickRevision)
         {
-            InvokeCallbacks(_segmentChangedInvocationList, tickRevision, value,
+            InvokeCallbacks(_segmentChanged.Invocations, tickRevision, value,
                 (listener, segment) => ((Action<int>)listener)(segment));
         }
 
         private void InvokeLoopBoundary(int tickRevision)
         {
-            InvokeCallbacks(_loopBoundaryInvocationList, tickRevision, 0,
+            InvokeCallbacks(_loopBoundary.Invocations, tickRevision, 0,
                 (listener, _) => ((Action)listener)());
         }
 
         private void InvokeCompleted()
         {
-            InvokeCallbacks(_completedInvocationList, _playbackRevision, 0,
+            InvokeCallbacks(_completed.Invocations, _playbackRevision, 0,
                 (listener, _) => ((Action)listener)());
         }
 
