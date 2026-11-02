@@ -476,6 +476,37 @@ namespace Common.TransformPath.Tests
             Assert.That(states, Is.EqualTo(new[] { EPathFollowerState.Ready, EPathFollowerState.Uninitialized }));
         }
 
+        [Test]
+        public void APauseEventLeavesTheFollowerWhereItReportsToBe()
+        {
+            var resume = ScriptableObject.CreateInstance<PathEventSettingSO>();
+            _objects.Add(resume);
+            resume.UseModifyPathMoveSpeed = true;
+            resume.MoveSpeedTargetValue = 2f;
+            var pause = ScriptableObject.CreateInstance<PathEventSettingSO>();
+            _objects.Add(pause);
+            pause.EventName = "pause";
+            pause.UseModifyPathMoveSpeed = true;
+            pause.MoveSpeedTargetValue = 0f;
+            pause.UseDelayedEvents = true;
+            pause.DelayedEvents.Add(new PathEventSettingSO.DelayedEventEntry { Delay = 1f, EventSetting = resume });
+            PathData path = CreatePath(10f);
+            typeof(PathData).GetField("_pathEvents", BindingFlags.NonPublic | BindingFlags.Instance)
+                .SetValue(path, new List<PathEventEntry> { new PathEventEntry { NormalizedTime = 0.1f, EventSetting = pause } });
+            path.Rebuild();
+            PathFollower follower = CreateFollower();
+            float heardAt = -1f;
+            follower.GetComponent<PathEventHandler>().OnEventDispatched += _ => heardAt = follower.transform.position.x;
+            follower.StartPlayback(PathPlaybackRequest.Single(path));
+
+            follower.Tick(2f);
+
+            Assert.That(follower.State, Is.EqualTo(EPathFollowerState.Paused));
+            Assert.That(follower.NormalizedTime, Is.EqualTo(0.2f).Within(0.0001f));
+            Assert.That(follower.transform.position.x, Is.EqualTo(2f).Within(0.001f));
+            Assert.That(heardAt, Is.EqualTo(2f).Within(0.001f), "The listener sees the same position.");
+        }
+
         private static void RunCommand(
             string command,
             QueuedPathManager manager,
