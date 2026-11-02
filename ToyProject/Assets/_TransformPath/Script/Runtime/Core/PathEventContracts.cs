@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Runtime.CompilerServices;
 using UnityEngine;
 
 namespace Common.TransformPath
@@ -231,7 +232,13 @@ namespace Common.TransformPath
     /// </summary>
     internal sealed class PathEventSourceSnapshot : IPathEventSource
     {
+        private static readonly PathEventSourceSnapshot Empty =
+            new PathEventSourceSnapshot(Array.Empty<PathRuntimeEvent>());
+        private static readonly ConditionalWeakTable<IPathProvider, PathEventSourceSnapshot> Latest =
+            new ConditionalWeakTable<IPathProvider, PathEventSourceSnapshot>();
+
         private readonly PathRuntimeEvent[] _events;
+        private int _providerRevision;
 
         public int EventCount => _events.Length;
 
@@ -245,6 +252,26 @@ namespace Common.TransformPath
             if (index < 0 || index >= _events.Length)
                 throw new ArgumentOutOfRangeException(nameof(index));
             return _events[index];
+        }
+
+        /// <summary>
+        /// The snapshot of this provider's current revision. It never changes, so
+        /// every follower of the path can use the same one.
+        /// </summary>
+        public static PathEventSourceSnapshot GetCurrent(IPathProvider provider)
+        {
+            if (!(provider is IPathEventSource source) || source.EventCount == 0)
+                return Empty;
+
+            int revision = provider.Revision;
+            if (Latest.TryGetValue(provider, out PathEventSourceSnapshot latest) && latest._providerRevision == revision)
+                return latest;
+
+            PathEventSourceSnapshot snapshot = Create(source);
+            snapshot._providerRevision = revision;
+            Latest.Remove(provider);
+            Latest.Add(provider, snapshot);
+            return snapshot;
         }
 
         public static PathEventSourceSnapshot Create(IPathEventSource source)
@@ -267,7 +294,8 @@ namespace Common.TransformPath
 
         internal bool HasSameContent(PathEventSourceSnapshot other)
         {
-            return other != null && PathRuntimeEvent.AreSame(_events, other._events);
+            return other != null
+                && (ReferenceEquals(this, other) || PathRuntimeEvent.AreSame(_events, other._events));
         }
 
     }

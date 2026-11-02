@@ -118,7 +118,7 @@ namespace Common.TransformPath
 
             // Compare the same stable ordering used when playback was prepared.
             // Return this candidate so a successful refresh does not copy it twice.
-            nextEvents = PathEventSourceSnapshot.Create(Provider as IPathEventSource);
+            nextEvents = PathEventSourceSnapshot.GetCurrent(Provider);
             if (!EventSource.HasSameContent(nextEvents))
                 return EPathSnapshotRefreshDecision.StopEventsChanged;
             return EPathSnapshotRefreshDecision.Refresh;
@@ -223,7 +223,7 @@ namespace Common.TransformPath
                 provider,
                 settings,
                 null,
-                PathEventSourceSnapshot.Create(provider as IPathEventSource));
+                PathEventSourceSnapshot.GetCurrent(provider));
         }
 
         private static PathPlaybackSession CreateAggregate(
@@ -248,7 +248,7 @@ namespace Common.TransformPath
                 request.Provider,
                 settings,
                 null,
-                PathEventSourceSnapshot.Create(request.Provider as IPathEventSource));
+                PathEventSourceSnapshot.GetCurrent(request.Provider));
         }
 
         private static PathPlaybackSession CreateSequence(

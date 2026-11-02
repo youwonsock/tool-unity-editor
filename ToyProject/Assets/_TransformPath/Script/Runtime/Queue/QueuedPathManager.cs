@@ -251,10 +251,12 @@ namespace Common.TransformPath
         {
             for (int i = 0; i < _entries.Count; i++)
                 _entries[i].Progress = Mathf.Clamp01(_entries[i].Agent.GlobalNormalizedTime);
-            SortEntries();
-            _indices.Clear();
-            for (int i = 0; i < _entries.Count; i++)
-                _indices[_entries[i].Agent] = i;
+            if (SortEntries())
+            {
+                _indices.Clear();
+                for (int i = 0; i < _entries.Count; i++)
+                    _indices[_entries[i].Agent] = i;
+            }
 
             float routeLength = Mathf.Max(_routeProvider.PathLength, 0.001f);
             QueueEntry ahead = null;
@@ -593,8 +595,10 @@ namespace Common.TransformPath
 
         // Leaders first. List.Sort allocates on every call here, and the order
         // barely changes between frames, which insertion sort handles in one pass.
-        private void SortEntries()
+        // Returns whether any entry moved.
+        private bool SortEntries()
         {
+            bool moved = false;
             for (int i = 1; i < _entries.Count; i++)
             {
                 QueueEntry entry = _entries[i];
@@ -603,9 +607,11 @@ namespace Common.TransformPath
                 {
                     _entries[j + 1] = _entries[j];
                     j--;
+                    moved = true;
                 }
                 _entries[j + 1] = entry;
             }
+            return moved;
         }
 
         private static bool IsAhead(QueueEntry left, QueueEntry right)

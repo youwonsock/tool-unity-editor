@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Reflection;
 using System.Text;
 using UnityEngine;
 using UnityEngine.Profiling;
@@ -83,6 +84,7 @@ namespace Common.TransformPath.PlayerProbe
                 yield return MeasureFree($"loop.single.speed.{count}", count, false, true);
                 yield return MeasureFree($"loop.sequence.time.{count}", count, true, true);
             }
+            yield return MeasureFree("free.single.events.1000", 1000, false, false, 8);
             foreach (int count in QueueSizes)
                 yield return MeasureQueue($"queue.speed.{count}", count, false);
             yield return MeasureQueue("queue.time.1000", 1000, true);
@@ -97,7 +99,7 @@ namespace Common.TransformPath.PlayerProbe
             Finish();
         }
 
-        private IEnumerator MeasureFree(string scenario, int count, bool sequence, bool loop)
+        private IEnumerator MeasureFree(string scenario, int count, bool sequence, bool loop, int events = 0)
         {
             var root = new GameObject(scenario);
             float segmentLength = loop ? 1f : 200f;
@@ -111,6 +113,7 @@ namespace Common.TransformPath.PlayerProbe
                         ? new PathMovementSettings(EPathMoveType.TimeBased, loop ? 0.25f : 300f, AnimationCurve.EaseInOut(0f, 0f, 1f, 1f))
                         : new PathMovementSettings(EPathMoveType.SpeedBased, loop ? 4f : 5f, null)));
             }
+            AddEvents(paths[0], events);
             MultiPathData multi = sequence ? CreateSequence(root, paths) : null;
             PathPlaybackRequest request = sequence
                 ? PathPlaybackRequest.Sequence(multi, loop)
@@ -353,6 +356,22 @@ namespace Common.TransformPath.PlayerProbe
             path.ConfigureControlPoints(new[] { start, end });
             path.Init();
             return path;
+        }
+
+        // PathData has no runtime API for events. They are authored in the Inspector.
+        private void AddEvents(PathData path, int count)
+        {
+            if (count == 0)
+                return;
+            var entries = new List<PathEventEntry>();
+            for (int i = 0; i < count; i++)
+            {
+                var setting = ScriptableObject.CreateInstance<PathEventSettingSO>();
+                setting.EventName = "event" + i;
+                entries.Add(new PathEventEntry { NormalizedTime = (i + 1f) / (count + 1f), EventSetting = setting });
+            }
+            typeof(PathData).GetField("_pathEvents", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(path, entries);
+            path.Rebuild();
         }
 
         private static MultiPathData CreateSequence(GameObject root, List<PathData> paths)

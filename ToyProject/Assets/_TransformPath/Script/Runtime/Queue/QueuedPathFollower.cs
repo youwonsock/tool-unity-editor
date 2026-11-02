@@ -357,7 +357,7 @@ namespace Common.TransformPath
             _queueParticipationMode = EQueueParticipationMode.Queued;
             _requestedMaxGlobalNormalizedTime = Mathf.Clamp01(maxGlobalNormalizedTime);
 
-            PathCommandReceipt receipt = _pathFollower.StartPreparedPlayback(request, session);
+            PathCommandReceipt receipt = _pathFollower.StartPreparedPlayback(session, request.Loop);
             // Replacing an already-moving playback does not emit StateChanged.
             if (receipt.Changed && IsMoving && !TryRegisterWithManager())
                 throw new InvalidOperationException(
@@ -378,7 +378,7 @@ namespace Common.TransformPath
             _activeManager = null;
             _requestedMaxGlobalNormalizedTime = 1f;
             ResetConstraintState();
-            return _pathFollower.StartPreparedPlayback(request, session);
+            return _pathFollower.StartPreparedPlayback(session, request.Loop);
         }
 
         public PathCommandReceipt StopMove()

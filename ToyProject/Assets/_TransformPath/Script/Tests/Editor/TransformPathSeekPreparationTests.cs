@@ -121,33 +121,6 @@ namespace Common.TransformPath.Tests
 
         [TestCase(false)]
         [TestCase(true)]
-        public void ChangedPreparedProviderIsRevalidatedBeforeReplacingOldPlayback(bool invalid)
-        {
-            var follower = Actor().AddComponent<PathFollower>(); follower.Init();
-            follower.StartPlayback(PathPlaybackRequest.Single(Path())); ulong old = follower.PlaybackId;
-            CountingProvider provider = CountedPath(); var request = PathPlaybackRequest.Single(provider);
-            PathPlaybackSession candidate = follower.PreparePlayback(request);
-            Assert.That(provider.Reads, Is.EqualTo(1));
-            if (invalid)
-            {
-                provider.Ready = false;
-                Assert.Throws<System.InvalidOperationException>(() => follower.StartPreparedPlayback(request, candidate));
-                Assert.That(follower.PlaybackId, Is.EqualTo(old)); Assert.That(follower.IsMoving, Is.True);
-            }
-            else
-            {
-                var setting = ScriptableObject.CreateInstance<PathEventSettingSO>(); objects.Add(setting); setting.EventName = "new";
-                provider.ChangeEvent(PathEventDefinition.FromAuthoring(setting));
-                var calls = new List<string>(); follower.GetComponent<PathEventHandler>().OnEventDispatched += name => calls.Add(name);
-                follower.StartPreparedPlayback(request, candidate);
-                Assert.That(provider.Reads, Is.EqualTo(2));
-                follower.Tick(2.5f);
-                CollectionAssert.AreEqual(new[] { "new" }, calls);
-            }
-        }
-
-        [TestCase(false)]
-        [TestCase(true)]
         public void QueueSeekKeepsOwnershipAndWaitsForRecalculatedConstraint(bool segmentSeek)
         {
             MultiPathData route = Sequence(Path(), Path());

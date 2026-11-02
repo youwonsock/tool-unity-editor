@@ -54,13 +54,35 @@ namespace Common.TransformPath.Tests
             Assert.That(manager.TryGetState(nextToken, out _), Is.False);
         }
 
+        [Test]
+        public void AnAgentThatOvertakesIsFoundAtItsNewPlace()
+        {
+            PathData path = CreatePath();
+            QueuedPathManager manager = CreateManager(path);
+            var first = new Agent(path, 0.5f);
+            var second = new Agent(path, 0.2f);
+            manager.Register(first);
+            manager.Register(second);
+            Tick(manager, 100);
+            Assert.That(manager.GetAgent(0), Is.SameAs(first));
+
+            second.GlobalNormalizedTime = 0.8f;
+            Tick(manager, 101);
+
+            Assert.That(manager.GetAgent(0), Is.SameAs(second));
+            Assert.That(manager.Unregister(first), Is.True);
+            Assert.That(manager.GetAgent(0), Is.SameAs(second), "The index must point at the agent that left.");
+            Assert.That(manager.TryGetState(second, out PathQueueState state), Is.True);
+            Assert.That(state.FrameId, Is.EqualTo(101));
+        }
+
         private sealed class Agent : IQueuedPathAgent
         {
             public Agent(IPathProvider path, float progress) { QueueProvider = path; GlobalNormalizedTime = progress; }
             public ulong PlaybackId { get; set; } = 1;
             public IPathProvider QueueProvider { get; }
             public bool IsMoving => true;
-            public float GlobalNormalizedTime { get; }
+            public float GlobalNormalizedTime { get; set; }
             public int SnapshotRevision => QueueProvider.Revision;
             public PathQueueAgentSettings QueueSettings => new PathQueueAgentSettings(1f, true, true, true);
             public Action OnApply;

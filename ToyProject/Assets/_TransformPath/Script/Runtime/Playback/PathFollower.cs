@@ -356,7 +356,7 @@ namespace Common.TransformPath
 
         public PathCommandReceipt StartPlayback(PathPlaybackRequest request)
         {
-            return StartPreparedPlayback(request, PreparePlayback(request));
+            return StartPreparedPlayback(PreparePlayback(request), request.Loop);
         }
 
         internal PathPlaybackSession PreparePlayback(PathPlaybackRequest request)
@@ -375,17 +375,10 @@ namespace Common.TransformPath
             return session;
         }
 
-        internal PathCommandReceipt StartPreparedPlayback(
-            PathPlaybackRequest request,
-            PathPlaybackSession session)
+        internal PathCommandReceipt StartPreparedPlayback(PathPlaybackSession session, bool loop)
         {
             EnsureInitialized();
-            // Preparation is local to this command. If a provider changed while
-            // the queue reconciled ownership, validate a fresh candidate before
-            // replacing the current playback. Normal starts reuse the candidate.
-            if (!session.Provider.IsReady || session.Provider.Revision != session.ProviderRevision)
-                session = PreparePlayback(request);
-            return BeginPlayback(session, request.Loop);
+            return BeginPlayback(session, loop);
         }
 
         public PathCommandReceipt StopMove()
