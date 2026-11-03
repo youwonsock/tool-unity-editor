@@ -7,8 +7,9 @@
 #   Tools/run-transformpath-probe.sh
 #   Tools/run-transformpath-probe.sh --runs 3 --skip-build
 #
-# See Tools/snapshot-worktree.sh for the environment variables. Each run stops
-# with exit code 124 after TRANSFORMPATH_PROBE_TIMEOUT seconds (default 900).
+# See Tools/snapshot-worktree.sh for the environment variables. The build stops
+# with exit code 124 after UNITY_BUILD_TIMEOUT seconds, each run after
+# TRANSFORMPATH_PROBE_TIMEOUT seconds (default 900).
 set -euo pipefail
 
 runs=5
@@ -29,12 +30,13 @@ timeout=${TRANSFORMPATH_PROBE_TIMEOUT:-900}
 if [ -z "$skip_build" ]; then
     rm -rf "$app"
     echo "== Build"
-    "$unity" -batchmode -quit -projectPath "$worktree/ToyProject" -buildTarget StandaloneOSX \
+    run_limited "$build_timeout" "$unity" -batchmode -quit -projectPath "$worktree/ToyProject" -buildTarget StandaloneOSX \
         -executeMethod Common.TransformPath.PlayerProbe.TransformPathPlayerProbeBuild.Build \
         -transformPathProbeApp "$app" -logFile "$results/transformpath-build.log" || {
+            code=$?
             echo "Build failed. See $results/transformpath-build.log"
             grep -E 'error CS|Exception:' "$results/transformpath-build.log" | sort -u | head -20 || true
-            exit 1
+            exit "$code"
         }
 fi
 
@@ -44,26 +46,10 @@ for run in $(seq 1 "$runs"); do
     csv=$results/transformpath-probe-$run.csv
     rm -f "$csv"
     echo "== Run $run"
-    "$app/Contents/MacOS/ToyProject" -logFile "$results/transformpath-run-$run.log" \
+    code=0
+    run_limited "$timeout" "$app/Contents/MacOS/ToyProject" -logFile "$results/transformpath-run-$run.log" \
         -screen-fullscreen 0 -screen-width 960 -screen-height 540 \
-        -transformPathProbeOut "$csv" &
-    pid=$!
-    deadline=$((SECONDS + timeout))
-    code=
-    while kill -0 "$pid" 2>/dev/null; do
-        if [ "$SECONDS" -ge "$deadline" ]; then
-            kill -9 "$pid" 2>/dev/null || true
-            wait "$pid" 2>/dev/null || true
-            echo "Timed out after $timeout seconds."
-            code=124
-            break
-        fi
-        sleep 1
-    done
-    if [ -z "$code" ]; then
-        code=0
-        wait "$pid" || code=$?
-    fi
+        -transformPathProbeOut "$csv" || code=$?
     [ "$code" -eq 0 ] || status=$code
     [ ! -f "$csv" ] || csvs+=("$csv")
 done

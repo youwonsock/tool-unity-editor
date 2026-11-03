@@ -43,30 +43,6 @@ for case in run.iter("test-case"):
 PY
 }
 
-stop_unity() {
-    pkill -9 -P "$unity_pid" 2>/dev/null || true
-    kill -9 "$unity_pid" 2>/dev/null || true
-    wait "$unity_pid" 2>/dev/null || true
-}
-
-# Unity can deadlock and never exit, and macOS has no timeout command. A run in
-# the background ignores Ctrl+C, so the trap passes it on.
-run_limited() {
-    "$@" &
-    unity_pid=$!
-    trap 'stop_unity; exit 130' INT TERM
-    local deadline=$((SECONDS + timeout))
-    while kill -0 "$unity_pid" 2>/dev/null; do
-        if [ "$SECONDS" -ge "$deadline" ]; then
-            stop_unity
-            echo "Timed out after $timeout seconds."
-            return 124
-        fi
-        sleep 1
-    done
-    wait "$unity_pid"
-}
-
 run_unity() {
     local mode=$1
     local arguments=(-batchmode -projectPath "$worktree/ToyProject" -runTests -testPlatform "$mode"
@@ -75,7 +51,7 @@ run_unity() {
     rm -f "$results/$mode.xml"
     echo "== $mode"
     local code=0
-    run_limited "$unity" "${arguments[@]}" || code=$?
+    run_limited "$timeout" "$unity" "${arguments[@]}" || code=$?
     if [ -f "$results/$mode.xml" ]; then
         summarize "$results/$mode.xml"
     else
