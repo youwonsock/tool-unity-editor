@@ -63,7 +63,7 @@ Moving 상태의 다음 Tick에 `EvaluateRefresh`로 판단하므로 Pause 중�
 - **적용:** 다른 재생이나 경로 버전, 이전 프레임의 결과는 `QueuedPathFollower`와 `PathQueueConstraintState`가 버립니다. 등록 직후와 Seek 뒤에는 첫 결과가 올 때까지 멈춥니다.
 - **완화:** `PathQueueSession.Step`이 수동 대기, 재출발 지연, 추가 간격, 속도 보간을 계산합니다.
 - **위반:** `ConstraintViolation`은 시작 때 지정한 진행 상한만 봅니다. Manager의 상한은 앞 Agent를 따라 움직이므로, 재개나 경로 단축으로 넘어선 Agent는 기다립니다.
-- **Pause와 ForceBlock:** Pause는 등록을 해제해 간격 계산에서 빠지고, ForceBlock은 등록을 유지합니다. Resume은 Manager와 경로가 유효할 때 다시 등록하고, 아니면 Queue 참여를 무효화합니다.
+- **Pause와 ForceBlock:** Pause는 등록을 해제해 간격 계산에서 빠지고, ForceBlock은 등록을 유지합니다. Queue에 참여하지 않을 때의 ForceBlock은 재생과 표시를 바꾸지 않고 다음 Queue 시작까지 대기 요청만 남깁니다. Resume은 Manager와 경로가 유효할 때 다시 등록하고, 아니면 Queue 참여를 무효화합니다.
 - **내부 Follower 직접 시작:** 같은 경로면 재등록하고 수동 대기와 상한을 유지합니다. 다른 경로면 `ProviderInvalid`로 끝냅니다.
 - **Loop:** 경계에서 재등록해 Agent 순서를 다시 잡습니다.
 
