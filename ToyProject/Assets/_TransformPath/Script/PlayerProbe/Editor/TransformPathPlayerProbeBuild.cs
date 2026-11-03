@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -10,8 +11,8 @@ namespace Common.TransformPath.PlayerProbe
 {
     /// <summary>
     /// Builds the measurement Player for Tools/run-transformpath-probe.sh. The
-    /// probe scene is generated in the disposable test worktree, so it never
-    /// enters the project or a normal build.
+    /// probe scene is generated in the disposable snapshot worktree, so it
+    /// never enters the project or a normal build.
     /// </summary>
     internal static class TransformPathPlayerProbeBuild
     {
@@ -32,7 +33,7 @@ namespace Common.TransformPath.PlayerProbe
                 throw new InvalidOperationException($"Could not save {ScenePath}.");
 
             EditorUserBuildSettings.SetPlatformSettings("Standalone", "OSXUniversal", "Architecture", "ARM64");
-            PlayerSettings.SetScriptingBackend(BuildTargetGroup.Standalone, ScriptingImplementation.Mono2x);
+            PlayerSettings.SetScriptingBackend(NamedBuildTarget.Standalone, ScriptingImplementation.Mono2x);
             BuildReport report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
             {
                 scenes = new[] { ScenePath, SampleScenePath },

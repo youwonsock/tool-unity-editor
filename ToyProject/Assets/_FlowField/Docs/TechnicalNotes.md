@@ -21,15 +21,17 @@
 - **재진입 없음:** `FlowFieldExecutionBoundary`가 이벤트를 큐에 모아 가장 바깥 작업이 끝난 뒤 전달합니다. `Release`·`Suspend`·Fault 이전의 이벤트는 버리고 `Released`만 항상 전달합니다. 핸들러가 서로를 계속 깨우면 100,000건에서 오류를 남기고 남은 일을 버립니다.
 - **중단 뒤 재개:** `Suspend`와 `RetryFault`는 게시된 결과를 버립니다. 멈춘 동안 바뀐 세계를 관측하지 못했으므로, 최신 요청을 다시 빌드해 게시하기 전까지 Ready가 아닙니다. 격자 정보는 최신 요청에서 읽어 `ClampPositionToGrid`는 계속 동작합니다.
 - **수명 종료:** 실행 중인 풀이 Job에 취소를 요청하고 끝날 때까지 기다립니다. Job은 4,096셀마다 취소를 확인합니다.
+- **Inspector 편집:** Play 중 Inspector에서 값을 바꾸면 `OnValidate` 안에서 요청이 제출되므로, `StateChanged` 핸들러가 그 안에서 실행될 수 있습니다.
 
 ## Surface2D
 
 <img src="Images/flowfield-surface.png" alt="Surface2D 빌드와 게시 흐름" width="80%">
 
-- Manager가 입력을 관측해 제출하면 Scheduler가 Session을 진행합니다. 제출되지 않은 요청은 빌드하지 않고 예산도 쓰지 않습니다. 직접 `Pump()`를 호출하는 베이크와 테스트는 호출자가 입력을 책임집니다.
+- Manager가 입력을 관측해 제출하면 Scheduler가 Session을 진행합니다. 제출되지 않은 요청은 빌드하지 않고 예산도 쓰지 않습니다. 직접 `Pump()`를 호출하는 베이크는 호출자가 입력을 책임집니다.
 - 표면·장애물·Goal·Modifier 영역은 Physics 결과가 한 스냅샷이 되도록 한 프레임에 실행합니다. BFS와 방향은 워커 스레드, Topology는 메인 스레드의 Burst입니다. 합성은 예산에 맞춰 나눕니다.
 - BFS가 예정된 빌드는 사전 합성을 생략하고, 완료 후 전체를 한 번 합성합니다.
 - 격자가 2,500셀을 넘으면 Scene View는 표시 대상을 줄입니다.
+- 한 번의 조회에서 겹치는 장애물이 4,096개에 이르면 Session이 Fault 납니다. 일부만 쓰면 장애물을 놓치기 때문입니다. Volume3D는 이때 셀별 검사로 넘어갑니다.
 
 ## Volume3D
 
@@ -49,6 +51,7 @@
 - `Observe()`는 관측 주기마다 호출되므로 할당하지 않게 작성합니다. 값 변경은 `Revision`을 올리거나 `NotifyModifierChanged`로 알립니다.
 - Fault 중에는 해제만 받습니다. 재시도가 전부 다시 빌드하므로 작업을 예약하지 않고, Fault 중 켜진 Modifier는 재시도의 Submit 전에 등록합니다.
 - 셀 판정은 `FlowFieldOverlapUtility.CellHalfExtent`로 0.0001 줄인 상자를 써서, 격자에 맞춘 Collider가 이웃 셀을 잡지 않게 합니다.
+- Influence Collider가 파괴되면 설정 오류로 보고 Fault를 냅니다. 무시하면 영향 영역이 조용히 사라집니다.
 
 ## StaticBaked
 

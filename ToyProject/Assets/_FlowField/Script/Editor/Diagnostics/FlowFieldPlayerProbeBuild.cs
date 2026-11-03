@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using Common.FlowField.PlayerProbe;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -12,8 +13,8 @@ namespace Common.FlowField.Editor
 {
     /// <summary>
     /// Builds the measurement Player for Tools/run-player-probe.sh. The probe
-    /// scene is generated in the disposable test worktree, so it never enters
-    /// the project or a normal build.
+    /// scene is generated in the disposable snapshot worktree, so it never
+    /// enters the project or a normal build.
     /// </summary>
     internal static class FlowFieldPlayerProbeBuild
     {
@@ -35,7 +36,7 @@ namespace Common.FlowField.Editor
             GenerateScene(sampleScenes);
 
             EditorUserBuildSettings.SetPlatformSettings("Standalone", "OSXUniversal", "Architecture", "ARM64");
-            PlayerSettings.SetScriptingBackend(BuildTargetGroup.Standalone, ScriptingImplementation.Mono2x);
+            PlayerSettings.SetScriptingBackend(NamedBuildTarget.Standalone, ScriptingImplementation.Mono2x);
 
             BuildReport report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
             {
@@ -53,7 +54,7 @@ namespace Common.FlowField.Editor
 
         internal static void BuildIl2cppCheck()
         {
-            PlayerSettings.SetScriptingBackend(BuildTargetGroup.Android, ScriptingImplementation.IL2CPP);
+            PlayerSettings.SetScriptingBackend(NamedBuildTarget.Android, ScriptingImplementation.IL2CPP);
             PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;
             BuildReport report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
             {

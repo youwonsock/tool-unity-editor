@@ -9,7 +9,7 @@
 | 공간 모드 | `Surface2D`: 바닥 표면, 8방향 탐색 · `Volume3D`: Bounds 내부 정육면체 셀, 26방향 탐색 |
 | 실행 모드 | `RuntimeDynamic`: 런타임 계산 · `StaticBaked`: Editor에서 만든 v6 Bake Asset 로드 |
 
-구현 세부는 [TechnicalNotes.md](Docs/TechnicalNotes.md), 설계 결정은 [RefactoringNotes.md](Docs/RefactoringNotes.md)에 있습니다.
+구현 세부는 [TechnicalNotes.md](Docs/TechnicalNotes.md)에 있습니다.
 
 ## 시작하기
 

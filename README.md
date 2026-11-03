@@ -30,6 +30,5 @@ Tools/run-il2cpp-build.sh
 ## 시스템 문서
 
 - FlowField — [README](./ToyProject/Assets/_FlowField/README.md)
-- OptimizeTool — [README](./ToyProject/Assets/_OptimizeTool/README.md) · [저장·재빌드 성능 검증](./ToyProject/Assets/_OptimizeTool/Docs/Performance/PerformanceReport.md)
-  - 현재 Mesh 요청 API, 녹화 원본 기준 비교와 v2 계측 결과 형식을 사용합니다. 구형 초기화·결과 별칭과 이전 데이터 호환 경로는 제거했습니다.
+- OptimizeTool — [README](./ToyProject/Assets/_OptimizeTool/README.md)
 - TransformPath — [README](./ToyProject/Assets/_TransformPath/README.md)
