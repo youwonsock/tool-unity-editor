@@ -419,6 +419,10 @@ namespace Common.TransformPath
         public void ForceBlock()
         {
             _queue.ManualBlock = true;
+            // Outside the queue nothing waits, so the hold only applies to the
+            // next queued start.
+            if (_queueParticipationMode != EQueueParticipationMode.Queued)
+                return;
             _queue.ResumeDelayRemaining = _resumeMovementDelay;
             _queue.IsBlocked = true;
             _queue.SpeedMultiplier = 0f;

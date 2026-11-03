@@ -103,7 +103,7 @@ Agent와 Manager는 같은 Provider 인스턴스를 써야 합니다. 세 번째
 | --- | --- |
 | `StartPlayback(request)` | Inspector에 지정한 Manager로 시작 |
 | `StartFreePlayback(request)` | Queue를 떠나 일반 재생 시작 |
-| `ForceBlock`, `ForceUnblock` | 등록과 간격 계산을 유지한 채 대기, 해제 |
+| `ForceBlock`, `ForceUnblock` | 등록과 간격 계산을 유지한 채 대기, 해제. Queue 밖의 재생은 멈추지 않고, 대기는 다음 Queue 시작에 적용 |
 | `PauseMove`, `ResumeMove` | 재생을 멈추고 등록을 해제, 재개하며 다시 등록 |
 | `DetachQueue` | 재생을 유지하고 Queue만 해제 |
 

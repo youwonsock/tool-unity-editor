@@ -405,6 +405,52 @@ namespace Common.TransformPath.Tests
         }
 
         [Test]
+        public void AHoldDoesNotFreezeAPlaybackOutsideTheQueue()
+        {
+            QueuedPathFollower queue = CreateQueue();
+            queue.StartFreePlayback(PathPlaybackRequest.Single(CreatePath(100f)));
+
+            queue.ForceBlock();
+
+            Assert.That(queue.IsBlocked, Is.False);
+            Assert.That(queue.IsActuallyMoving, Is.True);
+            Assert.That(queue.CurrentSpeedMultiplier, Is.EqualTo(1f));
+            Assert.That(queue.IsQueueHeld, Is.False);
+            queue.UnderlyingFollower.Tick(1f);
+            Assert.That(queue.GlobalNormalizedTime, Is.GreaterThan(0f));
+            queue.ForceUnblock();
+            Assert.That(queue.IsBlocked, Is.False);
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void AHoldMadeOutsideTheQueueAppliesToTheNextQueuedStart(bool whileMoving)
+        {
+            PathData path = CreatePath(100f);
+            QueuedPathManager manager = CreateManager(path);
+            QueuedPathFollower queue = CreateQueue();
+            var driver = new PathRuntimeDriver();
+            driver.Register(manager);
+            driver.Register(queue);
+            driver.Register(queue.UnderlyingFollower);
+            if (whileMoving)
+                queue.StartFreePlayback(PathPlaybackRequest.Single(path));
+
+            queue.ForceBlock();
+            Assert.That(queue.IsBlocked, Is.False);
+            queue.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            for (int frame = 1; frame <= 10; frame++)
+                driver.Tick(0.02f, 0.02f, frame);
+
+            Assert.That(queue.IsQueueHeld, Is.True);
+            Assert.That(queue.GlobalNormalizedTime, Is.Zero);
+            queue.ForceUnblock();
+            for (int frame = 11; frame <= 40; frame++)
+                driver.Tick(0.02f, 0.02f, frame);
+            Assert.That(queue.GlobalNormalizedTime, Is.GreaterThan(0f));
+        }
+
+        [Test]
         public void AStopWhileBlockedDoesNotCarryOverToTheNextPlayback()
         {
             PathData path = CreatePath(100f);
