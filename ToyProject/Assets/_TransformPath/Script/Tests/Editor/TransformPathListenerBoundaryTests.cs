@@ -450,6 +450,85 @@ namespace Common.TransformPath.Tests
             Assert.That(queue.GlobalNormalizedTime, Is.GreaterThan(0f));
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void LeavingTheQueueWhileBlockedReportsTheResume(bool startFree)
+        {
+            PathData path = CreatePath(100f);
+            QueuedPathManager manager = CreateManager(path);
+            QueuedPathFollower queue = CreateQueue();
+            var heard = new List<string>();
+            queue.OnBlocked += _ => heard.Add("blocked");
+            queue.OnResumed += _ => heard.Add("resumed");
+            queue.OnSpeedChanged += (_, speed) => heard.Add("speed " + speed);
+            var driver = new PathRuntimeDriver();
+            driver.Register(manager);
+            driver.Register(queue);
+            driver.Register(queue.UnderlyingFollower);
+
+            queue.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            queue.ForceBlock();
+            for (int frame = 1; frame <= 5; frame++)
+                driver.Tick(0.02f, 0.02f, frame);
+            Assert.That(queue.CurrentSpeedMultiplier, Is.Zero);
+            heard.Clear();
+
+            if (startFree) queue.StartFreePlayback(PathPlaybackRequest.Single(path));
+            else queue.DetachQueue();
+
+            Assert.That(queue.IsBlocked, Is.False);
+            Assert.That(queue.IsMoving, Is.True);
+            Assert.That(heard, Is.EqualTo(new[] { "resumed", "speed 1" }));
+
+            heard.Clear();
+            for (int frame = 6; frame <= 10; frame++)
+                driver.Tick(0.02f, 0.02f, frame);
+            Assert.That(heard, Is.Empty, "Listeners heard it once.");
+        }
+
+        [Test]
+        public void ALeaveNotificationRunsAfterTheCommandReturns()
+        {
+            PathData path = CreatePath(100f);
+            QueuedPathManager manager = CreateManager(path);
+            QueuedPathFollower queue = CreateQueue();
+            var driver = new PathRuntimeDriver();
+            driver.Register(manager);
+            driver.Register(queue);
+            queue.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            driver.Tick(0.02f, 0.02f, 1);
+            var speeds = new List<float>();
+            queue.OnResumed += _ => queue.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            queue.OnSpeedChanged += (_, speed) => speeds.Add(speed);
+
+            queue.DetachQueue();
+
+            Assert.That(queue.IsRegistered, Is.True);
+            Assert.That(speeds, Is.EqualTo(new[] { 1f }), "The restart came after the detach had raised both.");
+        }
+
+        [Test]
+        public void ADirectRestartAfterAStopReportsTheSpeedListenersLastHeard()
+        {
+            PathData path = CreatePath(100f);
+            QueuedPathManager manager = CreateManager(path);
+            QueuedPathFollower queue = CreateQueue();
+            var driver = new PathRuntimeDriver();
+            driver.Register(manager);
+            driver.Register(queue);
+            queue.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            driver.Tick(0.02f, 0.02f, 1);
+            var heard = new List<string>();
+            queue.OnResumed += _ => heard.Add("resumed");
+            queue.OnSpeedChanged += (_, speed) => heard.Add("speed " + speed);
+            queue.StopMove();
+            Assert.That(heard, Is.Empty, "A stop is not a resume.");
+
+            queue.UnderlyingFollower.StartPlayback(PathPlaybackRequest.Single(path));
+
+            Assert.That(heard, Is.EqualTo(new[] { "speed 1" }));
+        }
+
         [Test]
         public void AStopWhileBlockedDoesNotCarryOverToTheNextPlayback()
         {
