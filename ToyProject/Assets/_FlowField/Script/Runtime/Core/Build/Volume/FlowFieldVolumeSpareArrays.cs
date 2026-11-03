@@ -24,10 +24,6 @@ namespace Common.FlowField
         internal int[] Queue;
         internal bool[] Influence;
 
-        internal bool IsEmpty => Blocked == null && Topology == null && GoalFlags == null && Next == null
-            && Directions == null && Speeds == null && FinalDirections == null && FinalSpeeds == null
-            && EscapeDirections == null && Costs == null && Queue == null && Influence == null;
-
         internal long Bytes => (Blocked?.Length ?? 0)
             + (Influence?.Length ?? 0)
             + 4L * (Topology?.Length ?? 0)

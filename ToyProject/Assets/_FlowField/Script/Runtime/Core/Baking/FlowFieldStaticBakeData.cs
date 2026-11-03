@@ -271,7 +271,6 @@ namespace Common.FlowField
         internal float[] SurfaceHeights => _surfaceHeights;
         internal Vector3[] SurfaceNormals => _surfaceNormals;
         internal byte[] SurfaceFlags => _surfaceFlags;
-        internal byte[] SurfaceNeighborMasks => _surfaceNeighborMasks;
         internal bool[] Blocked => _blocked;
         internal Vector3[] EscapeDirections => _escapeDirections;
         internal byte[] TopologyMasks => _topologyMasks;

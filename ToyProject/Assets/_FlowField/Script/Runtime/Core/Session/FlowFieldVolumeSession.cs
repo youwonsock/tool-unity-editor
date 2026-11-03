@@ -75,9 +75,6 @@ namespace Common.FlowField
             return _requests.HasLatest;
         }
 
-        internal bool ContainsModifier(IFlowFieldVectorModifier modifier)
-            => _modifierRegistry.Contains(modifier);
-
         internal float BuildProgress
         {
             get
@@ -92,8 +89,6 @@ namespace Common.FlowField
                 return Mathf.Clamp01(((int)_build.Phase + Mathf.Clamp01(local)) / phaseCount);
             }
         }
-
-        internal bool HasSpareArrays => !_spares.IsEmpty;
 
         internal void Initialize(FlowFieldBakeMode bakeMode)
         {

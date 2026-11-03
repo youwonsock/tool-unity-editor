@@ -7,8 +7,8 @@
 #
 # See Tools/snapshot-worktree.sh for the environment variables. The build stops
 # with exit code 124 after UNITY_BUILD_TIMEOUT seconds. It needs about 2 GB of free
-# disk, and switches the test worktree to Android until the next test run switches
-# it back.
+# disk, and leaves the snapshot worktree on Android until the next Player build
+# switches it back.
 set -euo pipefail
 
 source "$(dirname "$0")/snapshot-worktree.sh"
