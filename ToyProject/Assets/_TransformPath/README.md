@@ -109,7 +109,7 @@ Agent와 Manager는 같은 Provider 인스턴스를 써야 합니다. 세 번째
 
 간격 1.5, 감속 시작 거리 3, 최소 속도 배율 0.1, 재출발 지연 0.1초, 추가 간격 0.3, 속도 보간율 5가 기본값이며 Inspector에서 바꿉니다.
 
-`OnBlocked`와 `OnResumed`는 Tick에서 관찰한 `IsBlocked`의 변화와 짝을 이룹니다. 시작, Seek, Loop 뒤의 첫 결과 대기도 포함하며, 대기가 한 Tick 안에 끝나면 둘 다 오지 않습니다. `ForceBlock`의 알림은 다음 Tick에 옵니다.
+`OnBlocked`와 `OnResumed`는 Tick에서 관찰한 `IsBlocked`의 변화와 짝을 이룹니다. 시작, Seek, Loop 뒤의 첫 결과 대기도 포함하며, 대기가 한 Tick 안에 끝나면 둘 다 오지 않습니다. `ForceBlock`의 알림은 다음 Tick에 옵니다. `DetachQueue`나 `StartFreePlayback`으로 Queue를 떠나면 `OnResumed`와 `OnSpeedChanged`가 바로 옵니다. 정지와 완료는 재생이 이어지지 않으므로 `StateChanged`와 `Completed`로만 알립니다.
 
 `QueueInvalidated`는 경로가 준비되지 않았거나(`ProviderInvalid`), Manager가 해제되었거나(`ManagerReleased`), 지정한 최대 진행률을 넘었을 때(`ConstraintViolation`) 옵니다. 앞 Agent와의 간격이 부족한 것은 위반이 아니라 대기입니다.
 

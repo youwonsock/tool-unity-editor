@@ -377,7 +377,7 @@ namespace Common.TransformPath
             _queueParticipationMode = EQueueParticipationMode.Detached;
             _activeManager = null;
             _requestedMaxGlobalNormalizedTime = 1f;
-            ResetConstraintState();
+            LeaveConstraintState();
             return _pathFollower.StartPreparedPlayback(session, request.Loop);
         }
 
@@ -446,6 +446,7 @@ namespace Common.TransformPath
         /// </summary>
         public void DetachQueue()
         {
+            using var operation = PathExecutionBoundary.Enter();
             _suppressDetachStop = true;
             try
             {
@@ -458,7 +459,7 @@ namespace Common.TransformPath
             _queueParticipationMode = EQueueParticipationMode.Detached;
             _activeManager = null;
             _requestedMaxGlobalNormalizedTime = 1f;
-            ResetConstraintState();
+            LeaveConstraintState();
         }
 
         public void ApplyQueueState(
@@ -588,7 +589,7 @@ namespace Common.TransformPath
                 if (_queueParticipationMode == EQueueParticipationMode.Queued)
                     TryRegisterWithManager();
                 else
-                    ResetConstraintState();
+                    LeaveConstraintState();
             }
             else if (state == EPathFollowerState.Paused)
             {
@@ -661,7 +662,6 @@ namespace Common.TransformPath
         {
             _queue.ManualBlock = false;
             _queue.IsBlocked = false;
-            _reportedBlocked = false;
             _managerState = null;
             _queue.SpeedMultiplier = 1f;
             _queue.ResumeDelayRemaining = 0f;
@@ -672,6 +672,13 @@ namespace Common.TransformPath
                     constraintTarget.ReleaseQueueConstraint(_queue.Registration);
             }
             UpdateAnimator();
+        }
+
+        // The playback goes on outside the queue, so listeners hear the wait end.
+        private void LeaveConstraintState()
+        {
+            ResetConstraintState();
+            ReportStateChanges();
         }
 
         private void ApplyCurrentConstraint()
