@@ -136,9 +136,7 @@ public static class MeshBuildExample
 
 병합 입력은 Layer·그림자·Probe·정렬·Rendering Layer·Motion Vector·Static Flag·Receive GI 설정이 같아야 합니다. 지원하는 설정은 출력 Renderer에 복사합니다. PropertyBlock, Additional Vertex Streams, 할당된 Lightmap, LODGroup, forceRenderingOff는 개별 Renderer의 동작을 보존할 수 없어 저장 전에 거부합니다. 카메라 기준 컬링은 해당 시점에 기하를 제거하는 베이크이며, 정점 Raycast 표본으로 판단하는 Occlusion은 Collider 기반 근사입니다.
 
-샘플 모드의 이름·그룹·버튼 정의는 `OptimizeToolSampleModes`에 모았습니다. 기존 배열 순서와 직렬화 필드는 유지하고, Mesh 통계 문자열을 캐시해 모드 변경 때 갱신합니다. 물리 상태 표시는 상태 변화 또는 0.1초 간격으로 갱신합니다. 벤치마크의 전역 설정·Behaviour 활성 상태는 `BenchmarkEnvironmentScope`, Editor Game View 설정은 `GameViewCaptureScope`가 복원합니다. 진단 파일 기록이 실패해도 복원은 실행합니다.
-
-초기 리팩터링 당시의 회귀 결과와 참조 보존 해시는 [RefactoringValidation.json](Docs/RefactoringValidation.json)에 보관합니다. 현재 계약의 검증 결과는 마지막 절에서 확인할 수 있습니다. 이전 성능 보고서의 CPU·GPU 수치를 이번 코드 정리의 성능 향상으로 해석하지 않습니다.
+샘플 모드의 이름·그룹·버튼 정의는 `OptimizeToolSampleModes`에 모았습니다. Mesh 통계 문자열을 캐시해 모드 변경 때 갱신합니다. 물리 상태 표시는 상태 변화 또는 0.1초 간격으로 갱신합니다. 벤치마크의 전역 설정·Behaviour 활성 상태는 `BenchmarkEnvironmentScope`, Editor Game View 설정은 `GameViewCaptureScope`가 복원합니다. 진단 파일 기록이 실패해도 복원은 실행합니다.
 
 ## 기능 상세
 
@@ -241,7 +239,7 @@ UI의 수치는 Geometry 수량이며 GPU 메모리나 실제 Draw Call·프레�
 
 클립 종료 시각이 물리 틱 사이에 있으면 원본 기준 데이터에도 보간한 종료 자세를 보존합니다. 양쪽의 화면은 같은 재생 시각을 사용하며, 오차는 프레임이 건너뛴 경우에도 시작·종료를 포함한 모든 원본 관찰 시각에서 검사합니다. 수치는 대응되는 Transform 경로의 로컬 위치·회전을 비교하므로 두 전시 공간의 배치 간격은 오차에 포함되지 않습니다.
 
-패널의 Peak recorded-pose delta는 녹화 당시 원본 관찰값과 저장된 Prefab의 커브 재생 사이의 최대 위치·회전 차이입니다. 설정된 표본 간격·움직임 임계값에 따른 축약 오차도 그대로 표시합니다. 비교에는 같은 녹화에서 저장한 `.anim`·`.prefab`·`.reference.asset`이 필요합니다. 기준 데이터가 없거나 클립·계층이 맞지 않으면 재생을 중단하고 오류를 표시합니다. RECORD로 새 녹화를 만들면 다시 비교할 수 있습니다. 원인 분석과 검증 결과는 [녹화 기준 비교 개선 기록](Docs/PhysicsRecordedComparison.md)을 참고하세요. 샘플 계층을 다시 만들려면 `Tools > OptimizeTool > Build Physics Recorder Demo`를 사용합니다. `Build Showcase Assets`도 이 데모 구성을 포함합니다.
+패널의 Peak recorded-pose delta는 녹화 당시 원본 관찰값과 저장된 Prefab의 커브 재생 사이의 최대 위치·회전 차이입니다. 설정된 표본 간격·움직임 임계값에 따른 축약 오차도 그대로 표시합니다. 비교에는 같은 녹화에서 저장한 `.anim`·`.prefab`·`.reference.asset`이 필요합니다. 기준 데이터가 없거나 클립·계층이 맞지 않으면 재생을 중단하고 오류를 표시합니다. RECORD로 새 녹화를 만들면 다시 비교할 수 있습니다. 샘플 계층을 다시 만들려면 `Tools > OptimizeTool > Build Physics Recorder Demo`를 사용합니다. `Build Showcase Assets`도 이 데모 구성을 포함합니다.
 
 기본 Showcase Prefab에는 저장된 녹화와 대응하는 `PhysicsRecordingReference`가 직렬화돼 있습니다. Player에서도 이 참조를 사용하며 Editor 전용 AssetDatabase 조회에 의존하지 않습니다. 직접 샘플을 구성할 때도 두 참조를 함께 지정해야 합니다.
 
@@ -286,33 +284,13 @@ python3 ToyProject/Assets/_OptimizeTool/Docs/Performance/summarize_player_benchm
 
 수집을 중단한 경우 같은 앱·옵션·`capture_root`로 실행 명령에 `--resume`을 추가하면 검증된 완료 실행을 재사용합니다. 실패한 수집은 따로 보존하고 다시 실행합니다. `Frame Timing is unavailable` 오류가 나면 Player Settings의 Frame Timing Stats를 활성화하고 재빌드합니다. GPU 오프스크린 측정은 아래 별도 GPU Player 빌드와 실행 스크립트를 사용하며, 그래픽이 필요한 경로이므로 `-nographics`를 사용하지 않습니다.
 
-### GPU 부하와 구간 검증
+### GPU 부하 측정
 
 `Tools > OptimizeTool > Benchmark > Build GPU Benchmark Scene`은 각 면을 64×64로 분할한 9·36·225개 큐브와 실제 최적화 Mesh를 생성합니다. `Build macOS GPU Benchmark Player`는 이 샘플의 별도 Player와 Metal 계측 플러그인을 빌드합니다. macOS Command Line Tools(`xcrun clang++`)가 필요합니다. 약 1.4 GiB의 고밀도 Mesh·GPU 씬·플러그인 바이너리는 재생성 가능한 로컬 산출물로 Git에서 제외했습니다.
 
 [GPU 실행 스크립트](Docs/Performance/run_gpu_benchmark_suite.py)는 실제 Metal GPU를 사용하는 오프스크린 Player로 비동기·GPU 완료 동기화·60 FPS 제한 조건을 교차 수집합니다. RenderTexture를 매 프레임 명시적으로 렌더하고, 같은 커맨드 버퍼의 GPU 시작·종료 타임스탬프를 검증합니다. 한 픽셀 완료 readback은 측정 GPU 구간 밖의 진단이며 기본 샘플 실행에는 적용하지 않습니다. 표시 FPS를 GPU 시간으로 환산하지 않습니다.
 
-225개·1,106만 삼각형의 연속 렌더링 완료 동기화 조건에서 GPU 구간 중앙값은 Original 6.316 ms, Combined 5.019 ms, Backface 1.677 ms, Occlusion 1.852 ms였습니다. 대응 구간 기준 Backface 71.63%, Occlusion 68.93% 감소를 확인했지만, 60 FPS 제한에서는 GPU 개선을 확정하지 못했습니다. 유효 성능 표본 51,840개·원시 타임스탬프·신뢰구간·한계는 [GPU 검증 보고서](Docs/Performance/PerformanceReport.md)에 있습니다.
-
-### Draw Call · CPU · GPU 실측
-
-앞선 저밀도 규모 샘플은 Apple M4 Pro / Metal / ARM64의 별도 Development Player(1920×1080)에서 225·900·3,600개 큐브를 반복 측정했습니다. 3,600개에서는 Draw Call 7,206→8회(99.89% 감소), CPU 전체 중앙값 2.206→0.615 ms(Combined)로 줄었습니다. GPU 보고값은 실행별 변동이 커 일관된 개선을 확인하지 못했습니다. 기본 조건과 240 FPS 대조 총 92,160개 유효 표본, 원시 데이터·신뢰구간·Player 재실행 방법은 [실제 성능 비교 보고서](Docs/Performance/PerformanceReport.md)에 있습니다. 기존 9개 큐브 Editor 측정 기록도 별도로 보존했습니다.
-
-### 3,600개 저장·재빌드 개선
-
-동일 입력을 전후 각각 별도 Editor 4회로 교차 측정한 저장·재빌드 수정 결과입니다. 신규 Mesh의 이름·읽기 설정을 생성 전에 확정해 중복 형상 저장을 없앴고, 재빌드는 유지되는 원본의 7,200회 불필요한 Renderer 변경을 생략했습니다. 콜백이 있는 저장과 기존 Mesh 덮어쓰기는 최종 저장·Undo·실패 복원을 유지합니다.
-
-| 구간 | 수정 전 → 후 중앙값 | 대응 실행 기준 감소 |
-| --- | ---: | ---: |
-| 신규 Mesh 3개 저장 | 380.04 → 177.07 ms | 54.05% |
-| 공개 API 재빌드 | 267.42 → 181.23 ms | 32.17% |
-| 코어 계산+저장 | 927.67 → 712.75 ms | 25.56% |
-
-첫 호출 시간과 전체 RSS의 확실한 개선은 확인하지 못했습니다. 위 값은 저장·재빌드 수정 당시의 Editor 실측이며, 아래 호환 코드 정리 후 새 성능 측정을 수행한 값은 아닙니다. 표본·신뢰구간·저장 결과 동등성은 [성능 보고서](Docs/Performance/PerformanceReport.md)와 [원시 자료](Docs/Performance/SaveRebuildFix-2026-10-24/README.md)에 있습니다.
-
 ### PhysicsRecorder 움직임 기록
-
-책임 분리 과정, 저장 계약, 단계별 검증과 비용 측정의 이력은 [PhysicsRecorder 리팩터링 기록](Docs/PhysicsRecorderRefactoring.md)을 참고하세요.
 
 **목적**
 
@@ -337,7 +315,7 @@ python3 ToyProject/Assets/_OptimizeTool/Docs/Performance/summarize_player_benchm
 ### 계측 결과의 실행 구분과 중단 복구
 
 - 계측은 기존 결과가 없는 출력 폴더를 한 번만 사용합니다. Player 로그 파일만 있는 폴더는 허용하며, `capture.json`의 실행 ID로 중복 실행을 차단합니다. CLI와 `StartEditorRun`이 같은 수집기를 사용합니다.
-- 결과 형식 v2는 실행 ID와 CSV·메타데이터의 SHA-256을 완료 파일에 기록합니다. 두 파일의 저장이 끝난 후 완료 파일을 원자적으로 게시하며 실패·중단은 완료 표시를 무효화합니다. 실행기와 오프라인 분석기는 같은 검증 함수를 사용합니다. 분석과 재개는 실행 ID·클레임·해시가 있는 v2 결과만 허용합니다. 버전이 없거나 v1인 결과, 오류 표시가 있는 실행은 거부합니다. 과거 보고서와 원시 자료는 검증 이력으로 보존하며 현재 분석기의 입력으로 자동 변환하지 않습니다.
+- 결과 형식 v2는 실행 ID와 CSV·메타데이터의 SHA-256을 완료 파일에 기록합니다. 두 파일의 저장이 끝난 후 완료 파일을 원자적으로 게시하며 실패·중단은 완료 표시를 무효화합니다. 실행기와 오프라인 분석기는 같은 검증 함수를 사용합니다. 분석과 재개는 실행 ID·클레임·해시가 있는 v2 결과만 허용합니다. 버전이 없거나 v1인 결과, 오류 표시가 있는 실행은 거부합니다.
 - 취소, 컴포넌트 비활성화, 오브젝트 파괴, 출력 실패 시 모드·규모·카메라 위치/회전/투영과 계측용 전역 설정·Behaviour 활성 상태를 복원합니다. 종료 콜백은 한 번만 전달합니다.
 - CSV의 `observed_frame`, `timing_timestamp`, `metal_frame_id`는 각각 관측 프레임, 지연된 CPU 타이밍, 별도 GPU 완료 기록의 식별자입니다. 같은 행을 동일 프레임의 CPU/GPU 쌍으로 해석하지 않습니다. 유효성 열은 사용할 수 없는 시간값 0을 구분합니다. 비교 통계는 워밍업 이후의 모드별 블록을 기준으로 합니다.
 - 내부 책임은 옵션 해석(`BenchmarkRunOptions`), 결과 게시(`BenchmarkCaptureOutput`), CSV 출력(`BenchmarkCsvWriter`), 작업·카메라 복원(`BenchmarkWorkloadScope`)으로 분리했습니다. 자원 Scope와 네이티브 GPU 계측은 해당 자원을 소유한 범위에서 정리합니다. 렌더 설정은 현재 URP 16 API에서 직접 읽으며, 다른 파이프라인의 대체값을 기록하지 않습니다.
