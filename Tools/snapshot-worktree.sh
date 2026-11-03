@@ -1,18 +1,56 @@
 # Sourced by the Unity scripts. Copies the current working tree into a separate
 # Git worktree, so an open Unity Editor keeps its project lock. Ignored files
-# are left out, which also proves a fresh checkout is sufficient.
+# are left out, which also proves a fresh checkout is sufficient. Also provides
+# run_limited.
 #
 # UNITY_PATH           Unity executable (default: the Hub install of the project version)
 # UNITY_TEST_WORKTREE  Reused worktree (default: under TMPDIR, keeps its Library)
 # UNITY_TEST_RESULTS   Folder for results and logs (default: <worktree>-results)
 # UNITY_TEST_TREE      Commit to test instead of the working tree
+# UNITY_BUILD_TIMEOUT  Seconds a Player build may take (default 3600)
 
 root=$(git rev-parse --show-toplevel)
 version=$(sed -n 's/^m_EditorVersion: //p' "$root/ToyProject/ProjectSettings/ProjectVersion.txt")
 unity=${UNITY_PATH:-/Applications/Unity/Hub/Editor/$version/Unity.app/Contents/MacOS/Unity}
 worktree=${UNITY_TEST_WORKTREE:-${TMPDIR:-/tmp}/tool-unity-editor-tests}
 results=${UNITY_TEST_RESULTS:-$worktree-results}
+build_timeout=${UNITY_BUILD_TIMEOUT:-3600}
 mkdir -p "$results"
+
+stop_tree() {
+    local child
+    for child in $(pgrep -P "$1" 2>/dev/null); do
+        stop_tree "$child"
+    done
+    kill -9 "$1" 2>/dev/null || true
+}
+
+stop_limited() {
+    stop_tree "$limited_pid"
+    wait "$limited_pid" 2>/dev/null || true
+}
+
+# run_limited <seconds> <command...> stops the command and everything it started
+# with exit code 124 after that time. Unity can deadlock and never exit, and macOS
+# has no timeout command. A run in the background ignores Ctrl+C, so the trap
+# passes it on.
+run_limited() {
+    local limit=$1
+    shift
+    "$@" &
+    limited_pid=$!
+    trap 'stop_limited; exit 130' INT TERM
+    local deadline=$((SECONDS + limit))
+    while kill -0 "$limited_pid" 2>/dev/null; do
+        if [ "$SECONDS" -ge "$deadline" ]; then
+            stop_limited
+            echo "Timed out after $limit seconds."
+            return 124
+        fi
+        sleep 1
+    done
+    wait "$limited_pid"
+}
 
 [ -e "$worktree/.git" ] || git -C "$root" worktree add -q --detach "$worktree" HEAD
 
