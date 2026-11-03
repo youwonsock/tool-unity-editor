@@ -4,16 +4,16 @@
 # run_limited.
 #
 # UNITY_PATH           Unity executable (default: the Hub install of the project version)
-# UNITY_TEST_WORKTREE  Reused worktree (default: under TMPDIR, keeps its Library)
-# UNITY_TEST_RESULTS   Folder for results and logs (default: <worktree>-results)
-# UNITY_TEST_TREE      Commit to test instead of the working tree
+# UNITY_WORKTREE       Reused worktree (default: under TMPDIR, keeps its Library)
+# UNITY_RESULTS        Folder for results and logs (default: <worktree>-results)
+# UNITY_TREE           Commit to build instead of the working tree
 # UNITY_BUILD_TIMEOUT  Seconds a Player build may take (default 3600)
 
 root=$(git rev-parse --show-toplevel)
 version=$(sed -n 's/^m_EditorVersion: //p' "$root/ToyProject/ProjectSettings/ProjectVersion.txt")
 unity=${UNITY_PATH:-/Applications/Unity/Hub/Editor/$version/Unity.app/Contents/MacOS/Unity}
-worktree=${UNITY_TEST_WORKTREE:-${TMPDIR:-/tmp}/tool-unity-editor-tests}
-results=${UNITY_TEST_RESULTS:-$worktree-results}
+worktree=${UNITY_WORKTREE:-${TMPDIR:-/tmp}/tool-unity-editor-snapshot}
+results=${UNITY_RESULTS:-$worktree-results}
 build_timeout=${UNITY_BUILD_TIMEOUT:-3600}
 mkdir -p "$results"
 
@@ -54,12 +54,12 @@ run_limited() {
 
 [ -e "$worktree/.git" ] || git -C "$root" worktree add -q --detach "$worktree" HEAD
 
-if [ -n "${UNITY_TEST_TREE:-}" ]; then
-    tree=$UNITY_TEST_TREE
+if [ -n "${UNITY_TREE:-}" ]; then
+    tree=$UNITY_TREE
 else
     # A temporary index captures tracked edits and new files without touching
     # the real index, the stash or any branch.
-    index=$(mktemp "${TMPDIR:-/tmp}/run-tests-index.XXXXXX")
+    index=$(mktemp "${TMPDIR:-/tmp}/snapshot-index.XXXXXX")
     rm -f "$index"
     trap 'rm -f "$index"' EXIT
     GIT_INDEX_FILE=$index git -C "$root" add -A
@@ -67,5 +67,5 @@ else
 fi
 git -C "$worktree" read-tree -u --reset "$tree"
 git -C "$worktree" clean -fdq
-# Tests generate large ignored assets. Library stays, because it holds the import.
+# Earlier runs leave large ignored assets. Library stays, because it holds the import.
 git -C "$worktree" clean -fdqX -- ToyProject/Assets

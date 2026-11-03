@@ -10,9 +10,6 @@
 | `Common.TransformPath.Editor` | Inspector, 연결점과 그룹 동기화, Scene View 미리보기 |
 | `Common.TransformPath.Samples` | Showcase UI, 샘플 카메라 |
 | `Common.TransformPath.PlayerProbe` | Player 측정 (`Tools/run-transformpath-probe.sh`). Editor와 측정 빌드에서만 컴파일 |
-| `Common.TransformPath.Tests`, `Common.TransformPath.Tests.PlayMode` | 회귀 테스트 (`Tools/run-tests.sh`). `TransformPathEditorUiTests`는 그래픽 Editor에서만 실행 |
-
-공개 API와 직렬화 필드는 `Script/Tests/Editor/TransformPathPublicApi.json`과 비교합니다. 공개 표면을 바꾸면 이 파일도 함께 갱신합니다.
 
 ## 수명 규칙
 

@@ -8,7 +8,6 @@ Unity Editor에서 Mesh 결합·컬링·물리 움직임 기록을 수행하고,
 - [프로젝트 요약](#프로젝트-요약)
 - [클래스와 호출 관계](#클래스와-호출-관계)
 - [기능 상세](#기능-상세)
-- [자동 테스트와 회귀 검증](#자동-테스트와-회귀-검증)
 
 ## 프로젝트 개요
 
@@ -342,24 +341,3 @@ python3 ToyProject/Assets/_OptimizeTool/Docs/Performance/summarize_player_benchm
 - 취소, 컴포넌트 비활성화, 오브젝트 파괴, 출력 실패 시 모드·규모·카메라 위치/회전/투영과 계측용 전역 설정·Behaviour 활성 상태를 복원합니다. 종료 콜백은 한 번만 전달합니다.
 - CSV의 `observed_frame`, `timing_timestamp`, `metal_frame_id`는 각각 관측 프레임, 지연된 CPU 타이밍, 별도 GPU 완료 기록의 식별자입니다. 같은 행을 동일 프레임의 CPU/GPU 쌍으로 해석하지 않습니다. 유효성 열은 사용할 수 없는 시간값 0을 구분합니다. 비교 통계는 워밍업 이후의 모드별 블록을 기준으로 합니다.
 - 내부 책임은 옵션 해석(`BenchmarkRunOptions`), 결과 게시(`BenchmarkCaptureOutput`), CSV 출력(`BenchmarkCsvWriter`), 작업·카메라 복원(`BenchmarkWorkloadScope`)으로 분리했습니다. 자원 Scope와 네이티브 GPU 계측은 해당 자원을 소유한 범위에서 정리합니다. 렌더 설정은 현재 URP 16 API에서 직접 읽으며, 다른 파이프라인의 대체값을 기록하지 않습니다.
-
-## 자동 테스트와 회귀 검증
-
-Unity Test Runner에서 `Common.OptimizeTool.Tests`(EditMode)와 `Common.OptimizeTool.PlayModeTests`(PlayMode)를 실행합니다. 배치 실행 시 같은 어셈블리를 선택할 수 있습니다.
-
-```sh
-Unity -batchmode -projectPath /path/to/ToyProject -runTests -testPlatform EditMode \
-  -assemblyNames Common.OptimizeTool.Tests -testResults /tmp/optimize-editmode.xml
-Unity -batchmode -projectPath /path/to/ToyProject -runTests -testPlatform PlayMode \
-  -assemblyNames Common.OptimizeTool.PlayModeTests -testResults /tmp/optimize-playmode.xml
-```
-
-`Unity`는 해당 버전의 Editor 실행 파일 경로로 바꿉니다. 배치 실행은 같은 프로젝트가 Editor에서 열려 있으면 사용할 수 없으므로 Editor를 닫거나 독립 복사본에서 실행합니다. EditMode의 `PhysicsDemoReloadLifecycleTests`는 실제 Play Mode 진입과 강제 재컴파일을 수행하고 최초 Enter Play Mode 옵션을 복원합니다.
-
-검사는 자세·정지 구간 보존, 저장 완료·실패 복원, 기준 데이터의 필수 참조와 누락·불일치 거부, 씬·Prefab 참조, 재컴파일 후 UI 복구, 반복 RESET·비활성화·컴포넌트 파괴 후 인스턴스와 리스너 정리를 포함합니다. NUnit의 버튼 호출과 Game View에서의 실제 마우스 클릭은 별도 증거로 관리합니다. 이전 계약의 검증 이력은 [PhysicsRecorder 회귀 검증 기록](Docs/PhysicsRecorderRegressionValidation.md), 현재 계약의 결과는 아래 정리 검증 문서에서 확인합니다. CPU·GPU 성능 측정은 위 성능 보고서의 별도 실행 결과입니다.
-
-2026-10-31 기준 **EditMode 117/117·PlayMode 38/38·Python 10/10** 통과했습니다(저장소 루트의 `Tools/run-tests.sh`). 2026-10-24 현재 계약 정리 후 EditMode 103/103·PlayMode 38/38·Python 10/10이었습니다. 최종 상태 표시 변경 후 관련 PlayMode 22개도 모두 통과했습니다. 정리 범위·원시 로그·실행 제한은 [현재 계약 정리 검증](Docs/CurrentContractCleanup/Validation.md)에 기록합니다. 메시 도구의 `Init`·`Release`·`IsInitialized`·`IsFaulted`, `MeshBuildResult.Materials`, 녹화 결과의 `ResultClip`·`ResultPrefab`·`IsSaveCompleted`, 기준 데이터 없는 녹화본 재생과 계측 v1 호환 처리를 제거했습니다. 호출부·테스트도 현재 API로 정리했으며 별도 마이그레이션 어댑터를 두지 않습니다.
-
-물리 Recorder와 샘플 UI의 `Init`·`Release`는 실제 세션·리스너를 관리하는 현재 수명주기로 남습니다. Unity Animation 출력 형식과 `LegacyRuntime.ttf`는 현재 재생·UI에 사용 중인 엔진 기능입니다. 과거 측정 보고서·소스 스냅샷·로그는 당시 결과를 재현하는 이력 자료로 보존합니다.
-
-추가 실제 클릭 5회로 기준 데이터 누락 시 재생 거부, RECORD를 통한 새 녹화와 세 에셋 저장, 비교 완료 및 RESET을 확인했습니다. 추가 검토의 전체 테스트 결과·소스 대조·클릭 기록은 위 검증 문서의 마지막 절에 있습니다.

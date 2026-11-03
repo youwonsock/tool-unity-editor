@@ -17,8 +17,6 @@ namespace Common.FlowField
             = new Dictionary<IFlowFieldVectorModifier, ModifierObservation>(16);
 
         internal int Count => _modifiers.Count;
-        internal bool Contains(IFlowFieldVectorModifier modifier)
-            => modifier != null && _modifiers.Contains(modifier);
 
         internal void Clear()
         {

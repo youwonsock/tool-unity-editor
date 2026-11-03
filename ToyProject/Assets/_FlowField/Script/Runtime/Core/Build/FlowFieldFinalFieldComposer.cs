@@ -174,43 +174,6 @@ namespace Common.FlowField
 
     internal static class FlowFieldFinalFieldComposer
     {
-        public static void Compose(
-            FlowFieldGridSpace grid,
-            FlowFieldSurfaceData surface,
-            FlowFieldWorkspace workspace,
-            Vector3 defaultDirection,
-            IReadOnlyList<FlowFieldModifierLayer> modifierLayers)
-            => Run(grid, surface, workspace, defaultDirection, modifierLayers, FlowFieldCellRect.Full(grid), rebuildBase: true);
-
-        public static void ApplyModifiers(
-            FlowFieldGridSpace grid,
-            FlowFieldSurfaceData surface,
-            FlowFieldWorkspace workspace,
-            IReadOnlyList<FlowFieldModifierLayer> modifierLayers)
-            => ApplyModifiers(grid, surface, workspace, modifierLayers, FlowFieldCellRect.Full(grid));
-
-        public static void ApplyModifiers(
-            FlowFieldGridSpace grid,
-            FlowFieldSurfaceData surface,
-            FlowFieldWorkspace workspace,
-            IReadOnlyList<FlowFieldModifierLayer> modifierLayers,
-            FlowFieldCellRect dirtyRegion)
-            => Run(grid, surface, workspace, Vector3.forward, modifierLayers, dirtyRegion, rebuildBase: false);
-
-        private static void Run(
-            FlowFieldGridSpace grid,
-            FlowFieldSurfaceData surface,
-            FlowFieldWorkspace workspace,
-            Vector3 defaultDirection,
-            IReadOnlyList<FlowFieldModifierLayer> modifierLayers,
-            FlowFieldCellRect region,
-            bool rebuildBase)
-        {
-            var run = new FlowFieldComposeRun();
-            run.Begin(grid, surface, workspace, defaultDirection, modifierLayers, region, rebuildBase);
-            run.Step(FlowFieldBuildBudget.Unlimited);
-        }
-
         internal static void ApplyModifierToCell(
             FlowFieldGridSpace grid,
             FlowFieldSurfaceData surface,

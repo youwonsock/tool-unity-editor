@@ -122,8 +122,6 @@ namespace Common.FlowField
         public bool TryGetFieldInfo(out FlowFieldFieldInfo info)
             => ActiveSession.TryGetFieldInfo(out info);
 
-        internal FlowFieldVolumeSession VolumeSession => _volumeSession;
-        internal FlowFieldSession SurfaceSession => _session;
         internal FlowFieldStaticBakeData StaticBakeData => _staticBakeData;
         internal FlowFieldVolumeBakeData VolumeStaticBakeData => _volumeStaticBakeData;
         internal Bounds BakeBoundsLocal => _bakeBoundsLocal;
