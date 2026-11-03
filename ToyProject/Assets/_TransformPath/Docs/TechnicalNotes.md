@@ -28,12 +28,23 @@
 - `PathPlaybackCursor`는 위치, 잔여 시간, Speed, Duration을 소유합니다. 완료 판정은 이벤트 처리 뒤의 현재 Duration을 씁니다.
 - `PathSequenceSnapshot.TryGetCurrent`와 `PathEventSourceSnapshot.GetCurrent`는 Provider와 Revision별로 스냅샷 하나를 공유합니다. 불변 객체이므로 같은 경로의 Follower가 함께 씁니다. 새 스냅샷이 이전 스냅샷과의 비교 결과를 기억하고, 교체될 때 그 참조를 끊어 스냅샷이 줄줄이 남지 않게 합니다.
 - 시작은 후보 Session을 지역 변수로 준비해 전달합니다. 그 사이 외부 코드가 실행되지 않으므로 다시 검증하지 않습니다.
+- 재생 세션은 첫 `StartPlayback`부터 `Release`까지 남습니다. 재생이 끝난 뒤의 `Seek`는 위치만 옮기고, `SetSpeed`와 `SetDuration`은 값만 바꾸며, 어느 쪽도 재생을 다시 시작하지 않습니다.
+- `PathFollower`를 추가하면 `PathEventHandler`가 함께 추가됩니다. CharacterController는 재생 중 꺼 두고 끝나면 복원하며, Inspector에서 끌 수 있습니다.
+- `SetRotateToPathDirection`은 지속 회전을, `AlignRotationToPathDirection`은 선택한 축의 일회 정렬을 제어합니다.
+
+### 콜백 규칙
+
+- 콜백이 실행될 때는 이벤트 효과와 초기 위치가 이미 반영되어 있습니다. 앞선 콜백이 상태를 바꿨을 수 있으니 인자보다 현재 상태를 읽습니다.
+- 대기 중에 구독을 해제한 리스너는 호출되지 않고, 발행 뒤에 구독한 리스너는 그 알림을 듣지 않습니다.
+- `PathData`와 `MultiPathData`의 `PathChanged`만 예외로 변경 작업 안에서 바로 호출됩니다. 이 콜백의 예외도 기록만 됩니다.
+- 직접 구현한 `IQueuedPathAgent`의 멤버에서 Queue를 바꾸면 `InvalidOperationException`이 발생합니다. 읽기는 할 수 있습니다.
 
 ### Seek
 
 - 먼저 입력과 Provider 준비 상태를 검증합니다. 실패하면 아무것도 바뀌지 않습니다.
 - 같은 위치면 `Changed=false`입니다. 위치가 바뀌면 잔여 시간을 버리고 Queue 제약은 다음 결과를 기다립니다.
-- 이벤트 커서는 목표 위치와 그 이전을 건너뜁니다. 뒤로 Seek하면 다시 통과하는 이벤트는 또 실행됩니다.
+- 이벤트 커서는 목표 위치와 그 이전을 건너뜁니다. 뒤로 Seek하면 다시 통과하는 이벤트는 또 실행됩니다. Seek는 `SegmentChanged`를 보내지 않습니다.
+- `Seek(1f)`는 즉시 완료하지 않고 다음 이동 Tick에서 판정합니다.
 - 구간 경계는 `[start, end)`이며 마지막 구간의 끝 1은 허용합니다.
 
 자연스럽게 시작이나 구간 처음에 도달한 재생은 커서를 0으로 되돌리므로 위치 0의 이벤트도 실행됩니다.
@@ -63,9 +74,20 @@ Moving 상태의 다음 Tick에 `EvaluateRefresh`로 판단하므로 Pause 중�
 - **Pause와 ForceBlock:** Pause는 등록을 해제해 간격 계산에서 빠지고, ForceBlock은 등록을 유지합니다. Queue에 참여하지 않을 때의 ForceBlock은 재생과 표시를 바꾸지 않고 다음 Queue 시작까지 대기 요청만 남깁니다. Resume은 Manager와 경로가 유효할 때 다시 등록하고, 아니면 Queue 참여를 무효화합니다.
 - **내부 Follower 직접 시작:** 같은 경로면 재등록하고 수동 대기와 상한을 유지합니다. 다른 경로면 `ProviderInvalid`로 끝냅니다.
 - **Loop:** 경계에서 재등록해 Agent 순서를 다시 잡습니다.
+- **기본값:** 간격 1.5, 감속 시작 거리 3, 최소 속도 배율 0.1, 재출발 지연 0.1초, 추가 간격 0.3, 속도 보간율 5이며 Inspector에서 바꿉니다. `StartPlayback(request)`는 Inspector에 지정한 Manager로 시작합니다.
+- **대기 알림:** `OnBlocked`와 `OnResumed`는 Tick에서 관찰한 `IsBlocked`의 변화와 짝을 이룹니다. 시작, Seek, Loop 뒤의 첫 결과 대기도 포함하며, 대기가 한 Tick 안에 끝나면 둘 다 오지 않습니다. `ForceBlock`의 알림은 다음 Tick에 옵니다. `DetachQueue`나 `StartFreePlayback`으로 Queue를 떠나면 `OnResumed`와 `OnSpeedChanged`가 바로 옵니다. 정지와 완료는 `StateChanged`와 `Completed`로만 알립니다.
+- **무효화:** `QueueInvalidated`의 이유는 `ProviderInvalid`(경로 준비 안 됨), `ManagerReleased`, `ConstraintViolation`(최대 진행률 초과)입니다. 앞 Agent와의 간격 부족은 위반이 아니라 대기입니다.
 
 ## 이벤트
 
+- 작성 위치는 `0..0.995`이고 같은 위치는 작성 순서를 따릅니다. 위치 0의 이벤트도 재생 시작 후 첫 이동에서 실행됩니다.
+- 수신기는 `PathEventHandler`의 `Init`에서 한 번 읽습니다. `HandleEvent(setting)`은 전달한 SO의 현재 값을 바로 실행하며, 경로에 등록된 복사본에는 `Rebuild` 전까지 반영되지 않습니다.
+- 지연 이벤트는 게임 시간을 쓰고, 다음 이벤트가 실행되면 남은 지연이 취소됩니다. TimeScale 목표 0과 함께 쓰면 영원히 실행되지 않으므로 거부합니다.
+- Pause 이벤트는 목표값이 `SpeedBased`에서 속도 0, `TimeBased`에서 Duration 9999인 이벤트입니다. 재생을 시작할 때 다음을 검증합니다.
+  1. Pause의 보간 시간은 0입니다.
+  2. **Use Delayed Events**를 켜고 지연 이벤트를 정확히 1개 둡니다. 지연은 양수입니다.
+  3. 그 이벤트는 같은 이동 방식의 Resume입니다. 속도는 양수, Duration은 9999 미만, 보간 시간은 0이고 지연 이벤트가 없어야 합니다.
+- 직접 호출하는 `SetSpeed(0)`은 범위 예외가 나고 `SetDuration(9999)`는 Pause하지 않습니다. 위 해석은 이벤트에만 적용됩니다.
 - `PathEventDefinition`은 `PathEventSettingSO`의 불변 복사본입니다. Provider가 위치순으로 안정 정렬해 발행하고 Session이 스냅샷으로 고정합니다.
 - 한 이벤트의 처리 순서는 알림 예약 → Pause, Resume → TimeScale → 값 보간 → 지연 이벤트 예약입니다. 알림은 경계 뒤에 전달되므로 수신기는 효과가 적용된 상태를 봅니다. 수신기가 `OnEventDispatched`보다 먼저 호출됩니다.
 - 값 보간(`PathScalarAdjustment`)은 시작한 구간의 이동 방식까지만 이어집니다. 이동 방식이 다른 구간에 들어가거나 Pause하면 취소합니다.
