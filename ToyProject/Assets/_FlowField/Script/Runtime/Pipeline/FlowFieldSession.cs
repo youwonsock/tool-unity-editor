@@ -96,8 +96,16 @@ namespace Common.FlowField
         // solve callback. Queued events and late solve callbacks
         // from before that point are dropped.
         internal int LifetimeGeneration { get; private set; }
-        internal bool TrySample(Vector3 worldPosition, out FlowFieldSample sample) => _builder.TrySample(worldPosition, out sample);
-        internal FlowFieldSample Sample(Vector3 worldPosition) => _builder.Sample(worldPosition);
+        internal bool TrySample(Vector3 worldPosition, out FlowFieldSample sample)
+            => _builder.TrySample(worldPosition, out sample) == FlowFieldSampleStatus.Sampled;
+
+        internal FlowFieldSample Sample(Vector3 worldPosition)
+        {
+            FlowFieldSampleStatus status = _builder.TrySample(worldPosition, out FlowFieldSample sample);
+            if (status != FlowFieldSampleStatus.Sampled)
+                throw FlowFieldFailures.ForSample(status, nameof(worldPosition));
+            return sample;
+        }
         internal FlowFieldClampResult ClampPositionToGrid(Vector3 worldPosition) => _builder.ClampPositionToGrid(worldPosition);
         internal bool TryGetFieldInfo(out FlowFieldFieldInfo info) => _builder.TryGetFieldInfo(out info);
 

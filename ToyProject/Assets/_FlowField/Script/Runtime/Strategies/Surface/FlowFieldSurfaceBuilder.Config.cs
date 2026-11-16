@@ -6,9 +6,6 @@ namespace Common.FlowField
     /// <summary>How Surface2D reads a Manager configuration: its grid, checks and requests.</summary>
     internal sealed partial class FlowFieldSurfaceBuilder
     {
-        private const string BakeModeLockedMessage
-            = "FlowField Bake Mode cannot change during an active Init session. Release and Init again.";
-
         internal static bool TryCreateLayout(
             in FlowFieldManagerConfig config,
             out Bounds worldBounds,
@@ -106,43 +103,19 @@ namespace Common.FlowField
             bool bakeModeLocked,
             bool validateStaticGoal)
         {
-            FlowFieldGridSettings grid = config.Grid;
+            config.ValidateShared(bakeModeLocked);
             FlowFieldSurfaceSettings surface = config.Surface;
             FlowFieldObstacleSettings obstacles = config.Obstacles;
-            if (!FlowFieldGridSpace.IsFinite(grid.CellSize) || grid.CellSize < FlowFieldBakeBoundsUtility.MinCellSize)
-                throw new ArgumentOutOfRangeException("_cellSize", grid.CellSize, "Cell Size must be finite and positive.");
-            if (!FlowFieldGridSpace.IsFinite(grid.BakeBoundsLocal.center)
-                || !FlowFieldGridSpace.IsFinite(grid.BakeBoundsLocal.size)
-                || grid.BakeBoundsLocal.size.x <= 0f
-                || grid.BakeBoundsLocal.size.y <= 0f
-                || grid.BakeBoundsLocal.size.z <= 0f)
-                throw new ArgumentOutOfRangeException("_bakeBoundsLocal", "Bake Bounds must be finite and positive.");
-            if (!config.HasValidDefaultDirection)
-                throw new ArgumentOutOfRangeException("_defaultFlowDirection", "Default Flow Direction must be finite and non-zero.");
-            if (!config.HasSupportedTransform)
-                throw new ArgumentException("FlowField Manager must use an unrotated transform with unit scale.", "transform");
             if (surface.GroundLayer.value == 0)
                 throw new ArgumentException("Ground Bake LayerMask must contain at least one layer.", "_groundBakeLayer");
-            if (obstacles.Layer.value == 0)
-                throw new ArgumentException("Obstacle LayerMask must contain at least one layer.", "_obstacleLayer");
             if (!FlowFieldGridSpace.IsFinite(surface.MaxSlope) || surface.MaxSlope < 0f || surface.MaxSlope > 89f)
-                throw new ArgumentOutOfRangeException("_maxSurfaceSlope");
+                throw new ArgumentOutOfRangeException("_maxSurfaceSlope", "Max Slope must be between 0 and 89 degrees.");
             if (!FlowFieldGridSpace.IsFinite(surface.MaxStepHeight) || surface.MaxStepHeight < 0f)
-                throw new ArgumentOutOfRangeException("_maxStepHeight");
+                throw new ArgumentOutOfRangeException("_maxStepHeight", "Max Step Height must be finite and not negative.");
             if (!FlowFieldGridSpace.IsFinite(surface.ObstacleCheckHeight) || surface.ObstacleCheckHeight <= 0f)
-                throw new ArgumentOutOfRangeException("_obstacleCheckHeight");
+                throw new ArgumentOutOfRangeException("_obstacleCheckHeight", "Obstacle Check Height must be finite and positive.");
             if (!FlowFieldGridSpace.IsFinite(surface.ObstacleCheckCenterOffset))
-                throw new ArgumentOutOfRangeException("_obstacleCheckCenterOffset");
-            if (!FlowFieldGridSpace.IsFinite(obstacles.Clearance) || obstacles.Clearance < 0f)
-                throw new ArgumentOutOfRangeException("_obstacleClearance");
-            if (!FlowFieldGridSpace.IsFinite(config.RefreshRate) || config.RefreshRate < FlowFieldManagerConfig.MinRefreshRate)
-                throw new ArgumentOutOfRangeException("_refreshRate");
-            if (!Enum.IsDefined(typeof(FlowFieldBakeMode), config.BakeMode))
-                throw new ArgumentOutOfRangeException("_bakeMode");
-            if (bakeModeLocked)
-                throw new InvalidOperationException(BakeModeLockedMessage);
-            if (!FlowFieldGridSpace.IsFinite(config.Flow.GoalInfluenceRadius) || config.Flow.GoalInfluenceRadius < 0f)
-                throw new ArgumentOutOfRangeException("_goalInfluenceRadius");
+                throw new ArgumentOutOfRangeException("_obstacleCheckCenterOffset", "Obstacle Check Center Offset must be finite.");
 
             if (!TryCreateLayout(in config, out _, out FlowFieldGridSpace layout) || !layout.IsValid)
                 throw new ArgumentException("Bake Bounds and Cell Size do not produce a valid grid.", "_bakeBoundsLocal");

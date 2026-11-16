@@ -61,36 +61,12 @@ namespace Common.FlowField
             bool bakeModeLocked,
             bool validateStaticGoal)
         {
-            FlowFieldGridSettings grid = config.Grid;
+            config.ValidateShared(bakeModeLocked);
             FlowFieldObstacleSettings obstacles = config.Obstacles;
-            if (!FlowFieldGridSpace.IsFinite(grid.CellSize) || grid.CellSize < FlowFieldBakeBoundsUtility.MinCellSize)
-                throw new ArgumentOutOfRangeException("_cellSize");
-            if (!FlowFieldGridSpace.IsFinite(grid.BakeBoundsLocal.center)
-                || !FlowFieldGridSpace.IsFinite(grid.BakeBoundsLocal.size)
-                || grid.BakeBoundsLocal.size.x <= 0f
-                || grid.BakeBoundsLocal.size.y <= 0f
-                || grid.BakeBoundsLocal.size.z <= 0f)
-                throw new ArgumentOutOfRangeException("_bakeBoundsLocal");
-            if (!config.HasValidDefaultDirection)
-                throw new ArgumentOutOfRangeException("_defaultFlowDirection");
-            if (!config.HasSupportedTransform)
-                throw new ArgumentException("FlowField Manager must use an unrotated transform with unit scale in Volume3D mode.", "transform");
-            if (obstacles.Layer.value == 0)
-                throw new ArgumentException("Obstacle LayerMask must contain at least one layer.", "_obstacleLayer");
-            if (!FlowFieldGridSpace.IsFinite(obstacles.Clearance) || obstacles.Clearance < 0f)
-                throw new ArgumentOutOfRangeException("_obstacleClearance");
-            if (!FlowFieldGridSpace.IsFinite(config.Flow.GoalInfluenceRadius) || config.Flow.GoalInfluenceRadius < 0f)
-                throw new ArgumentOutOfRangeException("_goalInfluenceRadius");
-            if (!FlowFieldGridSpace.IsFinite(config.RefreshRate) || config.RefreshRate < FlowFieldManagerConfig.MinRefreshRate)
-                throw new ArgumentOutOfRangeException("_refreshRate");
-            if (!Enum.IsDefined(typeof(FlowFieldBakeMode), config.BakeMode))
-                throw new ArgumentOutOfRangeException("_bakeMode");
             if (!TryCreateLayout(in config, out Bounds volumeBounds, out FlowFieldGridSpace volumeGrid) || !volumeGrid.IsValid)
                 throw new ArgumentException("Volume Bounds and Cell Size do not produce a valid grid.", "_bakeBoundsLocal");
             if (volumeGrid.CellCount > FlowFieldBakeBoundsUtility.MaxVolumeCellCount)
                 throw new ArgumentOutOfRangeException("_bakeBoundsLocal", "Volume cell count exceeds one million cells.");
-            if (bakeModeLocked)
-                throw new InvalidOperationException("FlowField Bake Mode cannot change during an active Init session. Release and Init again.");
             if (config.BakeMode != FlowFieldBakeMode.StaticBaked)
                 return;
             FlowFieldVolumeBakeData bakeData = config.BakeAssets.Volume;

@@ -63,28 +63,11 @@ namespace Common.FlowField
             return field != null;
         }
 
-        public FlowFieldSample Sample(Vector3 worldPosition)
-        {
-            FlowFieldSampleStatus status = TrySampleCore(worldPosition, out FlowFieldSample sample);
-            if (status == FlowFieldSampleStatus.Sampled)
-                return sample;
-            throw status switch
-            {
-                FlowFieldSampleStatus.NotReady => new InvalidOperationException("FlowField session is not ready."),
-                FlowFieldSampleStatus.NonFinite => new ArgumentOutOfRangeException(nameof(worldPosition)),
-                FlowFieldSampleStatus.OutOfGrid => new ArgumentOutOfRangeException(
-                    nameof(worldPosition),
-                    "Position is outside the FlowField grid."),
-                _ => new InvalidOperationException("FlowField sampling data is inconsistent."),
-            };
-        }
-
         /// <summary>
         /// The whole read without exceptions, so TrySample, which movers call
-        /// every physics step, never pays for one on an ordinary miss. Sample
-        /// turns the failure into the exception it has always thrown.
+        /// every physics step, never pays for one on an ordinary miss.
         /// </summary>
-        private FlowFieldSampleStatus TrySampleCore(Vector3 worldPosition, out FlowFieldSample sample)
+        public FlowFieldSampleStatus TrySample(Vector3 worldPosition, out FlowFieldSample sample)
         {
             sample = FlowFieldSample.Stopped;
             if (!IsReady)
@@ -170,32 +153,6 @@ namespace Common.FlowField
 
         private static FlowFieldSample Stop(in FlowFieldSample sample)
             => new FlowFieldSample(Vector3.zero, 0f, sample.SurfaceNormal, sample.HasSurface, sample.HasCell);
-
-        public bool TrySample(Vector3 worldPosition, out FlowFieldSample sample)
-        {
-            sample = FlowFieldSample.Stopped;
-            if (!IsReady || !FlowFieldGridSpace.IsFinite(worldPosition))
-                return false;
-            FlowFieldGridSpace grid = _fieldStore.Grid.IsValid ? _fieldStore.Grid : _state.Grid;
-            if (!grid.IsValid || !grid.ContainsWorldPosition(worldPosition))
-                return false;
-            // The guard only covers an internal invariant failing; an ordinary
-            // miss returns false from the core without throwing.
-            try
-            {
-                return TrySampleCore(worldPosition, out sample) == FlowFieldSampleStatus.Sampled;
-            }
-            catch (ArgumentOutOfRangeException)
-            {
-                sample = FlowFieldSample.Stopped;
-                return false;
-            }
-            catch (InvalidOperationException)
-            {
-                sample = FlowFieldSample.Stopped;
-                return false;
-            }
-        }
 
         public FlowFieldClampResult ClampPositionToGrid(Vector3 worldPosition)
         {

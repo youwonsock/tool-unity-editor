@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace Common.FlowField
@@ -69,6 +70,40 @@ namespace Common.FlowField
         internal bool HasSupportedTransform
             => Quaternion.Angle(Rotation, Quaternion.identity) <= 0.01f
                 && (LossyScale - Vector3.one).sqrMagnitude <= 0.0001f;
+
+        /// <summary>
+        /// The checks both space modes make first, in one order and with one
+        /// message each. <paramref name="bakeModeLocked"/> says a running
+        /// session accepted a different Bake Mode.
+        /// </summary>
+        internal void ValidateShared(bool bakeModeLocked)
+        {
+            if (!FlowFieldGridSpace.IsFinite(Grid.CellSize) || Grid.CellSize < FlowFieldBakeBoundsUtility.MinCellSize)
+                throw new ArgumentOutOfRangeException("_cellSize", Grid.CellSize, "Cell Size must be finite and positive.");
+            Bounds bounds = Grid.BakeBoundsLocal;
+            if (!FlowFieldGridSpace.IsFinite(bounds.center)
+                || !FlowFieldGridSpace.IsFinite(bounds.size)
+                || bounds.size.x <= 0f
+                || bounds.size.y <= 0f
+                || bounds.size.z <= 0f)
+                throw new ArgumentOutOfRangeException("_bakeBoundsLocal", "Bake Bounds must be finite and positive.");
+            if (!HasValidDefaultDirection)
+                throw new ArgumentOutOfRangeException("_defaultFlowDirection", "Default Flow Direction must be finite and non-zero.");
+            if (!HasSupportedTransform)
+                throw new ArgumentException("FlowField Manager must use an unrotated transform with unit scale.", "transform");
+            if (Obstacles.Layer.value == 0)
+                throw new ArgumentException("Obstacle LayerMask must contain at least one layer.", "_obstacleLayer");
+            if (!FlowFieldGridSpace.IsFinite(Obstacles.Clearance) || Obstacles.Clearance < 0f)
+                throw new ArgumentOutOfRangeException("_obstacleClearance", "Obstacle Clearance must be finite and not negative.");
+            if (!FlowFieldGridSpace.IsFinite(Flow.GoalInfluenceRadius) || Flow.GoalInfluenceRadius < 0f)
+                throw new ArgumentOutOfRangeException("_goalInfluenceRadius", "Goal Influence Radius must be finite and not negative.");
+            if (!FlowFieldGridSpace.IsFinite(RefreshRate) || RefreshRate < MinRefreshRate)
+                throw new ArgumentOutOfRangeException("_refreshRate", $"Refresh Rate must be at least {MinRefreshRate}.");
+            if (!Enum.IsDefined(typeof(FlowFieldBakeMode), BakeMode))
+                throw new ArgumentOutOfRangeException("_bakeMode");
+            if (bakeModeLocked)
+                throw new InvalidOperationException("FlowField Bake Mode cannot change during an active Init session. Release and Init again.");
+        }
 
         internal bool HasValidDefaultDirection
             => FlowFieldGridSpace.IsFinite(Flow.DefaultDirection)

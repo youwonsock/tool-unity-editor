@@ -378,7 +378,6 @@ namespace Common.FlowField
                     finalRegion.IsValid ? finalRegion : FlowFieldCellRect.Full(_state.Grid));
             }
             _committedRequest = request;
-            _state.ConfigurationStale = false;
             if (!_requests.Pending)
             {
                 _state.DirtyFlags = FlowFieldSurfaceDirtyFlags.None;

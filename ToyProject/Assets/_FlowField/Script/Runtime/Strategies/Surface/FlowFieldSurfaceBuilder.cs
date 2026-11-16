@@ -43,15 +43,9 @@ namespace Common.FlowField
         public FlowFieldSpaceMode SpaceMode => FlowFieldSpaceMode.Surface2D;
         public bool IsReady => (_session.Lifecycle == FlowFieldSessionLifecycle.Active
                 || _session.Lifecycle == FlowFieldSessionLifecycle.Building)
-            && !_state.ConfigurationStale
             && _state.SurfaceReady
             && _fieldStore.IsValid
             && HasCompatibleCommittedSource();
-        internal bool ConfigurationStale => _state.ConfigurationStale;
-        // Stale publications stay hidden until commit. A validated Submit
-        // clears these unsubmitted flags, allowing that rebuild to be pumped.
-        internal bool RequiresExplicitRebuild => _state.ConfigurationStale
-            && _state.GridMarkedUnsubmitted;
 
         private bool HasCompatibleCommittedSource()
             => !_committedRequest.HasValue
@@ -289,7 +283,6 @@ namespace Common.FlowField
             _modifierPipeline ??= new FlowFieldSurfaceModifierPipeline(new FlowFieldSurfaceModifierRegistry());
             _solveStage.Prepare(sourceKind);
             _session.Fault = null;
-            _state.ConfigurationStale = false;
             MarkDirty(FlowFieldSurfaceDirtyFlags.All, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
             _session.SetLifecycle(FlowFieldSessionLifecycle.Active);
         }
@@ -321,8 +314,6 @@ namespace Common.FlowField
                 _state.ExpandFinalDirty(finalRegion);
             if (obstacleRegion.IsValid)
                 _state.ExpandObstacleDirty(obstacleRegion);
-            if ((flags & FlowFieldSurfaceDirtyFlags.Grid) != 0)
-                _state.GridMarkedUnsubmitted = true;
             // Dirty observations reuse the latest accepted request. Initial
             // setup has no request yet and must wait for its first Submit.
             if (_requests.HasLatest)
@@ -331,19 +322,6 @@ namespace Common.FlowField
 
         /// <summary>The owner cleared the Goal. A solve still running for the old one must not publish.</summary>
         internal void ObserveGoalRemoved() => _state.GoalRemoved = true;
-
-        internal void MarkConfigurationStale()
-        {
-            if (!_session.IsInitialized || _state.ConfigurationStale)
-                return;
-            _state.ConfigurationStale = true;
-            MarkDirty(FlowFieldSurfaceDirtyFlags.All, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
-            // RuntimeState is derived from the lifecycle plus readiness. A
-            // stale configuration therefore becomes Building immediately,
-            // and observers receive the same single transition they would see
-            // when a normal rebuild actually starts.
-            _session.PublishRuntimeState();
-        }
 
         internal bool Submit(in FlowFieldSurfaceRequest request)
         {
@@ -386,8 +364,9 @@ namespace Common.FlowField
 
             _requests.Accept(request);
             _submittedForScheduler = true;
-            _state.GridMarkedUnsubmitted = false;
             _state.GoalRemoved = !request.Goal.IsValid;
+            // A new grid or source hides the published field at once.
+            _session.PublishRuntimeState();
             return true;
         }
 
@@ -505,7 +484,6 @@ namespace Common.FlowField
             // the same pose after activation.
             _state.ObstacleProbePending = false;
             _state.DirtyFlags = FlowFieldSurfaceDirtyFlags.All;
-            _state.ConfigurationStale = false;
             _session.Fault = null;
         }
 
@@ -543,7 +521,6 @@ namespace Common.FlowField
             _requests.Clear();
             _submittedForScheduler = false;
             _state.ObstacleProbePending = false;
-            _state.GridMarkedUnsubmitted = false;
             _state.GoalRemoved = false;
             _latestDefaultDirection = null;
             _session.Fault = null;

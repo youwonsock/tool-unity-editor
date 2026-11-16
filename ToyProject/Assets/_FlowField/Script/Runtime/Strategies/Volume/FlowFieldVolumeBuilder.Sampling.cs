@@ -12,23 +12,13 @@ namespace Common.FlowField
     /// <summary>Reads of the published Volume3D field.</summary>
     internal sealed partial class FlowFieldVolumeBuilder
     {
-        public bool TrySample(Vector3 worldPosition, out FlowFieldSample sample)
-            => TrySampleCore(worldPosition, out sample) == FlowFieldSampleStatus.Sampled;
-
-        private FlowFieldSampleStatus TrySampleCore(Vector3 worldPosition, out FlowFieldSample sample)
+        public FlowFieldSampleStatus TrySample(Vector3 worldPosition, out FlowFieldSample sample)
         {
             sample = FlowFieldSample.Stopped;
             if (!IsReady)
                 return FlowFieldSampleStatus.NotReady;
             if (!FlowFieldGridSpace.IsFinite(worldPosition))
                 return FlowFieldSampleStatus.NonFinite;
-            // A newly accepted grid/source invalidates sampling from the
-            // previous publication immediately. Ordinary Goal/obstacle
-            // rebuilds keep the last same-source result available until the
-            // replacement is committed.
-            if (_requests.HasLatest
-                && !_committed.Request.HasSameGrid(_requests.Latest))
-                return FlowFieldSampleStatus.NotReady;
             return FlowFieldSampler.Sample(_committed, worldPosition, this, out sample);
         }
 
@@ -77,13 +67,6 @@ namespace Common.FlowField
 
         // A cell exists here, but nothing may move through it yet.
         private static FlowFieldSample Stopped => new FlowFieldSample(Vector3.zero, 0f, Vector3.zero, false, true);
-
-        public FlowFieldSample Sample(Vector3 worldPosition)
-        {
-            if (!TrySample(worldPosition, out FlowFieldSample sample))
-                throw new InvalidOperationException("World position is outside the initialized FlowField volume.");
-            return sample;
-        }
 
         public FlowFieldClampResult ClampPositionToGrid(Vector3 worldPosition)
         {

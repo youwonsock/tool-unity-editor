@@ -29,8 +29,8 @@ namespace Common.FlowField
         bool HasOwedInput { get; }
 
         // ----- Reads ---------------------------------------------------------
-        bool TrySample(Vector3 worldPosition, out FlowFieldSample sample);
-        FlowFieldSample Sample(Vector3 worldPosition);
+        // Never throws; the session turns a failed status into the contract's exception.
+        FlowFieldSampleStatus TrySample(Vector3 worldPosition, out FlowFieldSample sample);
         FlowFieldClampResult ClampPositionToGrid(Vector3 worldPosition);
         bool TryGetFieldInfo(out FlowFieldFieldInfo info);
         bool TryGetPublishedField(out FlowFieldField field);

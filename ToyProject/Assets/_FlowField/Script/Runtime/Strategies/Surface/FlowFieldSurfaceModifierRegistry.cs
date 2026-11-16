@@ -294,8 +294,9 @@ namespace Common.FlowField
                 removed = true;
             }
 
+            // Removing a Modifier that is not registered changes nothing.
             if (!removed)
-                throw new InvalidOperationException("Modifier is not registered.");
+                return default;
             return new FlowFieldSurfaceModifierRegistryResult(false, false, true, dirty);
         }
 

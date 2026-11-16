@@ -6,29 +6,14 @@ namespace Common.FlowField
     /// <summary>The Provider and Controller API and the checks every call makes first.</summary>
     public partial class FlowFieldManager
     {
+        // The one availability check of the contract: a call needs a session
+        // that is initialized (running or stopped) and not faulted.
         private void ThrowIfLifecycleUnavailable()
         {
             if (IsFaulted)
-                throw new InvalidOperationException($"{nameof(FlowFieldManager)} is faulted.", ActiveSession.Fault);
+                throw FlowFieldFailures.Faulted(ActiveSession.Fault);
             if (!IsInitialized)
-                throw new InvalidOperationException($"{nameof(FlowFieldManager)} is not initialized.");
-        }
-
-        private void ThrowIfAvailableForInput()
-        {
-            ThrowIfLifecycleUnavailable();
-            if (ActiveMode.ConfigurationStale)
-                throw new InvalidOperationException($"{nameof(FlowFieldManager)} configuration is stale. Call RequestRebuild() before use.");
-        }
-
-        private void ThrowIfInputAllowedForMode()
-        {
-            ThrowIfLifecycleUnavailable();
-            // StaticBaked ignores runtime Goal/obstacle input. It must remain
-            // a valid no-op even while an unrelated serialized setting is
-            // awaiting an explicit rebuild.
-            if (ActiveMode.ConfigurationStale && BakeMode != FlowFieldBakeMode.StaticBaked)
-                throw new InvalidOperationException($"{nameof(FlowFieldManager)} configuration is stale. Call RequestRebuild() before use.");
+                throw FlowFieldFailures.NotInitialized();
         }
 
         private void MarkGoalDirty()
@@ -36,7 +21,7 @@ namespace Common.FlowField
 
         public FlowFieldSample Sample(Vector3 worldPosition)
         {
-            ThrowIfAvailableForInput();
+            ThrowIfLifecycleUnavailable();
             return ActiveSession.Sample(worldPosition);
         }
 
@@ -48,7 +33,7 @@ namespace Common.FlowField
 
         public FlowFieldClampResult ClampPositionToGrid(Vector3 worldPosition)
         {
-            ThrowIfAvailableForInput();
+            ThrowIfLifecycleUnavailable();
             return ActiveSession.ClampPositionToGrid(worldPosition);
         }
 
@@ -64,13 +49,13 @@ namespace Common.FlowField
 
         public bool RegisterDynamicObstacle(Collider collider)
         {
-            ThrowIfInputAllowedForMode();
+            ThrowIfLifecycleUnavailable();
             if (ReferenceEquals(collider, null))
                 throw new ArgumentNullException(nameof(collider));
             if (collider == null)
                 throw new InvalidOperationException("Cannot register a destroyed Collider.");
             if (BakeMode == FlowFieldBakeMode.StaticBaked)
-                throw new InvalidOperationException("Dynamic obstacle registration is not allowed in StaticBaked mode.");
+                throw FlowFieldFailures.NotInStaticBaked("Dynamic obstacle registration");
             return ActiveSession.RegisterObstacleCommand(collider);
         }
 
@@ -88,21 +73,21 @@ namespace Common.FlowField
         public void NotifyObstacleRegionDirty(Bounds worldBounds)
         {
             _boundary.ThrowIfInUserCode(nameof(NotifyObstacleRegionDirty));
-            ThrowIfInputAllowedForMode();
+            ThrowIfLifecycleUnavailable();
             if (!FlowFieldGridSpace.IsFinite(worldBounds.center)
                 || !FlowFieldGridSpace.IsFinite(worldBounds.size))
                 throw new ArgumentOutOfRangeException(nameof(worldBounds));
             if (BakeMode == FlowFieldBakeMode.StaticBaked)
-                throw new InvalidOperationException("Obstacle changes are not allowed in StaticBaked mode.");
+                throw FlowFieldFailures.NotInStaticBaked("Obstacle changes");
             ActiveSession.NotifyObstacleRegionDirtyCommand(worldBounds);
         }
 
         public void SetGoal(in FlowFieldGoalRequest request)
         {
             _boundary.ThrowIfInUserCode(nameof(SetGoal));
-            ThrowIfInputAllowedForMode();
+            ThrowIfLifecycleUnavailable();
             if (BakeMode == FlowFieldBakeMode.StaticBaked)
-                throw new InvalidOperationException("Runtime Goal changes are not allowed in StaticBaked mode.");
+                throw FlowFieldFailures.NotInStaticBaked("Runtime Goal changes");
 
             if (!request.HasGoal)
             {
@@ -134,22 +119,17 @@ namespace Common.FlowField
         public void NotifyCellsDirty()
         {
             _boundary.ThrowIfInUserCode(nameof(NotifyCellsDirty));
-            ThrowIfInputAllowedForMode();
+            ThrowIfLifecycleUnavailable();
             if (BakeMode == FlowFieldBakeMode.StaticBaked)
-                throw new InvalidOperationException("Cell regeneration is not allowed in StaticBaked mode.");
+                throw FlowFieldFailures.NotInStaticBaked("Cell regeneration");
             ActiveMode.MarkCellsDirty();
-        }
-
-        internal void MarkConfigurationStale()
-        {
-            ActiveMode.MarkConfigurationStale();
         }
 
         public bool RegisterVectorModifier(IFlowFieldVectorModifier modifier)
         {
             if (modifier == null)
                 throw new ArgumentNullException(nameof(modifier));
-            ThrowIfInputAllowedForMode();
+            ThrowIfLifecycleUnavailable();
             return ActiveSession.RegisterModifierCommand(modifier);
         }
 
@@ -157,9 +137,8 @@ namespace Common.FlowField
         {
             if (modifier == null)
                 return false;
-            // Removal needs no valid configuration; a component must be able
-            // to detach while the Manager waits for an explicit rebuild or a
-            // retry, which would otherwise keep applying it.
+            // A component must be able to detach while the Manager is faulted,
+            // or a retry would apply it again.
             if (!IsFaulted)
                 ThrowIfLifecycleUnavailable();
             return ActiveSession.UnregisterModifierCommand(modifier);
@@ -177,7 +156,7 @@ namespace Common.FlowField
                 throw new ArgumentOutOfRangeException(nameof(change));
             if (change == FlowFieldModifierChange.None)
                 return;
-            ThrowIfInputAllowedForMode();
+            ThrowIfLifecycleUnavailable();
             ActiveSession.NotifyModifierChangedCommand(modifier, change);
         }
     }

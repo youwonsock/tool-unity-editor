@@ -62,7 +62,11 @@ namespace Common.FlowField
         public FlowFieldSpaceMode SpaceMode => FlowFieldSpaceMode.Volume3D;
         public bool IsWaitingForExternalCompletion
             => _build != null && _build.SolveRunning && !_build.SolveHandle.IsCompleted;
-        public bool IsReady => _session.CanPump && _committed != null;
+        // TrySample can succeed inside the grid: a published field exists and
+        // no newer grid or source has replaced it.
+        public bool IsReady => _session.CanPump
+            && _committed != null
+            && (!_requests.HasLatest || _committed.Request.HasSameGrid(_requests.Latest));
         internal long TrackedMemoryBytes
         {
             get

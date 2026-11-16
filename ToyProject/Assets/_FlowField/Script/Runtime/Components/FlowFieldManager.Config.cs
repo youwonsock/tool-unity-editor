@@ -193,7 +193,7 @@ namespace Common.FlowField
             if (FlowFieldBakeBoundsUtility.Approximately(_grid.BakeBoundsLocal, snapped))
                 return;
             _grid.BakeBoundsLocal = snapped;
-            ModeFor(_spaceMode).OnBakeBoundsChanged();
+            OnSettingsChanged();
         }
 
         internal void AssignStaticBakeData(FlowFieldStaticBakeData bakeData)
@@ -201,9 +201,7 @@ namespace Common.FlowField
             if (_bakeAssets.Surface == bakeData)
                 return;
             _bakeAssets.Surface = bakeData;
-            FlowFieldSession surface = SessionFor(FlowFieldSpaceMode.Surface2D);
-            if (surface != null && surface.IsInitialized)
-                surface.Surface.MarkConfigurationStale();
+            OnSettingsChanged();
         }
 
         internal void AssignVolumeBakeData(FlowFieldVolumeBakeData bakeData)
@@ -211,8 +209,7 @@ namespace Common.FlowField
             if (_bakeAssets.Volume == bakeData)
                 return;
             _bakeAssets.Volume = bakeData;
-            if (SessionFor(FlowFieldSpaceMode.Volume3D)?.IsInitialized == true)
-                QueueVolumeRequest(force: true, requeryObstacles: true);
+            OnSettingsChanged();
         }
 
         /// <summary>A signature of every setting a bake depends on.</summary>

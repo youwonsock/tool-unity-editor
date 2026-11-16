@@ -155,10 +155,29 @@ namespace Common.FlowField
 
         private void OnValidate()
         {
-            if (!Application.isPlaying || !IsInitialized || _spaceMode != SpaceMode)
-                return;
+            if (Application.isPlaying)
+                OnSettingsChanged();
+        }
 
-            ActiveMode.OnSettingsEdited();
+        /// <summary>
+        /// A serialized setting changed while a session runs. Valid settings
+        /// rebuild what they change; invalid ones fault the session, the same
+        /// in both modes.
+        /// </summary>
+        private void OnSettingsChanged()
+        {
+            if (!IsInitialized || _spaceMode != SpaceMode)
+                return;
+            using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
+            try
+            {
+                ValidateConfiguration(validateStaticGoal: false);
+                ActiveMode.OnSettingsEdited();
+            }
+            catch (Exception exception)
+            {
+                ActiveSession.ReportFault(exception);
+            }
         }
 
         private void LateUpdate()
@@ -236,9 +255,7 @@ namespace Common.FlowField
             if (IsInitialized && _spaceMode != SpaceMode)
                 throw new InvalidOperationException("FlowField Space Mode cannot change during an active Init session. Release and Init again.");
             if (IsFaulted)
-                throw new InvalidOperationException(
-                    $"{nameof(FlowFieldManager)} is faulted. Call RequestRebuild() to retry.",
-                    ActiveSession.Fault);
+                throw FlowFieldFailures.Faulted(ActiveSession.Fault);
             if (IsInitialized)
                 return;
             ValidateConfiguration();
