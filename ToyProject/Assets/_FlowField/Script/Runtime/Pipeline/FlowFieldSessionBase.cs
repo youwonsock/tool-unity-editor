@@ -10,6 +10,19 @@ namespace Common.FlowField
     /// sequence, command deferral and the generation that retires queued events
     /// and late solve callbacks.
     /// </summary>
+    /// <summary>What one step of a build left it doing.</summary>
+    internal enum FlowFieldBuildStep
+    {
+        // More work remains and the budget ran out.
+        Yield,
+        // A worker thread is solving; nothing to do until it finishes.
+        Waiting,
+        // Newer input made the result useless; nothing is published.
+        Rejected,
+        // Ready to publish.
+        Completed,
+    }
+
     internal abstract class FlowFieldSessionBase : IDisposable, IFlowFieldBuildOperation
     {
         private protected readonly FlowFieldExecutionBoundary Boundary;
@@ -136,7 +149,97 @@ namespace Common.FlowField
 
         internal abstract bool IsWaitingForExternalCompletion { get; }
         internal bool IsBuilding => CanPump && (IsRebuilding || HasPendingRequest);
-        internal abstract void PumpInternal(in FlowFieldBuildBudget budget);
+
+        // ----- The build pipeline both space modes run -----------------------
+        // A build begins, takes steps until it is published or rejected, and
+        // the session moves between Building and Ready around it. A mode only
+        // supplies the steps.
+
+        /// <summary>A build has begun and is neither published nor rejected yet.</summary>
+        private protected abstract bool HasActiveBuild { get; }
+
+        /// <summary>Begins the next owed build. False when nothing is owed.</summary>
+        private protected abstract bool TryBeginBuild(bool scheduled);
+
+        /// <summary>Advances the active build within the budget.</summary>
+        private protected abstract FlowFieldBuildStep StepBuild(in FlowFieldBuildBudget budget, bool waitForWorker);
+
+        /// <summary>Publishes the completed build.</summary>
+        private protected abstract void PublishBuild();
+
+        /// <summary>Runs once at the start of every pump, before any step.</summary>
+        private protected virtual void BeforePump() { }
+
+        /// <summary>Whether a new build may begin after the budget has run out.</summary>
+        private protected virtual bool BeginsAfterBudget => false;
+
+        /// <summary>How many builds one pump may begin.</summary>
+        private protected virtual int MaxBuildsBegunPerPump => int.MaxValue;
+
+        /// <summary>
+        /// Whether the session stays Building after a publication while more
+        /// input is owed, instead of reporting Ready in between.
+        /// </summary>
+        private protected virtual bool StaysBuildingWhileOwed => false;
+
+        /// <summary>Whether input is still owed a build after a publication.</summary>
+        private protected virtual bool HasOwedInput => false;
+
+        internal void PumpInternal(in FlowFieldBuildBudget budget)
+            => RunPipeline(in budget, scheduled: true, waitForWorker: false);
+
+        /// <summary>
+        /// The pipeline loop. The scheduler pumps with a frame budget and never
+        /// waits; a direct owner (a bake, an Editor preview) may wait for the
+        /// worker thread instead.
+        /// </summary>
+        private protected void RunPipeline(in FlowFieldBuildBudget budget, bool scheduled, bool waitForWorker)
+        {
+            if (!CanPump)
+                return;
+            using FlowFieldExecutionBoundary.OperationScope operation = Boundary.EnterOperation();
+            try
+            {
+                BeforePump();
+                int begun = 0;
+                while (CanPump)
+                {
+                    if (!HasActiveBuild)
+                    {
+                        if (begun >= MaxBuildsBegunPerPump
+                            || !BeginsAfterBudget && budget.IsExpired
+                            || !TryBeginBuild(scheduled))
+                            return;
+                        begun++;
+                    }
+
+                    FlowFieldBuildStep step = StepBuild(in budget, waitForWorker);
+                    if (!CanPump)
+                        return;
+                    switch (step)
+                    {
+                        case FlowFieldBuildStep.Completed:
+                            PublishBuild();
+                            if (!(StaysBuildingWhileOwed && HasOwedInput))
+                                SetLifecycle(FlowFieldSessionLifecycle.Active);
+                            continue;
+                        case FlowFieldBuildStep.Rejected:
+                            SetLifecycle(FlowFieldSessionLifecycle.Active);
+                            continue;
+                        case FlowFieldBuildStep.Waiting when waitForWorker:
+                            SetLifecycle(FlowFieldSessionLifecycle.Building);
+                            continue;
+                        default:
+                            SetLifecycle(FlowFieldSessionLifecycle.Building);
+                            return;
+                    }
+                }
+            }
+            catch (Exception exception)
+            {
+                ReportFault(exception);
+            }
+        }
 
         bool IFlowFieldBuildOperation.IsWaitingForExternalCompletion => IsWaitingForExternalCompletion;
         bool IFlowFieldBuildOperation.IsBuilding => IsBuilding;

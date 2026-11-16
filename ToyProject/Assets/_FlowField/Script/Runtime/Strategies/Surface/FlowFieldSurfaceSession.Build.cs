@@ -81,7 +81,7 @@ namespace Common.FlowField
                     return true;
                 }
 
-                Commit(
+                QueueCommit(
                     request,
                     resultChanged: (pending & FlowFieldSurfaceDirtyFlags.FinalRegion) != 0,
                     includeBase: IsBaseDirty(pending) || !_fieldStore.IsValid,
@@ -155,7 +155,7 @@ namespace Common.FlowField
                 return;
             }
 
-            Commit(
+            QueueCommit(
                 request,
                 resultChanged: false,
                 includeBase: rebuildBase,
@@ -201,6 +201,7 @@ namespace Common.FlowField
             _state.LastComposedRegion = rebuildBase ? FlowFieldCellRect.Full(_state.Grid) : region;
             _state.DirtyFinalRegion = FlowFieldCellRect.Invalid;
             _composeStage.Begin(request, rebuildBase, resultChanged, includeBase);
+            _phase = BuildPhase.Composing;
             ContinueCompose();
         }
 
@@ -216,13 +217,12 @@ namespace Common.FlowField
             }
 
             _state.BaseComposed |= _composeStage.RebuildBase;
-            Commit(
+            QueueCommit(
                 _composeStage.Request,
                 _composeStage.ResultChanged,
                 _composeStage.IncludeBase,
                 _state.LastComposedRegion);
             _composeStage.Clear();
-            SetLifecycle(FlowFieldSessionLifecycle.Active);
         }
 
         private bool StartBfs(in FlowFieldSurfaceRequest request)
@@ -253,6 +253,9 @@ namespace Common.FlowField
                 return true;
             }
 
+            // Set first: a solve that completes synchronously reports through
+            // the callback, which moves the phase on.
+            _phase = BuildPhase.WaitingSolve;
             bool accepted = _solveStage.Start(bfsRequest, _ => RunBfsCallback(generation));
             // A synchronous completion has already left the Building state.
             if (!accepted && IsCurrentBuild(generation))
@@ -311,7 +314,10 @@ namespace Common.FlowField
             if (Lifecycle != FlowFieldSessionLifecycle.Building)
                 return;
             if (RejectOutdatedWork())
+            {
+                _phase = BuildPhase.Rejected;
                 return;
+            }
 
             FlowFieldSurfaceRequest finalRequest = _requests.Latest;
             FlowFieldSurfaceDirtyFlags pending = _state.DirtyFlags;

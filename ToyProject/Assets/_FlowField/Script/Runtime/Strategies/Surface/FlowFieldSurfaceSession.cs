@@ -61,19 +61,32 @@ namespace Common.FlowField
         internal bool HasSubmittedRequest => _requests.HasLatest;
         internal override bool HasPendingRequest => _requests.Pending;
 
+        // Where the active build stands. A build begins with the synchronous
+        // base stages, may wait for its solve on a worker thread, composes the
+        // final field over as many frames as the budget needs, and publishes.
+        private enum BuildPhase
+        {
+            None,
+            Begin,
+            WaitingSolve,
+            Composing,
+            Publish,
+            Rejected,
+        }
+
+        private BuildPhase _phase;
+        private FlowFieldSurfaceRequest _commitRequest;
+        private bool _commitResultChanged;
+        private bool _commitIncludeBase;
+        private FlowFieldCellRect _commitRegion;
+
         /// <summary>
         /// Advances a pending Surface2D request at the owning execution
-        /// boundary. Request submission only records/coalesces input; it does
-        /// not recursively enter the build pipeline.
+        /// boundary. A direct caller (a bake, a test) waits for the worker
+        /// thread; the scheduler never does.
         /// </summary>
-        internal bool Pump()
-        {
-            // A direct caller (a bake, a test) waits for the worker thread. The
-            // scheduler reports nothing until a solve has finished.
-            bool built = PumpFrame(FlowFieldBuildBudget.Unlimited);
-            _solveStage.Poll(wait: true);
-            return built;
-        }
+        internal void Pump()
+            => RunPipeline(FlowFieldBuildBudget.Unlimited, scheduled: false, waitForWorker: true);
 
         // Building without composing means a solve is running elsewhere. Input
         // nobody has submitted yet waits for the Manager in the same way.
@@ -82,46 +95,94 @@ namespace Common.FlowField
                 && (Lifecycle == FlowFieldSessionLifecycle.Building
                     || _requests.Pending && !_submittedForScheduler);
 
-        internal override void PumpInternal(in FlowFieldBuildBudget budget)
-            => PumpFrame(in budget, requireSubmit: true);
+        private protected override bool HasActiveBuild => _phase != BuildPhase.None;
 
-        private bool PumpFrame(in FlowFieldBuildBudget budget, bool requireSubmit = false)
+        // The base stages run in one frame so their Physics reads form one
+        // snapshot, so one build begins per pump whatever the budget says.
+        private protected override bool BeginsAfterBudget => true;
+
+        private protected override int MaxBuildsBegunPerPump => 1;
+
+        // Only the Manager can tell that its current settings are valid, so the
+        // scheduler builds nothing until it has submitted them.
+        private protected override bool TryBeginBuild(bool scheduled)
         {
-            if (!CanPump)
+            if (Lifecycle == FlowFieldSessionLifecycle.Building
+                || !_requests.Pending
+                || scheduled && !_submittedForScheduler)
                 return false;
-            using FlowFieldExecutionBoundary.OperationScope operation = Boundary.EnterOperation();
+            _phase = BuildPhase.Begin;
+            return true;
+        }
+
+        private protected override FlowFieldBuildStep StepBuild(in FlowFieldBuildBudget budget, bool waitForWorker)
+        {
             _composeStage.FrameBudget = budget;
             try
             {
-                if (_composeStage.IsRunning)
+                switch (_phase)
                 {
-                    // Input can only change between frames, so checking here
-                    // covers everything that arrived since the last piece.
-                    if (RejectOutdatedWork())
-                        _composeStage.Clear();
-                    else
-                        ContinueCompose();
+                    case BuildPhase.Begin:
+                        _phase = BuildPhase.None;
+                        BuildPending();
+                        break;
+                    case BuildPhase.WaitingSolve:
+                        // A finished solve reports through its callback, which
+                        // moves the build on.
+                        _solveStage.Poll(waitForWorker);
+                        break;
+                    case BuildPhase.Composing:
+                        // Input can only change between frames, so checking here
+                        // covers everything that arrived since the last piece.
+                        if (RejectOutdatedWork())
+                        {
+                            _composeStage.Clear();
+                            _phase = BuildPhase.Rejected;
+                        }
+                        else
+                        {
+                            ContinueCompose();
+                        }
+                        break;
                 }
-                else
+
+                switch (_phase)
                 {
-                    _solveStage.Poll(wait: false);
+                    case BuildPhase.WaitingSolve:
+                        return FlowFieldBuildStep.Waiting;
+                    case BuildPhase.Composing:
+                        return FlowFieldBuildStep.Yield;
+                    case BuildPhase.Publish:
+                        return FlowFieldBuildStep.Completed;
+                    default:
+                        _phase = BuildPhase.None;
+                        return FlowFieldBuildStep.Rejected;
                 }
-                return !_composeStage.IsRunning
-                    && Lifecycle != FlowFieldSessionLifecycle.Building
-                    && CanPump
-                    && _requests.Pending
-                    && (_submittedForScheduler || !requireSubmit)
-                    && BuildPending();
-            }
-            catch (Exception exception)
-            {
-                EnterFault(exception);
-                return false;
             }
             finally
             {
                 _composeStage.FrameBudget = FlowFieldBuildBudget.Unlimited;
             }
+        }
+
+        private protected override void PublishBuild()
+        {
+            _phase = BuildPhase.None;
+            Commit(_commitRequest, _commitResultChanged, _commitIncludeBase, _commitRegion);
+        }
+
+        /// <summary>Marks the build ready to publish with what Commit needs.</summary>
+        private void QueueCommit(
+            in FlowFieldSurfaceRequest request,
+            bool resultChanged,
+            bool includeBase,
+            FlowFieldCellRect finalRegion)
+        {
+            _commitRequest = request;
+            _commitResultChanged = resultChanged;
+            _commitIncludeBase = includeBase;
+            _commitRegion = finalRegion;
+            _phase = BuildPhase.Publish;
         }
 
         internal bool HasPendingObstacleProbe => _state.ObstacleProbePending;
@@ -401,6 +462,7 @@ namespace Common.FlowField
             AdvanceLifetimeGeneration();
             _solveStage.Cancel();
             _composeStage.Clear();
+            _phase = BuildPhase.None;
         }
 
         private protected override void AbandonWorkForFault() => InvalidateCallbacks();

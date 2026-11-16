@@ -168,43 +168,39 @@ namespace Common.FlowField
             FlowFieldBuildBudget budget = new FlowFieldBuildBudget(
                 budgetMilliseconds,
                 _pumpElapsedMilliseconds);
-            _waitForSolve = true;
-            try { PumpInternal(in budget); }
-            finally { _waitForSolve = false; }
+            RunPipeline(in budget, scheduled: false, waitForWorker: true);
         }
 
-        internal override void PumpInternal(in FlowFieldBuildBudget budget)
-        {
-            if (!CanPump)
-                return;
+        private protected override void BeforePump() => _obstacles.DetectRegisteredChanges();
 
-            using FlowFieldExecutionBoundary.OperationScope operation = Boundary.EnterOperation();
+        private protected override bool HasActiveBuild => _build != null;
+
+        private protected override bool TryBeginBuild(bool scheduled) => TryBeginPendingBuild();
+
+        private protected override FlowFieldBuildStep StepBuild(in FlowFieldBuildBudget budget, bool waitForWorker)
+        {
+            if (IsWaitingForExternalCompletion && !waitForWorker)
+                return FlowFieldBuildStep.Waiting;
+            _waitForSolve = waitForWorker;
             try
             {
-                _obstacles.DetectRegisteredChanges();
-                if (IsWaitingForExternalCompletion && !_waitForSolve)
-                    return;
-
-                while (!budget.IsExpired)
-                {
-                    if (_build == null && !TryBeginPendingBuild())
-                        return;
-                    if (!StepBuild(_build, budget))
-                        return;
-
-                    CommitBuild(_build);
-                    if (_requests.Pending || _hasPendingModifierRecompose)
-                        continue;
-                    if (IsRebuilding)
-                        SetLifecycle(FlowFieldSessionLifecycle.Active);
-                    return;
-                }
+                if (StepBuild(_build, budget))
+                    return FlowFieldBuildStep.Completed;
+                return _build.SolveRunning ? FlowFieldBuildStep.Waiting : FlowFieldBuildStep.Yield;
             }
-            catch (Exception exception)
+            finally
             {
-                ReportFault(exception);
+                _waitForSolve = false;
             }
         }
+
+        private protected override void PublishBuild() => CommitBuild(_build);
+
+        // The next build may already be owed, so the session reports Ready
+        // only once nothing is.
+        private protected override bool StaysBuildingWhileOwed => true;
+
+        private protected override bool HasOwedInput => _requests.Pending || _hasPendingModifierRecompose;
 
         private bool TryBeginPendingBuild()
         {
