@@ -9,8 +9,9 @@ skinparam activityBorderColor #496A88
 title FlowField 핵심 흐름
 
 start
-:FlowFieldManager\n설정·Goal·장애물·Modifier 수집;
-:최신 요청 수락\n연속 요청은 하나로 병합;
+:공개 API·FlowField 컴포넌트의 통지\n(씬 폴링 없음);
+:Session이 Builder에 설정 스냅샷 전달\n통지 영역은 그 프레임부터 정지;
+:최신 요청 수락\n빌드 중 입력은 다음 빌드로;
 :BuildDriver.LateUpdate\nScheduler가 공통 예산(기본 2ms)으로 Session 실행;
 if (실행 모드) then (RuntimeDynamic)
   :표면·장애물 준비\nBFS는 워커 스레드의 Burst Job;

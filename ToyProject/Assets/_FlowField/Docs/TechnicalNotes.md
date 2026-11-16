@@ -11,29 +11,38 @@
 
 Player 측정(`PlayerProbe` 폴더, `Tools/run-player-probe.sh`)은 Editor와 `FLOWFIELD_PLAYER_PROBE`를 정의한 측정 빌드에서만 컴파일합니다. 샘플이 UGUI를 쓰므로 `Common.FlowField`는 `UnityEngine.UI`를 참조합니다.
 
+## 파이프라인과 전략
+
+- `FlowFieldSession`은 두 모드가 같이 쓰는 파이프라인입니다. 수명, 이벤트, 빌드 루프(`RunPipeline`), Fault, 조회 실패를 예외로 바꾸는 일을 맡습니다. 모드마다 다른 일은 `IFlowFieldSpaceBuilder`(`FlowFieldSurfaceBuilder`, `FlowFieldVolumeBuilder`)가 맡습니다.
+- Builder는 `FlowFieldManagerConfig` 스냅샷을 받아 검증(`Validate`), 격자(`TryCreateLayout`), 요청(`SubmitConfig`)을 스스로 만듭니다. 공통 검사는 `FlowFieldManagerConfig.ValidateShared`가 같은 순서와 메시지로 합니다.
+- 공통 부품: 게시 필드 `FlowFieldField`, 조회 `FlowFieldSampler`, 불확실 영역 `FlowFieldSafety`, 계약 예외 `FlowFieldFailures`, 이벤트 경계 `FlowFieldExecutionBoundary`, 예산 `FlowFieldBuildScheduler`.
+- Modifier Registry와 최종 합성은 아직 모드별 구현입니다.
+
 ## 수명과 게시 규칙
 
-- **입력:** Session은 최신 요청 한 벌과 대기 표시만 보관합니다(`FlowFieldRequestInbox`). Volume은 빌드 시작 때 요청을 BuildContext에 고정하고, Surface는 풀이가 끝나면 최신 요청으로 합성합니다.
+- **입력:** Session은 최신 요청 한 벌과 대기 표시만 보관합니다(`FlowFieldRequestInbox`). Volume은 빌드 시작 때 요청을 BuildContext에 고정하고, Surface는 풀이가 끝나면 최신 요청으로 합성합니다. 빌드 중 온 입력은 다음 빌드로 넘기고, 그동안 두 모드 모두 Building을 유지합니다.
 - **게시:** 완성된 결과만 게시하고, 일반 조회는 게시 값을 읽은 뒤 최신 장애물·탈출 안전성 검사를 더합니다.
 - **끝난 풀이:** 새 입력이 들어와 있어도 게시합니다. 계속 움직이는 Goal 때문에 결과가 끊기지 않게 하기 위해서입니다. Grid나 설정이 바뀌었거나 Goal이 사라진 경우만 거부합니다.
-- **Revision:** Surface는 셀 데이터와 Goal이 실제로 바뀔 때, Volume은 결과를 교체할 때 증가합니다. 두 모드를 같은 규칙으로 해석하면 안 됩니다.
-- **재진입 없음:** `FlowFieldExecutionBoundary`가 이벤트를 큐에 모아 가장 바깥 작업이 끝난 뒤 전달합니다. `Release`·`Suspend`·Fault 이전의 이벤트는 버리고 `Released`만 항상 전달합니다. 핸들러가 서로를 계속 깨우면 100,000건에서 오류를 남기고 남은 일을 버립니다. 이때도 `Released`와 해제 이벤트는 순서대로 한 번 전달하고, 그 핸들러가 새로 만든 일은 버립니다.
-- **중단 뒤 재개:** `Suspend`와 `RetryFault`는 게시된 결과를 버립니다. 멈춘 동안 바뀐 세계를 관측하지 못했으므로, 최신 요청을 다시 빌드해 게시하기 전까지 Ready가 아닙니다. 격자 정보는 최신 요청에서 읽어 `ClampPositionToGrid`는 계속 동작합니다.
+- **Revision:** 두 모드 모두 게시 내용(셀 상태, 방향, 속도, Goal)이 실제로 바뀔 때만 증가하고 `FieldChanged`를 보냅니다. Volume은 `FlowFieldField.HasSameContent`(memcmp)로 비교합니다. 내용이 같아도 요청 스냅샷 갱신, 불확실 영역 정리, Ready 전환은 그대로 합니다.
+- **재진입 없음:** `FlowFieldExecutionBoundary`가 이벤트를 큐에 모아 가장 바깥 작업이 끝난 뒤 전달합니다. `Release`·`Stop`·`Restart`·Fault 이전의 이벤트는 버리고 `Released`만 항상 전달합니다. 핸들러가 서로를 계속 깨우면 100,000건에서 오류를 남기고 남은 일을 버립니다. 이때도 `Released`와 해제 이벤트는 순서대로 한 번 전달하고, 그 핸들러가 새로 만든 일은 버립니다.
+- **정지와 재시작:** 비활성화는 `Stop`(빌드 취소, 게시 결과 버림)입니다. 다시 활성화와 Fault 재시도(`RequestRebuild`)는 같은 `Restart` 경로로 처음부터 다시 빌드하고, 등록된 장애물과 Modifier는 유지합니다. 재시작에 실패하면 Fault로 남습니다. 새 결과가 게시되기 전까지 Ready가 아니고, `ClampPositionToGrid`는 최신 요청의 격자로 계속 동작합니다.
 - **수명 종료:** 실행 중인 풀이 Job에 취소를 요청하고 끝날 때까지 기다립니다. Job은 4,096셀마다 취소를 확인합니다.
-- **Inspector 편집:** Play 중 Inspector에서 값을 바꾸면 `OnValidate` 안에서 요청이 제출되므로, `StateChanged` 핸들러가 그 안에서 실행될 수 있습니다.
+- **Inspector 편집:** Play 중 Inspector에서 값을 바꾸면 `OnValidate` 안에서 검증하고 바로 다시 빌드합니다. Grid가 바뀌면 이전 결과를 즉시 숨기고 Building을 알립니다. 값이 잘못되면 Fault입니다. `StateChanged` 핸들러가 `OnValidate` 안에서 실행될 수 있습니다.
 
 ## 입력 변경
 
+- **통지 방식:** FlowField는 씬을 폴링하지 않습니다. 변경은 공개 API와 FlowField 컴포넌트의 통지로만 들어옵니다. `FlowFieldDynamicObstacle`, `FlowFieldGoalTarget`, Modifier Volume은 자기 Transform이나 Collider Bounds를 프레임당 한 번 확인합니다(컴포넌트당 O(1)).
+- **불확실 영역:** 장애물 등록·해제·이동·영역 dirty 통지를 받은 그 프레임에 영역을 표시하고, 그 영역을 조회한 빌드가 게시될 때까지 그 셀과 그 셀로 가는 경로는 속도 0입니다. 빌드 시작 때 목록을 옮기고 그 빌드를 게시할 때 지우며, 시작 후 기록된 영역은 다음 빌드까지 남습니다. 목록이 64개를 넘으면 합쳐서 더 넓게 정지합니다(`FlowFieldSafety`; Surface는 XZ, Volume은 3D로 비교). 장애물 설정이 바뀌면 필드 전체가 불확실해집니다.
 - `SetGoal()`은 장애물 결과를 재사용합니다. 같이 `RequestRebuild()`를 부르면 이 이점을 잃습니다.
 - Surface의 `RequestRebuild()`는 바닥 Raycast를 다시 한다고 보장하지 않습니다. 바닥 형상이 바뀌면 `NotifyCellsDirty()`를 씁니다. Volume의 `NotifyCellsDirty()`는 새 전체 작업을 예약합니다.
-- Surface는 Manager가 제출한 요청만 빌드하므로, 풀이 중에 바뀐 Goal은 다음 제출에서 반영됩니다.
+- 풀이 중에 바뀐 Goal과 설정은 Builder가 보관했다가 다음 빌드를 시작할 때 제출합니다.
 - Surface2D의 정적 장애물은 Obstacle Layer에서 Rigidbody가 없고 등록하지 않은 Collider입니다. `StaticBaked`는 동적 장애물 등록을 거부하고, 형식이 다른 Bake Asset도 거부하므로 다시 Bake해야 합니다.
 
 ## Surface2D
 
 <img src="Images/flowfield-surface.png" alt="Surface2D 빌드와 게시 흐름" width="80%">
 
-- Manager가 입력을 관측해 제출하면 Scheduler가 Session을 진행합니다. 제출되지 않은 요청은 빌드하지 않고 예산도 쓰지 않습니다. 직접 `Pump()`를 호출하는 베이크는 호출자가 입력을 책임집니다.
+- 통지가 dirty 표시와 요청을 남기면 Scheduler가 Session을 진행합니다. 직접 `Pump()`를 호출하는 베이크는 호출자가 입력을 책임집니다.
 - 표면·장애물·Goal·Modifier 영역은 Physics 결과가 한 스냅샷이 되도록 한 프레임에 실행합니다. BFS와 방향은 워커 스레드, Topology는 메인 스레드의 Burst입니다. 합성은 예산에 맞춰 나눕니다.
 - BFS가 예정된 빌드는 사전 합성을 생략하고, 완료 후 전체를 한 번 합성합니다.
 - 바닥 Layer와 경사·단차 조건이 필요합니다.
@@ -47,19 +56,20 @@ Player 측정(`PlayerProbe` 폴더, `Tools/run-player-probe.sh`)은 Editor와 `F
 - 셀은 `x + Width × (z + Depth × y)` 순서로 저장합니다. 두 축·세 축 대각선은 중간 셀이 모두 통과 가능할 때만 연결합니다.
 - 장애물·Modifier 단계는 64셀씩 진행합니다. 스텝마다 `OverlapBox`로 후보를 모아 후보가 닿는 셀만 정확히 검사합니다(`FlowFieldVolumeCellQuery`).
 - **부분 재계산:** Modifier만 바뀌면 게시된 내비게이션에 다시 합성하고, Goal만 바뀌면 장애물 결과와 Topology를 재사용합니다. Goal이 같은 셀 안에서 움직이면 빌드하지 않습니다. Goal을 지우면 진행 중인 빌드를 버립니다.
-- **추적되지 않은 Collider:** `RequestRebuild()`나 `NotifyCellsDirty()`의 전체 조회에서 반영됩니다.
-- **불확실 영역:** 장애물이 바뀐 영역은 게시 때까지 정지합니다. 빌드 시작 때 목록을 옮기고 그 빌드를 게시할 때 지우며, 시작 후 기록된 영역은 다음 빌드까지 남습니다. 목록이 64개를 넘으면 합쳐서 더 넓게 정지합니다(`FlowFieldVolumeSafetyState`).
-- **배열 재사용:** 교체된 게시 배열을 다음 빌드에 씁니다(`FlowFieldVolumeSpareArrays`). 뷰로 내준 필드의 배열은 재사용하지 않습니다.
+- **등록하지 않은 Collider:** `RequestRebuild()`나 `NotifyCellsDirty()`의 전체 조회에서 반영됩니다.
+- **경로 안전성:** 공통 불확실 영역에 더해, 다음 셀·탈출 방향·Default Direction 경로가 그 영역이나 막힌 셀을 지나면 정지합니다(`FlowFieldVolumeSafetyState`).
+- **배열 재사용:** 교체된 게시 배열을 다음 빌드에 씁니다(`FlowFieldSpareArrays`).
 
 ## Modifier
 
 - Modifier 적용 여부는 두 모드 모두 `FlowFieldVectorUtility.CanApplyModifier`로 판정합니다. 막힌 셀, Goal Anchor, 도달할 수 없는 셀, 기본 방향이 0인 셀에는 적용하지 않습니다.
 - Priority 기본값은 Speed 100, Noise 200입니다. 런타임 값은 `SetSpeedMultiplier()`, `SetNoise()`, `SetPriority()`로 바꿉니다.
 - `CaptureSnapshot()`이 빌드에 쓸 값을 고정합니다. Collider 형상까지 복제하지는 않습니다.
-- `Observe()`는 관측 주기마다 호출되므로 할당하지 않게 작성합니다. 값 변경은 `Revision`을 올리거나 `NotifyModifierChanged`로 알립니다.
-- Fault 중에는 해제만 받습니다. 재시도가 전부 다시 빌드하므로 작업을 예약하지 않고, Fault 중 켜진 Modifier는 재시도의 Submit 전에 등록합니다.
+- FlowField는 Modifier를 폴링하지 않습니다. 값, Priority, 영역 변경은 `NotifyModifierChanged`로 알립니다. 기본 Modifier Volume은 setter와 `OnValidate`에서 알리고, Influence Collider의 이동과 파괴는 프레임당 한 번 스스로 알립니다. `Observe()`는 등록과 통지 때 호출됩니다.
+- 등록된 Modifier의 설정이 통지 시점에 잘못되면 두 모드 모두 Fault입니다. 등록되지 않은 Modifier를 통지하면 `InvalidOperationException`입니다.
+- Fault 중에는 해제만 받습니다. 재시도가 전부 다시 빌드하므로 작업을 예약하지 않고, Fault 중 켜진 Modifier는 재시작의 요청 제출 전에 등록합니다.
 - 셀 판정은 `FlowFieldOverlapUtility.CellHalfExtent`로 0.0001 줄인 상자를 써서, 격자에 맞춘 Collider가 이웃 셀을 잡지 않게 합니다.
-- Influence Collider가 파괴되면 설정 오류로 보고 Fault를 냅니다. 무시하면 영향 영역이 조용히 사라집니다.
+- Influence Collider가 파괴되면 설정 오류로 보고 Fault를 냅니다. 무시하면 영향 영역이 조용히 사라집니다. 기본 Modifier Volume은 파괴를 다음 LateUpdate에 알립니다.
 - Modifier 자체의 Fault는 Manager 재빌드로 풀리지 않습니다. Modifier를 끈 상태에서 `Release()`, 값 수정, `Init()` 순서로 복구한 뒤 원래 활성 상태로 되돌립니다.
 
 직접 구현한 `IFlowFieldVectorModifier`의 `Observe()`, `CaptureSnapshot()`, `Modify()` 안에서는 호출이 다음과 같이 제한됩니다.
@@ -68,13 +78,14 @@ Player 측정(`PlayerProbe` 폴더, `Tools/run-player-probe.sh`)은 Editor와 `F
 | --- | --- |
 | `TrySample` 등 읽기 | 바로 실행 |
 | Modifier·동적 장애물 등록과 해제, `NotifyModifierChanged` | 작업이 끝난 뒤 실행. 그 사이 Session이 멈추면 버려지고 등록은 경고를 남김 |
-| `Init`, `RequestRebuild`, `Release`, `SetSpaceMode`, `SetGoal`, `NotifyCellsDirty`, `NotifyObstacleRegionDirty` | `InvalidOperationException` |
+| `Init`, `RequestRebuild`, `Release`, `SetSpaceMode`, `SetGoal`, `NotifyCellsDirty`, `NotifyObstacleRegionDirty`, `NotifyDynamicObstacleMoved` | `InvalidOperationException` |
 
 ## StaticBaked
 
 - Surface2D는 `FlowFieldStaticBakeData`, Volume3D는 `FlowFieldVolumeBakeData`이며 v6만 허용합니다.
 - Volume은 방향·속도·탈출 벡터를 저장하지 않고 NextCell과 면 인덱스(`_escapeFaces`)에서 재구성합니다. Surface는 배열을 `FlowFieldBakeBlob`으로 `byte[]`에 비트 그대로 저장합니다.
 - 저장에 실패하면 기존 Asset의 내용, Revision, GUID를 유지합니다.
+- 런타임은 Asset에 구운 Goal을 그대로 씁니다. Init은 Goal Transform 위치가 구운 Goal과 같은지 검사합니다.
 - 참조가 빈 Manager의 Bake 대상은 씬 GUID와 Manager ID로 만든 고정 경로입니다. 그 경로의 같은 형식 Asset은 이 Manager의 것으로 보고 덮어씁니다.
 
 ## Editor 표시

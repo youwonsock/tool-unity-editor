@@ -11,15 +11,15 @@ title Surface2D 빌드와 게시
 
 participant "Manager" as M
 participant "Scheduler" as Q
-participant "Session" as S
+participant "Session·SurfaceBuilder" as S
 participant "BaseStage" as B
 participant "풀이 Job\n(워커 스레드)" as J
 participant "ComposeStage" as C
 participant "FieldStore" as P
 
-M -> S : LateUpdate: 입력 관측, Submit
+M -> S : 통지 → SubmitConfig·dirty 표시\n통지 영역은 그 프레임부터 정지
 Q -> S : PumpInternal(예산)
-note over Q,S : 제출된 요청만 빌드한다
+note over Q,S : 빌드 중 온 입력은 다음 빌드 시작 때 제출한다
 alt RuntimeDynamic
   S -> B : 표면·장애물·Goal 준비\n(Physics는 한 프레임에)
   opt 내비게이션이 바뀜
@@ -34,5 +34,5 @@ S -> P : 완성된 결과 게시
 S --> M : FieldChanged (작업이 끝난 뒤)
 M -> S : TrySample(위치)
 S -> P : 게시 값 읽기
-note over S,P : 최신 장애물·탈출 안전성 검사를 더한다
+note over S,P : 공통 불확실 영역과 최신 장애물·탈출 검사를 더한다
 @enduml

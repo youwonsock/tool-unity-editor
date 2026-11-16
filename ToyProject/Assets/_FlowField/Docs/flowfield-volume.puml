@@ -11,15 +11,14 @@ title Volume3D 빌드와 게시
 
 participant "Manager" as M
 participant "Scheduler" as Q
-participant "VolumeSession" as S
+participant "Session·VolumeBuilder" as S
 participant "Tracker·Registry" as O
 participant "BuildContext\n·풀이 Job" as B
 participant "SafetyState\n·FieldData" as P
 
-M -> S : 최신 요청 제출
+M -> S : 통지 → SubmitConfig·불확실 영역 표시
 loop 실행 가능한 동안
   Q -> S : PumpInternal(예산)
-  S -> O : 장애물·Modifier 관측
   opt 새 빌드 시작
     S -> O : Modifier Snapshot 고정
     S -> B : 요청을 BuildContext에 고정
@@ -33,10 +32,10 @@ loop 실행 가능한 동안
   S -> B : Modifier 합성 (64셀씩)
   opt 빌드 완료
     S -> P : 결과 게시, 반영한 불확실 영역 해제
-    S --> M : FieldChanged (작업이 끝난 뒤)
+    S --> M : 내용이 바뀌었으면 FieldChanged (작업이 끝난 뒤)
   end
 end
 M -> S : TrySample(위치)
 S -> P : 게시 값 + 최신 안전성 상태
-note over S,P : 불확실 셀은 true와 속도 0을 돌려줄 수 있다
+note over S,P : 불확실 셀은 true와 속도 0을 돌려줄 수 있다 (두 모드 공통)
 @enduml

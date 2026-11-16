@@ -17,7 +17,8 @@
 1. `Scene/FlowFieldSample.unity` 또는 `FlowFieldVolume3DTest.unity`를 실행합니다. macOS 입력 소스가 한글이면 샘플의 글자 키가 동작하지 않습니다.
 2. 새 씬에서는 `FlowFieldManager`에 Bounds, CellSize, 공간 모드, Layer를 지정합니다. Manager는 회전 없이 단위 Scale로 둡니다.
 3. `StaticBaked`는 Editor에서 Bake한 Asset을 연결합니다. Goal이나 장애물이 바뀌면 다시 Bake합니다.
-4. 이동 주체에서 `TrySample()`을 호출합니다.
+4. 움직이는 장애물에는 `FlowFieldDynamicObstacle`, 움직이는 Goal에는 `FlowFieldGoalTarget`을 붙입니다. FlowField는 씬을 폴링하지 않으므로 알리지 않은 변화는 반영되지 않습니다.
+5. 이동 주체에서 `TrySample()`을 호출합니다.
 
 ```csharp
 using Common.FlowField;
@@ -54,8 +55,9 @@ public sealed class FlowFieldReadmeMover : MonoBehaviour
 
 <img src="Docs/Images/flowfield-structure.png" alt="FlowField 주요 타입의 구조" width="100%">
 
-- **Manager**가 설정을 검증하고 최신 요청을 Session에 넘깁니다. 호출이 계산 완료를 뜻하지는 않습니다.
-- **Session**은 완성된 결과만 게시하고, 다음 계산 중에도 이전 결과를 읽게 합니다. Manager를 다시 켜거나 Fault를 재시도한 뒤에는 새 결과가 나올 때까지 읽을 수 없습니다.
+- **Manager**는 직렬화 설정과 Unity 콜백을 맡고, 설정 스냅샷(`FlowFieldManagerConfig`)과 공개 API 호출을 Session에 넘깁니다. 호출이 계산 완료를 뜻하지는 않습니다.
+- **Session**은 두 공간 모드가 같이 쓰는 파이프라인입니다. 수명, 이벤트, 빌드 루프, 실패 규칙이 한 벌이고, 모드마다 다른 계산만 Builder(`Surface`·`Volume`)가 맡습니다.
+- 완성된 결과만 게시하고, 다음 계산 중에도 이전 결과를 읽게 합니다. Manager를 다시 켜거나 Fault를 재시도한 뒤, 또는 Grid가 바뀐 뒤에는 새 결과가 나올 때까지 읽을 수 없습니다.
 - **Scheduler**는 프로젝트 전체에서 프레임당 하나의 예산(기본 2ms)으로 작업을 나눕니다. 풀이는 워커 스레드에서 돕니다.
 - **Execution Boundary**는 이벤트와 Modifier 코드를 작업이 끝난 뒤로 미룹니다.
 
@@ -63,17 +65,35 @@ public sealed class FlowFieldReadmeMover : MonoBehaviour
 
 | 상황 | 호출 |
 | --- | --- |
-| Goal 변경 | `SetGoal()`. 장애물 결과를 재사용합니다 |
-| 설정 변경, Fault 재시도 | `RequestRebuild()` |
+| Goal 변경 | `SetGoal()` 또는 `FlowFieldGoalTarget`. 장애물 결과를 재사용합니다 |
+| Fault 재시도, Play 중 Manager 이동 | `RequestRebuild()` |
 | 바닥 형상 변경 (`RuntimeDynamic`) | `NotifyCellsDirty()` |
 | 장애물 영역 알림 (`RuntimeDynamic`) | `NotifyObstacleRegionDirty(bounds)`. 이전과 현재 Bounds의 합집합을 넘깁니다 |
-| 움직이는 장애물 | `RegisterDynamicObstacle(collider)` / `UnregisterDynamicObstacle(collider)` |
+| 움직이는 장애물 | `RegisterDynamicObstacle(collider)` → 이동할 때마다 `NotifyDynamicObstacleMoved(collider)` → `UnregisterDynamicObstacle(collider)`. `FlowFieldDynamicObstacle`이 이 셋을 대신합니다 |
 | 모드 변경 | `Release()` → `SetSpaceMode()` → `Init()` 뒤 동적 장애물 재등록 |
 | 결과 변화 알림 | `FieldChanged`, `StateChanged` 이벤트. 핸들러 안에서 모든 명령을 쓸 수 있습니다 |
 
-- **동적 장애물:** 움직이는 문이나 벽은 등록하거나, **Enable Unregistered Obstacle Sweep**을 켜고 Obstacle Layer에 넣어야 변경이 감지됩니다. 스윕은 기본으로 꺼져 있고, 장애물 조회는 Trigger를 무시합니다.
+- **통지 방식:** FlowField는 씬을 폴링하지 않습니다. 변경은 위 API와 FlowField 컴포넌트(`FlowFieldDynamicObstacle`, `FlowFieldGoalTarget`, Modifier)의 통지로만 들어옵니다. 알리지 않은 이동은 반영되지 않습니다. 통지를 받은 그 프레임부터 영향 영역은 새 결과가 게시될 때까지 속도 0입니다. 장애물 조회는 Trigger를 무시합니다.
+- **Goal Transform:** Manager의 Goal Transform은 Init과 Bake 때 한 번 읽는 초기 Goal입니다. 이후 이동은 `SetGoal()`이나 `FlowFieldGoalTarget`으로 알립니다.
+- **설정 변경:** Play 중 Inspector에서 설정을 바꾸면 바로 다시 빌드합니다. 값이 잘못되면 두 모드 모두 Fault가 됩니다.
 - **Modifier:** 영향 영역 Collider(Trigger, MeshCollider는 Convex)에 `FlowFieldSpeedModifier`나 `FlowFieldNoiseModifier`를 두고 Manager를 지정합니다. 같은 Manager 안에서는 Priority를 서로 다르게 두며, 낮은 값부터 합성합니다.
 - **Fault 복구:** 원인을 고친 뒤 `RequestRebuild()`를 부릅니다. Modifier 자체의 Fault는 Modifier를 껐다가 `Release()` → 값 수정 → `Init()` 순서로 풉니다. 직접 구현한 Modifier 안에서 쓸 수 있는 호출은 TechnicalNotes에 있습니다.
+
+### 실패 규칙
+
+두 공간 모드가 같은 규칙을 따릅니다.
+
+| 상황 | `TrySample` | `Sample` / `ClampPositionToGrid` | 명령 API |
+| --- | --- | --- | --- |
+| 초기화 전, `Release()` 뒤 | false | `InvalidOperationException` (not initialized) | `InvalidOperationException` |
+| Faulted | false | `InvalidOperationException` (InnerException = 원인) | `InvalidOperationException`. 해제(`Unregister*`)는 받고 bool을 돌려줍니다 |
+| 결과 없음 (첫 빌드, 비활성화 뒤, Grid 변경 뒤) | false | `Sample`: `InvalidOperationException` (not ready) · `Clamp`: 최신 Grid로 동작 | 받습니다 |
+| 좌표 NaN·무한대, 격자 밖 | false | `ArgumentOutOfRangeException` | — |
+| `StaticBaked` | 정상 | 정상 | `SetGoal`, `NotifyCellsDirty`, `NotifyObstacleRegionDirty`, `RegisterDynamicObstacle`, `NotifyDynamicObstacleMoved`는 `InvalidOperationException`, `UnregisterDynamicObstacle`은 false |
+
+- `TrySample()`은 어떤 상태에서도 예외를 던지지 않습니다. `IsReady`가 true면 격자 안 좌표의 `TrySample()`이 성공할 수 있습니다.
+- `Revision`과 `FieldChanged`는 두 모드 모두 게시 내용이 실제로 바뀔 때만 바뀝니다.
+- Surface2D의 `ClampPositionToGrid()`는 X·Z만 맞춥니다.
 
 ## 기능
 

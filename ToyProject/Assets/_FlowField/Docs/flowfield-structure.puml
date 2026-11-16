@@ -12,34 +12,46 @@ hide circle
 title FlowField 구조
 
 class "IFlowFieldController\n: IFlowFieldProvider" as API <<interface>>
-class FlowFieldManager
+class FlowFieldManager {
+  설정 묶음
+  FlowFieldManagerConfig
+  FlowFieldModifierAttachment
+}
 class FlowFieldExecutionBoundary
 class FlowFieldBuildDriver
 class FlowFieldBuildScheduler
 interface IFlowFieldBuildOperation
-abstract class FlowFieldSessionBase
-class "FlowFieldSession (Surface2D)" as Surface {
+class "FlowFieldSession\n(공통 파이프라인)" as Session {
+  수명·이벤트·빌드 루프
+  FlowFieldFailures
+}
+interface IFlowFieldSpaceBuilder
+class "FlowFieldSurfaceBuilder (Surface2D)" as Surface {
   SurfaceBaseStage
   SurfaceSolveStage
   SurfaceComposeStage
-  FieldStore
+  SurfaceFieldStore
 }
-class "FlowFieldVolumeSession (Volume3D)" as Volume {
+class "FlowFieldVolumeBuilder (Volume3D)" as Volume {
   VolumeObstacleTracker
   VolumeModifierRegistry
   VolumeBuildContext
   VolumeSafetyState
-  VolumeFieldData
 }
+class "FlowFieldField·FlowFieldSampler\nFlowFieldSafety" as Shared
+class "FlowFieldDynamicObstacle\nFlowFieldGoalTarget\nModifier Volume" as Components
 
 FlowFieldManager .up.|> API
-FlowFieldManager --> Surface
-FlowFieldManager --> Volume
+FlowFieldManager --> Session
 FlowFieldManager --> FlowFieldExecutionBoundary
-Surface --|> FlowFieldSessionBase
-Volume --|> FlowFieldSessionBase
-FlowFieldSessionBase --> FlowFieldExecutionBoundary
-FlowFieldSessionBase ..|> IFlowFieldBuildOperation
+Components ..> API : 통지
+Session --> IFlowFieldSpaceBuilder
+Surface ..|> IFlowFieldSpaceBuilder
+Volume ..|> IFlowFieldSpaceBuilder
+Surface --> Shared
+Volume --> Shared
+Session --> FlowFieldExecutionBoundary
+Session ..|> IFlowFieldBuildOperation
 FlowFieldBuildScheduler --> IFlowFieldBuildOperation
 FlowFieldBuildDriver -right-> FlowFieldBuildScheduler
 @enduml
