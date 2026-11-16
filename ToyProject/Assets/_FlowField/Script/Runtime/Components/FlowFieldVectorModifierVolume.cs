@@ -19,6 +19,9 @@ namespace Common.FlowField
         [System.NonSerialized] private bool _validationSnapshotInitialized;
         [System.NonSerialized] private bool _isInitialized;
         [System.NonSerialized] private Exception _fault;
+        // The Influence Collider bounds last reported to the Manager.
+        [System.NonSerialized] private Bounds _reportedBounds;
+        [System.NonSerialized] private bool _reportedMissingCollider;
 
         public FlowFieldManager FlowFieldManager => _flowFieldManager;
         public Collider InfluenceCollider => _influenceCollider;
@@ -63,6 +66,43 @@ namespace Common.FlowField
         protected virtual void OnDisable()
         {
             UnregisterFromCurrentManager();
+        }
+
+        // FlowField never polls a Modifier. The volume itself reports, at most
+        // once a frame, that its Influence Collider moved or was destroyed;
+        // value, priority and collider edits report through their setters.
+        private void LateUpdate()
+        {
+            if (_registeredManager == null)
+                return;
+            if (_influenceCollider == null)
+            {
+                if (_reportedMissingCollider)
+                    return;
+                _reportedMissingCollider = true;
+                ReportAreaChanged();
+                return;
+            }
+            _reportedMissingCollider = false;
+            Bounds bounds = _influenceCollider.bounds;
+            if (bounds == _reportedBounds)
+                return;
+            _reportedBounds = bounds;
+            ReportAreaChanged();
+        }
+
+        private void ReportAreaChanged()
+        {
+            // A Manager that stopped or faulted has nothing to rebuild.
+            if (!_registeredManager.IsInitialized || _registeredManager.IsFaulted)
+                return;
+            _registeredManager.NotifyModifierChanged(this, FlowFieldModifierChange.Area);
+        }
+
+        private void RememberReportedArea()
+        {
+            _reportedMissingCollider = _influenceCollider == null;
+            _reportedBounds = _reportedMissingCollider ? default : _influenceCollider.bounds;
         }
 
         private void OnDestroy()
@@ -162,6 +202,8 @@ namespace Common.FlowField
 
                 _flowFieldManager = manager;
                 _registeredManager = registeredWithCandidate ? manager : null;
+                if (_registeredManager != null)
+                    RememberReportedArea();
             }
             catch
             {
@@ -206,7 +248,10 @@ namespace Common.FlowField
                 _influenceCollider = influenceCollider;
                 IncrementRevision();
                 if (Application.isPlaying && isActiveAndEnabled && _registeredManager != null)
+                {
                     _registeredManager.NotifyModifierChanged(this, FlowFieldModifierChange.Area);
+                    RememberReportedArea();
+                }
             }
             catch
             {
@@ -358,6 +403,7 @@ namespace Common.FlowField
             if (!_flowFieldManager.RegisterVectorModifier(this))
                 throw new InvalidOperationException("FlowField Vector Modifier is already registered with the configured manager.");
             _registeredManager = _flowFieldManager;
+            RememberReportedArea();
         }
 
         /// <summary>

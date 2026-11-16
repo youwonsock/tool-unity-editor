@@ -17,7 +17,7 @@ namespace Common.FlowField
         }
 
         private void MarkGoalDirty()
-            => ActiveMode.MarkGoalDirty();
+            => SubmitConfig(FlowFieldConfigChange.Goal);
 
         public FlowFieldSample Sample(Vector3 worldPosition)
         {
@@ -70,6 +70,22 @@ namespace Common.FlowField
             return ActiveSession.UnregisterObstacleCommand(collider);
         }
 
+        /// <summary>
+        /// A registered obstacle moved. The cells of its last built bounds and of
+        /// its bounds now are rebuilt; a destroyed one stops being registered.
+        /// False when the Collider is not registered.
+        /// </summary>
+        public bool NotifyDynamicObstacleMoved(Collider collider)
+        {
+            _boundary.ThrowIfInUserCode(nameof(NotifyDynamicObstacleMoved));
+            ThrowIfLifecycleUnavailable();
+            if (ReferenceEquals(collider, null))
+                throw new ArgumentNullException(nameof(collider));
+            if (BakeMode == FlowFieldBakeMode.StaticBaked)
+                throw FlowFieldFailures.NotInStaticBaked("Obstacle changes");
+            return ActiveSession.NotifyObstacleMovedCommand(collider);
+        }
+
         public void NotifyObstacleRegionDirty(Bounds worldBounds)
         {
             _boundary.ThrowIfInUserCode(nameof(NotifyObstacleRegionDirty));
@@ -91,17 +107,15 @@ namespace Common.FlowField
 
             if (!request.HasGoal)
             {
-                if (_goalTransform == null && !_hasExplicitGoal)
+                if (!_hasExplicitGoal)
                     return;
-                _goalTransform = null;
                 _hasExplicitGoal = false;
                 _explicitGoalWorld = default;
                 MarkGoalDirty();
                 return;
             }
 
-            if (_goalTransform == null
-                && _hasExplicitGoal
+            if (_hasExplicitGoal
                 && FlowFieldGridSpace.Approximately(
                     _explicitGoalWorld,
                     request.WorldPosition,
@@ -109,7 +123,6 @@ namespace Common.FlowField
                 && Mathf.Abs(_flow.GoalInfluenceRadius - request.InfluenceRadius) <= FlowFieldManagerConfig.ValueEpsilon)
                 return;
 
-            _goalTransform = null;
             _hasExplicitGoal = true;
             _explicitGoalWorld = request.WorldPosition;
             _flow.GoalInfluenceRadius = request.InfluenceRadius;
@@ -122,7 +135,7 @@ namespace Common.FlowField
             ThrowIfLifecycleUnavailable();
             if (BakeMode == FlowFieldBakeMode.StaticBaked)
                 throw FlowFieldFailures.NotInStaticBaked("Cell regeneration");
-            ActiveMode.MarkCellsDirty();
+            SubmitConfig(FlowFieldConfigChange.Cells);
         }
 
         public bool RegisterVectorModifier(IFlowFieldVectorModifier modifier)

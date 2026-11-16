@@ -11,7 +11,6 @@ namespace Common.FlowField
     internal readonly struct FlowFieldManagerConfig
     {
         internal const float ValueEpsilon = 0.0001f;
-        internal const float MinRefreshRate = 0.05f;
 
         internal readonly FlowFieldSpaceMode SpaceMode;
         internal readonly FlowFieldBakeMode BakeMode;
@@ -20,15 +19,11 @@ namespace Common.FlowField
         internal readonly FlowFieldObstacleSettings Obstacles;
         internal readonly FlowFieldFlowSettings Flow;
         internal readonly FlowFieldBakeAssets BakeAssets;
-        internal readonly bool EnableUnregisteredObstacleSweep;
-        internal readonly float RefreshRate;
         internal readonly Vector3 Position;
         internal readonly Quaternion Rotation;
         internal readonly Vector3 LossyScale;
-        // A Goal Transform is read where the Goal is resolved, as before.
-        internal readonly Transform GoalTransform;
-        internal readonly bool HasExplicitGoal;
-        internal readonly Vector3 ExplicitGoalWorld;
+        internal readonly bool HasGoal;
+        internal readonly Vector3 GoalWorld;
 
         internal FlowFieldManagerConfig(
             FlowFieldSpaceMode spaceMode,
@@ -38,12 +33,9 @@ namespace Common.FlowField
             in FlowFieldObstacleSettings obstacles,
             in FlowFieldFlowSettings flow,
             in FlowFieldBakeAssets bakeAssets,
-            bool enableUnregisteredObstacleSweep,
-            float refreshRate,
             Transform managerTransform,
-            Transform goalTransform,
-            bool hasExplicitGoal,
-            Vector3 explicitGoalWorld)
+            bool hasGoal,
+            Vector3 goalWorld)
         {
             SpaceMode = spaceMode;
             BakeMode = bakeMode;
@@ -52,19 +44,12 @@ namespace Common.FlowField
             Obstacles = obstacles;
             Flow = flow;
             BakeAssets = bakeAssets;
-            EnableUnregisteredObstacleSweep = enableUnregisteredObstacleSweep;
-            RefreshRate = refreshRate;
             Position = managerTransform.position;
             Rotation = managerTransform.rotation;
             LossyScale = managerTransform.lossyScale;
-            GoalTransform = goalTransform;
-            HasExplicitGoal = hasExplicitGoal;
-            ExplicitGoalWorld = explicitGoalWorld;
+            HasGoal = hasGoal;
+            GoalWorld = goalWorld;
         }
-
-        internal bool HasGoal => GoalTransform != null || HasExplicitGoal;
-
-        internal Vector3 GoalWorld => GoalTransform != null ? GoalTransform.position : ExplicitGoalWorld;
 
         // The grid is world-axis aligned, so the Manager may not rotate or scale.
         internal bool HasSupportedTransform
@@ -97,8 +82,6 @@ namespace Common.FlowField
                 throw new ArgumentOutOfRangeException("_obstacleClearance", "Obstacle Clearance must be finite and not negative.");
             if (!FlowFieldGridSpace.IsFinite(Flow.GoalInfluenceRadius) || Flow.GoalInfluenceRadius < 0f)
                 throw new ArgumentOutOfRangeException("_goalInfluenceRadius", "Goal Influence Radius must be finite and not negative.");
-            if (!FlowFieldGridSpace.IsFinite(RefreshRate) || RefreshRate < MinRefreshRate)
-                throw new ArgumentOutOfRangeException("_refreshRate", $"Refresh Rate must be at least {MinRefreshRate}.");
             if (!Enum.IsDefined(typeof(FlowFieldBakeMode), BakeMode))
                 throw new ArgumentOutOfRangeException("_bakeMode");
             if (bakeModeLocked)

@@ -25,8 +25,6 @@ namespace Common.FlowField.Editor
             if (!isVolume)
                 DrawSettings(FlowFieldManager.PropertyNames.Surface, "Surface");
             DrawSettings(FlowFieldManager.PropertyNames.Obstacles, "Obstacles");
-            EditorGUILayout.PropertyField(serializedObject.FindProperty(FlowFieldManager.PropertyNames.EnableUnregisteredObstacleSweep));
-            EditorGUILayout.PropertyField(serializedObject.FindProperty(FlowFieldManager.PropertyNames.RefreshRate));
             DrawSettings(FlowFieldManager.PropertyNames.Flow, "Flow");
             EditorGUILayout.PropertyField(serializedObject.FindProperty(FlowFieldManager.PropertyNames.GoalTransform));
 

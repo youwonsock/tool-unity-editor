@@ -24,56 +24,6 @@ namespace Common.FlowField
             _modifierObservations.Clear();
         }
 
-        internal bool DetectChanges()
-        {
-            if (_modifiers.Count == 0)
-                return false;
-            var observations = ArrayPool<ModifierObservation>.Shared.Rent(_modifiers.Count);
-            try
-            {
-                bool changed = false;
-                for (int index = _modifiers.Count - 1; index >= 0; index--)
-                {
-                    IFlowFieldVectorModifier modifier = _modifiers[index];
-                    if (FlowFieldVectorUtility.IsMissingModifier(modifier))
-                    {
-                        changed = true;
-                        continue;
-                    }
-                    ModifierObservation current = ModifierObservation.From(modifier.Observe());
-                    for (int previousIndex = _modifiers.Count - 1; previousIndex > index; previousIndex--)
-                        if (!FlowFieldVectorUtility.IsMissingModifier(_modifiers[previousIndex]) && observations[previousIndex].Priority == current.Priority)
-                            throw new InvalidOperationException($"Vector modifier priority {current.Priority} is duplicated.");
-                    observations[index] = current;
-                    if (!_modifierObservations.TryGetValue(modifier, out ModifierObservation previous)
-                        || !previous.Equals(current))
-                        changed = true;
-                }
-
-                // Only a complete observation may replace the cache.
-                if (changed)
-                {
-                    for (int index = _modifiers.Count - 1; index >= 0; index--)
-                    {
-                        IFlowFieldVectorModifier modifier = _modifiers[index];
-                        if (FlowFieldVectorUtility.IsMissingModifier(modifier))
-                        {
-                            _modifiers.RemoveAt(index);
-                            _modifierObservations.Remove(modifier);
-                        }
-                        else
-                            _modifierObservations[modifier] = observations[index];
-                    }
-                    _modifiers.Sort((left, right) => _modifierObservations[left].Priority.CompareTo(_modifierObservations[right].Priority));
-                }
-                return changed;
-            }
-            finally
-            {
-                ArrayPool<ModifierObservation>.Shared.Return(observations, clearArray: true);
-            }
-        }
-
         internal bool Register(IFlowFieldVectorModifier modifier)
         {
             if (modifier == null)
@@ -96,6 +46,9 @@ namespace Common.FlowField
             _modifierObservations.Remove(modifier);
             return true;
         }
+
+        internal bool Contains(IFlowFieldVectorModifier modifier)
+            => modifier != null && _modifiers.Contains(modifier);
 
         internal bool ValidateModifierChange(
             IFlowFieldVectorModifier modifier,

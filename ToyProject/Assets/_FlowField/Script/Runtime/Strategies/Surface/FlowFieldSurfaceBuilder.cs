@@ -26,7 +26,10 @@ namespace Common.FlowField
         private FlowFieldSurfaceSourceKind _sourceKind;
         // Only the Manager can tell that its current settings are valid, so the
         // scheduler builds nothing until it has submitted them. Dirty input waits.
-        private bool _submittedForScheduler;
+        // Configuration input that arrived while a build ran. The next build
+        // submits it before it begins.
+        private FlowFieldManagerConfig _owedConfig;
+        private bool _configOwed;
 
         internal FlowFieldGridSpace StagingGrid => _state.Grid;
         internal bool StagingSurfaceReady => _state.SurfaceReady;
@@ -82,12 +85,11 @@ namespace Common.FlowField
         internal void Pump()
             => _session.RunPipeline(FlowFieldBuildBudget.Unlimited, scheduled: false, waitForWorker: true);
 
-        // Building without composing means a solve is running elsewhere. Input
-        // nobody has submitted yet waits for the Manager in the same way.
+        // Building without composing means a solve is running elsewhere.
         public bool IsWaitingForExternalCompletion
             => !_composeStage.IsRunning
-                && (_session.Lifecycle == FlowFieldSessionLifecycle.Building
-                    || _requests.Pending && !_submittedForScheduler);
+                && _session.Lifecycle == FlowFieldSessionLifecycle.Building
+                && _phase == BuildPhase.WaitingSolve;
 
         public bool HasActiveBuild => _phase != BuildPhase.None;
 
@@ -97,21 +99,20 @@ namespace Common.FlowField
 
         public int MaxBuildsBegunPerPump => 1;
 
-        public void BeforePump() { }
+        // Input that arrived during a build is built next, so the session
+        // reports Ready only once nothing is owed, as in Volume3D.
+        public bool StaysBuildingWhileOwed => true;
 
-        // Input that arrives during a build waits for the Manager's next
-        // Submit, so a publication always ends the Building state.
-        public bool StaysBuildingWhileOwed => false;
+        public bool HasOwedInput => _requests.Pending || _configOwed;
 
-        public bool HasOwedInput => false;
-
-        // Only the Manager can tell that its current settings are valid, so the
-        // scheduler builds nothing until it has submitted them.
         public bool TryBeginBuild(bool scheduled)
         {
-            if (_session.Lifecycle == FlowFieldSessionLifecycle.Building
-                || !_requests.Pending
-                || scheduled && !_submittedForScheduler)
+            if (_configOwed)
+            {
+                _configOwed = false;
+                Submit(CreateCurrentRequest(in _owedConfig));
+            }
+            if (!_requests.Pending)
                 return false;
             _phase = BuildPhase.Begin;
             return true;
@@ -308,8 +309,6 @@ namespace Common.FlowField
                 flags |= FlowFieldSurfaceDirtyFlags.FinalRegion;
             }
             _state.DirtyFlags |= flags;
-            // The submitted request no longer covers this input.
-            _submittedForScheduler = false;
             if (finalRegion.IsValid)
                 _state.ExpandFinalDirty(finalRegion);
             if (obstacleRegion.IsValid)
@@ -363,7 +362,6 @@ namespace Common.FlowField
                 _state.ExpandObstacleDirty(request.DirtyObstacleRegion);
 
             _requests.Accept(request);
-            _submittedForScheduler = true;
             _state.GoalRemoved = !request.Goal.IsValid;
             // A new grid or source hides the published field at once.
             _session.PublishRuntimeState();
@@ -390,28 +388,27 @@ namespace Common.FlowField
             return result.FinalDirty;
         }
 
-        internal FlowFieldSurfaceModifierRegistryResult DetectModifierChanges()
-        {
-            EnsureModifierServices();
-            FlowFieldSurfaceModifierRegistryResult result;
-            using (_session.Boundary.EnterUserCode())
-                result = _modifierPipeline.Registry.DetectChanges();
-            ApplyModifierRegistryResult(result);
-            return result;
-        }
-
         public void NotifyModifierChangedNow(
             IFlowFieldVectorModifier modifier,
             FlowFieldModifierChange change)
         {
             EnsureModifierServices();
-            if ((change & (FlowFieldModifierChange.Value | FlowFieldModifierChange.Priority)) != 0)
+            if (!_modifierPipeline.Registry.Contains(modifier))
+                throw new InvalidOperationException("Modifier is not registered.");
+            // Nothing polls a Modifier, so the notification is where an
+            // invalid configuration is found. It faults, as in Volume3D.
+            FlowFieldSurfaceModifierRegistryResult result;
+            try
             {
-                FlowFieldSurfaceModifierRegistryResult result;
                 using (_session.Boundary.EnterUserCode())
                     result = _modifierPipeline.Registry.MarkDirty(modifier, (change & FlowFieldModifierChange.Value) != 0);
-                ApplyModifierRegistryResult(result);
             }
+            catch (Exception exception) when (exception is InvalidOperationException || exception is ArgumentException)
+            {
+                _session.ReportFault(exception);
+                return;
+            }
+            ApplyModifierRegistryResult(result);
             if ((change & FlowFieldModifierChange.Area) != 0)
                 ApplyModifierRegistryResult(_modifierPipeline.Registry.MarkAreaDirty(modifier));
         }
@@ -484,6 +481,7 @@ namespace Common.FlowField
             // the same pose after activation.
             _state.ObstacleProbePending = false;
             _state.DirtyFlags = FlowFieldSurfaceDirtyFlags.All;
+            _configOwed = false;
             _session.Fault = null;
         }
 
@@ -519,7 +517,7 @@ namespace Common.FlowField
             _state.DirtyObstacleRegion = FlowFieldCellRect.Invalid;
             _state.ResolvedDefaultDirection = Vector3.zero;
             _requests.Clear();
-            _submittedForScheduler = false;
+            _configOwed = false;
             _state.ObstacleProbePending = false;
             _state.GoalRemoved = false;
             _latestDefaultDirection = null;

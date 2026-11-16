@@ -138,6 +138,11 @@ namespace Common.FlowField
         internal bool UnregisterObstacleCommand(Collider collider)
             => Boundary.IsInUserCode ? DeferUnregisterObstacle(collider) : _builder.UnregisterObstacleNow(collider);
 
+        internal bool NotifyObstacleMovedCommand(Collider collider)
+            => Boundary.IsInUserCode
+                ? Defer(() => _builder.NotifyObstacleMovedNow(collider))
+                : _builder.NotifyObstacleMovedNow(collider);
+
         // Kept apart so only a deferred call allocates the closure.
         private bool DeferRegisterModifier(IFlowFieldVectorModifier modifier)
             => Defer(() => _builder.RegisterModifierNow(modifier), "Modifier");
@@ -201,7 +206,6 @@ namespace Common.FlowField
             using FlowFieldExecutionBoundary.OperationScope operation = Boundary.EnterOperation();
             try
             {
-                _builder.BeforePump();
                 int begun = 0;
                 while (CanPump)
                 {

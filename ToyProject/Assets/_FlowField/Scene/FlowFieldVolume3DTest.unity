@@ -220,8 +220,6 @@ MonoBehaviour:
       serializedVersion: 2
       m_Bits: 512
     Clearance: 0.1
-  _enableUnregisteredObstacleSweep: 1
-  _refreshRate: 0.2
   _flow:
     DefaultDirection: {x: 0, y: 0, z: 1}
     GoalInfluenceRadius: 0

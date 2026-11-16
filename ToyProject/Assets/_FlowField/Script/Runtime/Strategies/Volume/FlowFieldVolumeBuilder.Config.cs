@@ -17,6 +17,40 @@ namespace Common.FlowField
                 out worldBounds,
                 out grid);
 
+        public void SubmitConfig(in FlowFieldManagerConfig config, FlowFieldConfigChange change)
+        {
+            switch (change)
+            {
+                case FlowFieldConfigChange.Rebuild:
+                    SubmitConfigRequest(in config, force: true, requeryObstacles: true);
+                    _session.AttachRuntimeScheduler();
+                    break;
+                // A Goal change keeps the obstacle result unless an obstacle changed.
+                case FlowFieldConfigChange.Goal:
+                    SubmitConfigRequest(in config, force: true, requeryObstacles: false);
+                    break;
+                case FlowFieldConfigChange.Cells:
+                    SubmitConfigRequest(in config, force: true, requeryObstacles: true);
+                    break;
+                // A changed request rebuilds; a new grid hides the old result at once.
+                default:
+                    SubmitConfigRequest(in config, force: false, requeryObstacles: false);
+                    break;
+            }
+        }
+
+        private void SubmitConfigRequest(in FlowFieldManagerConfig config, bool force, bool requeryObstacles)
+        {
+            if (!_session.IsInitialized || _session.IsFaulted)
+                return;
+            FlowFieldVolumeRequest request = CreateRequest(in config);
+            if (!force
+                && TryGetLatestRequestedInput(out FlowFieldVolumeRequest latest)
+                && latest.HasSameInputs(request))
+                return;
+            Submit(request, requeryObstacles);
+        }
+
         /// <summary>The request for the configured grid, Bake Mode and asset.</summary>
         internal static FlowFieldVolumeRequest CreateRequest(in FlowFieldManagerConfig config)
         {

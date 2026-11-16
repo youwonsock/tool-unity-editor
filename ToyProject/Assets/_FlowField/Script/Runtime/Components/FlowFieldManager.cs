@@ -7,9 +7,9 @@ namespace Common.FlowField
     /// The Unity component of a FlowField. It holds the serialized settings
     /// and the Unity callbacks, and forwards the Provider and Controller API
     /// to one <see cref="FlowFieldSession"/>, which owns all calculation state.
-    /// Files: this one (settings, lifecycle, events), .Api (public calls),
-    /// .Config (settings snapshot, checks and requests) and .Modes (what each
-    /// space mode observes).
+    /// Files: this one (settings, lifecycle, events), .Api (public calls) and
+    /// .Config (the settings snapshot the builders check and build from).
+    /// Nothing here polls the scene: every change arrives as a call.
     /// </summary>
     [DefaultExecutionOrder(-300)]
     public partial class FlowFieldManager : MonoBehaviour, IFlowFieldController
@@ -20,11 +20,9 @@ namespace Common.FlowField
         [SerializeField] private FlowFieldGridSettings _grid = FlowFieldGridSettings.Default;
         [SerializeField] private FlowFieldSurfaceSettings _surface = FlowFieldSurfaceSettings.Default;
         [SerializeField] private FlowFieldObstacleSettings _obstacles;
-        [SerializeField, Tooltip("ON이면 obstacle layer 전수 스윕(미등록 보정). OFF면 Static bake + RegisterDynamicObstacle만 사용.")]
-        private bool _enableUnregisteredObstacleSweep;
-        [SerializeField] private float _refreshRate = 0.2f;
         [SerializeField] private FlowFieldFlowSettings _flow = FlowFieldFlowSettings.Default;
-        [SerializeField] private Transform _goalTransform;
+        [SerializeField, Tooltip("Init과 Bake 때 한 번 읽는 Goal 위치입니다. 이후 Goal 이동은 SetGoal 또는 FlowFieldGoalTarget으로 알립니다.")]
+        private Transform _goalTransform;
 
         [Header("Mode")]
         [SerializeField, Tooltip("Surface2D는 기존 바닥 Raycast, Volume3D는 전체 Bounds를 정육면체 셀로 채웁니다. Init 이후 변경하려면 Release가 필요합니다.")]
@@ -43,8 +41,6 @@ namespace Common.FlowField
             internal const string GroundLayer = Surface + "." + nameof(FlowFieldSurfaceSettings.GroundLayer);
             internal const string Obstacles = nameof(_obstacles);
             internal const string ObstacleLayer = Obstacles + "." + nameof(FlowFieldObstacleSettings.Layer);
-            internal const string EnableUnregisteredObstacleSweep = nameof(_enableUnregisteredObstacleSweep);
-            internal const string RefreshRate = nameof(_refreshRate);
             internal const string Flow = nameof(_flow);
             internal const string GoalTransform = nameof(_goalTransform);
             internal const string SpaceMode = nameof(_spaceMode);
@@ -62,7 +58,6 @@ namespace Common.FlowField
         // stays after Release so its final state remains readable, and is
         // replaced only when Init runs in the other mode.
         private FlowFieldSession _session;
-        private float _refreshTimer;
         private bool _hasExplicitGoal;
         private Vector3 _explicitGoalWorld;
         [NonSerialized] private FlowFieldModifierAttachment _modifiers;
@@ -79,8 +74,6 @@ namespace Common.FlowField
         // The session, only when it runs in the given mode.
         private FlowFieldSession SessionFor(FlowFieldSpaceMode mode)
             => _session != null && _session.SpaceMode == mode ? _session : null;
-
-        private ModeDriver ActiveMode => ModeFor(ActiveSession.SpaceMode);
 
         private FlowFieldModifierAttachment Modifiers => _modifiers ??= new FlowFieldModifierAttachment(this);
 
@@ -127,7 +120,6 @@ namespace Common.FlowField
             _surface.GroundLayer = Physics.DefaultRaycastLayers;
             _spaceMode = FlowFieldSpaceMode.Surface2D;
             _bakeMode = FlowFieldBakeMode.RuntimeDynamic;
-            _enableUnregisteredObstacleSweep = false;
         }
 
         private void Awake()
@@ -138,7 +130,6 @@ namespace Common.FlowField
 
         private void OnEnable()
         {
-            _refreshTimer = 0f;
             if (!Application.isPlaying || _boundary.TryDefer(ResumeAfterEnable))
                 return;
             ResumeAfterEnable();
@@ -172,41 +163,12 @@ namespace Common.FlowField
             try
             {
                 ValidateConfiguration(validateStaticGoal: false);
-                ActiveMode.OnSettingsEdited();
+                SubmitConfig(FlowFieldConfigChange.Settings);
             }
             catch (Exception exception)
             {
                 ActiveSession.ReportFault(exception);
             }
-        }
-
-        private void LateUpdate()
-        {
-            if (!Application.isPlaying || !IsInitialized || IsFaulted)
-                return;
-            using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
-            try
-            {
-                ActiveMode.ObserveInputs();
-            }
-            catch (Exception exception)
-            {
-                // Invalid live input is a single Session fault. Once Faulted,
-                // LateUpdate stops polling and callers can explicitly retry
-                // through RequestRebuild().
-                ActiveSession.ReportFault(exception);
-            }
-        }
-
-        // Observation follows real time, so slowing or stopping the game does
-        // not delay the detection of input changes.
-        private bool ConsumeRefreshTick()
-        {
-            _refreshTimer -= Time.unscaledDeltaTime;
-            if (_refreshTimer > 0f)
-                return false;
-            _refreshTimer = Mathf.Max(FlowFieldManagerConfig.MinRefreshRate, _refreshRate);
-            return true;
         }
 
         private void OnDisable()
@@ -220,7 +182,6 @@ namespace Common.FlowField
         {
             using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
             ActiveSession?.Stop();
-            _refreshTimer = 0f;
         }
 
         private void OnDestroy()
@@ -260,8 +221,9 @@ namespace Common.FlowField
                 return;
             ValidateConfiguration();
             using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
+            AdoptGoalTransform();
             EnsureSessionForConfiguredMode();
-            ActiveMode.Initialize();
+            _session.Builder.Initialize(_bakeMode);
             // A disabled Manager starts building when it is enabled.
             if (!isActiveAndEnabled)
             {
@@ -299,7 +261,7 @@ namespace Common.FlowField
             ValidateConfiguration(validateStaticGoal: false);
             if (State == FlowFieldRuntimeState.Suspended)
                 return;
-            ActiveMode.SubmitRebuild();
+            SubmitConfig(FlowFieldConfigChange.Rebuild);
         }
 
         /// <summary>
@@ -322,12 +284,29 @@ namespace Common.FlowField
             }
         }
 
+        // The Goal Transform is an initial Goal: Init reads it once, and from
+        // then on only SetGoal changes the Goal.
+        private void AdoptGoalTransform()
+        {
+            if (_goalTransform == null || _hasExplicitGoal)
+                return;
+            _hasExplicitGoal = true;
+            _explicitGoalWorld = _goalTransform.position;
+        }
+
+        // The builder turns the current settings into its request.
+        private void SubmitConfig(FlowFieldConfigChange change)
+        {
+            FlowFieldManagerConfig config = CaptureConfig();
+            _session.Builder.SubmitConfig(in config, change);
+        }
+
         // Modifiers enabled while the session could not take them join
         // before the request, so its first build includes them.
         private void StartBuilding()
         {
             Modifiers.Reattach();
-            ActiveMode.SubmitRebuild();
+            SubmitConfig(FlowFieldConfigChange.Rebuild);
         }
 
         public void Release()
@@ -339,7 +318,6 @@ namespace Common.FlowField
             using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
             Modifiers.Detach();
             owner.Release();
-            _refreshTimer = 0f;
         }
 
         // Subscribed for the Manager's whole life: a queued Released must still

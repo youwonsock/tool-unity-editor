@@ -102,88 +102,22 @@ namespace Common.FlowField
             MarkObstacleDirty(FlowFieldCellRect.FromBounds(_state.Grid, worldBounds));
         }
 
-        internal bool DetectObstacleTransformsChanged()
+        public bool NotifyObstacleMovedNow(Collider collider)
         {
-            if (_session.BakeMode == FlowFieldBakeMode.StaticBaked || !_state.Grid.IsValid)
-                return false;
-            bool changed = _obstaclePipeline.DetectDynamicTransformsChanged(
-                _state.Grid,
-                out FlowFieldCellRect dirty);
-            if (changed)
-            {
-                _obstaclePipeline.DiscardStagedDynamicProbe();
-                _state.ObstacleProbePending = true;
-                _state.ExpandObstacleDirty(dirty);
-            }
-            return changed;
-        }
-
-        internal void RecordObstacleObservation(FlowFieldCellRect dirtyRegion)
-        {
+            if (ReferenceEquals(collider, null))
+                throw new ArgumentNullException(nameof(collider));
             if (_session.BakeMode == FlowFieldBakeMode.StaticBaked)
-                return;
-            _obstaclePipeline.DiscardStagedDynamicProbe();
-            _state.ObstacleProbePending = true;
-            if (dirtyRegion.IsValid)
-                _state.ExpandObstacleDirty(dirtyRegion);
-        }
-
-        internal bool ProbeObstacleChanges(in FlowFieldSurfaceRequest request)
-        {
-            if (_session.BakeMode == FlowFieldBakeMode.StaticBaked
-                || !_state.SurfaceReady
-                || !_state.HasObstacleMask
-                || _state.Workspace.Capacity != _state.Grid.CellCount)
                 return false;
-            bool changed = _obstaclePipeline.ProbeDynamicMask(
-                new FlowFieldObstacleRequest(
-                    _state.Grid,
-                    _state.Surface,
-                    _state.Workspace,
-                    request.ObstacleLayer,
-                    request.ObstacleCheckHeight,
-                    request.ObstacleCheckCenterOffset,
-                    request.ObstacleClearance,
-                    request.UseUnregisteredObstacleSweep,
-                    _state.DirtyObstacleRegion),
-                out FlowFieldCellRect dirty);
-            if (!changed)
-            {
-                _state.ObstacleProbePending = false;
-                _state.DirtyObstacleRegion = FlowFieldCellRect.Invalid;
-                ClearNoOpObstacleRequest();
+            if (!_obstaclePipeline.TryObserveMove(collider, out Bounds built, out Bounds current, out bool moved))
                 return false;
-            }
-            _state.ObstacleProbePending = false;
-            dirty = FlowFieldCellRect.Union(dirty, _state.DirtyObstacleRegion);
-            MarkDirty(
-                FlowFieldSurfaceDirtyFlags.DynamicObstacles
-                    | FlowFieldSurfaceDirtyFlags.Escape
-                    | FlowFieldSurfaceDirtyFlags.FinalRegion,
-                dirty,
-                dirty);
+            if (!moved || !_state.Grid.IsValid)
+                return true;
+            // The cells it was built in and the cells it is in now.
+            FlowFieldCellRect dirty = FlowFieldCellRect.Union(
+                FlowFieldCellRect.FromBounds(_state.Grid, built),
+                collider != null ? FlowFieldCellRect.FromBounds(_state.Grid, current) : FlowFieldCellRect.Invalid);
+            MarkObstacleDirty(dirty);
             return true;
-        }
-
-        private void ClearNoOpObstacleRequest()
-        {
-            const FlowFieldSurfaceDirtyFlags dynamicFlags = FlowFieldSurfaceDirtyFlags.DynamicObstacles;
-            bool staticStillDirty = (_state.DirtyFlags & FlowFieldSurfaceDirtyFlags.StaticObstacles) != 0;
-            FlowFieldSurfaceDirtyFlags clearedFlags = dynamicFlags;
-            if (!staticStillDirty)
-                clearedFlags |= FlowFieldSurfaceDirtyFlags.Escape;
-            _state.DirtyFlags &= ~clearedFlags;
-
-            // FinalRegion is derived for an obstacle request. Remove it only
-            // when no independent Goal/default/Modifier change still owns the
-            // pending final composition.
-            FlowFieldSurfaceDirtyFlags independent = _state.DirtyFlags
-                & ~(clearedFlags | FlowFieldSurfaceDirtyFlags.FinalRegion);
-            if (independent == FlowFieldSurfaceDirtyFlags.None)
-            {
-                _state.DirtyFlags &= ~FlowFieldSurfaceDirtyFlags.FinalRegion;
-                _state.DirtyFinalRegion = FlowFieldCellRect.Invalid;
-            }
         }
     }
 }

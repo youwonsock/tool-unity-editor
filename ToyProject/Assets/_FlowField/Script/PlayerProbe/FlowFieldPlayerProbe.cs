@@ -130,7 +130,7 @@ namespace Common.FlowField.PlayerProbe
             {
                 Vector3 offset = new Vector3(i % 2 == 0 ? 6f : -6f, 0f, 0f);
                 yield return MeasureCommit($"surface.rebuild.moveDynamic{i}", manager,
-                    () => moving.transform.position += offset);
+                    () => MoveObstacle(manager, moving, offset));
             }
 
             yield return MeasureModifier("surface", manager, _surfaceSize, 1f);
@@ -156,7 +156,7 @@ namespace Common.FlowField.PlayerProbe
             yield return MeasureCommit("volume.rebuild.registerDynamic", manager,
                 () => manager.RegisterDynamicObstacle(moving));
             yield return MeasureCommit("volume.rebuild.moveDynamic", manager,
-                () => moving.transform.position += new Vector3(4f, 0f, 0f));
+                () => MoveObstacle(manager, moving, new Vector3(4f, 0f, 0f)));
 
             yield return MeasureModifier("volume", manager, _volumeSize, _volumeSize * 0.5f);
             yield return MeasureMovingGoal("volume", manager, _volumeSize, _volumeSize * 0.5f);
@@ -191,6 +191,14 @@ namespace Common.FlowField.PlayerProbe
             }
             Record("surface.wallWalk", "steps", steps);
             Record("surface.wallWalk", "stepsInsideWalls", inside);
+        }
+
+        // FlowField never polls: a registered obstacle that moves says so.
+        private static void MoveObstacle(FlowFieldManager manager, Collider obstacle, Vector3 offset)
+        {
+            obstacle.transform.position += offset;
+            Physics.SyncTransforms();
+            manager.NotifyDynamicObstacleMoved(obstacle);
         }
 
         private IEnumerator MeasureModifier(string mode, FlowFieldManager manager, int size, float height)

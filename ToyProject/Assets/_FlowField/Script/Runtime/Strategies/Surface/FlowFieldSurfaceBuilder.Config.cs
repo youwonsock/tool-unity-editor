@@ -6,6 +6,96 @@ namespace Common.FlowField
     /// <summary>How Surface2D reads a Manager configuration: its grid, checks and requests.</summary>
     internal sealed partial class FlowFieldSurfaceBuilder
     {
+        public void Initialize(FlowFieldBakeMode bakeMode)
+            => Initialize(
+                bakeMode,
+                bakeMode == FlowFieldBakeMode.StaticBaked
+                    ? FlowFieldSurfaceSourceKind.StaticSnapshot
+                    : FlowFieldSurfaceSourceKind.SceneBuild);
+
+        public void SubmitConfig(in FlowFieldManagerConfig config, FlowFieldConfigChange change)
+        {
+            if (!_session.IsInitialized || _session.IsFaulted)
+                return;
+            switch (change)
+            {
+                case FlowFieldConfigChange.Rebuild:
+                    Submit(CreateRequest(
+                        in config,
+                        _session.BakeMode,
+                        CreateBakeSettings(in config),
+                        FlowFieldSurfaceDirtyFlags.None,
+                        _state.DirtyFinalRegion,
+                        _state.DirtyObstacleRegion));
+                    _configOwed = false;
+                    _session.AttachRuntimeScheduler();
+                    break;
+                case FlowFieldConfigChange.Goal:
+                    _goalTracker.ResetWarning();
+                    MarkDirty(FlowFieldSurfaceDirtyFlags.Goal, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
+                    if (!config.HasGoal)
+                        ObserveGoalRemoved();
+                    // The request holds the Goal.
+                    SubmitOrOwe(in config, immediately: false);
+                    break;
+                case FlowFieldConfigChange.Cells:
+                    MarkDirty(FlowFieldSurfaceDirtyFlags.Grid, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
+                    break;
+                default:
+                    SubmitSettings(in config);
+                    break;
+            }
+        }
+
+        // The settings are valid here. Compare the request with the last
+        // submitted one so a Default Direction edit rebuilds only the final
+        // field and a Goal or obstacle edit reuses the Surface. StaticBaked
+        // requests hold no runtime Goal or dynamic obstacle input, so those
+        // edits change nothing.
+        private void SubmitSettings(in FlowFieldManagerConfig config)
+        {
+            FlowFieldSurfaceRequest current = CreateCurrentRequest(in config);
+            if (HasSubmittedRequest && HasSameBaseInputs(current) && HasSameFinalInputs(current))
+                return;
+
+            // Visible to a solve callback even before the next Submit.
+            ObserveDefaultDirection(current.DefaultDirection);
+            FlowFieldSurfaceDirtyFlags flags = GetInputDirtyFlags(current);
+            bool gridChanged = (flags & FlowFieldSurfaceDirtyFlags.Grid) != 0;
+            if (gridChanged && TryCreateLayout(in config, out _, out FlowFieldGridSpace grid))
+                ObserveGrid(grid);
+            Vector3 normalized = FlowFieldVectorUtility.NormalizeDefaultDirection(config.Flow.DefaultDirection);
+            if ((_state.ResolvedDefaultDirection - normalized).sqrMagnitude
+                > FlowFieldManagerConfig.ValueEpsilon * FlowFieldManagerConfig.ValueEpsilon)
+                flags |= FlowFieldSurfaceDirtyFlags.DefaultDirection | FlowFieldSurfaceDirtyFlags.FinalRegion;
+            MarkDirty(flags, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
+            // A new grid hides the published field at once.
+            SubmitOrOwe(in config, immediately: gridChanged);
+        }
+
+        // A running build keeps the request it started with; the next build
+        // submits the newer configuration before it begins.
+        private void SubmitOrOwe(in FlowFieldManagerConfig config, bool immediately)
+        {
+            if (immediately || !_session.IsRebuilding)
+            {
+                _configOwed = false;
+                Submit(CreateCurrentRequest(in config));
+                return;
+            }
+            _owedConfig = config;
+            _configOwed = true;
+        }
+
+        private FlowFieldSurfaceRequest CreateCurrentRequest(in FlowFieldManagerConfig config)
+            => CreateRequest(
+                in config,
+                _session.BakeMode,
+                CreateBakeSettings(in config),
+                FlowFieldSurfaceDirtyFlags.None,
+                FlowFieldCellRect.Invalid,
+                FlowFieldCellRect.Invalid);
+
         internal static bool TryCreateLayout(
             in FlowFieldManagerConfig config,
             out Bounds worldBounds,
@@ -34,9 +124,9 @@ namespace Common.FlowField
             FlowFieldGridSpace grid)
             => FlowFieldSurfaceGoalPipeline.Resolve(
                 grid,
-                config.GoalTransform,
-                config.HasExplicitGoal,
-                config.ExplicitGoalWorld,
+                null,
+                config.HasGoal,
+                config.GoalWorld,
                 config.Flow.GoalInfluenceRadius);
 
         internal static FlowFieldSurfaceBakeSnapshot CreateStaticSnapshot(
@@ -86,7 +176,7 @@ namespace Common.FlowField
                 config.Surface.ObstacleCheckHeight,
                 config.Surface.ObstacleCheckCenterOffset,
                 config.Obstacles.Clearance,
-                config.EnableUnregisteredObstacleSweep,
+                false,
                 ResolveGoal(in config, settings.Grid),
                 config.Flow.DefaultDirection,
                 dirtyFlags,

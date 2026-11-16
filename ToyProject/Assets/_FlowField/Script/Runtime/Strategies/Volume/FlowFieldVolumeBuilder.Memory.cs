@@ -59,7 +59,6 @@ namespace Common.FlowField
         private long EstimateAuxiliaryBytes()
         {
             long bytes = 64L;
-            bytes = checked(bytes + _obstacles.SweepBufferBytes);
             bytes = checked(bytes + _cellQuery.BufferBytes);
             bytes = checked(bytes + _spares.Bytes);
             if (_registeredObstacleOverlapBuffer != null)

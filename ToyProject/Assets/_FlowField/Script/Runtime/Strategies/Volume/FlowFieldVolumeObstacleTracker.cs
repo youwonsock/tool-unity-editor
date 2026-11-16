@@ -4,9 +4,9 @@ using UnityEngine;
 
 namespace Common.FlowField
 {
-    // Owns registration, cached collider observations and sweep storage. Reports
-    // dirty bounds synchronously; safety margins, requests and lifecycle
-    // decisions remain with the session that receives them.
+    // Owns the registered colliders and their last bounds. Reports dirty bounds
+    // synchronously when told about a change; safety margins, requests and
+    // lifecycle decisions remain with the builder that receives them.
     internal sealed class FlowFieldVolumeObstacleTracker
     {
         private const int MaxObstacleSweepColliders = 65536;
@@ -16,11 +16,6 @@ namespace Common.FlowField
         // bounds beside the reference so a destroyed registered collider can
         // still invalidate its former cells.
         private readonly List<Bounds> _dynamicObstacleBounds = new List<Bounds>(16);
-        private readonly Dictionary<Collider, Bounds> _observedObstacleBounds = new Dictionary<Collider, Bounds>(64);
-        private readonly Dictionary<Collider, ObstacleObservation> _observedObstacleStates
-            = new Dictionary<Collider, ObstacleObservation>(64);
-        private readonly HashSet<Collider> _seenObstacleColliders = new HashSet<Collider>();
-        private Collider[] _obstacleSweepBuffer = new Collider[512];
 
         private readonly Action<Bounds> _markDirty;
 
@@ -29,16 +24,11 @@ namespace Common.FlowField
 
         internal int RegisteredCount => _dynamicObstacles.Count;
         internal Collider GetRegisteredObstacle(int index) => _dynamicObstacles[index];
-        internal long SweepBufferBytes => 8L * _obstacleSweepBuffer.Length;
 
         internal void Clear()
         {
             _dynamicObstacles.Clear();
             _dynamicObstacleBounds.Clear();
-            _observedObstacleBounds.Clear();
-            _observedObstacleStates.Clear();
-            _seenObstacleColliders.Clear();
-            // Retain the grown query capacity, matching Release/Dispose policy.
         }
 
         internal bool Register(Collider collider)
@@ -50,8 +40,6 @@ namespace Common.FlowField
             if (FindRegisteredIndex(collider) >= 0)
                 return false;
             Bounds current = collider.bounds;
-            _observedObstacleBounds.Remove(collider);
-            _observedObstacleStates.Remove(collider);
             _dynamicObstacles.Add(collider);
             _dynamicObstacleBounds.Add(current);
             _markDirty(current);
@@ -66,8 +54,6 @@ namespace Common.FlowField
             if (obstacleIndex < 0)
                 return false;
             Bounds previous = _dynamicObstacleBounds[obstacleIndex];
-            _observedObstacleBounds.Remove(collider);
-            _observedObstacleStates.Remove(collider);
             _dynamicObstacles.RemoveAt(obstacleIndex);
             _dynamicObstacleBounds.RemoveAt(obstacleIndex);
             if (FlowFieldGridSpace.IsFinite(previous.center)
@@ -76,35 +62,38 @@ namespace Common.FlowField
             return true;
         }
 
-        internal void DetectRegisteredChanges()
+        /// <summary>
+        /// A registered collider moved: its last bounds and its current bounds
+        /// become dirty. A destroyed one leaves its last bounds dirty and stops
+        /// being registered. False when the collider is not registered.
+        /// </summary>
+        internal bool NotifyMoved(Collider collider)
         {
-            for (int i = _dynamicObstacles.Count - 1; i >= 0; i--)
+            if (ReferenceEquals(collider, null))
+                throw new ArgumentNullException(nameof(collider));
+            int index = FindRegisteredIndex(collider);
+            if (index < 0)
+                return false;
+            Bounds previous = _dynamicObstacleBounds[index];
+            bool previousValid = FlowFieldGridSpace.IsFinite(previous.center)
+                && FlowFieldGridSpace.IsFinite(previous.size);
+            if (collider == null)
             {
-                Collider collider = _dynamicObstacles[i];
-                if (collider == null)
-                {
-                    Bounds removedBounds = _dynamicObstacleBounds[i];
-                    if (FlowFieldGridSpace.IsFinite(removedBounds.center)
-                        && FlowFieldGridSpace.IsFinite(removedBounds.size))
-                        _markDirty(removedBounds);
-                    _dynamicObstacles.RemoveAt(i);
-                    _dynamicObstacleBounds.RemoveAt(i);
-                    _observedObstacleBounds.Remove(collider);
-                    _observedObstacleStates.Remove(collider);
-                    continue;
-                }
-                Bounds current = collider.bounds;
-                Bounds previous = _dynamicObstacleBounds[i];
-                if ((current.center - previous.center).sqrMagnitude > 0.00000001f
-                    || (current.size - previous.size).sqrMagnitude > 0.00000001f)
-                {
-                    if (FlowFieldGridSpace.IsFinite(previous.center)
-                        && FlowFieldGridSpace.IsFinite(previous.size))
-                        _markDirty(previous);
-                    _dynamicObstacleBounds[i] = current;
-                    _markDirty(current);
-                }
+                if (previousValid)
+                    _markDirty(previous);
+                _dynamicObstacles.RemoveAt(index);
+                _dynamicObstacleBounds.RemoveAt(index);
+                return true;
             }
+            Bounds current = collider.bounds;
+            if ((current.center - previous.center).sqrMagnitude <= 0.00000001f
+                && (current.size - previous.size).sqrMagnitude <= 0.00000001f)
+                return true;
+            if (previousValid)
+                _markDirty(previous);
+            _dynamicObstacleBounds[index] = current;
+            _markDirty(current);
+            return true;
         }
 
         private int FindRegisteredIndex(Collider collider)
@@ -113,151 +102,6 @@ namespace Common.FlowField
                 if (ReferenceEquals(_dynamicObstacles[index], collider))
                     return index;
             return -1;
-        }
-
-        internal void DetectUnregisteredChanges(in FlowFieldVolumeRequest request)
-        {
-            Physics.SyncTransforms();
-            Bounds sweepBounds = request.WorldBounds;
-            float sweepMargin = request.Grid.CellSize + request.ObstacleClearance;
-            sweepBounds.Expand(Vector3.one * (sweepMargin * 2f));
-            int count = SweepObstacles(sweepBounds, request.ObstacleLayer, out bool complete);
-            ApplySweep(sweepBounds, _obstacleSweepBuffer, count, complete);
-        }
-
-        internal void ApplySweep(Bounds sweepBounds, Collider[] colliders, int count, bool complete)
-        {
-            if (!complete)
-            {
-                // A saturated query cannot prove removal. Retain previous
-                // observations while conservatively invalidating the swept area.
-                _markDirty(sweepBounds);
-                return;
-            }
-
-            _seenObstacleColliders.Clear();
-            for (int index = 0; index < count; index++)
-            {
-                Collider collider = colliders[index];
-                if (collider == null || FindRegisteredIndex(collider) >= 0)
-                    continue;
-                _seenObstacleColliders.Add(collider);
-                Bounds current = collider.bounds;
-                ObstacleObservation currentState = ObstacleObservation.From(collider);
-                if (!_observedObstacleBounds.TryGetValue(collider, out Bounds previous))
-                {
-                    _observedObstacleBounds[collider] = current;
-                    _observedObstacleStates[collider] = currentState;
-                    _markDirty(current);
-                    continue;
-                }
-                if (!_observedObstacleStates.TryGetValue(collider, out ObstacleObservation previousState)
-                    || !previousState.Equals(currentState))
-                {
-                    Bounds previousBounds = previousState.Bounds.size.sqrMagnitude > 0f
-                        ? previousState.Bounds
-                        : previous;
-                    _markDirty(previousBounds);
-                    _markDirty(current);
-                    _observedObstacleBounds[collider] = current;
-                    _observedObstacleStates[collider] = currentState;
-                }
-            }
-
-            if (_observedObstacleBounds.Count == 0)
-                return;
-            List<Collider> removed = null;
-            foreach (KeyValuePair<Collider, Bounds> pair in _observedObstacleBounds)
-            {
-                if (_seenObstacleColliders.Contains(pair.Key))
-                    continue;
-                if (removed == null)
-                    removed = new List<Collider>();
-                removed.Add(pair.Key);
-                Bounds previous = _observedObstacleStates.TryGetValue(pair.Key, out ObstacleObservation removedState)
-                    ? removedState.Bounds
-                    : pair.Value;
-                _markDirty(previous);
-            }
-            if (removed == null)
-                return;
-            for (int index = 0; index < removed.Count; index++)
-            {
-                _observedObstacleBounds.Remove(removed[index]);
-                _observedObstacleStates.Remove(removed[index]);
-            }
-        }
-
-        private int SweepObstacles(Bounds bounds, LayerMask obstacleLayer, out bool complete)
-        {
-            while (true)
-            {
-                int count = Physics.OverlapBoxNonAlloc(
-                    bounds.center,
-                    bounds.extents,
-                    _obstacleSweepBuffer,
-                    Quaternion.identity,
-                    obstacleLayer,
-                    QueryTriggerInteraction.Ignore);
-                if (count < _obstacleSweepBuffer.Length)
-                {
-                    complete = true;
-                    return count;
-                }
-                if (_obstacleSweepBuffer.Length >= MaxObstacleSweepColliders)
-                {
-                    complete = false;
-                    return count;
-                }
-                int nextCapacity = Math.Min(
-                    MaxObstacleSweepColliders,
-                    _obstacleSweepBuffer.Length * 2);
-                _obstacleSweepBuffer = new Collider[nextCapacity];
-            }
-        }
-
-        private readonly struct ObstacleObservation : IEquatable<ObstacleObservation>
-        {
-            internal readonly Bounds Bounds;
-            private readonly bool _enabled;
-            private readonly bool _active;
-            private readonly bool _trigger;
-            private readonly int _layer;
-
-            private ObstacleObservation(
-                Bounds bounds,
-                bool enabled,
-                bool active,
-                bool trigger,
-                int layer)
-            {
-                Bounds = bounds;
-                _enabled = enabled;
-                _active = active;
-                _trigger = trigger;
-                _layer = layer;
-            }
-
-            internal static ObstacleObservation From(Collider collider)
-                => new ObstacleObservation(
-                    collider != null ? collider.bounds : default,
-                    collider != null && collider.enabled,
-                    collider != null && collider.gameObject.activeInHierarchy,
-                    collider != null && collider.isTrigger,
-                    collider != null ? collider.gameObject.layer : -1);
-
-            public bool Equals(ObstacleObservation other)
-                => _enabled == other._enabled
-                    && _active == other._active
-                    && _trigger == other._trigger
-                    && _layer == other._layer
-                    && (Bounds.center - other.Bounds.center).sqrMagnitude <= 0.00000001f
-                    && (Bounds.size - other.Bounds.size).sqrMagnitude <= 0.00000001f;
-
-            public override bool Equals(object obj)
-                => obj is ObstacleObservation other && Equals(other);
-
-            public override int GetHashCode() => 0;
         }
     }
 }

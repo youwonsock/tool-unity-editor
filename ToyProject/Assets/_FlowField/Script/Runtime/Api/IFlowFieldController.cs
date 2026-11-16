@@ -17,6 +17,9 @@ namespace Common.FlowField
 
         bool RegisterDynamicObstacle(Collider collider);
         bool UnregisterDynamicObstacle(Collider collider);
+        // FlowField never polls the scene: a registered obstacle that moves
+        // must say so, or its cells keep their old state.
+        bool NotifyDynamicObstacleMoved(Collider collider);
         void NotifyObstacleRegionDirty(Bounds worldBounds);
 
         bool RegisterVectorModifier(IFlowFieldVectorModifier modifier);

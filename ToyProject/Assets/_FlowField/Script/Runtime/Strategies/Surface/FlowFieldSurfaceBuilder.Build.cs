@@ -13,7 +13,6 @@ namespace Common.FlowField
 
             FlowFieldSurfaceRequest request = _requests.Latest;
             _requests.Pending = false;
-            _submittedForScheduler = false;
             FlowFieldSurfaceDirtyFlags pending = _state.DirtyFlags;
             _state.DirtyFlags = FlowFieldSurfaceDirtyFlags.None;
 

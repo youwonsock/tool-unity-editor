@@ -101,7 +101,7 @@ namespace Common.FlowField
             }
         }
 
-        internal void Initialize(FlowFieldBakeMode bakeMode)
+        public void Initialize(FlowFieldBakeMode bakeMode)
         {
             ThrowIfDisposed();
             if (_session.IsInitialized)
@@ -181,8 +181,6 @@ namespace Common.FlowField
                 _pumpElapsedMilliseconds);
             _session.RunPipeline(in budget, scheduled: false, waitForWorker: true);
         }
-
-        public void BeforePump() => _obstacles.DetectRegisteredChanges();
 
         public bool BeginsAfterBudget => false;
 
@@ -326,6 +324,12 @@ namespace Common.FlowField
         public bool UnregisterObstacleNow(Collider collider)
             => UnregisterDynamicObstacle(collider);
 
+        public bool NotifyObstacleMovedNow(Collider collider)
+        {
+            ThrowIfInputAvailable();
+            return _obstacles.NotifyMoved(collider);
+        }
+
         internal void MarkObstacleRegionDirty(Bounds bounds)
         {
             if (!FlowFieldGridSpace.IsFinite(bounds.center) || !FlowFieldGridSpace.IsFinite(bounds.size))
@@ -344,34 +348,6 @@ namespace Common.FlowField
 
         public void NotifyObstacleRegionDirtyCommand(Bounds worldBounds)
             => MarkObstacleRegionDirty(worldBounds);
-
-        internal void DetectUnregisteredObstacleChanges(bool enabled)
-        {
-            if (!enabled
-                || !_session.IsInitialized
-                || _session.IsFaulted
-                || _session.BakeMode == FlowFieldBakeMode.StaticBaked)
-                return;
-            FlowFieldVolumeRequest request = _requests.HasLatest
-                ? _requests.Latest
-                : _build?.Request ?? _committed?.Request ?? _requests.Latest;
-            if (!request.Grid.IsValid
-                || !FlowFieldGridSpace.IsFinite(request.WorldBounds.center)
-                || !FlowFieldGridSpace.IsFinite(request.WorldBounds.size))
-                return;
-
-            using FlowFieldExecutionBoundary.OperationScope operation = _session.Boundary.EnterOperation();
-            _obstacles.DetectUnregisteredChanges(in request);
-        }
-
-        internal void DetectModifierChanges()
-        {
-            bool changed;
-            using (_session.Boundary.EnterUserCode())
-                changed = _modifierRegistry.DetectChanges();
-            if (changed)
-                QueueModifierChange();
-        }
 
         internal bool RegisterModifier(IFlowFieldVectorModifier modifier)
         {
@@ -409,10 +385,21 @@ namespace Common.FlowField
             FlowFieldModifierChange change)
         {
             ThrowIfInputAvailable();
-            bool valid;
-            using (_session.Boundary.EnterUserCode())
-                valid = _modifierRegistry.ValidateModifierChange(modifier, change);
-            if (valid && change != FlowFieldModifierChange.None)
+            if (!_modifierRegistry.Contains(modifier))
+                throw new InvalidOperationException("Modifier is not registered.");
+            // Nothing polls a Modifier, so the notification is where an
+            // invalid configuration is found. It faults, as in Surface2D.
+            try
+            {
+                using (_session.Boundary.EnterUserCode())
+                    _modifierRegistry.ValidateModifierChange(modifier, change);
+            }
+            catch (Exception exception) when (exception is InvalidOperationException || exception is ArgumentException)
+            {
+                _session.ReportFault(exception);
+                return;
+            }
+            if (change != FlowFieldModifierChange.None)
                 QueueModifierChange();
         }
 

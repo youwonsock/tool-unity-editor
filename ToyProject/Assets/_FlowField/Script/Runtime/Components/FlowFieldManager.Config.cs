@@ -23,11 +23,13 @@ namespace Common.FlowField
         // accepted session runs in the previous one.
         internal FlowFieldSpaceMode ConfiguredSpaceMode => _spaceMode;
 
-        internal Vector3 ConfiguredGoalWorld
-            => _goalTransform != null ? _goalTransform.position : _explicitGoalWorld;
-
+        // The Goal a build uses: SetGoal's, or before Init reads it the Goal
+        // Transform, which the Editor bakes.
         internal bool HasConfiguredGoal
-            => _goalTransform != null || _hasExplicitGoal;
+            => _hasExplicitGoal || _goalTransform != null && !IsInitialized && !IsFaulted;
+
+        internal Vector3 ConfiguredGoalWorld
+            => _hasExplicitGoal || _goalTransform == null ? _explicitGoalWorld : _goalTransform.position;
 
         internal float ConfiguredGoalInfluenceRadius => _flow.GoalInfluenceRadius;
 
@@ -44,12 +46,9 @@ namespace Common.FlowField
                 in _obstacles,
                 in _flow,
                 in _bakeAssets,
-                _enableUnregisteredObstacleSweep,
-                _refreshRate,
                 transform,
-                _goalTransform,
-                _hasExplicitGoal,
-                _explicitGoalWorld);
+                HasConfiguredGoal,
+                ConfiguredGoalWorld);
 
         private void ValidateConfiguration(bool validateStaticGoal = true)
         {
@@ -71,13 +70,6 @@ namespace Common.FlowField
         {
             FlowFieldManagerConfig config = CaptureConfig();
             return FlowFieldSurfaceBuilder.TryCreateLayout(in config, out worldBounds, out grid);
-        }
-
-        private FlowFieldGridSpace CreateGridSpace()
-        {
-            if (!TryGetBakeLayout(out _, out FlowFieldGridSpace grid))
-                throw new InvalidOperationException("Bake Bounds and Cell Size do not produce a valid grid.");
-            return grid;
         }
 
         internal FlowFieldSurfaceBakeSettings CreateSurfaceBakeSettings()
@@ -106,25 +98,6 @@ namespace Common.FlowField
                 dirtyFlags,
                 dirtyFinalRegion,
                 dirtyObstacleRegion);
-        }
-
-        private bool TryCreateCurrentSurfaceRequest(out FlowFieldSurfaceRequest request)
-        {
-            request = default;
-            try
-            {
-                FlowFieldSurfaceBakeSettings settings = CreateSurfaceBakeSettings();
-                request = CreateSurfaceRequest(
-                    settings,
-                    FlowFieldSurfaceDirtyFlags.None,
-                    FlowFieldCellRect.Invalid,
-                    FlowFieldCellRect.Invalid);
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
         }
 
         internal bool TryValidateSurfaceBake(out string reason)
@@ -163,22 +136,6 @@ namespace Common.FlowField
                 bakeInputGeneration);
         }
 
-        private void QueueVolumeRequest(bool force = false, bool requeryObstacles = false)
-        {
-            FlowFieldSession session = SessionFor(FlowFieldSpaceMode.Volume3D);
-            if (session == null || !session.IsInitialized || session.IsFaulted)
-                return;
-            FlowFieldManagerConfig config = CaptureConfig();
-            FlowFieldVolumeRequest request = FlowFieldVolumeBuilder.CreateRequest(in config);
-            if (!force
-                && session.Volume.TryGetLatestRequestedInput(out FlowFieldVolumeRequest latest)
-                && latest.HasSameInputs(request))
-                return;
-            // The session owns the accepted input, including a newer input
-            // submitted from its synchronous state-change callback.
-            session.Volume.Submit(request, requeryObstacles);
-        }
-
         internal bool TryValidateVolumeBake(out string reason)
         {
             FlowFieldManagerConfig config = CaptureConfig();
@@ -189,7 +146,9 @@ namespace Common.FlowField
 
         internal void SetBakeBoundsLocal(Bounds localBounds)
         {
-            Bounds snapped = ModeFor(_spaceMode).SnapBakeBounds(localBounds);
+            Bounds snapped = _spaceMode == FlowFieldSpaceMode.Volume3D
+                ? FlowFieldBakeBoundsUtility.SnapVolumeCenterAnchored(localBounds, _grid.CellSize)
+                : FlowFieldBakeBoundsUtility.SnapCenterAnchored(localBounds, _grid.CellSize);
             if (FlowFieldBakeBoundsUtility.Approximately(_grid.BakeBoundsLocal, snapped))
                 return;
             _grid.BakeBoundsLocal = snapped;

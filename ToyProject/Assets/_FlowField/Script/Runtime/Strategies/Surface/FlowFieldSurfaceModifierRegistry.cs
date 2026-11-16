@@ -126,101 +126,6 @@ namespace Common.FlowField
                 entry.InfluenceRect);
         }
 
-        internal FlowFieldSurfaceModifierRegistryResult DetectChanges()
-        {
-            // No cache changes until every Modifier has answered, so one that
-            // throws leaves the earlier observations in place.
-            if (_entries.Count == 0)
-                return default;
-            var observations = ArrayPool<FlowFieldModifierObservation>.Shared.Rent(_entries.Count);
-            try
-            {
-                for (int i = 0; i < _entries.Count; i++)
-                {
-                    IFlowFieldVectorModifier modifier = _entries[i].Modifier;
-                    if (FlowFieldVectorUtility.IsMissingModifier(modifier))
-                        continue;
-                    FlowFieldModifierObservation observation = modifier.Observe();
-                    ValidateConfiguration(observation.InfluenceCollider);
-                    for (int previous = 0; previous < i; previous++)
-                        if (!FlowFieldVectorUtility.IsMissingModifier(_entries[previous].Modifier) && observations[previous].Priority == observation.Priority)
-                            throw new InvalidOperationException($"Vector modifier priority {observation.Priority} is duplicated.");
-                    observations[i] = observation;
-                }
-                bool areaDirty = false;
-                bool valueDirty = false;
-                bool finalDirty = false;
-                bool priorityChanged = false;
-                FlowFieldCellRect dirtyRegion = FlowFieldCellRect.Invalid;
-                for (int i = _entries.Count - 1; i >= 0; i--)
-                {
-                    Entry entry = _entries[i];
-                    IFlowFieldVectorModifier modifier = entry.Modifier;
-                    if (FlowFieldVectorUtility.IsMissingModifier(modifier))
-                    {
-                        dirtyRegion = FlowFieldCellRect.Union(
-                            dirtyRegion,
-                            entry.InfluenceRect);
-                        entry.ReleaseArea();
-                        _entries.RemoveAt(i);
-                        finalDirty = true;
-                        continue;
-                    }
-
-                    Collider collider = observations[i].InfluenceCollider;
-                    int priority = observations[i].Priority;
-                    int revision = observations[i].Revision;
-
-                    if (entry.Priority != priority)
-                    {
-                        entry.Priority = priority;
-                        priorityChanged = true;
-                        finalDirty = true;
-                    }
-
-                    if (entry.Revision != revision)
-                    {
-                        entry.Revision = revision;
-                        valueDirty = true;
-                        finalDirty = true;
-                    }
-
-                    if (entry.AreaDirty || HasColliderSnapshotChanged(entry, collider))
-                    {
-                        dirtyRegion = FlowFieldCellRect.Union(
-                            dirtyRegion,
-                            entry.InfluenceRect);
-                        entry.InfluenceCollider = collider;
-                        entry.AreaDirty = true;
-                        areaDirty = true;
-                        // Treat this observation as the latest input even before
-                        // the next composition runs. Otherwise an unchanged
-                        // collider would be reported dirty on every poll while a
-                        // solve is in flight. The area flag remains set, so
-                        // the subsequent build still recomputes its mask.
-                        UpdateColliderSnapshot(entry, collider);
-                        if (collider != null)
-                            dirtyRegion = FlowFieldCellRect.Union(
-                                dirtyRegion,
-                                entry.InfluenceRect);
-                    }
-
-                }
-
-                if (priorityChanged)
-                {
-                    _entries.Sort(CompareEntries);
-                    dirtyRegion = UnionAllInfluenceRects();
-                }
-
-                return new FlowFieldSurfaceModifierRegistryResult(areaDirty, valueDirty, finalDirty, dirtyRegion);
-            }
-            finally
-            {
-                ArrayPool<FlowFieldModifierObservation>.Shared.Return(observations, clearArray: true);
-            }
-        }
-
         internal void MarkAllAreasDirty()
         {
             for (int i = 0; i < _entries.Count; i++)
@@ -332,6 +237,8 @@ namespace Common.FlowField
         private static int CompareEntries(Entry left, Entry right)
             => left.Priority.CompareTo(right.Priority);
 
+        internal bool Contains(IFlowFieldVectorModifier modifier) => Find(modifier) != null;
+
         private Entry Find(IFlowFieldVectorModifier modifier)
         {
             if (modifier == null)
@@ -344,31 +251,6 @@ namespace Common.FlowField
             }
 
             return null;
-        }
-
-        private static bool HasColliderSnapshotChanged(Entry entry, Collider collider)
-        {
-            if (!entry.SnapshotInitialized || entry.InfluenceCollider != collider)
-                return true;
-
-            if (collider == null)
-                return false;
-
-            bool active = collider.gameObject.activeInHierarchy;
-            if (entry.LastEnabled != collider.enabled
-                || entry.LastActive != active
-                || entry.LastTrigger != collider.isTrigger)
-                return true;
-
-            Transform colliderTransform = collider.transform;
-            if ((entry.LastPosition - colliderTransform.position).sqrMagnitude > 0.00000001f
-                || Quaternion.Angle(entry.LastRotation, colliderTransform.rotation) > 0.0001f
-                || (entry.LastScale - colliderTransform.lossyScale).sqrMagnitude > 0.00000001f)
-                return true;
-
-            Bounds bounds = collider.bounds;
-            return (entry.LastBounds.center - bounds.center).sqrMagnitude > 0.00000001f
-                || (entry.LastBounds.size - bounds.size).sqrMagnitude > 0.00000001f;
         }
 
         private FlowFieldCellRect UnionAllInfluenceRects()

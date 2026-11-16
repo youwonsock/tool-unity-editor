@@ -127,12 +127,6 @@ namespace Common.FlowField
         Invalid,
     }
 
-    internal enum FlowFieldSurfaceGoalChangeStatus
-    {
-        None,
-        Changed,
-    }
-
     internal readonly struct FlowFieldSurfaceGoalSolveInput
     {
         public bool HasGoal { get; }
@@ -157,12 +151,6 @@ namespace Common.FlowField
         private bool _hasBuiltRequest;
         private int _lastBuiltSourceCellIndex = -1;
         private float _lastBuiltRadius;
-        // Keep an observation separate from the last committed build. A Goal
-        // can move more than once while an async BFS is in flight; comparing
-        // every poll with the committed request would repeatedly report the
-        // same change and would not preserve latest-wins semantics.
-        private bool _hasObservedRequest;
-        private FlowFieldSurfaceGoalSolveInput _lastObservedRequest;
         private bool _missingWalkableWarningIssued;
 
 
@@ -171,55 +159,6 @@ namespace Common.FlowField
                 && request.HasGoal == _lastBuiltHadGoal
                 && request.SourceCellIndex == _lastBuiltSourceCellIndex
                 && System.Math.Abs(request.InfluenceRadius - _lastBuiltRadius) <= VALUE_EPSILON;
-
-        internal FlowFieldSurfaceGoalChangeStatus DetectChange(
-            FlowFieldGridSpace grid,
-            bool surfaceReady,
-            Transform target,
-            bool hasExplicitGoal,
-            Vector3 explicitGoal,
-            float influenceRadius)
-        {
-            if (!FlowFieldSurfaceGoalPipeline.HasActiveGoal(target, hasExplicitGoal))
-            {
-                FlowFieldSurfaceGoalSolveInput none = FlowFieldSurfaceGoalSolveInput.None;
-                bool changed = !_hasObservedRequest || !RequestsEqual(_lastObservedRequest, none);
-                bool hadObservedGoal = _hasObservedRequest && _lastObservedRequest.HasGoal;
-                _lastObservedRequest = none;
-                _hasObservedRequest = true;
-                // A target can disappear while the first asynchronous solve
-                // is still in flight, before the Goal tracker has recorded a
-                // committed build. The observed request is still an active
-                // input in that case, so the pending solve must be invalidated
-                // just like a committed Goal would be.
-                return changed && (_lastBuiltHadGoal || hadObservedGoal)
-                    ? FlowFieldSurfaceGoalChangeStatus.Changed
-                    : FlowFieldSurfaceGoalChangeStatus.None;
-            }
-            if (!surfaceReady || !grid.IsValid)
-                return FlowFieldSurfaceGoalChangeStatus.None;
-
-            FlowFieldSurfaceGoalResolution resolution = FlowFieldSurfaceGoalPipeline.Resolve(
-                grid,
-                target,
-                hasExplicitGoal,
-                explicitGoal,
-                influenceRadius);
-            if (!resolution.IsValid)
-                return FlowFieldSurfaceGoalChangeStatus.None;
-
-            FlowFieldSurfaceGoalSolveInput request = new FlowFieldSurfaceGoalSolveInput(
-                true,
-                resolution.SourceCellIndex,
-                resolution.InfluenceRadius);
-            bool changedFromObservation = !_hasObservedRequest
-                || !RequestsEqual(_lastObservedRequest, request);
-            _lastObservedRequest = request;
-            _hasObservedRequest = true;
-            return changedFromObservation && HasChanged(request)
-                ? FlowFieldSurfaceGoalChangeStatus.Changed
-                : FlowFieldSurfaceGoalChangeStatus.None;
-        }
 
         internal bool HasChanged(in FlowFieldSurfaceGoalSolveInput request)
         {
@@ -248,8 +187,6 @@ namespace Common.FlowField
             _lastBuiltHadGoal = request.HasGoal && status != FlowFieldSurfaceGoalBuildStatus.Invalid;
             _lastBuiltSourceCellIndex = request.HasGoal ? request.SourceCellIndex : -1;
             _lastBuiltRadius = request.HasGoal ? request.InfluenceRadius : 0f;
-            _lastObservedRequest = request;
-            _hasObservedRequest = true;
             if (status != FlowFieldSurfaceGoalBuildStatus.NoWalkableSurface)
                 _missingWalkableWarningIssued = false;
         }
@@ -288,8 +225,6 @@ namespace Common.FlowField
             _lastBuiltHadGoal = false;
             _lastBuiltSourceCellIndex = -1;
             _lastBuiltRadius = 0f;
-            _hasObservedRequest = false;
-            _lastObservedRequest = FlowFieldSurfaceGoalSolveInput.None;
             _missingWalkableWarningIssued = false;
         }
 

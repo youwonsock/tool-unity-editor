@@ -508,41 +508,41 @@ namespace Common.FlowField
             return dirty;
         }
 
-        internal bool DetectDynamicTransformsChanged(
-            FlowFieldGridSpace grid,
-            out FlowFieldCellRect dirtyRegion)
+        /// <summary>
+        /// A registered collider says it moved. Gives the bounds its cells were
+        /// last built with and its bounds now. A destroyed collider stops being
+        /// registered, and its last built bounds stay dirty.
+        /// </summary>
+        internal bool TryObserveMove(
+            Collider collider,
+            out Bounds built,
+            out Bounds current,
+            out bool moved)
         {
-            dirtyRegion = FlowFieldCellRect.Invalid;
-            for (int i = 0; i < _dynamicObstacles.Count; i++)
+            built = default;
+            current = default;
+            moved = false;
+            int index = _dynamicObstacles.IndexOf(collider);
+            if (index < 0)
+                return false;
+            built = _dynamicBounds[index];
+            if (collider == null)
             {
-                Collider collider = _dynamicObstacles[i];
-                if (collider == null)
-                {
-                    if (grid.IsValid)
-                        dirtyRegion = FlowFieldCellRect.Union(
-                            dirtyRegion,
-                            FlowFieldCellRect.FromBounds(grid, _dynamicBounds[i]));
-                    _dynamicSet.Remove(collider);
-                    _dynamicObstacles.RemoveAt(i);
-                    _dynamicBounds.RemoveAt(i);
-                    _observedDynamicBounds.RemoveAt(i);
-                    return true;
-                }
-
-                Bounds current = collider.bounds;
-                Bounds previous = _observedDynamicBounds[i];
-                if ((current.center - previous.center).sqrMagnitude > 0.0001f
-                    || (current.size - previous.size).sqrMagnitude > 0.0001f)
-                {
-                    _observedDynamicBounds[i] = current;
-                    // The exact grid conversion is performed by the caller;
-                    // return an invalid rect here and let RebuildDynamicOverlay
-                    // union the cached world bounds at probe time.
-                    return true;
-                }
+                DiscardStagedDynamicProbe();
+                _dynamicSet.Remove(collider);
+                _dynamicObstacles.RemoveAt(index);
+                _dynamicBounds.RemoveAt(index);
+                _observedDynamicBounds.RemoveAt(index);
+                moved = true;
+                return true;
             }
-
-            return false;
+            current = collider.bounds;
+            Bounds previous = _observedDynamicBounds[index];
+            moved = (current.center - previous.center).sqrMagnitude > 0.0001f
+                || (current.size - previous.size).sqrMagnitude > 0.0001f;
+            if (moved)
+                _observedDynamicBounds[index] = current;
+            return true;
         }
 
         public bool CommitCombinedAndBuildEscape(
