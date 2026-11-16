@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: FlowFieldManager_1569603542928883877_StaticBake
   m_EditorClassIdentifier: 
   _formatVersion: 6
-  _revision: 6
+  _revision: 7
   _spaceMode: 0
   _gridOriginWorld: {x: -50, y: 2, z: -50}
   _width: 100

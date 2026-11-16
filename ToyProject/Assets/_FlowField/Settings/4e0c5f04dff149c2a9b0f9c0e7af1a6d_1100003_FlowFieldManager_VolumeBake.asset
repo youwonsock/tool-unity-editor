@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 4e0c5f04dff149c2a9b0f9c0e7af1a6d_1100003_FlowFieldManager_VolumeBake
   m_EditorClassIdentifier: 
   _formatVersion: 6
-  _revision: 6
+  _revision: 7
   _gridOriginWorld: {x: 0, y: 0, z: 0}
   _width: 20
   _height: 12
