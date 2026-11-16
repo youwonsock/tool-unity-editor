@@ -100,14 +100,19 @@ namespace Common.FlowField
             if (!latestLayoutMatchesSample)
                 return false;
 
+            // A notified obstacle change stops movers in its region until a
+            // build that queried it is published, as in Volume3D.
+            if (_safety.IsCellUncertain(sampleGrid, CellCenter(sampleGrid, sampleIndex)))
+            {
+                sample = Stop(published);
+                return true;
+            }
+
             int latestIndex = _state.Grid.ToFlatIndex(latestX, latestZ);
             FlowFieldSurfaceWorkspace latestWorkspace = _state.Workspace;
             FlowFieldSurfaceData latestSurface = _state.Surface;
-            bool obstacleProbeActive = _session.IsRebuilding || _obstaclePipeline.HasStagedDynamicProbe;
             bool latestBlocked = latestWorkspace.Blocked[latestIndex];
-            bool stagedObstacleBlocksSample = _obstaclePipeline.HasStagedDynamicProbe
-                && latestWorkspace.ObstacleScratch[latestIndex];
-            if (obstacleProbeActive && latestBlocked)
+            if (_session.IsRebuilding && latestBlocked)
             {
                 sample = FlowFieldSurfaceCellSampler.TrySampleEscape(
                         _state.Grid,
@@ -119,19 +124,12 @@ namespace Common.FlowField
                     : Stop(published);
                 return true;
             }
-            if (obstacleProbeActive && stagedObstacleBlocksSample)
-            {
-                sample = Stop(published);
-                return true;
-            }
-
             int next = field.NextCells[sampleIndex];
             if (next < 0)
                 return false;
             bool nextBlocked = next >= sampleGrid.CellCount
                 || latestWorkspace.Blocked[next]
-                || _obstaclePipeline.HasStagedDynamicProbe
-                    && latestWorkspace.ObstacleScratch[next]
+                || _safety.IsCellUncertain(sampleGrid, CellCenter(sampleGrid, next))
                 || latestSurface == null
                 || !latestSurface.IsSurfaceValid(next);
             bool topologyChanged = false;
@@ -149,6 +147,12 @@ namespace Common.FlowField
                 return false;
             sample = Stop(published);
             return true;
+        }
+
+        private static Vector3 CellCenter(FlowFieldGridSpace grid, int index)
+        {
+            grid.FromFlatIndex(index, out int x, out int z);
+            return grid.LocalToWorldCenter(x, z);
         }
 
         private static FlowFieldSample Stop(in FlowFieldSample sample)

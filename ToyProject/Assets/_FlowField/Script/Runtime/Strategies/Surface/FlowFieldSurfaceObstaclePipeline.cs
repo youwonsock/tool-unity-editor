@@ -13,7 +13,6 @@ namespace Common.FlowField
         public float CheckHeight { get; }
         public float CenterOffset { get; }
         public float Clearance { get; }
-        public bool UseUnregisteredSweep { get; }
         public FlowFieldCellRect DirtyRegion { get; }
 
         public FlowFieldObstacleRequest(
@@ -24,7 +23,6 @@ namespace Common.FlowField
             float checkHeight,
             float centerOffset,
             float clearance,
-            bool useUnregisteredSweep,
             FlowFieldCellRect dirtyRegion)
         {
             Grid = grid;
@@ -34,7 +32,6 @@ namespace Common.FlowField
             CheckHeight = checkHeight;
             CenterOffset = centerOffset;
             Clearance = clearance;
-            UseUnregisteredSweep = useUnregisteredSweep;
             DirtyRegion = dirtyRegion;
         }
     }
@@ -65,17 +62,9 @@ namespace Common.FlowField
         // rebuild still receives the complete previous→latest dirty range.
         private readonly List<Bounds> _observedDynamicBounds = new List<Bounds>(32);
         private readonly HashSet<Collider> _dynamicSet = new HashSet<Collider>();
-        // A transform/sweep probe leaves its candidate in the reusable
-        // scratch mask.  The next base build consumes that candidate instead
-        // of issuing the same Physics queries a second time.  Keeping the
-        // flag separate from the mask itself lets sampling stop immediately
-        // for a newly blocked cell while the committed graph is still old.
-        private bool _hasStagedDynamicProbe;
-        private FlowFieldCellRect _stagedDynamicDirtyRegion = FlowFieldCellRect.Invalid;
 
         public IReadOnlyList<Collider> DynamicObstacles => _dynamicObstacles;
         public bool AllBlockedWarningIssued;
-        internal bool HasStagedDynamicProbe => _hasStagedDynamicProbe;
 
         public bool RegisterDynamicObstacle(Collider collider)
         {
@@ -87,7 +76,6 @@ namespace Common.FlowField
                 || !_dynamicSet.Add(collider))
                 return false;
 
-            DiscardStagedDynamicProbe();
             _dynamicObstacles.Add(collider);
             _dynamicBounds.Add(collider.bounds);
             _observedDynamicBounds.Add(collider.bounds);
@@ -101,7 +89,6 @@ namespace Common.FlowField
             if (ReferenceEquals(collider, null) || !_dynamicSet.Remove(collider))
                 return false;
 
-            DiscardStagedDynamicProbe();
             int index = _dynamicObstacles.IndexOf(collider);
             if (index >= 0)
             {
@@ -129,7 +116,6 @@ namespace Common.FlowField
 
         public void ClearDynamicObstacles()
         {
-            DiscardStagedDynamicProbe();
             _dynamicObstacles.Clear();
             _dynamicBounds.Clear();
             _observedDynamicBounds.Clear();
@@ -142,7 +128,6 @@ namespace Common.FlowField
             bool rebuildDynamic)
         {
             ValidateRequest(request);
-            bool consumeStagedDynamicProbe = rebuildDynamic && _hasStagedDynamicProbe;
             bool staticChanged = false;
             bool dynamicChanged = false;
             FlowFieldCellRect dynamicDirty = FlowFieldCellRect.Invalid;
@@ -156,7 +141,6 @@ namespace Common.FlowField
                     request.CheckHeight,
                     request.CenterOffset,
                     request.Clearance,
-                    request.UseUnregisteredSweep,
                     _dynamicSet,
                     ref _overlapBuffer,
                     ref _targetOverlapBuffer);
@@ -176,30 +160,6 @@ namespace Common.FlowField
                     effectiveMaskDirtyWithoutDynamic);
             }
 
-            if (consumeStagedDynamicProbe)
-            {
-                dynamicDirty = _stagedDynamicDirtyRegion;
-                dynamicChanged = CommitDynamicScratch(request.Workspace);
-                DiscardStagedDynamicProbe();
-            }
-            else if (request.UseUnregisteredSweep)
-            {
-                if (BuildFullLayerScratch(
-                        request.Grid,
-                        request.Surface,
-                        request.ObstacleLayer,
-                        request.CheckHeight,
-                        request.CenterOffset,
-                        request.Clearance,
-                        request.Workspace.ObstacleScratch,
-                        syncTransforms: false))
-                {
-                    dynamicChanged = CommitDynamicScratch(request.Workspace);
-                    if (dynamicChanged)
-                        dynamicDirty = FlowFieldCellRect.Full(request.Grid);
-                }
-            }
-            else
             {
                 dynamicDirty = RebuildDynamicOverlay(
                     request.Grid,
@@ -274,79 +234,6 @@ namespace Common.FlowField
             return effectiveChanged;
         }
 
-        /// <summary>
-        /// Non-versioning obstacle probe. It writes only the reusable scratch
-        /// mask and compares it with the last committed dynamic overlay. The
-        /// caller promotes a changed probe to a rebuild; an identical probe
-        /// has no observable version, BFS or Revision side effect.
-        /// </summary>
-        internal bool ProbeDynamicMask(
-            in FlowFieldObstacleRequest request,
-            out FlowFieldCellRect dirtyRegion)
-        {
-            ValidateRequest(request);
-            dirtyRegion = FlowFieldCellRect.Invalid;
-            bool built;
-            if (request.UseUnregisteredSweep)
-            {
-                built = BuildFullLayerScratch(
-                    request.Grid,
-                    request.Surface,
-                    request.ObstacleLayer,
-                    request.CheckHeight,
-                    request.CenterOffset,
-                    request.Clearance,
-                    request.Workspace.ObstacleScratch,
-                    syncTransforms: false);
-                if (!built)
-                {
-                    DiscardStagedDynamicProbe();
-                    return false;
-                }
-                bool changed = !FlowFieldObstacleMaskBuilder.AreEqual(
-                    request.Workspace.ObstacleScratch,
-                    request.Workspace.DynamicBlocked);
-                if (changed)
-                {
-                    _stagedDynamicDirtyRegion = FlowFieldCellRect.Full(request.Grid);
-                    _hasStagedDynamicProbe = true;
-                }
-                else
-                {
-                    DiscardStagedDynamicProbe();
-                }
-                return changed;
-            }
-
-            dirtyRegion = RebuildDynamicOverlay(
-                request.Grid,
-                request.Surface,
-                request.CheckHeight,
-                request.CenterOffset,
-                request.Clearance,
-                request.Workspace.ObstacleScratch,
-                request.DirtyRegion);
-            bool overlayChanged = !FlowFieldObstacleMaskBuilder.AreEqual(
-                request.Workspace.ObstacleScratch,
-                request.Workspace.DynamicBlocked);
-            if (overlayChanged)
-            {
-                _stagedDynamicDirtyRegion = dirtyRegion;
-                _hasStagedDynamicProbe = true;
-            }
-            else
-            {
-                DiscardStagedDynamicProbe();
-            }
-            return overlayChanged;
-        }
-
-        internal void DiscardStagedDynamicProbe()
-        {
-            _hasStagedDynamicProbe = false;
-            _stagedDynamicDirtyRegion = FlowFieldCellRect.Invalid;
-        }
-
         private static bool BuildStaticScratch(
             FlowFieldGridSpace grid,
             FlowFieldSurfaceData surface,
@@ -355,7 +242,6 @@ namespace Common.FlowField
             float checkHeight,
             float centerOffset,
             float clearance,
-            bool useUnregisteredSweep,
             HashSet<Collider> registeredObstacles,
             ref Collider[] overlapBuffer,
             ref Collider[] targetOverlapBuffer)
@@ -367,13 +253,7 @@ namespace Common.FlowField
             if (workspace.Capacity != grid.CellCount)
                 throw new ArgumentException("Static obstacle workspace capacity must match the grid.", nameof(workspace));
 
-            // The sweep follows every Collider on the layer. A static copy of
-            // the same Colliders would keep their old cells after they move.
-            if (useUnregisteredSweep)
-            {
-                Array.Clear(workspace.ObstacleScratch, 0, workspace.Capacity);
-            }
-            else if (!FlowFieldObstacleMaskBuilder.BuildStatic(
+            if (!FlowFieldObstacleMaskBuilder.BuildStatic(
                     grid,
                     surface,
                     obstacleLayer,
@@ -528,7 +408,6 @@ namespace Common.FlowField
             built = _dynamicBounds[index];
             if (collider == null)
             {
-                DiscardStagedDynamicProbe();
                 _dynamicSet.Remove(collider);
                 _dynamicObstacles.RemoveAt(index);
                 _dynamicBounds.RemoveAt(index);

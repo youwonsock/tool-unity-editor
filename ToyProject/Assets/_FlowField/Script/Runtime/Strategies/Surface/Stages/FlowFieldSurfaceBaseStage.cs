@@ -64,7 +64,6 @@ namespace Common.FlowField
             // was measured against the previous cell heights and bounds.
             // Leave the registered collider set intact; the downstream base
             // stage will issue one fresh dynamic query for the new Surface.
-            _obstaclePipeline.DiscardStagedDynamicProbe();
 
             FlowFieldSurfaceData surface = ResolveSurface(request);
             if (!surface.IsValid)
@@ -174,7 +173,6 @@ namespace Common.FlowField
                         request.ObstacleCheckHeight,
                         request.ObstacleCheckCenterOffset,
                         request.ObstacleClearance,
-                        request.UseUnregisteredObstacleSweep,
                         _state.DirtyObstacleRegion),
                     goal,
                     surfaceChanged),

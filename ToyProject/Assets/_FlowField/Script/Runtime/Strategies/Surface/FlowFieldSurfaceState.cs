@@ -22,7 +22,6 @@ namespace Common.FlowField
         internal bool SurfaceReady => Surface != null && Surface.IsValid;
         internal bool HasObstacleMask;
         internal bool BaseComposed;
-        internal bool ObstacleProbePending;
         internal bool GoalRemoved;
 
         public void ExpandFinalDirty(FlowFieldCellRect rect)

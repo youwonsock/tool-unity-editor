@@ -1,57 +1,23 @@
 using System;
-using System.Collections.Generic;
 using UnityEngine;
 using VolumeFieldData = Common.FlowField.FlowFieldField<Common.FlowField.FlowFieldVolumeRequest>;
 using static Common.FlowField.FlowFieldVolumeNavigation;
 
 namespace Common.FlowField
 {
-    // Owns conservative safety state and sampling decisions. Physics observation,
-    // rebuild scheduling and publication policy stay in the session.
+    // The paths Volume3D checks against the shared uncertain regions: a cell,
+    // the step to its next cell, its escape and its Default Direction.
     internal sealed class FlowFieldVolumeSafetyState
     {
-        private const int MaxUncertainBounds = 64;
-        // Changes no running build has observed yet.
-        private readonly List<Bounds> _uncertainBounds = new List<Bounds>(8);
-        // Changes the running build observes, still unsafe until it is published.
-        private readonly List<Bounds> _observingBounds = new List<Bounds>(8);
+        private readonly FlowFieldSafety _regions = new FlowFieldSafety(planar: false);
 
-        internal int UncertainRegionCount => _uncertainBounds.Count + _observingBounds.Count;
-
-        internal void ClearRegions()
-        {
-            _uncertainBounds.Clear();
-            _observingBounds.Clear();
-        }
-
-        /// <summary>
-        /// Every build queries the obstacles in these regions after it starts, so
-        /// it resolves the regions recorded so far. A discarded build keeps them here until
-        /// its replacement publishes.
-        /// </summary>
-        internal void BeginBuild()
-        {
-            for (int index = 0; index < _uncertainBounds.Count; index++)
-                AddBounds(_observingBounds, _uncertainBounds[index]);
-            _uncertainBounds.Clear();
-        }
-
-        internal void ClearObservedRegions() => _observingBounds.Clear();
-
-        internal Bounds[] ObservedRegions() => _observingBounds.ToArray();
-
-        // An obstacle mask/clearance change invalidates the complete volume.
-        // Preserve its distinct policy: no dirty-region expansion.
-        internal void InvalidateRegion(Bounds bounds) => AddBounds(_uncertainBounds, bounds);
-
-        internal void MarkDirty(Bounds bounds, float margin)
-        {
-            if (!FlowFieldGridSpace.IsFinite(bounds.center) || !FlowFieldGridSpace.IsFinite(bounds.size))
-                throw new ArgumentOutOfRangeException(nameof(bounds));
-            Bounds expanded = bounds;
-            expanded.Expand(Vector3.one * (margin * 2f));
-            AddBounds(_uncertainBounds, expanded);
-        }
+        internal int UncertainRegionCount => _regions.UncertainRegionCount;
+        internal void ClearRegions() => _regions.ClearRegions();
+        internal void BeginBuild() => _regions.BeginBuild();
+        internal void ClearObservedRegions() => _regions.ClearObservedRegions();
+        internal Bounds[] ObservedRegions() => _regions.ObservedRegions();
+        internal void InvalidateRegion(Bounds bounds) => _regions.InvalidateRegion(bounds);
+        internal void MarkDirty(Bounds bounds, float margin) => _regions.MarkDirty(bounds, margin);
 
         internal bool IsLatestCellUnknown(VolumeFieldData field, Vector3 center)
         {
@@ -139,45 +105,6 @@ namespace Common.FlowField
         }
 
         private bool IntersectsUncertainBounds(FlowFieldGridSpace grid, Vector3 center)
-            => IntersectsUncertainBounds(grid, center, _uncertainBounds)
-                || IntersectsUncertainBounds(grid, center, _observingBounds);
-
-        private static bool IntersectsUncertainBounds(FlowFieldGridSpace grid, Vector3 center,
-            List<Bounds> uncertainBounds)
-        {
-            Bounds cell = new Bounds(center, Vector3.one * grid.CellSize);
-            for (int i = 0; i < uncertainBounds.Count; i++)
-                if (uncertainBounds[i].Intersects(cell))
-                    return true;
-            return false;
-        }
-
-        private static void AddBounds(List<Bounds> list, Bounds bounds)
-        {
-            for (int index = 0; index < list.Count; index++)
-            {
-                if (!list[index].Intersects(bounds))
-                    continue;
-                list[index] = UnionBounds(list[index], bounds);
-                return;
-            }
-
-            if (list.Count < MaxUncertainBounds)
-            {
-                list.Add(bounds);
-                return;
-            }
-
-            // Once the bounded dirty-list is full, retaining a conservative
-            // union is safer than evicting an area and treating it as clear.
-            list[0] = UnionBounds(list[0], bounds);
-        }
-
-        private static Bounds UnionBounds(Bounds left, Bounds right)
-        {
-            left.Encapsulate(right.min);
-            left.Encapsulate(right.max);
-            return left;
-        }
+            => _regions.IsCellUncertain(grid, center);
     }
 }

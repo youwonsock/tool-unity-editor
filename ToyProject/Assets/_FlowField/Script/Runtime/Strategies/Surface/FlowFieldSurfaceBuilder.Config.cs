@@ -176,7 +176,6 @@ namespace Common.FlowField
                 config.Surface.ObstacleCheckHeight,
                 config.Surface.ObstacleCheckCenterOffset,
                 config.Obstacles.Clearance,
-                false,
                 ResolveGoal(in config, settings.Grid),
                 config.Flow.DefaultDirection,
                 dirtyFlags,

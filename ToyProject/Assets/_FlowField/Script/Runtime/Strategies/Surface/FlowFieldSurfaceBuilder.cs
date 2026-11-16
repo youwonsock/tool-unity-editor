@@ -15,6 +15,11 @@ namespace Common.FlowField
         private readonly FlowFieldSurfaceFieldStore _fieldStore = new FlowFieldSurfaceFieldStore();
         private readonly FlowFieldSurfaceObstaclePipeline _obstaclePipeline = new FlowFieldSurfaceObstaclePipeline();
         private readonly FlowFieldSurfaceGoalTracker _goalTracker = new FlowFieldSurfaceGoalTracker();
+        // Regions a notified obstacle change made uncertain; shared with Volume3D.
+        private readonly FlowFieldSafety _safety = new FlowFieldSafety(planar: true);
+        // The running build queries obstacles, so its publication resolves
+        // the regions it began with.
+        private bool _buildResolvesSafety;
         private readonly FlowFieldRequestInbox<FlowFieldSurfaceRequest> _requests
             = new FlowFieldRequestInbox<FlowFieldSurfaceRequest>();
         private readonly FlowFieldSurfaceBaseStage _baseStage;
@@ -188,7 +193,6 @@ namespace Common.FlowField
             _phase = BuildPhase.Publish;
         }
 
-        internal bool HasPendingObstacleProbe => _state.ObstacleProbePending;
 
         /// <summary>
         /// Records a final-only scalar as soon as the Unity façade observes
@@ -274,11 +278,13 @@ namespace Common.FlowField
                     "FlowField bake mode and source are fixed until Release.");
             }
 
+            _safety.ClearRegions();
             Start(bakeMode, sourceKind);
         }
 
         private void Start(FlowFieldBakeMode bakeMode, FlowFieldSurfaceSourceKind sourceKind)
         {
+            _buildResolvesSafety = false;
             _session.BakeMode = bakeMode;
             _sourceKind = sourceKind;
             _modifierPipeline ??= new FlowFieldSurfaceModifierPipeline(new FlowFieldSurfaceModifierRegistry());
@@ -296,7 +302,6 @@ namespace Common.FlowField
             if (flags == FlowFieldSurfaceDirtyFlags.None)
                 return;
             if ((flags & (FlowFieldSurfaceDirtyFlags.Grid | FlowFieldSurfaceDirtyFlags.StaticObstacles)) != 0)
-                _obstaclePipeline.DiscardStagedDynamicProbe();
             // A base or final-input change always requires final composition.
             // Adding the derived flag at the point where the input is
             // versioned keeps Submit from counting the same change twice when
@@ -335,6 +340,11 @@ namespace Common.FlowField
             if (_requests.HasLatest && !request.HasSameInputs(_requests.Latest))
                 inputFlags = _requests.Latest.GetInputDirtyFlags(request);
             ObserveDefaultDirection(request.DefaultDirection);
+            // New obstacle settings make every published cell uncertain.
+            if ((inputFlags & FlowFieldSurfaceDirtyFlags.StaticObstacles) != 0
+                && (inputFlags & FlowFieldSurfaceDirtyFlags.Grid) == 0
+                && _committedRequest.HasValue)
+                _safety.InvalidateRegion(request.SurfaceSettings.BakeBounds);
 
             // A staged obstacle probe is valid only for the exact Surface,
             // obstacle settings and registered collider set that produced it.
@@ -346,7 +356,6 @@ namespace Common.FlowField
                     | FlowFieldSurfaceDirtyFlags.DynamicObstacles
                     | FlowFieldSurfaceDirtyFlags.Escape)) != 0)
             {
-                _obstaclePipeline.DiscardStagedDynamicProbe();
             }
 
             FlowFieldSurfaceDirtyFlags combinedFlags = inputFlags | request.DirtyFlags;
@@ -472,14 +481,10 @@ namespace Common.FlowField
             _state.BaseComposed = false;
             _state.LastComposedRegion = FlowFieldCellRect.Invalid;
             _state.HasObstacleMask = false;
-            _obstaclePipeline.DiscardStagedDynamicProbe();
             _state.Surface = null;
             _state.Workspace.ClearAll();
-            // The complete rebuild on restart supersedes any probe that was
-            // waiting for an in-flight callback. Keep the registered
-            // colliders themselves, but do not run a duplicate probe against
-            // the same pose after activation.
-            _state.ObstacleProbePending = false;
+            // The complete rebuild on restart queries every obstacle again;
+            // the registered colliders themselves stay.
             _state.DirtyFlags = FlowFieldSurfaceDirtyFlags.All;
             _configOwed = false;
             _session.Fault = null;
@@ -518,9 +523,10 @@ namespace Common.FlowField
             _state.ResolvedDefaultDirection = Vector3.zero;
             _requests.Clear();
             _configOwed = false;
-            _state.ObstacleProbePending = false;
             _state.GoalRemoved = false;
             _latestDefaultDirection = null;
+            _safety.ClearRegions();
+            _buildResolvesSafety = false;
             _session.Fault = null;
             _session.SetLifecycle(FlowFieldSessionLifecycle.Released);
         }

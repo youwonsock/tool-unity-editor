@@ -12,9 +12,9 @@ namespace Common.FlowField
                 throw new ArgumentNullException(nameof(collider));
             if (_session.BakeMode == FlowFieldBakeMode.StaticBaked)
                 return true;
-            _obstaclePipeline.DiscardStagedDynamicProbe();
             if (!_obstaclePipeline.RegisterDynamicObstacle(collider))
                 return false;
+            MarkUncertain(collider.bounds);
             MarkDirty(
                 ObstacleRegistrationFlags(collider),
                 dirtyRegion,
@@ -54,7 +54,6 @@ namespace Common.FlowField
                 throw new ArgumentNullException(nameof(collider));
             if (_session.BakeMode == FlowFieldBakeMode.StaticBaked)
                 return true;
-            _obstaclePipeline.DiscardStagedDynamicProbe();
             if (!_obstaclePipeline.UnregisterDynamicObstacle(collider))
                 return false;
             MarkDirty(
@@ -70,6 +69,7 @@ namespace Common.FlowField
                 throw new ArgumentNullException(nameof(collider));
             if (!TryGetRegisteredObstacleBounds(collider, out Bounds bounds))
                 return false;
+            MarkUncertain(bounds);
             FlowFieldCellRect dirty = _state.Grid.IsValid
                 ? FlowFieldCellRect.FromBounds(_state.Grid, bounds)
                 : FlowFieldCellRect.Invalid;
@@ -85,7 +85,6 @@ namespace Common.FlowField
         {
             if (_session.BakeMode == FlowFieldBakeMode.StaticBaked)
                 return;
-            _obstaclePipeline.DiscardStagedDynamicProbe();
             MarkDirty(
                 FlowFieldSurfaceDirtyFlags.DynamicObstacles | FlowFieldSurfaceDirtyFlags.Escape | FlowFieldSurfaceDirtyFlags.FinalRegion,
                 dirtyRegion,
@@ -99,7 +98,19 @@ namespace Common.FlowField
                 throw new ArgumentOutOfRangeException(nameof(worldBounds));
             if (!_state.Grid.IsValid)
                 throw new InvalidOperationException("FlowField grid is not initialized.");
+            MarkUncertain(worldBounds);
             MarkObstacleDirty(FlowFieldCellRect.FromBounds(_state.Grid, worldBounds));
+        }
+
+        // Cells an obstacle change can reach stop from this frame until a
+        // build that queried them is published.
+        private void MarkUncertain(Bounds bounds)
+        {
+            if (_session.BakeMode == FlowFieldBakeMode.StaticBaked || !_state.Grid.IsValid
+                || !FlowFieldGridSpace.IsFinite(bounds.center) || !FlowFieldGridSpace.IsFinite(bounds.size))
+                return;
+            float clearance = _requests.HasLatest ? _requests.Latest.ObstacleClearance : 0f;
+            _safety.MarkDirty(bounds, _state.Grid.CellSize + clearance);
         }
 
         public bool NotifyObstacleMovedNow(Collider collider)
@@ -110,7 +121,12 @@ namespace Common.FlowField
                 return false;
             if (!_obstaclePipeline.TryObserveMove(collider, out Bounds built, out Bounds current, out bool moved))
                 return false;
-            if (!moved || !_state.Grid.IsValid)
+            if (!moved)
+                return true;
+            MarkUncertain(built);
+            if (collider != null)
+                MarkUncertain(current);
+            if (!_state.Grid.IsValid)
                 return true;
             // The cells it was built in and the cells it is in now.
             FlowFieldCellRect dirty = FlowFieldCellRect.Union(

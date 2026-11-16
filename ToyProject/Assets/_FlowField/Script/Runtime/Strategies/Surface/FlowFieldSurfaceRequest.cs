@@ -21,7 +21,6 @@ namespace Common.FlowField
         internal float ObstacleCheckHeight { get; }
         internal float ObstacleCheckCenterOffset { get; }
         internal float ObstacleClearance { get; }
-        internal bool UseUnregisteredObstacleSweep { get; }
         internal FlowFieldSurfaceGoalResolution Goal { get; }
         internal Vector3 DefaultDirection { get; }
         internal FlowFieldSurfaceDirtyFlags DirtyFlags { get; }
@@ -37,7 +36,6 @@ namespace Common.FlowField
             float obstacleCheckHeight,
             float obstacleCheckCenterOffset,
             float obstacleClearance,
-            bool useUnregisteredObstacleSweep,
             in FlowFieldSurfaceGoalResolution goal,
             Vector3 defaultDirection,
             FlowFieldSurfaceDirtyFlags dirtyFlags,
@@ -53,7 +51,6 @@ namespace Common.FlowField
             ObstacleCheckHeight = obstacleCheckHeight;
             ObstacleCheckCenterOffset = obstacleCheckCenterOffset;
             ObstacleClearance = obstacleClearance;
-            UseUnregisteredObstacleSweep = useUnregisteredObstacleSweep;
             Goal = goal;
             DefaultDirection = defaultDirection;
             DirtyFlags = dirtyFlags;
@@ -67,7 +64,6 @@ namespace Common.FlowField
             float obstacleCheckHeight,
             float obstacleCheckCenterOffset,
             float obstacleClearance,
-            bool useUnregisteredObstacleSweep,
             in FlowFieldSurfaceGoalResolution goal,
             Vector3 defaultDirection,
             FlowFieldSurfaceDirtyFlags dirtyFlags,
@@ -82,7 +78,6 @@ namespace Common.FlowField
                 obstacleCheckHeight,
                 obstacleCheckCenterOffset,
                 obstacleClearance,
-                useUnregisteredObstacleSweep,
                 goal,
                 defaultDirection,
                 dirtyFlags,
@@ -108,7 +103,6 @@ namespace Common.FlowField
                 obstacleCheckHeight,
                 obstacleCheckCenterOffset,
                 obstacleClearance,
-                false,
                 FlowFieldSurfaceGoalResolution.None,
                 defaultDirection,
                 dirtyFlags,
@@ -138,7 +132,6 @@ namespace Common.FlowField
                 && Approximately(ObstacleCheckHeight, other.ObstacleCheckHeight)
                 && Approximately(ObstacleCheckCenterOffset, other.ObstacleCheckCenterOffset)
                 && Approximately(ObstacleClearance, other.ObstacleClearance)
-                && UseUnregisteredObstacleSweep == other.UseUnregisteredObstacleSweep
                 && GoalMatch(Goal, other.Goal);
 
         internal bool HasSameFinalInputs(in FlowFieldSurfaceRequest other)
@@ -157,8 +150,7 @@ namespace Common.FlowField
             else if (ObstacleLayer.value != other.ObstacleLayer.value
                 || !Approximately(ObstacleCheckHeight, other.ObstacleCheckHeight)
                 || !Approximately(ObstacleCheckCenterOffset, other.ObstacleCheckCenterOffset)
-                || !Approximately(ObstacleClearance, other.ObstacleClearance)
-                || UseUnregisteredObstacleSweep != other.UseUnregisteredObstacleSweep)
+                || !Approximately(ObstacleClearance, other.ObstacleClearance))
             {
                 flags |= FlowFieldSurfaceDirtyFlags.StaticObstacles
                     | FlowFieldSurfaceDirtyFlags.DynamicObstacles

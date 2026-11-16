@@ -14,6 +14,11 @@ namespace Common.FlowField
             FlowFieldSurfaceRequest request = _requests.Latest;
             _requests.Pending = false;
             FlowFieldSurfaceDirtyFlags pending = _state.DirtyFlags;
+            _buildResolvesSafety = (pending & (FlowFieldSurfaceDirtyFlags.Grid
+                | FlowFieldSurfaceDirtyFlags.StaticObstacles
+                | FlowFieldSurfaceDirtyFlags.DynamicObstacles)) != 0;
+            if (_buildResolvesSafety)
+                _safety.BeginBuild();
             _state.DirtyFlags = FlowFieldSurfaceDirtyFlags.None;
 
             try
@@ -377,13 +382,17 @@ namespace Common.FlowField
                     finalRegion.IsValid ? finalRegion : FlowFieldCellRect.Full(_state.Grid));
             }
             _committedRequest = request;
+            if (_buildResolvesSafety)
+            {
+                // Changes notified after this build began stay uncertain.
+                _safety.ClearObservedRegions();
+                _buildResolvesSafety = false;
+            }
             if (!_requests.Pending)
             {
                 _state.DirtyFlags = FlowFieldSurfaceDirtyFlags.None;
                 _state.DirtyFinalRegion = FlowFieldCellRect.Invalid;
-                // A pending probe still needs the region it observed.
-                if (!_state.ObstacleProbePending)
-                    _state.DirtyObstacleRegion = FlowFieldCellRect.Invalid;
+                _state.DirtyObstacleRegion = FlowFieldCellRect.Invalid;
             }
             _session.PublishRuntimeState();
             if (actualChanged)

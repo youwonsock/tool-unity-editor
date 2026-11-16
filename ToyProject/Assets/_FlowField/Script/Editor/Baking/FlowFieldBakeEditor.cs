@@ -259,7 +259,6 @@ namespace Common.FlowField.Editor
                         input.CheckHeight,
                         input.CheckCenterOffset,
                         input.Clearance,
-                        false,
                         goalSnapshot,
                         manager.DefaultFlowDirection,
                         FlowFieldSurfaceDirtyFlags.All,
