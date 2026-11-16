@@ -1,12 +1,15 @@
 {
-    "name": "Common.FlowField.Runtime",
+    "name": "Common.FlowField",
     "rootNamespace": "Common.FlowField",
     "references": [
-        "Common.FlowField.Core"
+        "Unity.Burst",
+        "Unity.Collections",
+        "Unity.Mathematics",
+        "UnityEngine.UI"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
-    "allowUnsafeCode": false,
+    "allowUnsafeCode": true,
     "overrideReferences": false,
     "precompiledReferences": [],
     "autoReferenced": true,

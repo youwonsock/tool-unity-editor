@@ -6,11 +6,10 @@
 
 | 어셈블리 | 내용 |
 | --- | --- |
-| `Common.FlowField.Core` | 계약, 격자, Session, 계산 단계, 결과 저장소, Bake 데이터 |
-| `Common.FlowField.Runtime` | `FlowFieldManager`, Modifier 컴포넌트, Unity 수명 연결 |
+| `Common.FlowField` | 계약, 격자, Session, 계산 단계, 결과 저장소, Bake 데이터, `FlowFieldManager`와 Modifier 컴포넌트, 샘플, Player 측정 |
 | `Common.FlowField.Editor` | Inspector, Bake, Scene View 표시 |
-| `Common.FlowField.Samples` | Agent, HUD, 샘플 카메라 |
-| `Common.FlowField.PlayerProbe` | Player 측정 (`Tools/run-player-probe.sh`). Editor와 측정 빌드에서만 컴파일 |
+
+Player 측정(`PlayerProbe` 폴더, `Tools/run-player-probe.sh`)은 Editor와 `FLOWFIELD_PLAYER_PROBE`를 정의한 측정 빌드에서만 컴파일합니다. 샘플이 UGUI를 쓰므로 `Common.FlowField`는 `UnityEngine.UI`를 참조합니다.
 
 ## 수명과 게시 규칙
 

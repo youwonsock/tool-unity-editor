@@ -1,3 +1,5 @@
+// Only the Editor and the measuring Player build compile the probe.
+#if UNITY_EDITOR || FLOWFIELD_PLAYER_PROBE
 using System;
 using System.Collections;
 using System.Diagnostics;
@@ -443,3 +445,4 @@ namespace Common.FlowField.PlayerProbe
         public const int Obstacle = 30;
     }
 }
+#endif

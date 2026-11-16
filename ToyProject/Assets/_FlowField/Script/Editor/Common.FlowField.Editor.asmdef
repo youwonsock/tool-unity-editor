@@ -2,9 +2,7 @@
     "name": "Common.FlowField.Editor",
     "rootNamespace": "Common.FlowField.Editor",
     "references": [
-        "Common.FlowField.Core",
-        "Common.FlowField.Runtime",
-        "Common.FlowField.PlayerProbe"
+        "Common.FlowField"
     ],
     "includePlatforms": [
         "Editor"
