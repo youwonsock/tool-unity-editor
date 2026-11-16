@@ -5,7 +5,7 @@ using UnityEngine;
 namespace Common.FlowField
 {
     /// <summary>
-    /// Unity-facing façade for the shared FlowFieldSession. The component
+    /// Unity-facing façade for the shared FlowFieldSurfaceSession. The component
     /// owns serialized authoring settings and Unity lifecycle callbacks; all
     /// calculation state, versions, staging/committed fields and backend
     /// lifetime live in the common Session.
@@ -64,7 +64,7 @@ namespace Common.FlowField
         // Both sessions share one boundary, so the Manager's events keep their
         // order and a Modifier of either mode sees the same command rules.
         private readonly FlowFieldExecutionBoundary _boundary = new FlowFieldExecutionBoundary();
-        private readonly FlowFieldSession _session;
+        private readonly FlowFieldSurfaceSession _session;
         private readonly FlowFieldVolumeSession _volumeSession;
         private float _refreshTimer;
         private bool _hasExplicitGoal;
@@ -78,7 +78,7 @@ namespace Common.FlowField
 
         public FlowFieldManager()
         {
-            _session = new FlowFieldSession(boundary: _boundary);
+            _session = new FlowFieldSurfaceSession(boundary: _boundary);
             _volumeSession = new FlowFieldVolumeSession(_boundary);
             ForwardSessionEvents(_session);
             ForwardSessionEvents(_volumeSession);
@@ -148,8 +148,8 @@ namespace Common.FlowField
             => _volumeSession.TryGetVisualizationSource(out source);
 #endif
 
-        internal FlowFieldGoalResolution ResolveConfiguredGoal(FlowFieldGridSpace grid)
-            => FlowFieldGoalPipeline.Resolve(
+        internal FlowFieldSurfaceGoalResolution ResolveConfiguredGoal(FlowFieldGridSpace grid)
+            => FlowFieldSurfaceGoalPipeline.Resolve(
                 grid,
                 _goalTransform,
                 _hasExplicitGoal,

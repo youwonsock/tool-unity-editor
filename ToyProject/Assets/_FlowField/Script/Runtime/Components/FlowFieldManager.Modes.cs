@@ -141,7 +141,7 @@ namespace Common.FlowField
 
         private sealed class SurfaceMode : ModeDriver
         {
-            private readonly FlowFieldSession _session;
+            private readonly FlowFieldSurfaceSession _session;
 
             internal SurfaceMode(FlowFieldManager owner) : base(owner)
             {
@@ -168,12 +168,12 @@ namespace Common.FlowField
 
             private void InitializeSession()
             {
-                FlowFieldSessionSourceKind sourceKind = Owner.BakeMode == FlowFieldBakeMode.StaticBaked
-                    ? FlowFieldSessionSourceKind.StaticSnapshot
-                    : FlowFieldSessionSourceKind.SceneBuild;
-                FlowFieldSolvePolicy policy = Application.isPlaying
-                    ? FlowFieldSolvePolicy.Worker
-                    : FlowFieldSolvePolicy.Inline;
+                FlowFieldSurfaceSourceKind sourceKind = Owner.BakeMode == FlowFieldBakeMode.StaticBaked
+                    ? FlowFieldSurfaceSourceKind.StaticSnapshot
+                    : FlowFieldSurfaceSourceKind.SceneBuild;
+                FlowFieldSurfaceSolvePolicy policy = Application.isPlaying
+                    ? FlowFieldSurfaceSolvePolicy.Worker
+                    : FlowFieldSurfaceSolvePolicy.Inline;
                 Owner._attachedSession = _session;
                 _session.Initialize(Owner._bakeMode, sourceKind, policy);
                 Owner.ReattachActiveModifiers();
@@ -184,7 +184,7 @@ namespace Common.FlowField
                 FlowFieldSurfaceBakeSettings settings = Owner.CreateSurfaceBakeSettings();
                 _session.Submit(Owner.CreateSurfaceRequest(
                     settings,
-                    FlowFieldDirtyFlags.None,
+                    FlowFieldSurfaceDirtyFlags.None,
                     _session.DirtyFinalRegion,
                     _session.DirtyObstacleRegion));
                 _session.AttachRuntimeScheduler();
@@ -208,7 +208,7 @@ namespace Common.FlowField
                     if (!_session.IsRebuilding
                         && (Owner._enableUnregisteredObstacleSweep || obstacleObserved || probePending))
                     {
-                        if (Owner.TryCreateCurrentSessionRequest(out FlowFieldSessionRequest probeRequest))
+                        if (Owner.TryCreateCurrentSurfaceRequest(out FlowFieldSurfaceRequest probeRequest))
                         {
                             _session.ProbeObstacleChanges(probeRequest);
                         }
@@ -232,26 +232,26 @@ namespace Common.FlowField
                     return;
                 FlowFieldGridSpace current = Owner.CreateGridSpace();
                 if (_session.ObserveGrid(current))
-                    _session.MarkDirty(FlowFieldDirtyFlags.Grid, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
+                    _session.MarkDirty(FlowFieldSurfaceDirtyFlags.Grid, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
             }
 
             private void DetectGoalChange()
             {
                 if (!_session.StagingSurfaceReady || !_session.StagingGrid.IsValid)
                     return;
-                if ((_session.DirtyFlags & FlowFieldDirtyFlags.Goal) != 0)
+                if ((_session.DirtyFlags & FlowFieldSurfaceDirtyFlags.Goal) != 0)
                     return;
-                FlowFieldGoalChangeStatus status = _session.GoalTracker.DetectChange(
+                FlowFieldSurfaceGoalChangeStatus status = _session.GoalTracker.DetectChange(
                     _session.StagingGrid,
                     _session.StagingSurfaceReady,
                     Owner._goalTransform,
                     Owner._hasExplicitGoal,
                     Owner._explicitGoalWorld,
                     Owner._goalInfluenceRadius);
-                if (status == FlowFieldGoalChangeStatus.Changed)
+                if (status == FlowFieldSurfaceGoalChangeStatus.Changed)
                 {
                     _session.MarkDirty(
-                        FlowFieldDirtyFlags.Goal,
+                        FlowFieldSurfaceDirtyFlags.Goal,
                         FlowFieldCellRect.Invalid,
                         FlowFieldCellRect.Invalid);
                     if (!Owner.HasConfiguredGoal)
@@ -268,7 +268,7 @@ namespace Common.FlowField
                 if (_session.RequiresExplicitRebuild || _session.IsRebuilding)
                     return;
                 if (_session.HasPendingRequest
-                    && Owner.TryCreateCurrentSessionRequest(out FlowFieldSessionRequest request))
+                    && Owner.TryCreateCurrentSurfaceRequest(out FlowFieldSurfaceRequest request))
                     _session.Submit(request);
             }
 
@@ -280,7 +280,7 @@ namespace Common.FlowField
                 // real Surface/obstacle/Goal change invalidates the base build.
                 // StaticBaked requests intentionally contain no runtime Goal or
                 // dynamic-obstacle input, making those edits true no-ops.
-                if (!Owner.TryCreateCurrentSessionRequest(out FlowFieldSessionRequest current)
+                if (!Owner.TryCreateCurrentSurfaceRequest(out FlowFieldSurfaceRequest current)
                     || !_session.HasSubmittedRequest)
                 {
                     if (!_session.ConfigurationStale)
@@ -302,12 +302,12 @@ namespace Common.FlowField
                 if (_session.HasSameFinalInputs(current))
                     return;
 
-                FlowFieldDirtyFlags finalFlags = FlowFieldDirtyFlags.FinalRegion;
+                FlowFieldSurfaceDirtyFlags finalFlags = FlowFieldSurfaceDirtyFlags.FinalRegion;
                 try
                 {
                     Vector3 normalized = FlowFieldVectorUtility.NormalizeDefaultDirection(Owner._defaultFlowDirection);
                     if ((_session.ResolvedDefaultDirection - normalized).sqrMagnitude > VALUE_EPSILON * VALUE_EPSILON)
-                        finalFlags |= FlowFieldDirtyFlags.DefaultDirection;
+                        finalFlags |= FlowFieldSurfaceDirtyFlags.DefaultDirection;
                 }
                 catch
                 {
@@ -320,20 +320,20 @@ namespace Common.FlowField
                     _session.MarkDirty(finalFlags, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
             }
 
-            private void MarkChangedBaseInputs(in FlowFieldSessionRequest current)
+            private void MarkChangedBaseInputs(in FlowFieldSurfaceRequest current)
             {
-                FlowFieldDirtyFlags changedFlags = _session.GetInputDirtyFlags(current);
+                FlowFieldSurfaceDirtyFlags changedFlags = _session.GetInputDirtyFlags(current);
                 // Goal and obstacle scalar edits are base-field changes, but
                 // they can reuse the already-baked Surface. Only a real Grid
                 // or source/signature change makes the current Surface stale
                 // and requires an explicit full rebuild.
                 if (Owner.BakeMode == FlowFieldBakeMode.StaticBaked
-                    || (changedFlags & FlowFieldDirtyFlags.Grid) != 0)
+                    || (changedFlags & FlowFieldSurfaceDirtyFlags.Grid) != 0)
                 {
                     if (!_session.ConfigurationStale)
                         _session.MarkConfigurationStale();
                 }
-                else if (changedFlags != FlowFieldDirtyFlags.None)
+                else if (changedFlags != FlowFieldSurfaceDirtyFlags.None)
                 {
                     _session.MarkDirty(
                         changedFlags,
@@ -349,7 +349,7 @@ namespace Common.FlowField
             {
                 _session.GoalTracker.ResetWarning();
                 _session.MarkDirty(
-                    FlowFieldDirtyFlags.Goal,
+                    FlowFieldSurfaceDirtyFlags.Goal,
                     FlowFieldCellRect.Invalid,
                     FlowFieldCellRect.Invalid);
                 if (!Owner.HasConfiguredGoal)
@@ -359,7 +359,7 @@ namespace Common.FlowField
             internal override void MarkCellsDirty()
             {
                 _session.MarkDirty(
-                    FlowFieldDirtyFlags.Grid,
+                    FlowFieldSurfaceDirtyFlags.Grid,
                     FlowFieldCellRect.Invalid,
                     FlowFieldCellRect.Invalid);
                 Owner.RefreshEditorPreview();
@@ -383,7 +383,7 @@ namespace Common.FlowField
                 if (Owner.TryGetBakeLayout(out _, out FlowFieldGridSpace current))
                     _session.ObserveGrid(current);
                 _session.MarkDirty(
-                    FlowFieldDirtyFlags.Grid,
+                    FlowFieldSurfaceDirtyFlags.Grid,
                     FlowFieldCellRect.Invalid,
                     FlowFieldCellRect.Invalid);
             }

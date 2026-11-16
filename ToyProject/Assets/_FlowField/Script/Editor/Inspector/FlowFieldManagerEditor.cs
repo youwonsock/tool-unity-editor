@@ -87,25 +87,25 @@ namespace Common.FlowField.Editor
             EditorGUILayout.Space();
             bool exceedsCellLimit = DrawBakeLayout(manager);
             DrawBakeStatus(manager);
-            bool disableBakeActions = FlowFieldSurfaceBakeEditor.IsBaking || exceedsCellLimit;
+            bool disableBakeActions = FlowFieldBakeEditor.IsBaking || exceedsCellLimit;
             if (manager.BakeMode == FlowFieldBakeMode.StaticBaked)
             {
-                if (FlowFieldSurfaceBakeEditor.IsBaking)
+                if (FlowFieldBakeEditor.IsBaking)
                 {
                     EditorGUILayout.HelpBox(
-                        string.IsNullOrEmpty(FlowFieldSurfaceBakeEditor.ProgressLabel)
+                        string.IsNullOrEmpty(FlowFieldBakeEditor.ProgressLabel)
                             ? "Static Flow Bake is running."
-                            : FlowFieldSurfaceBakeEditor.ProgressLabel,
+                            : FlowFieldBakeEditor.ProgressLabel,
                         MessageType.Info);
                     if (GUILayout.Button("Cancel Static Bake"))
-                        FlowFieldSurfaceBakeEditor.CancelBake();
+                        FlowFieldBakeEditor.CancelBake();
                 }
                 using (new EditorGUI.DisabledScope(disableBakeActions))
                 {
                     using (new EditorGUILayout.HorizontalScope())
                     {
                         if (GUILayout.Button("Bake / ReBake Static Flow Field"))
-                            FlowFieldSurfaceBakeEditor.ScheduleBake(manager);
+                            FlowFieldBakeEditor.ScheduleBake(manager);
 
                         bool hasBakeAsset = manager.SpaceMode == FlowFieldSpaceMode.Volume3D
                             ? manager.VolumeStaticBakeData != null
@@ -113,7 +113,7 @@ namespace Common.FlowField.Editor
                         using (new EditorGUI.DisabledScope(!hasBakeAsset))
                         {
                             if (GUILayout.Button("Clear Bake"))
-                                FlowFieldSurfaceBakeEditor.ClearReference(manager);
+                                FlowFieldBakeEditor.ClearReference(manager);
                         }
                     }
                 }

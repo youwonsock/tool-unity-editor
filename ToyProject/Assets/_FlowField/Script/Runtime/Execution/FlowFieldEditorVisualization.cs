@@ -100,7 +100,7 @@ namespace Common.FlowField
                 || !request.Grid.TryWorldToLocalClamped(request.GoalWorld, out int x, out int z))
                 return;
 
-            int index = FlowFieldGraphTraversal.FindNearestSurfaceAnchor(request.Grid, request.View.Surface, x, z);
+            int index = FlowFieldSurfaceGraphTraversal.FindNearestSurfaceAnchor(request.Grid, request.View.Surface, x, z);
             if (index < 0)
                 return;
 

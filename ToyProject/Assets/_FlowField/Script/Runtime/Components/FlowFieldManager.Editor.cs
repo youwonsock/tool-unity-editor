@@ -6,7 +6,7 @@ namespace Common.FlowField
 {
     public partial class FlowFieldManager
     {
-        private FlowFieldSession _editorPreviewSession;
+        private FlowFieldSurfaceSession _editorPreviewSession;
 
         [ContextMenu("Clear Goal")]
         private void ClearGoalContextMenu() => SetGoal(FlowFieldGoalRequest.None);
@@ -62,9 +62,9 @@ namespace Common.FlowField
                 grid = _editorPreviewSession.CommittedGrid;
             }
 
-            FlowFieldGoalResolution goal = BakeMode == FlowFieldBakeMode.StaticBaked
+            FlowFieldSurfaceGoalResolution goal = BakeMode == FlowFieldBakeMode.StaticBaked
                 && _staticBakeData != null
-                ? new FlowFieldGoalResolution(
+                ? new FlowFieldSurfaceGoalResolution(
                     _staticBakeData.HasGoal,
                     _staticBakeData.HasGoal,
                     0,
@@ -72,7 +72,7 @@ namespace Common.FlowField
                     _staticBakeData.ResolvedGoalIndex,
                     _staticBakeData.GoalInfluenceRadius,
                     _staticBakeData.RequestedGoalWorld)
-                : FlowFieldGoalPipeline.Resolve(
+                : FlowFieldSurfaceGoalPipeline.Resolve(
                     grid,
                     _goalTransform,
                     _hasExplicitGoal,
@@ -118,18 +118,18 @@ namespace Common.FlowField
                 return;
 
             ReleaseEditorPreview();
-            _editorPreviewSession = new FlowFieldSession();
-            FlowFieldSessionSourceKind sourceKind = BakeMode == FlowFieldBakeMode.StaticBaked
-                ? FlowFieldSessionSourceKind.StaticSnapshot
-                : FlowFieldSessionSourceKind.SceneBuild;
+            _editorPreviewSession = new FlowFieldSurfaceSession();
+            FlowFieldSurfaceSourceKind sourceKind = BakeMode == FlowFieldBakeMode.StaticBaked
+                ? FlowFieldSurfaceSourceKind.StaticSnapshot
+                : FlowFieldSurfaceSourceKind.SceneBuild;
             _editorPreviewSession.Initialize(
                 BakeMode,
                 sourceKind,
-                FlowFieldSolvePolicy.Inline);
+                FlowFieldSurfaceSolvePolicy.Inline);
 
             RegisterEditorModifiers(_editorPreviewSession);
             FlowFieldSurfaceBakeSettings settings = CreateSurfaceBakeSettings();
-            FlowFieldDirtyFlags dirty = _editorPreviewSession.DirtyFlags;
+            FlowFieldSurfaceDirtyFlags dirty = _editorPreviewSession.DirtyFlags;
             _editorPreviewSession.Submit(CreateSurfaceRequest(
                 settings,
                 dirty,
@@ -142,7 +142,7 @@ namespace Common.FlowField
             _editorPreviewSession.Pump();
         }
 
-        private void RegisterEditorModifiers(FlowFieldSession session)
+        private void RegisterEditorModifiers(FlowFieldSurfaceSession session)
         {
             FlowFieldVectorModifierVolume[] volumes = Resources.FindObjectsOfTypeAll<FlowFieldVectorModifierVolume>();
             Array.Sort(volumes, (left, right) =>

@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace Common.FlowField
 {
-    /// <summary>Bake inputs, the requests built from them and the checks made before a bake.</summary>
+    /// <summary>Bake inputs and the checks made before a bake.</summary>
     public partial class FlowFieldManager
     {
         internal int CaptureBakeInputGeneration()
@@ -18,7 +18,7 @@ namespace Common.FlowField
             return _bakeInputGeneration;
         }
 
-        internal FlowFieldStaticBakeSnapshot CreateStaticBakeSnapshot(
+        internal FlowFieldSurfaceBakeSnapshot CreateStaticBakeSnapshot(
             in FlowFieldSurfaceBakeSettings settings)
         {
             if (_staticBakeData == null)
@@ -29,64 +29,6 @@ namespace Common.FlowField
                 _obstacleCheckHeight,
                 _obstacleCheckCenterOffset,
                 _obstacleClearance);
-        }
-
-        private FlowFieldGridSpace CreateGridSpace()
-        {
-            if (!TryGetBakeLayout(out _, out FlowFieldGridSpace grid))
-                throw new InvalidOperationException("Bake Bounds and Cell Size do not produce a valid grid.");
-            return grid;
-        }
-
-        internal bool TryGetVolumeLayout(out Bounds worldBounds, out FlowFieldGridSpace grid)
-            => FlowFieldBakeBoundsUtility.TryCreateVolumeWorldLayout(
-                transform.position,
-                _bakeBoundsLocal,
-                _cellSize,
-                out worldBounds,
-                out grid);
-
-        private FlowFieldVolumeRequest CreateVolumeRequest()
-        {
-            if (!TryGetVolumeLayout(out Bounds worldBounds, out FlowFieldGridSpace grid))
-                throw new InvalidOperationException("Volume Bounds and Cell Size do not produce a valid grid.");
-            return CreateVolumeRequest(
-                grid,
-                worldBounds,
-                _bakeMode,
-                _bakeMode == FlowFieldBakeMode.StaticBaked ? _volumeStaticBakeData : null);
-        }
-
-        private FlowFieldVolumeRequest CreateVolumeRequest(
-            FlowFieldGridSpace grid,
-            Bounds worldBounds,
-            FlowFieldBakeMode bakeMode,
-            FlowFieldVolumeBakeData bakeData)
-            => new FlowFieldVolumeRequest(
-                grid,
-                worldBounds,
-                bakeMode,
-                _obstacleLayer,
-                _obstacleClearance,
-                HasConfiguredGoal,
-                ConfiguredGoalWorld,
-                _goalInfluenceRadius,
-                _defaultFlowDirection,
-                bakeData,
-                CaptureBakeInputGeneration());
-
-        private void QueueVolumeRequest(bool force = false, bool requeryObstacles = false)
-        {
-            if (!_volumeSession.IsInitialized || _volumeSession.IsFaulted)
-                return;
-            FlowFieldVolumeRequest request = CreateVolumeRequest();
-            if (!force
-                && _volumeSession.TryGetLatestRequestedInput(out FlowFieldVolumeRequest latest)
-                && latest.HasSameInputs(request))
-                return;
-            // The session owns the accepted input, including a newer input
-            // submitted from its synchronous state-change callback.
-            _volumeSession.Submit(request, requeryObstacles);
         }
 
         /// <summary>
@@ -116,79 +58,6 @@ namespace Common.FlowField
             {
                 session.Dispose();
                 throw;
-            }
-        }
-
-        internal FlowFieldSurfaceBakeSettings CreateSurfaceBakeSettings()
-        {
-            if (!TryGetBakeLayout(out Bounds worldBounds, out FlowFieldGridSpace grid))
-                throw new InvalidOperationException("Bake Bounds and Cell Size do not produce a valid grid.");
-            return new FlowFieldSurfaceBakeSettings(
-                grid,
-                worldBounds,
-                _groundBakeLayer,
-                _maxSurfaceSlope,
-                _maxStepHeight);
-        }
-
-        internal bool TryGetBakeLayout(out Bounds worldBounds, out FlowFieldGridSpace grid)
-            => FlowFieldBakeBoundsUtility.TryCreateWorldLayout(
-                transform.position,
-                _bakeBoundsLocal,
-                _cellSize,
-                out worldBounds,
-                out grid);
-
-        private FlowFieldSessionRequest CreateSurfaceRequest(
-            FlowFieldSurfaceBakeSettings settings,
-            FlowFieldDirtyFlags dirtyFlags,
-            FlowFieldCellRect dirtyFinalRegion,
-            FlowFieldCellRect dirtyObstacleRegion)
-        {
-            if (BakeMode == FlowFieldBakeMode.StaticBaked)
-            {
-                return FlowFieldSessionRequest.ForStaticSnapshot(
-                    settings,
-                    _staticBakeData,
-                    CreateStaticBakeSnapshot(settings),
-                    _obstacleLayer,
-                    _obstacleCheckHeight,
-                    _obstacleCheckCenterOffset,
-                    _obstacleClearance,
-                    _defaultFlowDirection,
-                    dirtyFlags);
-            }
-
-            return FlowFieldSessionRequest.ForSceneBuild(
-                settings,
-                _obstacleLayer,
-                _obstacleCheckHeight,
-                _obstacleCheckCenterOffset,
-                _obstacleClearance,
-                _enableUnregisteredObstacleSweep,
-                ResolveConfiguredGoal(settings.Grid),
-                _defaultFlowDirection,
-                dirtyFlags,
-                dirtyFinalRegion,
-                dirtyObstacleRegion);
-        }
-
-        private bool TryCreateCurrentSessionRequest(out FlowFieldSessionRequest request)
-        {
-            request = default;
-            try
-            {
-                FlowFieldSurfaceBakeSettings settings = CreateSurfaceBakeSettings();
-                request = CreateSurfaceRequest(
-                    settings,
-                    FlowFieldDirtyFlags.None,
-                    FlowFieldCellRect.Invalid,
-                    FlowFieldCellRect.Invalid);
-                return true;
-            }
-            catch
-            {
-                return false;
             }
         }
 
