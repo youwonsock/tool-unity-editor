@@ -9,7 +9,7 @@ using static Common.FlowField.FlowFieldVolumeNavigation;
 
 namespace Common.FlowField
 {
-    internal sealed partial class FlowFieldVolumeSession : FlowFieldSessionBase
+    internal sealed partial class FlowFieldVolumeSession : FlowFieldSessionBase, IFlowFieldSampleSafety
     {
         private const int CellsPerStep = FlowFieldVolumeNavigation.CellsPerStep;
         private const int ArrayElementsPerStep = FlowFieldVolumeNavigation.ArrayElementsPerStep;

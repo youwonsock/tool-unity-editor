@@ -54,24 +54,16 @@ namespace Common.FlowField
             return info.IsValid;
         }
 
-        private enum SampleFailure
-        {
-            None,
-            NotReady,
-            NonFinite,
-            OutOfGrid,
-            Inconsistent,
-        }
-
         internal override FlowFieldSample Sample(Vector3 worldPosition)
         {
-            if (TrySampleCore(worldPosition, out FlowFieldSample sample, out SampleFailure failure))
+            FlowFieldSampleStatus status = TrySampleCore(worldPosition, out FlowFieldSample sample);
+            if (status == FlowFieldSampleStatus.Sampled)
                 return sample;
-            throw failure switch
+            throw status switch
             {
-                SampleFailure.NotReady => new InvalidOperationException("FlowField session is not ready."),
-                SampleFailure.NonFinite => new ArgumentOutOfRangeException(nameof(worldPosition)),
-                SampleFailure.OutOfGrid => new ArgumentOutOfRangeException(
+                FlowFieldSampleStatus.NotReady => new InvalidOperationException("FlowField session is not ready."),
+                FlowFieldSampleStatus.NonFinite => new ArgumentOutOfRangeException(nameof(worldPosition)),
+                FlowFieldSampleStatus.OutOfGrid => new ArgumentOutOfRangeException(
                     nameof(worldPosition),
                     "Position is outside the FlowField grid."),
                 _ => new InvalidOperationException("FlowField sampling data is inconsistent."),
@@ -83,121 +75,92 @@ namespace Common.FlowField
         /// every physics step, never pays for one on an ordinary miss. Sample
         /// turns the failure into the exception it has always thrown.
         /// </summary>
-        private bool TrySampleCore(Vector3 worldPosition, out FlowFieldSample sample, out SampleFailure failure)
+        private FlowFieldSampleStatus TrySampleCore(Vector3 worldPosition, out FlowFieldSample sample)
         {
             sample = FlowFieldSample.Stopped;
-            failure = SampleFailure.None;
             if (!IsReady)
-            {
-                failure = SampleFailure.NotReady;
+                return FlowFieldSampleStatus.NotReady;
+            return FlowFieldSampler.Sample(_fieldStore.Field, worldPosition, this, out sample);
+        }
+
+        /// <summary>
+        /// The staging workspace already knows about obstacles the published
+        /// field was not built with. A mover inside one escapes it, and one
+        /// whose next step a change has blocked stops.
+        /// </summary>
+        bool IFlowFieldSampleSafety.TryOverride(
+            FlowFieldField field,
+            int sampleIndex,
+            Vector3 worldPosition,
+            in FlowFieldSample published,
+            out FlowFieldSample sample)
+        {
+            sample = published;
+            FlowFieldGridSpace sampleGrid = field.Grid;
+            int latestX = 0;
+            int latestZ = 0;
+            bool latestLayoutMatchesSample = _state.Grid.IsValid
+                && _state.Workspace != null
+                && _state.Workspace.Capacity == _state.Grid.CellCount
+                && sampleGrid.MatchesBounds(_state.Grid)
+                && ReferenceEquals(field.Surface, _state.Surface)
+                && _state.Grid.TryWorldToLocal(worldPosition, out latestX, out latestZ);
+            if (!latestLayoutMatchesSample)
                 return false;
+
+            int latestIndex = _state.Grid.ToFlatIndex(latestX, latestZ);
+            FlowFieldSurfaceWorkspace latestWorkspace = _state.Workspace;
+            FlowFieldSurfaceData latestSurface = _state.Surface;
+            bool obstacleProbeActive = IsRebuilding || _obstaclePipeline.HasStagedDynamicProbe;
+            bool latestBlocked = latestWorkspace.Blocked[latestIndex];
+            bool stagedObstacleBlocksSample = _obstaclePipeline.HasStagedDynamicProbe
+                && latestWorkspace.ObstacleScratch[latestIndex];
+            if (obstacleProbeActive && latestBlocked)
+            {
+                sample = FlowFieldSurfaceCellSampler.TrySampleEscape(
+                        _state.Grid,
+                        latestSurface,
+                        latestWorkspace,
+                        worldPosition,
+                        out FlowFieldSample escapeSample)
+                    ? escapeSample
+                    : Stop(published);
+                return true;
             }
-            if (!FlowFieldGridSpace.IsFinite(worldPosition))
+            if (obstacleProbeActive && stagedObstacleBlocksSample)
             {
-                failure = SampleFailure.NonFinite;
-                return false;
+                sample = Stop(published);
+                return true;
             }
 
-            FlowFieldGridSpace sampleGrid = _fieldStore.Grid;
-            FlowFieldSurfaceData sampleSurface = _fieldStore.Surface;
-            if (!sampleGrid.ContainsWorldPosition(worldPosition))
-            {
-                failure = SampleFailure.OutOfGrid;
+            int next = field.NextCells[sampleIndex];
+            if (next < 0)
                 return false;
-            }
-            if (!_fieldStore.TrySample(worldPosition, out sample))
+            bool nextBlocked = next >= sampleGrid.CellCount
+                || latestWorkspace.Blocked[next]
+                || _obstaclePipeline.HasStagedDynamicProbe
+                    && latestWorkspace.ObstacleScratch[next]
+                || latestSurface == null
+                || !latestSurface.IsSurfaceValid(next);
+            bool topologyChanged = false;
+            if (!IsRebuilding && !nextBlocked && next != sampleIndex)
             {
-                sample = FlowFieldSample.Stopped;
-                failure = SampleFailure.Inconsistent;
+                sampleGrid.FromFlatIndex(sampleIndex, out int currentX, out int currentZ);
+                sampleGrid.FromFlatIndex(next, out int nextX, out int nextZ);
+                int directionIndex = FlowFieldNeighborUtility.FindDirectionIndex(nextX - currentX, nextZ - currentZ);
+                topologyChanged = directionIndex < 0
+                    || latestWorkspace.TopologyMasks == null
+                    || sampleIndex >= latestWorkspace.TopologyMasks.Length
+                    || (latestWorkspace.TopologyMasks[sampleIndex] & (1 << directionIndex)) == 0;
+            }
+            if (!nextBlocked && !topologyChanged)
                 return false;
-            }
-
-            if (sampleGrid.TryWorldToLocal(worldPosition, out int sampleX, out int sampleZ))
-            {
-                int sampleIndex = sampleGrid.ToFlatIndex(sampleX, sampleZ);
-                int latestX = 0;
-                int latestZ = 0;
-                bool latestLayoutMatchesSample = _state.Grid.IsValid
-                    && _state.Workspace != null
-                    && _state.Workspace.Capacity == _state.Grid.CellCount
-                    && sampleGrid.MatchesBounds(_state.Grid)
-                    && ReferenceEquals(sampleSurface, _state.Surface)
-                    && _state.Grid.TryWorldToLocal(worldPosition, out latestX, out latestZ);
-                if (latestLayoutMatchesSample)
-                {
-                    int latestIndex = _state.Grid.ToFlatIndex(latestX, latestZ);
-                    FlowFieldSurfaceWorkspace latestWorkspace = _state.Workspace;
-                    FlowFieldSurfaceData latestSurface = _state.Surface;
-                    bool obstacleProbeActive = IsRebuilding || _obstaclePipeline.HasStagedDynamicProbe;
-                    bool latestBlocked = latestWorkspace.Blocked[latestIndex];
-                    bool stagedObstacleBlocksSample = _obstaclePipeline.HasStagedDynamicProbe
-                        && latestWorkspace.ObstacleScratch[latestIndex];
-                    if (obstacleProbeActive && latestBlocked)
-                    {
-                        if (FlowFieldSurfaceCellSampler.TrySampleEscape(
-                                _state.Grid,
-                                latestSurface,
-                                latestWorkspace,
-                                worldPosition,
-                                out FlowFieldSample escapeSample))
-                        {
-                            sample = escapeSample;
-                            return true;
-                        }
-                        sample = new FlowFieldSample(
-                            Vector3.zero,
-                            0f,
-                            sample.SurfaceNormal,
-                            sample.HasSurface,
-                            sample.HasCell);
-                        return true;
-                    }
-                    if (obstacleProbeActive && stagedObstacleBlocksSample)
-                    {
-                        sample = new FlowFieldSample(
-                            Vector3.zero,
-                            0f,
-                            sample.SurfaceNormal,
-                            sample.HasSurface,
-                            sample.HasCell);
-                        return true;
-                    }
-
-                    int next = _fieldStore.NextCells[sampleIndex];
-                    if (next >= 0)
-                    {
-                        bool nextBlocked = next >= sampleGrid.CellCount
-                            || latestWorkspace.Blocked[next]
-                            || _obstaclePipeline.HasStagedDynamicProbe
-                                && latestWorkspace.ObstacleScratch[next]
-                            || latestSurface == null
-                            || !latestSurface.IsSurfaceValid(next);
-                        bool topologyChanged = false;
-                        if (!IsRebuilding && !nextBlocked && next != sampleIndex)
-                        {
-                            sampleGrid.FromFlatIndex(sampleIndex, out int currentX, out int currentZ);
-                            sampleGrid.FromFlatIndex(next, out int nextX, out int nextZ);
-                            int directionIndex = FlowFieldNeighborUtility.FindDirectionIndex(nextX - currentX, nextZ - currentZ);
-                            topologyChanged = directionIndex < 0
-                                || latestWorkspace.TopologyMasks == null
-                                || sampleIndex >= latestWorkspace.TopologyMasks.Length
-                                || (latestWorkspace.TopologyMasks[sampleIndex] & (1 << directionIndex)) == 0;
-                        }
-                        if (nextBlocked || topologyChanged)
-                        {
-                            sample = new FlowFieldSample(
-                                Vector3.zero,
-                                0f,
-                                sample.SurfaceNormal,
-                                sample.HasSurface,
-                                sample.HasCell);
-                            return true;
-                        }
-                    }
-                }
-            }
+            sample = Stop(published);
             return true;
         }
+
+        private static FlowFieldSample Stop(in FlowFieldSample sample)
+            => new FlowFieldSample(Vector3.zero, 0f, sample.SurfaceNormal, sample.HasSurface, sample.HasCell);
 
         internal override bool TrySample(Vector3 worldPosition, out FlowFieldSample sample)
         {
@@ -211,7 +174,7 @@ namespace Common.FlowField
             // miss returns false from the core without throwing.
             try
             {
-                return TrySampleCore(worldPosition, out sample, out _);
+                return TrySampleCore(worldPosition, out sample) == FlowFieldSampleStatus.Sampled;
             }
             catch (ArgumentOutOfRangeException)
             {

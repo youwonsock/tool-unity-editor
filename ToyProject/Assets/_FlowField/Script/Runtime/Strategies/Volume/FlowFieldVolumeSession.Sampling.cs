@@ -13,28 +13,43 @@ namespace Common.FlowField
     internal sealed partial class FlowFieldVolumeSession
     {
         internal override bool TrySample(Vector3 worldPosition, out FlowFieldSample sample)
+            => TrySampleCore(worldPosition, out sample) == FlowFieldSampleStatus.Sampled;
+
+        private FlowFieldSampleStatus TrySampleCore(Vector3 worldPosition, out FlowFieldSample sample)
         {
             sample = FlowFieldSample.Stopped;
-            if (!IsReady || !FlowFieldGridSpace.IsFinite(worldPosition))
-                return false;
-
-            VolumeFieldData field = _committed;
+            if (!IsReady)
+                return FlowFieldSampleStatus.NotReady;
+            if (!FlowFieldGridSpace.IsFinite(worldPosition))
+                return FlowFieldSampleStatus.NonFinite;
             // A newly accepted grid/source invalidates sampling from the
             // previous publication immediately. Ordinary Goal/obstacle
             // rebuilds keep the last same-source result available until the
             // replacement is committed.
             if (_requests.HasLatest
-                && !field.Request.HasSameGrid(_requests.Latest))
-                return false;
-            if (!field.Grid.ContainsWorldPosition(worldPosition)
-                || !field.Grid.TryWorldToLocal(worldPosition, out int x, out int y, out int z))
-                return false;
+                && !_committed.Request.HasSameGrid(_requests.Latest))
+                return FlowFieldSampleStatus.NotReady;
+            return FlowFieldSampler.Sample(_committed, worldPosition, this, out sample);
+        }
 
-            int index = field.Grid.ToFlatIndex(x, y, z);
+        /// <summary>
+        /// Stops a mover in a region whose obstacles changed since the build,
+        /// and lets one inside a blocked cell escape unless that path is unsafe.
+        /// </summary>
+        bool IFlowFieldSampleSafety.TryOverride(
+            FlowFieldField published,
+            int index,
+            Vector3 worldPosition,
+            in FlowFieldSample sample,
+            out FlowFieldSample result)
+        {
+            var field = (VolumeFieldData)published;
+            result = sample;
+            field.Grid.FromFlatIndex(index, out int x, out int y, out int z);
             Vector3 center = field.Grid.LocalToWorldCenter(x, y, z);
             if (_safety.IsLatestCellUnknown(field, center))
             {
-                sample = new FlowFieldSample(Vector3.zero, 0f, Vector3.zero, false, true);
+                result = Stopped;
                 return true;
             }
 
@@ -42,34 +57,26 @@ namespace Common.FlowField
             {
                 if (_safety.IsEscapePathUnsafe(field, index))
                 {
-                    sample = new FlowFieldSample(Vector3.zero, 0f, Vector3.zero, false, true);
+                    result = Stopped;
                     return true;
                 }
                 Vector3 escape = field.EscapeDirections[index];
-                sample = new FlowFieldSample(escape, escape.sqrMagnitude > 0.00000001f ? 1f : 0f, Vector3.zero, false, true);
+                result = new FlowFieldSample(escape, escape.sqrMagnitude > 0.00000001f ? 1f : 0f, Vector3.zero, false, true);
                 return true;
             }
 
             int next = field.NextCells[index];
-            if (next >= 0 && _safety.IsLatestPathUnsafe(field, index, next))
+            if (next >= 0 && _safety.IsLatestPathUnsafe(field, index, next)
+                || next == -1 && _safety.IsDefaultDirectionPathUnsafe(field, index))
             {
-                sample = new FlowFieldSample(Vector3.zero, 0f, Vector3.zero, false, true);
+                result = Stopped;
                 return true;
             }
-            if (next == -1 && _safety.IsDefaultDirectionPathUnsafe(field, index))
-            {
-                sample = new FlowFieldSample(Vector3.zero, 0f, Vector3.zero, false, true);
-                return true;
-            }
-
-            sample = new FlowFieldSample(
-                field.FinalDirections[index],
-                field.FinalSpeeds[index],
-                Vector3.zero,
-                false,
-                true);
-            return true;
+            return false;
         }
+
+        // A cell exists here, but nothing may move through it yet.
+        private static FlowFieldSample Stopped => new FlowFieldSample(Vector3.zero, 0f, Vector3.zero, false, true);
 
         internal override FlowFieldSample Sample(Vector3 worldPosition)
         {

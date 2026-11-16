@@ -8,7 +8,7 @@ namespace Common.FlowField
     /// in their existing files; this class owns only state, resource lifetime,
     /// request coalescing and the solve backend boundary.
     /// </summary>
-    internal sealed partial class FlowFieldSurfaceSession : FlowFieldSessionBase
+    internal sealed partial class FlowFieldSurfaceSession : FlowFieldSessionBase, IFlowFieldSampleSafety
     {
         private readonly FlowFieldSurfaceState _state = new FlowFieldSurfaceState();
         private readonly FlowFieldSurfaceFieldStore _fieldStore = new FlowFieldSurfaceFieldStore();
