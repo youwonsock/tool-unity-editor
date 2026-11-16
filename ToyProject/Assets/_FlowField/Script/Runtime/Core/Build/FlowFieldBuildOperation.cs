@@ -9,7 +9,12 @@ namespace Common.FlowField
     /// </summary>
     public static class FlowFieldBuildSettings
     {
-        private static double _budgetMilliseconds = 2d;
+        private const double DEFAULT_BUDGET_MILLISECONDS = 2d;
+        private static double _budgetMilliseconds = DEFAULT_BUDGET_MILLISECONDS;
+
+        // A budget set during one Play session must not leak into the next
+        // when domain reload is disabled.
+        internal static void ResetToDefault() => _budgetMilliseconds = DEFAULT_BUDGET_MILLISECONDS;
 
         public static double BudgetMilliseconds
         {

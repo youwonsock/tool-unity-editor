@@ -26,6 +26,19 @@ namespace Common.FlowField
 
         internal static void ResetLongestPump() => LongestPumpMilliseconds = 0d;
 
+        /// <summary>
+        /// Clears the round-robin position and the probe reading at the start of
+        /// a Play session. With domain reload disabled, static fields otherwise
+        /// carry over from the previous one. Registered operations stay: each
+        /// session tracks its own registration and unregisters when it stops.
+        /// </summary>
+        internal static void ResetForNewPlaySession()
+        {
+            _cursor = 0;
+            _pumping = false;
+            LongestPumpMilliseconds = 0d;
+        }
+
         internal static void Register(IFlowFieldBuildOperation operation)
         {
             if (operation == null || Operations.Contains(operation))

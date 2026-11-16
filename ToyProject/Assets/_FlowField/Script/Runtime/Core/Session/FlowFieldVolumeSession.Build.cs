@@ -60,6 +60,16 @@ namespace Common.FlowField
             return false;
         }
 
+        // The solve job holds pinned pointers into the build arrays, which the
+        // Job safety system cannot see. No other stage may run until it ends.
+        [Conditional("UNITY_ASSERTIONS")]
+        private static void AssertSolveIdle(BuildContext build, string stage)
+        {
+            if (build.SolveRunning)
+                UnityEngine.Debug.LogAssertion(
+                    $"[FlowField] Volume {stage} ran while its solve job was running.");
+        }
+
         private bool StepSolve(BuildContext build)
         {
             if (!build.SolveRunning)
@@ -72,6 +82,7 @@ namespace Common.FlowField
 
         private bool StepStaticData(BuildContext build)
         {
+            AssertSolveIdle(build, nameof(StepStaticData));
             FlowFieldVolumeBakeData data = build.Request.StaticBakeData;
             int end = Math.Min(build.Cursor + ArrayElementsPerStep, build.Count);
             Vector3 defaultDirection = FlowFieldVectorUtility.NormalizeDefaultDirection(build.Request.DefaultDirection);
@@ -102,6 +113,7 @@ namespace Common.FlowField
 
         private bool StepAllocate(BuildContext build)
         {
+            AssertSolveIdle(build, nameof(StepAllocate));
             // Keep large managed allocations as individually observable work
             // units. A build can therefore yield between arrays instead of
             // constructing the entire Volume3D staging graph in one frame.
@@ -141,6 +153,7 @@ namespace Common.FlowField
 
         private bool StepObstacles(BuildContext build)
         {
+            AssertSolveIdle(build, nameof(StepObstacles));
             if (!build.ObstaclesSynced)
             {
                 Physics.SyncTransforms();
@@ -183,6 +196,7 @@ namespace Common.FlowField
 
         private bool StepModifiers(BuildContext build)
         {
+            AssertSolveIdle(build, nameof(StepModifiers));
             // The final field starts as the base field, so only cells a Modifier
             // can reach need to be walked. They are rarely more than a small part.
             if (build.ModifierCells == null)

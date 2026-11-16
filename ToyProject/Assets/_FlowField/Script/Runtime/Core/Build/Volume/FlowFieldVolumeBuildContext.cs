@@ -165,14 +165,18 @@ namespace Common.FlowField
             return written;
         }
 
-        /// <summary>Solves on a worker thread. What follows only from the obstacles is kept when their result was reused.</summary>
+        /// <summary>
+        /// Solves on worker threads as one job chain, parallel where a stage
+        /// writes only its own cell. What follows only from the obstacles is
+        /// kept when their result was reused.
+        /// </summary>
         internal unsafe void StartSolve()
         {
             FlowFieldGridSpace grid = Request.Grid;
-            _solvePins = new FlowFieldPinnedArrays(FlowFieldVolumeSolveJob.PinnedArrayCount + 2);
+            _solvePins = new FlowFieldPinnedArrays(FlowFieldVolumeSolveData.PinnedArrayCount + 2);
             _solveCancel = new int[1];
             _solveGoal = new[] { -1 };
-            var job = new FlowFieldVolumeSolveJob
+            var data = new FlowFieldVolumeSolveData
             {
                 Blocked = _solvePins.Pin(Blocked),
                 Topology = _solvePins.Pin(Topology),
@@ -190,8 +194,6 @@ namespace Common.FlowField
                 Height = grid.Height,
                 Depth = grid.Depth,
                 CellSize = grid.CellSize,
-                BuildTopology = !ReusesObstacleQueries,
-                BuildEscape = !ReusesObstacleQueries,
                 HasGoal = Request.HasGoal,
                 RequestedGoal = Request.HasGoal ? Request.GoalCell : -1,
                 GoalInfluenceRadius = Request.GoalInfluenceRadius,
@@ -199,14 +201,14 @@ namespace Common.FlowField
             };
             for (int direction = 0; direction < FlowFieldNeighborUtility.VolumeCount; direction++)
             {
-                job.DeltaX[direction] = FlowFieldNeighborUtility.DeltaX[direction];
-                job.DeltaY[direction] = FlowFieldNeighborUtility.DeltaY[direction];
-                job.DeltaZ[direction] = FlowFieldNeighborUtility.DeltaZ[direction];
+                data.DeltaX[direction] = FlowFieldNeighborUtility.DeltaX[direction];
+                data.DeltaY[direction] = FlowFieldNeighborUtility.DeltaY[direction];
+                data.DeltaZ[direction] = FlowFieldNeighborUtility.DeltaZ[direction];
             }
             for (int face = 0; face < FlowFieldNeighborUtility.VolumeFaceDirections.Length; face++)
-                job.FaceDirections[face] = FlowFieldNeighborUtility.VolumeFaceDirections[face];
+                data.FaceDirections[face] = FlowFieldNeighborUtility.VolumeFaceDirections[face];
 
-            SolveHandle = job.Schedule();
+            SolveHandle = data.ScheduleChain(buildObstacleResults: !ReusesObstacleQueries);
             SolveRunning = true;
             JobHandle.ScheduleBatchedJobs();
         }

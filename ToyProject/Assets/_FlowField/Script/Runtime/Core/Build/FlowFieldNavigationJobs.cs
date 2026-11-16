@@ -37,16 +37,20 @@ namespace Common.FlowField
     }
 
     /// <summary>
-    /// Everything between the obstacle queries and the Modifiers of one Volume3D
-    /// build: topology, Goal resolution, BFS, directions and escape directions.
+    /// What the jobs of one Volume3D solve share: the pinned arrays, the grid
+    /// and the request. Everything between the obstacle queries and the
+    /// Modifiers runs as one chain of jobs: topology, Goal resolution, BFS,
+    /// directions and escape directions. Stages that write only their own cell
+    /// run in parallel chunks. The searches stay sequential, so the result is
+    /// identical to a single-threaded solve.
     /// </summary>
-    [BurstCompile(FloatMode = FloatMode.Strict, FloatPrecision = FloatPrecision.Standard)]
-    internal unsafe struct FlowFieldVolumeSolveJob : IJob
+    internal unsafe struct FlowFieldVolumeSolveData
     {
-        private const int NeighborCount = FlowFieldNeighborUtility.VolumeCount;
-        private const int MaxCorners = 96;
-        private const int CancelCheckInterval = 4096;
-
+        internal const int NeighborCount = FlowFieldNeighborUtility.VolumeCount;
+        internal const int MaxCorners = 96;
+        // Cells per parallel work item. Every stage also checks for a cancel
+        // request this often.
+        internal const int ChunkSize = 4096;
         internal const int Unreachable = int.MaxValue;
         internal const int PinnedArrayCount = 10;
 
@@ -60,7 +64,7 @@ namespace Common.FlowField
         [NativeDisableUnsafePtrRestriction] internal int* Costs;
         [NativeDisableUnsafePtrRestriction] internal int* Queue;
         [NativeDisableUnsafePtrRestriction] internal bool* Influence;
-        // One-element arrays shared with the owner: its cancel request and the Goal this job resolved.
+        // One-element arrays shared with the owner: its cancel request and the Goal the chain resolved.
         [NativeDisableUnsafePtrRestriction] internal int* Cancel;
         [NativeDisableUnsafePtrRestriction] internal int* ResolvedGoal;
 
@@ -68,8 +72,6 @@ namespace Common.FlowField
         internal int Height;
         internal int Depth;
         internal float CellSize;
-        internal bool BuildTopology;
-        internal bool BuildEscape;
         internal bool HasGoal;
         internal int RequestedGoal;
         internal float GoalInfluenceRadius;
@@ -79,38 +81,21 @@ namespace Common.FlowField
         internal fixed int DeltaZ[NeighborCount];
         internal fixed int FaceDirections[6];
 
-        private int Count => Width * Height * Depth;
+        internal int Count => Width * Height * Depth;
 
-        public void Execute()
+        internal int ChunkCount => (Count + ChunkSize - 1) / ChunkSize;
+
+        internal bool Cancelled => Volatile.Read(ref *Cancel) != 0;
+
+        internal void ChunkRange(int chunk, out int start, out int end)
         {
-            for (int index = 0; index < Count; index++)
-            {
-                Next[index] = -1;
-                Costs[index] = Unreachable;
-                Influence[index] = false;
-            }
-
-            if (BuildTopology)
-                RunTopology();
-            if (Cancelled)
-                return;
-            int goal = ResolveGoal();
-            *ResolvedGoal = goal;
-            if (goal >= 0)
-                RunBfs(goal);
-            if (Cancelled)
-                return;
-            RunDirections(goal);
-            if (!BuildEscape || Cancelled)
-                return;
-            RunEscape();
+            start = chunk * ChunkSize;
+            end = System.Math.Min(start + ChunkSize, Count);
         }
 
-        private bool Cancelled => Volatile.Read(ref *Cancel) != 0;
+        internal int Flat(int x, int y, int z) => x + Width * (z + Depth * y);
 
-        private int Flat(int x, int y, int z) => x + Width * (z + Depth * y);
-
-        private void Unflatten(int index, out int x, out int y, out int z)
+        internal void Unflatten(int index, out int x, out int y, out int z)
         {
             y = index / (Width * Depth);
             int layer = index - y * Width * Depth;
@@ -118,63 +103,10 @@ namespace Common.FlowField
             x = layer - z * Width;
         }
 
-        private bool InBounds(int x, int y, int z)
+        internal bool InBounds(int x, int y, int z)
             => x >= 0 && x < Width && y >= 0 && y < Height && z >= 0 && z < Depth;
 
-        private void RunTopology()
-        {
-            int* neighbor = stackalloc int[NeighborCount];
-            int* cornerStart = stackalloc int[NeighborCount + 1];
-            int* corner = stackalloc int[MaxCorners];
-            BuildInteriorOffsets(neighbor, cornerStart, corner);
-
-            for (int index = 0; index < Count; index++)
-            {
-                if ((index & (CancelCheckInterval - 1)) == 0 && Cancelled)
-                    return;
-                if (Blocked[index])
-                {
-                    Next[index] = -2;
-                    GoalFlags[index] = FlowFieldGoalFlags.None;
-                    Directions[index] = Vector3.zero;
-                    Speeds[index] = 0f;
-                    continue;
-                }
-
-                Unflatten(index, out int x, out int y, out int z);
-                uint mask = 0u;
-                if (x > 0 && x < Width - 1 && y > 0 && y < Height - 1 && z > 0 && z < Depth - 1)
-                {
-                    for (int direction = 0; direction < NeighborCount; direction++)
-                    {
-                        if (Blocked[index + neighbor[direction]])
-                            continue;
-                        bool open = true;
-                        for (int i = cornerStart[direction]; i < cornerStart[direction + 1]; i++)
-                        {
-                            if (Blocked[index + corner[i]])
-                            {
-                                open = false;
-                                break;
-                            }
-                        }
-                        if (open)
-                            mask |= 1u << direction;
-                    }
-                }
-                else
-                {
-                    for (int direction = 0; direction < NeighborCount; direction++)
-                    {
-                        if (CanTraverse(x, y, z, direction))
-                            mask |= 1u << direction;
-                    }
-                }
-                Topology[index] = mask;
-            }
-        }
-
-        private void BuildInteriorOffsets(int* neighbor, int* cornerStart, int* corner)
+        internal void BuildInteriorOffsets(int* neighbor, int* cornerStart, int* corner)
         {
             int count = 0;
             for (int direction = 0; direction < NeighborCount; direction++)
@@ -199,7 +131,7 @@ namespace Common.FlowField
             cornerStart[NeighborCount] = count;
         }
 
-        private bool CanTraverse(int x, int y, int z, int direction)
+        internal bool CanTraverse(int x, int y, int z, int direction)
         {
             int dx = DeltaX[direction];
             int dy = DeltaY[direction];
@@ -224,138 +156,308 @@ namespace Common.FlowField
             return true;
         }
 
-        private int ResolveGoal()
+        internal Vector3 StepDirection(int direction)
+            => Normalized(DeltaX[direction], DeltaY[direction], DeltaZ[direction]);
+
+        // Same arithmetic as Vector3.normalized, which keeps published values unchanged.
+        internal static Vector3 Normalized(int x, int y, int z)
         {
-            if (!HasGoal)
-                return -1;
-            int goal = RequestedGoal;
-            if (Blocked[goal])
+            float length = (float)System.Math.Sqrt((float)x * x + (float)y * y + (float)z * z);
+            return new Vector3(x / length, y / length, z / length);
+        }
+
+        /// <summary>
+        /// Schedules the whole solve. With reused obstacle queries, Topology and
+        /// EscapeDirections are the published arrays, so their stages are left out.
+        /// </summary>
+        internal JobHandle ScheduleChain(bool buildObstacleResults)
+        {
+            int chunks = ChunkCount;
+            JobHandle handle = new FlowFieldVolumeResetJob { Data = this }.Schedule(chunks, 1);
+            if (buildObstacleResults)
+                handle = new FlowFieldVolumeTopologyJob { Data = this }.Schedule(chunks, 1, handle);
+            handle = new FlowFieldVolumeGoalJob { Data = this }.Schedule(handle);
+            handle = new FlowFieldVolumeInfluenceJob { Data = this }.Schedule(chunks, 1, handle);
+            handle = new FlowFieldVolumeBfsJob { Data = this }.Schedule(handle);
+            handle = new FlowFieldVolumeDirectionsJob { Data = this }.Schedule(chunks, 1, handle);
+            if (buildObstacleResults)
+                handle = new FlowFieldVolumeEscapeJob { Data = this }.Schedule(handle);
+            return handle;
+        }
+    }
+
+    [BurstCompile(FloatMode = FloatMode.Strict, FloatPrecision = FloatPrecision.Standard)]
+    internal unsafe struct FlowFieldVolumeResetJob : IJobParallelFor
+    {
+        internal FlowFieldVolumeSolveData Data;
+
+        public void Execute(int chunk)
+        {
+            Data.ChunkRange(chunk, out int start, out int end);
+            for (int index = start; index < end; index++)
             {
-                goal = -1;
-                long nearest = long.MaxValue;
-                Unflatten(RequestedGoal, out int rx, out int ry, out int rz);
-                for (int index = 0; index < Count; index++)
+                Data.Next[index] = -1;
+                Data.Costs[index] = FlowFieldVolumeSolveData.Unreachable;
+                Data.Influence[index] = false;
+            }
+        }
+    }
+
+    [BurstCompile(FloatMode = FloatMode.Strict, FloatPrecision = FloatPrecision.Standard)]
+    internal unsafe struct FlowFieldVolumeTopologyJob : IJobParallelFor
+    {
+        private const int NeighborCount = FlowFieldVolumeSolveData.NeighborCount;
+
+        internal FlowFieldVolumeSolveData Data;
+
+        public void Execute(int chunk)
+        {
+            if (Data.Cancelled)
+                return;
+            int* neighbor = stackalloc int[NeighborCount];
+            int* cornerStart = stackalloc int[NeighborCount + 1];
+            int* corner = stackalloc int[FlowFieldVolumeSolveData.MaxCorners];
+            Data.BuildInteriorOffsets(neighbor, cornerStart, corner);
+
+            int width = Data.Width;
+            int height = Data.Height;
+            int depth = Data.Depth;
+            Data.ChunkRange(chunk, out int start, out int end);
+            for (int index = start; index < end; index++)
+            {
+                if (Data.Blocked[index])
                 {
-                    if (Blocked[index])
-                        continue;
-                    Unflatten(index, out int x, out int y, out int z);
-                    long dx = x - rx;
-                    long dy = y - ry;
-                    long dz = z - rz;
-                    long distance = dx * dx + dy * dy + dz * dz;
-                    // Indices rise, so the lowest index already wins a tie.
-                    if (distance < nearest)
+                    // A blocked cell keeps its previous Topology value, as before.
+                    Data.Next[index] = -2;
+                    Data.GoalFlags[index] = FlowFieldGoalFlags.None;
+                    Data.Directions[index] = Vector3.zero;
+                    Data.Speeds[index] = 0f;
+                    continue;
+                }
+
+                Data.Unflatten(index, out int x, out int y, out int z);
+                uint mask = 0u;
+                if (x > 0 && x < width - 1 && y > 0 && y < height - 1 && z > 0 && z < depth - 1)
+                {
+                    for (int direction = 0; direction < NeighborCount; direction++)
                     {
-                        nearest = distance;
-                        goal = index;
+                        if (Data.Blocked[index + neighbor[direction]])
+                            continue;
+                        bool open = true;
+                        for (int i = cornerStart[direction]; i < cornerStart[direction + 1]; i++)
+                        {
+                            if (Data.Blocked[index + corner[i]])
+                            {
+                                open = false;
+                                break;
+                            }
+                        }
+                        if (open)
+                            mask |= 1u << direction;
                     }
                 }
-                if (goal < 0)
-                    return -1;
+                else
+                {
+                    for (int direction = 0; direction < NeighborCount; direction++)
+                    {
+                        if (Data.CanTraverse(x, y, z, direction))
+                            mask |= 1u << direction;
+                    }
+                }
+                Data.Topology[index] = mask;
             }
+        }
+    }
 
-            Unflatten(goal, out int gx, out int gy, out int gz);
-            double radiusSqr = (double)GoalInfluenceRadius * GoalInfluenceRadius;
-            for (int index = 0; index < Count; index++)
+    /// <summary>Resolves the Goal cell. A blocked Goal moves to the nearest open cell, lowest index on a tie.</summary>
+    [BurstCompile(FloatMode = FloatMode.Strict, FloatPrecision = FloatPrecision.Standard)]
+    internal unsafe struct FlowFieldVolumeGoalJob : IJob
+    {
+        internal FlowFieldVolumeSolveData Data;
+
+        public void Execute()
+        {
+            if (Data.Cancelled)
+                return;
+            *Data.ResolvedGoal = Resolve();
+        }
+
+        private int Resolve()
+        {
+            if (!Data.HasGoal)
+                return -1;
+            int goal = Data.RequestedGoal;
+            if (!Data.Blocked[goal])
+                return goal;
+
+            goal = -1;
+            long nearest = long.MaxValue;
+            Data.Unflatten(Data.RequestedGoal, out int rx, out int ry, out int rz);
+            int count = Data.Count;
+            for (int index = 0; index < count; index++)
             {
-                if (Blocked[index])
+                if (Data.Blocked[index])
                     continue;
-                Unflatten(index, out int x, out int y, out int z);
+                Data.Unflatten(index, out int x, out int y, out int z);
+                long dx = x - rx;
+                long dy = y - ry;
+                long dz = z - rz;
+                long distance = dx * dx + dy * dy + dz * dz;
+                // Indices rise, so the lowest index already wins a tie.
+                if (distance < nearest)
+                {
+                    nearest = distance;
+                    goal = index;
+                }
+            }
+            return goal;
+        }
+    }
+
+    [BurstCompile(FloatMode = FloatMode.Strict, FloatPrecision = FloatPrecision.Standard)]
+    internal unsafe struct FlowFieldVolumeInfluenceJob : IJobParallelFor
+    {
+        internal FlowFieldVolumeSolveData Data;
+
+        public void Execute(int chunk)
+        {
+            if (Data.Cancelled)
+                return;
+            int goal = *Data.ResolvedGoal;
+            if (goal < 0)
+                return;
+
+            Data.Unflatten(goal, out int gx, out int gy, out int gz);
+            float radius = Data.GoalInfluenceRadius;
+            float cellSize = Data.CellSize;
+            double radiusSqr = (double)radius * radius;
+            Data.ChunkRange(chunk, out int start, out int end);
+            for (int index = start; index < end; index++)
+            {
+                if (Data.Blocked[index])
+                    continue;
+                Data.Unflatten(index, out int x, out int y, out int z);
                 long dx = x - gx;
                 long dy = y - gy;
                 long dz = z - gz;
-                double distanceSqr = (double)(dx * dx + dy * dy + dz * dz) * CellSize * CellSize;
-                Influence[index] = GoalInfluenceRadius <= 0f || distanceSqr <= radiusSqr;
+                double distanceSqr = (double)(dx * dx + dy * dy + dz * dz) * cellSize * cellSize;
+                Data.Influence[index] = radius <= 0f || distanceSqr <= radiusSqr;
             }
-            Influence[goal] = true;
-            return goal;
+            if (goal >= start && goal < end)
+                Data.Influence[goal] = true;
         }
+    }
 
-        private void RunBfs(int goal)
+    [BurstCompile(FloatMode = FloatMode.Strict, FloatPrecision = FloatPrecision.Standard)]
+    internal unsafe struct FlowFieldVolumeBfsJob : IJob
+    {
+        private const int NeighborCount = FlowFieldVolumeSolveData.NeighborCount;
+
+        internal FlowFieldVolumeSolveData Data;
+
+        public void Execute()
         {
+            if (Data.Cancelled)
+                return;
+            int goal = *Data.ResolvedGoal;
+            if (goal < 0)
+                return;
+
             int head = 0;
             int tail = 0;
-            Costs[goal] = 0;
-            Queue[tail++] = goal;
+            Data.Costs[goal] = 0;
+            Data.Queue[tail++] = goal;
             while (head < tail)
             {
-                if ((head & (CancelCheckInterval - 1)) == 0 && Cancelled)
+                if ((head & (FlowFieldVolumeSolveData.ChunkSize - 1)) == 0 && Data.Cancelled)
                     return;
-                int current = Queue[head++];
-                Unflatten(current, out int x, out int y, out int z);
-                int candidate = Costs[current] + 1;
-                uint mask = Topology[current];
+                int current = Data.Queue[head++];
+                Data.Unflatten(current, out int x, out int y, out int z);
+                int candidate = Data.Costs[current] + 1;
+                uint mask = Data.Topology[current];
                 for (int direction = 0; direction < NeighborCount; direction++)
                 {
                     if ((mask & (1u << direction)) == 0u)
                         continue;
-                    int nx = x + DeltaX[direction];
-                    int ny = y + DeltaY[direction];
-                    int nz = z + DeltaZ[direction];
-                    if (!InBounds(nx, ny, nz))
+                    int nx = x + Data.DeltaX[direction];
+                    int ny = y + Data.DeltaY[direction];
+                    int nz = z + Data.DeltaZ[direction];
+                    if (!Data.InBounds(nx, ny, nz))
                         continue;
-                    int neighbor = Flat(nx, ny, nz);
-                    if (!Influence[neighbor] || candidate >= Costs[neighbor])
+                    int neighbor = Data.Flat(nx, ny, nz);
+                    if (!Data.Influence[neighbor] || candidate >= Data.Costs[neighbor])
                         continue;
-                    Costs[neighbor] = candidate;
-                    Queue[tail++] = neighbor;
+                    Data.Costs[neighbor] = candidate;
+                    Data.Queue[tail++] = neighbor;
                 }
             }
         }
+    }
 
-        private void RunDirections(int goal)
+    /// <summary>Picks each cell's next step from the finished BFS. A cell writes only itself.</summary>
+    [BurstCompile(FloatMode = FloatMode.Strict, FloatPrecision = FloatPrecision.Standard)]
+    internal unsafe struct FlowFieldVolumeDirectionsJob : IJobParallelFor
+    {
+        private const int NeighborCount = FlowFieldVolumeSolveData.NeighborCount;
+
+        internal FlowFieldVolumeSolveData Data;
+
+        public void Execute(int chunk)
         {
+            if (Data.Cancelled)
+                return;
+            int goal = *Data.ResolvedGoal;
             int gx = 0, gy = 0, gz = 0;
             if (goal >= 0)
-                Unflatten(goal, out gx, out gy, out gz);
-            for (int index = 0; index < Count; index++)
+                Data.Unflatten(goal, out gx, out gy, out gz);
+
+            Data.ChunkRange(chunk, out int start, out int end);
+            for (int index = start; index < end; index++)
             {
-                if ((index & (CancelCheckInterval - 1)) == 0 && Cancelled)
-                    return;
-                if (Blocked[index])
+                if (Data.Blocked[index])
                 {
-                    Next[index] = -2;
-                    GoalFlags[index] = FlowFieldGoalFlags.None;
-                    Directions[index] = Vector3.zero;
-                    Speeds[index] = 0f;
+                    Data.Next[index] = -2;
+                    Data.GoalFlags[index] = FlowFieldGoalFlags.None;
+                    Data.Directions[index] = Vector3.zero;
+                    Data.Speeds[index] = 0f;
                     continue;
                 }
                 if (goal == index)
                 {
-                    Next[index] = index;
-                    GoalFlags[index] = FlowFieldGoalFlags.Directed | FlowFieldGoalFlags.Anchor;
-                    Directions[index] = Vector3.zero;
-                    Speeds[index] = 0f;
+                    Data.Next[index] = index;
+                    Data.GoalFlags[index] = FlowFieldGoalFlags.Directed | FlowFieldGoalFlags.Anchor;
+                    Data.Directions[index] = Vector3.zero;
+                    Data.Speeds[index] = 0f;
                     continue;
                 }
 
-                Vector3 direction = DefaultDirection;
+                Vector3 direction = Data.DefaultDirection;
                 int next = -1;
-                bool influenced = goal >= 0 && Influence[index];
+                bool influenced = goal >= 0 && Data.Influence[index];
                 if (influenced)
                 {
-                    if (Costs[index] == Unreachable)
+                    if (Data.Costs[index] == FlowFieldVolumeSolveData.Unreachable)
                     {
                         next = -3;
                     }
                     else
                     {
-                        Unflatten(index, out int x, out int y, out int z);
+                        Data.Unflatten(index, out int x, out int y, out int z);
                         int bestScore = int.MinValue;
                         int bestDirection = -1;
-                        int previousWave = Costs[index] - 1;
-                        uint mask = Topology[index];
+                        int previousWave = Data.Costs[index] - 1;
+                        uint mask = Data.Topology[index];
                         for (int candidate = 0; candidate < NeighborCount; candidate++)
                         {
                             if ((mask & (1u << candidate)) == 0u)
                                 continue;
-                            int sx = DeltaX[candidate];
-                            int sy = DeltaY[candidate];
-                            int sz = DeltaZ[candidate];
-                            if (!InBounds(x + sx, y + sy, z + sz))
+                            int sx = Data.DeltaX[candidate];
+                            int sy = Data.DeltaY[candidate];
+                            int sz = Data.DeltaZ[candidate];
+                            if (!Data.InBounds(x + sx, y + sy, z + sz))
                                 continue;
-                            int neighbor = Flat(x + sx, y + sy, z + sz);
-                            if (Costs[neighbor] != previousWave)
+                            int neighbor = Data.Flat(x + sx, y + sy, z + sz);
+                            if (Data.Costs[neighbor] != previousWave)
                                 continue;
                             int score = 2 * (sx * (gx - x) + sy * (gy - y) + sz * (gz - z))
                                 - (sx * sx + sy * sy + sz * sz);
@@ -367,7 +469,7 @@ namespace Common.FlowField
                             }
                         }
                         if (next >= 0)
-                            direction = StepDirection(bestDirection);
+                            direction = Data.StepDirection(bestDirection);
                         else
                             next = -3;
                     }
@@ -375,67 +477,73 @@ namespace Common.FlowField
                         direction = Vector3.zero;
                 }
 
-                Next[index] = next;
-                GoalFlags[index] = next >= 0
+                Data.Next[index] = next;
+                Data.GoalFlags[index] = next >= 0
                     ? FlowFieldGoalFlags.Directed
                     : influenced
                         ? FlowFieldGoalFlags.Unreachable
                         : FlowFieldGoalFlags.None;
-                Directions[index] = direction;
-                Speeds[index] = direction.x * direction.x + direction.y * direction.y + direction.z * direction.z
+                Data.Directions[index] = direction;
+                Data.Speeds[index] = direction.x * direction.x + direction.y * direction.y + direction.z * direction.z
                     > 0.00000001f
                         ? 1f
                         : 0f;
             }
         }
+    }
 
-        private void RunEscape()
+    /// <summary>
+    /// Points each blocked cell back toward open space, a multi-source BFS over
+    /// the six faces. It reuses the Goal BFS arrays, so it runs last.
+    /// </summary>
+    [BurstCompile(FloatMode = FloatMode.Strict, FloatPrecision = FloatPrecision.Standard)]
+    internal unsafe struct FlowFieldVolumeEscapeJob : IJob
+    {
+        internal FlowFieldVolumeSolveData Data;
+
+        public void Execute()
         {
+            if (Data.Cancelled)
+                return;
+            int count = Data.Count;
             int head = 0;
             int tail = 0;
-            for (int index = 0; index < Count; index++)
+            for (int index = 0; index < count; index++)
             {
-                bool blocked = Blocked[index];
-                Costs[index] = blocked ? Unreachable : 0;
-                EscapeDirections[index] = Vector3.zero;
+                bool blocked = Data.Blocked[index];
+                Data.Costs[index] = blocked ? FlowFieldVolumeSolveData.Unreachable : 0;
+                Data.EscapeDirections[index] = Vector3.zero;
                 if (!blocked)
-                    Queue[tail++] = index;
+                    Data.Queue[tail++] = index;
             }
 
             while (head < tail)
             {
-                if ((head & (CancelCheckInterval - 1)) == 0 && Cancelled)
+                if ((head & (FlowFieldVolumeSolveData.ChunkSize - 1)) == 0 && Data.Cancelled)
                     return;
-                int current = Queue[head++];
-                Unflatten(current, out int x, out int y, out int z);
-                int nextCost = Costs[current] + 1;
+                int current = Data.Queue[head++];
+                Data.Unflatten(current, out int x, out int y, out int z);
+                int nextCost = Data.Costs[current] + 1;
                 for (int face = 0; face < 6; face++)
                 {
-                    int direction = FaceDirections[face];
-                    int nx = x + DeltaX[direction];
-                    int ny = y + DeltaY[direction];
-                    int nz = z + DeltaZ[direction];
-                    if (!InBounds(nx, ny, nz))
+                    int direction = Data.FaceDirections[face];
+                    int nx = x + Data.DeltaX[direction];
+                    int ny = y + Data.DeltaY[direction];
+                    int nz = z + Data.DeltaZ[direction];
+                    if (!Data.InBounds(nx, ny, nz))
                         continue;
-                    int neighbor = Flat(nx, ny, nz);
-                    if (!Blocked[neighbor] || Costs[neighbor] != Unreachable)
+                    int neighbor = Data.Flat(nx, ny, nz);
+                    if (!Data.Blocked[neighbor] || Data.Costs[neighbor] != FlowFieldVolumeSolveData.Unreachable)
                         continue;
-                    Costs[neighbor] = nextCost;
+                    Data.Costs[neighbor] = nextCost;
                     // From the blocked neighbor back to the walkable cell.
-                    EscapeDirections[neighbor] = Normalized(-DeltaX[direction], -DeltaY[direction], -DeltaZ[direction]);
-                    Queue[tail++] = neighbor;
+                    Data.EscapeDirections[neighbor] = FlowFieldVolumeSolveData.Normalized(
+                        -Data.DeltaX[direction],
+                        -Data.DeltaY[direction],
+                        -Data.DeltaZ[direction]);
+                    Data.Queue[tail++] = neighbor;
                 }
             }
-        }
-
-        private Vector3 StepDirection(int direction)
-            => Normalized(DeltaX[direction], DeltaY[direction], DeltaZ[direction]);
-
-        // Same arithmetic as Vector3.normalized, which keeps published values unchanged.
-        private static Vector3 Normalized(int x, int y, int z)
-        {
-            float length = (float)System.Math.Sqrt((float)x * x + (float)y * y + (float)z * z);
-            return new Vector3(x / length, y / length, z / length);
         }
     }
 

@@ -47,12 +47,16 @@ namespace Common.FlowField
 
         private void Awake()
         {
+            Track(this);
             if (Application.isPlaying)
                 Init();
         }
 
         protected virtual void OnEnable()
         {
+            // Also tracked here: an object that outlives a domain reload is
+            // enabled again without another Awake.
+            Track(this);
             if (Application.isPlaying && _isInitialized && _registeredManager == null)
                 RegisterWithConfiguredManager();
         }
@@ -64,8 +68,36 @@ namespace Common.FlowField
 
         private void OnDestroy()
         {
+            Live.Remove(this);
             if (_isInitialized || IsFaulted)
                 Release();
+        }
+
+        // Every volume that has woken and not been destroyed. Only these can be
+        // registered or reattached: registration needs an enabled component.
+        // The Manager walks this list instead of every loaded object.
+        private static readonly System.Collections.Generic.List<FlowFieldVectorModifierVolume> Live
+            = new System.Collections.Generic.List<FlowFieldVectorModifierVolume>(8);
+
+        private static void Track(FlowFieldVectorModifierVolume volume)
+        {
+            if (!Live.Contains(volume))
+                Live.Add(volume);
+        }
+
+        /// <summary>
+        /// Copies the live volumes into the caller's buffer, dropping destroyed
+        /// ones. A copy, because reattaching may enable or destroy volumes.
+        /// </summary>
+        internal static void CopyLive(System.Collections.Generic.List<FlowFieldVectorModifierVolume> buffer)
+        {
+            buffer.Clear();
+            for (int i = Live.Count - 1; i >= 0; i--)
+            {
+                if (Live[i] == null)
+                    Live.RemoveAt(i);
+            }
+            buffer.AddRange(Live);
         }
 
         protected virtual void OnValidate()

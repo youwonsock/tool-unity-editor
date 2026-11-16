@@ -86,10 +86,9 @@ namespace Common.FlowField
                 {
                     if (_deferredCommands.Count + _events.Count > 0 && ++done > MAX_WORK_PER_DRAIN)
                     {
+                        int dropped = DropRunawayWork();
                         Debug.LogError($"FlowField handlers raised more than {MAX_WORK_PER_DRAIN} commands and events in a row. "
-                            + $"Dropping {_deferredCommands.Count + _events.Count} of them.");
-                        _deferredCommands.Clear();
-                        _events.Clear();
+                            + $"Dropping {dropped} of them; Released and disposal events were still delivered.");
                         return;
                     }
                     if (_deferredCommands.Count > 0)
@@ -108,6 +107,47 @@ namespace Common.FlowField
                 _draining = false;
             }
         }
+
+        /// <summary>
+        /// Drops the queued work except the events that end a session lifetime:
+        /// a subscriber that never sees Released keeps waiting on a session that
+        /// is gone. Those are delivered once, in order. Whatever their handlers
+        /// raise is dropped too, so a handler cannot restart the runaway.
+        /// Returns how many items were dropped.
+        /// </summary>
+        private int DropRunawayWork()
+        {
+            int dropped = _deferredCommands.Count;
+            _deferredCommands.Clear();
+            List<QueuedEvent> lifetimeEnds = null;
+            while (_events.Count > 0)
+            {
+                QueuedEvent queuedEvent = _events.Dequeue();
+                if (EndsLifetime(in queuedEvent))
+                    (lifetimeEnds ??= new List<QueuedEvent>()).Add(queuedEvent);
+                else
+                    dropped++;
+            }
+
+            if (lifetimeEnds != null)
+            {
+                for (int i = 0; i < lifetimeEnds.Count; i++)
+                {
+                    QueuedEvent queuedEvent = lifetimeEnds[i];
+                    queuedEvent.Source.Deliver(in queuedEvent);
+                }
+            }
+
+            dropped += _deferredCommands.Count + _events.Count;
+            _deferredCommands.Clear();
+            _events.Clear();
+            return dropped;
+        }
+
+        private static bool EndsLifetime(in QueuedEvent queuedEvent)
+            => queuedEvent.Kind == EventKind.Disposed
+                || queuedEvent.Kind == EventKind.StateChanged
+                    && queuedEvent.State == FlowFieldRuntimeState.Released;
 
         private static void RunDeferredCommand(Action command)
         {

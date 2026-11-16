@@ -325,6 +325,7 @@ namespace Common.FlowField
             _request = request;
             _completed = completed;
             _handle = _solve.Job.Schedule();
+            request.Workspace.SolveInFlight = true;
             JobHandle.ScheduleBatchedJobs();
             return true;
         }
@@ -334,6 +335,7 @@ namespace Common.FlowField
             if (_solve == null || !wait && !_handle.IsCompleted)
                 return;
             _handle.Complete();
+            _request.Workspace.SolveInFlight = false;
             _solve.Release();
             _solve = null;
             Action<FlowFieldBfsRequest> completed = _completed;
@@ -349,6 +351,7 @@ namespace Common.FlowField
                 return;
             _solve.RequestCancel();
             _handle.Complete();
+            _request.Workspace.SolveInFlight = false;
             _solve.Release();
             _solve = null;
             _completed = null;

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Common.FlowField
@@ -73,6 +74,7 @@ namespace Common.FlowField
         [NonSerialized] private int _bakeInputGeneration;
         [NonSerialized] private int _lastBakeInputHash;
         [NonSerialized] private bool _hasBakeInputHash;
+        [NonSerialized] private List<FlowFieldVectorModifierVolume> _modifierBuffer;
 
         public FlowFieldManager()
         {
@@ -567,37 +569,67 @@ namespace Common.FlowField
 
         private void ReattachActiveModifiers()
         {
-            FlowFieldVectorModifierVolume[] volumes = Resources.FindObjectsOfTypeAll<FlowFieldVectorModifierVolume>();
-            for (int i = 0; i < volumes.Length; i++)
+            List<FlowFieldVectorModifierVolume> volumes = RentModifierBuffer();
+            try
             {
-                FlowFieldVectorModifierVolume volume = volumes[i];
-                if (volume == null
-                    || volume.FlowFieldManager != this
-                    || !volume.gameObject.scene.IsValid())
-                    continue;
+                for (int i = 0; i < volumes.Count; i++)
+                {
+                    FlowFieldVectorModifierVolume volume = volumes[i];
+                    if (volume == null
+                        || volume.FlowFieldManager != this
+                        || !volume.gameObject.scene.IsValid())
+                        continue;
 
-                try
-                {
-                    volume.ReattachToConfiguredManager();
+                    try
+                    {
+                        volume.ReattachToConfiguredManager();
+                    }
+                    catch (Exception exception)
+                    {
+                        Debug.LogException(exception, volume);
+                    }
                 }
-                catch (Exception exception)
-                {
-                    Debug.LogException(exception, volume);
-                }
+            }
+            finally
+            {
+                ReturnModifierBuffer(volumes);
             }
         }
 
         private void DetachActiveModifiers()
         {
-            FlowFieldVectorModifierVolume[] volumes = Resources.FindObjectsOfTypeAll<FlowFieldVectorModifierVolume>();
-            for (int i = 0; i < volumes.Length; i++)
+            List<FlowFieldVectorModifierVolume> volumes = RentModifierBuffer();
+            try
             {
-                FlowFieldVectorModifierVolume volume = volumes[i];
-                if (volume == null || volume.FlowFieldManager != this)
-                    continue;
+                for (int i = 0; i < volumes.Count; i++)
+                {
+                    FlowFieldVectorModifierVolume volume = volumes[i];
+                    if (volume == null || volume.FlowFieldManager != this)
+                        continue;
 
-                volume.DetachFromFlowFieldSession(this);
+                    volume.DetachFromFlowFieldSession(this);
+                }
             }
+            finally
+            {
+                ReturnModifierBuffer(volumes);
+            }
+        }
+
+        // A reattach can run a Manager command that walks the volumes again,
+        // so a nested walk gets its own list instead of clearing this one.
+        private List<FlowFieldVectorModifierVolume> RentModifierBuffer()
+        {
+            List<FlowFieldVectorModifierVolume> buffer = _modifierBuffer ?? new List<FlowFieldVectorModifierVolume>(8);
+            _modifierBuffer = null;
+            FlowFieldVectorModifierVolume.CopyLive(buffer);
+            return buffer;
+        }
+
+        private void ReturnModifierBuffer(List<FlowFieldVectorModifierVolume> buffer)
+        {
+            buffer.Clear();
+            _modifierBuffer ??= buffer;
         }
 
     }

@@ -54,19 +54,63 @@ namespace Common.FlowField
             return info.IsValid;
         }
 
+        private enum SampleFailure
+        {
+            None,
+            NotReady,
+            NonFinite,
+            OutOfGrid,
+            Inconsistent,
+        }
+
         internal override FlowFieldSample Sample(Vector3 worldPosition)
         {
+            if (TrySampleCore(worldPosition, out FlowFieldSample sample, out SampleFailure failure))
+                return sample;
+            throw failure switch
+            {
+                SampleFailure.NotReady => new InvalidOperationException("FlowField session is not ready."),
+                SampleFailure.NonFinite => new ArgumentOutOfRangeException(nameof(worldPosition)),
+                SampleFailure.OutOfGrid => new ArgumentOutOfRangeException(
+                    nameof(worldPosition),
+                    "Position is outside the FlowField grid."),
+                _ => new InvalidOperationException("FlowField sampling data is inconsistent."),
+            };
+        }
+
+        /// <summary>
+        /// The whole read without exceptions, so TrySample, which movers call
+        /// every physics step, never pays for one on an ordinary miss. Sample
+        /// turns the failure into the exception it has always thrown.
+        /// </summary>
+        private bool TrySampleCore(Vector3 worldPosition, out FlowFieldSample sample, out SampleFailure failure)
+        {
+            sample = FlowFieldSample.Stopped;
+            failure = SampleFailure.None;
             if (!IsReady)
-                throw new InvalidOperationException("FlowField session is not ready.");
+            {
+                failure = SampleFailure.NotReady;
+                return false;
+            }
             if (!FlowFieldGridSpace.IsFinite(worldPosition))
-                throw new ArgumentOutOfRangeException(nameof(worldPosition));
+            {
+                failure = SampleFailure.NonFinite;
+                return false;
+            }
 
             FlowFieldGridSpace sampleGrid = _fieldStore.Grid;
             FlowFieldSurfaceData sampleSurface = _fieldStore.Surface;
             if (!sampleGrid.ContainsWorldPosition(worldPosition))
-                throw new ArgumentOutOfRangeException(nameof(worldPosition), "Position is outside the FlowField grid.");
-            if (!_fieldStore.TrySample(worldPosition, out FlowFieldSample sample))
-                throw new InvalidOperationException("FlowField sampling data is inconsistent.");
+            {
+                failure = SampleFailure.OutOfGrid;
+                return false;
+            }
+            if (!_fieldStore.TrySample(worldPosition, out sample))
+            {
+                sample = FlowFieldSample.Stopped;
+                failure = SampleFailure.Inconsistent;
+                return false;
+            }
 
             if (sampleGrid.TryWorldToLocal(worldPosition, out int sampleX, out int sampleZ))
             {
@@ -96,21 +140,28 @@ namespace Common.FlowField
                                 latestWorkspace,
                                 worldPosition,
                                 out FlowFieldSample escapeSample))
-                            return escapeSample;
-                        return new FlowFieldSample(
+                        {
+                            sample = escapeSample;
+                            return true;
+                        }
+                        sample = new FlowFieldSample(
                             Vector3.zero,
                             0f,
                             sample.SurfaceNormal,
                             sample.HasSurface,
                             sample.HasCell);
+                        return true;
                     }
                     if (obstacleProbeActive && stagedObstacleBlocksSample)
-                        return new FlowFieldSample(
+                    {
+                        sample = new FlowFieldSample(
                             Vector3.zero,
                             0f,
                             sample.SurfaceNormal,
                             sample.HasSurface,
                             sample.HasCell);
+                        return true;
+                    }
 
                     int next = _fieldStore.NextCells[sampleIndex];
                     if (next >= 0)
@@ -133,16 +184,19 @@ namespace Common.FlowField
                                 || (latestWorkspace.TopologyMasks[sampleIndex] & (1 << directionIndex)) == 0;
                         }
                         if (nextBlocked || topologyChanged)
-                            return new FlowFieldSample(
+                        {
+                            sample = new FlowFieldSample(
                                 Vector3.zero,
                                 0f,
                                 sample.SurfaceNormal,
                                 sample.HasSurface,
                                 sample.HasCell);
+                            return true;
+                        }
                     }
                 }
             }
-            return sample;
+            return true;
         }
 
         internal override bool TrySample(Vector3 worldPosition, out FlowFieldSample sample)
@@ -153,17 +207,20 @@ namespace Common.FlowField
             FlowFieldGridSpace grid = _fieldStore.Grid.IsValid ? _fieldStore.Grid : _state.Grid;
             if (!grid.IsValid || !grid.ContainsWorldPosition(worldPosition))
                 return false;
+            // The guard only covers an internal invariant failing; an ordinary
+            // miss returns false from the core without throwing.
             try
             {
-                sample = Sample(worldPosition);
-                return true;
+                return TrySampleCore(worldPosition, out sample, out _);
             }
             catch (ArgumentOutOfRangeException)
             {
+                sample = FlowFieldSample.Stopped;
                 return false;
             }
             catch (InvalidOperationException)
             {
+                sample = FlowFieldSample.Stopped;
                 return false;
             }
         }

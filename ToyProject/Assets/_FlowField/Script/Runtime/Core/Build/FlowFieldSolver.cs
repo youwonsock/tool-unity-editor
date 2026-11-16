@@ -23,6 +23,7 @@ namespace Common.FlowField
             FlowFieldWorkspace workspace)
         {
             ValidateWorkspace(grid, surface, workspace);
+            workspace.AssertWritable(nameof(BuildEscapeDirections));
 
             int count = grid.CellCount;
             Array.Clear(workspace.EscapeDirections, 0, count);
@@ -225,6 +226,7 @@ namespace Common.FlowField
                 || workspace.TopologyMasks == null
                 || workspace.TopologyMasks.Length != grid.CellCount)
                 throw new System.ArgumentException("Topology mask workspace capacity must match the grid.", nameof(workspace));
+            workspace.AssertWritable(nameof(BuildTopologyMasks));
 
             unsafe
             {
@@ -268,6 +270,7 @@ namespace Common.FlowField
             if (!grid.IsValid || surface == null || !surface.IsValid
                 || workspace == null || workspace.Capacity != grid.CellCount)
                 throw new ArgumentException("No-goal sentinel input is invalid.");
+            workspace.AssertWritable(nameof(ApplyNoGoalSentinels));
             for (int index = 0; index < grid.CellCount; index++)
             {
                 workspace.NextCells[index] = !surface.IsSurfaceValid(index)

@@ -155,6 +155,7 @@ namespace Common.FlowField
         {
             if (!IsValid || workspace == null || workspace.Capacity != Capacity)
                 throw new ArgumentException("Committed workspace does not match the field store.", nameof(workspace));
+            workspace.AssertWritable(nameof(CopyToWorkspace));
             Array.Copy(_blocked, workspace.Blocked, Capacity);
             CopyGoalAndFieldToWorkspace(workspace);
             // Escape vectors are a diagnostic/bake concern rather than part

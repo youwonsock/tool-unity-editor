@@ -35,8 +35,23 @@ namespace Common.FlowField
         public int Capacity => Blocked == null ? 0 : Blocked.Length;
         public bool HasBlockedCells { get; private set; }
 
+        // Set while a scheduled Surface solve job holds pinned pointers into
+        // these arrays. The Job safety system cannot see managed arrays, so
+        // main-thread writers check this in development builds instead.
+        internal bool SolveInFlight { get; set; }
+
+        /// <summary>Logs an assertion when the main thread writes while a solve job runs.</summary>
+        [System.Diagnostics.Conditional("UNITY_ASSERTIONS")]
+        internal void AssertWritable(string writer)
+        {
+            if (SolveInFlight)
+                UnityEngine.Debug.LogAssertion(
+                    $"[FlowField] {writer} wrote the Surface workspace while its solve job was running.");
+        }
+
         public bool Resize(int cellCount)
         {
+            AssertWritable(nameof(Resize));
             if (cellCount <= 0)
                 throw new ArgumentOutOfRangeException(nameof(cellCount), cellCount, "Workspace capacity must be positive.");
 
@@ -70,6 +85,7 @@ namespace Common.FlowField
 
         public void Release()
         {
+            AssertWritable(nameof(Release));
             Blocked = null;
             ObstacleScratch = null;
             StaticBlocked = null;
@@ -94,6 +110,7 @@ namespace Common.FlowField
 
         public void RebuildCombinedBlocked()
         {
+            AssertWritable(nameof(RebuildCombinedBlocked));
             int count = Capacity;
             HasBlockedCells = false;
             for (int i = 0; i < count; i++)
@@ -105,6 +122,7 @@ namespace Common.FlowField
 
         public void ClearGoal()
         {
+            AssertWritable(nameof(ClearGoal));
             if (GoalDirections == null)
                 return;
 
@@ -120,6 +138,7 @@ namespace Common.FlowField
 
         internal void SetResolvedGoal(int index)
         {
+            AssertWritable(nameof(SetResolvedGoal));
             if (index < 0 || index >= Capacity)
                 throw new ArgumentOutOfRangeException(nameof(index));
             ResolvedGoalIndex = index;
@@ -131,6 +150,7 @@ namespace Common.FlowField
             int resolvedGoalIndex,
             int[] nextCells)
         {
+            AssertWritable(nameof(LoadBakedGoal));
             if (nextCells == null || nextCells.Length != Capacity)
                 throw new ArgumentException("Baked Goal NextCell data must match the workspace capacity.", nameof(nextCells));
             if (hasGoal && (resolvedGoalIndex < 0 || resolvedGoalIndex >= Capacity))
@@ -164,6 +184,7 @@ namespace Common.FlowField
 
         public void ClearAll()
         {
+            AssertWritable(nameof(ClearAll));
             if (Capacity <= 0)
                 return;
 
