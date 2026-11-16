@@ -55,24 +55,24 @@ namespace Common.FlowField
         // Both sessions share one boundary, so the Manager's events keep their
         // order and a Modifier of either mode sees the same command rules.
         private readonly FlowFieldExecutionBoundary _boundary = new FlowFieldExecutionBoundary();
-        private readonly FlowFieldSurfaceSession _session;
-        private readonly FlowFieldVolumeSession _volumeSession;
+        private readonly FlowFieldSession _session;
+        private readonly FlowFieldSession _volumeSession;
         private float _refreshTimer;
         private bool _hasExplicitGoal;
         private Vector3 _explicitGoalWorld;
         private bool _requiresActivationRebuild;
-        private FlowFieldSessionBase _attachedSession;
+        private FlowFieldSession _attachedSession;
         [NonSerialized] private List<FlowFieldVectorModifierVolume> _modifierBuffer;
 
         public FlowFieldManager()
         {
-            _session = new FlowFieldSurfaceSession(boundary: _boundary);
-            _volumeSession = new FlowFieldVolumeSession(_boundary);
+            _session = FlowFieldSession.CreateSurface(_boundary);
+            _volumeSession = FlowFieldSession.CreateVolume(_boundary);
             ForwardSessionEvents(_session);
             ForwardSessionEvents(_volumeSession);
         }
 
-        private FlowFieldSessionBase ActiveSession
+        private FlowFieldSession ActiveSession
         {
             get
             {
@@ -242,7 +242,7 @@ namespace Common.FlowField
         private void DisposeSessions()
         {
             using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
-            _session.DisposePermanently();
+            _session.Surface.DisposePermanently();
             _volumeSession.Dispose();
             _attachedSession = null;
         }
@@ -267,7 +267,7 @@ namespace Common.FlowField
         {
             _boundary.ThrowIfInUserCode(nameof(RequestRebuild));
             using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
-            FlowFieldSessionBase owner = ActiveSession;
+            FlowFieldSession owner = ActiveSession;
             bool retryingFault = owner.IsFaulted;
             if (retryingFault)
             {
@@ -312,7 +312,7 @@ namespace Common.FlowField
         public void Release()
         {
             _boundary.ThrowIfInUserCode(nameof(Release));
-            FlowFieldSessionBase owner = ActiveSession;
+            FlowFieldSession owner = ActiveSession;
             if (!owner.IsInitialized && !owner.IsFaulted)
                 return;
             using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
@@ -473,7 +473,7 @@ namespace Common.FlowField
 
         // Subscribed for the Manager's whole life: a queued Released must still
         // arrive after the Manager has moved on from that session.
-        private void ForwardSessionEvents(FlowFieldSessionBase session)
+        private void ForwardSessionEvents(FlowFieldSession session)
         {
             session.FieldCommitted += OnSessionFieldCommitted;
             session.StateChanged += OnSessionStateChanged;

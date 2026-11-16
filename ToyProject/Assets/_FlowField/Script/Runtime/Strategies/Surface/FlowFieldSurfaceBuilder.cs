@@ -4,11 +4,12 @@ using UnityEngine;
 namespace Common.FlowField
 {
     /// <summary>
-    /// Shared owner for runtime and editor field state.  Stage algorithms stay
-    /// in their existing files; this class owns only state, resource lifetime,
-    /// request coalescing and the solve backend boundary.
+    /// The Surface2D strategy of a <see cref="FlowFieldSession"/>: a floor
+    /// surface from downward raycasts, 8-neighbour navigation and region
+    /// recomposition. Stage algorithms stay in their own files; this class owns
+    /// the staging state, request coalescing and the solve backend boundary.
     /// </summary>
-    internal sealed partial class FlowFieldSurfaceSession : FlowFieldSessionBase, IFlowFieldSampleSafety
+    internal sealed partial class FlowFieldSurfaceBuilder : IFlowFieldSpaceBuilder, IFlowFieldSampleSafety
     {
         private readonly FlowFieldSurfaceState _state = new FlowFieldSurfaceState();
         private readonly FlowFieldSurfaceFieldStore _fieldStore = new FlowFieldSurfaceFieldStore();
@@ -39,9 +40,9 @@ namespace Common.FlowField
         internal FlowFieldSurfaceGoalTracker GoalTracker => _goalTracker;
         internal FlowFieldSurfaceData CommittedSurface => _fieldStore.Surface;
         internal FlowFieldGridSpace CommittedGrid => _fieldStore.Grid;
-        internal override FlowFieldSpaceMode SpaceMode => FlowFieldSpaceMode.Surface2D;
-        internal override bool IsReady => (Lifecycle == FlowFieldSessionLifecycle.Active
-                || Lifecycle == FlowFieldSessionLifecycle.Building)
+        public FlowFieldSpaceMode SpaceMode => FlowFieldSpaceMode.Surface2D;
+        public bool IsReady => (_session.Lifecycle == FlowFieldSessionLifecycle.Active
+                || _session.Lifecycle == FlowFieldSessionLifecycle.Building)
             && !_state.ConfigurationStale
             && _state.SurfaceReady
             && _fieldStore.IsValid
@@ -58,7 +59,7 @@ namespace Common.FlowField
                 || _requests.Latest.HasSameSource(_committedRequest.Value);
 
         internal bool HasSubmittedRequest => _requests.HasLatest;
-        internal override bool HasPendingRequest => _requests.Pending;
+        public bool HasPendingRequest => _requests.Pending;
 
         // Where the active build stands. A build begins with the synchronous
         // base stages, may wait for its solve on a worker thread, composes the
@@ -85,28 +86,36 @@ namespace Common.FlowField
         /// thread; the scheduler never does.
         /// </summary>
         internal void Pump()
-            => RunPipeline(FlowFieldBuildBudget.Unlimited, scheduled: false, waitForWorker: true);
+            => _session.RunPipeline(FlowFieldBuildBudget.Unlimited, scheduled: false, waitForWorker: true);
 
         // Building without composing means a solve is running elsewhere. Input
         // nobody has submitted yet waits for the Manager in the same way.
-        internal override bool IsWaitingForExternalCompletion
+        public bool IsWaitingForExternalCompletion
             => !_composeStage.IsRunning
-                && (Lifecycle == FlowFieldSessionLifecycle.Building
+                && (_session.Lifecycle == FlowFieldSessionLifecycle.Building
                     || _requests.Pending && !_submittedForScheduler);
 
-        private protected override bool HasActiveBuild => _phase != BuildPhase.None;
+        public bool HasActiveBuild => _phase != BuildPhase.None;
 
         // The base stages run in one frame so their Physics reads form one
         // snapshot, so one build begins per pump whatever the budget says.
-        private protected override bool BeginsAfterBudget => true;
+        public bool BeginsAfterBudget => true;
 
-        private protected override int MaxBuildsBegunPerPump => 1;
+        public int MaxBuildsBegunPerPump => 1;
+
+        public void BeforePump() { }
+
+        // Input that arrives during a build waits for the Manager's next
+        // Submit, so a publication always ends the Building state.
+        public bool StaysBuildingWhileOwed => false;
+
+        public bool HasOwedInput => false;
 
         // Only the Manager can tell that its current settings are valid, so the
         // scheduler builds nothing until it has submitted them.
-        private protected override bool TryBeginBuild(bool scheduled)
+        public bool TryBeginBuild(bool scheduled)
         {
-            if (Lifecycle == FlowFieldSessionLifecycle.Building
+            if (_session.Lifecycle == FlowFieldSessionLifecycle.Building
                 || !_requests.Pending
                 || scheduled && !_submittedForScheduler)
                 return false;
@@ -114,7 +123,7 @@ namespace Common.FlowField
             return true;
         }
 
-        private protected override FlowFieldBuildStep StepBuild(in FlowFieldBuildBudget budget, bool waitForWorker)
+        public FlowFieldBuildStep StepBuild(in FlowFieldBuildBudget budget, bool waitForWorker)
         {
             _composeStage.FrameBudget = budget;
             try
@@ -164,7 +173,7 @@ namespace Common.FlowField
             }
         }
 
-        private protected override void PublishBuild()
+        public void PublishBuild()
         {
             _phase = BuildPhase.None;
             Commit(_commitRequest, _commitResultChanged, _commitIncludeBase, _commitRegion);
@@ -207,14 +216,14 @@ namespace Common.FlowField
         /// by solve failures. The caller deliberately stays outside the
         /// solver exception boundary.
         /// </summary>
-        internal override void RetryFault()
+        public void RetryFault()
         {
-            if (Disposed)
-                throw new ObjectDisposedException(nameof(FlowFieldSurfaceSession));
-            if (Lifecycle != FlowFieldSessionLifecycle.Faulted)
+            if (_session.Disposed)
+                throw new ObjectDisposedException(nameof(FlowFieldSurfaceBuilder));
+            if (_session.Lifecycle != FlowFieldSessionLifecycle.Faulted)
                 return;
             InvalidateCallbacks();
-            Fault = null;
+            _session.Fault = null;
             // The fault may have interrupted a Goal that was prepared but not
             // solved. Forget it so the Goal stage cannot report it as unchanged.
             _goalTracker.ForgetLastBuild();
@@ -232,7 +241,7 @@ namespace Common.FlowField
                 ? FlowFieldCellRect.Full(_state.Grid)
                 : FlowFieldCellRect.Invalid;
             _requests.Pending = false;
-            SetLifecycle(FlowFieldSessionLifecycle.Active);
+            _session.SetLifecycle(FlowFieldSessionLifecycle.Active);
         }
 
         internal bool HasSameBaseInputs(in FlowFieldSurfaceRequest request)
@@ -248,13 +257,17 @@ namespace Common.FlowField
 
         internal bool ObserveGrid(in FlowFieldGridSpace grid) => _baseStage.ObserveGrid(grid);
 
-        internal FlowFieldSurfaceSession(
+        // The session that runs this builder. Lifecycle, events and the build
+        // loop live there.
+        private readonly FlowFieldSession _session;
+
+        internal FlowFieldSurfaceBuilder(
+            FlowFieldSession session,
             IFlowFieldSurfaceSource surfaceSource = null,
             IFlowFieldSurfaceSolveBackend solveBackend = null,
-            Func<IFlowFieldSurfaceSolveBackend> solveBackendFactory = null,
-            FlowFieldExecutionBoundary boundary = null)
-            : base(boundary)
+            Func<IFlowFieldSurfaceSolveBackend> solveBackendFactory = null)
         {
+            _session = session ?? throw new ArgumentNullException(nameof(session));
             _solveStage = new FlowFieldSurfaceSolveStage(solveBackend, solveBackendFactory);
             _baseStage = new FlowFieldSurfaceBaseStage(
                 _state,
@@ -267,29 +280,29 @@ namespace Common.FlowField
             FlowFieldBakeMode bakeMode,
             FlowFieldSurfaceSourceKind sourceKind)
         {
-            if (Disposed)
-                throw new ObjectDisposedException(nameof(FlowFieldSurfaceSession));
-            if (Lifecycle == FlowFieldSessionLifecycle.Active
-                || Lifecycle == FlowFieldSessionLifecycle.Building)
+            if (_session.Disposed)
+                throw new ObjectDisposedException(nameof(FlowFieldSurfaceBuilder));
+            if (_session.Lifecycle == FlowFieldSessionLifecycle.Active
+                || _session.Lifecycle == FlowFieldSessionLifecycle.Building)
                 throw new InvalidOperationException("FlowField session is already initialized.");
-            if (Lifecycle == FlowFieldSessionLifecycle.Faulted)
-                throw new InvalidOperationException("FlowField session is faulted. Retry the pending request or Release before Initialize.", Fault);
-            if (Lifecycle == FlowFieldSessionLifecycle.Suspended
-                && (BakeMode != bakeMode
+            if (_session.Lifecycle == FlowFieldSessionLifecycle.Faulted)
+                throw new InvalidOperationException("FlowField session is faulted. Retry the pending request or Release before Initialize.", _session.Fault);
+            if (_session.Lifecycle == FlowFieldSessionLifecycle.Suspended
+                && (_session.BakeMode != bakeMode
                     || _sourceKind != sourceKind))
             {
                 throw new InvalidOperationException(
                     "FlowField bake mode and source are fixed until Release.");
             }
 
-            BakeMode = bakeMode;
+            _session.BakeMode = bakeMode;
             _sourceKind = sourceKind;
             _modifierPipeline ??= new FlowFieldSurfaceModifierPipeline(new FlowFieldSurfaceModifierRegistry());
             _solveStage.Prepare(sourceKind);
-            Fault = null;
+            _session.Fault = null;
             _state.ConfigurationStale = false;
             MarkDirty(FlowFieldSurfaceDirtyFlags.All, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
-            SetLifecycle(FlowFieldSessionLifecycle.Active);
+            _session.SetLifecycle(FlowFieldSessionLifecycle.Active);
         }
 
         internal void MarkDirty(
@@ -332,7 +345,7 @@ namespace Common.FlowField
 
         internal void MarkConfigurationStale()
         {
-            if (!IsInitialized || _state.ConfigurationStale)
+            if (!_session.IsInitialized || _state.ConfigurationStale)
                 return;
             _state.ConfigurationStale = true;
             MarkDirty(FlowFieldSurfaceDirtyFlags.All, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
@@ -340,14 +353,14 @@ namespace Common.FlowField
             // stale configuration therefore becomes Building immediately,
             // and observers receive the same single transition they would see
             // when a normal rebuild actually starts.
-            PublishRuntimeState();
+            _session.PublishRuntimeState();
         }
 
         internal bool Submit(in FlowFieldSurfaceRequest request)
         {
-            if (Disposed)
-                throw new ObjectDisposedException(nameof(FlowFieldSurfaceSession));
-            if (!IsInitialized)
+            if (_session.Disposed)
+                throw new ObjectDisposedException(nameof(FlowFieldSurfaceBuilder));
+            if (!_session.IsInitialized)
                 throw new InvalidOperationException("FlowField session is not initialized.");
             if (request.SourceKind != _sourceKind)
                 throw new InvalidOperationException("FlowField request source does not match the active session.");
@@ -389,22 +402,22 @@ namespace Common.FlowField
             return true;
         }
 
-        private protected override bool RegisterModifierNow(IFlowFieldVectorModifier modifier)
+        public bool RegisterModifierNow(IFlowFieldVectorModifier modifier)
         {
             EnsureModifierServices();
             FlowFieldSurfaceModifierRegistryResult result;
-            using (Boundary.EnterUserCode())
+            using (_session.Boundary.EnterUserCode())
                 result = _modifierPipeline.Registry.Register(modifier);
             ApplyModifierRegistryResult(result);
             return result.FinalDirty;
         }
 
-        private protected override bool UnregisterModifierNow(IFlowFieldVectorModifier modifier)
+        public bool UnregisterModifierNow(IFlowFieldVectorModifier modifier)
         {
             EnsureModifierServices();
             FlowFieldSurfaceModifierRegistryResult result = _modifierPipeline.Registry.Unregister(modifier);
             // A retry builds everything again.
-            if (!IsFaulted)
+            if (!_session.IsFaulted)
                 ApplyModifierRegistryResult(result);
             return result.FinalDirty;
         }
@@ -413,13 +426,13 @@ namespace Common.FlowField
         {
             EnsureModifierServices();
             FlowFieldSurfaceModifierRegistryResult result;
-            using (Boundary.EnterUserCode())
+            using (_session.Boundary.EnterUserCode())
                 result = _modifierPipeline.Registry.DetectChanges();
             ApplyModifierRegistryResult(result);
             return result;
         }
 
-        private protected override void NotifyModifierChangedNow(
+        public void NotifyModifierChangedNow(
             IFlowFieldVectorModifier modifier,
             FlowFieldModifierChange change)
         {
@@ -427,7 +440,7 @@ namespace Common.FlowField
             if ((change & (FlowFieldModifierChange.Value | FlowFieldModifierChange.Priority)) != 0)
             {
                 FlowFieldSurfaceModifierRegistryResult result;
-                using (Boundary.EnterUserCode())
+                using (_session.Boundary.EnterUserCode())
                     result = _modifierPipeline.Registry.MarkDirty(modifier, (change & FlowFieldModifierChange.Value) != 0);
                 ApplyModifierRegistryResult(result);
             }
@@ -456,27 +469,27 @@ namespace Common.FlowField
 
         private void InvalidateCallbacks()
         {
-            AdvanceLifetimeGeneration();
+            _session.AdvanceLifetimeGeneration();
             _solveStage.Cancel();
             _composeStage.Clear();
             _phase = BuildPhase.None;
         }
 
-        private protected override void AbandonWorkForFault() => InvalidateCallbacks();
+        public void AbandonWorkForFault() => InvalidateCallbacks();
 
-        private protected override void ApplyFaultedState()
+        public void ApplyFaultedState()
         {
             _state.DirtyFlags = FlowFieldSurfaceDirtyFlags.None;
-            SetLifecycle(FlowFieldSessionLifecycle.Faulted);
+            _session.SetLifecycle(FlowFieldSessionLifecycle.Faulted);
         }
 
-        internal override void Suspend()
+        public void Suspend()
         {
-            if (Disposed
-                || Lifecycle == FlowFieldSessionLifecycle.Uninitialized
-                || Lifecycle == FlowFieldSessionLifecycle.Released
-                || Lifecycle == FlowFieldSessionLifecycle.Faulted
-                || Lifecycle == FlowFieldSessionLifecycle.Suspended)
+            if (_session.Disposed
+                || _session.Lifecycle == FlowFieldSessionLifecycle.Uninitialized
+                || _session.Lifecycle == FlowFieldSessionLifecycle.Released
+                || _session.Lifecycle == FlowFieldSessionLifecycle.Faulted
+                || _session.Lifecycle == FlowFieldSessionLifecycle.Suspended)
                 return;
             InvalidateCallbacks();
             _solveStage.DetachBackend();
@@ -498,12 +511,12 @@ namespace Common.FlowField
             _state.ObstacleProbePending = false;
             _state.DirtyFlags = FlowFieldSurfaceDirtyFlags.All;
             _state.ConfigurationStale = false;
-            SetLifecycle(FlowFieldSessionLifecycle.Suspended);
+            _session.SetLifecycle(FlowFieldSessionLifecycle.Suspended);
         }
 
-        internal override void Release()
+        public void Release()
         {
-            if (Disposed)
+            if (_session.Disposed)
                 return;
             ReleaseResources();
         }
@@ -511,7 +524,7 @@ namespace Common.FlowField
         private void ReleaseResources()
         {
             InvalidateCallbacks();
-            DetachRuntimeScheduler();
+            _session.DetachRuntimeScheduler();
             _solveStage.DetachBackend();
             _modifierPipeline?.Clear();
             _modifierPipeline = null;
@@ -538,28 +551,28 @@ namespace Common.FlowField
             _state.GridMarkedUnsubmitted = false;
             _state.GoalRemoved = false;
             _latestDefaultDirection = null;
-            Fault = null;
-            SetLifecycle(FlowFieldSessionLifecycle.Released);
+            _session.Fault = null;
+            _session.SetLifecycle(FlowFieldSessionLifecycle.Released);
         }
 
         internal void DisposePermanently()
         {
-            if (Disposed)
+            if (_session.Disposed)
                 return;
-            using FlowFieldExecutionBoundary.OperationScope operation = Boundary.EnterOperation();
+            using FlowFieldExecutionBoundary.OperationScope operation = _session.Boundary.EnterOperation();
             // Disposal is terminal before Released subscribers run, so they
             // cannot recreate resources or recursively dispose this owner.
-            Disposed = true;
+            _session.Disposed = true;
             ReleaseResources();
             // A directly injected backend is deliberately kept alive across
             // Release so the same Session can be initialized again. Permanent
             // disposal is the ownership boundary where it is finally freed.
             _solveStage.DisposeInjected();
-            MarkBaseDisposed();
-            SetLifecycle(FlowFieldSessionLifecycle.Released);
+            _session.MarkBaseDisposed();
+            _session.SetLifecycle(FlowFieldSessionLifecycle.Released);
         }
 
-        public override void Dispose()
+        public void Dispose()
             => DisposePermanently();
 
         private const FlowFieldSurfaceDirtyFlags BaseDirtyMask = FlowFieldSurfaceDirtyFlags.Grid

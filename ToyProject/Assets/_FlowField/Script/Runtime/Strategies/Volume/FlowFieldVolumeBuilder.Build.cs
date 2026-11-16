@@ -10,7 +10,7 @@ using static Common.FlowField.FlowFieldVolumeNavigation;
 namespace Common.FlowField
 {
     /// <summary>The cooperative stages of one Volume3D build, up to its commit.</summary>
-    internal sealed partial class FlowFieldVolumeSession
+    internal sealed partial class FlowFieldVolumeBuilder
     {
         private bool StepBuild(BuildContext build, in FlowFieldBuildBudget budget)
         {
@@ -217,7 +217,7 @@ namespace Common.FlowField
             _cellQuery.BeginModifierStep(
                 FlowFieldVolumeCellQuery.StepBounds(build.Request.Grid, _obstacleCells, count, cellHalf),
                 build.Modifiers);
-            using FlowFieldExecutionBoundary.OperationScope userCode = Boundary.EnterUserCode();
+            using FlowFieldExecutionBoundary.OperationScope userCode = _session.Boundary.EnterUserCode();
             for (int i = 0; i < count; i++)
             {
                 int index = _obstacleCells[i];
@@ -319,7 +319,7 @@ namespace Common.FlowField
 
             _spares.Retire(_committed, next);
             _committed = next;
-            Revision++;
+            _session.Revision++;
             _committedReservationBytes = EstimateCommittedBytes(build.Count);
             if (!build.IsModifierRecompose)
             {
@@ -333,7 +333,7 @@ namespace Common.FlowField
             }
             _build = null;
             _buildReservationBytes = 0;
-            NotifyFieldCommitted();
+            _session.NotifyFieldCommitted();
         }
     }
 }

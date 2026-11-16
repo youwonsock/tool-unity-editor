@@ -9,7 +9,12 @@ using static Common.FlowField.FlowFieldVolumeNavigation;
 
 namespace Common.FlowField
 {
-    internal sealed partial class FlowFieldVolumeSession : FlowFieldSessionBase, IFlowFieldSampleSafety
+    /// <summary>
+    /// The Volume3D strategy of a <see cref="FlowFieldSession"/>: cubic cells
+    /// filling the Bounds, 26-neighbour navigation on worker threads, and
+    /// re-queries limited to the regions whose obstacles changed.
+    /// </summary>
+    internal sealed partial class FlowFieldVolumeBuilder : IFlowFieldSpaceBuilder, IFlowFieldSampleSafety
     {
         private const int CellsPerStep = FlowFieldVolumeNavigation.CellsPerStep;
         private const int ArrayElementsPerStep = FlowFieldVolumeNavigation.ArrayElementsPerStep;
@@ -44,17 +49,21 @@ namespace Common.FlowField
         private readonly Stopwatch _pumpTimer = new Stopwatch();
         private readonly Func<double> _pumpElapsedMilliseconds;
 
-        internal FlowFieldVolumeSession(FlowFieldExecutionBoundary boundary = null)
-            : base(boundary)
+        // The session that runs this builder. Lifecycle, events and the build
+        // loop live there.
+        private readonly FlowFieldSession _session;
+
+        internal FlowFieldVolumeBuilder(FlowFieldSession session)
         {
+            _session = session ?? throw new ArgumentNullException(nameof(session));
             _obstacles = new FlowFieldVolumeObstacleTracker(MarkObstacleRegionDirty);
             _pumpElapsedMilliseconds = () => _pumpTimer.Elapsed.TotalMilliseconds;
         }
 
-        internal override FlowFieldSpaceMode SpaceMode => FlowFieldSpaceMode.Volume3D;
-        internal override bool IsWaitingForExternalCompletion
+        public FlowFieldSpaceMode SpaceMode => FlowFieldSpaceMode.Volume3D;
+        public bool IsWaitingForExternalCompletion
             => _build != null && _build.SolveRunning && !_build.SolveHandle.IsCompleted;
-        internal override bool IsReady => CanPump && _committed != null;
+        public bool IsReady => _session.CanPump && _committed != null;
         internal long TrackedMemoryBytes
         {
             get
@@ -67,7 +76,7 @@ namespace Common.FlowField
         }
         internal FlowFieldGridSpace Grid
             => _committed?.Grid ?? _build?.Request.Grid ?? (_requests.HasLatest ? _requests.Latest.Grid : default);
-        internal override bool HasPendingRequest => _requests.Pending || _hasPendingModifierRecompose || _build != null;
+        public bool HasPendingRequest => _requests.Pending || _hasPendingModifierRecompose || _build != null;
         internal bool TryGetLatestRequestedInput(out FlowFieldVolumeRequest request)
         {
             request = _requests.Latest;
@@ -92,10 +101,10 @@ namespace Common.FlowField
         internal void Initialize(FlowFieldBakeMode bakeMode)
         {
             ThrowIfDisposed();
-            if (IsInitialized)
+            if (_session.IsInitialized)
                 throw new InvalidOperationException("FlowField volume session is already initialized.");
-            BakeMode = bakeMode;
-            Fault = null;
+            _session.BakeMode = bakeMode;
+            _session.Fault = null;
             _requests.Clear();
             _hasPendingModifierRecompose = false;
             _obstacleQueryRequired = false;
@@ -103,13 +112,13 @@ namespace Common.FlowField
             _suspendedByLifecycle = false;
             _buildReservationBytes = 0;
             _committedReservationBytes = 0;
-            SetLifecycle(FlowFieldSessionLifecycle.Suspended);
+            _session.SetLifecycle(FlowFieldSessionLifecycle.Suspended);
         }
 
         internal bool Submit(in FlowFieldVolumeRequest request, bool requeryObstacles = false)
         {
             ThrowIfDisposed();
-            if (!IsInitialized)
+            if (!_session.IsInitialized)
                 throw new InvalidOperationException("FlowField volume session is not initialized.");
             ValidateRequest(request);
             if (requeryObstacles)
@@ -155,8 +164,8 @@ namespace Common.FlowField
         // Accepted input waits while the lifecycle has stopped this session.
         private void EnterBuildingUnlessStopped()
         {
-            if (!IsFaulted && (State != FlowFieldRuntimeState.Suspended || !_suspendedByLifecycle))
-                SetLifecycle(FlowFieldSessionLifecycle.Building);
+            if (!_session.IsFaulted && (_session.State != FlowFieldRuntimeState.Suspended || !_suspendedByLifecycle))
+                _session.SetLifecycle(FlowFieldSessionLifecycle.Building);
         }
 
         internal void Pump(double budgetMilliseconds = DefaultBudgetMilliseconds)
@@ -167,16 +176,20 @@ namespace Common.FlowField
             FlowFieldBuildBudget budget = new FlowFieldBuildBudget(
                 budgetMilliseconds,
                 _pumpElapsedMilliseconds);
-            RunPipeline(in budget, scheduled: false, waitForWorker: true);
+            _session.RunPipeline(in budget, scheduled: false, waitForWorker: true);
         }
 
-        private protected override void BeforePump() => _obstacles.DetectRegisteredChanges();
+        public void BeforePump() => _obstacles.DetectRegisteredChanges();
 
-        private protected override bool HasActiveBuild => _build != null;
+        public bool BeginsAfterBudget => false;
 
-        private protected override bool TryBeginBuild(bool scheduled) => TryBeginPendingBuild();
+        public int MaxBuildsBegunPerPump => int.MaxValue;
 
-        private protected override FlowFieldBuildStep StepBuild(in FlowFieldBuildBudget budget, bool waitForWorker)
+        public bool HasActiveBuild => _build != null;
+
+        public bool TryBeginBuild(bool scheduled) => TryBeginPendingBuild();
+
+        public FlowFieldBuildStep StepBuild(in FlowFieldBuildBudget budget, bool waitForWorker)
         {
             if (IsWaitingForExternalCompletion && !waitForWorker)
                 return FlowFieldBuildStep.Waiting;
@@ -193,20 +206,20 @@ namespace Common.FlowField
             }
         }
 
-        private protected override void PublishBuild() => CommitBuild(_build);
+        public void PublishBuild() => CommitBuild(_build);
 
         // The next build may already be owed, so the session reports Ready
         // only once nothing is.
-        private protected override bool StaysBuildingWhileOwed => true;
+        public bool StaysBuildingWhileOwed => true;
 
-        private protected override bool HasOwedInput => _requests.Pending || _hasPendingModifierRecompose;
+        public bool HasOwedInput => _requests.Pending || _hasPendingModifierRecompose;
 
         private bool TryBeginPendingBuild()
         {
             if (!_requests.Pending && !_hasPendingModifierRecompose)
             {
-                if (_committed != null && IsRebuilding)
-                    SetLifecycle(FlowFieldSessionLifecycle.Active);
+                if (_committed != null && _session.IsRebuilding)
+                    _session.SetLifecycle(FlowFieldSessionLifecycle.Active);
                 return false;
             }
 
@@ -215,7 +228,7 @@ namespace Common.FlowField
             _requests.Pending = false;
             _hasPendingModifierRecompose = false;
             FlowFieldModifierWorkItem[] modifierSnapshots;
-            using (Boundary.EnterUserCode())
+            using (_session.Boundary.EnterUserCode())
                 modifierSnapshots = _modifierRegistry.CaptureSnapshots();
             long reservation = EstimateBuildBytes(request.Grid.CellCount, modifierSnapshots.Length);
             if (!CanReserveForBuild(request, reservation))
@@ -286,7 +299,7 @@ namespace Common.FlowField
 
         private void CancelCurrentBuild()
         {
-            AdvanceLifetimeGeneration();
+            _session.AdvanceLifetimeGeneration();
             DiscardBuild();
             _requests.Pending = false;
             _hasPendingModifierRecompose = false;
@@ -298,7 +311,7 @@ namespace Common.FlowField
             return _obstacles.Register(collider);
         }
 
-        private protected override bool RegisterObstacleNow(Collider collider)
+        public bool RegisterObstacleNow(Collider collider)
             => RegisterDynamicObstacle(collider);
 
         internal bool UnregisterDynamicObstacle(Collider collider)
@@ -307,7 +320,7 @@ namespace Common.FlowField
             return _obstacles.Unregister(collider);
         }
 
-        private protected override bool UnregisterObstacleNow(Collider collider)
+        public bool UnregisterObstacleNow(Collider collider)
             => UnregisterDynamicObstacle(collider);
 
         internal void MarkObstacleRegionDirty(Bounds bounds)
@@ -326,15 +339,15 @@ namespace Common.FlowField
                 EnterBuildingUnlessStopped();
         }
 
-        internal override void NotifyObstacleRegionDirtyCommand(Bounds worldBounds)
+        public void NotifyObstacleRegionDirtyCommand(Bounds worldBounds)
             => MarkObstacleRegionDirty(worldBounds);
 
         internal void DetectUnregisteredObstacleChanges(bool enabled)
         {
             if (!enabled
-                || !IsInitialized
-                || IsFaulted
-                || BakeMode == FlowFieldBakeMode.StaticBaked)
+                || !_session.IsInitialized
+                || _session.IsFaulted
+                || _session.BakeMode == FlowFieldBakeMode.StaticBaked)
                 return;
             FlowFieldVolumeRequest request = _requests.HasLatest
                 ? _requests.Latest
@@ -344,14 +357,14 @@ namespace Common.FlowField
                 || !FlowFieldGridSpace.IsFinite(request.WorldBounds.size))
                 return;
 
-            using FlowFieldExecutionBoundary.OperationScope operation = Boundary.EnterOperation();
+            using FlowFieldExecutionBoundary.OperationScope operation = _session.Boundary.EnterOperation();
             _obstacles.DetectUnregisteredChanges(in request);
         }
 
         internal void DetectModifierChanges()
         {
             bool changed;
-            using (Boundary.EnterUserCode())
+            using (_session.Boundary.EnterUserCode())
                 changed = _modifierRegistry.DetectChanges();
             if (changed)
                 QueueModifierChange();
@@ -361,7 +374,7 @@ namespace Common.FlowField
         {
             ThrowIfInputAvailable();
             bool registered;
-            using (Boundary.EnterUserCode())
+            using (_session.Boundary.EnterUserCode())
                 registered = _modifierRegistry.Register(modifier);
             if (!registered)
                 return false;
@@ -369,54 +382,54 @@ namespace Common.FlowField
             return true;
         }
 
-        private protected override bool RegisterModifierNow(IFlowFieldVectorModifier modifier)
+        public bool RegisterModifierNow(IFlowFieldVectorModifier modifier)
             => RegisterModifier(modifier);
 
         internal bool UnregisterModifier(IFlowFieldVectorModifier modifier)
         {
             ThrowIfDisposed();
-            if (!IsInitialized && !IsFaulted)
+            if (!_session.IsInitialized && !_session.IsFaulted)
                 throw new InvalidOperationException("FlowField volume session is unavailable.");
             if (!_modifierRegistry.Unregister(modifier))
                 return false;
             // A retry builds everything again.
-            if (!IsFaulted)
+            if (!_session.IsFaulted)
                 QueueModifierChange();
             return true;
         }
 
-        private protected override bool UnregisterModifierNow(IFlowFieldVectorModifier modifier)
+        public bool UnregisterModifierNow(IFlowFieldVectorModifier modifier)
             => UnregisterModifier(modifier);
 
-        private protected override void NotifyModifierChangedNow(
+        public void NotifyModifierChangedNow(
             IFlowFieldVectorModifier modifier,
             FlowFieldModifierChange change)
         {
             ThrowIfInputAvailable();
             bool valid;
-            using (Boundary.EnterUserCode())
+            using (_session.Boundary.EnterUserCode())
                 valid = _modifierRegistry.ValidateModifierChange(modifier, change);
             if (valid && change != FlowFieldModifierChange.None)
                 QueueModifierChange();
         }
 
-        internal override void Suspend()
+        public void Suspend()
         {
-            if (!IsInitialized)
+            if (!_session.IsInitialized)
                 return;
             _suspendedByLifecycle = true;
             CancelCurrentBuild();
             DropCommittedField();
-            SetLifecycle(FlowFieldSessionLifecycle.Suspended);
+            _session.SetLifecycle(FlowFieldSessionLifecycle.Suspended);
         }
 
         internal void Resume()
         {
-            if (State != FlowFieldRuntimeState.Suspended)
+            if (_session.State != FlowFieldRuntimeState.Suspended)
                 return;
             _suspendedByLifecycle = false;
             _requests.Pending = _requests.HasLatest;
-            SetLifecycle(FlowFieldSessionLifecycle.Building);
+            _session.SetLifecycle(FlowFieldSessionLifecycle.Building);
         }
 
         // The world may have changed while nothing observed it, so the session
@@ -427,44 +440,44 @@ namespace Common.FlowField
             _committedReservationBytes = 0;
         }
 
-        internal override void Release()
+        public void Release()
         {
-            if (!IsInitialized && !IsFaulted)
+            if (!_session.IsInitialized && !_session.IsFaulted)
                 return;
             CancelCurrentBuild();
-            Fault = null;
+            _session.Fault = null;
             DropCommittedField();
             _requests.Clear();
             _suspendedByLifecycle = false;
             _safety.ClearRegions();
-            DetachRuntimeScheduler();
+            _session.DetachRuntimeScheduler();
             _obstacles.Clear();
             _registeredObstacleOverlapBuffer = null;
             _cellQuery.Clear();
             _spares.Clear();
             _modifierRegistry.Clear();
-            SetLifecycle(FlowFieldSessionLifecycle.Released);
+            _session.SetLifecycle(FlowFieldSessionLifecycle.Released);
         }
 
-        internal override void RetryFault()
+        public void RetryFault()
         {
-            if (!IsFaulted)
+            if (!_session.IsFaulted)
                 return;
-            AdvanceLifetimeGeneration();
-            Fault = null;
+            _session.AdvanceLifetimeGeneration();
+            _session.Fault = null;
             // A retry only clears the failure.  The latest accepted request
             // must still build and publish before the session becomes Ready;
             // never expose a transient Ready state with no valid result.
             DropCommittedField();
             _requests.Pending = _requests.HasLatest;
-            SetLifecycle(_suspendedByLifecycle
+            _session.SetLifecycle(_suspendedByLifecycle
                 ? FlowFieldSessionLifecycle.Suspended
                 : FlowFieldSessionLifecycle.Building);
         }
 
-        private protected override void AbandonWorkForFault() => CancelCurrentBuild();
+        public void AbandonWorkForFault() => CancelCurrentBuild();
 
-        private protected override void ApplyFaultedState() => SetLifecycle(FlowFieldSessionLifecycle.Faulted);
+        public void ApplyFaultedState() => _session.SetLifecycle(FlowFieldSessionLifecycle.Faulted);
 
         private void QueueModifierChange()
         {
@@ -503,14 +516,14 @@ namespace Common.FlowField
         private void ThrowIfInputAvailable()
         {
             ThrowIfDisposed();
-            if (!IsInitialized || IsFaulted)
-                throw new InvalidOperationException("FlowField volume session is unavailable.", Fault);
+            if (!_session.IsInitialized || _session.IsFaulted)
+                throw new InvalidOperationException("FlowField volume session is unavailable.", _session.Fault);
         }
 
         private void ThrowIfDisposed()
         {
-            if (Disposed)
-                throw new ObjectDisposedException(nameof(FlowFieldVolumeSession));
+            if (_session.Disposed)
+                throw new ObjectDisposedException(nameof(FlowFieldVolumeBuilder));
         }
 
         private void ValidateRequest(in FlowFieldVolumeRequest request)
@@ -554,13 +567,13 @@ namespace Common.FlowField
                 throw new InvalidOperationException(staticReason);
         }
 
-        public override void Dispose()
+        public void Dispose()
         {
-            if (Disposed)
+            if (_session.Disposed)
                 return;
-            using FlowFieldExecutionBoundary.OperationScope operation = Boundary.EnterOperation();
-            Disposed = true;
-            DetachRuntimeScheduler();
+            using FlowFieldExecutionBoundary.OperationScope operation = _session.Boundary.EnterOperation();
+            _session.Disposed = true;
+            _session.DetachRuntimeScheduler();
             CancelCurrentBuild();
             _requests.Clear();
             DropCommittedField();
@@ -570,8 +583,8 @@ namespace Common.FlowField
             _spares.Clear();
             _modifierRegistry.Clear();
             _safety.ClearRegions();
-            SetLifecycle(FlowFieldSessionLifecycle.Released);
-            MarkBaseDisposed();
+            _session.SetLifecycle(FlowFieldSessionLifecycle.Released);
+            _session.MarkBaseDisposed();
         }
     }
 

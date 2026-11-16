@@ -4,13 +4,13 @@ using UnityEngine;
 namespace Common.FlowField
 {
     /// <summary>Obstacle commands and observations of a Surface2D session.</summary>
-    internal sealed partial class FlowFieldSurfaceSession
+    internal sealed partial class FlowFieldSurfaceBuilder
     {
         internal bool RegisterObstacle(Collider collider, FlowFieldCellRect dirtyRegion)
         {
             if (ReferenceEquals(collider, null))
                 throw new ArgumentNullException(nameof(collider));
-            if (BakeMode == FlowFieldBakeMode.StaticBaked)
+            if (_session.BakeMode == FlowFieldBakeMode.StaticBaked)
                 return true;
             _obstaclePipeline.DiscardStagedDynamicProbe();
             if (!_obstaclePipeline.RegisterDynamicObstacle(collider))
@@ -34,7 +34,7 @@ namespace Common.FlowField
             return flags;
         }
 
-        private protected override bool RegisterObstacleNow(Collider collider)
+        public bool RegisterObstacleNow(Collider collider)
         {
             if (ReferenceEquals(collider, null))
                 throw new ArgumentNullException(nameof(collider));
@@ -52,7 +52,7 @@ namespace Common.FlowField
         {
             if (ReferenceEquals(collider, null))
                 throw new ArgumentNullException(nameof(collider));
-            if (BakeMode == FlowFieldBakeMode.StaticBaked)
+            if (_session.BakeMode == FlowFieldBakeMode.StaticBaked)
                 return true;
             _obstaclePipeline.DiscardStagedDynamicProbe();
             if (!_obstaclePipeline.UnregisterDynamicObstacle(collider))
@@ -64,7 +64,7 @@ namespace Common.FlowField
             return true;
         }
 
-        private protected override bool UnregisterObstacleNow(Collider collider)
+        public bool UnregisterObstacleNow(Collider collider)
         {
             if (ReferenceEquals(collider, null))
                 throw new ArgumentNullException(nameof(collider));
@@ -83,7 +83,7 @@ namespace Common.FlowField
 
         internal void MarkObstacleDirty(FlowFieldCellRect dirtyRegion)
         {
-            if (BakeMode == FlowFieldBakeMode.StaticBaked)
+            if (_session.BakeMode == FlowFieldBakeMode.StaticBaked)
                 return;
             _obstaclePipeline.DiscardStagedDynamicProbe();
             MarkDirty(
@@ -92,7 +92,7 @@ namespace Common.FlowField
                 dirtyRegion);
         }
 
-        internal override void NotifyObstacleRegionDirtyCommand(Bounds worldBounds)
+        public void NotifyObstacleRegionDirtyCommand(Bounds worldBounds)
         {
             if (!FlowFieldGridSpace.IsFinite(worldBounds.center)
                 || !FlowFieldGridSpace.IsFinite(worldBounds.size))
@@ -104,7 +104,7 @@ namespace Common.FlowField
 
         internal bool DetectObstacleTransformsChanged()
         {
-            if (BakeMode == FlowFieldBakeMode.StaticBaked || !_state.Grid.IsValid)
+            if (_session.BakeMode == FlowFieldBakeMode.StaticBaked || !_state.Grid.IsValid)
                 return false;
             bool changed = _obstaclePipeline.DetectDynamicTransformsChanged(
                 _state.Grid,
@@ -120,7 +120,7 @@ namespace Common.FlowField
 
         internal void RecordObstacleObservation(FlowFieldCellRect dirtyRegion)
         {
-            if (BakeMode == FlowFieldBakeMode.StaticBaked)
+            if (_session.BakeMode == FlowFieldBakeMode.StaticBaked)
                 return;
             _obstaclePipeline.DiscardStagedDynamicProbe();
             _state.ObstacleProbePending = true;
@@ -130,7 +130,7 @@ namespace Common.FlowField
 
         internal bool ProbeObstacleChanges(in FlowFieldSurfaceRequest request)
         {
-            if (BakeMode == FlowFieldBakeMode.StaticBaked
+            if (_session.BakeMode == FlowFieldBakeMode.StaticBaked
                 || !_state.SurfaceReady
                 || !_state.HasObstacleMask
                 || _state.Workspace.Capacity != _state.Grid.CellCount)

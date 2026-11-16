@@ -186,7 +186,7 @@ namespace Common.FlowField.Editor
             FlowFieldSurfaceBakeJob bakeJob = new FlowFieldSurfaceBakeJob(
                 settings,
                 ReportSurfaceProgress);
-            FlowFieldSurfaceSession session = null;
+            FlowFieldSession session = null;
             int generation = _callbackGeneration;
             bool cleaned = false;
             void Cleanup()
@@ -200,7 +200,7 @@ namespace Common.FlowField.Editor
                 {
                     session.FieldCommitted -= Complete;
                     session.Failed -= Failed;
-                    session.DisposePermanently();
+                    session.Surface.DisposePermanently();
                 }
                 bakeJob.Dispose();
                 EditorUtility.ClearProgressBar();
@@ -243,17 +243,17 @@ namespace Common.FlowField.Editor
                 }
 
                 FlowFieldSurfaceData surface = FlowFieldSurfaceData.FromRuntime(settings, result, 1);
-                session = new FlowFieldSurfaceSession(new FlowFieldFixedSurfaceSource(surface));
+                session = FlowFieldSession.CreateSurface(surfaceSource: new FlowFieldFixedSurfaceSource(surface));
                 session.FieldCommitted += Complete;
                 session.Failed += Failed;
                 try
                 {
-                    session.Initialize(
+                    session.Surface.Initialize(
                         FlowFieldBakeMode.RuntimeDynamic,
                         FlowFieldSurfaceSourceKind.SceneBuild);
 
                     FlowFieldSurfaceGoalResolution goalSnapshot = manager.ResolveConfiguredGoal(settings.Grid);
-                    bool accepted = session.Submit(FlowFieldSurfaceRequest.ForSceneBuild(
+                    bool accepted = session.Surface.Submit(FlowFieldSurfaceRequest.ForSceneBuild(
                         settings,
                         input.ObstacleLayer,
                         input.CheckHeight,
@@ -269,7 +269,7 @@ namespace Common.FlowField.Editor
                         throw new InvalidOperationException("Static Flow Bake session could not be started.");
                     if (session.IsFaulted)
                         throw session.Fault ?? new InvalidOperationException("Static Flow Bake failed.");
-                    session.Pump();
+                    session.Surface.Pump();
                 }
                 catch
                 {
@@ -298,7 +298,7 @@ namespace Common.FlowField.Editor
 
                     if (session != null)
                     {
-                        session.Pump();
+                        session.Surface.Pump();
                         if (session.IsFaulted)
                             Failed(session.Fault ?? new InvalidOperationException("Static Flow Bake failed."));
                         return;
@@ -364,7 +364,7 @@ namespace Common.FlowField.Editor
         private static void SaveSurfaceBake(
             FlowFieldManager manager,
             FlowFieldSurfaceBakeSettings settings,
-            FlowFieldSurfaceSession session)
+            FlowFieldSession session)
         {
             int undoGroup = -1;
             string assetPath = null;
@@ -372,8 +372,8 @@ namespace Common.FlowField.Editor
             bool createdAsset = false;
             try
             {
-                FlowFieldSurfaceWorkspace workspace = session.CommittedWorkspace;
-                if (workspace == null || session.CommittedSurface == null)
+                FlowFieldSurfaceWorkspace workspace = session.Surface.CommittedWorkspace;
+                if (workspace == null || session.Surface.CommittedSurface == null)
                     throw new InvalidOperationException("Static Flow Bake produced no committed field.");
                 if (manager.HasConfiguredGoal && (!workspace.HasActiveGoal || workspace.ResolvedGoalIndex < 0))
                     throw new InvalidOperationException(
@@ -403,7 +403,7 @@ namespace Common.FlowField.Editor
                 Undo.RecordObject(asset, "Bake FlowField Static Snapshot");
                 bool hasGoal = workspace.HasActiveGoal && workspace.ResolvedGoalIndex >= 0;
                 FlowFieldSurfaceGoalResolution goal = manager.ResolveConfiguredGoal(settings.Grid);
-                asset.Apply(settings, session.CommittedSurface, manager.ObstacleLayer,
+                asset.Apply(settings, session.Surface.CommittedSurface, manager.ObstacleLayer,
                     manager.ObstacleCheckHeight, manager.ObstacleCheckCenterOffset,
                     manager.ObstacleClearance, hasGoal, goal.RequestedWorld,
                     goal.InfluenceRadius, hasGoal ? workspace.ResolvedGoalIndex : -1, workspace);
@@ -439,7 +439,7 @@ namespace Common.FlowField.Editor
             if (manager == null)
                 throw new ArgumentNullException(nameof(manager));
 
-            FlowFieldVolumeSession session = FlowFieldBakeService.CreateVolumeBakeSession(
+            FlowFieldSession session = FlowFieldBakeService.CreateVolumeBakeSession(
                 manager,
                 out FlowFieldVolumeRequest request);
             int bakeInputGeneration = FlowFieldBakeService.CaptureInputGeneration(manager);
@@ -510,13 +510,13 @@ namespace Common.FlowField.Editor
                         Cleanup();
                         return;
                     }
-                    if (!ReportVolumeProgress(session.BuildProgress))
+                    if (!ReportVolumeProgress(session.Volume.BuildProgress))
                     {
                         Debug.Log("Volume3D Static Flow Bake cancelled.");
                         Cleanup();
                         return;
                     }
-                    session.Pump(2.0);
+                    session.Volume.Pump(2.0);
                     if (session.IsFaulted)
                         Failed(new InvalidOperationException(
                             session.LastError ?? "Volume3D Static Flow Bake failed."));
@@ -539,7 +539,7 @@ namespace Common.FlowField.Editor
             EditorApplication.update += Pump;
         }
 
-        private static void SaveVolumeBake(FlowFieldManager manager, FlowFieldVolumeSession session)
+        private static void SaveVolumeBake(FlowFieldManager manager, FlowFieldSession session)
         {
             string assetPath = null;
             FlowFieldVolumeBakeData asset = null;
@@ -547,7 +547,7 @@ namespace Common.FlowField.Editor
             int undoGroup = -1;
             try
             {
-                if (!session.TryExport(
+                if (!session.Volume.TryExport(
                         out FlowFieldVolumeRequest committedRequest,
                         out bool[] blocked,
                         out uint[] topology,

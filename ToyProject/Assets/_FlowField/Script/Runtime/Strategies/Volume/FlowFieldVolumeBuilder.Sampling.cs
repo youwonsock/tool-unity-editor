@@ -10,9 +10,9 @@ using static Common.FlowField.FlowFieldVolumeNavigation;
 namespace Common.FlowField
 {
     /// <summary>Reads of the published Volume3D field.</summary>
-    internal sealed partial class FlowFieldVolumeSession
+    internal sealed partial class FlowFieldVolumeBuilder
     {
-        internal override bool TrySample(Vector3 worldPosition, out FlowFieldSample sample)
+        public bool TrySample(Vector3 worldPosition, out FlowFieldSample sample)
             => TrySampleCore(worldPosition, out sample) == FlowFieldSampleStatus.Sampled;
 
         private FlowFieldSampleStatus TrySampleCore(Vector3 worldPosition, out FlowFieldSample sample)
@@ -78,16 +78,16 @@ namespace Common.FlowField
         // A cell exists here, but nothing may move through it yet.
         private static FlowFieldSample Stopped => new FlowFieldSample(Vector3.zero, 0f, Vector3.zero, false, true);
 
-        internal override FlowFieldSample Sample(Vector3 worldPosition)
+        public FlowFieldSample Sample(Vector3 worldPosition)
         {
             if (!TrySample(worldPosition, out FlowFieldSample sample))
                 throw new InvalidOperationException("World position is outside the initialized FlowField volume.");
             return sample;
         }
 
-        internal override FlowFieldClampResult ClampPositionToGrid(Vector3 worldPosition)
+        public FlowFieldClampResult ClampPositionToGrid(Vector3 worldPosition)
         {
-            if (!IsInitialized || !Grid.IsValid)
+            if (!_session.IsInitialized || !Grid.IsValid)
                 throw new InvalidOperationException("FlowField volume session is not initialized.");
             if (!FlowFieldGridSpace.IsFinite(worldPosition))
                 throw new ArgumentOutOfRangeException(nameof(worldPosition));

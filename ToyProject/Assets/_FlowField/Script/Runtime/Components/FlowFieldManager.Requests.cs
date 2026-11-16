@@ -59,12 +59,12 @@ namespace Common.FlowField
                 return;
             FlowFieldVolumeRequest request = CreateVolumeRequest();
             if (!force
-                && _volumeSession.TryGetLatestRequestedInput(out FlowFieldVolumeRequest latest)
+                && _volumeSession.Volume.TryGetLatestRequestedInput(out FlowFieldVolumeRequest latest)
                 && latest.HasSameInputs(request))
                 return;
             // The session owns the accepted input, including a newer input
             // submitted from its synchronous state-change callback.
-            _volumeSession.Submit(request, requeryObstacles);
+            _volumeSession.Volume.Submit(request, requeryObstacles);
         }
 
         internal FlowFieldSurfaceBakeSettings CreateSurfaceBakeSettings()

@@ -39,7 +39,7 @@ namespace Common.FlowField.Editor
         /// Creates an isolated Volume3D bake session. The caller owns and must
         /// dispose it, and pumps it from the Editor update loop.
         /// </summary>
-        internal static FlowFieldVolumeSession CreateVolumeBakeSession(
+        internal static FlowFieldSession CreateVolumeBakeSession(
             FlowFieldManager manager,
             out FlowFieldVolumeRequest request)
         {
@@ -56,11 +56,11 @@ namespace Common.FlowField.Editor
                 null,
                 CaptureInputGeneration(manager));
 
-            var session = new FlowFieldVolumeSession();
+            var session = FlowFieldSession.CreateVolume();
             try
             {
-                session.Initialize(FlowFieldBakeMode.RuntimeDynamic);
-                session.Submit(request);
+                session.Volume.Initialize(FlowFieldBakeMode.RuntimeDynamic);
+                session.Volume.Submit(request);
                 return session;
             }
             catch

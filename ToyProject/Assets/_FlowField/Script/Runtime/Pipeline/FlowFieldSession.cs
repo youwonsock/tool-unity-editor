@@ -3,13 +3,6 @@ using UnityEngine;
 
 namespace Common.FlowField
 {
-    /// <summary>
-    /// Common execution boundary for the Surface2D and Volume3D sessions.
-    /// Mode-specific sessions own their requests, versions and result data.
-    /// This base owns the shared lifecycle rules: the published state, the fault
-    /// sequence, command deferral and the generation that retires queued events
-    /// and late solve callbacks.
-    /// </summary>
     /// <summary>What one step of a build left it doing.</summary>
     internal enum FlowFieldBuildStep
     {
@@ -23,25 +16,54 @@ namespace Common.FlowField
         Completed,
     }
 
-    internal abstract class FlowFieldSessionBase : IDisposable, IFlowFieldBuildOperation
+    /// <summary>
+    /// The FlowField pipeline, the same for both space modes. It owns the
+    /// lifecycle, the published state, the fault sequence, command deferral,
+    /// the build loop and the generation that retires queued events and late
+    /// solve callbacks. What differs between Surface2D and Volume3D lives in
+    /// its <see cref="IFlowFieldSpaceBuilder"/>.
+    /// </summary>
+    internal sealed class FlowFieldSession : IDisposable, IFlowFieldBuildOperation
     {
-        private protected readonly FlowFieldExecutionBoundary Boundary;
+        internal readonly FlowFieldExecutionBoundary Boundary;
+        private readonly IFlowFieldSpaceBuilder _builder;
         private bool _baseDisposed;
         private bool _runtimeScheduled;
         private FlowFieldRuntimeState _publishedState = FlowFieldRuntimeState.Uninitialized;
 
-        private protected FlowFieldSessionBase(FlowFieldExecutionBoundary boundary)
+        internal FlowFieldSession(
+            FlowFieldExecutionBoundary boundary,
+            Func<FlowFieldSession, IFlowFieldSpaceBuilder> createBuilder)
         {
             Boundary = boundary ?? new FlowFieldExecutionBoundary();
+            _builder = createBuilder?.Invoke(this)
+                ?? throw new ArgumentNullException(nameof(createBuilder));
         }
+
+        /// <summary>A Surface2D session. The arguments replace parts of the build for a test or a bake.</summary>
+        internal static FlowFieldSession CreateSurface(
+            FlowFieldExecutionBoundary boundary = null,
+            IFlowFieldSurfaceSource surfaceSource = null,
+            IFlowFieldSurfaceSolveBackend solveBackend = null,
+            Func<IFlowFieldSurfaceSolveBackend> solveBackendFactory = null)
+            => new FlowFieldSession(
+                boundary,
+                session => new FlowFieldSurfaceBuilder(session, surfaceSource, solveBackend, solveBackendFactory));
+
+        internal static FlowFieldSession CreateVolume(FlowFieldExecutionBoundary boundary = null)
+            => new FlowFieldSession(boundary, session => new FlowFieldVolumeBuilder(session));
+
+        internal IFlowFieldSpaceBuilder Builder => _builder;
+        internal FlowFieldSurfaceBuilder Surface => _builder as FlowFieldSurfaceBuilder;
+        internal FlowFieldVolumeBuilder Volume => _builder as FlowFieldVolumeBuilder;
 
         internal event Action FieldCommitted;
         internal event Action<Exception> Failed;
         internal event Action<FlowFieldRuntimeState> StateChanged;
         internal event Action<Exception> EventFailed;
 
-        internal abstract FlowFieldSpaceMode SpaceMode { get; }
-        internal FlowFieldBakeMode BakeMode { get; private protected set; }
+        internal FlowFieldSpaceMode SpaceMode => _builder.SpaceMode;
+        internal FlowFieldBakeMode BakeMode { get; set; }
         internal FlowFieldSessionLifecycle Lifecycle { get; private set; }
 
         internal FlowFieldRuntimeState State => Lifecycle switch
@@ -61,71 +83,71 @@ namespace Common.FlowField
             || Lifecycle == FlowFieldSessionLifecycle.Suspended;
         internal bool IsFaulted => Lifecycle == FlowFieldSessionLifecycle.Faulted;
         internal bool IsRebuilding => Lifecycle == FlowFieldSessionLifecycle.Building;
-        private protected bool CanPump => !Disposed
+        internal bool CanPump => !Disposed
             && (Lifecycle == FlowFieldSessionLifecycle.Active || Lifecycle == FlowFieldSessionLifecycle.Building);
-        internal abstract bool IsReady { get; }
-        internal abstract bool HasPendingRequest { get; }
-        internal Exception Fault { get; private protected set; }
+        internal bool IsReady => _builder.IsReady;
+        internal bool HasPendingRequest => _builder.HasPendingRequest;
+        internal Exception Fault { get; set; }
         internal string LastError => Fault?.Message;
-        internal int Revision { get; private protected set; }
-        private protected bool Disposed { get; set; }
+        internal int Revision { get; set; }
+        internal bool Disposed { get; set; }
         // Advances when the session stops being what earlier work was for:
         // Release, Suspend and a fault. Queued events and late solve callbacks
         // from before that point are dropped.
-        private protected int LifetimeGeneration { get; private set; }
-        internal abstract bool TrySample(Vector3 worldPosition, out FlowFieldSample sample);
-        internal abstract FlowFieldSample Sample(Vector3 worldPosition);
-        internal abstract FlowFieldClampResult ClampPositionToGrid(Vector3 worldPosition);
-        internal abstract bool TryGetFieldInfo(out FlowFieldFieldInfo info);
+        internal int LifetimeGeneration { get; private set; }
+        internal bool TrySample(Vector3 worldPosition, out FlowFieldSample sample) => _builder.TrySample(worldPosition, out sample);
+        internal FlowFieldSample Sample(Vector3 worldPosition) => _builder.Sample(worldPosition);
+        internal FlowFieldClampResult ClampPositionToGrid(Vector3 worldPosition) => _builder.ClampPositionToGrid(worldPosition);
+        internal bool TryGetFieldInfo(out FlowFieldFieldInfo info) => _builder.TryGetFieldInfo(out info);
 
         /// <summary>
         /// The published field, for display and bakes. It is valid until the
         /// next pump, after which its arrays may be reused.
         /// </summary>
-        internal abstract bool TryGetPublishedField(out FlowFieldField field);
+        internal bool TryGetPublishedField(out FlowFieldField field) => _builder.TryGetPublishedField(out field);
 
         // Registration commands issued from Modifier code wait until that
         // operation has finished. The mode-specific sessions keep their
         // different area-cache and rebuild policies behind the Now methods.
         internal bool RegisterModifierCommand(IFlowFieldVectorModifier modifier)
-            => Boundary.IsInUserCode ? DeferRegisterModifier(modifier) : RegisterModifierNow(modifier);
+            => Boundary.IsInUserCode ? DeferRegisterModifier(modifier) : _builder.RegisterModifierNow(modifier);
 
         internal bool UnregisterModifierCommand(IFlowFieldVectorModifier modifier)
-            => Boundary.IsInUserCode ? DeferUnregisterModifier(modifier) : UnregisterModifierNow(modifier);
+            => Boundary.IsInUserCode ? DeferUnregisterModifier(modifier) : _builder.UnregisterModifierNow(modifier);
 
         internal void NotifyModifierChangedCommand(IFlowFieldVectorModifier modifier, FlowFieldModifierChange change)
         {
             if (Boundary.IsInUserCode)
                 DeferNotifyModifierChanged(modifier, change);
             else
-                NotifyModifierChangedNow(modifier, change);
+                _builder.NotifyModifierChangedNow(modifier, change);
         }
 
         internal bool RegisterObstacleCommand(Collider collider)
-            => Boundary.IsInUserCode ? DeferRegisterObstacle(collider) : RegisterObstacleNow(collider);
+            => Boundary.IsInUserCode ? DeferRegisterObstacle(collider) : _builder.RegisterObstacleNow(collider);
 
         internal bool UnregisterObstacleCommand(Collider collider)
-            => Boundary.IsInUserCode ? DeferUnregisterObstacle(collider) : UnregisterObstacleNow(collider);
+            => Boundary.IsInUserCode ? DeferUnregisterObstacle(collider) : _builder.UnregisterObstacleNow(collider);
 
         // Kept apart so only a deferred call allocates the closure.
         private bool DeferRegisterModifier(IFlowFieldVectorModifier modifier)
-            => Defer(() => RegisterModifierNow(modifier), "Modifier");
+            => Defer(() => _builder.RegisterModifierNow(modifier), "Modifier");
 
         private bool DeferUnregisterModifier(IFlowFieldVectorModifier modifier)
-            => Defer(() => UnregisterModifierNow(modifier));
+            => Defer(() => _builder.UnregisterModifierNow(modifier));
 
         private void DeferNotifyModifierChanged(IFlowFieldVectorModifier modifier, FlowFieldModifierChange change)
             => Defer(() =>
             {
-                NotifyModifierChangedNow(modifier, change);
+                _builder.NotifyModifierChangedNow(modifier, change);
                 return true;
             });
 
         private bool DeferRegisterObstacle(Collider collider)
-            => Defer(() => RegisterObstacleNow(collider), "장애물");
+            => Defer(() => _builder.RegisterObstacleNow(collider), "장애물");
 
         private bool DeferUnregisterObstacle(Collider collider)
-            => Defer(() => UnregisterObstacleNow(collider));
+            => Defer(() => _builder.UnregisterObstacleNow(collider));
 
         private bool Defer(Func<bool> command, string registration = null)
         {
@@ -144,52 +166,16 @@ namespace Common.FlowField
                 Debug.LogWarning($"[FlowField] 세션이 멈춰 대기 중이던 {registration} 등록을 처리하지 못했습니다.");
         }
 
-        private protected abstract bool RegisterModifierNow(IFlowFieldVectorModifier modifier);
-        private protected abstract bool UnregisterModifierNow(IFlowFieldVectorModifier modifier);
-        private protected abstract void NotifyModifierChangedNow(
-            IFlowFieldVectorModifier modifier,
-            FlowFieldModifierChange change);
-        private protected abstract bool RegisterObstacleNow(Collider collider);
-        private protected abstract bool UnregisterObstacleNow(Collider collider);
-        internal abstract void NotifyObstacleRegionDirtyCommand(Bounds worldBounds);
+        internal void NotifyObstacleRegionDirtyCommand(Bounds worldBounds)
+            => _builder.NotifyObstacleRegionDirtyCommand(worldBounds);
 
-        internal abstract bool IsWaitingForExternalCompletion { get; }
+        internal bool IsWaitingForExternalCompletion => _builder.IsWaitingForExternalCompletion;
         internal bool IsBuilding => CanPump && (IsRebuilding || HasPendingRequest);
 
         // ----- The build pipeline both space modes run -----------------------
         // A build begins, takes steps until it is published or rejected, and
-        // the session moves between Building and Ready around it. A mode only
-        // supplies the steps.
-
-        /// <summary>A build has begun and is neither published nor rejected yet.</summary>
-        private protected abstract bool HasActiveBuild { get; }
-
-        /// <summary>Begins the next owed build. False when nothing is owed.</summary>
-        private protected abstract bool TryBeginBuild(bool scheduled);
-
-        /// <summary>Advances the active build within the budget.</summary>
-        private protected abstract FlowFieldBuildStep StepBuild(in FlowFieldBuildBudget budget, bool waitForWorker);
-
-        /// <summary>Publishes the completed build.</summary>
-        private protected abstract void PublishBuild();
-
-        /// <summary>Runs once at the start of every pump, before any step.</summary>
-        private protected virtual void BeforePump() { }
-
-        /// <summary>Whether a new build may begin after the budget has run out.</summary>
-        private protected virtual bool BeginsAfterBudget => false;
-
-        /// <summary>How many builds one pump may begin.</summary>
-        private protected virtual int MaxBuildsBegunPerPump => int.MaxValue;
-
-        /// <summary>
-        /// Whether the session stays Building after a publication while more
-        /// input is owed, instead of reporting Ready in between.
-        /// </summary>
-        private protected virtual bool StaysBuildingWhileOwed => false;
-
-        /// <summary>Whether input is still owed a build after a publication.</summary>
-        private protected virtual bool HasOwedInput => false;
+        // the session moves between Building and Ready around it. The builder
+        // only supplies the steps.
 
         internal void PumpInternal(in FlowFieldBuildBudget budget)
             => RunPipeline(in budget, scheduled: true, waitForWorker: false);
@@ -199,34 +185,34 @@ namespace Common.FlowField
         /// waits; a direct owner (a bake, an Editor preview) may wait for the
         /// worker thread instead.
         /// </summary>
-        private protected void RunPipeline(in FlowFieldBuildBudget budget, bool scheduled, bool waitForWorker)
+        internal void RunPipeline(in FlowFieldBuildBudget budget, bool scheduled, bool waitForWorker)
         {
             if (!CanPump)
                 return;
             using FlowFieldExecutionBoundary.OperationScope operation = Boundary.EnterOperation();
             try
             {
-                BeforePump();
+                _builder.BeforePump();
                 int begun = 0;
                 while (CanPump)
                 {
-                    if (!HasActiveBuild)
+                    if (!_builder.HasActiveBuild)
                     {
-                        if (begun >= MaxBuildsBegunPerPump
-                            || !BeginsAfterBudget && budget.IsExpired
-                            || !TryBeginBuild(scheduled))
+                        if (begun >= _builder.MaxBuildsBegunPerPump
+                            || !_builder.BeginsAfterBudget && budget.IsExpired
+                            || !_builder.TryBeginBuild(scheduled))
                             return;
                         begun++;
                     }
 
-                    FlowFieldBuildStep step = StepBuild(in budget, waitForWorker);
+                    FlowFieldBuildStep step = _builder.StepBuild(in budget, waitForWorker);
                     if (!CanPump)
                         return;
                     switch (step)
                     {
                         case FlowFieldBuildStep.Completed:
-                            PublishBuild();
-                            if (!(StaysBuildingWhileOwed && HasOwedInput))
+                            _builder.PublishBuild();
+                            if (!(_builder.StaysBuildingWhileOwed && _builder.HasOwedInput))
                                 SetLifecycle(FlowFieldSessionLifecycle.Active);
                             continue;
                         case FlowFieldBuildStep.Rejected:
@@ -261,7 +247,7 @@ namespace Common.FlowField
             _runtimeScheduled = true;
         }
 
-        private protected void DetachRuntimeScheduler()
+        internal void DetachRuntimeScheduler()
         {
             if (!_runtimeScheduled)
                 return;
@@ -270,10 +256,10 @@ namespace Common.FlowField
         }
 
         // Lifecycle commands with the same contract in both modes. Mode
-        // specific Init/request creation stays on the concrete sessions.
-        internal abstract void Suspend();
-        internal abstract void Release();
-        internal abstract void RetryFault();
+        // specific Init and request creation stay on the builders.
+        internal void Suspend() => _builder.Suspend();
+        internal void Release() => _builder.Release();
+        internal void RetryFault() => _builder.RetryFault();
 
         internal void ReportFault(Exception exception)
         {
@@ -281,24 +267,21 @@ namespace Common.FlowField
                 EnterFault(exception ?? new InvalidOperationException("FlowField session failed."));
         }
 
-        private protected void EnterFault(Exception exception)
+        internal void EnterFault(Exception exception)
         {
             using FlowFieldExecutionBoundary.OperationScope operation = Boundary.EnterOperation();
-            AbandonWorkForFault();
+            _builder.AbandonWorkForFault();
             Fault = exception;
-            ApplyFaultedState();
+            _builder.ApplyFaultedState();
             Publish(FlowFieldExecutionBoundary.EventKind.Failed, exception: exception);
         }
 
-        private protected abstract void AbandonWorkForFault();
-        private protected abstract void ApplyFaultedState();
-
-        private protected void AdvanceLifetimeGeneration()
+        internal void AdvanceLifetimeGeneration()
         {
             unchecked { LifetimeGeneration++; }
         }
 
-        private protected void SetLifecycle(FlowFieldSessionLifecycle next)
+        internal void SetLifecycle(FlowFieldSessionLifecycle next)
         {
             if (Lifecycle == next)
                 return;
@@ -306,7 +289,7 @@ namespace Common.FlowField
             PublishRuntimeState();
         }
 
-        private protected void PublishRuntimeState()
+        internal void PublishRuntimeState()
         {
             FlowFieldRuntimeState state = State;
             if (_publishedState == state)
@@ -319,7 +302,7 @@ namespace Common.FlowField
                 Publish(FlowFieldExecutionBoundary.EventKind.StateChanged, state);
         }
 
-        protected void NotifyFieldCommitted() => Publish(FlowFieldExecutionBoundary.EventKind.FieldCommitted);
+        internal void NotifyFieldCommitted() => Publish(FlowFieldExecutionBoundary.EventKind.FieldCommitted);
 
         private void Publish(
             FlowFieldExecutionBoundary.EventKind kind,
@@ -335,7 +318,7 @@ namespace Common.FlowField
                     exception));
         }
 
-        protected void MarkBaseDisposed()
+        internal void MarkBaseDisposed()
         {
             if (_baseDisposed)
                 return;
@@ -394,6 +377,6 @@ namespace Common.FlowField
             }
         }
 
-        public abstract void Dispose();
+        public void Dispose() => _builder.Dispose();
     }
 }

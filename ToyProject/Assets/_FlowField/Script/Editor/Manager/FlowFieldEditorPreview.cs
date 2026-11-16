@@ -13,8 +13,8 @@ namespace Common.FlowField.Editor
     [InitializeOnLoad]
     internal static class FlowFieldEditorPreview
     {
-        private static readonly Dictionary<FlowFieldManager, FlowFieldSurfaceSession> Sessions
-            = new Dictionary<FlowFieldManager, FlowFieldSurfaceSession>();
+        private static readonly Dictionary<FlowFieldManager, FlowFieldSession> Sessions
+            = new Dictionary<FlowFieldManager, FlowFieldSession>();
         private static readonly List<FlowFieldManager> Stale = new List<FlowFieldManager>();
 
         static FlowFieldEditorPreview()
@@ -37,7 +37,7 @@ namespace Common.FlowField.Editor
             grid = default;
             if (manager == null)
                 return false;
-            if (!Sessions.TryGetValue(manager, out FlowFieldSurfaceSession session) || !session.IsReady)
+            if (!Sessions.TryGetValue(manager, out FlowFieldSession session) || !session.IsReady)
             {
                 Invalidate(manager);
                 session = Build(manager);
@@ -54,40 +54,40 @@ namespace Common.FlowField.Editor
 
         internal static void Invalidate(FlowFieldManager manager)
         {
-            if (manager is null || !Sessions.TryGetValue(manager, out FlowFieldSurfaceSession session))
+            if (manager is null || !Sessions.TryGetValue(manager, out FlowFieldSession session))
                 return;
             Sessions.Remove(manager);
-            session.DisposePermanently();
+            session.Surface.DisposePermanently();
         }
 
         internal static void InvalidateAll()
         {
-            foreach (FlowFieldSurfaceSession session in Sessions.Values)
-                session.DisposePermanently();
+            foreach (FlowFieldSession session in Sessions.Values)
+                session.Surface.DisposePermanently();
             Sessions.Clear();
         }
 
-        private static FlowFieldSurfaceSession Build(FlowFieldManager manager)
+        private static FlowFieldSession Build(FlowFieldManager manager)
         {
-            var session = new FlowFieldSurfaceSession();
+            var session = FlowFieldSession.CreateSurface();
             FlowFieldSurfaceSourceKind sourceKind = manager.BakeMode == FlowFieldBakeMode.StaticBaked
                 ? FlowFieldSurfaceSourceKind.StaticSnapshot
                 : FlowFieldSurfaceSourceKind.SceneBuild;
-            session.Initialize(manager.BakeMode, sourceKind);
+            session.Surface.Initialize(manager.BakeMode, sourceKind);
             RegisterModifiers(manager, session);
             FlowFieldSurfaceBakeSettings settings = manager.CreateSurfaceBakeSettings();
-            session.Submit(manager.CreateSurfaceRequest(
+            session.Surface.Submit(manager.CreateSurfaceRequest(
                 settings,
-                session.DirtyFlags,
-                session.DirtyFinalRegion,
-                session.DirtyObstacleRegion));
+                session.Surface.DirtyFlags,
+                session.Surface.DirtyFinalRegion,
+                session.Surface.DirtyObstacleRegion));
             // The preview owns its session and waits for the worker, so it
             // completes in the same editor repaint that asked for it.
-            session.Pump();
+            session.Surface.Pump();
             return session;
         }
 
-        private static void RegisterModifiers(FlowFieldManager manager, FlowFieldSurfaceSession session)
+        private static void RegisterModifiers(FlowFieldManager manager, FlowFieldSession session)
         {
             FlowFieldVectorModifierVolume[] volumes = UnityEngine.Object.FindObjectsByType<FlowFieldVectorModifierVolume>(
                 FindObjectsInactive.Include,

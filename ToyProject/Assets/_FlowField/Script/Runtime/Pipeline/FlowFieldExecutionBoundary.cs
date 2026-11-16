@@ -186,14 +186,14 @@ namespace Common.FlowField
 
         internal readonly struct QueuedEvent
         {
-            internal FlowFieldSessionBase Source { get; }
+            internal FlowFieldSession Source { get; }
             internal EventKind Kind { get; }
             internal int Generation { get; }
             internal FlowFieldRuntimeState State { get; }
             internal Exception Exception { get; }
 
             internal QueuedEvent(
-                FlowFieldSessionBase source,
+                FlowFieldSession source,
                 EventKind kind,
                 int generation,
                 FlowFieldRuntimeState state = default,

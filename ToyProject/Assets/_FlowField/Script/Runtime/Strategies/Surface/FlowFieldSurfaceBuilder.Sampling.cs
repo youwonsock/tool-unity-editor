@@ -4,9 +4,9 @@ using UnityEngine;
 namespace Common.FlowField
 {
     /// <summary>Reads of the published Surface2D field.</summary>
-    internal sealed partial class FlowFieldSurfaceSession
+    internal sealed partial class FlowFieldSurfaceBuilder
     {
-        internal override bool TryGetFieldInfo(out FlowFieldFieldInfo info)
+        public bool TryGetFieldInfo(out FlowFieldFieldInfo info)
         {
             info = default;
             if (!IsReady || !_fieldStore.Grid.IsValid || _fieldStore.Surface == null || !_fieldStore.Surface.IsValid)
@@ -44,8 +44,8 @@ namespace Common.FlowField
                 _fieldStore.Grid,
                 _fieldStore.Surface.BakeBoundsWorld,
                 FlowFieldSpaceMode.Surface2D,
-                BakeMode,
-                Revision,
+                _session.BakeMode,
+                _session.Revision,
                 hasRequestedGoal,
                 requestedGoal,
                 influenceRadius,
@@ -54,16 +54,16 @@ namespace Common.FlowField
             return info.IsValid;
         }
 
-        internal override bool TryGetPublishedField(out FlowFieldField field)
+        public bool TryGetPublishedField(out FlowFieldField field)
         {
             field = null;
-            if (!IsInitialized || !_state.Grid.IsValid || !IsReady)
+            if (!_session.IsInitialized || !_state.Grid.IsValid || !IsReady)
                 return false;
             field = _fieldStore.Field;
             return field != null;
         }
 
-        internal override FlowFieldSample Sample(Vector3 worldPosition)
+        public FlowFieldSample Sample(Vector3 worldPosition)
         {
             FlowFieldSampleStatus status = TrySampleCore(worldPosition, out FlowFieldSample sample);
             if (status == FlowFieldSampleStatus.Sampled)
@@ -120,7 +120,7 @@ namespace Common.FlowField
             int latestIndex = _state.Grid.ToFlatIndex(latestX, latestZ);
             FlowFieldSurfaceWorkspace latestWorkspace = _state.Workspace;
             FlowFieldSurfaceData latestSurface = _state.Surface;
-            bool obstacleProbeActive = IsRebuilding || _obstaclePipeline.HasStagedDynamicProbe;
+            bool obstacleProbeActive = _session.IsRebuilding || _obstaclePipeline.HasStagedDynamicProbe;
             bool latestBlocked = latestWorkspace.Blocked[latestIndex];
             bool stagedObstacleBlocksSample = _obstaclePipeline.HasStagedDynamicProbe
                 && latestWorkspace.ObstacleScratch[latestIndex];
@@ -152,7 +152,7 @@ namespace Common.FlowField
                 || latestSurface == null
                 || !latestSurface.IsSurfaceValid(next);
             bool topologyChanged = false;
-            if (!IsRebuilding && !nextBlocked && next != sampleIndex)
+            if (!_session.IsRebuilding && !nextBlocked && next != sampleIndex)
             {
                 sampleGrid.FromFlatIndex(sampleIndex, out int currentX, out int currentZ);
                 sampleGrid.FromFlatIndex(next, out int nextX, out int nextZ);
@@ -171,7 +171,7 @@ namespace Common.FlowField
         private static FlowFieldSample Stop(in FlowFieldSample sample)
             => new FlowFieldSample(Vector3.zero, 0f, sample.SurfaceNormal, sample.HasSurface, sample.HasCell);
 
-        internal override bool TrySample(Vector3 worldPosition, out FlowFieldSample sample)
+        public bool TrySample(Vector3 worldPosition, out FlowFieldSample sample)
         {
             sample = FlowFieldSample.Stopped;
             if (!IsReady || !FlowFieldGridSpace.IsFinite(worldPosition))
@@ -197,13 +197,13 @@ namespace Common.FlowField
             }
         }
 
-        internal override FlowFieldClampResult ClampPositionToGrid(Vector3 worldPosition)
+        public FlowFieldClampResult ClampPositionToGrid(Vector3 worldPosition)
         {
-            if (!IsInitialized)
+            if (!_session.IsInitialized)
                 throw new InvalidOperationException("FlowField session is not initialized.");
             if (!FlowFieldGridSpace.IsFinite(worldPosition))
                 throw new ArgumentOutOfRangeException(nameof(worldPosition));
-            FlowFieldGridSpace grid = IsRebuilding && _fieldStore.Grid.IsValid ? _fieldStore.Grid : _state.Grid;
+            FlowFieldGridSpace grid = _session.IsRebuilding && _fieldStore.Grid.IsValid ? _fieldStore.Grid : _state.Grid;
             if (!grid.IsValid)
                 throw new InvalidOperationException("FlowField grid is not initialized.");
             Vector3 clamped = grid.ClampWorldXZ(worldPosition);

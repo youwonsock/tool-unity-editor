@@ -10,7 +10,7 @@ using static Common.FlowField.FlowFieldVolumeNavigation;
 namespace Common.FlowField
 {
     /// <summary>Exports and read views of the published Volume3D field for bakes and tools.</summary>
-    internal sealed partial class FlowFieldVolumeSession
+    internal sealed partial class FlowFieldVolumeBuilder
     {
         internal bool TryExport(
             out FlowFieldVolumeRequest request,
@@ -71,14 +71,14 @@ namespace Common.FlowField
             return true;
         }
 
-        internal override bool TryGetFieldInfo(out FlowFieldFieldInfo info)
+        public bool TryGetFieldInfo(out FlowFieldFieldInfo info)
         {
             info = default;
             if (_committed == null
-                || State == FlowFieldRuntimeState.Uninitialized
-                || State == FlowFieldRuntimeState.Released
-                || State == FlowFieldRuntimeState.Suspended
-                || State == FlowFieldRuntimeState.Faulted)
+                || _session.State == FlowFieldRuntimeState.Uninitialized
+                || _session.State == FlowFieldRuntimeState.Released
+                || _session.State == FlowFieldRuntimeState.Suspended
+                || _session.State == FlowFieldRuntimeState.Faulted)
                 return false;
 
             if (_requests.HasLatest
@@ -109,7 +109,7 @@ namespace Common.FlowField
                 request.WorldBounds,
                 FlowFieldSpaceMode.Volume3D,
                 request.BakeMode,
-                Revision,
+                _session.Revision,
                 requested.HasGoal,
                 requested.GoalWorld,
                 requested.GoalInfluenceRadius,
@@ -118,14 +118,14 @@ namespace Common.FlowField
             return info.IsValid;
         }
 
-        internal override bool TryGetPublishedField(out FlowFieldField field)
+        public bool TryGetPublishedField(out FlowFieldField field)
         {
             field = null;
             if (_committed == null
-                || State == FlowFieldRuntimeState.Uninitialized
-                || State == FlowFieldRuntimeState.Released
-                || State == FlowFieldRuntimeState.Suspended
-                || State == FlowFieldRuntimeState.Faulted)
+                || _session.State == FlowFieldRuntimeState.Uninitialized
+                || _session.State == FlowFieldRuntimeState.Released
+                || _session.State == FlowFieldRuntimeState.Suspended
+                || _session.State == FlowFieldRuntimeState.Faulted)
                 return false;
             // A newly accepted grid makes the published cells meaningless.
             if (_requests.HasLatest

@@ -4,7 +4,7 @@ using UnityEngine;
 namespace Common.FlowField
 {
     /// <summary>The stages of one Surface2D rebuild, from a pending request to the published field.</summary>
-    internal sealed partial class FlowFieldSurfaceSession
+    internal sealed partial class FlowFieldSurfaceBuilder
     {
         private bool BuildPending()
         {
@@ -90,7 +90,7 @@ namespace Common.FlowField
             }
             catch (Exception exception)
             {
-                EnterFault(exception);
+                _session.EnterFault(exception);
                 return false;
             }
         }
@@ -164,7 +164,7 @@ namespace Common.FlowField
 
         private FlowFieldCellRect RebuildModifierAreaData(in FlowFieldSurfaceRequest request)
         {
-            using FlowFieldExecutionBoundary.OperationScope userCode = Boundary.EnterUserCode();
+            using FlowFieldExecutionBoundary.OperationScope userCode = _session.Boundary.EnterUserCode();
             return _modifierPipeline.RebuildAreaData(
                 new FlowFieldSurfaceModifierBuildRequest(
                     _state.Grid,
@@ -185,7 +185,7 @@ namespace Common.FlowField
             FlowFieldCellRect region = _state.DirtyFinalRegion.IsValid
                 ? _state.DirtyFinalRegion
                 : FlowFieldCellRect.Full(_state.Grid);
-            using (Boundary.EnterUserCode())
+            using (_session.Boundary.EnterUserCode())
             {
                 _modifierPipeline.BeginFinalField(
                     new FlowFieldSurfaceModifierBuildRequest(
@@ -208,11 +208,11 @@ namespace Common.FlowField
         private void ContinueCompose()
         {
             bool finished;
-            using (Boundary.EnterUserCode())
+            using (_session.Boundary.EnterUserCode())
                 finished = _modifierPipeline.StepFinalField(in _composeStage.FrameBudget);
             if (!finished)
             {
-                SetLifecycle(FlowFieldSessionLifecycle.Building);
+                _session.SetLifecycle(FlowFieldSessionLifecycle.Building);
                 return;
             }
 
@@ -228,7 +228,7 @@ namespace Common.FlowField
         private bool StartBfs(in FlowFieldSurfaceRequest request)
         {
             // A solve callback can arrive after this lifetime has ended.
-            int generation = LifetimeGeneration;
+            int generation = _session.LifetimeGeneration;
             if (!_state.Workspace.HasActiveGoal)
             {
                 ComposeThenCommit(request, rebuildBase: true, resultChanged: true, includeBase: true);
@@ -245,7 +245,7 @@ namespace Common.FlowField
                 request.Goal.InfluenceRadius,
                 _state.Workspace.ResolvedGoalIndex);
 
-            SetLifecycle(FlowFieldSessionLifecycle.Building);
+            _session.SetLifecycle(FlowFieldSessionLifecycle.Building);
             // Set first: a solve that completes synchronously reports through
             // the callback, which moves the phase on.
             _phase = BuildPhase.WaitingSolve;
@@ -257,17 +257,17 @@ namespace Common.FlowField
         }
 
         private bool IsCurrentBuild(int generation)
-            => !Disposed
-                && generation == LifetimeGeneration
-                && Lifecycle == FlowFieldSessionLifecycle.Building;
+            => !_session.Disposed
+                && generation == _session.LifetimeGeneration
+                && _session.Lifecycle == FlowFieldSessionLifecycle.Building;
 
         private void RunBfsCallback(int generation)
         {
             if (!IsCurrentBuild(generation))
                 return;
-            using FlowFieldExecutionBoundary.OperationScope operation = Boundary.EnterOperation();
+            using FlowFieldExecutionBoundary.OperationScope operation = _session.Boundary.EnterOperation();
             try { OnBfsCompleted(); }
-            catch (Exception exception) { EnterFault(exception); }
+            catch (Exception exception) { _session.EnterFault(exception); }
         }
 
         /// <summary>
@@ -285,7 +285,7 @@ namespace Common.FlowField
                 return false;
             RestoreStagingAfterStaleResult();
             RequeueRejectedGoal();
-            SetLifecycle(FlowFieldSessionLifecycle.Active);
+            _session.SetLifecycle(FlowFieldSessionLifecycle.Active);
             return true;
         }
 
@@ -304,7 +304,7 @@ namespace Common.FlowField
 
         private void OnBfsCompleted()
         {
-            if (Lifecycle != FlowFieldSessionLifecycle.Building)
+            if (_session.Lifecycle != FlowFieldSessionLifecycle.Building)
                 return;
             if (RejectOutdatedWork())
             {
@@ -387,14 +387,14 @@ namespace Common.FlowField
                 if (!_state.ObstacleProbePending)
                     _state.DirtyObstacleRegion = FlowFieldCellRect.Invalid;
             }
-            PublishRuntimeState();
+            _session.PublishRuntimeState();
             if (actualChanged)
             {
                 unchecked
                 {
-                    Revision++;
+                    _session.Revision++;
                 }
-                NotifyFieldCommitted();
+                _session.NotifyFieldCommitted();
             }
         }
 

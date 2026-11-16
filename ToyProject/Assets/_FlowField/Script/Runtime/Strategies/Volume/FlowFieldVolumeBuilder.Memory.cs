@@ -10,7 +10,7 @@ using static Common.FlowField.FlowFieldVolumeNavigation;
 namespace Common.FlowField
 {
     /// <summary>The estimate of tracked memory that bounds a Volume3D build.</summary>
-    internal sealed partial class FlowFieldVolumeSession
+    internal sealed partial class FlowFieldVolumeBuilder
     {
         private bool CanReserveForBuild(
             in FlowFieldVolumeRequest request,

@@ -136,7 +136,7 @@ namespace Common.FlowField
                 return;
             _staticBakeData = bakeData;
             if (_session.IsInitialized)
-                _session.MarkConfigurationStale();
+                _session.Surface.MarkConfigurationStale();
         }
 
         internal void AssignVolumeBakeData(FlowFieldVolumeBakeData bakeData)
