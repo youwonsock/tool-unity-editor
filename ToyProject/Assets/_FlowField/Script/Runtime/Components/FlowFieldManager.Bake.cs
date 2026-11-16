@@ -6,18 +6,6 @@ namespace Common.FlowField
     /// <summary>Bake inputs and the checks made before a bake.</summary>
     public partial class FlowFieldManager
     {
-        internal int CaptureBakeInputGeneration()
-        {
-            int hash = ComputeBakeInputHash();
-            if (!_hasBakeInputHash || hash != _lastBakeInputHash)
-            {
-                unchecked { _bakeInputGeneration++; }
-                _lastBakeInputHash = hash;
-                _hasBakeInputHash = true;
-            }
-            return _bakeInputGeneration;
-        }
-
         internal FlowFieldSurfaceBakeSnapshot CreateStaticBakeSnapshot(
             in FlowFieldSurfaceBakeSettings settings)
         {
@@ -31,36 +19,6 @@ namespace Common.FlowField
                 _obstacleClearance);
         }
 
-        /// <summary>
-        /// Creates an isolated managed Volume3D bake session. The caller owns
-        /// and must dispose the returned session; it may pump it from either
-        /// the Editor update loop or a test-controlled clock.
-        /// </summary>
-        internal FlowFieldVolumeSession CreateVolumeBakeSessionForEditor(
-            out FlowFieldVolumeRequest request)
-        {
-            request = default;
-            if (_spaceMode != FlowFieldSpaceMode.Volume3D)
-                throw new InvalidOperationException("Volume bake requires Volume3D mode.");
-            if (!TryGetVolumeLayout(out Bounds worldBounds, out FlowFieldGridSpace grid))
-                throw new InvalidOperationException("Volume Bounds and Cell Size do not produce a valid grid.");
-
-            request = CreateVolumeRequest(grid, worldBounds, FlowFieldBakeMode.RuntimeDynamic, null);
-
-            FlowFieldVolumeSession session = new FlowFieldVolumeSession();
-            try
-            {
-                session.Initialize(FlowFieldBakeMode.RuntimeDynamic);
-                session.Submit(request);
-                return session;
-            }
-            catch
-            {
-                session.Dispose();
-                throw;
-            }
-        }
-
         internal void SetBakeBoundsLocal(Bounds localBounds)
         {
             Bounds snapped = ModeFor(_spaceMode).SnapBakeBounds(localBounds);
@@ -68,7 +26,6 @@ namespace Common.FlowField
                 return;
             _bakeBoundsLocal = snapped;
             ModeFor(_spaceMode).OnBakeBoundsChanged();
-            RefreshEditorPreview();
         }
 
         internal bool TryValidateSurfaceBake(out string reason)
@@ -180,7 +137,6 @@ namespace Common.FlowField
             _staticBakeData = bakeData;
             if (_session.IsInitialized)
                 _session.MarkConfigurationStale();
-            RefreshEditorPreview();
         }
 
         internal void AssignVolumeBakeData(FlowFieldVolumeBakeData bakeData)
@@ -190,10 +146,10 @@ namespace Common.FlowField
             _volumeStaticBakeData = bakeData;
             if (_volumeSession.IsInitialized)
                 QueueVolumeRequest(force: true, requeryObstacles: true);
-            RefreshEditorPreview();
         }
 
-        private int ComputeBakeInputHash()
+        /// <summary>A signature of every setting a bake depends on.</summary>
+        internal int ComputeBakeInputHash()
         {
             unchecked
             {

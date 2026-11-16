@@ -7644,6 +7644,7 @@ GameObject:
   m_Component:
   - component: {fileID: 8078378768395388488}
   - component: {fileID: 1569603542928883877}
+  - component: {fileID: 2871300249047378711}
   m_Layer: 0
   m_Name: FlowFieldManager
   m_TagString: Untagged
@@ -7700,7 +7701,6 @@ MonoBehaviour:
   _defaultFlowDirection: {x: 0, y: 0, z: 1}
   _goalTransform: {fileID: 1757447674168876635}
   _goalInfluenceRadius: 0
-  _showField: 1
 --- !u!1 &8373119785862483051
 GameObject:
   m_ObjectHideFlags: 0
@@ -8548,3 +8548,21 @@ MonoBehaviour:
   _influenceCollider: {fileID: 7823435900577447182}
   _priority: 100
   _speedMultiplier: 1.8
+--- !u!114 &2871300249047378711
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8364973828783338324}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e42bd85ea9db494aa75ebb51e2a23bdb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _showField: 1
+  _volumeGizmoMode: 0
+  _showVolumeCells: 0
+  _showVolumeVectors: 1
+  _volumeGizmoSliceAxis: 1
+  _volumeGizmoSlice: -1

@@ -411,6 +411,7 @@ namespace Common.FlowField.Editor
                 EditorUtility.SetDirty(asset);
                 Undo.RecordObject(manager, "Assign FlowField Static Snapshot");
                 manager.AssignStaticBakeData(asset);
+                FlowFieldEditorPreview.Invalidate(manager);
                 EditorUtility.SetDirty(manager);
                 if (manager.gameObject.scene.IsValid())
                     EditorSceneManager.MarkSceneDirty(manager.gameObject.scene);
@@ -439,9 +440,10 @@ namespace Common.FlowField.Editor
             if (manager == null)
                 throw new ArgumentNullException(nameof(manager));
 
-            FlowFieldVolumeSession session = manager.CreateVolumeBakeSessionForEditor(
+            FlowFieldVolumeSession session = FlowFieldBakeService.CreateVolumeBakeSession(
+                manager,
                 out FlowFieldVolumeRequest request);
-            int bakeInputGeneration = manager.CaptureBakeInputGeneration();
+            int bakeInputGeneration = FlowFieldBakeService.CaptureInputGeneration(manager);
             int generation = _callbackGeneration;
             bool cleaned = false;
 
@@ -599,6 +601,7 @@ namespace Common.FlowField.Editor
                 EditorUtility.SetDirty(asset);
                 Undo.RecordObject(manager, "Assign FlowField Volume Snapshot");
                 manager.AssignVolumeBakeData(asset);
+                FlowFieldEditorPreview.Invalidate(manager);
                 EditorUtility.SetDirty(manager);
                 if (manager.gameObject.scene.IsValid())
                     EditorSceneManager.MarkSceneDirty(manager.gameObject.scene);
@@ -660,7 +663,7 @@ namespace Common.FlowField.Editor
                 // serialized property was changed and then changed back
                 // between two OnValidate callbacks. The generation is
                 // monotonic, so A -> B -> A is still rejected.
-                if (manager.CaptureBakeInputGeneration() != bakeInputGeneration
+                if (FlowFieldBakeService.CaptureInputGeneration(manager) != bakeInputGeneration
                     || request.BakeInputGeneration != bakeInputGeneration)
                     return false;
                 if (!manager.TryGetVolumeLayout(out Bounds bounds, out FlowFieldGridSpace grid)
@@ -702,7 +705,7 @@ namespace Common.FlowField.Editor
             internal SurfaceBakeInput(FlowFieldManager manager, FlowFieldSurfaceBakeSettings settings)
             {
                 _settings = settings;
-                _generation = manager.CaptureBakeInputGeneration();
+                _generation = FlowFieldBakeService.CaptureInputGeneration(manager);
                 ObstacleLayer = manager.ObstacleLayer;
                 CheckHeight = manager.ObstacleCheckHeight;
                 CheckCenterOffset = manager.ObstacleCheckCenterOffset;
@@ -718,7 +721,7 @@ namespace Common.FlowField.Editor
                     return false;
                 try
                 {
-                    if (manager.CaptureBakeInputGeneration() != _generation)
+                    if (FlowFieldBakeService.CaptureInputGeneration(manager) != _generation)
                         return false;
                     FlowFieldSurfaceBakeSettings current = manager.CreateSurfaceBakeSettings();
                     return current.IsValid && current.Grid.MatchesBounds(_settings.Grid)
@@ -747,6 +750,7 @@ namespace Common.FlowField.Editor
                     return;
                 Undo.RecordObject(manager, "Clear FlowField Volume Bake Reference");
                 manager.AssignVolumeBakeData(null);
+                FlowFieldEditorPreview.Invalidate(manager);
                 EditorUtility.SetDirty(manager);
                 if (manager.gameObject.scene.IsValid())
                     EditorSceneManager.MarkSceneDirty(manager.gameObject.scene);
@@ -756,6 +760,7 @@ namespace Common.FlowField.Editor
                 return;
             Undo.RecordObject(manager, "Clear FlowField Static Bake Reference");
             manager.AssignStaticBakeData(null);
+            FlowFieldEditorPreview.Invalidate(manager);
             EditorUtility.SetDirty(manager);
             if (manager.gameObject.scene.IsValid())
                 EditorSceneManager.MarkSceneDirty(manager.gameObject.scene);

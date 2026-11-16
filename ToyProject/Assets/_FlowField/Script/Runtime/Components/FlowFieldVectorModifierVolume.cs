@@ -3,7 +3,6 @@ using UnityEngine;
 
 namespace Common.FlowField
 {
-    [ExecuteAlways]
     [DefaultExecutionOrder(-100)]
     public abstract class FlowFieldVectorModifierVolume : MonoBehaviour, IFlowFieldVectorModifier
     {
@@ -112,19 +111,6 @@ namespace Common.FlowField
                 IncrementRevision();
 
             CacheValidationSnapshot();
-
-#if UNITY_EDITOR
-            if (!Application.isPlaying
-                && (valueChanged || priorityChanged || areaChanged)
-                && _flowFieldManager != null)
-            {
-                // Editor Preview is event-invalidated just like the runtime
-                // Session.  A modifier's own OnValidate runs after the
-                // manager's callback, so notify the manager directly instead
-                // of waiting for the next repaint to discover stale data.
-                _flowFieldManager.InvalidateEditorPreview();
-            }
-#endif
 
             if (Application.isPlaying
                 && (valueChanged || priorityChanged || areaChanged)

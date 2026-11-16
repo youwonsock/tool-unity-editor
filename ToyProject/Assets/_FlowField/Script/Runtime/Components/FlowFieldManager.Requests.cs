@@ -32,11 +32,14 @@ namespace Common.FlowField
                 _bakeMode == FlowFieldBakeMode.StaticBaked ? _volumeStaticBakeData : null);
         }
 
-        private FlowFieldVolumeRequest CreateVolumeRequest(
+        // A bake passes the input generation it captured, so it can tell when
+        // the settings changed under it. Runtime requests do not compare it.
+        internal FlowFieldVolumeRequest CreateVolumeRequest(
             FlowFieldGridSpace grid,
             Bounds worldBounds,
             FlowFieldBakeMode bakeMode,
-            FlowFieldVolumeBakeData bakeData)
+            FlowFieldVolumeBakeData bakeData,
+            int bakeInputGeneration = 0)
             => new FlowFieldVolumeRequest(
                 grid,
                 worldBounds,
@@ -48,7 +51,7 @@ namespace Common.FlowField
                 _goalInfluenceRadius,
                 _defaultFlowDirection,
                 bakeData,
-                CaptureBakeInputGeneration());
+                bakeInputGeneration);
 
         private void QueueVolumeRequest(bool force = false, bool requeryObstacles = false)
         {
@@ -84,7 +87,7 @@ namespace Common.FlowField
                 out worldBounds,
                 out grid);
 
-        private FlowFieldSurfaceRequest CreateSurfaceRequest(
+        internal FlowFieldSurfaceRequest CreateSurfaceRequest(
             FlowFieldSurfaceBakeSettings settings,
             FlowFieldSurfaceDirtyFlags dirtyFlags,
             FlowFieldCellRect dirtyFinalRegion,

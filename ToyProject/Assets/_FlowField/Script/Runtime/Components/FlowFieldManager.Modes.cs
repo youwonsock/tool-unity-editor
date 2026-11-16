@@ -33,7 +33,6 @@ namespace Common.FlowField
             internal abstract void SubmitRebuild();
             internal abstract void ObserveInputs();
             internal abstract void OnSettingsEdited();
-            internal virtual void OnReleased() { }
             internal abstract void ValidateConfiguration(bool validateStaticGoal);
             internal abstract void MarkGoalDirty();
             internal abstract void MarkCellsDirty();
@@ -101,13 +100,6 @@ namespace Common.FlowField
                 }
             }
 
-            internal override void OnReleased()
-            {
-#if UNITY_EDITOR
-                // The Volume3D gizmo mesh is cached per result and must drop the released field.
-                FlowFieldEditorVisualizationBridge.RequestRefresh(Owner);
-#endif
-            }
 
             internal override void ValidateConfiguration(bool validateStaticGoal)
                 => Owner.ValidateVolumeConfiguration(validateStaticGoal);
@@ -126,7 +118,6 @@ namespace Common.FlowField
             {
                 if (_session.IsInitialized)
                     Owner.QueueVolumeRequest(force: true, requeryObstacles: true);
-                Owner.RefreshEditorPreview();
             }
 
             internal override Bounds SnapBakeBounds(Bounds localBounds)
@@ -256,7 +247,6 @@ namespace Common.FlowField
                         FlowFieldCellRect.Invalid);
                     if (!Owner.HasConfiguredGoal)
                         _session.ObserveGoalRemoved();
-                    Owner.RefreshEditorPreview();
                 }
             }
 
@@ -362,7 +352,6 @@ namespace Common.FlowField
                     FlowFieldSurfaceDirtyFlags.Grid,
                     FlowFieldCellRect.Invalid,
                     FlowFieldCellRect.Invalid);
-                Owner.RefreshEditorPreview();
             }
 
             internal override void MarkConfigurationStale()
@@ -370,7 +359,6 @@ namespace Common.FlowField
                 if (!_session.IsInitialized)
                     return;
                 _session.MarkConfigurationStale();
-                Owner.RefreshEditorPreview();
             }
 
             internal override Bounds SnapBakeBounds(Bounds localBounds)

@@ -52,15 +52,6 @@ namespace Common.FlowField
         [SerializeField, Tooltip("0은 Global hybrid Goal, 양수는 XYZ 구 형태의 Ranged Goal입니다.")]
         private float _goalInfluenceRadius;
 
-        [Header("Editor Gizmos")]
-        [SerializeField, Tooltip("Bake 표면, Obstacle, Goal, Modifier 영향 셀과 최종 3D 벡터를 표시합니다.")]
-        private bool _showField;
-        [SerializeField] private FlowFieldVolumeGizmoMode _volumeGizmoMode = FlowFieldVolumeGizmoMode.FullVolume;
-        [SerializeField] private bool _showVolumeCells;
-        [SerializeField] private bool _showVolumeVectors = true;
-        [SerializeField] private FlowFieldVolumeSliceAxis _volumeGizmoSliceAxis = FlowFieldVolumeSliceAxis.Y;
-        [SerializeField, Tooltip("-1이면 단면 중앙을 사용합니다.")] private int _volumeGizmoSlice = -1;
-
         // Both sessions share one boundary, so the Manager's events keep their
         // order and a Modifier of either mode sees the same command rules.
         private readonly FlowFieldExecutionBoundary _boundary = new FlowFieldExecutionBoundary();
@@ -71,9 +62,6 @@ namespace Common.FlowField
         private Vector3 _explicitGoalWorld;
         private bool _requiresActivationRebuild;
         private FlowFieldSessionBase _attachedSession;
-        [NonSerialized] private int _bakeInputGeneration;
-        [NonSerialized] private int _lastBakeInputHash;
-        [NonSerialized] private bool _hasBakeInputHash;
         [NonSerialized] private List<FlowFieldVectorModifierVolume> _modifierBuffer;
 
         public FlowFieldManager()
@@ -133,20 +121,28 @@ namespace Common.FlowField
         internal float ObstacleCheckCenterOffset => _obstacleCheckCenterOffset;
         internal float ObstacleClearance => _obstacleClearance;
         internal Vector3 DefaultFlowDirection => _defaultFlowDirection;
-        internal FlowFieldVolumeGizmoMode VolumeGizmoMode => _volumeGizmoMode;
-        internal bool ShowVolumeCells => _showVolumeCells;
-        internal bool ShowVolumeVectors => _showVolumeVectors;
-        internal FlowFieldVolumeSliceAxis VolumeGizmoSliceAxis => _volumeGizmoSliceAxis;
-        internal int VolumeGizmoSlice => _volumeGizmoSlice;
+        // The serialized mode, which may differ from SpaceMode while an
+        // accepted session runs in the previous one.
+        internal FlowFieldSpaceMode ConfiguredSpaceMode => _spaceMode;
 
-#if UNITY_EDITOR
         internal bool TryGetVolumeVisualizationView(out FlowFieldReadView view)
             => _volumeSession.TryGetVisualizationView(out view);
 
         internal bool TryGetVolumeVisualizationSource(
             out FlowFieldVolumeVisualizationSource source)
             => _volumeSession.TryGetVisualizationSource(out source);
-#endif
+
+        /// <summary>The published Surface2D field, for display.</summary>
+        internal bool TryGetSurfaceView(out FlowFieldReadView view, out FlowFieldGridSpace grid)
+        {
+            view = default;
+            grid = default;
+            if (!_session.IsInitialized || !_session.StagingGrid.IsValid || !_session.IsReady)
+                return false;
+            view = _session.CommittedView;
+            grid = _session.CommittedGrid;
+            return view.IsValid;
+        }
 
         internal FlowFieldSurfaceGoalResolution ResolveConfiguredGoal(FlowFieldGridSpace grid)
             => FlowFieldSurfaceGoalPipeline.Resolve(
@@ -171,11 +167,6 @@ namespace Common.FlowField
             _groundBakeLayer = Physics.DefaultRaycastLayers;
             _spaceMode = FlowFieldSpaceMode.Surface2D;
             _bakeMode = FlowFieldBakeMode.RuntimeDynamic;
-            _volumeGizmoMode = FlowFieldVolumeGizmoMode.FullVolume;
-            _showVolumeCells = false;
-            _showVolumeVectors = true;
-            _volumeGizmoSliceAxis = FlowFieldVolumeSliceAxis.Y;
-            _volumeGizmoSlice = -1;
             _enableUnregisteredObstacleSweep = false;
         }
 
@@ -188,10 +179,6 @@ namespace Common.FlowField
         private void OnEnable()
         {
             _refreshTimer = 0f;
-#if UNITY_EDITOR
-            InvalidateEditorPreview();
-            FlowFieldEditorVisualizationBridge.Register(this);
-#endif
             if (!Application.isPlaying || _boundary.TryDefer(ResumeAfterEnable))
                 return;
             ResumeAfterEnable();
@@ -208,11 +195,6 @@ namespace Common.FlowField
 
         private void OnValidate()
         {
-            CaptureBakeInputGeneration();
-#if UNITY_EDITOR
-            InvalidateEditorPreview();
-            FlowFieldEditorVisualizationBridge.RequestRefresh(this);
-#endif
             if (!Application.isPlaying || !IsInitialized || _spaceMode != SpaceMode)
                 return;
 
@@ -250,9 +232,6 @@ namespace Common.FlowField
 
         private void OnDisable()
         {
-#if UNITY_EDITOR
-            FlowFieldEditorVisualizationBridge.Unregister(this);
-#endif
             if (!Application.isPlaying || _boundary.TryDefer(SuspendAfterDisable))
                 return;
             SuspendAfterDisable();
@@ -268,10 +247,6 @@ namespace Common.FlowField
 
         private void OnDestroy()
         {
-#if UNITY_EDITOR
-            ReleaseEditorPreview();
-            FlowFieldEditorVisualizationBridge.Unregister(this);
-#endif
             if (!_boundary.TryDefer(DisposeSessions))
                 DisposeSessions();
         }
@@ -353,12 +328,10 @@ namespace Common.FlowField
             if (!owner.IsInitialized && !owner.IsFaulted)
                 return;
             using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
-            ModeDriver mode = ActiveMode;
             DetachActiveModifiers();
             owner.Release();
             _attachedSession = null;
             _refreshTimer = 0f;
-            mode.OnReleased();
         }
 
         private void ThrowIfLifecycleUnavailable()
@@ -395,19 +368,8 @@ namespace Common.FlowField
             ModeFor(_spaceMode).ValidateConfiguration(validateStaticGoal);
         }
 
-        [System.Diagnostics.Conditional("UNITY_EDITOR")]
-        private void RefreshEditorPreview()
-        {
-#if UNITY_EDITOR
-            InvalidateEditorPreview();
-#endif
-        }
-
         private void MarkGoalDirty()
-        {
-            ActiveMode.MarkGoalDirty();
-            RefreshEditorPreview();
-        }
+            => ActiveMode.MarkGoalDirty();
 
         #region Provider and Controller API
 
@@ -445,12 +407,7 @@ namespace Common.FlowField
                 throw new InvalidOperationException("Cannot register a destroyed Collider.");
             if (BakeMode == FlowFieldBakeMode.StaticBaked)
                 throw new InvalidOperationException("Dynamic obstacle registration is not allowed in StaticBaked mode.");
-            bool added = ActiveSession.RegisterObstacleCommand(collider);
-#if UNITY_EDITOR
-            if (added)
-                InvalidateEditorPreview();
-#endif
-            return added;
+            return ActiveSession.RegisterObstacleCommand(collider);
         }
 
         public bool UnregisterDynamicObstacle(Collider collider)
@@ -461,12 +418,7 @@ namespace Common.FlowField
                 throw new ArgumentNullException(nameof(collider));
             if (BakeMode == FlowFieldBakeMode.StaticBaked)
                 return false;
-            bool removed = ActiveSession.UnregisterObstacleCommand(collider);
-#if UNITY_EDITOR
-            if (removed)
-                InvalidateEditorPreview();
-#endif
-            return removed;
+            return ActiveSession.UnregisterObstacleCommand(collider);
         }
 
         public void NotifyObstacleRegionDirty(Bounds worldBounds)
@@ -479,7 +431,6 @@ namespace Common.FlowField
             if (BakeMode == FlowFieldBakeMode.StaticBaked)
                 throw new InvalidOperationException("Obstacle changes are not allowed in StaticBaked mode.");
             ActiveSession.NotifyObstacleRegionDirtyCommand(worldBounds);
-            RefreshEditorPreview();
         }
 
         public void SetGoal(in FlowFieldGoalRequest request)

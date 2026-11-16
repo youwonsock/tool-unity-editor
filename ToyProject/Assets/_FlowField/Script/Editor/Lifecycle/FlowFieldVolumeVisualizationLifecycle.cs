@@ -6,9 +6,10 @@ using UnityEngine.SceneManagement;
 namespace Common.FlowField.Editor
 {
     /// <summary>
-    /// Keeps the display service alive only through editor events.  Runtime
-    /// code never references this type; disabling domain reload therefore
-    /// cannot accumulate update or undo callbacks.
+    /// Keeps the display service alive only through editor events. Managers
+    /// join it when the Scene View first draws them and leave it when they are
+    /// disabled or destroyed; disabling domain reload therefore cannot
+    /// accumulate update or undo callbacks.
     /// </summary>
     [InitializeOnLoad]
     internal static class FlowFieldVolumeVisualizationLifecycle
@@ -25,13 +26,6 @@ namespace Common.FlowField.Editor
             if (_registered)
                 return;
             _registered = true;
-            FlowFieldEditorVisualizationBridge.Install(
-                FlowFieldVolumeVisualizationEditor.Register,
-                FlowFieldVolumeVisualizationEditor.Unregister,
-                FlowFieldVolumeVisualizationEditor.RequestRefresh,
-                FlowFieldVolumeVisualizationEditor.Draw,
-                FlowFieldVolumeVisualizationEditor.DrawBounds,
-                SceneView.RepaintAll);
             EditorApplication.update += OnEditorUpdate;
             Undo.undoRedoPerformed += OnUndoRedo;
             EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
@@ -74,7 +68,6 @@ namespace Common.FlowField.Editor
             EditorApplication.quitting -= OnEditorQuitting;
             AssemblyReloadEvents.beforeAssemblyReload -= OnBeforeAssemblyReload;
             _registered = false;
-            FlowFieldEditorVisualizationBridge.Uninstall();
             if (clearState)
                 FlowFieldVolumeVisualizationEditor.Clear();
         }

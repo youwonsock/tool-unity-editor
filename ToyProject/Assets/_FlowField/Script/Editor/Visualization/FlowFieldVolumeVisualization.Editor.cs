@@ -6,7 +6,7 @@ using System.Threading;
 using UnityEditor;
 using UnityEngine;
 
-namespace Common.FlowField
+namespace Common.FlowField.Editor
 {
     internal enum FlowFieldVolumeVisualizationStatusCode
     {
@@ -163,6 +163,30 @@ namespace Common.FlowField
             RemoveUnusedAssets();
         }
 
+        /// <summary>Drops the state of Managers that were destroyed or disabled.</summary>
+        internal static void PruneInactive()
+        {
+            var stale = new List<FlowFieldManager>();
+            var missing = new List<int>();
+            foreach (KeyValuePair<int, ManagerState> entry in Managers)
+            {
+                if (entry.Value.Manager == null)
+                    missing.Add(entry.Key);
+                else if (!entry.Value.Manager.isActiveAndEnabled)
+                    stale.Add(entry.Value.Manager);
+            }
+            foreach (int id in missing)
+            {
+                Managers[id].Dispose();
+                Managers.Remove(id);
+            }
+            foreach (FlowFieldManager manager in stale)
+                Unregister(manager);
+            _managerCursor = Math.Min(_managerCursor, Managers.Count);
+            if (missing.Count > 0)
+                RemoveUnusedAssets();
+        }
+
         internal static void RequestRefresh(FlowFieldManager manager)
         {
             if (manager == null || !manager.isActiveAndEnabled)
@@ -269,7 +293,7 @@ namespace Common.FlowField
                         continue;
 
                     Vector3 center = grid.LocalToWorldCenter(x, y, z);
-                    if (manager.ShowVolumeCells)
+                    if (FlowFieldDisplay.Of(manager).ShowVolumeCells)
                     {
                         Gizmos.color = blocked
                             ? new Color(0.92f, 0.18f, 0.18f, 0.72f)
@@ -277,7 +301,7 @@ namespace Common.FlowField
                         Gizmos.DrawWireCube(center, Vector3.one * grid.CellSize);
                     }
 
-                    if (!manager.ShowVolumeVectors)
+                    if (!FlowFieldDisplay.Of(manager).ShowVolumeVectors)
                         continue;
                     if (speed <= 0f || direction.sqrMagnitude <= 0.00000001f)
                         DrawStopMarker(center, grid.CellSize);
@@ -539,14 +563,14 @@ namespace Common.FlowField
             int selectionHash = ComputeSelectionHash(manager, view.Grid);
             if (!state.HasSelection || state.SelectionHash != selectionHash)
             {
-                int max = manager.VolumeGizmoMode == FlowFieldVolumeGizmoMode.Slice
+                int max = FlowFieldDisplay.Of(manager).VolumeGizmoMode == FlowFieldVolumeGizmoMode.Slice
                     ? FlowFieldVolumeDisplaySelection.DefaultSliceLimit
                     : FlowFieldVolumeDisplaySelection.DefaultFullVolumeLimit;
                 state.HasSelection = FlowFieldVolumeDisplaySelection.TryCreate(
                     view.Grid,
-                    manager.VolumeGizmoMode,
-                    manager.VolumeGizmoSliceAxis,
-                    manager.VolumeGizmoSlice,
+                    FlowFieldDisplay.Of(manager).VolumeGizmoMode,
+                    FlowFieldDisplay.Of(manager).VolumeGizmoSliceAxis,
+                    FlowFieldDisplay.Of(manager).VolumeGizmoSlice,
                     max,
                     out state.Selection);
                 state.SelectionHash = selectionHash;
@@ -630,9 +654,9 @@ namespace Common.FlowField
                 hash = hash * 31 + grid.Height;
                 hash = hash * 31 + grid.Depth;
                 hash = hash * 31 + grid.CellSize.GetHashCode();
-                hash = hash * 31 + (int)manager.VolumeGizmoMode;
-                hash = hash * 31 + (int)manager.VolumeGizmoSliceAxis;
-                hash = hash * 31 + manager.VolumeGizmoSlice;
+                hash = hash * 31 + (int)FlowFieldDisplay.Of(manager).VolumeGizmoMode;
+                hash = hash * 31 + (int)FlowFieldDisplay.Of(manager).VolumeGizmoSliceAxis;
+                hash = hash * 31 + FlowFieldDisplay.Of(manager).VolumeGizmoSlice;
                 return hash;
             }
         }

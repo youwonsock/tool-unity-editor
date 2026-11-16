@@ -36,12 +36,6 @@ namespace Common.FlowField.Editor
                         "_maxStepHeight",
                         "_obstacleCheckHeight",
                         "_obstacleCheckCenterOffset",
-                        "_showField",
-                        "_volumeGizmoMode",
-                        "_showVolumeCells",
-                        "_showVolumeVectors",
-                        "_volumeGizmoSliceAxis",
-                        "_volumeGizmoSlice",
                     }
                     : new[]
                     {
@@ -49,12 +43,6 @@ namespace Common.FlowField.Editor
                         "_spaceMode",
                         "_staticBakeData",
                         "_volumeStaticBakeData",
-                        "_showField",
-                        "_volumeGizmoMode",
-                        "_showVolumeCells",
-                        "_showVolumeVectors",
-                        "_volumeGizmoSliceAxis",
-                        "_volumeGizmoSlice",
                     });
             using (new EditorGUI.DisabledScope(Application.isPlaying && manager.IsInitialized))
                 EditorGUILayout.PropertyField(spaceMode);
@@ -68,21 +56,8 @@ namespace Common.FlowField.Editor
                 else
                     EditorGUILayout.PropertyField(serializedObject.FindProperty("_staticBakeData"));
             }
-            EditorGUILayout.PropertyField(serializedObject.FindProperty("_showField"));
-            if (isVolume)
-            {
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("_volumeGizmoMode"));
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("_showVolumeCells"));
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("_showVolumeVectors"));
-                SerializedProperty gizmoMode = serializedObject.FindProperty("_volumeGizmoMode");
-                if (gizmoMode != null
-                    && gizmoMode.enumValueIndex == (int)FlowFieldVolumeGizmoMode.Slice)
-                {
-                    EditorGUILayout.PropertyField(serializedObject.FindProperty("_volumeGizmoSliceAxis"));
-                    EditorGUILayout.PropertyField(serializedObject.FindProperty("_volumeGizmoSlice"));
-                }
-            }
             serializedObject.ApplyModifiedProperties();
+            DrawDisplaySettingsNotice(manager);
 
             EditorGUILayout.Space();
             bool exceedsCellLimit = DrawBakeLayout(manager);
@@ -221,6 +196,8 @@ namespace Common.FlowField.Editor
         {
             Undo.RecordObject(manager, undoName);
             manager.SetBakeBoundsLocal(localBounds);
+            FlowFieldEditorPreview.Invalidate(manager);
+            FlowFieldVolumeVisualizationEditor.RequestRefresh(manager);
             EditorUtility.SetDirty(manager);
             if (manager.gameObject.scene.IsValid())
                 EditorSceneManager.MarkSceneDirty(manager.gameObject.scene);
@@ -244,9 +221,10 @@ namespace Common.FlowField.Editor
                 EditorGUILayout.HelpBox(volumeStatus.Message, type);
                 if (manager.TryGetVolumeLayout(out _, out FlowFieldGridSpace displayGrid))
                 {
-                    string displayMode = manager.VolumeGizmoMode == FlowFieldVolumeGizmoMode.FullVolume
+                    FlowFieldDisplay display = FlowFieldDisplay.Of(manager);
+                    string displayMode = display.VolumeGizmoMode == FlowFieldVolumeGizmoMode.FullVolume
                         ? "FullVolume"
-                        : $"Slice {manager.VolumeGizmoSliceAxis}={manager.VolumeGizmoSlice}";
+                        : $"Slice {display.VolumeGizmoSliceAxis}={display.VolumeGizmoSlice}";
                     EditorGUILayout.LabelField(
                         "Display Grid",
                         $"{displayGrid.Width} × {displayGrid.Height} × {displayGrid.Depth} "
@@ -258,7 +236,7 @@ namespace Common.FlowField.Editor
                         + $"{volumeStatus.StoppedCellCount:N0} stopped");
                     if (volumeStatus.IsSampled)
                     {
-                        int limit = manager.VolumeGizmoMode == FlowFieldVolumeGizmoMode.FullVolume
+                        int limit = display.VolumeGizmoMode == FlowFieldVolumeGizmoMode.FullVolume
                             ? FlowFieldVolumeDisplaySelection.DefaultFullVolumeLimit
                             : FlowFieldVolumeDisplaySelection.DefaultSliceLimit;
                         if (volumeStatus.SelectedCellCount < displayGrid.CellCount)
@@ -293,6 +271,18 @@ namespace Common.FlowField.Editor
             }
 
             EditorGUILayout.HelpBox(reason, MessageType.Error);
+        }
+
+        // Display options live on their own component, which the Scene View reads.
+        private static void DrawDisplaySettingsNotice(FlowFieldManager manager)
+        {
+            if (manager.GetComponent<FlowFieldDisplaySettings>() != null)
+                return;
+            EditorGUILayout.HelpBox(
+                "Scene View 표시 설정이 없어 방향장을 그리지 않습니다.",
+                MessageType.None);
+            if (GUILayout.Button("Add Display Settings"))
+                Undo.AddComponent<FlowFieldDisplaySettings>(manager.gameObject);
         }
 
         private static void DrawTransformWarning(FlowFieldManager manager)

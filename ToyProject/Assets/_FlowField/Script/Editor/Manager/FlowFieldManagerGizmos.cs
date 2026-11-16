@@ -1,0 +1,76 @@
+using UnityEditor;
+using UnityEngine;
+
+namespace Common.FlowField.Editor
+{
+    /// <summary>Scene View drawing of a Manager's field and Bake Bounds.</summary>
+    internal static class FlowFieldManagerGizmos
+    {
+        [DrawGizmo(GizmoType.Selected | GizmoType.NonSelected)]
+        private static void DrawField(FlowFieldManager manager, GizmoType gizmoType)
+        {
+            if (!FlowFieldDisplay.Of(manager).ShowField)
+                return;
+            if (manager.ConfiguredSpaceMode == FlowFieldSpaceMode.Volume3D)
+            {
+                FlowFieldVolumeVisualizationEditor.Draw(manager);
+                return;
+            }
+            DrawSurfaceField(manager);
+        }
+
+        [DrawGizmo(GizmoType.Selected | GizmoType.Active)]
+        private static void DrawBakeBounds(FlowFieldManager manager, GizmoType gizmoType)
+        {
+            bool volume = manager.ConfiguredSpaceMode == FlowFieldSpaceMode.Volume3D;
+            Bounds worldBounds;
+            bool validLayout = volume
+                ? manager.TryGetVolumeLayout(out worldBounds, out _)
+                : manager.TryGetBakeLayout(out worldBounds, out _);
+            if (!validLayout)
+                return;
+            if (volume)
+                FlowFieldVolumeVisualizationEditor.DrawBounds(manager, worldBounds);
+            else
+                FlowFieldGizmoDrawer.DrawBakeBounds(worldBounds, manager.TryValidateSurfaceBake(out _));
+        }
+
+        private static void DrawSurfaceField(FlowFieldManager manager)
+        {
+            if (!manager.TryGetBakeLayout(out _, out FlowFieldGridSpace grid)
+                || !grid.IsValid
+                || !FlowFieldBakeBoundsUtility.TryValidateCellCount(grid.Width, grid.Depth, out _)
+                || !manager.TryValidateSurfaceBake(
+                    out _,
+                    includeStaticGoal: manager.BakeMode != FlowFieldBakeMode.StaticBaked))
+                return;
+
+            FlowFieldReadView view;
+            bool hasView = Application.isPlaying
+                ? manager.TryGetSurfaceView(out view, out grid)
+                : FlowFieldEditorPreview.TryGetView(manager, out view, out grid);
+            if (!hasView)
+                return;
+
+            FlowFieldStaticBakeData bake = manager.StaticBakeData;
+            FlowFieldSurfaceGoalResolution goal = manager.BakeMode == FlowFieldBakeMode.StaticBaked && bake != null
+                ? new FlowFieldSurfaceGoalResolution(
+                    bake.HasGoal,
+                    bake.HasGoal,
+                    0,
+                    0,
+                    bake.ResolvedGoalIndex,
+                    bake.GoalInfluenceRadius,
+                    bake.RequestedGoalWorld)
+                : manager.ResolveConfiguredGoal(grid);
+
+            FlowFieldGizmoDrawer.Draw(new FlowFieldGizmoRequest(
+                grid,
+                view,
+                manager.CellSize,
+                goal.IsValid,
+                goal.RequestedWorld,
+                goal.InfluenceRadius));
+        }
+    }
+}

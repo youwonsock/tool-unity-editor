@@ -1,8 +1,7 @@
-#if UNITY_EDITOR
 using System;
 using UnityEngine;
 
-namespace Common.FlowField
+namespace Common.FlowField.Editor
 {
     internal readonly struct FlowFieldGizmoRequest
     {
@@ -217,4 +216,3 @@ namespace Common.FlowField
     }
 
 }
-#endif
