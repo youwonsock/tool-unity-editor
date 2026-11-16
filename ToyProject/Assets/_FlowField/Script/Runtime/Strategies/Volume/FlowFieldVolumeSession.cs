@@ -35,7 +35,6 @@ namespace Common.FlowField
         // accepted request must still be able to start a build. This flag
         // distinguishes that state from an explicit lifecycle suspension.
         private bool _suspendedByLifecycle;
-        private static long _nextVisualizationResultId;
         // Whoever pumps directly (a bake, a test) waits for the worker thread.
         // The scheduler polls it, so no frame blocks on a solve.
         private bool _waitForSolve;

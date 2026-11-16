@@ -125,24 +125,12 @@ namespace Common.FlowField
         // accepted session runs in the previous one.
         internal FlowFieldSpaceMode ConfiguredSpaceMode => _spaceMode;
 
-        internal bool TryGetVolumeVisualizationView(out FlowFieldReadView view)
-            => _volumeSession.TryGetVisualizationView(out view);
-
-        internal bool TryGetVolumeVisualizationSource(
-            out FlowFieldVolumeVisualizationSource source)
-            => _volumeSession.TryGetVisualizationSource(out source);
-
-        /// <summary>The published Surface2D field, for display.</summary>
-        internal bool TryGetSurfaceView(out FlowFieldReadView view, out FlowFieldGridSpace grid)
-        {
-            view = default;
-            grid = default;
-            if (!_session.IsInitialized || !_session.StagingGrid.IsValid || !_session.IsReady)
-                return false;
-            view = _session.CommittedView;
-            grid = _session.CommittedGrid;
-            return view.IsValid;
-        }
+        /// <summary>
+        /// The published field of the active session, for display. It is valid
+        /// until the next pump, after which its arrays may be reused.
+        /// </summary>
+        internal bool TryGetPublishedField(out FlowFieldField field)
+            => ActiveSession.TryGetPublishedField(out field);
 
         internal FlowFieldSurfaceGoalResolution ResolveConfiguredGoal(FlowFieldGridSpace grid)
             => FlowFieldSurfaceGoalPipeline.Resolve(

@@ -5,7 +5,8 @@ namespace Common.FlowField
     /// <summary>
     /// A published field, the same shape in both space modes. Once published it
     /// never changes; a new publication replaces the whole object, and the
-    /// arrays it replaced go back to <see cref="FlowFieldSpareArrays"/>.
+    /// arrays it replaced go back to <see cref="FlowFieldSpareArrays"/>. A reader
+    /// outside the session may therefore use a field only until the next pump.
     /// Arrays a mode does not keep are null.
     /// </summary>
     internal class FlowFieldField
@@ -28,9 +29,6 @@ namespace Common.FlowField
         internal readonly bool[] ModifierInfluence;
         internal readonly bool HasActiveGoal;
         internal readonly int GoalIndex;
-        internal readonly long ResultId;
-        // Set when a view exposes these arrays, which then must never be reused.
-        internal bool HandedOut;
 
         internal int Capacity => Blocked.Length;
 
@@ -48,8 +46,7 @@ namespace Common.FlowField
             Vector3[] escapeDirections,
             bool[] modifierInfluence,
             bool hasActiveGoal,
-            int goalIndex,
-            long resultId)
+            int goalIndex)
         {
             Grid = grid;
             Surface = surface;
@@ -65,7 +62,6 @@ namespace Common.FlowField
             ModifierInfluence = modifierInfluence;
             HasActiveGoal = hasActiveGoal;
             GoalIndex = goalIndex;
-            ResultId = resultId;
         }
     }
 
@@ -89,8 +85,7 @@ namespace Common.FlowField
             Vector3[] escapeDirections,
             bool[] modifierInfluence,
             bool hasActiveGoal,
-            int goalIndex,
-            long resultId)
+            int goalIndex)
             : base(
                 grid,
                 surface,
@@ -105,8 +100,7 @@ namespace Common.FlowField
                 escapeDirections,
                 modifierInfluence,
                 hasActiveGoal,
-                goalIndex,
-                resultId)
+                goalIndex)
         {
             Request = request;
         }

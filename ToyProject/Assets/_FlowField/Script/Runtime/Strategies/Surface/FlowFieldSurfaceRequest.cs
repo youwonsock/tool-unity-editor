@@ -10,14 +10,6 @@ namespace Common.FlowField
         StaticSnapshot,
     }
 
-    internal enum FlowFieldSurfaceSolvePolicy
-    {
-        // On a worker thread, reported through the session's backend.
-        Worker,
-        // On the calling thread: Editor previews and bakes.
-        Inline,
-    }
-
     internal readonly struct FlowFieldSurfaceRequest
     {
         internal FlowFieldSurfaceSourceKind SourceKind { get; }

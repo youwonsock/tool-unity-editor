@@ -250,8 +250,7 @@ namespace Common.FlowField.Editor
                 {
                     session.Initialize(
                         FlowFieldBakeMode.RuntimeDynamic,
-                        FlowFieldSurfaceSourceKind.SceneBuild,
-                        FlowFieldSurfaceSolvePolicy.Inline);
+                        FlowFieldSurfaceSourceKind.SceneBuild);
 
                     FlowFieldSurfaceGoalResolution goalSnapshot = manager.ResolveConfiguredGoal(settings.Grid);
                     bool accepted = session.Submit(FlowFieldSurfaceRequest.ForSceneBuild(

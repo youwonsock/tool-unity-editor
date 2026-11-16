@@ -315,13 +315,8 @@ namespace Common.FlowField
                 build.EscapeDirections,
                 modifierInfluence: null,
                 hasActiveGoal: goalIndex >= 0,
-                goalIndex,
-                Interlocked.Increment(ref _nextVisualizationResultId));
+                goalIndex);
 
-            // A viewed Blocked array stays out of the spares through every field sharing it.
-            next.HandedOut = _committed != null
-                && _committed.HandedOut
-                && ReferenceEquals(_committed.Blocked, next.Blocked);
             _spares.Retire(_committed, next);
             _committed = next;
             Revision++;

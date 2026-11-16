@@ -162,11 +162,8 @@ namespace Common.FlowField
                 FlowFieldSurfaceSourceKind sourceKind = Owner.BakeMode == FlowFieldBakeMode.StaticBaked
                     ? FlowFieldSurfaceSourceKind.StaticSnapshot
                     : FlowFieldSurfaceSourceKind.SceneBuild;
-                FlowFieldSurfaceSolvePolicy policy = Application.isPlaying
-                    ? FlowFieldSurfaceSolvePolicy.Worker
-                    : FlowFieldSurfaceSolvePolicy.Inline;
                 Owner._attachedSession = _session;
-                _session.Initialize(Owner._bakeMode, sourceKind, policy);
+                _session.Initialize(Owner._bakeMode, sourceKind);
                 Owner.ReattachActiveModifiers();
             }
 

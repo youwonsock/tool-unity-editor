@@ -24,16 +24,6 @@ namespace Common.FlowField
         internal bool IsValid => _field != null && Grid.IsValid && Surface != null && Surface.IsValid;
         internal int[] NextCells => _field?.NextCells;
 
-        internal FlowFieldReadView CreateReadView()
-            => FlowFieldReadView.CreateSurface(
-                Grid,
-                Surface,
-                _field?.Blocked,
-                _field?.GoalFlags,
-                _field?.FinalDirections,
-                _field?.FinalSpeeds,
-                _field?.ModifierInfluence);
-
         private static unsafe bool CopyRegion(
             int width,
             FlowFieldSurfaceWorkspace workspace,
@@ -165,8 +155,7 @@ namespace Common.FlowField
                 escapeDirections: null,
                 FlowFieldSpareArrays.Rent(ref _spares.ModifierInfluence, count),
                 workspace.HasActiveGoal,
-                workspace.ResolvedGoalIndex,
-                resultId: 0L);
+                workspace.ResolvedGoalIndex);
 
         private static FlowFieldField Share(FlowFieldField field, FlowFieldGridSpace grid, FlowFieldSurfaceData surface)
             => new FlowFieldField(
@@ -183,8 +172,7 @@ namespace Common.FlowField
                 field.EscapeDirections,
                 field.ModifierInfluence,
                 field.HasActiveGoal,
-                field.GoalIndex,
-                field.ResultId);
+                field.GoalIndex);
 
         private static void CopyAll(FlowFieldField from, FlowFieldField to)
         {

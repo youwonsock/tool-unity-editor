@@ -78,6 +78,12 @@ namespace Common.FlowField
         internal abstract FlowFieldClampResult ClampPositionToGrid(Vector3 worldPosition);
         internal abstract bool TryGetFieldInfo(out FlowFieldFieldInfo info);
 
+        /// <summary>
+        /// The published field, for display and bakes. It is valid until the
+        /// next pump, after which its arrays may be reused.
+        /// </summary>
+        internal abstract bool TryGetPublishedField(out FlowFieldField field);
+
         // Registration commands issued from Modifier code wait until that
         // operation has finished. The mode-specific sessions keep their
         // different area-cache and rebuild policies behind the Now methods.

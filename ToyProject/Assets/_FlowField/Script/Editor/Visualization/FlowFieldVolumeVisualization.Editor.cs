@@ -512,9 +512,10 @@ namespace Common.FlowField.Editor
         {
             bool refreshRequested = state.RefreshRequested;
             FlowFieldVolumeVisualizationStatusCode previousCode = state.Code;
-            bool hasRequestedSource = manager.TryGetVolumeVisualizationSource(
+            bool hasRequestedSource = TryGetConfiguredSource(
+                manager,
                 out FlowFieldVolumeVisualizationSource requestedSource);
-            bool hasView = manager.TryGetVolumeVisualizationView(out FlowFieldReadView view);
+            bool hasView = TryGetRuntimeView(manager, out FlowFieldReadView view);
             if (hasView && hasRequestedSource
                 && view.Source.HasSameDisplaySource(requestedSource))
             {
@@ -701,10 +702,7 @@ namespace Common.FlowField.Editor
                 return false;
 
             if (Application.isPlaying)
-            {
-                return manager.TryGetVolumeVisualizationView(out view)
-                    && view.IsValid;
-            }
+                return TryGetRuntimeView(manager, out view) && view.IsValid;
 
             if (state.Code != FlowFieldVolumeVisualizationStatusCode.Valid)
                 return false;
@@ -732,6 +730,40 @@ namespace Common.FlowField.Editor
                 directions,
                 speeds);
             return view.IsValid;
+        }
+
+        // The published field, valid for this repaint. Each publication raises
+        // the Manager's Revision, which tells counted cells when to recount.
+        private static bool TryGetRuntimeView(FlowFieldManager manager, out FlowFieldReadView view)
+        {
+            view = default;
+            if (!manager.TryGetPublishedField(out FlowFieldField field)
+                || !(field is FlowFieldField<FlowFieldVolumeRequest> volume))
+                return false;
+            view = FlowFieldReadView.FromVolumeField(volume, manager.Revision);
+            return true;
+        }
+
+        // What the Manager is configured to show. The Manager submits its
+        // settings every frame, so this matches the latest accepted request.
+        private static bool TryGetConfiguredSource(
+            FlowFieldManager manager,
+            out FlowFieldVolumeVisualizationSource source)
+        {
+            source = default;
+            if (!manager.TryGetVolumeLayout(out Bounds worldBounds, out FlowFieldGridSpace grid))
+                return false;
+            FlowFieldVolumeBakeData asset = manager.BakeMode == FlowFieldBakeMode.StaticBaked
+                ? manager.VolumeStaticBakeData
+                : null;
+            source = new FlowFieldVolumeVisualizationSource(
+                grid,
+                worldBounds,
+                manager.BakeMode,
+                asset,
+                asset != null ? asset.Revision : -1,
+                0L);
+            return source.IsValid;
         }
 
         private static void RemoveUnusedAssets()

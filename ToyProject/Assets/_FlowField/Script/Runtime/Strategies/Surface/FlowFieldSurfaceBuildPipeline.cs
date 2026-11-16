@@ -358,35 +358,6 @@ namespace Common.FlowField
             _request = default;
         }
 
-        /// <summary>Solves on the calling thread, for the Editor preview and bakes.</summary>
-        internal static void SolveNow(in FlowFieldSurfaceBfsRequest request)
-        {
-            if (!request.HasGoal)
-            {
-                request.Workspace.ClearGoal();
-                return;
-            }
-            if (request.GoalIndex >= 0)
-            {
-                // The Goal stage prepared this request.
-                FlowFieldSurfaceSolver.SolvePreparedGoal(
-                    request.Grid,
-                    request.Surface,
-                    request.Workspace,
-                    request.GoalIndex);
-                return;
-            }
-            if (!FlowFieldSurfaceSolver.BuildGoal(
-                    request.Grid,
-                    request.Surface,
-                    request.Workspace,
-                    request.GoalX,
-                    request.GoalZ,
-                    request.GoalInfluenceRadius,
-                    out _))
-                request.Workspace.ClearGoal();
-        }
-
         private static void ValidateRequest(in FlowFieldSurfaceBfsRequest request)
         {
             if (!request.Grid.IsValid)

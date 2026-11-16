@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace Common.FlowField
+namespace Common.FlowField.Editor
 {
     /// <summary>
     /// Immutable identity of the field source used by a Volume3D view.  The
@@ -206,6 +206,34 @@ namespace Common.FlowField
                 directions,
                 speeds,
                 modifierInfluence);
+
+        /// <summary>A view of a published Surface2D field, for this repaint only.</summary>
+        internal static FlowFieldReadView FromSurfaceField(FlowFieldField field)
+            => CreateSurface(
+                field.Grid,
+                field.Surface,
+                field.Blocked,
+                field.GoalFlags,
+                field.FinalDirections,
+                field.FinalSpeeds,
+                field.ModifierInfluence);
+
+        /// <summary>
+        /// A view of a published Volume3D field, for this repaint only. The
+        /// Manager's Revision tells one publication from the next.
+        /// </summary>
+        internal static FlowFieldReadView FromVolumeField(FlowFieldField<FlowFieldVolumeRequest> field, long resultId)
+            => CreateVolume(
+                new FlowFieldVolumeVisualizationSource(
+                    field.Grid,
+                    field.Request.WorldBounds,
+                    field.Request.BakeMode,
+                    field.Request.StaticBakeData,
+                    field.Request.StaticBakeRevision,
+                    resultId),
+                field.Blocked,
+                field.FinalDirections,
+                field.FinalSpeeds);
 
         internal static FlowFieldReadView CreateVolume(
             FlowFieldVolumeVisualizationSource source,

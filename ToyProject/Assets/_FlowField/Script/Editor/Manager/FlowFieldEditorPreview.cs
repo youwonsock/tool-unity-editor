@@ -45,10 +45,10 @@ namespace Common.FlowField.Editor
                     return false;
                 Sessions[manager] = session;
             }
-            if (!session.IsReady)
+            if (!session.TryGetPublishedField(out FlowFieldField field))
                 return false;
-            view = session.CommittedView;
-            grid = session.CommittedGrid;
+            view = FlowFieldReadView.FromSurfaceField(field);
+            grid = field.Grid;
             return view.IsValid;
         }
 
@@ -73,7 +73,7 @@ namespace Common.FlowField.Editor
             FlowFieldSurfaceSourceKind sourceKind = manager.BakeMode == FlowFieldBakeMode.StaticBaked
                 ? FlowFieldSurfaceSourceKind.StaticSnapshot
                 : FlowFieldSurfaceSourceKind.SceneBuild;
-            session.Initialize(manager.BakeMode, sourceKind, FlowFieldSurfaceSolvePolicy.Inline);
+            session.Initialize(manager.BakeMode, sourceKind);
             RegisterModifiers(manager, session);
             FlowFieldSurfaceBakeSettings settings = manager.CreateSurfaceBakeSettings();
             session.Submit(manager.CreateSurfaceRequest(
@@ -81,8 +81,8 @@ namespace Common.FlowField.Editor
                 session.DirtyFlags,
                 session.DirtyFinalRegion,
                 session.DirtyObstacleRegion));
-            // The preview owns its session, so it completes in the same editor
-            // repaint that asked for it.
+            // The preview owns its session and waits for the worker, so it
+            // completes in the same editor repaint that asked for it.
             session.Pump();
             return session;
         }

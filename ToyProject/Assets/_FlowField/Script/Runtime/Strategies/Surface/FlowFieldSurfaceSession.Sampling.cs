@@ -54,6 +54,15 @@ namespace Common.FlowField
             return info.IsValid;
         }
 
+        internal override bool TryGetPublishedField(out FlowFieldField field)
+        {
+            field = null;
+            if (!IsInitialized || !_state.Grid.IsValid || !IsReady)
+                return false;
+            field = _fieldStore.Field;
+            return field != null;
+        }
+
         internal override FlowFieldSample Sample(Vector3 worldPosition)
         {
             FlowFieldSampleStatus status = TrySampleCore(worldPosition, out FlowFieldSample sample);

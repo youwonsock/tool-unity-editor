@@ -71,26 +71,6 @@ namespace Common.FlowField
             return true;
         }
 
-        internal bool TryGetView(
-            out FlowFieldGridSpace grid,
-            out bool[] blocked,
-            out Vector3[] directions,
-            out float[] speeds)
-        {
-            grid = default;
-            blocked = null;
-            directions = null;
-            speeds = null;
-            if (_committed == null)
-                return false;
-            _committed.HandedOut = true;
-            grid = _committed.Grid;
-            blocked = _committed.Blocked;
-            directions = _committed.FinalDirections;
-            speeds = _committed.FinalSpeeds;
-            return true;
-        }
-
         internal override bool TryGetFieldInfo(out FlowFieldFieldInfo info)
         {
             info = default;
@@ -138,68 +118,21 @@ namespace Common.FlowField
             return info.IsValid;
         }
 
-        internal bool TryGetVisualizationView(out FlowFieldReadView view)
+        internal override bool TryGetPublishedField(out FlowFieldField field)
         {
-            view = default;
+            field = null;
             if (_committed == null
                 || State == FlowFieldRuntimeState.Uninitialized
                 || State == FlowFieldRuntimeState.Released
                 || State == FlowFieldRuntimeState.Suspended
                 || State == FlowFieldRuntimeState.Faulted)
                 return false;
-
-            VolumeFieldData field = _committed;
+            // A newly accepted grid makes the published cells meaningless.
             if (_requests.HasLatest
-                && !field.Request.HasSameGrid(_requests.Latest))
+                && !_committed.Request.HasSameGrid(_requests.Latest))
                 return false;
-            field.HandedOut = true;
-            FlowFieldVolumeVisualizationSource source = new FlowFieldVolumeVisualizationSource(
-                field.Grid,
-                field.Request.WorldBounds,
-                field.Request.BakeMode,
-                field.Request.StaticBakeData,
-                field.Request.StaticBakeRevision,
-                field.ResultId);
-            view = FlowFieldReadView.CreateVolume(
-                source,
-                field.Blocked,
-                field.FinalDirections,
-                field.FinalSpeeds);
-            return view.IsValid;
-        }
-
-        internal bool TryGetVisualizationSource(
-            out FlowFieldVolumeVisualizationSource source)
-        {
-            source = default;
-            if (State == FlowFieldRuntimeState.Uninitialized
-                || State == FlowFieldRuntimeState.Released
-                || State == FlowFieldRuntimeState.Suspended
-                || State == FlowFieldRuntimeState.Faulted)
-                return false;
-
-            if (_requests.HasLatest)
-            {
-                source = new FlowFieldVolumeVisualizationSource(
-                    _requests.Latest.Grid,
-                    _requests.Latest.WorldBounds,
-                    _requests.Latest.BakeMode,
-                    _requests.Latest.StaticBakeData,
-                    _requests.Latest.StaticBakeRevision,
-                    _committed != null ? _committed.ResultId : 0L);
-                return source.IsValid;
-            }
-
-            if (_committed == null)
-                return false;
-            source = new FlowFieldVolumeVisualizationSource(
-                _committed.Grid,
-                _committed.Request.WorldBounds,
-                _committed.Request.BakeMode,
-                _committed.Request.StaticBakeData,
-                _committed.Request.StaticBakeRevision,
-                _committed.ResultId);
-            return source.IsValid;
+            field = _committed;
+            return true;
         }
     }
 }

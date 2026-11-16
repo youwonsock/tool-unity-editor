@@ -246,13 +246,6 @@ namespace Common.FlowField
                 _state.Workspace.ResolvedGoalIndex);
 
             SetLifecycle(FlowFieldSessionLifecycle.Building);
-            if (_solveStage.Policy == FlowFieldSurfaceSolvePolicy.Inline)
-            {
-                FlowFieldSurfaceBuildPipeline.SolveNow(bfsRequest);
-                OnBfsCompleted();
-                return true;
-            }
-
             // Set first: a solve that completes synchronously reports through
             // the callback, which moves the phase on.
             _phase = BuildPhase.WaitingSolve;

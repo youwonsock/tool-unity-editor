@@ -7,8 +7,7 @@ namespace Common.FlowField
     /// Arrays of the field a new publication replaced, reused by the next build
     /// in either space mode. Allocating a 100³ build every time a Goal moves
     /// collected often enough to exceed the frame budget. An array still shared
-    /// with the new field, or a field whose arrays were handed out as a view,
-    /// stays out of here.
+    /// with the new field stays out of here.
     /// </summary>
     internal sealed class FlowFieldSpareArrays
     {
@@ -56,7 +55,7 @@ namespace Common.FlowField
 
         internal void Retire(FlowFieldField replaced, FlowFieldField next)
         {
-            if (replaced == null || replaced.HandedOut)
+            if (replaced == null)
                 return;
             Keep(ref Blocked, replaced.Blocked, next.Blocked);
             Keep(ref Topology, replaced.Topology, next.Topology);

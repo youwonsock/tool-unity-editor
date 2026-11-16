@@ -3,8 +3,8 @@ using System;
 namespace Common.FlowField
 {
     /// <summary>
-    /// Runs the Surface2D solve: inline for Editor previews and bakes, or through
-    /// the backend, which keeps it off the frame that asked for it.
+    /// Runs the Surface2D solve through the backend, which keeps it off the
+    /// frame that asked for it.
     /// </summary>
     internal sealed class FlowFieldSurfaceSolveStage
     {
@@ -20,14 +20,11 @@ namespace Common.FlowField
             _factory = factory;
         }
 
-        internal FlowFieldSurfaceSolvePolicy Policy { get; private set; }
-
-        internal void Prepare(FlowFieldSurfaceSourceKind sourceKind, FlowFieldSurfaceSolvePolicy policy)
+        // Every solve runs on a worker thread. A direct owner that needs the
+        // result at once waits for it through Poll.
+        internal void Prepare(FlowFieldSurfaceSourceKind sourceKind)
         {
-            Policy = policy;
-            if (_backend != null
-                || sourceKind != FlowFieldSurfaceSourceKind.SceneBuild
-                || policy != FlowFieldSurfaceSolvePolicy.Worker)
+            if (_backend != null || sourceKind != FlowFieldSurfaceSourceKind.SceneBuild)
                 return;
             _backend = _factory != null
                 ? _factory()

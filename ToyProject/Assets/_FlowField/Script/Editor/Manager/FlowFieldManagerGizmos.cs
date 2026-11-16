@@ -46,10 +46,18 @@ namespace Common.FlowField.Editor
                 return;
 
             FlowFieldReadView view;
-            bool hasView = Application.isPlaying
-                ? manager.TryGetSurfaceView(out view, out grid)
-                : FlowFieldEditorPreview.TryGetView(manager, out view, out grid);
-            if (!hasView)
+            if (Application.isPlaying)
+            {
+                if (!manager.TryGetPublishedField(out FlowFieldField field) || field.Surface == null)
+                    return;
+                view = FlowFieldReadView.FromSurfaceField(field);
+                grid = field.Grid;
+            }
+            else if (!FlowFieldEditorPreview.TryGetView(manager, out view, out grid))
+            {
+                return;
+            }
+            if (!view.IsValid)
                 return;
 
             FlowFieldStaticBakeData bake = manager.StaticBakeData;

@@ -36,7 +36,6 @@ namespace Common.FlowField
         // Editor and bake adapters request an explicit snapshot only at their
         // boundary. Runtime sampling reads the compact store directly.
         internal FlowFieldSurfaceWorkspace CommittedWorkspace => _fieldStore.CreateWorkspaceSnapshot();
-        internal FlowFieldReadView CommittedView => _fieldStore.CreateReadView();
         internal FlowFieldSurfaceGoalTracker GoalTracker => _goalTracker;
         internal FlowFieldSurfaceData CommittedSurface => _fieldStore.Surface;
         internal FlowFieldGridSpace CommittedGrid => _fieldStore.Grid;
@@ -266,8 +265,7 @@ namespace Common.FlowField
 
         internal void Initialize(
             FlowFieldBakeMode bakeMode,
-            FlowFieldSurfaceSourceKind sourceKind,
-            FlowFieldSurfaceSolvePolicy solvePolicy)
+            FlowFieldSurfaceSourceKind sourceKind)
         {
             if (Disposed)
                 throw new ObjectDisposedException(nameof(FlowFieldSurfaceSession));
@@ -278,17 +276,16 @@ namespace Common.FlowField
                 throw new InvalidOperationException("FlowField session is faulted. Retry the pending request or Release before Initialize.", Fault);
             if (Lifecycle == FlowFieldSessionLifecycle.Suspended
                 && (BakeMode != bakeMode
-                    || _sourceKind != sourceKind
-                    || _solveStage.Policy != solvePolicy))
+                    || _sourceKind != sourceKind))
             {
                 throw new InvalidOperationException(
-                    "FlowField bake mode, source and solve policy are fixed until Release.");
+                    "FlowField bake mode and source are fixed until Release.");
             }
 
             BakeMode = bakeMode;
             _sourceKind = sourceKind;
             _modifierPipeline ??= new FlowFieldSurfaceModifierPipeline(new FlowFieldSurfaceModifierRegistry());
-            _solveStage.Prepare(sourceKind, solvePolicy);
+            _solveStage.Prepare(sourceKind);
             Fault = null;
             _state.ConfigurationStale = false;
             MarkDirty(FlowFieldSurfaceDirtyFlags.All, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
