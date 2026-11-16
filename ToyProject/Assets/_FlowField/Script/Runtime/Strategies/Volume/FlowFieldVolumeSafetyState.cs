@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using VolumeFieldData = Common.FlowField.FlowFieldVolumeFieldData;
+using VolumeFieldData = Common.FlowField.FlowFieldField<Common.FlowField.FlowFieldVolumeRequest>;
 using static Common.FlowField.FlowFieldVolumeNavigation;
 
 namespace Common.FlowField

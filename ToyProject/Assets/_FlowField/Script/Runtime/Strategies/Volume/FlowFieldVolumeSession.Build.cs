@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.Threading;
 using UnityEngine;
 using BuildContext = Common.FlowField.FlowFieldVolumeBuildContext;
-using VolumeFieldData = Common.FlowField.FlowFieldVolumeFieldData;
+using VolumeFieldData = Common.FlowField.FlowFieldField<Common.FlowField.FlowFieldVolumeRequest>;
 using BuildPhase = Common.FlowField.FlowFieldVolumeBuildPhase;
 using static Common.FlowField.FlowFieldVolumeNavigation;
 
@@ -120,30 +120,30 @@ namespace Common.FlowField
             switch (build.AllocationStage)
             {
                 case 0:
-                    build.Blocked ??= FlowFieldVolumeSpareArrays.Rent(ref _spares.Blocked, build.Count);
+                    build.Blocked ??= FlowFieldSpareArrays.Rent(ref _spares.Blocked, build.Count);
                     if (build.PublishedBlocked != null)
                         Array.Copy(build.PublishedBlocked, build.Blocked, build.Count);
                     break;
-                case 1: build.Topology ??= FlowFieldVolumeSpareArrays.Rent(ref _spares.Topology, build.Count); break;
-                case 2: build.GoalFlags = FlowFieldVolumeSpareArrays.Rent(ref _spares.GoalFlags, build.Count); break;
-                case 3: build.Next = FlowFieldVolumeSpareArrays.Rent(ref _spares.Next, build.Count); break;
-                case 4: build.Directions = FlowFieldVolumeSpareArrays.Rent(ref _spares.Directions, build.Count); break;
-                case 5: build.Speeds = FlowFieldVolumeSpareArrays.Rent(ref _spares.Speeds, build.Count); break;
-                case 6: build.FinalDirections = FlowFieldVolumeSpareArrays.Rent(ref _spares.FinalDirections, build.Count); break;
-                case 7: build.FinalSpeeds = FlowFieldVolumeSpareArrays.Rent(ref _spares.FinalSpeeds, build.Count); break;
-                case 8: build.EscapeDirections ??= FlowFieldVolumeSpareArrays.Rent(ref _spares.EscapeDirections, build.Count); break;
+                case 1: build.Topology ??= FlowFieldSpareArrays.Rent(ref _spares.Topology, build.Count); break;
+                case 2: build.GoalFlags = FlowFieldSpareArrays.Rent(ref _spares.GoalFlags, build.Count); break;
+                case 3: build.Next = FlowFieldSpareArrays.Rent(ref _spares.Next, build.Count); break;
+                case 4: build.Directions = FlowFieldSpareArrays.Rent(ref _spares.Directions, build.Count); break;
+                case 5: build.Speeds = FlowFieldSpareArrays.Rent(ref _spares.Speeds, build.Count); break;
+                case 6: build.FinalDirections = FlowFieldSpareArrays.Rent(ref _spares.FinalDirections, build.Count); break;
+                case 7: build.FinalSpeeds = FlowFieldSpareArrays.Rent(ref _spares.FinalSpeeds, build.Count); break;
+                case 8: build.EscapeDirections ??= FlowFieldSpareArrays.Rent(ref _spares.EscapeDirections, build.Count); break;
                 // A static bake loads its navigation and never searches.
                 case 9:
                     if (build.Request.StaticBakeData == null)
-                        build.Costs = FlowFieldVolumeSpareArrays.Rent(ref _spares.Costs, build.Count);
+                        build.Costs = FlowFieldSpareArrays.Rent(ref _spares.Costs, build.Count);
                     break;
                 case 10:
                     if (build.Request.StaticBakeData == null)
-                        build.Queue = FlowFieldVolumeSpareArrays.Rent(ref _spares.Queue, build.Count);
+                        build.Queue = FlowFieldSpareArrays.Rent(ref _spares.Queue, build.Count);
                     break;
                 case 11:
                     if (build.Request.StaticBakeData == null)
-                        build.Influence = FlowFieldVolumeSpareArrays.Rent(ref _spares.Influence, build.Count);
+                        build.Influence = FlowFieldSpareArrays.Rent(ref _spares.Influence, build.Count);
                     break;
             }
 
@@ -297,8 +297,13 @@ namespace Common.FlowField
 
         private void CommitBuild(BuildContext build)
         {
+            // The solver or the static bake has already resolved the Goal. An
+            // anchor flag must never change the published Goal identity.
+            int goalIndex = build.Request.HasGoal ? build.GoalIndex : -1;
             VolumeFieldData next = new VolumeFieldData(
                 build.Request,
+                build.Request.Grid,
+                surface: null,
                 build.Blocked,
                 build.Topology,
                 build.GoalFlags,
@@ -308,7 +313,9 @@ namespace Common.FlowField
                 build.FinalDirections,
                 build.FinalSpeeds,
                 build.EscapeDirections,
-                build.GoalIndex,
+                modifierInfluence: null,
+                hasActiveGoal: goalIndex >= 0,
+                goalIndex,
                 Interlocked.Increment(ref _nextVisualizationResultId));
 
             // A viewed Blocked array stays out of the spares through every field sharing it.

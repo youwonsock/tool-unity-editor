@@ -5,45 +5,39 @@ using UnityEngine;
 namespace Common.FlowField
 {
     /// <summary>
-    /// Compact committed representation.  Solver scratch (costs, queues,
-    /// obstacle probes and influence masks) remains in the staging workspace;
-    /// this store contains only data needed for sampling, diagnostics and a
-    /// subsequent final-only composition.
+    /// The published Surface2D field. Solver scratch (costs, queues, obstacle
+    /// probes and influence masks) stays in the staging workspace; a commit
+    /// copies the composed region into a new <see cref="FlowFieldField"/> and
+    /// replaces the published one, as Volume3D does.
     /// </summary>
     internal sealed class FlowFieldSurfaceFieldStore
     {
-        internal FlowFieldGridSpace Grid { get; private set; }
-        internal FlowFieldSurfaceData Surface { get; private set; }
-        internal bool HasActiveGoal { get; private set; }
-        internal int ResolvedGoalIndex { get; private set; } = -1;
-        internal int Capacity => _blocked?.Length ?? 0;
-        internal bool IsValid => Capacity > 0 && Grid.IsValid && Surface != null && Surface.IsValid;
+        private readonly FlowFieldSpareArrays _spares = new FlowFieldSpareArrays();
+        private FlowFieldField _field;
 
-        private bool[] _blocked;
-        private byte[] _topologyMasks;
-        private FlowFieldGoalFlags[] _goalFlags;
-        private int[] _nextCells;
-        private Vector3[] _baseDirections;
-        private float[] _baseSpeeds;
-        private Vector3[] _finalDirections;
-        private float[] _finalSpeeds;
-        private bool[] _modifierInfluence;
-
-        internal int[] NextCells => _nextCells;
+        internal FlowFieldField Field => _field;
+        internal FlowFieldGridSpace Grid => _field?.Grid ?? default;
+        internal FlowFieldSurfaceData Surface => _field?.Surface;
+        internal bool HasActiveGoal => _field != null && _field.HasActiveGoal;
+        internal int ResolvedGoalIndex => _field?.GoalIndex ?? -1;
+        internal int Capacity => _field?.Capacity ?? 0;
+        internal bool IsValid => _field != null && Grid.IsValid && Surface != null && Surface.IsValid;
+        internal int[] NextCells => _field?.NextCells;
 
         internal FlowFieldReadView CreateReadView()
             => FlowFieldReadView.CreateSurface(
                 Grid,
                 Surface,
-                _blocked,
-                _goalFlags,
-                _finalDirections,
-                _finalSpeeds,
-                _modifierInfluence);
+                _field?.Blocked,
+                _field?.GoalFlags,
+                _field?.FinalDirections,
+                _field?.FinalSpeeds,
+                _field?.ModifierInfluence);
 
-        private unsafe bool CopyRegion(
+        private static unsafe bool CopyRegion(
             int width,
             FlowFieldSurfaceWorkspace workspace,
+            FlowFieldField target,
             bool includeBase,
             int minX,
             int maxX,
@@ -56,23 +50,23 @@ namespace Common.FlowField
             {
                 new FlowFieldSurfaceFieldCommitJob
                 {
-                    Blocked = pins.Pin(_blocked),
+                    Blocked = pins.Pin(target.Blocked),
                     BlockedSource = pins.Pin(workspace.Blocked),
-                    Topology = pins.Pin(_topologyMasks),
+                    Topology = pins.Pin(target.Topology),
                     TopologySource = pins.Pin(workspace.TopologyMasks),
-                    GoalFlags = pins.Pin(_goalFlags),
+                    GoalFlags = pins.Pin(target.GoalFlags),
                     GoalFlagsSource = pins.Pin(workspace.GoalFlags),
-                    Next = pins.Pin(_nextCells),
+                    Next = pins.Pin(target.NextCells),
                     NextSource = pins.Pin(workspace.NextCells),
-                    BaseDirections = pins.Pin(_baseDirections),
+                    BaseDirections = pins.Pin(target.BaseDirections),
                     BaseDirectionsSource = pins.Pin(workspace.BaseDirections),
-                    BaseSpeeds = pins.Pin(_baseSpeeds),
+                    BaseSpeeds = pins.Pin(target.BaseSpeeds),
                     BaseSpeedsSource = pins.Pin(workspace.BaseSpeedMultipliers),
-                    FinalDirections = pins.Pin(_finalDirections),
+                    FinalDirections = pins.Pin(target.FinalDirections),
                     FinalDirectionsSource = pins.Pin(workspace.FinalDirections),
-                    FinalSpeeds = pins.Pin(_finalSpeeds),
+                    FinalSpeeds = pins.Pin(target.FinalSpeeds),
                     FinalSpeedsSource = pins.Pin(workspace.FinalSpeedMultipliers),
-                    Influence = pins.Pin(_modifierInfluence),
+                    Influence = pins.Pin(target.ModifierInfluence),
                     InfluenceSource = pins.Pin(workspace.ModifierInfluence),
                     Changed = pins.Pin(changed),
                     Width = width,
@@ -107,18 +101,21 @@ namespace Common.FlowField
             // scan every Surface sample just to discover that the geometry is
             // unchanged. A content comparison is still required when an
             // adapter supplies a different instance for the same Grid.
+            FlowFieldField previous = _field;
             bool sameSurface = ReferenceEquals(Surface, surface)
                 || Surface != null && Surface.ContentEquals(surface);
-            bool full = Capacity != grid.CellCount || !Grid.MatchesBounds(grid)
+            bool full = previous == null || Capacity != grid.CellCount || !Grid.MatchesBounds(grid)
                 || !sameSurface;
             if (full)
             {
-                Resize(grid.CellCount);
                 region = FlowFieldCellRect.Full(grid);
                 includeBase = true;
             }
 
-            bool any = full;
+            FlowFieldField next = Rent(grid, surface, grid.CellCount, workspace);
+            if (!full)
+                CopyAll(previous, next);
+
             int minX = 0, maxX = grid.Width - 1, minZ = 0, maxZ = grid.Depth - 1;
             if (!full && region.IsValid)
             {
@@ -127,18 +124,80 @@ namespace Common.FlowField
                 minZ = Mathf.Clamp(region.MinZ, 0, grid.Depth - 1);
                 maxZ = Mathf.Clamp(region.MaxZ, 0, grid.Depth - 1);
             }
-            any |= CopyRegion(grid.Width, workspace, includeBase, minX, maxX, minZ, maxZ);
+            bool any = full;
+            any |= CopyRegion(grid.Width, workspace, next, includeBase, minX, maxX, minZ, maxZ);
+            any |= previous == null
+                || previous.HasActiveGoal != next.HasActiveGoal
+                || previous.GoalIndex != next.GoalIndex;
 
-            // Equal geometry may arrive in a new immutable snapshot. Keep
-            // published identity/revision aligned without inventing a cell change.
-            Grid = grid;
-            Surface = surface;
-            bool oldGoal = HasActiveGoal;
-            int oldIndex = ResolvedGoalIndex;
-            HasActiveGoal = workspace.HasActiveGoal;
-            ResolvedGoalIndex = workspace.ResolvedGoalIndex;
-            any |= oldGoal != HasActiveGoal || oldIndex != ResolvedGoalIndex;
-            return any;
+            if (!any)
+            {
+                // Equal content may arrive with a new immutable Surface
+                // snapshot. Keep the published identity aligned without
+                // inventing a cell change, and give the copy back.
+                FlowFieldField aligned = Share(previous, grid, surface);
+                _spares.Retire(next, aligned);
+                _field = aligned;
+                return false;
+            }
+
+            _spares.Retire(previous, next);
+            _field = next;
+            return true;
+        }
+
+        private FlowFieldField Rent(
+            FlowFieldGridSpace grid,
+            FlowFieldSurfaceData surface,
+            int count,
+            FlowFieldSurfaceWorkspace workspace)
+            => new FlowFieldField(
+                grid,
+                surface,
+                FlowFieldSpareArrays.Rent(ref _spares.Blocked, count),
+                FlowFieldSpareArrays.Rent(ref _spares.Topology, count),
+                FlowFieldSpareArrays.Rent(ref _spares.GoalFlags, count),
+                FlowFieldSpareArrays.Rent(ref _spares.Next, count),
+                FlowFieldSpareArrays.Rent(ref _spares.Directions, count),
+                FlowFieldSpareArrays.Rent(ref _spares.Speeds, count),
+                FlowFieldSpareArrays.Rent(ref _spares.FinalDirections, count),
+                FlowFieldSpareArrays.Rent(ref _spares.FinalSpeeds, count),
+                escapeDirections: null,
+                FlowFieldSpareArrays.Rent(ref _spares.ModifierInfluence, count),
+                workspace.HasActiveGoal,
+                workspace.ResolvedGoalIndex,
+                resultId: 0L);
+
+        private static FlowFieldField Share(FlowFieldField field, FlowFieldGridSpace grid, FlowFieldSurfaceData surface)
+            => new FlowFieldField(
+                grid,
+                surface,
+                field.Blocked,
+                field.Topology,
+                field.GoalFlags,
+                field.NextCells,
+                field.BaseDirections,
+                field.BaseSpeeds,
+                field.FinalDirections,
+                field.FinalSpeeds,
+                field.EscapeDirections,
+                field.ModifierInfluence,
+                field.HasActiveGoal,
+                field.GoalIndex,
+                field.ResultId);
+
+        private static void CopyAll(FlowFieldField from, FlowFieldField to)
+        {
+            int count = from.Capacity;
+            Array.Copy(from.Blocked, to.Blocked, count);
+            Array.Copy(from.Topology, to.Topology, count);
+            Array.Copy(from.GoalFlags, to.GoalFlags, count);
+            Array.Copy(from.NextCells, to.NextCells, count);
+            Array.Copy(from.BaseDirections, to.BaseDirections, count);
+            Array.Copy(from.BaseSpeeds, to.BaseSpeeds, count);
+            Array.Copy(from.FinalDirections, to.FinalDirections, count);
+            Array.Copy(from.FinalSpeeds, to.FinalSpeeds, count);
+            Array.Copy(from.ModifierInfluence, to.ModifierInfluence, count);
         }
 
         internal FlowFieldSurfaceWorkspace CreateWorkspaceSnapshot()
@@ -156,7 +215,7 @@ namespace Common.FlowField
             if (!IsValid || workspace == null || workspace.Capacity != Capacity)
                 throw new ArgumentException("Committed workspace does not match the field store.", nameof(workspace));
             workspace.AssertWritable(nameof(CopyToWorkspace));
-            Array.Copy(_blocked, workspace.Blocked, Capacity);
+            Array.Copy(_field.Blocked, workspace.Blocked, Capacity);
             CopyGoalAndFieldToWorkspace(workspace);
             // Escape vectors are a diagnostic/bake concern rather than part
             // of the compact runtime field. Reconstruct them only when an
@@ -176,19 +235,22 @@ namespace Common.FlowField
         {
             if (!IsValid || workspace == null || workspace.Capacity != Capacity)
                 throw new ArgumentException("Committed workspace does not match the field store.", nameof(workspace));
-            Array.Copy(_topologyMasks, workspace.TopologyMasks, Capacity);
-            Array.Copy(_goalFlags, workspace.GoalFlags, Capacity);
-            Array.Copy(_nextCells, workspace.NextCells, Capacity);
-            Array.Copy(_baseDirections, workspace.BaseDirections, Capacity);
-            Array.Copy(_baseSpeeds, workspace.BaseSpeedMultipliers, Capacity);
-            Array.Copy(_finalDirections, workspace.FinalDirections, Capacity);
-            Array.Copy(_finalSpeeds, workspace.FinalSpeedMultipliers, Capacity);
-            Array.Copy(_modifierInfluence, workspace.ModifierInfluence, Capacity);
-            workspace.LoadBakedGoal(HasActiveGoal, ResolvedGoalIndex, _nextCells);
+            workspace.AssertWritable(nameof(CopyGoalAndFieldToWorkspace));
+            FlowFieldField field = _field;
+            for (int i = 0; i < Capacity; i++)
+                workspace.TopologyMasks[i] = (byte)field.Topology[i];
+            Array.Copy(field.GoalFlags, workspace.GoalFlags, Capacity);
+            Array.Copy(field.NextCells, workspace.NextCells, Capacity);
+            Array.Copy(field.BaseDirections, workspace.BaseDirections, Capacity);
+            Array.Copy(field.BaseSpeeds, workspace.BaseSpeedMultipliers, Capacity);
+            Array.Copy(field.FinalDirections, workspace.FinalDirections, Capacity);
+            Array.Copy(field.FinalSpeeds, workspace.FinalSpeedMultipliers, Capacity);
+            Array.Copy(field.ModifierInfluence, workspace.ModifierInfluence, Capacity);
+            workspace.LoadBakedGoal(HasActiveGoal, ResolvedGoalIndex, field.NextCells);
             for (int i = 0; i < Capacity; i++)
             {
-                workspace.GoalDirections[i] = (_goalFlags[i] & FlowFieldGoalFlags.Directed) != 0
-                    ? _baseDirections[i]
+                workspace.GoalDirections[i] = (field.GoalFlags[i] & FlowFieldGoalFlags.Directed) != 0
+                    ? field.BaseDirections[i]
                     : Vector3.zero;
             }
         }
@@ -204,45 +266,17 @@ namespace Common.FlowField
             if (!Surface.IsSurfaceValid(index))
                 return true;
             Vector3 normal = Surface.GetSurfaceNormal(index);
-            Vector3 direction = _finalDirections[index];
+            Vector3 direction = _field.FinalDirections[index];
             if (direction.sqrMagnitude > FlowFieldVectorUtility.DIRECTION_EPSILON_SQR)
                 direction = Vector3.ProjectOnPlane(direction, normal).normalized;
-            sample = new FlowFieldSample(direction, _finalSpeeds[index], normal, true, true);
+            sample = new FlowFieldSample(direction, _field.FinalSpeeds[index], normal, true, true);
             return true;
-        }
-
-        private void Resize(int count)
-        {
-            if (count <= 0)
-                throw new ArgumentOutOfRangeException(nameof(count));
-            _blocked = new bool[count];
-            _topologyMasks = new byte[count];
-            _goalFlags = new FlowFieldGoalFlags[count];
-            _nextCells = new int[count];
-            _baseDirections = new Vector3[count];
-            _baseSpeeds = new float[count];
-            _finalDirections = new Vector3[count];
-            _finalSpeeds = new float[count];
-            _modifierInfluence = new bool[count];
-            for (int i = 0; i < count; i++) _nextCells[i] = -1;
         }
 
         internal void Clear()
         {
-            _blocked = null;
-            _topologyMasks = null;
-            _goalFlags = null;
-            _nextCells = null;
-            _baseDirections = null;
-            _baseSpeeds = null;
-            _finalDirections = null;
-            _finalSpeeds = null;
-            _modifierInfluence = null;
-            Grid = default;
-            Surface = null;
-            HasActiveGoal = false;
-            ResolvedGoalIndex = -1;
+            _field = null;
+            _spares.Clear();
         }
-
     }
 }

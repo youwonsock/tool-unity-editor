@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.Threading;
 using UnityEngine;
 using BuildContext = Common.FlowField.FlowFieldVolumeBuildContext;
-using VolumeFieldData = Common.FlowField.FlowFieldVolumeFieldData;
+using VolumeFieldData = Common.FlowField.FlowFieldField<Common.FlowField.FlowFieldVolumeRequest>;
 using BuildPhase = Common.FlowField.FlowFieldVolumeBuildPhase;
 using static Common.FlowField.FlowFieldVolumeNavigation;
 

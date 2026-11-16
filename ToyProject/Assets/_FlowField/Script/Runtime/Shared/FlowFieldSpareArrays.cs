@@ -4,12 +4,13 @@ using UnityEngine;
 namespace Common.FlowField
 {
     /// <summary>
-    /// Arrays of the field a new publication replaced, reused by the next build.
-    /// Allocating a 100³ build every time a Goal moves collected often enough to
-    /// exceed the frame budget. An array still shared with the new field, or a
-    /// field whose arrays were handed out as a view, stays out of here.
+    /// Arrays of the field a new publication replaced, reused by the next build
+    /// in either space mode. Allocating a 100³ build every time a Goal moves
+    /// collected often enough to exceed the frame budget. An array still shared
+    /// with the new field, or a field whose arrays were handed out as a view,
+    /// stays out of here.
     /// </summary>
-    internal sealed class FlowFieldVolumeSpareArrays
+    internal sealed class FlowFieldSpareArrays
     {
         internal bool[] Blocked;
         internal uint[] Topology;
@@ -23,9 +24,11 @@ namespace Common.FlowField
         internal int[] Costs;
         internal int[] Queue;
         internal bool[] Influence;
+        internal bool[] ModifierInfluence;
 
         internal long Bytes => (Blocked?.Length ?? 0)
             + (Influence?.Length ?? 0)
+            + (ModifierInfluence?.Length ?? 0)
             + 4L * (Topology?.Length ?? 0)
             + (GoalFlags?.Length ?? 0)
             + 4L * (Next?.Length ?? 0)
@@ -51,7 +54,7 @@ namespace Common.FlowField
             return array;
         }
 
-        internal void Retire(FlowFieldVolumeFieldData replaced, FlowFieldVolumeFieldData next)
+        internal void Retire(FlowFieldField replaced, FlowFieldField next)
         {
             if (replaced == null || replaced.HandedOut)
                 return;
@@ -64,11 +67,13 @@ namespace Common.FlowField
             Keep(ref FinalDirections, replaced.FinalDirections, next.FinalDirections);
             Keep(ref FinalSpeeds, replaced.FinalSpeeds, next.FinalSpeeds);
             Keep(ref EscapeDirections, replaced.EscapeDirections, next.EscapeDirections);
+            Keep(ref ModifierInfluence, replaced.ModifierInfluence, next.ModifierInfluence);
         }
 
+        // A mode that does not keep an array leaves the spare it has alone.
         private static void Keep<T>(ref T[] slot, T[] replaced, T[] current)
         {
-            if (!ReferenceEquals(replaced, current))
+            if (replaced != null && !ReferenceEquals(replaced, current))
                 slot = replaced;
         }
 
@@ -86,6 +91,7 @@ namespace Common.FlowField
             Costs = null;
             Queue = null;
             Influence = null;
+            ModifierInfluence = null;
         }
     }
 }

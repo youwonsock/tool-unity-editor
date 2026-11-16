@@ -308,7 +308,8 @@ namespace Common.FlowField
     {
         [NativeDisableUnsafePtrRestriction] internal bool* Blocked;
         [NativeDisableUnsafePtrRestriction] internal bool* BlockedSource;
-        [NativeDisableUnsafePtrRestriction] internal byte* Topology;
+        // The published field keeps topology as uint, the workspace as byte.
+        [NativeDisableUnsafePtrRestriction] internal uint* Topology;
         [NativeDisableUnsafePtrRestriction] internal byte* TopologySource;
         [NativeDisableUnsafePtrRestriction] internal FlowFieldGoalFlags* GoalFlags;
         [NativeDisableUnsafePtrRestriction] internal FlowFieldGoalFlags* GoalFlagsSource;

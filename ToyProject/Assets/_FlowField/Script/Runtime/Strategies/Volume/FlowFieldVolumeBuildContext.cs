@@ -125,7 +125,7 @@ namespace Common.FlowField
         /// published arrays are shared read-only; only the final field is new.
         /// </summary>
         internal FlowFieldVolumeBuildContext(
-            FlowFieldVolumeFieldData published,
+            FlowFieldField<FlowFieldVolumeRequest> published,
             FlowFieldModifierWorkItem[] modifiers,
             Vector3[] finalDirections,
             float[] finalSpeeds)

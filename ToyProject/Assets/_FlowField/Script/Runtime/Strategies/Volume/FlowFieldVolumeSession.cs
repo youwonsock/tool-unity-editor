@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.Threading;
 using UnityEngine;
 using BuildContext = Common.FlowField.FlowFieldVolumeBuildContext;
-using VolumeFieldData = Common.FlowField.FlowFieldVolumeFieldData;
+using VolumeFieldData = Common.FlowField.FlowFieldField<Common.FlowField.FlowFieldVolumeRequest>;
 using BuildPhase = Common.FlowField.FlowFieldVolumeBuildPhase;
 using static Common.FlowField.FlowFieldVolumeNavigation;
 
@@ -19,7 +19,7 @@ namespace Common.FlowField
         private Collider[] _registeredObstacleOverlapBuffer;
         private readonly int[] _obstacleCells = new int[CellsPerStep];
         private readonly FlowFieldVolumeCellQuery _cellQuery = new FlowFieldVolumeCellQuery();
-        private readonly FlowFieldVolumeSpareArrays _spares = new FlowFieldVolumeSpareArrays();
+        private readonly FlowFieldSpareArrays _spares = new FlowFieldSpareArrays();
         private readonly FlowFieldVolumeModifierRegistry _modifierRegistry = new FlowFieldVolumeModifierRegistry();
         private readonly FlowFieldVolumeSafetyState _safety = new FlowFieldVolumeSafetyState();
 
@@ -234,8 +234,8 @@ namespace Common.FlowField
                 _build = new BuildContext(
                     _committed,
                     modifierSnapshots,
-                    FlowFieldVolumeSpareArrays.Rent(ref _spares.FinalDirections, request.Grid.CellCount),
-                    FlowFieldVolumeSpareArrays.Rent(ref _spares.FinalSpeeds, request.Grid.CellCount));
+                    FlowFieldSpareArrays.Rent(ref _spares.FinalDirections, request.Grid.CellCount),
+                    FlowFieldSpareArrays.Rent(ref _spares.FinalSpeeds, request.Grid.CellCount));
             }
             else
             {
