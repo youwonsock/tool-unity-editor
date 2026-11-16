@@ -202,8 +202,7 @@ namespace Common.FlowField
             var current = new FlowFieldVectorState(
                 workspace.FinalDirections[index],
                 workspace.FinalSpeedMultipliers[index]);
-            FlowFieldVectorState candidate = modifier.Modify(in current, in context);
-            FlowFieldVectorUtility.ValidateModifierOutput(in candidate, surfaceNormal);
+            FlowFieldVectorState candidate = FlowFieldVectorUtility.ApplyModifier(modifier, in current, in context);
 
             workspace.ModifierInfluence[index] = true;
             workspace.FinalDirections[index] = candidate.Direction;

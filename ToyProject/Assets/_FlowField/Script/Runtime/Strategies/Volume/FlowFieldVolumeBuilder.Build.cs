@@ -258,9 +258,7 @@ namespace Common.FlowField
                         Vector3.zero,
                         build.Request.Grid,
                         (build.GoalFlags[index] & FlowFieldGoalFlags.Directed) != 0);
-                    FlowFieldVectorState candidate = modifier.Snapshot.Modify(in current, in context);
-                    FlowFieldVectorUtility.ValidateVolumeModifierOutput(candidate);
-                    current = candidate;
+                    current = FlowFieldVectorUtility.ApplyModifier(modifier.Snapshot, in current, in context);
                 }
                 build.FinalDirections[index] = current.Direction;
                 build.FinalSpeeds[index] = current.SpeedMultiplier;

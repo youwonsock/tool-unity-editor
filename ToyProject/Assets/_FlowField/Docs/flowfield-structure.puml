@@ -34,11 +34,10 @@ class "FlowFieldSurfaceBuilder (Surface2D)" as Surface {
 }
 class "FlowFieldVolumeBuilder (Volume3D)" as Volume {
   VolumeObstacleTracker
-  VolumeModifierRegistry
   VolumeBuildContext
   VolumeSafetyState
 }
-class "FlowFieldField·FlowFieldSampler\nFlowFieldSafety" as Shared
+class "FlowFieldField·FlowFieldSampler\nFlowFieldSafety·FlowFieldModifierRegistry" as Shared
 class "FlowFieldDynamicObstacle\nFlowFieldGoalTarget\nModifier Volume" as Components
 
 FlowFieldManager .up.|> API

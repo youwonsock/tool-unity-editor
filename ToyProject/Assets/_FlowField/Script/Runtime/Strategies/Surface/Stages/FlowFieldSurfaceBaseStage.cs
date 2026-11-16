@@ -53,7 +53,7 @@ namespace Common.FlowField
         internal bool PrepareSurface(
             in FlowFieldSurfaceRequest request,
             FlowFieldSurfaceDirtyFlags pending,
-            FlowFieldSurfaceModifierRegistry modifiers)
+            FlowFieldModifierRegistry<FlowFieldSurfaceModifierArea> modifiers)
         {
             if ((pending & FlowFieldSurfaceDirtyFlags.Grid) == 0
                 && _state.Grid.IsValid

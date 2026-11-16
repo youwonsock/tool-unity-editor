@@ -25,7 +25,8 @@ namespace Common.FlowField
         private readonly int[] _obstacleCells = new int[CellsPerStep];
         private readonly FlowFieldVolumeCellQuery _cellQuery = new FlowFieldVolumeCellQuery();
         private readonly FlowFieldSpareArrays _spares = new FlowFieldSpareArrays();
-        private readonly FlowFieldVolumeModifierRegistry _modifierRegistry = new FlowFieldVolumeModifierRegistry();
+        // Volume3D finds a Modifier's cells per build, so it keeps no area data.
+        private readonly FlowFieldModifierRegistry<object> _modifierRegistry = new FlowFieldModifierRegistry<object>();
         private readonly FlowFieldVolumeSafetyState _safety = new FlowFieldVolumeSafetyState();
 
         private VolumeFieldData _committed;
@@ -369,7 +370,7 @@ namespace Common.FlowField
             ThrowIfDisposed();
             if (!_session.IsInitialized && !_session.IsFaulted)
                 throw new InvalidOperationException("FlowField volume session is unavailable.");
-            if (!_modifierRegistry.Unregister(modifier))
+            if (FlowFieldVectorUtility.IsMissingModifier(modifier) || !_modifierRegistry.Unregister(modifier))
                 return false;
             // A retry builds everything again.
             if (!_session.IsFaulted)
@@ -392,7 +393,7 @@ namespace Common.FlowField
             try
             {
                 using (_session.Boundary.EnterUserCode())
-                    _modifierRegistry.ValidateModifierChange(modifier, change);
+                    _modifierRegistry.ApplyChange(modifier, change);
             }
             catch (Exception exception) when (exception is InvalidOperationException || exception is ArgumentException)
             {

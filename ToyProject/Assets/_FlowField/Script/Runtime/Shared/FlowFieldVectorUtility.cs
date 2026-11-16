@@ -21,6 +21,22 @@ namespace Common.FlowField
             => modifier == null
                 || modifier is UnityEngine.Object unityObject && unityObject == null;
 
+        /// <summary>
+        /// Applies one Modifier to one cell, the same in both space modes: the
+        /// output must be finite, have a speed of zero or more and a unit (or
+        /// zero) direction. On a surface the direction must also lie in it;
+        /// Volume3D cells pass a zero normal.
+        /// </summary>
+        internal static FlowFieldVectorState ApplyModifier(
+            IFlowFieldModifierSnapshot modifier,
+            in FlowFieldVectorState current,
+            in FlowFieldVectorModifierContext context)
+        {
+            FlowFieldVectorState candidate = modifier.Modify(in current, in context);
+            ValidateModifierOutput(in candidate, context.SurfaceNormal);
+            return candidate;
+        }
+
         internal static void ValidateModifierOutput(
             in FlowFieldVectorState candidate,
             Vector3 surfaceNormal)
@@ -31,30 +47,16 @@ namespace Common.FlowField
                 throw new System.ArgumentOutOfRangeException(nameof(candidate));
             if (candidate.SpeedMultiplier < 0f)
                 throw new System.ArgumentOutOfRangeException(nameof(candidate.SpeedMultiplier));
-            Vector3 normal = ValidateSurfaceNormal(surfaceNormal);
+            bool onSurface = surfaceNormal != Vector3.zero;
+            Vector3 normal = onSurface ? ValidateSurfaceNormal(surfaceNormal) : Vector3.zero;
             if (candidate.Direction.sqrMagnitude <= DIRECTION_EPSILON_SQR)
                 return;
 
             float directionLength = candidate.Direction.magnitude;
             if (Mathf.Abs(directionLength - 1f) > 0.001f)
                 throw new System.ArgumentException("Modifier direction must be normalized.", nameof(candidate));
-            if (Mathf.Abs(Vector3.Dot(candidate.Direction, normal)) > 0.001f)
+            if (onSurface && Mathf.Abs(Vector3.Dot(candidate.Direction, normal)) > 0.001f)
                 throw new System.ArgumentException("Modifier direction must be tangent to the surface.", nameof(candidate));
-        }
-
-        internal static void ValidateVolumeModifierOutput(
-            in FlowFieldVectorState candidate)
-        {
-            if (!FlowFieldGridSpace.IsFinite(candidate.Direction)
-                || !FlowFieldGridSpace.IsFinite(candidate.SpeedMultiplier)
-                || candidate.SpeedMultiplier < 0f)
-                throw new System.ArgumentOutOfRangeException(nameof(candidate));
-
-            if (candidate.Direction.sqrMagnitude > DIRECTION_EPSILON_SQR
-                && Mathf.Abs(candidate.Direction.magnitude - 1f) > 0.001f)
-                throw new System.ArgumentException(
-                    "Modifier direction must be normalized.",
-                    nameof(candidate));
         }
 
         public static Vector3 ProjectDefaultOnSurface(Vector3 direction, Vector3 surfaceNormal)

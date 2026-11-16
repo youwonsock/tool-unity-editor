@@ -29,14 +29,14 @@ namespace Common.FlowField
 
     internal sealed class FlowFieldSurfaceModifierPipeline
     {
-        private readonly FlowFieldSurfaceModifierRegistry _registry;
+        private readonly FlowFieldModifierRegistry<FlowFieldSurfaceModifierArea> _registry;
         private readonly List<FlowFieldSurfaceModifierLayer> _runtimeLayers = new List<FlowFieldSurfaceModifierLayer>(16);
         private readonly FlowFieldSurfaceComposeRun _composeRun = new FlowFieldSurfaceComposeRun();
         private Collider[] _overlapBuffer;
 
-        internal FlowFieldSurfaceModifierRegistry Registry => _registry;
+        internal FlowFieldModifierRegistry<FlowFieldSurfaceModifierArea> Registry => _registry;
 
-        internal FlowFieldSurfaceModifierPipeline(FlowFieldSurfaceModifierRegistry registry)
+        internal FlowFieldSurfaceModifierPipeline(FlowFieldModifierRegistry<FlowFieldSurfaceModifierArea> registry)
         {
             if (registry == null)
                 throw new ArgumentNullException(nameof(registry));
@@ -67,11 +67,11 @@ namespace Common.FlowField
             Physics.SyncTransforms();
             for (int i = 0; i < _registry.Entries.Count; i++)
             {
-                FlowFieldSurfaceModifierRegistry.Entry entry = _registry.Entries[i];
+                FlowFieldModifierEntry<FlowFieldSurfaceModifierArea> entry = _registry.Entries[i];
                 if (!entry.AreaDirty)
                     continue;
 
-                FlowFieldCellRect previousRect = entry.InfluenceRect;
+                FlowFieldCellRect previousRect = entry.Area.InfluenceRect;
                 ResizeRuntimeMask(entry, request.Grid.CellCount);
                 Collider collider = entry.Modifier.Observe().InfluenceCollider;
 
@@ -81,18 +81,18 @@ namespace Common.FlowField
                     collider,
                     request.ObstacleCheckHeight,
                     request.ObstacleCheckCenterOffset,
-                    entry.InfluenceScratch,
+                    entry.Area.InfluenceScratch,
                     ref _overlapBuffer);
 
                 bool maskChanged = !FlowFieldObstacleMaskBuilder.AreEqual(
-                    entry.InfluenceMask,
-                    entry.InfluenceScratch);
+                    entry.Area.InfluenceMask,
+                    entry.Area.InfluenceScratch);
                 if (maskChanged)
                 {
-                    Array.Copy(entry.InfluenceScratch, entry.InfluenceMask, entry.InfluenceMask.Length);
+                    Array.Copy(entry.Area.InfluenceScratch, entry.Area.InfluenceMask, entry.Area.InfluenceMask.Length);
                 }
 
-                if (maskChanged || !entry.InfluenceIndicesBuilt)
+                if (maskChanged || !entry.Area.InfluenceIndicesBuilt)
                 {
                     RebuildInfluenceIndices(entry, request.Grid);
                 }
@@ -100,10 +100,9 @@ namespace Common.FlowField
                 if (maskChanged)
                     changedRegion = FlowFieldCellRect.Union(
                         changedRegion,
-                        FlowFieldCellRect.Union(previousRect, entry.InfluenceRect));
+                        FlowFieldCellRect.Union(previousRect, entry.Area.InfluenceRect));
 
                 entry.InfluenceCollider = collider;
-                _registry.UpdateColliderSnapshot(entry, collider);
                 entry.AreaDirty = false;
             }
 
@@ -126,18 +125,18 @@ namespace Common.FlowField
                 throw new ArgumentOutOfRangeException(nameof(request.ObstacleCheckCenterOffset));
         }
 
-        private static void RebuildInfluenceIndices(FlowFieldSurfaceModifierRegistry.Entry entry, FlowFieldGridSpace grid)
+        private static void RebuildInfluenceIndices(FlowFieldModifierEntry<FlowFieldSurfaceModifierArea> entry, FlowFieldGridSpace grid)
         {
-            entry.InfluenceIndices.Clear();
+            entry.Area.InfluenceIndices.Clear();
             // The rect comes from the mask, not the collider bounds: a
             // cell that only touches the collider belongs to the mask,
             // and a partial composition rewrites nothing outside the rect.
             FlowFieldCellRect maskRect = FlowFieldCellRect.Invalid;
-            for (int index = 0; index < entry.InfluenceMask.Length; index++)
+            for (int index = 0; index < entry.Area.InfluenceMask.Length; index++)
             {
-                if (!entry.InfluenceMask[index])
+                if (!entry.Area.InfluenceMask[index])
                     continue;
-                entry.InfluenceIndices.Add(index);
+                entry.Area.InfluenceIndices.Add(index);
                 grid.FromFlatIndex(index, out int x, out int z);
                 maskRect = FlowFieldCellRect.Union(maskRect, new FlowFieldCellRect
                 {
@@ -149,8 +148,8 @@ namespace Common.FlowField
                     MaxZ = z,
                 });
             }
-            entry.InfluenceIndicesBuilt = true;
-            entry.InfluenceRect = maskRect;
+            entry.Area.InfluenceIndicesBuilt = true;
+            entry.Area.InfluenceRect = maskRect;
         }
 
         /// <summary>Takes the Modifier snapshots for one composition, then <see cref="StepFinalField"/> runs it.</summary>
@@ -198,46 +197,43 @@ namespace Common.FlowField
             _runtimeLayers.Clear();
             for (int i = 0; i < _registry.Entries.Count; i++)
             {
-                FlowFieldSurfaceModifierRegistry.Entry entry = _registry.Entries[i];
+                FlowFieldModifierEntry<FlowFieldSurfaceModifierArea> entry = _registry.Entries[i];
                 if (FlowFieldVectorUtility.IsMissingModifier(entry.Modifier)
-                    || entry.InfluenceMask == null
-                    || entry.InfluenceMask.Length != cellCount)
+                    || entry.Area.InfluenceMask == null
+                    || entry.Area.InfluenceMask.Length != cellCount)
                     throw new InvalidOperationException("Registered modifier data is inconsistent.");
 
-                if (!entry.InfluenceIndicesBuilt)
+                if (!entry.Area.InfluenceIndicesBuilt)
                 {
-                    for (int index = 0; index < entry.InfluenceMask.Length; index++)
+                    for (int index = 0; index < entry.Area.InfluenceMask.Length; index++)
                     {
-                        if (entry.InfluenceMask[index])
-                            entry.InfluenceIndices.Add(index);
+                        if (entry.Area.InfluenceMask[index])
+                            entry.Area.InfluenceIndices.Add(index);
                     }
-                    entry.InfluenceIndicesBuilt = true;
+                    entry.Area.InfluenceIndicesBuilt = true;
                 }
 
-                IFlowFieldModifierSnapshot snapshot = entry.Modifier.CaptureSnapshot();
-                if (snapshot == null)
-                    throw new InvalidOperationException(
-                        $"FlowField modifier '{entry.Modifier.GetType().Name}' returned a null snapshot.");
+                IFlowFieldModifierSnapshot snapshot = FlowFieldModifierRegistry<FlowFieldSurfaceModifierArea>.CaptureSnapshot(entry.Modifier);
 
                 _runtimeLayers.Add(new FlowFieldSurfaceModifierLayer(
                     snapshot,
-                    entry.InfluenceMask,
-                    entry.InfluenceIndices));
+                    entry.Area.InfluenceMask,
+                    entry.Area.InfluenceIndices));
             }
         }
 
         private static void ResizeRuntimeMask(
-            FlowFieldSurfaceModifierRegistry.Entry entry,
+            FlowFieldModifierEntry<FlowFieldSurfaceModifierArea> entry,
             int cellCount)
         {
-            if (entry.InfluenceMask != null && entry.InfluenceMask.Length == cellCount)
+            if (entry.Area.InfluenceMask != null && entry.Area.InfluenceMask.Length == cellCount)
                 return;
 
-            entry.InfluenceMask = new bool[cellCount];
-            entry.InfluenceScratch = new bool[cellCount];
-            entry.InfluenceIndices ??= new List<int>(64);
-            entry.InfluenceIndices.Clear();
-            entry.InfluenceIndicesBuilt = false;
+            entry.Area.InfluenceMask = new bool[cellCount];
+            entry.Area.InfluenceScratch = new bool[cellCount];
+            entry.Area.InfluenceIndices ??= new List<int>(64);
+            entry.Area.InfluenceIndices.Clear();
+            entry.Area.InfluenceIndicesBuilt = false;
         }
     }
 }

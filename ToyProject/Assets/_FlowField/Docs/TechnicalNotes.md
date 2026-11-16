@@ -15,8 +15,8 @@ Player 측정(`PlayerProbe` 폴더, `Tools/run-player-probe.sh`)은 Editor와 `F
 
 - `FlowFieldSession`은 두 모드가 같이 쓰는 파이프라인입니다. 수명, 이벤트, 빌드 루프(`RunPipeline`), Fault, 조회 실패를 예외로 바꾸는 일을 맡습니다. 모드마다 다른 일은 `IFlowFieldSpaceBuilder`(`FlowFieldSurfaceBuilder`, `FlowFieldVolumeBuilder`)가 맡습니다.
 - Builder는 `FlowFieldManagerConfig` 스냅샷을 받아 검증(`Validate`), 격자(`TryCreateLayout`), 요청(`SubmitConfig`)을 스스로 만듭니다. 공통 검사는 `FlowFieldManagerConfig.ValidateShared`가 같은 순서와 메시지로 합니다.
-- 공통 부품: 게시 필드 `FlowFieldField`, 조회 `FlowFieldSampler`, 불확실 영역 `FlowFieldSafety`, 계약 예외 `FlowFieldFailures`, 이벤트 경계 `FlowFieldExecutionBoundary`, 예산 `FlowFieldBuildScheduler`.
-- Modifier Registry와 최종 합성은 아직 모드별 구현입니다.
+- 공통 부품: 게시 필드 `FlowFieldField`, 조회 `FlowFieldSampler`, 불확실 영역 `FlowFieldSafety`, 계약 예외 `FlowFieldFailures`, Modifier 등록 `FlowFieldModifierRegistry`, 셀 합성 규칙 `FlowFieldVectorUtility.ApplyModifier`, 이벤트 경계 `FlowFieldExecutionBoundary`, 예산 `FlowFieldBuildScheduler`.
+- Modifier가 닿는 셀을 찾는 방식만 모드별입니다. Surface는 셀 마스크를 보관해 바뀐 영역만 다시 합성하고, Volume은 빌드마다 64셀씩 후보를 조회합니다.
 
 ## 수명과 게시 규칙
 
@@ -63,6 +63,8 @@ Player 측정(`PlayerProbe` 폴더, `Tools/run-player-probe.sh`)은 Editor와 `F
 ## Modifier
 
 - Modifier 적용 여부는 두 모드 모두 `FlowFieldVectorUtility.CanApplyModifier`로 판정합니다. 막힌 셀, Goal Anchor, 도달할 수 없는 셀, 기본 방향이 0인 셀에는 적용하지 않습니다.
+- 등록, Priority 순서(낮은 값부터, 중복 거부), 변경 통지, 값 Snapshot은 두 모드가 같은 `FlowFieldModifierRegistry`를 씁니다. 이미 등록된 Modifier를 다시 등록하면 false를 돌려줍니다.
+- 셀 하나에 적용하는 규칙(적용 조건, `Modify()` 호출, 출력 검사)도 공통입니다. 출력은 유한해야 하고 속도는 0 이상, 방향은 단위 벡터나 0이어야 합니다. Surface는 방향이 표면에 접해야 합니다.
 - Priority 기본값은 Speed 100, Noise 200입니다. 런타임 값은 `SetSpeedMultiplier()`, `SetNoise()`, `SetPriority()`로 바꿉니다.
 - `CaptureSnapshot()`이 빌드에 쓸 값을 고정합니다. Collider 형상까지 복제하지는 않습니다.
 - FlowField는 Modifier를 폴링하지 않습니다. 값, Priority, 영역 변경은 `NotifyModifierChanged`로 알립니다. 기본 Modifier Volume은 setter와 `OnValidate`에서 알리고, Influence Collider의 이동과 파괴는 프레임당 한 번 스스로 알립니다. `Observe()`는 등록과 통지 때 호출됩니다.
