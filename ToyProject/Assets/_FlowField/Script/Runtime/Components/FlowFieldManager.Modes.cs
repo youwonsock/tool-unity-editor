@@ -33,7 +33,6 @@ namespace Common.FlowField
             protected FlowFieldSession Session => Owner.SessionFor(Mode);
             internal virtual bool ConfigurationStale => false;
             internal abstract void Initialize();
-            internal abstract void ActivateSuspended();
             internal abstract void SubmitRebuild();
             internal abstract void ObserveInputs();
             internal abstract void OnSettingsEdited();
@@ -53,22 +52,7 @@ namespace Common.FlowField
             protected override FlowFieldSpaceMode Mode => FlowFieldSpaceMode.Volume3D;
 
             internal override void Initialize()
-            {
-                Session.Volume.Initialize(Owner._bakeMode);
-                Owner._requiresActivationRebuild = !Owner.isActiveAndEnabled;
-                if (Owner._requiresActivationRebuild)
-                    Session.Suspend();
-                Owner.RequestRebuild();
-                Owner.Modifiers.Reattach();
-            }
-
-            internal override void ActivateSuspended()
-            {
-                Owner._requiresActivationRebuild = false;
-                Session.Volume.Resume();
-                // A Modifier enabled during the suspension could not register.
-                Owner.Modifiers.Reattach();
-            }
+                => Session.Volume.Initialize(Owner._bakeMode);
 
             internal override void SubmitRebuild()
             {
@@ -137,26 +121,10 @@ namespace Common.FlowField
 
             internal override void Initialize()
             {
-                InitializeSession();
-                Owner._requiresActivationRebuild = !Owner.isActiveAndEnabled;
-                if (Owner._requiresActivationRebuild)
-                    Session.Suspend();
-                Owner.RequestRebuild();
-            }
-
-            internal override void ActivateSuspended()
-            {
-                Owner._requiresActivationRebuild = false;
-                InitializeSession();
-            }
-
-            private void InitializeSession()
-            {
                 FlowFieldSurfaceSourceKind sourceKind = Owner.BakeMode == FlowFieldBakeMode.StaticBaked
                     ? FlowFieldSurfaceSourceKind.StaticSnapshot
                     : FlowFieldSurfaceSourceKind.SceneBuild;
                 Session.Surface.Initialize(Owner._bakeMode, sourceKind);
-                Owner.Modifiers.Reattach();
             }
 
             internal override void SubmitRebuild()

@@ -211,37 +211,21 @@ namespace Common.FlowField
         }
 
         /// <summary>
-        /// Reports a non-solver failure (for example an invalid live Modifier
-        /// configuration) through the same one-shot Faulted transition used
-        /// by solve failures. The caller deliberately stays outside the
-        /// solver exception boundary.
+        /// Starts a stopped or faulted session again from nothing. Registered
+        /// obstacles and Modifiers stay; the caller submits a new request.
         /// </summary>
-        public void RetryFault()
+        public void Restart()
         {
             if (_session.Disposed)
                 throw new ObjectDisposedException(nameof(FlowFieldSurfaceBuilder));
-            if (_session.Lifecycle != FlowFieldSessionLifecycle.Faulted)
+            if (_session.Lifecycle != FlowFieldSessionLifecycle.Suspended
+                && _session.Lifecycle != FlowFieldSessionLifecycle.Faulted)
                 return;
-            InvalidateCallbacks();
-            _session.Fault = null;
-            // The fault may have interrupted a Goal that was prepared but not
+            ClearComputedState();
+            // A fault may have interrupted a Goal that was prepared but not
             // solved. Forget it so the Goal stage cannot report it as unchanged.
             _goalTracker.ForgetLastBuild();
-            // A retry is a new build attempt, not a re-publication of the
-            // field that was available before the fault.  Keep the public
-            // state in Building until the retry commits successfully; this
-            // also preserves the contract that Faulted/initial retry paths
-            // report IsReady=false rather than emitting a transient Ready.
-            _state.ConfigurationStale = true;
-            _state.DirtyFlags |= FlowFieldSurfaceDirtyFlags.All;
-            _state.DirtyFinalRegion = _state.Grid.IsValid
-                ? FlowFieldCellRect.Full(_state.Grid)
-                : FlowFieldCellRect.Invalid;
-            _state.DirtyObstacleRegion = _state.Grid.IsValid
-                ? FlowFieldCellRect.Full(_state.Grid)
-                : FlowFieldCellRect.Invalid;
-            _requests.Pending = false;
-            _session.SetLifecycle(FlowFieldSessionLifecycle.Active);
+            Start(_session.BakeMode, _sourceKind);
         }
 
         internal bool HasSameBaseInputs(in FlowFieldSurfaceRequest request)
@@ -295,6 +279,11 @@ namespace Common.FlowField
                     "FlowField bake mode and source are fixed until Release.");
             }
 
+            Start(bakeMode, sourceKind);
+        }
+
+        private void Start(FlowFieldBakeMode bakeMode, FlowFieldSurfaceSourceKind sourceKind)
+        {
             _session.BakeMode = bakeMode;
             _sourceKind = sourceKind;
             _modifierPipeline ??= new FlowFieldSurfaceModifierPipeline(new FlowFieldSurfaceModifierRegistry());
@@ -483,14 +472,20 @@ namespace Common.FlowField
             _session.SetLifecycle(FlowFieldSessionLifecycle.Faulted);
         }
 
-        public void Suspend()
+        public void Stop()
         {
             if (_session.Disposed
-                || _session.Lifecycle == FlowFieldSessionLifecycle.Uninitialized
-                || _session.Lifecycle == FlowFieldSessionLifecycle.Released
-                || _session.Lifecycle == FlowFieldSessionLifecycle.Faulted
-                || _session.Lifecycle == FlowFieldSessionLifecycle.Suspended)
+                || _session.Lifecycle != FlowFieldSessionLifecycle.Active
+                && _session.Lifecycle != FlowFieldSessionLifecycle.Building)
                 return;
+            ClearComputedState();
+            _session.SetLifecycle(FlowFieldSessionLifecycle.Suspended);
+        }
+
+        // Drops every build, the published field and the computed Surface,
+        // keeping registered obstacles and Modifiers.
+        private void ClearComputedState()
+        {
             InvalidateCallbacks();
             _solveStage.DetachBackend();
             _baseStage.LoadedSnapshot = null;
@@ -504,14 +499,14 @@ namespace Common.FlowField
             _obstaclePipeline.DiscardStagedDynamicProbe();
             _state.Surface = null;
             _state.Workspace.ClearAll();
-            // The complete rebuild on resume supersedes any probe that was
+            // The complete rebuild on restart supersedes any probe that was
             // waiting for an in-flight callback. Keep the registered
             // colliders themselves, but do not run a duplicate probe against
             // the same pose after activation.
             _state.ObstacleProbePending = false;
             _state.DirtyFlags = FlowFieldSurfaceDirtyFlags.All;
             _state.ConfigurationStale = false;
-            _session.SetLifecycle(FlowFieldSessionLifecycle.Suspended);
+            _session.Fault = null;
         }
 
         public void Release()

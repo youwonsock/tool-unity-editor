@@ -92,7 +92,8 @@ namespace Common.FlowField
         internal int Revision { get; set; }
         internal bool Disposed { get; set; }
         // Advances when the session stops being what earlier work was for:
-        // Release, Suspend and a fault. Queued events and late solve callbacks
+        // Stop, Restart, Release and a fault, which must also drop a late
+        // solve callback. Queued events and late solve callbacks
         // from before that point are dropped.
         internal int LifetimeGeneration { get; private set; }
         internal bool TrySample(Vector3 worldPosition, out FlowFieldSample sample) => _builder.TrySample(worldPosition, out sample);
@@ -257,9 +258,9 @@ namespace Common.FlowField
 
         // Lifecycle commands with the same contract in both modes. Mode
         // specific Init and request creation stay on the builders.
-        internal void Suspend() => _builder.Suspend();
+        internal void Stop() => _builder.Stop();
+        internal void Restart() => _builder.Restart();
         internal void Release() => _builder.Release();
-        internal void RetryFault() => _builder.RetryFault();
 
         internal void ReportFault(Exception exception)
         {

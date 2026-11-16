@@ -149,10 +149,7 @@ namespace Common.FlowField
         {
             if (modifier == null)
                 throw new ArgumentNullException(nameof(modifier));
-            if (Modifiers.IsReattachingForRetry)
-                ThrowIfLifecycleUnavailable();
-            else
-                ThrowIfInputAllowedForMode();
+            ThrowIfInputAllowedForMode();
             return ActiveSession.RegisterModifierCommand(modifier);
         }
 

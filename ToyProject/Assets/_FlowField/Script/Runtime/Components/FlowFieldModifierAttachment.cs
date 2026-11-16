@@ -18,20 +18,6 @@ namespace Common.FlowField
             _manager = manager;
         }
 
-        /// <summary>
-        /// True while a fault retry reattaches. Registration is then allowed
-        /// before the configuration is checked again.
-        /// </summary>
-        internal bool IsReattachingForRetry { get; private set; }
-
-        // A retried Surface session stays stale until it commits.
-        internal void ReattachForRetry()
-        {
-            IsReattachingForRetry = true;
-            try { Reattach(); }
-            finally { IsReattachingForRetry = false; }
-        }
-
         internal void Reattach()
         {
             List<FlowFieldVectorModifierVolume> volumes = RentBuffer();

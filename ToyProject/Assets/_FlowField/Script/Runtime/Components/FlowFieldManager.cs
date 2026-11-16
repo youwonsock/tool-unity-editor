@@ -65,7 +65,6 @@ namespace Common.FlowField
         private float _refreshTimer;
         private bool _hasExplicitGoal;
         private Vector3 _explicitGoalWorld;
-        private bool _requiresActivationRebuild;
         [NonSerialized] private FlowFieldModifierAttachment _modifiers;
 
         // The session the façade answers from. The accepted session keeps
@@ -145,13 +144,13 @@ namespace Common.FlowField
             ResumeAfterEnable();
         }
 
+        // Disabling stopped the session, so enabling starts it again.
         private void ResumeAfterEnable()
         {
-            if (!_requiresActivationRebuild || !IsInitialized)
+            if (State != FlowFieldRuntimeState.Suspended)
                 return;
             using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
-            ActiveMode.ActivateSuspended();
-            RequestRebuild();
+            RestartSession(_session);
         }
 
         private void OnValidate()
@@ -201,8 +200,7 @@ namespace Common.FlowField
         private void SuspendAfterDisable()
         {
             using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
-            _requiresActivationRebuild = true;
-            ActiveSession?.Suspend();
+            ActiveSession?.Stop();
             _refreshTimer = 0f;
         }
 
@@ -247,6 +245,13 @@ namespace Common.FlowField
             using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
             EnsureSessionForConfiguredMode();
             ActiveMode.Initialize();
+            // A disabled Manager starts building when it is enabled.
+            if (!isActiveAndEnabled)
+            {
+                _session.Stop();
+                return;
+            }
+            StartBuilding();
         }
 
         public void RequestRebuild()
@@ -254,45 +259,58 @@ namespace Common.FlowField
             _boundary.ThrowIfInUserCode(nameof(RequestRebuild));
             using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
             FlowFieldSession owner = ActiveSession;
-            bool retryingFault = owner != null && owner.IsFaulted;
-            if (retryingFault)
+            if (owner != null && owner.IsFaulted)
             {
-                owner.RetryFault();
-                if (_requiresActivationRebuild)
+                // A retry starts again from nothing. A disabled Manager only
+                // leaves the fault, and starts when it is enabled.
+                if (isActiveAndEnabled)
                 {
-                    // A fault skipped or replaced the suspension, so restore
-                    // it. OnEnable cannot resume a Faulted session, which
-                    // leaves the activation to a retry made while enabled.
-                    owner.Suspend();
-                    if (isActiveAndEnabled)
-                        ActiveMode.ActivateSuspended();
+                    RestartSession(owner);
                 }
+                else
+                {
+                    owner.Restart();
+                    owner.Stop();
+                }
+                return;
             }
+
+            ThrowIfLifecycleUnavailable();
+            // Static navigation is immutable for the lifetime of a Session.
+            // Init validates the baked Goal signature; a rebuild validates
+            // only the loaded snapshot settings and recomposes it.
+            ValidateConfiguration(validateStaticGoal: false);
+            if (State == FlowFieldRuntimeState.Suspended)
+                return;
+            ActiveMode.SubmitRebuild();
+        }
+
+        /// <summary>
+        /// Enabling and a fault retry start the session again from nothing,
+        /// keeping registered obstacles and Modifiers. A failure faults it,
+        /// so it keeps a LastError to diagnose.
+        /// </summary>
+        private void RestartSession(FlowFieldSession owner)
+        {
+            owner.Restart();
             try
             {
-                ThrowIfLifecycleUnavailable();
-                // Static navigation is immutable for the lifetime of a
-                // Session. A Goal Transform may move for presentation or
-                // gameplay reasons; runtime motion is intentionally ignored
-                // by the baked base field. Initial Init still validates the
-                // baked Goal signature, while later rebuilds validate only the
-                // loaded snapshot settings and recompose it.
                 ValidateConfiguration(validateStaticGoal: false);
-                // A Modifier enabled during the fault could not register. It
-                // joins before the Submit, so this build already includes it.
-                if (retryingFault)
-                    Modifiers.ReattachForRetry();
-                ActiveMode.SubmitRebuild();
+                StartBuilding();
             }
             catch (Exception exception)
             {
-                // If a retry fails during validation or request submission,
-                // retain a diagnosable Faulted state instead of leaving an
-                // initialized but unusable Session with no LastError.
-                if (retryingFault)
-                    owner.ReportFault(exception);
+                owner.ReportFault(exception);
                 throw;
             }
+        }
+
+        // Modifiers enabled while the session could not take them join
+        // before the request, so its first build includes them.
+        private void StartBuilding()
+        {
+            Modifiers.Reattach();
+            ActiveMode.SubmitRebuild();
         }
 
         public void Release()

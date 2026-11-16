@@ -44,9 +44,12 @@ namespace Common.FlowField
         void NotifyObstacleRegionDirtyCommand(Bounds worldBounds);
 
         // ----- Lifecycle -----------------------------------------------------
-        void Suspend();
+        // Stop: a running session drops its work and its field and waits.
+        // Restart: a stopped or faulted session starts again from nothing,
+        // keeping its registrations. Release: everything is cleared.
+        void Stop();
+        void Restart();
         void Release();
-        void RetryFault();
         void AbandonWorkForFault();
         void ApplyFaultedState();
     }

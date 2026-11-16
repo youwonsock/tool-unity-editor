@@ -39,7 +39,6 @@ namespace Common.FlowField
         // Initialization uses Suspended as a staging state, but the first
         // accepted request must still be able to start a build. This flag
         // distinguishes that state from an explicit lifecycle suspension.
-        private bool _suspendedByLifecycle;
         // Whoever pumps directly (a bake, a test) waits for the worker thread.
         // The scheduler polls it, so no frame blocks on a solve.
         private bool _waitForSolve;
@@ -109,10 +108,10 @@ namespace Common.FlowField
             _hasPendingModifierRecompose = false;
             _obstacleQueryRequired = false;
             _safety.ClearRegions();
-            _suspendedByLifecycle = false;
             _buildReservationBytes = 0;
             _committedReservationBytes = 0;
-            _session.SetLifecycle(FlowFieldSessionLifecycle.Suspended);
+            // Running with no request yet; the first Submit starts a build.
+            _session.SetLifecycle(FlowFieldSessionLifecycle.Active);
         }
 
         internal bool Submit(in FlowFieldVolumeRequest request, bool requeryObstacles = false)
@@ -161,10 +160,10 @@ namespace Common.FlowField
             return !current.HasSameGoal(request) && current.HasSameResult(request);
         }
 
-        // Accepted input waits while the lifecycle has stopped this session.
+        // Accepted input waits while the session is stopped.
         private void EnterBuildingUnlessStopped()
         {
-            if (!_session.IsFaulted && (_session.State != FlowFieldRuntimeState.Suspended || !_suspendedByLifecycle))
+            if (!_session.IsFaulted && _session.Lifecycle != FlowFieldSessionLifecycle.Suspended)
                 _session.SetLifecycle(FlowFieldSessionLifecycle.Building);
         }
 
@@ -413,23 +412,14 @@ namespace Common.FlowField
                 QueueModifierChange();
         }
 
-        public void Suspend()
+        public void Stop()
         {
-            if (!_session.IsInitialized)
+            if (_session.Lifecycle != FlowFieldSessionLifecycle.Active
+                && _session.Lifecycle != FlowFieldSessionLifecycle.Building)
                 return;
-            _suspendedByLifecycle = true;
             CancelCurrentBuild();
             DropCommittedField();
             _session.SetLifecycle(FlowFieldSessionLifecycle.Suspended);
-        }
-
-        internal void Resume()
-        {
-            if (_session.State != FlowFieldRuntimeState.Suspended)
-                return;
-            _suspendedByLifecycle = false;
-            _requests.Pending = _requests.HasLatest;
-            _session.SetLifecycle(FlowFieldSessionLifecycle.Building);
         }
 
         // The world may have changed while nothing observed it, so the session
@@ -448,7 +438,6 @@ namespace Common.FlowField
             _session.Fault = null;
             DropCommittedField();
             _requests.Clear();
-            _suspendedByLifecycle = false;
             _safety.ClearRegions();
             _session.DetachRuntimeScheduler();
             _obstacles.Clear();
@@ -459,20 +448,20 @@ namespace Common.FlowField
             _session.SetLifecycle(FlowFieldSessionLifecycle.Released);
         }
 
-        public void RetryFault()
+        /// <summary>
+        /// Starts a stopped or faulted session again from nothing. Registered
+        /// obstacles and Modifiers stay; the latest request builds again.
+        /// </summary>
+        public void Restart()
         {
-            if (!_session.IsFaulted)
+            ThrowIfDisposed();
+            if (_session.Lifecycle != FlowFieldSessionLifecycle.Suspended && !_session.IsFaulted)
                 return;
-            _session.AdvanceLifetimeGeneration();
+            CancelCurrentBuild();
             _session.Fault = null;
-            // A retry only clears the failure.  The latest accepted request
-            // must still build and publish before the session becomes Ready;
-            // never expose a transient Ready state with no valid result.
             DropCommittedField();
             _requests.Pending = _requests.HasLatest;
-            _session.SetLifecycle(_suspendedByLifecycle
-                ? FlowFieldSessionLifecycle.Suspended
-                : FlowFieldSessionLifecycle.Building);
+            _session.SetLifecycle(FlowFieldSessionLifecycle.Building);
         }
 
         public void AbandonWorkForFault() => CancelCurrentBuild();
