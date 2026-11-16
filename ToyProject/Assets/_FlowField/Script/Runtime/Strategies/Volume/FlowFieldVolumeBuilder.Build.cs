@@ -317,9 +317,13 @@ namespace Common.FlowField
                 hasActiveGoal: goalIndex >= 0,
                 goalIndex);
 
+            // The request snapshot and the safety regions update either way;
+            // only a field that reads differently is a new Revision.
+            bool changed = !FlowFieldField.HasSameContent(_committed, next);
             _spares.Retire(_committed, next);
             _committed = next;
-            _session.Revision++;
+            if (changed)
+                _session.Revision++;
             _committedReservationBytes = EstimateCommittedBytes(build.Count);
             if (!build.IsModifierRecompose)
             {
@@ -333,7 +337,8 @@ namespace Common.FlowField
             }
             _build = null;
             _buildReservationBytes = 0;
-            _session.NotifyFieldCommitted();
+            if (changed)
+                _session.NotifyFieldCommitted();
         }
     }
 }
