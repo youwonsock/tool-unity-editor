@@ -78,7 +78,7 @@ namespace Common.FlowField.Editor
                 return Array.Empty<string>();
 
             using var settings = new SerializedObject(manager);
-            SerializedProperty bakeMode = settings.FindProperty("_bakeMode");
+            SerializedProperty bakeMode = settings.FindProperty(FlowFieldManager.PropertyNames.BakeMode);
             bakeMode.enumValueIndex = bakeMode.enumValueIndex == (int)FlowFieldBakeMode.StaticBaked
                 ? (int)FlowFieldBakeMode.RuntimeDynamic
                 : (int)FlowFieldBakeMode.StaticBaked;
@@ -132,12 +132,12 @@ namespace Common.FlowField.Editor
             managerObject.SetActive(false);
             var manager = managerObject.AddComponent<FlowFieldManager>();
             using var settings = new SerializedObject(manager);
-            settings.FindProperty("_spaceMode").enumValueIndex = (int)mode;
-            settings.FindProperty("_bakeMode").enumValueIndex = (int)FlowFieldBakeMode.RuntimeDynamic;
-            settings.FindProperty("_bakeBoundsLocal").boundsValue = bounds;
-            settings.FindProperty("_cellSize").floatValue = 1f;
-            settings.FindProperty("_groundBakeLayer").intValue = 1 << FlowFieldPlayerProbeLayers.Ground;
-            settings.FindProperty("_obstacleLayer").intValue = 1 << FlowFieldPlayerProbeLayers.Obstacle;
+            settings.FindProperty(FlowFieldManager.PropertyNames.SpaceMode).enumValueIndex = (int)mode;
+            settings.FindProperty(FlowFieldManager.PropertyNames.BakeMode).enumValueIndex = (int)FlowFieldBakeMode.RuntimeDynamic;
+            settings.FindProperty(FlowFieldManager.PropertyNames.BakeBoundsLocal).boundsValue = bounds;
+            settings.FindProperty(FlowFieldManager.PropertyNames.CellSize).floatValue = 1f;
+            settings.FindProperty(FlowFieldManager.PropertyNames.GroundLayer).intValue = 1 << FlowFieldPlayerProbeLayers.Ground;
+            settings.FindProperty(FlowFieldManager.PropertyNames.ObstacleLayer).intValue = 1 << FlowFieldPlayerProbeLayers.Obstacle;
             settings.ApplyModifiedPropertiesWithoutUndo();
             return manager;
         }

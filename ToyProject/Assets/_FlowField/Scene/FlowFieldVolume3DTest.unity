@@ -202,31 +202,36 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e75a0cdf6e1be9f438a1a509557110c6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _bakeBoundsLocal:
-    m_Center: {x: 10, y: 6, z: 10}
-    m_Extent: {x: 10, y: 6, z: 10}
-  _cellSize: 1
-  _groundBakeLayer:
-    serializedVersion: 2
-    m_Bits: 256
-  _maxSurfaceSlope: 45
-  _maxStepHeight: 0.5
-  _staticBakeData: {fileID: 0}
-  _volumeStaticBakeData: {fileID: 11400000, guid: a2847e880553f22468388c0fd624691d,
-    type: 2}
-  _obstacleLayer:
-    serializedVersion: 2
-    m_Bits: 512
-  _obstacleCheckHeight: 2
-  _obstacleCheckCenterOffset: 1
-  _obstacleClearance: 0.1
+  _grid:
+    BakeBoundsLocal:
+      m_Center: {x: 10, y: 6, z: 10}
+      m_Extent: {x: 10, y: 6, z: 10}
+    CellSize: 1
+  _surface:
+    GroundLayer:
+      serializedVersion: 2
+      m_Bits: 256
+    MaxSlope: 45
+    MaxStepHeight: 0.5
+    ObstacleCheckHeight: 2
+    ObstacleCheckCenterOffset: 1
+  _obstacles:
+    Layer:
+      serializedVersion: 2
+      m_Bits: 512
+    Clearance: 0.1
   _enableUnregisteredObstacleSweep: 1
   _refreshRate: 0.2
+  _flow:
+    DefaultDirection: {x: 0, y: 0, z: 1}
+    GoalInfluenceRadius: 0
+  _goalTransform: {fileID: 1400002}
   _spaceMode: 1
   _bakeMode: 1
-  _defaultFlowDirection: {x: 0, y: 0, z: 1}
-  _goalTransform: {fileID: 1400002}
-  _goalInfluenceRadius: 0
+  _bakeAssets:
+    Surface: {fileID: 0}
+    Volume: {fileID: 11400000, guid: a2847e880553f22468388c0fd624691d,
+      type: 2}
 --- !u!1 &1200001
 GameObject:
   m_ObjectHideFlags: 0

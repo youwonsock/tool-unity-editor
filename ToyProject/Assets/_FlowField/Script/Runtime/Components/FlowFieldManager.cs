@@ -1,100 +1,96 @@
 using System;
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace Common.FlowField
 {
     /// <summary>
-    /// Unity-facing façade for the shared FlowFieldSurfaceSession. The component
-    /// owns serialized authoring settings and Unity lifecycle callbacks; all
-    /// calculation state, versions, staging/committed fields and backend
-    /// lifetime live in the common Session.
+    /// The Unity component of a FlowField. It holds the serialized settings
+    /// and the Unity callbacks, and forwards the Provider and Controller API
+    /// to one <see cref="FlowFieldSession"/>, which owns all calculation state.
+    /// Files: this one (settings, lifecycle, events), .Api (public calls),
+    /// .Config (settings snapshot, checks and requests) and .Modes (what each
+    /// space mode observes).
     /// </summary>
     [DefaultExecutionOrder(-300)]
     public partial class FlowFieldManager : MonoBehaviour, IFlowFieldController
     {
-        private const float MIN_REFRESH_RATE = 0.05f;
-        private const float VALUE_EPSILON = 0.0001f;
 
-        [Header("Surface Bake")]
-        [SerializeField, Tooltip("Manager 위치 기준 월드 축 정렬 Bake 영역입니다. XZ는 Grid, Y는 Ground Ray 범위입니다.")]
-        private Bounds _bakeBoundsLocal = new Bounds(
-            new Vector3(20f, 0f, 20f),
-            new Vector3(40f, 10f, 40f));
-        [SerializeField] private float _cellSize = 0.5f;
-        [SerializeField] private LayerMask _groundBakeLayer = Physics.DefaultRaycastLayers;
-        [SerializeField] private float _maxSurfaceSlope = 45f;
-        [SerializeField] private float _maxStepHeight = 0.5f;
-        [SerializeField, Tooltip("Surface2D 정적 모드에서 사용할 Flow Field Snapshot입니다.")] private FlowFieldStaticBakeData _staticBakeData;
-        [SerializeField, Tooltip("Volume3D 정적 모드에서 사용할 v6 Flow Field Snapshot입니다.")] private FlowFieldVolumeBakeData _volumeStaticBakeData;
-
-        [Header("Obstacles")]
-        [SerializeField] private LayerMask _obstacleLayer;
-        [SerializeField] private float _obstacleCheckHeight = 2f;
-        [SerializeField] private float _obstacleCheckCenterOffset = 1f;
-        [SerializeField, Tooltip("셀 영역 밖으로 장애물 판정을 확장하는 XZ 거리입니다.")]
-        private float _obstacleClearance;
+        // Serialized as bundles; FlowFieldManagerSettings.cs holds the
+        // defaults and PropertyNames below the paths Editor code uses.
+        [SerializeField] private FlowFieldGridSettings _grid = FlowFieldGridSettings.Default;
+        [SerializeField] private FlowFieldSurfaceSettings _surface = FlowFieldSurfaceSettings.Default;
+        [SerializeField] private FlowFieldObstacleSettings _obstacles;
         [SerializeField, Tooltip("ON이면 obstacle layer 전수 스윕(미등록 보정). OFF면 Static bake + RegisterDynamicObstacle만 사용.")]
         private bool _enableUnregisteredObstacleSweep;
         [SerializeField] private float _refreshRate = 0.2f;
+        [SerializeField] private FlowFieldFlowSettings _flow = FlowFieldFlowSettings.Default;
+        [SerializeField] private Transform _goalTransform;
 
-        [Header("Bake Mode")]
+        [Header("Mode")]
         [SerializeField, Tooltip("Surface2D는 기존 바닥 Raycast, Volume3D는 전체 Bounds를 정육면체 셀로 채웁니다. Init 이후 변경하려면 Release가 필요합니다.")]
         private FlowFieldSpaceMode _spaceMode = FlowFieldSpaceMode.Surface2D;
         [SerializeField, Tooltip("RuntimeDynamic은 런타임 Surface/장애물을 다시 계산하고, StaticBaked는 Editor에서 저장한 base field를 사용합니다.")]
         private FlowFieldBakeMode _bakeMode = FlowFieldBakeMode.RuntimeDynamic;
+        [SerializeField] private FlowFieldBakeAssets _bakeAssets;
 
-        [Header("Default Flow")]
-        [SerializeField] private Vector3 _defaultFlowDirection = Vector3.forward;
+        /// <summary>Serialized property paths, for SerializedObject access.</summary>
+        internal static class PropertyNames
+        {
+            internal const string Grid = nameof(_grid);
+            internal const string BakeBoundsLocal = Grid + "." + nameof(FlowFieldGridSettings.BakeBoundsLocal);
+            internal const string CellSize = Grid + "." + nameof(FlowFieldGridSettings.CellSize);
+            internal const string Surface = nameof(_surface);
+            internal const string GroundLayer = Surface + "." + nameof(FlowFieldSurfaceSettings.GroundLayer);
+            internal const string Obstacles = nameof(_obstacles);
+            internal const string ObstacleLayer = Obstacles + "." + nameof(FlowFieldObstacleSettings.Layer);
+            internal const string EnableUnregisteredObstacleSweep = nameof(_enableUnregisteredObstacleSweep);
+            internal const string RefreshRate = nameof(_refreshRate);
+            internal const string Flow = nameof(_flow);
+            internal const string GoalTransform = nameof(_goalTransform);
+            internal const string SpaceMode = nameof(_spaceMode);
+            internal const string BakeMode = nameof(_bakeMode);
+            internal const string BakeAssets = nameof(_bakeAssets);
+            internal const string SurfaceBakeData = BakeAssets + "." + nameof(FlowFieldBakeAssets.Surface);
+            internal const string VolumeBakeData = BakeAssets + "." + nameof(FlowFieldBakeAssets.Volume);
+        }
 
-        [Header("Goal")]
-        [SerializeField] private Transform _goalTransform;
-        [SerializeField, Tooltip("0은 Global hybrid Goal, 양수는 XYZ 구 형태의 Ranged Goal입니다.")]
-        private float _goalInfluenceRadius;
-
-        // Both sessions share one boundary, so the Manager's events keep their
-        // order and a Modifier of either mode sees the same command rules.
+        // The boundary outlives each session, so events of a replaced session
+        // and its successor keep their order and Modifiers of either mode see
+        // the same command rules.
         private readonly FlowFieldExecutionBoundary _boundary = new FlowFieldExecutionBoundary();
-        private readonly FlowFieldSession _session;
-        private readonly FlowFieldSession _volumeSession;
+        // One session at a time, created by Init for the configured mode. It
+        // stays after Release so its final state remains readable, and is
+        // replaced only when Init runs in the other mode.
+        private FlowFieldSession _session;
         private float _refreshTimer;
         private bool _hasExplicitGoal;
         private Vector3 _explicitGoalWorld;
         private bool _requiresActivationRebuild;
-        private FlowFieldSession _attachedSession;
-        [NonSerialized] private List<FlowFieldVectorModifierVolume> _modifierBuffer;
+        [NonSerialized] private FlowFieldModifierAttachment _modifiers;
 
-        public FlowFieldManager()
-        {
-            _session = FlowFieldSession.CreateSurface(_boundary);
-            _volumeSession = FlowFieldSession.CreateVolume(_boundary);
-            ForwardSessionEvents(_session);
-            ForwardSessionEvents(_volumeSession);
-        }
-
+        // The session the façade answers from. The accepted session keeps
+        // answering until Release even if the serialized mode is edited; a
+        // stopped session of the other mode is no longer the Manager's.
         private FlowFieldSession ActiveSession
-        {
-            get
-            {
-                // The serialized mode can be edited while a session is
-                // active. Keep all Provider/Controller reads and commands
-                // attached to the accepted session until Release; otherwise
-                // an Inspector edit would make the façade query the other
-                // mode's still-uninitialized session.
-                if (_attachedSession != null && (_attachedSession.IsInitialized || _attachedSession.IsFaulted))
-                    return _attachedSession;
-                return ModeFor(_spaceMode).Session;
-            }
-        }
+            => _session != null
+                && (_session.IsInitialized || _session.IsFaulted || _session.SpaceMode == _spaceMode)
+                    ? _session
+                    : null;
+
+        // The session, only when it runs in the given mode.
+        private FlowFieldSession SessionFor(FlowFieldSpaceMode mode)
+            => _session != null && _session.SpaceMode == mode ? _session : null;
 
         private ModeDriver ActiveMode => ModeFor(ActiveSession.SpaceMode);
 
-        public bool IsInitialized => ActiveSession.IsInitialized;
-        public FlowFieldRuntimeState State => ActiveSession.State;
-        public bool IsFaulted => ActiveSession.IsFaulted;
-        public bool IsReady => ActiveSession.IsReady;
-        public bool IsRebuilding => ActiveSession.IsRebuilding;
-        public string LastError => ActiveSession.LastError;
+        private FlowFieldModifierAttachment Modifiers => _modifiers ??= new FlowFieldModifierAttachment(this);
+
+        public bool IsInitialized => ActiveSession?.IsInitialized ?? false;
+        public FlowFieldRuntimeState State => ActiveSession?.State ?? FlowFieldRuntimeState.Uninitialized;
+        public bool IsFaulted => ActiveSession?.IsFaulted ?? false;
+        public bool IsReady => ActiveSession?.IsReady ?? false;
+        public bool IsRebuilding => ActiveSession?.IsRebuilding ?? false;
+        public string LastError => ActiveSession?.LastError;
         public FlowFieldBakeMode BakeMode => IsInitialized || IsFaulted
             ? ActiveSession.BakeMode
             : _bakeMode;
@@ -105,54 +101,31 @@ namespace Common.FlowField
         public FlowFieldSpaceMode SpaceMode => IsInitialized || IsFaulted
             ? ActiveSession.SpaceMode
             : _spaceMode;
-        public int Revision => ActiveSession.Revision;
+        public int Revision => ActiveSession?.Revision ?? 0;
         public event Action FieldChanged;
         public event Action<FlowFieldRuntimeState> StateChanged;
 
         public bool TryGetFieldInfo(out FlowFieldFieldInfo info)
-            => ActiveSession.TryGetFieldInfo(out info);
-
-        internal FlowFieldStaticBakeData StaticBakeData => _staticBakeData;
-        internal FlowFieldVolumeBakeData VolumeStaticBakeData => _volumeStaticBakeData;
-        internal Bounds BakeBoundsLocal => _bakeBoundsLocal;
-        internal float CellSize => _cellSize;
-        internal LayerMask ObstacleLayer => _obstacleLayer;
-        internal float ObstacleCheckHeight => _obstacleCheckHeight;
-        internal float ObstacleCheckCenterOffset => _obstacleCheckCenterOffset;
-        internal float ObstacleClearance => _obstacleClearance;
-        internal Vector3 DefaultFlowDirection => _defaultFlowDirection;
-        // The serialized mode, which may differ from SpaceMode while an
-        // accepted session runs in the previous one.
-        internal FlowFieldSpaceMode ConfiguredSpaceMode => _spaceMode;
+        {
+            info = default;
+            return ActiveSession?.TryGetFieldInfo(out info) ?? false;
+        }
 
         /// <summary>
         /// The published field of the active session, for display. It is valid
         /// until the next pump, after which its arrays may be reused.
         /// </summary>
         internal bool TryGetPublishedField(out FlowFieldField field)
-            => ActiveSession.TryGetPublishedField(out field);
-
-        internal FlowFieldSurfaceGoalResolution ResolveConfiguredGoal(FlowFieldGridSpace grid)
-            => FlowFieldSurfaceGoalPipeline.Resolve(
-                grid,
-                _goalTransform,
-                _hasExplicitGoal,
-                _explicitGoalWorld,
-                _goalInfluenceRadius);
-
-        internal Vector3 ConfiguredGoalWorld
-            => _goalTransform != null ? _goalTransform.position : _explicitGoalWorld;
-
-        internal bool HasConfiguredGoal
-            => _goalTransform != null || _hasExplicitGoal;
-
-        internal float ConfiguredGoalInfluenceRadius => _goalInfluenceRadius;
+        {
+            field = null;
+            return ActiveSession?.TryGetPublishedField(out field) ?? false;
+        }
 
         private void Reset()
         {
-            _bakeBoundsLocal = FlowFieldBakeBoundsUtility.DefaultLocalBounds;
-            _cellSize = 0.5f;
-            _groundBakeLayer = Physics.DefaultRaycastLayers;
+            _grid.BakeBoundsLocal = FlowFieldBakeBoundsUtility.DefaultLocalBounds;
+            _grid.CellSize = 0.5f;
+            _surface.GroundLayer = Physics.DefaultRaycastLayers;
             _spaceMode = FlowFieldSpaceMode.Surface2D;
             _bakeMode = FlowFieldBakeMode.RuntimeDynamic;
             _enableUnregisteredObstacleSweep = false;
@@ -174,7 +147,7 @@ namespace Common.FlowField
 
         private void ResumeAfterEnable()
         {
-            if (!_requiresActivationRebuild || !ActiveSession.IsInitialized)
+            if (!_requiresActivationRebuild || !IsInitialized)
                 return;
             using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
             ActiveMode.ActivateSuspended();
@@ -214,7 +187,7 @@ namespace Common.FlowField
             _refreshTimer -= Time.unscaledDeltaTime;
             if (_refreshTimer > 0f)
                 return false;
-            _refreshTimer = Mathf.Max(MIN_REFRESH_RATE, _refreshRate);
+            _refreshTimer = Mathf.Max(FlowFieldManagerConfig.MinRefreshRate, _refreshRate);
             return true;
         }
 
@@ -229,7 +202,7 @@ namespace Common.FlowField
         {
             using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
             _requiresActivationRebuild = true;
-            ActiveSession.Suspend();
+            ActiveSession?.Suspend();
             _refreshTimer = 0f;
         }
 
@@ -242,9 +215,21 @@ namespace Common.FlowField
         private void DisposeSessions()
         {
             using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
-            _session.Surface.DisposePermanently();
-            _volumeSession.Dispose();
-            _attachedSession = null;
+            _session?.Dispose();
+        }
+
+        // Init reuses the session of the configured mode. A session of the
+        // other mode is disposed; its handlers stay until its Disposed event,
+        // so a Released still queued before it reaches subscribers.
+        private void EnsureSessionForConfiguredMode()
+        {
+            if (_session != null && _session.SpaceMode == _spaceMode)
+                return;
+            _session?.Dispose();
+            _session = _spaceMode == FlowFieldSpaceMode.Volume3D
+                ? FlowFieldSession.CreateVolume(_boundary)
+                : FlowFieldSession.CreateSurface(_boundary);
+            ForwardSessionEvents(_session);
         }
 
         public void Init()
@@ -260,6 +245,7 @@ namespace Common.FlowField
                 return;
             ValidateConfiguration();
             using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
+            EnsureSessionForConfiguredMode();
             ActiveMode.Initialize();
         }
 
@@ -268,7 +254,7 @@ namespace Common.FlowField
             _boundary.ThrowIfInUserCode(nameof(RequestRebuild));
             using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
             FlowFieldSession owner = ActiveSession;
-            bool retryingFault = owner.IsFaulted;
+            bool retryingFault = owner != null && owner.IsFaulted;
             if (retryingFault)
             {
                 owner.RetryFault();
@@ -295,7 +281,7 @@ namespace Common.FlowField
                 // A Modifier enabled during the fault could not register. It
                 // joins before the Submit, so this build already includes it.
                 if (retryingFault)
-                    ReattachModifiersForRetry();
+                    Modifiers.ReattachForRetry();
                 ActiveMode.SubmitRebuild();
             }
             catch (Exception exception)
@@ -313,162 +299,12 @@ namespace Common.FlowField
         {
             _boundary.ThrowIfInUserCode(nameof(Release));
             FlowFieldSession owner = ActiveSession;
-            if (!owner.IsInitialized && !owner.IsFaulted)
+            if (owner == null || !owner.IsInitialized && !owner.IsFaulted)
                 return;
             using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
-            DetachActiveModifiers();
+            Modifiers.Detach();
             owner.Release();
-            _attachedSession = null;
             _refreshTimer = 0f;
-        }
-
-        private void ThrowIfLifecycleUnavailable()
-        {
-            if (IsFaulted)
-                throw new InvalidOperationException($"{nameof(FlowFieldManager)} is faulted.", ActiveSession.Fault);
-            if (!IsInitialized)
-                throw new InvalidOperationException($"{nameof(FlowFieldManager)} is not initialized.");
-        }
-
-        private void ThrowIfAvailableForInput()
-        {
-            ThrowIfLifecycleUnavailable();
-            if (ActiveMode.ConfigurationStale)
-                throw new InvalidOperationException($"{nameof(FlowFieldManager)} configuration is stale. Call RequestRebuild() before use.");
-        }
-
-        private void ThrowIfInputAllowedForMode()
-        {
-            ThrowIfLifecycleUnavailable();
-            // StaticBaked ignores runtime Goal/obstacle input. It must remain
-            // a valid no-op even while an unrelated serialized setting is
-            // awaiting an explicit rebuild.
-            if (ActiveMode.ConfigurationStale && BakeMode != FlowFieldBakeMode.StaticBaked)
-                throw new InvalidOperationException($"{nameof(FlowFieldManager)} configuration is stale. Call RequestRebuild() before use.");
-        }
-
-        private void ValidateConfiguration(bool validateStaticGoal = true)
-        {
-            if (!Enum.IsDefined(typeof(FlowFieldSpaceMode), _spaceMode))
-                throw new ArgumentOutOfRangeException(nameof(_spaceMode));
-            if (IsInitialized && SpaceMode != _spaceMode)
-                throw new InvalidOperationException("FlowField Space Mode cannot change during an active Init session. Release and Init again.");
-            ModeFor(_spaceMode).ValidateConfiguration(validateStaticGoal);
-        }
-
-        private void MarkGoalDirty()
-            => ActiveMode.MarkGoalDirty();
-
-        #region Provider and Controller API
-
-        public FlowFieldSample Sample(Vector3 worldPosition)
-        {
-            ThrowIfAvailableForInput();
-            return ActiveSession.Sample(worldPosition);
-        }
-
-        public bool TrySample(Vector3 worldPosition, out FlowFieldSample sample)
-            => ActiveSession.TrySample(worldPosition, out sample);
-
-        public FlowFieldClampResult ClampPositionToGrid(Vector3 worldPosition)
-        {
-            ThrowIfAvailableForInput();
-            return ActiveSession.ClampPositionToGrid(worldPosition);
-        }
-
-        public void SetSpaceMode(FlowFieldSpaceMode mode)
-        {
-            _boundary.ThrowIfInUserCode(nameof(SetSpaceMode));
-            if (!Enum.IsDefined(typeof(FlowFieldSpaceMode), mode))
-                throw new ArgumentOutOfRangeException(nameof(mode));
-            if (IsInitialized || IsFaulted)
-                throw new InvalidOperationException("FlowField Space Mode can only change after Release and before Init.");
-            _spaceMode = mode;
-        }
-
-        public bool RegisterDynamicObstacle(Collider collider)
-        {
-            ThrowIfInputAllowedForMode();
-            if (ReferenceEquals(collider, null))
-                throw new ArgumentNullException(nameof(collider));
-            if (collider == null)
-                throw new InvalidOperationException("Cannot register a destroyed Collider.");
-            if (BakeMode == FlowFieldBakeMode.StaticBaked)
-                throw new InvalidOperationException("Dynamic obstacle registration is not allowed in StaticBaked mode.");
-            return ActiveSession.RegisterObstacleCommand(collider);
-        }
-
-        public bool UnregisterDynamicObstacle(Collider collider)
-        {
-            // Removal needs no valid configuration, as with Modifiers.
-            ThrowIfLifecycleUnavailable();
-            if (ReferenceEquals(collider, null))
-                throw new ArgumentNullException(nameof(collider));
-            if (BakeMode == FlowFieldBakeMode.StaticBaked)
-                return false;
-            return ActiveSession.UnregisterObstacleCommand(collider);
-        }
-
-        public void NotifyObstacleRegionDirty(Bounds worldBounds)
-        {
-            _boundary.ThrowIfInUserCode(nameof(NotifyObstacleRegionDirty));
-            ThrowIfInputAllowedForMode();
-            if (!FlowFieldGridSpace.IsFinite(worldBounds.center)
-                || !FlowFieldGridSpace.IsFinite(worldBounds.size))
-                throw new ArgumentOutOfRangeException(nameof(worldBounds));
-            if (BakeMode == FlowFieldBakeMode.StaticBaked)
-                throw new InvalidOperationException("Obstacle changes are not allowed in StaticBaked mode.");
-            ActiveSession.NotifyObstacleRegionDirtyCommand(worldBounds);
-        }
-
-        public void SetGoal(in FlowFieldGoalRequest request)
-        {
-            _boundary.ThrowIfInUserCode(nameof(SetGoal));
-            ThrowIfInputAllowedForMode();
-            if (BakeMode == FlowFieldBakeMode.StaticBaked)
-                throw new InvalidOperationException("Runtime Goal changes are not allowed in StaticBaked mode.");
-
-            if (!request.HasGoal)
-            {
-                if (_goalTransform == null && !_hasExplicitGoal)
-                    return;
-                _goalTransform = null;
-                _hasExplicitGoal = false;
-                _explicitGoalWorld = default;
-                MarkGoalDirty();
-                return;
-            }
-
-            if (_goalTransform == null
-                && _hasExplicitGoal
-                && FlowFieldGridSpace.Approximately(
-                    _explicitGoalWorld,
-                    request.WorldPosition,
-                    0.00000001d)
-                && Mathf.Abs(_goalInfluenceRadius - request.InfluenceRadius) <= VALUE_EPSILON)
-                return;
-
-            _goalTransform = null;
-            _hasExplicitGoal = true;
-            _explicitGoalWorld = request.WorldPosition;
-            _goalInfluenceRadius = request.InfluenceRadius;
-            MarkGoalDirty();
-        }
-
-        #endregion
-
-        public void NotifyCellsDirty()
-        {
-            _boundary.ThrowIfInUserCode(nameof(NotifyCellsDirty));
-            ThrowIfInputAllowedForMode();
-            if (BakeMode == FlowFieldBakeMode.StaticBaked)
-                throw new InvalidOperationException("Cell regeneration is not allowed in StaticBaked mode.");
-            ActiveMode.MarkCellsDirty();
-        }
-
-        internal void MarkConfigurationStale()
-        {
-            ActiveMode.MarkConfigurationStale();
         }
 
         // Subscribed for the Manager's whole life: a queued Released must still
@@ -496,79 +332,6 @@ namespace Common.FlowField
         {
             if (exception != null)
                 Debug.LogException(exception, this);
-        }
-
-        // A retried Surface session stays stale until it commits.
-        private void ReattachModifiersForRetry()
-        {
-            _reattachingForRetry = true;
-            try { ReattachActiveModifiers(); }
-            finally { _reattachingForRetry = false; }
-        }
-
-        private void ReattachActiveModifiers()
-        {
-            List<FlowFieldVectorModifierVolume> volumes = RentModifierBuffer();
-            try
-            {
-                for (int i = 0; i < volumes.Count; i++)
-                {
-                    FlowFieldVectorModifierVolume volume = volumes[i];
-                    if (volume == null
-                        || volume.FlowFieldManager != this
-                        || !volume.gameObject.scene.IsValid())
-                        continue;
-
-                    try
-                    {
-                        volume.ReattachToConfiguredManager();
-                    }
-                    catch (Exception exception)
-                    {
-                        Debug.LogException(exception, volume);
-                    }
-                }
-            }
-            finally
-            {
-                ReturnModifierBuffer(volumes);
-            }
-        }
-
-        private void DetachActiveModifiers()
-        {
-            List<FlowFieldVectorModifierVolume> volumes = RentModifierBuffer();
-            try
-            {
-                for (int i = 0; i < volumes.Count; i++)
-                {
-                    FlowFieldVectorModifierVolume volume = volumes[i];
-                    if (volume == null || volume.FlowFieldManager != this)
-                        continue;
-
-                    volume.DetachFromFlowFieldSession(this);
-                }
-            }
-            finally
-            {
-                ReturnModifierBuffer(volumes);
-            }
-        }
-
-        // A reattach can run a Manager command that walks the volumes again,
-        // so a nested walk gets its own list instead of clearing this one.
-        private List<FlowFieldVectorModifierVolume> RentModifierBuffer()
-        {
-            List<FlowFieldVectorModifierVolume> buffer = _modifierBuffer ?? new List<FlowFieldVectorModifierVolume>(8);
-            _modifierBuffer = null;
-            FlowFieldVectorModifierVolume.CopyLive(buffer);
-            return buffer;
-        }
-
-        private void ReturnModifierBuffer(List<FlowFieldVectorModifierVolume> buffer)
-        {
-            buffer.Clear();
-            _modifierBuffer ??= buffer;
         }
 
     }

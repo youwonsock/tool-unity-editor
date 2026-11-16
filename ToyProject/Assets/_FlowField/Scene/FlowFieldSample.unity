@@ -275,12 +275,12 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1569603542928883877, guid: ea9473f2a5a61c044828d7e078c86447,
         type: 3}
-      propertyPath: _cellSize
+      propertyPath: _grid.CellSize
       value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 1569603542928883877, guid: ea9473f2a5a61c044828d7e078c86447,
         type: 3}
-      propertyPath: _staticBakeData
+      propertyPath: _bakeAssets.Surface
       value: 
       objectReference: {fileID: 11400000, guid: e144fe4642c6e4e8b9c73398f7caba55,
         type: 2}

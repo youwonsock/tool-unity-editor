@@ -26,14 +26,17 @@ namespace Common.FlowField
                 Owner = owner;
             }
 
-            internal abstract FlowFieldSession Session { get; }
+            protected abstract FlowFieldSpaceMode Mode { get; }
+
+            // The Manager's session while it runs in this mode, otherwise
+            // null: an Inspector edit may target the mode not running.
+            protected FlowFieldSession Session => Owner.SessionFor(Mode);
             internal virtual bool ConfigurationStale => false;
             internal abstract void Initialize();
             internal abstract void ActivateSuspended();
             internal abstract void SubmitRebuild();
             internal abstract void ObserveInputs();
             internal abstract void OnSettingsEdited();
-            internal abstract void ValidateConfiguration(bool validateStaticGoal);
             internal abstract void MarkGoalDirty();
             internal abstract void MarkCellsDirty();
             internal abstract void MarkConfigurationStale();
@@ -43,72 +46,64 @@ namespace Common.FlowField
 
         private sealed class VolumeMode : ModeDriver
         {
-            private readonly FlowFieldSession _session;
-            private FlowFieldVolumeBuilder Volume => _session.Volume;
-
             internal VolumeMode(FlowFieldManager owner) : base(owner)
             {
-                _session = owner._volumeSession;
             }
 
-            internal override FlowFieldSession Session => _session;
+            protected override FlowFieldSpaceMode Mode => FlowFieldSpaceMode.Volume3D;
 
             internal override void Initialize()
             {
-                Owner._attachedSession = _session;
-                _session.Volume.Initialize(Owner._bakeMode);
+                Session.Volume.Initialize(Owner._bakeMode);
                 Owner._requiresActivationRebuild = !Owner.isActiveAndEnabled;
                 if (Owner._requiresActivationRebuild)
-                    _session.Suspend();
+                    Session.Suspend();
                 Owner.RequestRebuild();
-                Owner.ReattachActiveModifiers();
+                Owner.Modifiers.Reattach();
             }
 
             internal override void ActivateSuspended()
             {
                 Owner._requiresActivationRebuild = false;
-                _session.Volume.Resume();
+                Session.Volume.Resume();
                 // A Modifier enabled during the suspension could not register.
-                Owner.ReattachActiveModifiers();
+                Owner.Modifiers.Reattach();
             }
 
             internal override void SubmitRebuild()
             {
                 Owner.QueueVolumeRequest(force: true, requeryObstacles: true);
-                _session.AttachRuntimeScheduler();
+                Session.AttachRuntimeScheduler();
             }
 
             internal override void ObserveInputs()
             {
                 if (Owner._enableUnregisteredObstacleSweep && Owner.ConsumeRefreshTick())
-                    _session.Volume.DetectUnregisteredObstacleChanges(true);
-                _session.Volume.DetectModifierChanges();
+                    Session.Volume.DetectUnregisteredObstacleChanges(true);
+                Session.Volume.DetectModifierChanges();
                 Owner.QueueVolumeRequest();
             }
 
             internal override void OnSettingsEdited()
             {
-                if (!_session.IsInitialized || _session.IsFaulted)
+                if (Session?.IsInitialized != true || Session.IsFaulted)
                     return;
                 try
                 {
-                    if (!_session.IsRebuilding || _session.HasPendingRequest)
+                    if (!Session.IsRebuilding || Session.HasPendingRequest)
                         Owner.QueueVolumeRequest();
                 }
                 catch (Exception exception)
                 {
-                    _session.ReportFault(exception);
+                    Session.ReportFault(exception);
                 }
             }
 
 
-            internal override void ValidateConfiguration(bool validateStaticGoal)
-                => Owner.ValidateVolumeConfiguration(validateStaticGoal);
-
             internal override void MarkGoalDirty()
             {
                 // A Goal change keeps the obstacle result unless a tracked obstacle moved.
-                if (_session.IsInitialized)
+                if (Session?.IsInitialized == true)
                     Owner.QueueVolumeRequest(force: true);
             }
 
@@ -117,39 +112,35 @@ namespace Common.FlowField
 
             internal override void MarkConfigurationStale()
             {
-                if (_session.IsInitialized)
+                if (Session?.IsInitialized == true)
                     Owner.QueueVolumeRequest(force: true, requeryObstacles: true);
             }
 
             internal override Bounds SnapBakeBounds(Bounds localBounds)
-                => FlowFieldBakeBoundsUtility.SnapVolumeCenterAnchored(localBounds, Owner._cellSize);
+                => FlowFieldBakeBoundsUtility.SnapVolumeCenterAnchored(localBounds, Owner._grid.CellSize);
 
             internal override void OnBakeBoundsChanged()
             {
-                if (_session.IsInitialized)
+                if (Session?.IsInitialized == true)
                     Owner.QueueVolumeRequest(force: true, requeryObstacles: true);
             }
         }
 
         private sealed class SurfaceMode : ModeDriver
         {
-            private readonly FlowFieldSession _session;
-            private FlowFieldSurfaceBuilder Surface => _session.Surface;
-
             internal SurfaceMode(FlowFieldManager owner) : base(owner)
             {
-                _session = owner._session;
             }
 
-            internal override FlowFieldSession Session => _session;
-            internal override bool ConfigurationStale => _session.Surface.ConfigurationStale;
+            protected override FlowFieldSpaceMode Mode => FlowFieldSpaceMode.Surface2D;
+            internal override bool ConfigurationStale => Session.Surface.ConfigurationStale;
 
             internal override void Initialize()
             {
                 InitializeSession();
                 Owner._requiresActivationRebuild = !Owner.isActiveAndEnabled;
                 if (Owner._requiresActivationRebuild)
-                    _session.Suspend();
+                    Session.Suspend();
                 Owner.RequestRebuild();
             }
 
@@ -164,25 +155,24 @@ namespace Common.FlowField
                 FlowFieldSurfaceSourceKind sourceKind = Owner.BakeMode == FlowFieldBakeMode.StaticBaked
                     ? FlowFieldSurfaceSourceKind.StaticSnapshot
                     : FlowFieldSurfaceSourceKind.SceneBuild;
-                Owner._attachedSession = _session;
-                _session.Surface.Initialize(Owner._bakeMode, sourceKind);
-                Owner.ReattachActiveModifiers();
+                Session.Surface.Initialize(Owner._bakeMode, sourceKind);
+                Owner.Modifiers.Reattach();
             }
 
             internal override void SubmitRebuild()
             {
                 FlowFieldSurfaceBakeSettings settings = Owner.CreateSurfaceBakeSettings();
-                _session.Surface.Submit(Owner.CreateSurfaceRequest(
+                Session.Surface.Submit(Owner.CreateSurfaceRequest(
                     settings,
                     FlowFieldSurfaceDirtyFlags.None,
-                    _session.Surface.DirtyFinalRegion,
-                    _session.Surface.DirtyObstacleRegion));
-                _session.AttachRuntimeScheduler();
+                    Session.Surface.DirtyFinalRegion,
+                    Session.Surface.DirtyObstacleRegion));
+                Session.AttachRuntimeScheduler();
             }
 
             internal override void ObserveInputs()
             {
-                if (!_session.Surface.ConfigurationStale && Owner.ConsumeRefreshTick())
+                if (!Session.Surface.ConfigurationStale && Owner.ConsumeRefreshTick())
                     ObserveDueInputs();
                 SubmitPendingRebuild();
             }
@@ -193,72 +183,72 @@ namespace Common.FlowField
                 {
                     DetectGridTransformChange();
                     DetectGoalChange();
-                    bool obstacleObserved = _session.Surface.DetectObstacleTransformsChanged();
-                    bool probePending = _session.Surface.HasPendingObstacleProbe;
-                    if (!_session.IsRebuilding
+                    bool obstacleObserved = Session.Surface.DetectObstacleTransformsChanged();
+                    bool probePending = Session.Surface.HasPendingObstacleProbe;
+                    if (!Session.IsRebuilding
                         && (Owner._enableUnregisteredObstacleSweep || obstacleObserved || probePending))
                     {
                         if (Owner.TryCreateCurrentSurfaceRequest(out FlowFieldSurfaceRequest probeRequest))
                         {
-                            _session.Surface.ProbeObstacleChanges(probeRequest);
+                            Session.Surface.ProbeObstacleChanges(probeRequest);
                         }
                     }
-                    else if (_session.IsRebuilding && obstacleObserved)
+                    else if (Session.IsRebuilding && obstacleObserved)
                     {
                         // Transform snapshots are updated immediately, but the
                         // physics probe waits until the in-flight BFS callback
                         // has returned. This keeps at most one probe and one BFS
                         // active while preserving the previous/next dirty bounds.
-                        _session.Surface.RecordObstacleObservation(_session.Surface.DirtyObstacleRegion);
+                        Session.Surface.RecordObstacleObservation(Session.Surface.DirtyObstacleRegion);
                     }
                 }
 
-                _session.Surface.DetectModifierChanges();
+                Session.Surface.DetectModifierChanges();
             }
 
             private void DetectGridTransformChange()
             {
-                if (!_session.Surface.StagingGrid.IsValid)
+                if (!Session.Surface.StagingGrid.IsValid)
                     return;
                 FlowFieldGridSpace current = Owner.CreateGridSpace();
-                if (_session.Surface.ObserveGrid(current))
-                    _session.Surface.MarkDirty(FlowFieldSurfaceDirtyFlags.Grid, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
+                if (Session.Surface.ObserveGrid(current))
+                    Session.Surface.MarkDirty(FlowFieldSurfaceDirtyFlags.Grid, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
             }
 
             private void DetectGoalChange()
             {
-                if (!_session.Surface.StagingSurfaceReady || !_session.Surface.StagingGrid.IsValid)
+                if (!Session.Surface.StagingSurfaceReady || !Session.Surface.StagingGrid.IsValid)
                     return;
-                if ((_session.Surface.DirtyFlags & FlowFieldSurfaceDirtyFlags.Goal) != 0)
+                if ((Session.Surface.DirtyFlags & FlowFieldSurfaceDirtyFlags.Goal) != 0)
                     return;
-                FlowFieldSurfaceGoalChangeStatus status = _session.Surface.GoalTracker.DetectChange(
-                    _session.Surface.StagingGrid,
-                    _session.Surface.StagingSurfaceReady,
+                FlowFieldSurfaceGoalChangeStatus status = Session.Surface.GoalTracker.DetectChange(
+                    Session.Surface.StagingGrid,
+                    Session.Surface.StagingSurfaceReady,
                     Owner._goalTransform,
                     Owner._hasExplicitGoal,
                     Owner._explicitGoalWorld,
-                    Owner._goalInfluenceRadius);
+                    Owner._flow.GoalInfluenceRadius);
                 if (status == FlowFieldSurfaceGoalChangeStatus.Changed)
                 {
-                    _session.Surface.MarkDirty(
+                    Session.Surface.MarkDirty(
                         FlowFieldSurfaceDirtyFlags.Goal,
                         FlowFieldCellRect.Invalid,
                         FlowFieldCellRect.Invalid);
                     if (!Owner.HasConfiguredGoal)
-                        _session.Surface.ObserveGoalRemoved();
+                        Session.Surface.ObserveGoalRemoved();
                 }
             }
 
             // The scheduler builds it later in this frame.
             private void SubmitPendingRebuild()
             {
-                if (!Owner.isActiveAndEnabled || !_session.IsInitialized || _session.IsFaulted)
+                if (!Owner.isActiveAndEnabled || Session?.IsInitialized != true || Session.IsFaulted)
                     return;
-                if (_session.Surface.RequiresExplicitRebuild || _session.IsRebuilding)
+                if (Session.Surface.RequiresExplicitRebuild || Session.IsRebuilding)
                     return;
-                if (_session.HasPendingRequest
+                if (Session.HasPendingRequest
                     && Owner.TryCreateCurrentSurfaceRequest(out FlowFieldSurfaceRequest request))
-                    _session.Surface.Submit(request);
+                    Session.Surface.Submit(request);
             }
 
             internal override void OnSettingsEdited()
@@ -270,48 +260,48 @@ namespace Common.FlowField
                 // StaticBaked requests intentionally contain no runtime Goal or
                 // dynamic-obstacle input, making those edits true no-ops.
                 if (!Owner.TryCreateCurrentSurfaceRequest(out FlowFieldSurfaceRequest current)
-                    || !_session.Surface.HasSubmittedRequest)
+                    || !Session.Surface.HasSubmittedRequest)
                 {
-                    if (!_session.Surface.ConfigurationStale)
-                        _session.Surface.MarkConfigurationStale();
+                    if (!Session.Surface.ConfigurationStale)
+                        Session.Surface.MarkConfigurationStale();
                     return;
                 }
 
                 // Keep the latest final-only scalar visible to a solve callback
                 // even when the inspector edit lands between the solve starting and
                 // the next RequestRebuild scheduling tick.
-                _session.Surface.ObserveDefaultDirection(current.DefaultDirection);
+                Session.Surface.ObserveDefaultDirection(current.DefaultDirection);
 
-                if (!_session.Surface.HasSameBaseInputs(current))
+                if (!Session.Surface.HasSameBaseInputs(current))
                 {
                     MarkChangedBaseInputs(current);
                     return;
                 }
 
-                if (_session.Surface.HasSameFinalInputs(current))
+                if (Session.Surface.HasSameFinalInputs(current))
                     return;
 
                 FlowFieldSurfaceDirtyFlags finalFlags = FlowFieldSurfaceDirtyFlags.FinalRegion;
                 try
                 {
-                    Vector3 normalized = FlowFieldVectorUtility.NormalizeDefaultDirection(Owner._defaultFlowDirection);
-                    if ((_session.Surface.ResolvedDefaultDirection - normalized).sqrMagnitude > VALUE_EPSILON * VALUE_EPSILON)
+                    Vector3 normalized = FlowFieldVectorUtility.NormalizeDefaultDirection(Owner._flow.DefaultDirection);
+                    if ((Session.Surface.ResolvedDefaultDirection - normalized).sqrMagnitude > FlowFieldManagerConfig.ValueEpsilon * FlowFieldManagerConfig.ValueEpsilon)
                         finalFlags |= FlowFieldSurfaceDirtyFlags.DefaultDirection;
                 }
                 catch
                 {
-                    if (!_session.Surface.ConfigurationStale)
-                        _session.Surface.MarkConfigurationStale();
+                    if (!Session.Surface.ConfigurationStale)
+                        Session.Surface.MarkConfigurationStale();
                     return;
                 }
 
-                if ((_session.Surface.DirtyFlags & finalFlags) != finalFlags)
-                    _session.Surface.MarkDirty(finalFlags, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
+                if ((Session.Surface.DirtyFlags & finalFlags) != finalFlags)
+                    Session.Surface.MarkDirty(finalFlags, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
             }
 
             private void MarkChangedBaseInputs(in FlowFieldSurfaceRequest current)
             {
-                FlowFieldSurfaceDirtyFlags changedFlags = _session.Surface.GetInputDirtyFlags(current);
+                FlowFieldSurfaceDirtyFlags changedFlags = Session.Surface.GetInputDirtyFlags(current);
                 // Goal and obstacle scalar edits are base-field changes, but
                 // they can reuse the already-baked Surface. Only a real Grid
                 // or source/signature change makes the current Surface stale
@@ -319,35 +309,32 @@ namespace Common.FlowField
                 if (Owner.BakeMode == FlowFieldBakeMode.StaticBaked
                     || (changedFlags & FlowFieldSurfaceDirtyFlags.Grid) != 0)
                 {
-                    if (!_session.Surface.ConfigurationStale)
-                        _session.Surface.MarkConfigurationStale();
+                    if (!Session.Surface.ConfigurationStale)
+                        Session.Surface.MarkConfigurationStale();
                 }
                 else if (changedFlags != FlowFieldSurfaceDirtyFlags.None)
                 {
-                    _session.Surface.MarkDirty(
+                    Session.Surface.MarkDirty(
                         changedFlags,
                         FlowFieldCellRect.Invalid,
                         FlowFieldCellRect.Invalid);
                 }
             }
 
-            internal override void ValidateConfiguration(bool validateStaticGoal)
-                => Owner.ValidateSurfaceConfiguration(validateStaticGoal);
-
             internal override void MarkGoalDirty()
             {
-                _session.Surface.GoalTracker.ResetWarning();
-                _session.Surface.MarkDirty(
+                Session.Surface.GoalTracker.ResetWarning();
+                Session.Surface.MarkDirty(
                     FlowFieldSurfaceDirtyFlags.Goal,
                     FlowFieldCellRect.Invalid,
                     FlowFieldCellRect.Invalid);
                 if (!Owner.HasConfiguredGoal)
-                    _session.Surface.ObserveGoalRemoved();
+                    Session.Surface.ObserveGoalRemoved();
             }
 
             internal override void MarkCellsDirty()
             {
-                _session.Surface.MarkDirty(
+                Session.Surface.MarkDirty(
                     FlowFieldSurfaceDirtyFlags.Grid,
                     FlowFieldCellRect.Invalid,
                     FlowFieldCellRect.Invalid);
@@ -355,21 +342,21 @@ namespace Common.FlowField
 
             internal override void MarkConfigurationStale()
             {
-                if (!_session.IsInitialized)
+                if (Session?.IsInitialized != true)
                     return;
-                _session.Surface.MarkConfigurationStale();
+                Session.Surface.MarkConfigurationStale();
             }
 
             internal override Bounds SnapBakeBounds(Bounds localBounds)
-                => FlowFieldBakeBoundsUtility.SnapCenterAnchored(localBounds, Owner._cellSize);
+                => FlowFieldBakeBoundsUtility.SnapCenterAnchored(localBounds, Owner._grid.CellSize);
 
             internal override void OnBakeBoundsChanged()
             {
-                if (!_session.IsInitialized)
+                if (Session?.IsInitialized != true)
                     return;
                 if (Owner.TryGetBakeLayout(out _, out FlowFieldGridSpace current))
-                    _session.Surface.ObserveGrid(current);
-                _session.Surface.MarkDirty(
+                    Session.Surface.ObserveGrid(current);
+                Session.Surface.MarkDirty(
                     FlowFieldSurfaceDirtyFlags.Grid,
                     FlowFieldCellRect.Invalid,
                     FlowFieldCellRect.Invalid);

@@ -16,45 +16,32 @@ namespace Common.FlowField.Editor
         {
             serializedObject.Update();
             var manager = (FlowFieldManager)target;
-            // Keep the mode immutable while a play-mode Init session is
-            // active. The rest of the serialized settings retain Unity's
-            // default inspector rendering.
-            SerializedProperty spaceMode = serializedObject.FindProperty("_spaceMode");
+            // The mode stays fixed while a play-mode Init session is active.
+            // Settings only the other mode reads are hidden.
+            SerializedProperty spaceMode = serializedObject.FindProperty(FlowFieldManager.PropertyNames.SpaceMode);
             bool isVolume = spaceMode != null
                 && spaceMode.enumValueIndex == (int)FlowFieldSpaceMode.Volume3D;
-            DrawPropertiesExcluding(
-                serializedObject,
-                isVolume
-                    ? new[]
-                    {
-                        "_bakeMode",
-                        "_spaceMode",
-                        "_staticBakeData",
-                        "_volumeStaticBakeData",
-                        "_groundBakeLayer",
-                        "_maxSurfaceSlope",
-                        "_maxStepHeight",
-                        "_obstacleCheckHeight",
-                        "_obstacleCheckCenterOffset",
-                    }
-                    : new[]
-                    {
-                        "_bakeMode",
-                        "_spaceMode",
-                        "_staticBakeData",
-                        "_volumeStaticBakeData",
-                    });
+            DrawSettings(FlowFieldManager.PropertyNames.Grid, "Grid");
+            if (!isVolume)
+                DrawSettings(FlowFieldManager.PropertyNames.Surface, "Surface");
+            DrawSettings(FlowFieldManager.PropertyNames.Obstacles, "Obstacles");
+            EditorGUILayout.PropertyField(serializedObject.FindProperty(FlowFieldManager.PropertyNames.EnableUnregisteredObstacleSweep));
+            EditorGUILayout.PropertyField(serializedObject.FindProperty(FlowFieldManager.PropertyNames.RefreshRate));
+            DrawSettings(FlowFieldManager.PropertyNames.Flow, "Flow");
+            EditorGUILayout.PropertyField(serializedObject.FindProperty(FlowFieldManager.PropertyNames.GoalTransform));
+
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Mode", EditorStyles.boldLabel);
             using (new EditorGUI.DisabledScope(Application.isPlaying && manager.IsInitialized))
                 EditorGUILayout.PropertyField(spaceMode);
-            SerializedProperty mode = serializedObject.FindProperty("_bakeMode");
+            SerializedProperty mode = serializedObject.FindProperty(FlowFieldManager.PropertyNames.BakeMode);
             using (new EditorGUI.DisabledScope(Application.isPlaying))
                 EditorGUILayout.PropertyField(mode);
             if (mode != null && mode.enumValueIndex == (int)FlowFieldBakeMode.StaticBaked)
             {
-                if (spaceMode != null && spaceMode.enumValueIndex == (int)FlowFieldSpaceMode.Volume3D)
-                    EditorGUILayout.PropertyField(serializedObject.FindProperty("_volumeStaticBakeData"));
-                else
-                    EditorGUILayout.PropertyField(serializedObject.FindProperty("_staticBakeData"));
+                EditorGUILayout.PropertyField(serializedObject.FindProperty(isVolume
+                    ? FlowFieldManager.PropertyNames.VolumeBakeData
+                    : FlowFieldManager.PropertyNames.SurfaceBakeData));
             }
             serializedObject.ApplyModifiedProperties();
             DrawDisplaySettingsNotice(manager);
@@ -101,6 +88,20 @@ namespace Common.FlowField.Editor
             }
 
             DrawTransformWarning(manager);
+        }
+
+        // A settings bundle drawn as a header and its fields, without a foldout.
+        private void DrawSettings(string path, string header)
+        {
+            SerializedProperty bundle = serializedObject.FindProperty(path);
+            if (bundle == null)
+                return;
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField(header, EditorStyles.boldLabel);
+            SerializedProperty end = bundle.GetEndProperty();
+            SerializedProperty child = bundle.Copy();
+            for (bool enter = true; child.NextVisible(enter) && !SerializedProperty.EqualContents(child, end); enter = false)
+                EditorGUILayout.PropertyField(child, true);
         }
 
         private void OnSceneGUI()
