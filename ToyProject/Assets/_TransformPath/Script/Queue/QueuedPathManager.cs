@@ -168,9 +168,11 @@ namespace Common.TransformPath
 
         protected override void OnDisabled() => Release();
 
+        internal override EPathTickPhases TickPhases => EPathTickPhases.Queue;
+
         internal override void Tick(EPathTickPhase phase, float deltaTime, int frameId)
         {
-            if (phase != EPathTickPhase.Queue || !_isInitialized || _routeProvider == null)
+            if (!_isInitialized || _routeProvider == null)
                 return;
             using var operation = PathExecutionBoundary.Enter();
             if (!_routeProvider.IsReady)

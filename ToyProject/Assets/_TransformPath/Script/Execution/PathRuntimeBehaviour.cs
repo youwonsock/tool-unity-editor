@@ -14,6 +14,9 @@ namespace Common.TransformPath
         /// <summary>The playback the driver protects within a frame, or 0.</summary>
         internal virtual ulong TickPlaybackId => 0UL;
         ulong IPathRuntimeTickable.PlaybackId => TickPlaybackId;
+        /// <summary>The phases this component works in. Fixed for its type.</summary>
+        internal abstract EPathTickPhases TickPhases { get; }
+        EPathTickPhases IPathRuntimeTickable.Phases => TickPhases;
 
         protected virtual void Awake()
         {

@@ -208,10 +208,10 @@ namespace Common.TransformPath
             TryRestoreCharacterController();
         }
 
+        internal override EPathTickPhases TickPhases => EPathTickPhases.Effects | EPathTickPhases.Movement;
+
         internal override void Tick(EPathTickPhase phase, float deltaTime, int frameId)
         {
-            if (phase == EPathTickPhase.Queue)
-                return;
             // Most frames have no blend or delayed event: only the frame is recorded.
             if (phase == EPathTickPhase.Effects && !Playback.HasPendingEffects)
             {
