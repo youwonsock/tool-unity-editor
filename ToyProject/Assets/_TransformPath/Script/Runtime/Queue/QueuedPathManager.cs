@@ -237,7 +237,14 @@ namespace Common.TransformPath
             _pool.Add(entry);
         }
 
-        internal bool Contains(PathQueueMember member) => member != null && _entries.ContainsKey(member);
+        /// <summary>Orders a member behind every other at the same progress.</summary>
+        internal void MoveToBack(PathQueueMember member)
+        {
+            if (member != null && _entries.TryGetValue(member, out Entry entry))
+                entry.Sequence = _nextSequence++;
+        }
+
+                internal bool Contains(PathQueueMember member) => member != null && _entries.ContainsKey(member);
 
         private void LeaveAll(EPathQueueLeaveReason reason)
         {

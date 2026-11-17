@@ -7,17 +7,20 @@ namespace Common.TransformPath
     /// <summary>What a queue currently allows one follower.</summary>
     internal readonly struct PathMotionLimit
     {
-        public static readonly PathMotionLimit None = new PathMotionLimit(false, 1f, 1f);
+        public static readonly PathMotionLimit None = new PathMotionLimit(false, 1f, 1f, false);
 
         public readonly bool Blocked;
         public readonly float SpeedMultiplier;
         public readonly float MaxProgress;
+        /// <summary>A queue member stops at a loop seam and waits for the queue before its next lap.</summary>
+        public readonly bool HoldAtLoopSeam;
 
-        public PathMotionLimit(bool blocked, float speedMultiplier, float maxProgress)
+        public PathMotionLimit(bool blocked, float speedMultiplier, float maxProgress, bool holdAtLoopSeam)
         {
             Blocked = blocked;
             SpeedMultiplier = Mathf.Clamp01(speedMultiplier);
             MaxProgress = Mathf.Clamp01(maxProgress);
+            HoldAtLoopSeam = holdAtLoopSeam;
         }
     }
 
@@ -93,6 +96,8 @@ namespace Common.TransformPath
         public PathMotionLimit Limit { get; set; } = PathMotionLimit.None;
         /// <summary>Rises on every Seek that moved the position, so a queue can drop limits from before it.</summary>
         public int SeekCount { get; private set; }
+        /// <summary>Rises at every loop seam, so a queue can order the member again.</summary>
+        public int LoopCount { get; private set; }
 
         public PathRoute Route => _route;
         public float Progress => _cursor.Global;
@@ -384,6 +389,12 @@ namespace Common.TransformPath
                 return;
             EnterSegment(hasNext ? _cursor.Segment + 1 : 0);
             transitioned = true;
+            if (hasNext)
+                return;
+            LoopCount++;
+            // The rest of this frame's time is dropped at the seam until the queue answers.
+            if (Limit.HoldAtLoopSeam)
+                Limit = new PathMotionLimit(true, 0f, 0f, true);
         }
 
         private void EnterSegment(int index)

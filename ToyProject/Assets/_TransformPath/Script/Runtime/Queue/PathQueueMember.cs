@@ -46,6 +46,7 @@ namespace Common.TransformPath
         private float _requestedMaxProgress = 1f;
         private ulong _playbackId;
         private int _seekCount;
+        private int _loopCount;
         private bool _showingPause;
         private bool _reportedBlocked;
         private float _reportedSpeedMultiplier = 1f;
@@ -177,7 +178,7 @@ namespace Common.TransformPath
             _activeManager = manager;
             _requestedMaxProgress = Mathf.Clamp01(maxProgress);
             manager.Join(this);
-            AwaitFirstResult();
+            AwaitFirstResult(false);
             return changed;
         }
 
@@ -245,8 +246,14 @@ namespace Common.TransformPath
                 }
                 return;
             }
-            if (_showingPause || follower.PlaybackId != _playbackId)
-                AwaitFirstResult();
+            if (follower.LoopCount != _loopCount)
+            {
+                // A new lap joins the back of the line, as a new start would.
+                _activeManager?.MoveToBack(this);
+                AwaitFirstResult(true);
+            }
+            else if (_showingPause || follower.PlaybackId != _playbackId)
+                AwaitFirstResult(true);
             if (follower.SeekCount != _seekCount)
             {
                 // Limits from before a Seek no longer fit the new position.
@@ -300,13 +307,16 @@ namespace Common.TransformPath
         }
 
         // A new or resumed playback waits for the manager and the restart delay.
-        private void AwaitFirstResult()
+        // A result that arrived this frame is already fresh and stays.
+        private void AwaitFirstResult(bool keepStatus)
         {
             PathFollower follower = Follower;
             _playbackId = follower.PlaybackId;
             _seekCount = follower.SeekCount;
+            _loopCount = follower.LoopCount;
             _showingPause = false;
-            _hasStatus = false;
+            if (!keepStatus)
+                _hasStatus = false;
             _wait.IsBlocked = true;
             _wait.ResumeDelayRemaining = _resumeMovementDelay;
             _wait.SpeedMultiplier = 0f;
@@ -329,7 +339,7 @@ namespace Common.TransformPath
             float maxProgress = _hasStatus
                 ? Mathf.Min(_requestedMaxProgress, _status.MaxProgress)
                 : _requestedMaxProgress;
-            Follower.SetMotionLimit(new PathMotionLimit(_wait.IsBlocked, _wait.SpeedMultiplier, maxProgress));
+            Follower.SetMotionLimit(new PathMotionLimit(_wait.IsBlocked, _wait.SpeedMultiplier, maxProgress, true));
         }
 
         private void ReportChanges()

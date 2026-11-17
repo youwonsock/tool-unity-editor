@@ -51,6 +51,7 @@ namespace Common.TransformPath
 
         internal override ulong TickPlaybackId => Playback.PlaybackId;
         internal int SeekCount => Playback.SeekCount;
+        internal int LoopCount => Playback.LoopCount;
         internal int RouteRevision => Playback.Route?.Revision ?? -1;
 
         public event Action<EPathFollowerState> StateChanged
