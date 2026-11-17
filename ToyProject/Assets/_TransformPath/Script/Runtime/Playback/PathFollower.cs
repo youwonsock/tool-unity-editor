@@ -8,7 +8,6 @@ namespace Common.TransformPath
     /// provider snapshot and event cursor, the cursor owns the position on the
     /// route, so no coroutine or per-frame temporary object is required.
     /// </summary>
-    [DefaultExecutionOrder(-100)]
     [RequireComponent(typeof(PathEventHandler))]
     public sealed class PathFollower : MonoBehaviour, IPathFollower, IPathPlaybackIdentity, IPathRuntimeTickable, IPathConstraintTarget, IPathRuntimeFaultHandler
     {
@@ -22,14 +21,8 @@ namespace Common.TransformPath
 
         #region Member Variables
 
-        [Header("Startup")]
-        [SerializeField] private MonoBehaviour _startupProviderObject;
-        [SerializeField] private bool _playOnStart;
-        [SerializeField] private bool _startupLoop;
-
         [Header("Runtime")]
         [SerializeField] private PathEventHandler _pathEventHandler;
-        [SerializeField] private PathFollowerAnimatorView _animatorView;
 
         [Header("Movement Collision")]
         [SerializeField] private CharacterController _characterController;
@@ -113,8 +106,6 @@ namespace Common.TransformPath
             using var operation = PathExecutionBoundary.Enter();
             if (_pathEventHandler == null)
                 TryGetComponent(out _pathEventHandler);
-            if (_animatorView == null)
-                TryGetComponent(out _animatorView);
             if (_characterController == null)
                 TryGetComponent(out _characterController);
             if (_pathEventHandler != null && !_pathEventHandler.IsInitialized)
@@ -166,40 +157,6 @@ namespace Common.TransformPath
             if (!_isInitialized)
                 Init();
             PathRuntimeDriverBehaviour.Instance.Register(this);
-        }
-
-        private void Start()
-        {
-            if (!_playOnStart || _startupProviderObject == null)
-                return;
-
-            IPathProvider provider = _startupProviderObject as IPathProvider;
-            if (provider == null)
-            {
-                Debug.LogError(
-                    $"PathFollower '{name}' startup provider does not implement IPathProvider.",
-                    this);
-                return;
-            }
-
-            IPathSequenceProvider sequenceProvider = provider as IPathSequenceProvider;
-            if (sequenceProvider != null)
-            {
-                StartPlayback(PathPlaybackRequest.Sequence(sequenceProvider, _startupLoop));
-                return;
-            }
-
-            IPathMovementProvider movementProvider = provider as IPathMovementProvider;
-            if (movementProvider != null)
-            {
-                StartPlayback(PathPlaybackRequest.Single(movementProvider, _startupLoop));
-                return;
-            }
-
-            Debug.LogError(
-                $"PathFollower '{name}' startup provider does not expose movement settings. "
-                + "Use the explicit Aggregate playback request.",
-                this);
         }
 
         void IPathRuntimeTickable.Tick(
@@ -278,7 +235,6 @@ namespace Common.TransformPath
                     return;
                 StopPlaybackOnly();
                 EndPlayback();
-                ApplyAnimatorSpeed(1f);
                 SetState(EPathFollowerState.Ready);
                 TryRestoreCharacterController();
             }
@@ -391,7 +347,6 @@ namespace Common.TransformPath
             EndPlayback();
             PathCommandReceipt receipt = CreateReceipt(true);
             TryRestoreCharacterController();
-            ApplyAnimatorSpeed(1f);
             SetState(_isInitialized
                 ? EPathFollowerState.Ready
                 : EPathFollowerState.Uninitialized);
@@ -409,7 +364,6 @@ namespace Common.TransformPath
             _stateRevision++;
             _pathEventHandler?.CancelMovementAdjustments();
             PathCommandReceipt receipt = CreateReceipt(true);
-            ApplyAnimatorSpeed(0f);
             SetState(EPathFollowerState.Paused);
             return receipt;
         }
@@ -425,7 +379,6 @@ namespace Common.TransformPath
             _isMoving = true;
             _stateRevision++;
             PathCommandReceipt receipt = CreateReceipt(true);
-            ApplyAnimatorSpeed(1f);
             SetState(EPathFollowerState.Moving);
             return receipt;
         }
@@ -568,7 +521,6 @@ namespace Common.TransformPath
             _stateRevision++;
             PathCommandReceipt receipt = CreateReceipt(true);
             TrySuppressCharacterController();
-            ApplyAnimatorSpeed(1f);
             SetState(EPathFollowerState.Moving);
             // The queue adapter can refuse the start inside SetState.
             if (_isMoving)
@@ -753,7 +705,6 @@ namespace Common.TransformPath
         {
             _isMoving = false;
             _cursor.PendingTime = 0f;
-            ApplyAnimatorSpeed(0f);
         }
 
         private void EndPlayback()
@@ -801,12 +752,6 @@ namespace Common.TransformPath
             // only the state that stands.
             if (_state == state)
                 PathExecutionBoundary.PublishState(_stateChanged, state);
-        }
-
-        // Path playback uses 0 for pause and 1 for moving/ready; no stored speed restore.
-        private void ApplyAnimatorSpeed(float value)
-        {
-            _animatorView?.ApplyPlaybackSpeed(value);
         }
 
         private void TrySuppressCharacterController()

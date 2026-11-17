@@ -119,10 +119,5 @@ namespace Common.TransformPath
                 }
             }
         }
-
-        public void Tick(float deltaTime)
-        {
-            Tick(deltaTime, deltaTime, 0);
-        }
     }
 }

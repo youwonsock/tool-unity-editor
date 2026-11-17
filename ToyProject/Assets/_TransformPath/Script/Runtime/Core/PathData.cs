@@ -316,7 +316,7 @@ namespace Common.TransformPath
             return ClampPathEventNormalizedTimes() || changed;
         }
 
-        public bool ClampPathEventNormalizedTimes()
+        private bool ClampPathEventNormalizedTimes()
         {
             if (_pathEvents == null)
                 return false;

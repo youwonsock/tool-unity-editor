@@ -293,9 +293,6 @@ namespace Common.TransformPath
                 return false;
             }
 
-            HashSet<IPathProvider> active = new HashSet<IPathProvider>();
-            HashSet<IPathProvider> completed = new HashSet<IPathProvider>();
-            active.Add(this);
             for (int i = 0; i < candidate.Length; i++)
             {
                 PathSegmentDescriptor descriptor = candidate[i];
@@ -313,12 +310,11 @@ namespace Common.TransformPath
                     error = $"Segment {i} movement settings are invalid: {error}";
                     return false;
                 }
-                if (!ValidateProviderGraph(
-                        descriptor.Provider,
-                        active,
-                        completed,
-                        out error))
+                if (!(descriptor.Provider is PathData))
+                {
+                    error = $"Segment {i} provider must be a PathData.";
                     return false;
+                }
 
                 float length = descriptor.Provider.PathLength;
                 if (!PathValueUtility.IsFinite(length) || length <= 0f)
@@ -347,96 +343,6 @@ namespace Common.TransformPath
                 accumulated += lengths[i];
             }
 
-            error = null;
-            return true;
-        }
-
-        private bool ValidateProviderGraph(
-            IPathProvider provider,
-            HashSet<IPathProvider> active,
-            HashSet<IPathProvider> completed,
-            out string error)
-        {
-            if (ReferenceEquals(provider, this))
-            {
-                error = "A MultiPathData cannot contain itself.";
-                return false;
-            }
-            if (active.Contains(provider))
-            {
-                error = "MultiPathData contains a cyclic provider reference.";
-                return false;
-            }
-            if (completed.Contains(provider))
-            {
-                error = null;
-                return true;
-            }
-
-            if (!(provider is IPathSequenceProvider sequence))
-            {
-                completed.Add(provider);
-                error = null;
-                return true;
-            }
-
-            active.Add(provider);
-            try
-            {
-                if (!sequence.IsReady || sequence.SegmentCount <= 0)
-                {
-                    error = "Nested sequence provider is not ready.";
-                    return false;
-                }
-                float nestedDistance = 0f;
-                for (int i = 0; i < sequence.SegmentCount; i++)
-                {
-                    PathSegmentDescriptor child = sequence.GetSegment(i);
-                    if (!PathMovementSettingsUtility.TryValidate(
-                            child.MovementSettings,
-                            out error))
-                    {
-                        error = $"Nested sequence segment {i} movement settings are invalid: {error}";
-                        return false;
-                    }
-                    float declaredStart = sequence.GetSegmentStartDistance(i);
-                    float declaredLength = sequence.GetSegmentLength(i);
-                    if (!PathValueUtility.IsFinite(declaredStart)
-                        || !PathValueUtility.IsFinite(declaredLength)
-                        || declaredLength <= 0f
-                        || !Mathf.Approximately(declaredStart, nestedDistance)
-                        || !Mathf.Approximately(
-                            declaredLength,
-                            child.Provider == null ? 0f : child.Provider.PathLength))
-                    {
-                        error = $"Nested sequence segment {i} has inconsistent distance data.";
-                        return false;
-                    }
-                    if (!ValidateProviderGraph(
-                            child.Provider,
-                            active,
-                            completed,
-                            out error))
-                        return false;
-                    nestedDistance += declaredLength;
-                }
-                if (!Mathf.Approximately(nestedDistance, sequence.PathLength))
-                {
-                    error = "Nested sequence total length does not match its segments.";
-                    return false;
-                }
-            }
-            catch (Exception exception)
-            {
-                error = $"Nested sequence could not be inspected: {exception.Message}";
-                return false;
-            }
-            finally
-            {
-                active.Remove(provider);
-            }
-
-            completed.Add(provider);
             error = null;
             return true;
         }

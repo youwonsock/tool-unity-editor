@@ -9,7 +9,6 @@ namespace Common.TransformPath
     /// only source of truth; constraints are calculated once before followers
     /// tick for the frame.
     /// </summary>
-    [DefaultExecutionOrder(-180)]
     public sealed class QueuedPathManager : MonoBehaviour, IPathRuntimeTickable, IPathRuntimeFaultHandler
     {
         #region Constants

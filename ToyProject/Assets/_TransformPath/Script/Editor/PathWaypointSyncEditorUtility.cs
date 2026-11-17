@@ -1,4 +1,3 @@
-#if UNITY_EDITOR
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -277,4 +276,3 @@ namespace Common.TransformPath
         #endregion
     }
 }
-#endif

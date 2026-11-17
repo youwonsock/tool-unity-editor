@@ -4,7 +4,6 @@ using UnityEngine;
 namespace Common.TransformPath
 {
     /// <summary>PathFollower adapter that applies one manager constraint per frame.</summary>
-    [DefaultExecutionOrder(-110)]
     [RequireComponent(typeof(PathFollower))]
     public sealed class QueuedPathFollower : MonoBehaviour, IQueuedPathAgent, IPathFollower, IPathPlaybackIdentity, IPathRuntimeTickable, IPathRuntimeFaultHandler
     {
@@ -36,7 +35,6 @@ namespace Common.TransformPath
         [SerializeField] private bool _useManagerSpacing = true;
         [SerializeField] private bool _enableGradualSlowdown = true;
         [SerializeField] private bool _enableOvertakeProtection = true;
-        [SerializeField] private PathFollowerAnimatorView _animatorView;
         [SerializeField, Min(0f)] private float _resumeMovementDelay = DEFAULT_RESUME_MOVEMENT_DELAY;
         [SerializeField, Min(0f)] private float _unblockHysteresis = DEFAULT_UNBLOCK_HYSTERESIS;
         [SerializeField, Min(0f)] private float _speedSmoothRate = DEFAULT_SPEED_SMOOTH_RATE;
@@ -70,12 +68,7 @@ namespace Common.TransformPath
         int IPathRuntimeTickable.RuntimeOrder => -110;
         public bool IsBlocked => _queue.IsBlocked;
         public bool IsMoving => Source?.IsMoving ?? false;
-        public bool IsActuallyMoving => IsMoving && !_queue.IsBlocked;
         public bool IsRegistered => _queue.IsRegistered;
-        public bool IsQueueHeld => _queueParticipationMode == EQueueParticipationMode.Queued
-            && _queue.IsRegistered && _queue.ManualBlock;
-        public IPathFollower Playback => this;
-        public PathFollower UnderlyingFollower => _pathFollower;
 
         public float ActorSpacing
         {
@@ -127,7 +120,6 @@ namespace Common.TransformPath
             _enableOvertakeProtection);
         public float GlobalNormalizedTime => Source?.GlobalNormalizedTime ?? 0f;
         public QueuedPathManager Manager => _manager;
-        public QueuedPathManager ActiveManager => _activeManager;
         public IPathProvider QueueProvider => CurrentProvider;
         public int SnapshotRevision => Source?.SnapshotRevision ?? -1;
 
@@ -196,8 +188,6 @@ namespace Common.TransformPath
                 TryGetComponent(out _pathFollower);
             if (_pathFollower == null)
                 return default(PathCommandReceipt);
-            if (_animatorView == null)
-                TryGetComponent(out _animatorView);
             if (_manager == null)
                 _manager = GetComponentInParent<QueuedPathManager>();
 
@@ -309,7 +299,6 @@ namespace Common.TransformPath
             _queue.Step(deltaTime, _managerState.HasValue, _managerState.GetValueOrDefault(),
                 GetSpacing(), _resumeMovementDelay, _unblockHysteresis, _speedSmoothRate);
             ApplyCurrentConstraint();
-            UpdateAnimator();
             ReportStateChanges();
         }
 
@@ -427,7 +416,6 @@ namespace Common.TransformPath
             _queue.IsBlocked = true;
             _queue.SpeedMultiplier = 0f;
             ApplyCurrentConstraint();
-            UpdateAnimator();
         }
 
         public void ForceUnblock()
@@ -435,7 +423,6 @@ namespace Common.TransformPath
             _queue.ManualBlock = false;
             _queue.ResumeDelayRemaining = _resumeMovementDelay;
             ApplyCurrentConstraint();
-            UpdateAnimator();
         }
 
         /// <summary>
@@ -607,7 +594,6 @@ namespace Common.TransformPath
                 _queue.IsBlocked = false;
                 _reportedBlocked = false;
                 _queue.SpeedMultiplier = 1f;
-                UpdateAnimator();
             }
 
             // Registering can refuse the start and stop the playback again.
@@ -626,7 +612,6 @@ namespace Common.TransformPath
                 UnregisterFromManager(EPathQueueDetachReason.Paused);
             _queue.IsBlocked = true;
             _queue.SpeedMultiplier = 0f;
-            UpdateAnimator();
         }
 
         private void HandleUnderlyingLoopBoundary()
@@ -671,7 +656,6 @@ namespace Common.TransformPath
                     && _pathFollower is IPathConstraintTarget constraintTarget)
                     constraintTarget.ReleaseQueueConstraint(_queue.Registration);
             }
-            UpdateAnimator();
         }
 
         // The playback goes on outside the queue, so listeners hear the wait end.
@@ -714,7 +698,6 @@ namespace Common.TransformPath
             _queue.IsBlocked = true;
             _queue.SpeedMultiplier = 0f;
             ApplyCurrentConstraint();
-            UpdateAnimator();
             return receipt;
         }
 
@@ -725,7 +708,6 @@ namespace Common.TransformPath
             _queue.ResumeDelayRemaining = _resumeMovementDelay;
             _queue.SpeedMultiplier = 0f;
             ApplyCurrentConstraint();
-            UpdateAnimator();
         }
 
         private void ReportStateChanges()
@@ -742,11 +724,6 @@ namespace Common.TransformPath
                 _lastReportedSpeedMultiplier = _queue.SpeedMultiplier;
                 PathExecutionBoundary.PublishQueueSpeed(_onSpeedChanged, this, _queue.SpeedMultiplier);
             }
-        }
-
-        private void UpdateAnimator()
-        {
-            _animatorView?.ApplyQueueMultiplier(_queue.SpeedMultiplier);
         }
 
         private float GetSpacing()

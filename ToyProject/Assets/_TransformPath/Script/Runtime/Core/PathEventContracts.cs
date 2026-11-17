@@ -85,13 +85,8 @@ namespace Common.TransformPath
         public float MoveDurationTargetValue { get; }
         public float MoveDurationAdjustDuration { get; }
         private readonly AnimationCurve _moveDurationAdjustCurve;
-        public bool UseTimeScaleAdjust { get; }
-        public float TimeScaleAdjustValue { get; }
-        public float TimeScaleAdjustDuration { get; }
-        private readonly AnimationCurve _timeScaleAdjustCurve;
         internal AnimationCurve MoveSpeedAdjustCurve => PathMovementSettingsUtility.CloneCurve(_moveSpeedAdjustCurve);
         internal AnimationCurve MoveDurationAdjustCurve => PathMovementSettingsUtility.CloneCurve(_moveDurationAdjustCurve);
-        internal AnimationCurve TimeScaleAdjustCurve => PathMovementSettingsUtility.CloneCurve(_timeScaleAdjustCurve);
         public IReadOnlyList<PathDelayedEventDefinition> DelayedEvents => _delayedEventsView;
 
         public PathEventDefinition(
@@ -104,10 +99,6 @@ namespace Common.TransformPath
             float moveDurationTargetValue,
             float moveDurationAdjustDuration,
             AnimationCurve moveDurationAdjustCurve,
-            bool useTimeScaleAdjust,
-            float timeScaleAdjustValue,
-            float timeScaleAdjustDuration,
-            AnimationCurve timeScaleAdjustCurve,
             IReadOnlyList<PathDelayedEventDefinition> delayedEvents = null)
         {
             EventName = eventName ?? string.Empty;
@@ -119,10 +110,6 @@ namespace Common.TransformPath
             MoveDurationTargetValue = moveDurationTargetValue;
             MoveDurationAdjustDuration = moveDurationAdjustDuration;
             _moveDurationAdjustCurve = PathMovementSettingsUtility.CloneCurve(moveDurationAdjustCurve);
-            UseTimeScaleAdjust = useTimeScaleAdjust;
-            TimeScaleAdjustValue = timeScaleAdjustValue;
-            TimeScaleAdjustDuration = timeScaleAdjustDuration;
-            _timeScaleAdjustCurve = PathMovementSettingsUtility.CloneCurve(timeScaleAdjustCurve);
 
             if (delayedEvents == null || delayedEvents.Count == 0)
             {
@@ -176,10 +163,6 @@ namespace Common.TransformPath
                 setting.MoveDurationTargetValue,
                 setting.MoveDurationAdjustDuration,
                 setting.MoveDurationAdjustCurve,
-                setting.UseTimeScaleAdjust,
-                setting.TimeScaleAdjustValue,
-                setting.TimeScaleAdjustDuration,
-                setting.TimeScaleAdjustCurve,
                 delayed);
         }
 
@@ -203,12 +186,6 @@ namespace Common.TransformPath
                 || !PathMovementSettingsUtility.AreSameCurve(
                     left._moveDurationAdjustCurve,
                     right._moveDurationAdjustCurve)
-                || left.UseTimeScaleAdjust != right.UseTimeScaleAdjust
-                || !Mathf.Approximately(left.TimeScaleAdjustValue, right.TimeScaleAdjustValue)
-                || !Mathf.Approximately(left.TimeScaleAdjustDuration, right.TimeScaleAdjustDuration)
-                || !PathMovementSettingsUtility.AreSameCurve(
-                    left._timeScaleAdjustCurve,
-                    right._timeScaleAdjustCurve)
                 || left.DelayedEvents.Count != right.DelayedEvents.Count)
                 return false;
 
@@ -290,11 +267,6 @@ namespace Common.TransformPath
 
             PathRuntimeEvent.SortByPosition(events);
             return new PathEventSourceSnapshot(events);
-        }
-
-        public bool Matches(IPathEventSource source)
-        {
-            return HasSameContent(Create(source));
         }
 
         internal bool HasSameContent(PathEventSourceSnapshot other)

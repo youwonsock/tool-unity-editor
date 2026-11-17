@@ -8,7 +8,6 @@ namespace Common.TransformPath
     /// Unity bridge for immutable path events. Authoring assets are converted
     /// before dispatch; the handler never reads an SO during a path tick.
     /// </summary>
-    [DefaultExecutionOrder(-200)]
     public sealed class PathEventHandler : MonoBehaviour, IPathRuntimeTickable, IPathRuntimeFaultHandler
     {
         private readonly PathEventScheduler _scheduler = new PathEventScheduler();
@@ -24,7 +23,6 @@ namespace Common.TransformPath
 
         public bool IsInitialized => _isInitialized;
         int IPathRuntimeTickable.RuntimeOrder => -200;
-        public bool IsControllingSpeed => _scalarAdjustment.Active;
         public ulong PlaybackId => _boundFollower == null
             ? 0UL
             : _boundFollower.PlaybackId;
@@ -109,7 +107,6 @@ namespace Common.TransformPath
 
             using var operation = PathExecutionBoundary.Enter();
             _currentFrameId = frameId;
-            UpdateTimeScale(unscaledDeltaTime, frameId);
             _scalarAdjustment.Tick(deltaTime, frameId);
             _scheduler.Advance(deltaTime, frameId);
 
@@ -234,8 +231,6 @@ namespace Common.TransformPath
         {
             _scheduler.Clear();
             _scalarAdjustment.Cancel();
-            PathTimeScaleCoordinator.Shared.Release(
-                GetOwnerId(_boundFollower, playbackId));
         }
 
         public void HandleEvent(PathEventSettingSO setting)
@@ -310,9 +305,6 @@ namespace Common.TransformPath
                 _scalarAdjustment.Cancel();
             PathEventRuntime.ApplyLifecycle(intent, follower);
 
-            if (definition.UseTimeScaleAdjust)
-                StartTimeScale(definition, follower);
-
             if (intent == EPathEventIntent.ChangeValue
                 || intent == EPathEventIntent.Resume)
             {
@@ -365,33 +357,6 @@ namespace Common.TransformPath
         {
             _scalarAdjustment.Start(follower, channel, target, duration, curve,
                 _currentFrameId > 0 ? _currentFrameId : Time.frameCount);
-        }
-
-        private void StartTimeScale(
-            PathEventDefinition definition,
-            IPathFollower follower)
-        {
-            PathTimeScaleCoordinator.Shared.Request(
-                GetOwnerId(follower, follower == null ? 0UL : follower.PlaybackId),
-                definition.TimeScaleAdjustValue,
-                definition.TimeScaleAdjustDuration,
-                definition.TimeScaleAdjustCurve,
-                _currentFrameId);
-        }
-
-        private void UpdateTimeScale(float unscaledDeltaTime, int frame)
-        {
-            PathTimeScaleCoordinator.Shared.Tick(unscaledDeltaTime, frame);
-        }
-
-        private static ulong GetOwnerId(
-            IPathFollower follower,
-            ulong fallbackPlaybackId)
-        {
-            if (follower is IPathPlaybackIdentity identity
-                && identity.PlaybackOwnerId != 0UL)
-                return identity.PlaybackOwnerId;
-            return fallbackPlaybackId;
         }
     }
 }

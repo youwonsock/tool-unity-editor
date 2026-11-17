@@ -38,12 +38,6 @@ namespace Common.TransformPath
         public float MoveDurationAdjustDuration;
         public AnimationCurve MoveDurationAdjustCurve = AnimationCurve.EaseInOut(0, 0, 1, 1);
 
-        [Header("타임 스케일 조정 사용")]
-        public bool UseTimeScaleAdjust;
-        public float TimeScaleAdjustValue;
-        public float TimeScaleAdjustDuration;
-        public AnimationCurve TimeScaleAdjustCurve = AnimationCurve.EaseInOut(0, 0, 1, 1);
-
         [Header("지연 이벤트 목록 (경로 상 다음 이벤트 트리거 시 취소됨)")]
         public bool UseDelayedEvents;
         public List<DelayedEventEntry> DelayedEvents = new List<DelayedEventEntry>();
