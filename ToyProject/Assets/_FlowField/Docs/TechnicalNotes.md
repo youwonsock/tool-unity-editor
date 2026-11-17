@@ -111,7 +111,7 @@
 - Volume은 방향·속도·탈출 벡터를 저장하지 않고 NextCell과 면 인덱스(`_escapeFaces`)에서 재구성합니다. Surface는 배열을 `FlowFieldBakeBlob`으로 `byte[]`에 비트 그대로 저장합니다.
 - 저장에 실패하면 기존 Asset의 내용, Revision, GUID를 유지합니다.
 - 런타임은 Asset에 구운 Goal을 그대로 씁니다. Init은 Goal Transform 위치가 구운 Goal과 같은지 검사합니다.
-- 참조가 빈 Manager의 Bake 대상은 씬 GUID와 Manager ID로 만든 고정 경로입니다. 그 경로의 같은 형식 Asset은 이 Manager의 것으로 보고 덮어씁니다.
+- 참조가 빈 Manager의 Bake 대상은 씬 옆, 씬 이름의 폴더에 씬 GUID와 Manager ID로 만든 고정 경로(`<씬 폴더>/<씬 이름>/<씬GUID>_<ManagerID>_<이름>_<StaticBake|VolumeBake>.asset`)입니다. 참조가 있으면 그 Asset 경로에 씁니다. 그 경로의 같은 형식 Asset은 이 Manager의 것으로 보고 덮어씁니다.
 
 ## Editor 표시
 

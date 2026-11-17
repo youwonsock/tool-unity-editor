@@ -542,7 +542,7 @@ namespace Common.FlowField.Editor
                 // Read the published field before any asset changes.
                 Action<TAsset> apply = export();
                 assetPath = target.ResolvePath(manager);
-                FlowFieldBakeAssetUtility.CreateBakeFolder();
+                FlowFieldBakeAssetUtility.CreateBakeFolder(assetPath);
                 // A failed bake reverts down to this group, so it must hold nothing older.
                 Undo.IncrementCurrentGroup();
                 undoGroup = Undo.GetCurrentGroup();
@@ -754,8 +754,6 @@ namespace Common.FlowField.Editor
                 throw new IOException($"Could not save {AssetDatabase.GetAssetPath(asset)}.");
         }
 
-        private const string BAKE_DIRECTORY = "Assets/_FlowField/Settings";
-
         internal static string ResolveStaticAssetPath(FlowFieldManager manager)
         {
             if (manager == null)
@@ -793,15 +791,23 @@ namespace Common.FlowField.Editor
             string managerId = id.targetObjectId != 0
                 ? id.targetObjectId.ToString()
                 : manager.GetInstanceID().ToString();
-            string sceneGuid = AssetDatabase.AssetPathToGUID(manager.gameObject.scene.path);
+            string scenePath = manager.gameObject.scene.path;
+            string sceneGuid = AssetDatabase.AssetPathToGUID(scenePath);
             if (string.IsNullOrEmpty(sceneGuid))
                 throw new InvalidOperationException("씬 GUID를 확인할 수 없습니다. 씬을 저장한 뒤 다시 시도하세요.");
-            return $"{BAKE_DIRECTORY}/{sceneGuid}_{managerId}_{manager.name}_{suffix}.asset";
+            // Next to the scene, in a folder named after it, as Unity keeps lightmaps.
+            string sceneFolder = Path.GetDirectoryName(scenePath)?.Replace('\\', '/');
+            string bakeFolder = $"{sceneFolder}/{Path.GetFileNameWithoutExtension(scenePath)}";
+            return $"{bakeFolder}/{sceneGuid}_{managerId}_{manager.name}_{suffix}.asset";
         }
 
-        internal static void CreateBakeFolder()
+        /// <summary>Creates the folders of a project asset path that do not exist yet.</summary>
+        internal static void CreateBakeFolder(string assetPath)
         {
-            string[] parts = BAKE_DIRECTORY.Split('/');
+            string folder = Path.GetDirectoryName(assetPath)?.Replace('\\', '/');
+            if (string.IsNullOrEmpty(folder))
+                throw new InvalidOperationException($"Bake target '{assetPath}' has no folder.");
+            string[] parts = folder.Split('/');
             string current = parts[0];
             for (int i = 1; i < parts.Length; i++)
             {
