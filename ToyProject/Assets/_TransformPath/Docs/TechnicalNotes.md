@@ -37,6 +37,8 @@ Runtime 폴더는 역할로 나눕니다: `Core`(계약, 상수, 이벤트 정�
 
 - `PathData`는 Transform 제어점을 곡선별로 샘플링한 `PathPolyline`을 발행합니다. 위치는 누적 거리로 보간하므로 진행률이 일정하면 샘플 사이에서 속도가 일정합니다. 스플라인은 매개변수로 샘플링하므로 샘플 수가 적으면 구간마다 속도가 달라집니다(테스트 기준 500샘플에서 최대 편차 0.05% 이하).
 - `MultiPathData`는 `PathData`만 구간으로 받습니다. 자식의 `PathChanged`를 구독해 자식이 바뀌면 다시 빌드하므로 자식을 폴링하지 않습니다. 빌드할 때 아직 빌드되지 않은 자식을 먼저 빌드해, Awake 순서에 기대지 않습니다.
+- Provider는 빌드에 실패하거나 파괴되면 준비 상태를 잃고 `PathChanged`로 알립니다. 이 경로를 쓰는 Follower는 다음 이동 Tick에서 멈추고, Queue는 멤버를 내보내며, MultiPathData는 오류를 다시 기록하지 않고 사용 불가가 됩니다. 실패 전과 같은 내용으로 복구되어도 알리므로 MultiPathData가 함께 돌아옵니다.
+- `PathData.MovementSettings`는 빌드 뒤에는 게시된 값을 돌려줍니다. 값을 대입하면 즉시 다시 빌드합니다.
 - `PathRoute`는 구간 배열(샘플러, 시작 거리, 길이, 이동 설정, 속도 보존, 이벤트)입니다. Single과 Sequence는 Provider가 리비전별로 하나를 캐시해 Follower들이 함께 쓰고, Aggregate는 Provider 전체를 한 구간으로 만듭니다.
 - `PathPlaybackCursor`는 위치, 잔여 시간, Speed, Duration을 소유합니다. 완료 판정은 이벤트 처리 뒤의 현재 Duration을 씁니다.
 - `PathMovementSettings`는 생성할 때 시간 곡선을 한 번 복사해 밖으로 내주지 않습니다. 그래서 여러 Follower가 방어 복사 없이 공유합니다. TimeBased의 빈 곡선은 선형으로 해석합니다.
