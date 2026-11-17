@@ -169,14 +169,12 @@ namespace Common.FlowField
     /// only immutable base navigation data; default direction and modifiers
     /// remain runtime inputs and are composed after loading the snapshot.
     /// </summary>
-    public sealed class FlowFieldStaticBakeData : ScriptableObject, ISerializationCallbackReceiver
+    public sealed class FlowFieldStaticBakeData : FlowFieldBakeAsset, ISerializationCallbackReceiver
     {
         internal const int CURRENT_FORMAT_VERSION = 6;
         private const float EPSILON = 0.0001f;
         private const int MinSentinel = -3;
 
-        [SerializeField] private int _formatVersion;
-        [SerializeField] private int _revision;
         [SerializeField] private FlowFieldSpaceMode _spaceMode = FlowFieldSpaceMode.Surface2D;
         [SerializeField] private Vector3 _gridOriginWorld;
         [SerializeField] private int _width;
@@ -221,30 +219,18 @@ namespace Common.FlowField
         [NonSerialized] private int _validatedContentGeneration = -1;
         [NonSerialized] private bool _validationResult;
         [NonSerialized] private string _validationReason = string.Empty;
-        [NonSerialized] private int _contentGeneration;
 
-        public int FormatVersion => _formatVersion;
-        public int Revision => _revision;
-        public int ContentGeneration => _contentGeneration;
+        private protected override int CurrentFormatVersion => CURRENT_FORMAT_VERSION;
         public bool HasGoal => _hasGoal;
         public Vector3 RequestedGoalWorld => _requestedGoalWorld;
         public float GoalInfluenceRadius => _goalInfluenceRadius;
         public int ResolvedGoalIndex => _resolvedGoalIndex;
 
-        private void OnValidate()
+        // Serialized inspector edits can change a valid snapshot without going
+        // through Apply(). The immutable runtime cache never outlives that
+        // change; the next request validates and rebuilds the view.
+        private protected override void OnContentChanged()
         {
-            unchecked { _contentGeneration++; }
-            // Serialized inspector edits can change a valid snapshot without
-            // going through Apply(). Never let the immutable runtime cache
-            // outlive that authoring change; the next request will validate
-            // and rebuild the view from the edited arrays.
-            _snapshotCache = null;
-            _snapshotCacheRevision = -1;
-        }
-
-        private void OnEnable()
-        {
-            unchecked { _contentGeneration++; }
             _snapshotCache = null;
             _snapshotCacheRevision = -1;
         }
@@ -263,9 +249,7 @@ namespace Common.FlowField
             _surfaceNormals = FlowFieldBakeBlob.Unpack<Vector3>(_surfaceNormalData);
             _escapeDirections = FlowFieldBakeBlob.Unpack<Vector3>(_escapeDirectionData);
             _goalDirections = FlowFieldBakeBlob.Unpack<Vector3>(_goalDirectionData);
-            unchecked { _contentGeneration++; }
-            _snapshotCache = null;
-            _snapshotCacheRevision = -1;
+            MarkContentChanged();
         }
 
         internal float[] SurfaceHeights => _surfaceHeights;
@@ -290,11 +274,11 @@ namespace Common.FlowField
         // milliseconds at the largest grids, so an unchanged asset answers once.
         internal bool Validate(out string reason)
         {
-            if (_validatedRevision != _revision || _validatedContentGeneration != _contentGeneration)
+            if (_validatedRevision != Revision || _validatedContentGeneration != ContentGeneration)
             {
                 _validationResult = ValidateContents(out _validationReason);
-                _validatedRevision = _revision;
-                _validatedContentGeneration = _contentGeneration;
+                _validatedRevision = Revision;
+                _validatedContentGeneration = ContentGeneration;
             }
             reason = _validationReason;
             return _validationResult;
@@ -303,8 +287,8 @@ namespace Common.FlowField
         private bool ValidateContents(out string reason)
         {
             reason = string.Empty;
-            if (_formatVersion != CURRENT_FORMAT_VERSION)
-                return Fail(out reason, $"FlowField Static Bake format {_formatVersion} is unsupported; ReBake is required.");
+            if (!HasCurrentFormat)
+                return Fail(out reason, $"FlowField Static Bake format {FormatVersion} is unsupported; ReBake is required.");
             if (_spaceMode != FlowFieldSpaceMode.Surface2D)
                 return Fail(out reason, "FlowField Static Bake is not a Surface2D snapshot.");
             if (!FlowFieldBakeBoundsUtility.TryValidateCellCount(_width, _depth, out int count)
@@ -389,7 +373,7 @@ namespace Common.FlowField
                 throw new InvalidOperationException(obstacleReason);
 
             if (_snapshotCache != null
-                && _snapshotCacheRevision == _revision
+                && _snapshotCacheRevision == Revision
                 && _snapshotCache.MatchesSurface(settings, out _)
                 && _snapshotCache.MatchesObstacles(
                     obstacleLayer,
@@ -406,7 +390,7 @@ namespace Common.FlowField
                 checkHeight,
                 centerOffset,
                 clearance,
-                _revision,
+                Revision,
                 _hasGoal,
                 _requestedGoalWorld,
                 _goalInfluenceRadius,
@@ -418,7 +402,7 @@ namespace Common.FlowField
                 _goalFlags,
                 _goalDirections,
                 _nextCells);
-            _snapshotCacheRevision = _revision;
+            _snapshotCacheRevision = Revision;
             return _snapshotCache;
         }
 
@@ -621,12 +605,6 @@ namespace Common.FlowField
                 _gridOriginWorld.z + (z + 0.5f) * _cellSize);
         }
 
-        private static bool Fail(out string reason, string message)
-        {
-            reason = message;
-            return false;
-        }
-
         private static bool ApproximatelyUnit(Vector3 value)
             => Mathf.Abs(value.sqrMagnitude - 1f) <= 0.01f;
 
@@ -685,7 +663,7 @@ namespace Common.FlowField
                 _surfaceFlags,
                 _surfaceNeighborMasks,
                 valid,
-                _revision);
+                Revision);
         }
 
         internal void CopyToWorkspace(FlowFieldGridSpace grid, FlowFieldSurfaceWorkspace workspace)
@@ -716,7 +694,6 @@ namespace Common.FlowField
             float goalInfluenceRadius,
             int resolvedGoalIndex)
         {
-            _formatVersion = CURRENT_FORMAT_VERSION;
             _spaceMode = FlowFieldSpaceMode.Surface2D;
             _gridOriginWorld = settings.Grid.Origin;
             _width = settings.Grid.Width;
@@ -779,6 +756,8 @@ namespace Common.FlowField
             FlowFieldStaticBakeData candidate = ScriptableObject.CreateInstance<FlowFieldStaticBakeData>();
             try
             {
+                // The candidate is checked as the bake it would become: current format.
+                candidate.MarkBaked();
                 candidate.AssignHeader(settings, obstacleLayer, checkHeight, centerOffset, clearance,
                     hasGoal, requestedGoalWorld, goalInfluenceRadius, resolvedGoalIndex);
                 candidate._surfaceHeights = surfaceHeights;
@@ -797,11 +776,7 @@ namespace Common.FlowField
 
                 _snapshotCache = null;
                 _snapshotCacheRevision = -1;
-                unchecked
-                {
-                    _revision++;
-                    _contentGeneration++;
-                }
+                MarkBaked();
                 AssignHeader(settings, obstacleLayer, checkHeight, centerOffset, clearance,
                     hasGoal, requestedGoalWorld, goalInfluenceRadius, resolvedGoalIndex);
                 _surfaceHeights = surfaceHeights;

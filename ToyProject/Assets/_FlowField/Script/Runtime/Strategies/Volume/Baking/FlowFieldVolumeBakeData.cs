@@ -6,12 +6,10 @@ namespace Common.FlowField
     [CreateAssetMenu(
         fileName = "FlowFieldVolumeBakeData",
         menuName = "FlowField/Volume 3D Bake Data")]
-    public sealed class FlowFieldVolumeBakeData : ScriptableObject, ISerializationCallbackReceiver
+    public sealed class FlowFieldVolumeBakeData : FlowFieldBakeAsset, ISerializationCallbackReceiver
     {
         public const int CURRENT_FORMAT_VERSION = 6;
 
-        [SerializeField] private int _formatVersion = CURRENT_FORMAT_VERSION;
-        [SerializeField] private int _revision;
         [SerializeField] private Vector3 _gridOriginWorld;
         [SerializeField] private int _width;
         [SerializeField] private int _height;
@@ -44,29 +42,19 @@ namespace Common.FlowField
         [NonSerialized] private float _validatedObstacleClearance;
         [NonSerialized] private int _validatedContentGeneration = -1;
         [NonSerialized] private bool _hasValidatedSignature;
-        [NonSerialized] private int _contentGeneration;
         [NonSerialized] private Vector3[] _directions = Array.Empty<Vector3>();
         [NonSerialized] private float[] _speeds = Array.Empty<float>();
         [NonSerialized] private Vector3[] _escapeDirections = Array.Empty<Vector3>();
 
-        public int FormatVersion => _formatVersion;
-        public int Revision => _revision;
-        public int ContentGeneration => _contentGeneration;
+        private protected override int CurrentFormatVersion => CURRENT_FORMAT_VERSION;
         public bool HasGoal => _hasGoal;
         public Vector3 RequestedGoalWorld => _requestedGoalWorld;
         public float GoalInfluenceRadius => _goalInfluenceRadius;
         public int ResolvedGoalIndex => _resolvedGoalIndex;
 
-        private void OnValidate()
+        private protected override void OnContentChanged()
         {
-            unchecked { _contentGeneration++; }
             _validatedRevision = -1;
-            _hasValidatedSignature = false;
-        }
-
-        private void OnEnable()
-        {
-            unchecked { _contentGeneration++; }
             _hasValidatedSignature = false;
         }
 
@@ -91,8 +79,8 @@ namespace Common.FlowField
             out string reason)
         {
             reason = string.Empty;
-            if (_formatVersion != CURRENT_FORMAT_VERSION)
-                return Fail(out reason, $"FlowField Volume Bake format {_formatVersion} is unsupported; ReBake is required.");
+            if (!HasCurrentFormat)
+                return Fail(out reason, $"FlowField Volume Bake format {FormatVersion} is unsupported; ReBake is required.");
             if (_width <= 0 || _height <= 0 || _depth <= 0
                 || !FlowFieldGridSpace.IsFinite(_gridOriginWorld)
                 || !FlowFieldGridSpace.IsFinite(_cellSize)
@@ -133,8 +121,8 @@ namespace Common.FlowField
                 return false;
 
             view = new FlowFieldVolumeBakeValidationView(
-                _formatVersion,
-                _revision,
+                FormatVersion,
+                Revision,
                 _width,
                 _height,
                 _depth,
@@ -167,8 +155,8 @@ namespace Common.FlowField
         {
             reason = string.Empty;
             if (_hasValidatedSignature
-                && _validatedRevision == _revision
-                && _validatedContentGeneration == _contentGeneration
+                && _validatedRevision == Revision
+                && _validatedContentGeneration == ContentGeneration
                 && _validatedGrid.MatchesBounds(grid)
                 && FlowFieldBakeBoundsUtility.Approximately(_validatedBounds, bounds)
                 && _validatedObstacleLayer == obstacleLayer.value
@@ -188,12 +176,12 @@ namespace Common.FlowField
                     return Fail(out reason, validator.Error);
             }
 
-            _validatedRevision = _revision;
+            _validatedRevision = Revision;
             _validatedGrid = grid;
             _validatedBounds = bounds;
             _validatedObstacleLayer = obstacleLayer.value;
             _validatedObstacleClearance = obstacleClearance;
-            _validatedContentGeneration = _contentGeneration;
+            _validatedContentGeneration = ContentGeneration;
             _hasValidatedSignature = true;
             return true;
         }
@@ -243,7 +231,7 @@ namespace Common.FlowField
             blocked = null;
             directions = null;
             speeds = null;
-            if (_formatVersion != CURRENT_FORMAT_VERSION
+            if (!HasCurrentFormat
                 || !grid.IsValid
                 || grid.SpaceMode != FlowFieldSpaceMode.Volume3D
                 || _width != grid.Width || _height != grid.Height || _depth != grid.Depth
@@ -342,7 +330,6 @@ namespace Common.FlowField
                     out reason))
                 throw new InvalidOperationException(reason);
 
-            _formatVersion = CURRENT_FORMAT_VERSION;
             _gridOriginWorld = grid.Origin;
             _width = grid.Width;
             _height = grid.Height;
@@ -363,14 +350,13 @@ namespace Common.FlowField
             _defaultDirection = defaultDirection;
             _escapeFaces = escapeFaces;
             RebuildDerivedArrays();
-            _revision++;
-            unchecked { _contentGeneration++; }
-            _validatedRevision = _revision;
+            MarkBaked();
+            _validatedRevision = Revision;
             _validatedGrid = grid;
             _validatedBounds = bounds;
             _validatedObstacleLayer = obstacleLayer.value;
             _validatedObstacleClearance = obstacleClearance;
-            _validatedContentGeneration = _contentGeneration;
+            _validatedContentGeneration = ContentGeneration;
             _hasValidatedSignature = true;
         }
 
@@ -573,11 +559,6 @@ namespace Common.FlowField
             return FlowFieldVolumeBakeValidator.ValidatePayload(in view, grid, out reason);
         }
 
-        private static bool Fail(out string reason, string message)
-        {
-            reason = message;
-            return false;
-        }
 
     }
 }
