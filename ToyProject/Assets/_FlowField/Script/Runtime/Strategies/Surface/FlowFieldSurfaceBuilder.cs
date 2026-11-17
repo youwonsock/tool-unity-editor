@@ -40,13 +40,9 @@ namespace Common.FlowField
                 ? _fieldStore.Field
                 : null;
 
-        // While a build runs, the published grid; otherwise the grid of the
-        // latest build or, before the first one, of the latest request.
+        // The latest request's grid, which the next build uses, as in Volume3D.
         public FlowFieldGridSpace LatestGrid
-            => _session.IsRebuilding && _fieldStore.Grid.IsValid ? _fieldStore.Grid
-                : _state.Grid.IsValid ? _state.Grid
-                : _requests.HasLatest ? _requests.Latest.SurfaceSettings.Grid
-                : default;
+            => _requests.HasLatest ? _requests.Latest.SurfaceSettings.Grid : _state.Grid;
 
         private bool HasCompatibleCommittedSource()
             => !_committedRequest.HasValue

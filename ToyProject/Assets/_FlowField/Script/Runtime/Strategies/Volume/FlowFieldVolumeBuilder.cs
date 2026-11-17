@@ -61,7 +61,8 @@ namespace Common.FlowField
                 ? _committed
                 : null;
 
-        public FlowFieldGridSpace LatestGrid => Grid;
+        // The latest request's grid, which the next build uses, as in Surface2D.
+        public FlowFieldGridSpace LatestGrid => _requests.HasLatest ? _requests.Latest.Grid : Grid;
         internal long TrackedMemoryBytes
         {
             get

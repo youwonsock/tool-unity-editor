@@ -67,7 +67,7 @@ namespace Common.FlowField
         // submits the newer configuration before it begins.
         private void SubmitOrOwe(in FlowFieldManagerConfig config, bool immediately)
         {
-            if (immediately || !_session.IsRebuilding)
+            if (immediately || !HasActiveBuild)
             {
                 _configOwed = false;
                 Submit(CreateCurrentRequest(in config));

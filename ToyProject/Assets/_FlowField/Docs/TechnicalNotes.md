@@ -22,7 +22,7 @@ Player 측정(`PlayerProbe` 폴더, `Tools/run-player-probe.sh`)은 Editor와 `F
 - 모드마다 다른 일은 `IFlowFieldSpaceBuilder`(`FlowFieldSurfaceBuilder`, `FlowFieldVolumeBuilder`)가 맡습니다. 자기 멤버 21개와 상속한 `Dispose`입니다.
   - 요청 만들기(`Initialize`, `SubmitConfig`)
   - 빌드 단계(`TryBeginBuild`·`StepBuild`·`PublishBuild`, `BuildPolicy`)
-  - 게시 필드와 격자(`PublishedField`·`LatestGrid`·`TryGetFieldInfo`), 게시 필드보다 새 셀 정보(`LatestCells`: Surface는 진행 중인 빌드의 기본 단계 결과, Volume은 없음)
+  - 게시 필드와 격자(`PublishedField`·`TryGetFieldInfo`, `LatestGrid` = 마지막 요청의 Grid로 `ClampPositionToGrid`가 씀), 게시 필드보다 새 셀 정보(`LatestCells`: Surface는 진행 중인 빌드의 기본 단계 결과, Volume은 없음)
   - 입력 반영(`ApplyObstacleChange`·`ApplyModifierChange`·`CreateModifierArea`)
   - 수명 훅(`CancelWork`·`DropComputedState`·`ReleaseResources`)
 - Manager는 모드별 정적 묘사 `FlowFieldSpaceStrategy.For(mode)`로 세션 생성, 검증, 격자, Bounds 스냅을 고릅니다. Builder는 `FlowFieldManagerConfig` 스냅샷으로 검증(`Validate`), 격자(`TryCreateLayout`), 요청을 스스로 만듭니다. 공통 검사는 `FlowFieldManagerConfig.ValidateShared`가 같은 순서와 메시지로 합니다.

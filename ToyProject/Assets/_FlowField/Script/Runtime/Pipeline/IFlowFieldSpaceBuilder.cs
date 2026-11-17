@@ -66,7 +66,8 @@ namespace Common.FlowField
         // What the mode knows about its cells beyond the published field, for
         // the shared sample safety rule; null when it knows nothing newer.
         IFlowFieldLatestCells LatestCells { get; }
-        // The grid ClampPositionToGrid uses, valid once a request exists.
+        // The latest request's grid: ClampPositionToGrid uses it, before and
+        // after the build that publishes it. Valid once a request exists.
         FlowFieldGridSpace LatestGrid { get; }
         bool TryGetFieldInfo(out FlowFieldFieldInfo info);
 
