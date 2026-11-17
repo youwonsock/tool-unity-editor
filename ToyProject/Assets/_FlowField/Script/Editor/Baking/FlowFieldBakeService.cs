@@ -103,10 +103,12 @@ namespace Common.FlowField.Editor
             Bounds snapped = FlowFieldSpaceStrategy.For(config.SpaceMode).SnapBounds(localBounds, config.Grid.CellSize);
             if (FlowFieldBakeBoundsUtility.Approximately(config.Grid.BakeBoundsLocal, snapped))
                 return;
+            // One Undo step under undoName; ApplyModifiedProperties would add a
+            // second, separately named one.
+            Undo.RecordObject(manager, undoName);
             var serialized = new SerializedObject(manager);
             serialized.FindProperty(FlowFieldManager.PropertyNames.BakeBoundsLocal).boundsValue = snapped;
-            serialized.ApplyModifiedProperties();
-            Undo.SetCurrentGroupName(undoName);
+            serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 
         // A bake assigns or clears its asset without an Undo step.
