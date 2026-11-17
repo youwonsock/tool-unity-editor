@@ -23,6 +23,7 @@ Player 측정(`PlayerProbe` 폴더, `Tools/run-player-probe.sh`)은 Editor와 `F
   - 요청 만들기(`Initialize`, `SubmitConfig`)
   - 빌드 단계(`TryBeginBuild`·`StepBuild`·`PublishBuild`, `BuildPolicy`)
   - 게시 필드와 격자(`PublishedField`·`LatestGrid`·`TryGetFieldInfo`), 경로 안전 검사(`TryOverride`)
+    - 남은 차이: 두 모드 모두 불확실 영역의 셀은 멈추고, 다음 칸이 막히거나 불확실하면 멈춥니다. 세부 규칙은 아직 모드마다 다릅니다. Volume은 탈출 경로와 Default Direction 경로도 검사하고, Surface는 다음 빌드의 스테이징 데이터(최신 막힘·지면 연결)를 함께 봅니다. 묶으면 멈추는 조건이 바뀌므로 따로 결정할 일로 남겼습니다.
   - 입력 반영(`ApplyObstacleChange`·`ApplyModifierChange`·`CreateModifierArea`)
   - 수명 훅(`CancelWork`·`DropComputedState`·`ReleaseResources`)
 - Manager는 모드별 정적 묘사 `FlowFieldSpaceStrategy.For(mode)`로 세션 생성, 검증, 격자, Bounds 스냅을 고릅니다. Builder는 `FlowFieldManagerConfig` 스냅샷으로 검증(`Validate`), 격자(`TryCreateLayout`), 요청을 스스로 만듭니다. 공통 검사는 `FlowFieldManagerConfig.ValidateShared`가 같은 순서와 메시지로 합니다.
