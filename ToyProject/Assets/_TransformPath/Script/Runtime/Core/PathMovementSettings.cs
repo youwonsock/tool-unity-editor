@@ -24,9 +24,12 @@ namespace Common.TransformPath
         {
             MoveType = moveType;
             Value = value;
-            _timeCurve = moveType == EPathMoveType.TimeBased
-                ? PathValueUtility.CloneCurve(timeCurve) ?? AnimationCurve.Linear(0f, 0f, 1f, 1f)
-                : null;
+            // Unity loads an unset curve field as an empty curve. Both mean linear.
+            _timeCurve = moveType != EPathMoveType.TimeBased
+                ? null
+                : timeCurve == null || timeCurve.length == 0
+                    ? AnimationCurve.Linear(0f, 0f, 1f, 1f)
+                    : PathValueUtility.CloneCurve(timeCurve);
         }
 
         public static PathMovementSettings Time(float duration, AnimationCurve curve = null)

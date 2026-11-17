@@ -154,10 +154,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fa5fe1bbda4ab594d8f6e01c0e321802, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _startupProviderObject: {fileID: 0}
-  _playOnStart: 0
-  _startupLoop: 0
   _eventReceiver: {fileID: 7857241934567123456}
+  _rotateToPathDirection: 1
+  _characterController: {fileID: 0}
+  _suppressCharacterControllerDuringPlayback: 1
 --- !u!114 &5437495982911894610
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -176,6 +176,9 @@ MonoBehaviour:
   _useManagerSpacing: 1
   _enableGradualSlowdown: 1
   _enableOvertakeProtection: 1
+  _resumeMovementDelay: 0.1
+  _unblockHysteresis: 0.3
+  _speedSmoothRate: 5
 --- !u!1 &964567102779225824
 GameObject:
   m_ObjectHideFlags: 0
@@ -299,9 +302,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fa5fe1bbda4ab594d8f6e01c0e321802, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _startupProviderObject: {fileID: 0}
-  _startupLoop: 0
   _eventReceiver: {fileID: 7857241934567123456}
+  _rotateToPathDirection: 1
+  _characterController: {fileID: 0}
+  _suppressCharacterControllerDuringPlayback: 1
 --- !u!114 &7119315875045243401
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -320,6 +324,9 @@ MonoBehaviour:
   _useManagerSpacing: 1
   _enableGradualSlowdown: 1
   _enableOvertakeProtection: 1
+  _resumeMovementDelay: 0.1
+  _unblockHysteresis: 0.3
+  _speedSmoothRate: 5
 --- !u!1 &966396877587928619
 GameObject:
   m_ObjectHideFlags: 0
@@ -443,9 +450,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fa5fe1bbda4ab594d8f6e01c0e321802, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _startupProviderObject: {fileID: 0}
-  _startupLoop: 0
   _eventReceiver: {fileID: 7857241934567123456}
+  _rotateToPathDirection: 1
+  _characterController: {fileID: 0}
+  _suppressCharacterControllerDuringPlayback: 1
 --- !u!114 &4355684901334086907
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -464,6 +472,9 @@ MonoBehaviour:
   _useManagerSpacing: 1
   _enableGradualSlowdown: 1
   _enableOvertakeProtection: 1
+  _resumeMovementDelay: 0.1
+  _unblockHysteresis: 0.3
+  _speedSmoothRate: 5
 --- !u!1 &1207185434881250682
 GameObject:
   m_ObjectHideFlags: 0
@@ -649,9 +660,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fa5fe1bbda4ab594d8f6e01c0e321802, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _startupProviderObject: {fileID: 0}
-  _startupLoop: 0
   _eventReceiver: {fileID: 7857241934567123456}
+  _rotateToPathDirection: 1
+  _characterController: {fileID: 0}
+  _suppressCharacterControllerDuringPlayback: 1
 --- !u!114 &2828592278171850358
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -670,6 +682,9 @@ MonoBehaviour:
   _useManagerSpacing: 1
   _enableGradualSlowdown: 1
   _enableOvertakeProtection: 1
+  _resumeMovementDelay: 0.1
+  _unblockHysteresis: 0.3
+  _speedSmoothRate: 5
 --- !u!1 &1529576719824187706
 GameObject:
   m_ObjectHideFlags: 0
@@ -929,9 +944,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fa5fe1bbda4ab594d8f6e01c0e321802, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _startupProviderObject: {fileID: 0}
-  _startupLoop: 0
   _eventReceiver: {fileID: 7857241934567123456}
+  _rotateToPathDirection: 1
+  _characterController: {fileID: 0}
+  _suppressCharacterControllerDuringPlayback: 1
 --- !u!1 &2411843356809523431
 GameObject:
   m_ObjectHideFlags: 0
@@ -1055,8 +1071,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: de7c5457100feba4b89be1c636b6b4ce, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &3050940385459170216
 GameObject:
   m_ObjectHideFlags: 0
@@ -1339,9 +1355,25 @@ MonoBehaviour:
   _segments:
   - _providerObject: {fileID: 830505861753064085}
     _movementSource: 0
+    _moveType: 0
+    _moveValue: 0
+    _timeCurve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
     _preservePreviousSpeed: 0
   - _providerObject: {fileID: 3101732148213765793}
     _movementSource: 0
+    _moveType: 0
+    _moveValue: 0
+    _timeCurve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
     _preservePreviousSpeed: 1
   _autoLinkPathPoints: 1
   _multiPathLineWidth: 2
@@ -1617,7 +1649,12 @@ MonoBehaviour:
   _curveType: 2
   _moveType: 1
   _moveValue: 3
-  _timeCurve: {fileID: 0}
+  _timeCurve:
+    serializedVersion: 2
+    m_Curve: []
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
   _showPathInEditor: 1
   _previewSamplingType: 0
   _previewSampleCount: 10
@@ -2145,9 +2182,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fa5fe1bbda4ab594d8f6e01c0e321802, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _startupProviderObject: {fileID: 0}
-  _startupLoop: 0
   _eventReceiver: {fileID: 7857241934567123456}
+  _rotateToPathDirection: 1
+  _characterController: {fileID: 0}
+  _suppressCharacterControllerDuringPlayback: 1
 --- !u!114 &1548854285891510683
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2166,6 +2204,9 @@ MonoBehaviour:
   _useManagerSpacing: 1
   _enableGradualSlowdown: 1
   _enableOvertakeProtection: 1
+  _resumeMovementDelay: 0.1
+  _unblockHysteresis: 0.3
+  _speedSmoothRate: 5
 --- !u!1 &5336906050488433844
 GameObject:
   m_ObjectHideFlags: 0
@@ -2237,7 +2278,12 @@ MonoBehaviour:
   _curveType: 0
   _moveType: 1
   _moveValue: 2
-  _timeCurve: {fileID: 0}
+  _timeCurve:
+    serializedVersion: 2
+    m_Curve: []
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
   _showPathInEditor: 1
   _previewSamplingType: 0
   _previewSampleCount: 10
@@ -2264,6 +2310,14 @@ MonoBehaviour:
   _segments:
   - _providerObject: {fileID: 5616179923128869812}
     _movementSource: 0
+    _moveType: 0
+    _moveValue: 0
+    _timeCurve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
     _preservePreviousSpeed: 0
   _autoLinkPathPoints: 1
   _multiPathLineWidth: 2
@@ -2615,9 +2669,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fa5fe1bbda4ab594d8f6e01c0e321802, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _startupProviderObject: {fileID: 0}
-  _startupLoop: 1
   _eventReceiver: {fileID: 7857241934567123456}
+  _rotateToPathDirection: 1
+  _characterController: {fileID: 0}
+  _suppressCharacterControllerDuringPlayback: 1
 --- !u!1 &6494991109688495073
 GameObject:
   m_ObjectHideFlags: 0
@@ -2999,9 +3054,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fa5fe1bbda4ab594d8f6e01c0e321802, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _startupProviderObject: {fileID: 0}
-  _startupLoop: 0
   _eventReceiver: {fileID: 7857241934567123456}
+  _rotateToPathDirection: 1
+  _characterController: {fileID: 0}
+  _suppressCharacterControllerDuringPlayback: 1
 --- !u!114 &3600725696844987565
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3020,6 +3076,9 @@ MonoBehaviour:
   _useManagerSpacing: 1
   _enableGradualSlowdown: 1
   _enableOvertakeProtection: 1
+  _resumeMovementDelay: 0.1
+  _unblockHysteresis: 0.3
+  _speedSmoothRate: 5
 --- !u!1 &7924782285320085249
 GameObject:
   m_ObjectHideFlags: 0

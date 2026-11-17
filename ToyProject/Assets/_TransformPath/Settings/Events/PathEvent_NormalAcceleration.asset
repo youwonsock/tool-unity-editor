@@ -13,10 +13,11 @@ MonoBehaviour:
   m_Name: PathEvent_NormalAcceleration
   m_EditorClassIdentifier: 
   EventName: Acceleration
-  UseModifyPathMoveSpeed: 1
-  MoveSpeedTargetValue: 4
-  MoveSpeedAdjustDuration: 0
-  MoveSpeedAdjustCurve:
+  Lifecycle: 0
+  UseSpeedChange: 1
+  SpeedTarget: 4
+  SpeedBlendTime: 0
+  SpeedBlendCurve:
     serializedVersion: 2
     m_Curve:
     - serializedVersion: 3
@@ -40,10 +41,10 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  UseModifyPathMoveDuration: 0
-  MoveDurationTargetValue: 5
-  MoveDurationAdjustDuration: 0
-  MoveDurationAdjustCurve:
+  UseDurationChange: 0
+  DurationTarget: 5
+  DurationBlendTime: 0
+  DurationBlendCurve:
     serializedVersion: 2
     m_Curve:
     - serializedVersion: 3
@@ -67,32 +68,4 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  UseTimeScaleAdjust: 0
-  TimeScaleAdjustValue: 0
-  TimeScaleAdjustDuration: 0
-  TimeScaleAdjustCurve:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 0
-      value: 0
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    - serializedVersion: 3
-      time: 1
-      value: 1
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
-  UseDelayedEvents: 0
   DelayedEvents: []
