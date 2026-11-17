@@ -102,30 +102,6 @@ namespace Common.FlowField
             return true;
         }
 
-
-        public static bool BuildGoal(
-            FlowFieldGridSpace grid,
-            FlowFieldSurfaceData surface,
-            FlowFieldSurfaceWorkspace workspace,
-            int requestedGoalX,
-            int requestedGoalZ,
-            float influenceRadius,
-            out int resolvedGoalIndex)
-        {
-            if (!PrepareGoal(
-                    grid,
-                    surface,
-                    workspace,
-                    requestedGoalX,
-                    requestedGoalZ,
-                    influenceRadius,
-                    out resolvedGoalIndex))
-                return false;
-
-            SolvePreparedGoal(grid, surface, workspace, resolvedGoalIndex);
-            return true;
-        }
-
         /// <summary>
         /// Solves a Goal whose influence and topology PrepareGoal already built
         /// from the current obstacle state.

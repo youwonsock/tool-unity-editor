@@ -745,17 +745,11 @@ namespace Common.FlowField.Editor
 
     internal static class FlowFieldBakeAssetUtility
     {
-        // Replaces the save in a test, which cannot make a real disk write fail.
-        internal static Action<UnityEngine.Object> SaveOverride;
-
         // AssetDatabase reports a failed write only in the Console. The Asset then
         // stays dirty, and a bake must not report success over the old file.
         internal static void Save(UnityEngine.Object asset)
         {
-            if (SaveOverride != null)
-                SaveOverride(asset);
-            else
-                AssetDatabase.SaveAssetIfDirty(asset);
+            AssetDatabase.SaveAssetIfDirty(asset);
             if (EditorUtility.IsDirty(asset))
                 throw new IOException($"Could not save {AssetDatabase.GetAssetPath(asset)}.");
         }

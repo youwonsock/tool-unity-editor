@@ -73,6 +73,7 @@
 - 바닥 Layer와 경사·단차 조건이 필요합니다.
 - 격자가 2,500셀을 넘으면 Scene View는 표시 대상을 줄입니다.
 - 한 번의 조회에서 겹치는 장애물이 4,096개에 이르면 Session이 Fault 납니다. 일부만 쓰면 장애물을 놓치기 때문입니다. Volume3D는 이때 셀별 검사로 넘어갑니다.
+- 특정 Collider가 한 셀에 닿는지 확인할 때(장애물 마스크, Modifier 영향 영역, Volume3D 셀별 검사), 그 셀 상자에 겹친 Collider가 256개에 이르면 같은 이유로 Session이 Fault 납니다(`FlowFieldOverlapUtility`).
 
 ## Volume3D
 

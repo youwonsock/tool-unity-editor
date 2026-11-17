@@ -3,9 +3,6 @@ using UnityEngine;
 
 namespace Common.FlowField
 {
-    [CreateAssetMenu(
-        fileName = "FlowFieldVolumeBakeData",
-        menuName = "FlowField/Volume 3D Bake Data")]
     public sealed class FlowFieldVolumeBakeData : FlowFieldBakeAsset, ISerializationCallbackReceiver
     {
         public const int CURRENT_FORMAT_VERSION = 6;
