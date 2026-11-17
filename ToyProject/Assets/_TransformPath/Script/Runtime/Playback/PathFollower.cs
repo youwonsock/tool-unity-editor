@@ -212,6 +212,14 @@ namespace Common.TransformPath
         {
             if (phase == EPathTickPhase.Queue)
                 return;
+            // Most frames have no blend or delayed event: only the frame is recorded.
+            if (phase == EPathTickPhase.Effects && !Playback.HasPendingEffects)
+            {
+                Playback.TickEffects(deltaTime, frameId);
+                return;
+            }
+            if (phase == EPathTickPhase.Movement && !Playback.IsMoving)
+                return;
             using var operation = PathExecutionBoundary.Enter();
             if (phase == EPathTickPhase.Effects)
                 Playback.TickEffects(deltaTime, frameId);

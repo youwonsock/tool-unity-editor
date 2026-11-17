@@ -107,6 +107,8 @@ namespace Common.TransformPath
         public float Speed => _cursor.Speed;
         public float Duration => _cursor.Duration;
         public bool CanSample => _route != null && _route.Provider.IsReady;
+        /// <summary>Whether a blend or a delayed event waits for the effects tick.</summary>
+        public bool HasPendingEffects => PlaybackId != 0 && (_blend.Channel != EChannel.None || _delayed.Count > 0);
 
         /// <summary>Whether the position changed since the last call. Clears the flag.</summary>
         public bool ConsumePositionDirty()
@@ -265,7 +267,7 @@ namespace Common.TransformPath
         public void TickEffects(float deltaTime, int frame)
         {
             _effectsFrame = frame;
-            if (PlaybackId == 0)
+            if (!HasPendingEffects)
                 return;
             TickBlend(deltaTime, frame);
             if (deltaTime > 0f)
