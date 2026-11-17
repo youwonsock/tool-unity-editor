@@ -165,7 +165,7 @@ namespace Common.FlowField
             FlowFieldSurfaceGoalResolution goal = request.Goal;
             FlowFieldSurfaceBuildResult prepared = FlowFieldSurfaceBuildPipeline.PrepareBase(
                 new FlowFieldSurfaceBuildRequest(
-                    new FlowFieldObstacleRequest(
+                    new FlowFieldSurfaceObstacleRequest(
                         _state.Grid,
                         _state.Surface,
                         _state.Workspace,

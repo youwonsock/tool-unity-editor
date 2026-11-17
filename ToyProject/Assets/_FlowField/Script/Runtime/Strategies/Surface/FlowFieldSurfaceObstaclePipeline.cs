@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace Common.FlowField
 {
-    internal readonly struct FlowFieldObstacleRequest
+    internal readonly struct FlowFieldSurfaceObstacleRequest
     {
         public FlowFieldGridSpace Grid { get; }
         public FlowFieldSurfaceData Surface { get; }
@@ -15,7 +15,7 @@ namespace Common.FlowField
         public float Clearance { get; }
         public FlowFieldCellRect DirtyRegion { get; }
 
-        public FlowFieldObstacleRequest(
+        public FlowFieldSurfaceObstacleRequest(
             FlowFieldGridSpace grid,
             FlowFieldSurfaceData surface,
             FlowFieldSurfaceWorkspace workspace,
@@ -36,12 +36,12 @@ namespace Common.FlowField
         }
     }
 
-    internal readonly struct FlowFieldObstacleResult
+    internal readonly struct FlowFieldSurfaceObstacleResult
     {
         public bool MaskChanged { get; }
         public FlowFieldCellRect DirtyRegion { get; }
 
-        public FlowFieldObstacleResult(
+        public FlowFieldSurfaceObstacleResult(
             bool maskChanged,
             FlowFieldCellRect dirtyRegion)
         {
@@ -64,8 +64,8 @@ namespace Common.FlowField
 
         public bool AllBlockedWarningIssued;
 
-        internal FlowFieldObstacleResult RebuildMasks(
-            in FlowFieldObstacleRequest request,
+        internal FlowFieldSurfaceObstacleResult RebuildMasks(
+            in FlowFieldSurfaceObstacleRequest request,
             bool rebuildStatic,
             bool rebuildDynamic)
         {
@@ -97,7 +97,7 @@ namespace Common.FlowField
                     dynamicChanged,
                     ref dynamicDirty,
                     out FlowFieldCellRect effectiveMaskDirtyWithoutDynamic);
-                return new FlowFieldObstacleResult(
+                return new FlowFieldSurfaceObstacleResult(
                     effectiveMaskChangedWithoutDynamic,
                     effectiveMaskDirtyWithoutDynamic);
             }
@@ -121,7 +121,7 @@ namespace Common.FlowField
                 dynamicChanged,
                 ref dynamicDirty,
                 out FlowFieldCellRect effectiveMaskDirty);
-            return new FlowFieldObstacleResult(
+            return new FlowFieldSurfaceObstacleResult(
                 effectiveMaskChanged,
                 effectiveMaskDirty);
         }
@@ -345,7 +345,7 @@ namespace Common.FlowField
             return true;
         }
 
-        private static void ValidateRequest(in FlowFieldObstacleRequest request)
+        private static void ValidateRequest(in FlowFieldSurfaceObstacleRequest request)
         {
             if (!request.Grid.IsValid)
                 throw new ArgumentException("Obstacle rebuild requires a valid grid.", nameof(request));

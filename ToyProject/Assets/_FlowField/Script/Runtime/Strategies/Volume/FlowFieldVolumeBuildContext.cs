@@ -15,7 +15,7 @@ namespace Common.FlowField
     }
 
     /// <summary>Walks the cells of world-space regions, a few at a time.</summary>
-    internal sealed class FlowFieldCellRegionCursor
+    internal sealed class FlowFieldVolumeCellCursor
     {
         private readonly Bounds[] _regions;
         private int _region;
@@ -24,7 +24,7 @@ namespace Common.FlowField
         private int _z;
         private bool _open;
 
-        internal FlowFieldCellRegionCursor(Bounds[] regions) => _regions = regions;
+        internal FlowFieldVolumeCellCursor(Bounds[] regions) => _regions = regions;
 
         /// <summary>Writes the next cells and returns how many. Zero means finished.</summary>
         internal int Next(FlowFieldGridSpace grid, int[] cells)
@@ -108,8 +108,8 @@ namespace Common.FlowField
         internal bool ReusesObstacleQueries;
         // Obstacle queries cover only these regions; other cells keep this published mask.
         internal bool[] PublishedBlocked;
-        private FlowFieldCellRegionCursor _changedCells;
-        internal FlowFieldCellRegionCursor ModifierCells;
+        private FlowFieldVolumeCellCursor _changedCells;
+        internal FlowFieldVolumeCellCursor ModifierCells;
 
         internal FlowFieldVolumeBuildContext(
             in FlowFieldVolumeRequest request,
@@ -148,7 +148,7 @@ namespace Common.FlowField
         internal void QueryOnlyChangedRegions(bool[] publishedBlocked, Bounds[] regions)
         {
             PublishedBlocked = publishedBlocked;
-            _changedCells = new FlowFieldCellRegionCursor(regions);
+            _changedCells = new FlowFieldVolumeCellCursor(regions);
         }
 
         /// <summary>

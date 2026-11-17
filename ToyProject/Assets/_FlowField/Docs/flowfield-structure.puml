@@ -21,11 +21,19 @@ class FlowFieldExecutionBoundary
 class FlowFieldBuildDriver
 class FlowFieldBuildScheduler
 interface IFlowFieldBuildOperation
+class FlowFieldSpaceStrategy
 class "FlowFieldSession\n(공통 파이프라인)" as Session {
-  수명·이벤트·빌드 루프
-  FlowFieldFailures
+  수명 전이·이벤트·빌드 루프
+  조회·FlowFieldFailures
+  FlowFieldObstacleRegistry
+  FlowFieldModifierRegistry
+  FlowFieldSafety
 }
-interface IFlowFieldSpaceBuilder
+interface IFlowFieldSpaceBuilder {
+  요청·빌드 단계
+  게시 필드·격자
+  입력 반영·수명 훅
+}
 class "FlowFieldSurfaceBuilder (Surface2D)" as Surface {
   SurfaceBaseStage
   SurfaceSolveStage
@@ -33,15 +41,18 @@ class "FlowFieldSurfaceBuilder (Surface2D)" as Surface {
   SurfaceFieldStore
 }
 class "FlowFieldVolumeBuilder (Volume3D)" as Volume {
-  VolumeObstacleTracker
   VolumeBuildContext
   VolumeSafetyState
 }
-class "FlowFieldField·FlowFieldSampler\nFlowFieldSafety·FlowFieldModifierRegistry" as Shared
+class "FlowFieldField·FlowFieldSampler\nFlowFieldRequestInbox" as Shared
+class "FlowFieldBakeService\n(Editor)" as BakeService
 class "FlowFieldDynamicObstacle\nFlowFieldGoalTarget\nModifier Volume" as Components
 
 FlowFieldManager .up.|> API
 FlowFieldManager --> Session
+FlowFieldManager --> FlowFieldSpaceStrategy
+FlowFieldSpaceStrategy ..> Session : 생성
+BakeService ..> FlowFieldManager : CaptureConfig
 FlowFieldManager --> FlowFieldExecutionBoundary
 Components ..> API : 통지
 Session --> IFlowFieldSpaceBuilder
@@ -50,6 +61,7 @@ Volume ..|> IFlowFieldSpaceBuilder
 Surface --> Shared
 Volume --> Shared
 Session --> FlowFieldExecutionBoundary
+Session --> Shared
 Session ..|> IFlowFieldBuildOperation
 FlowFieldBuildScheduler --> IFlowFieldBuildOperation
 FlowFieldBuildDriver -right-> FlowFieldBuildScheduler

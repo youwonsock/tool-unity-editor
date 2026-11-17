@@ -206,7 +206,7 @@ namespace Common.FlowField
                 if (build.Modifiers.Length == 0)
                     return true;
                 Physics.SyncTransforms();
-                build.ModifierCells = new FlowFieldCellRegionCursor(ModifierReach(build));
+                build.ModifierCells = new FlowFieldVolumeCellCursor(ModifierReach(build));
             }
 
             int count = build.ModifierCells.Next(build.Request.Grid, _obstacleCells);

@@ -12,12 +12,12 @@ namespace Common.FlowField
     {
         internal FlowFieldGridSpace Grid => Obstacles.Grid;
         internal FlowFieldSurfaceData Surface => Obstacles.Surface;
-        internal FlowFieldObstacleRequest Obstacles { get; }
+        internal FlowFieldSurfaceObstacleRequest Obstacles { get; }
         internal FlowFieldSurfaceGoalResolution Goal { get; }
         internal bool SurfaceChanged { get; }
 
         internal FlowFieldSurfaceBuildRequest(
-            FlowFieldObstacleRequest obstacles,
+            FlowFieldSurfaceObstacleRequest obstacles,
             FlowFieldSurfaceGoalResolution goal,
             bool surfaceChanged = false)
         {
@@ -80,7 +80,7 @@ namespace Common.FlowField
 
             if (rebuildStaticObstacles || rebuildDynamicObstacles)
             {
-                FlowFieldObstacleResult obstacleResult = obstaclePipeline.RebuildMasks(
+                FlowFieldSurfaceObstacleResult obstacleResult = obstaclePipeline.RebuildMasks(
                     request.Obstacles,
                     rebuildStaticObstacles,
                     rebuildDynamicObstacles);
