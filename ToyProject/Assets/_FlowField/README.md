@@ -23,7 +23,7 @@
 ## 다른 프로젝트로 옮기기
 
 - `Assets/_FlowField/Script/` 폴더를 `.meta`와 함께 복사합니다. 시스템(`Common.FlowField`)과 에디터(`Common.FlowField.Editor`) 어셈블리가 들어 있습니다.
-- 패키지: Burst(1.8.13), Collections(1.4.0), Mathematics(1.2.6), Physics 모듈. 괄호는 이 프로젝트가 쓰는 버전입니다.
+- 패키지: Burst(1.8.13), Collections(1.4.0), Mathematics(1.2.6), Physics 모듈. 괄호는 이 프로젝트가 쓰는 버전입니다. Unity 2023.2.20f1 빈 프로젝트에 이 패키지만 넣고 `Script/`만 복사해 두 어셈블리가 오류 없이 컴파일되는 것을 확인했습니다.
 - `Samples/`(샘플 씬·스크립트, UGUI와 `FlowFieldObstacle` 레이어 필요)와 `Dev/`(측정 도구)는 옮기지 않아도 됩니다. 문서가 필요하면 이 README와 `Docs/`를 함께 옮깁니다.
 - 새 Bake Asset은 씬 옆, 씬 이름의 폴더(`<씬 폴더>/<씬 이름>/`)에 저장되므로 폴더 구조와 상관없이 동작합니다.
 
