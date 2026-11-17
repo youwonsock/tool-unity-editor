@@ -9,7 +9,7 @@ namespace Common.TransformPath
     /// </summary>
     internal sealed class PathPlaybackCursor
     {
-        private const float EPSILON = 0.00001f;
+        private const float EPSILON = PathConstants.EPSILON;
         private const float MIN_DIRECTION_LOOK_AHEAD = 0.001f;
         private const float MIN_DIRECTION_LOOK_AHEAD_DISTANCE = 0.01f;
 
@@ -25,9 +25,9 @@ namespace Common.TransformPath
         public float Global { get; private set; }
         public float PendingTime { get; set; }
 
-        private AnimationCurve TimeCurve { get; set; }
+        private PathMovementSettings _movement;
 
-        public void Begin(PathPlaybackSession session, bool loop)
+        public void Begin(PathRoute session, bool loop)
         {
             Loop = loop;
             ConfigureSegment(session, 0, 0f, false);
@@ -36,7 +36,7 @@ namespace Common.TransformPath
 
         /// <summary>Returns whether the segment moves in another way than the one before it.</summary>
         public bool ConfigureSegment(
-            PathPlaybackSession session,
+            PathRoute session,
             int index,
             float previousNominalSpeed,
             bool preserveSpeed)
@@ -44,9 +44,9 @@ namespace Common.TransformPath
             PathMovementSettings settings = session.GetMovementSettings(index);
             bool moveTypeChanged = settings.MoveType != MoveType;
             MoveType = settings.MoveType;
-            TimeCurve = settings.TimeCurve;
+            _movement = settings;
             if (preserveSpeed
-                && previousNominalSpeed >= PathMovementSettingsUtility.MIN_VALUE
+                && previousNominalSpeed >= PathConstants.MIN_MOVE_VALUE
                 && PathValueUtility.IsFinite(previousNominalSpeed))
             {
                 if (settings.MoveType == EPathMoveType.SpeedBased)
@@ -55,8 +55,8 @@ namespace Common.TransformPath
                 {
                     Duration = Mathf.Clamp(
                         session.GetLength(index) / previousNominalSpeed,
-                        PathMovementSettingsUtility.MIN_VALUE,
-                        PathMovementSettingsUtility.MAX_VALUE);
+                        PathConstants.MIN_MOVE_VALUE,
+                        PathConstants.MAX_MOVE_VALUE);
                 }
             }
             else if (settings.MoveType == EPathMoveType.SpeedBased)
@@ -66,7 +66,7 @@ namespace Common.TransformPath
             return moveTypeChanged;
         }
 
-        public void EnterSegment(PathPlaybackSession session, int index)
+        public void EnterSegment(PathRoute session, int index)
         {
             Segment = index;
             _elapsed = 0f;
@@ -80,7 +80,7 @@ namespace Common.TransformPath
         /// The global progress never passes the cap.
         /// </summary>
         public float Advance(
-            PathPlaybackSession session,
+            PathRoute session,
             float availableTime,
             float multiplier,
             float cap,
@@ -95,16 +95,16 @@ namespace Common.TransformPath
             PathProgressStep step;
             if (MoveType == EPathMoveType.TimeBased)
             {
-                float duration = Mathf.Max(Duration, PathMovementSettingsUtility.MIN_VALUE);
-                float current = PathProgressCalculator.EvaluateTimeProgress(_elapsed / duration, TimeCurve);
+                float duration = Mathf.Max(Duration, PathConstants.MIN_MOVE_VALUE);
+                float current = _movement.EvaluateProgress(_elapsed / duration);
                 if (capped && maxLocal <= current + EPSILON)
                     return 0f;
-                step = PathProgressCalculator.AdvanceTime(_elapsed, duration, TimeCurve, availableTime, multiplier, maxLocal);
+                step = PathProgressCalculator.AdvanceTime(_elapsed, duration, _movement, availableTime, multiplier, maxLocal);
                 _elapsed = step.Position;
             }
             else
             {
-                float length = Mathf.Max(session.GetLength(Segment), PathMovementSettingsUtility.MIN_VALUE);
+                float length = Mathf.Max(session.GetLength(Segment), PathConstants.MIN_MOVE_VALUE);
                 if (capped && maxLocal * length <= _distance + EPSILON)
                     return 0f;
                 step = PathProgressCalculator.AdvanceDistance(_distance, length, Speed, availableTime, multiplier, maxLocal);
@@ -119,25 +119,25 @@ namespace Common.TransformPath
 
         // SetDuration preserves progress by rescaling elapsed time, so this
         // compares with the current duration, after event callbacks.
-        public bool HasReachedSegmentEnd(PathPlaybackSession session)
+        public bool HasReachedSegmentEnd(PathRoute session)
         {
             return MoveType == EPathMoveType.TimeBased
                 ? _elapsed >= Duration - EPSILON
                 : _distance >= session.GetLength(Segment) - EPSILON;
         }
 
-        public void MoveToSegmentEnd(PathPlaybackSession session)
+        public void MoveToSegmentEnd(PathRoute session)
         {
             Normalized = 1f;
             Global = session.GetGlobalProgress(Segment, 1f);
         }
 
-        public void MoveTo(PathPlaybackSession session, int index, float local)
+        public void MoveTo(PathRoute session, int index, float local)
         {
             Segment = index;
             Normalized = Mathf.Clamp01(local);
             _elapsed = MoveType == EPathMoveType.TimeBased
-                ? PathProgressCalculator.InverseTimeProgress(Normalized, TimeCurve) * Duration
+                ? _movement.InverseProgress(Normalized) * Duration
                 : 0f;
             _distance = MoveType == EPathMoveType.SpeedBased
                 ? session.GetLength(index) * Normalized
@@ -146,7 +146,7 @@ namespace Common.TransformPath
         }
 
         // The geometry changed: keep the local progress.
-        public void SyncToProvider(PathPlaybackSession session)
+        public void SyncToProvider(PathRoute session)
         {
             MoveTo(session, Segment, Normalized);
         }
@@ -158,29 +158,29 @@ namespace Common.TransformPath
 
         public void SetDuration(float duration)
         {
-            float normalized = Duration >= PathMovementSettingsUtility.MIN_VALUE
-                ? PathProgressCalculator.EvaluateTimeProgress(_elapsed / Duration, TimeCurve)
+            float normalized = Duration >= PathConstants.MIN_MOVE_VALUE
+                ? _movement.EvaluateProgress(_elapsed / Duration)
                 : 0f;
             Duration = duration;
-            _elapsed = PathProgressCalculator.InverseTimeProgress(normalized, TimeCurve) * duration;
+            _elapsed = _movement.InverseProgress(normalized) * duration;
         }
 
-        public float GetNominalSpeed(PathPlaybackSession session)
+        public float GetNominalSpeed(PathRoute session)
         {
             if (MoveType == EPathMoveType.SpeedBased)
                 return Speed;
-            return Duration >= PathMovementSettingsUtility.MIN_VALUE
+            return Duration >= PathConstants.MIN_MOVE_VALUE
                 ? session.GetLength(Segment) / Duration
                 : 0f;
         }
 
-        public Vector3 SamplePosition(PathPlaybackSession session)
+        public Vector3 SamplePosition(PathRoute session)
         {
             return session.Sample(Segment, Normalized);
         }
 
         /// <summary>The normalized direction of travel at the current position.</summary>
-        public bool TryEvaluateDirection(PathPlaybackSession session, out Vector3 direction)
+        public bool TryEvaluateDirection(PathRoute session, out Vector3 direction)
         {
             direction = Vector3.zero;
             float length = session.GetLength(Segment);

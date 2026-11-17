@@ -31,7 +31,7 @@ namespace Common.TransformPath.Samples
         [Header("Queued Path Lane")]
         [SerializeField] private QueuedPathManager _queueManager;
         [SerializeField] private MultiPathData _queuePathData;
-        [SerializeField] private QueuedPathFollower[] _queueFollowers;
+        [SerializeField] private PathQueueMember[] _queueFollowers;
 
         [Header("Presentation")]
         [SerializeField] private TransformPathFreeCamera _freeCamera;
@@ -46,6 +46,7 @@ namespace Common.TransformPath.Samples
         private bool _multiWasMovingWhenHidden;
         private bool[] _queueWasMovingWhenHidden;
         private bool _completionEventsSubscribed;
+        private Action[] _queueRestarts;
         private int _presentationMode;
         private ETransformPathShowcaseLane _activeLane = ETransformPathShowcaseLane.Normal;
 
@@ -99,12 +100,12 @@ namespace Common.TransformPath.Samples
                 return;
 
             UnsubscribeCompletionEvents();
-            _pathFollower?.StopMove();
-            _multiPathFollower?.StopMove();
+            _pathFollower?.Stop();
+            _multiPathFollower?.Stop();
             if (_queueFollowers != null)
             {
                 for (int i = 0; i < _queueFollowers.Length; i++)
-                    _queueFollowers[i]?.StopMove();
+                    _queueFollowers[i]?.Follower.Stop();
             }
 
             for (int i = 0; i < _multiRouteRenderers.Count; i++)
@@ -190,13 +191,13 @@ namespace Common.TransformPath.Samples
             if (!_isInitialized || mode < 0 || mode > 2 || _pathData == null)
                 return;
 
-            float progress = _pathFollower != null ? _pathFollower.NormalizedTime : 0f;
+            float progress = _pathFollower != null ? _pathFollower.Progress : 0f;
             EPathCurveType curve = mode == 0
                 ? EPathCurveType.Linear
                 : mode == 1
                     ? EPathCurveType.SplineInterpolating
                     : EPathCurveType.SplineApproximating;
-            _pathData.SetCurveType(curve);
+            _pathData.CurveType = curve;
             if (_pathFollower != null && ReferenceEquals(_pathFollower.CurrentProvider, _pathData))
                 _pathFollower.Seek(progress);
             _presentationMode = mode;
@@ -218,12 +219,12 @@ namespace Common.TransformPath.Samples
             _normalWasMovingWhenHidden = _pathFollower != null && _pathFollower.IsMoving;
             _multiWasMovingWhenHidden = _multiPathFollower != null && _multiPathFollower.IsMoving;
             for (int i = 0; i < _queueWasMovingWhenHidden.Length; i++)
-                _queueWasMovingWhenHidden[i] = _queueFollowers[i] != null && _queueFollowers[i].IsMoving;
+                _queueWasMovingWhenHidden[i] = _queueFollowers[i] != null && _queueFollowers[i].Follower.IsMoving;
 
-            _pathFollower?.PauseMove();
-            _multiPathFollower?.PauseMove();
+            _pathFollower?.Pause();
+            _multiPathFollower?.Pause();
             for (int i = 0; i < _queueFollowers.Length; i++)
-                _queueFollowers[i]?.PauseMove();
+                _queueFollowers[i]?.Follower.Pause();
             _isPaused = true;
         }
 
@@ -245,10 +246,10 @@ namespace Common.TransformPath.Samples
                 return;
             bool wasPaused = _isPaused;
             _isPaused = false;
-            _pathFollower?.StopMove();
-            _multiPathFollower?.StopMove();
+            _pathFollower?.Stop();
+            _multiPathFollower?.Stop();
             for (int i = 0; i < _queueFollowers.Length; i++)
-                _queueFollowers[i]?.StopMove();
+                _queueFollowers[i]?.Follower.Stop();
 
             StartNormalPath();
             StartMultiPath();
@@ -267,21 +268,21 @@ namespace Common.TransformPath.Samples
             if (!_isInitialized || float.IsNaN(delta) || float.IsInfinity(delta))
                 return;
             if (_activeLane == ETransformPathShowcaseLane.Normal && _pathFollower != null)
-                _pathFollower.Seek(Mathf.Clamp01(_pathFollower.NormalizedTime + delta));
+                _pathFollower.Seek(Mathf.Clamp01(_pathFollower.Progress + delta));
             else if (_activeLane == ETransformPathShowcaseLane.MultiPath && _multiPathFollower != null)
-                _multiPathFollower.Seek(Mathf.Clamp01(_multiPathFollower.GlobalNormalizedTime + delta));
+                _multiPathFollower.Seek(Mathf.Clamp01(_multiPathFollower.Progress + delta));
         }
 
         public void BlockQueueLeader()
         {
-            QueuedPathFollower leader = GetQueueLeader();
-            leader?.ForceBlock();
+            PathQueueMember leader = GetQueueLeader();
+            leader?.Hold();
         }
 
         public void UnblockQueueLeader()
         {
-            QueuedPathFollower leader = GetQueueLeader();
-            leader?.ForceUnblock();
+            PathQueueMember leader = GetQueueLeader();
+            leader?.ReleaseHold();
         }
 
         public void ToggleQueueVisibility()
@@ -322,7 +323,7 @@ namespace Common.TransformPath.Samples
         private string GetNormalStatus()
         {
             return $"NORMAL  ready={_pathData.IsReady}  curve={_pathData.CurveType}\n"
-                + $"length={_pathData.PathLength:F2}m  progress={_pathFollower.NormalizedTime:F2}  "
+                + $"length={_pathData.PathLength:F2}m  progress={_pathFollower.Progress:F2}  "
                 + $"{DescribeMovement(_pathFollower)}\n"
                 + $"samples={_pathData.SamplePointCount}  state={_pathFollower.State}\n"
                 + $"events={DescribeEvents(_pathData, _pathFollower.MoveType)}";
@@ -331,9 +332,9 @@ namespace Common.TransformPath.Samples
         private string GetMultiStatus()
         {
             int count = _multiPathData.IsReady ? _multiPathData.SegmentCount : 0;
-            int index = count == 0 ? 0 : Mathf.Clamp(_multiPathFollower.CurrentSegmentIndex + 1, 1, count);
+            int index = count == 0 ? 0 : Mathf.Clamp(_multiPathFollower.SegmentIndex + 1, 1, count);
             return $"MULTI  ready={_multiPathData.IsReady}  segment={index}/{count}\n"
-                + $"global={_multiPathFollower.GlobalNormalizedTime:F2}  local={_multiPathFollower.NormalizedTime:F2}  "
+                + $"global={_multiPathFollower.Progress:F2}  local={_multiPathFollower.SegmentProgress:F2}  "
                 + $"{DescribeMovement(_multiPathFollower)}\n"
                 + $"length={_multiPathData.PathLength:F2}m  state={_multiPathFollower.State}\n"
                 + $"events={DescribeSequenceEvents(_multiPathData)}";
@@ -341,27 +342,27 @@ namespace Common.TransformPath.Samples
 
         private string GetQueueStatus()
         {
-            QueuedPathFollower leader = GetQueueLeader();
+            PathQueueMember leader = GetQueueLeader();
             string leaderText = leader == null
                 ? "none"
-                : leader.IsBlocked ? "BLOCKED" : leader.IsMoving ? "moving" : "stopped";
+                : leader.IsBlocked ? "BLOCKED" : leader.Follower.IsMoving ? "moving" : "stopped";
             string spacing = _queueManager == null ? "-" : $"{_queueManager.DefaultSpacing:F2}m";
             string ahead = "none";
             string multiplier = "1.00";
-            if (leader != null && _queueManager.TryGetState(leader, out PathQueueState state))
+            if (leader != null && _queueManager.TryGetMemberStatus(leader, out PathQueueStatus state))
             {
                 ahead = state.DistanceToAhead.HasValue ? $"{state.DistanceToAhead.Value:F2}m" : "none";
                 multiplier = leader.CurrentSpeedMultiplier.ToString("F2");
             }
-            return $"QUEUE  agents={_queueManager.AgentCount}/{_queueFollowers.Length}  visible={_queueVisible}\n"
+            return $"QUEUE  agents={_queueManager.MemberCount}/{_queueFollowers.Length}  visible={_queueVisible}\n"
                 + $"spacing={spacing}  leader={leaderText}  ahead={ahead}\n"
                 + $"speed x{multiplier}  routeRev={_queueManager.RouteRevision}\n"
                 + $"length={_queuePathData.PathLength:F2}m  state={(_isPaused ? "paused" : "running")}  "
-                + $"{(leader == null ? "movement=none" : DescribeMovement(leader))}\n"
+                + $"{(leader == null ? "movement=none" : DescribeMovement(leader.Follower))}\n"
                 + $"events={DescribeSequenceEvents(_queuePathData)}";
         }
 
-        private static string DescribeMovement(IPathPlaybackState playback)
+        private static string DescribeMovement(PathFollower playback)
         {
             if (playback == null)
                 return "movement=none";
@@ -371,42 +372,30 @@ namespace Common.TransformPath.Samples
         }
 
         private static string DescribeEvents(
-            IPathProvider provider,
+            PathData path,
             EPathMoveType moveType)
         {
-            IPathEventSource source = provider as IPathEventSource;
-            if (source == null || source.EventCount == 0)
+            if (path == null || path.Events.Count == 0)
                 return "none";
 
-            List<string> descriptions = new List<string>(source.EventCount);
-            for (int i = 0; i < source.EventCount; i++)
-            {
-                PathRuntimeEvent pathEvent = source.GetEvent(i);
-                descriptions.Add(DescribeEvent(pathEvent, moveType));
-            }
+            List<string> descriptions = new List<string>(path.Events.Count);
+            for (int i = 0; i < path.Events.Count; i++)
+                descriptions.Add(DescribeEvent(path.Events[i], moveType));
             return string.Join(" · ", descriptions);
         }
 
-        private static string DescribeSequenceEvents(IPathSequenceProvider provider)
+        private static string DescribeSequenceEvents(MultiPathData sequence)
         {
-            if (provider == null || provider.SegmentCount == 0)
+            if (sequence == null || !sequence.IsReady)
                 return "none";
 
             List<string> descriptions = new List<string>();
-            for (int segment = 0; segment < provider.SegmentCount; segment++)
+            for (int segment = 0; segment < sequence.SegmentCount; segment++)
             {
-                PathSegmentDescriptor descriptor = provider.GetSegment(segment);
-                IPathEventSource source = descriptor.Provider as IPathEventSource;
-                if (source == null)
-                    continue;
-                for (int i = 0; i < source.EventCount; i++)
-                {
-                    PathRuntimeEvent pathEvent = source.GetEvent(i);
-                    string eventDescription = DescribeEvent(
-                        pathEvent,
-                        descriptor.MovementSettings.MoveType);
-                    descriptions.Add($"S{segment + 1} {eventDescription}");
-                }
+                PathData path = sequence.GetSegmentPath(segment);
+                EPathMoveType moveType = sequence.GetSegmentMovement(segment).MoveType;
+                for (int i = 0; i < path.Events.Count; i++)
+                    descriptions.Add($"S{segment + 1} {DescribeEvent(path.Events[i], moveType)}");
             }
             return descriptions.Count == 0
                 ? "none"
@@ -422,24 +411,15 @@ namespace Common.TransformPath.Samples
                 return $"event @ {pathEvent.NormalizedTime:F2}";
 
             string action = "notify";
-            if (moveType == EPathMoveType.SpeedBased
-                && definition.UseModifyPathMoveSpeed)
-            {
-                action = Mathf.Approximately(
-                    definition.MoveSpeedTargetValue,
-                    0f)
-                    ? "Pause"
-                    : $"Speed {definition.MoveSpeedTargetValue:F2}";
-            }
-            else if (moveType == EPathMoveType.TimeBased
-                && definition.UseModifyPathMoveDuration)
-            {
-                action = Mathf.Approximately(
-                    definition.MoveDurationTargetValue,
-                    9999f)
-                    ? "Pause"
-                    : $"Duration {definition.MoveDurationTargetValue:F2}s";
-            }
+            PathValueChange change = moveType == EPathMoveType.SpeedBased
+                ? definition.SpeedChange
+                : definition.DurationChange;
+            if (definition.Lifecycle == EPathEventLifecycle.Pause)
+                action = "Pause";
+            else if (change.Enabled)
+                action = moveType == EPathMoveType.SpeedBased
+                    ? $"Speed {change.Target:F2}"
+                    : $"Duration {change.Target:F2}s";
 
             string delayed = definition.DelayedEvents.Count == 0
                 ? string.Empty
@@ -450,26 +430,23 @@ namespace Common.TransformPath.Samples
         private void StartNormalPath()
         {
             if (_pathFollower != null && !_pathFollower.IsMoving)
-                _pathFollower.StartPlayback(
-                    PathPlaybackRequest.Single(_pathData, loop: true));
+                _pathFollower.Play(PathPlaybackRequest.Single(_pathData, loop: true));
         }
 
         private void StartMultiPath()
         {
             if (_multiPathFollower != null && !_multiPathFollower.IsMoving)
-                _multiPathFollower.StartPlayback(
-                    PathPlaybackRequest.Sequence(_multiPathData, loop: false));
+                _multiPathFollower.Play(PathPlaybackRequest.Sequence(_multiPathData, loop: false));
         }
 
         private void StartQueueFollowers()
         {
             for (int i = 0; i < _queueFollowers.Length; i++)
             {
-                QueuedPathFollower follower = _queueFollowers[i];
-                if (follower == null || !follower.isActiveAndEnabled || follower.IsMoving)
+                PathQueueMember follower = _queueFollowers[i];
+                if (follower == null || !follower.isActiveAndEnabled || follower.Follower.IsMoving)
                     continue;
-                follower.StartPlayback(
-                    PathPlaybackRequest.Sequence(_queuePathData, loop: false));
+                follower.StartQueuedPlayback(PathPlaybackRequest.Sequence(_queuePathData, loop: false));
             }
             ApplyQueueStartSpacing();
         }
@@ -481,9 +458,9 @@ namespace Common.TransformPath.Samples
             float normalizedGap = Mathf.Clamp((_queueManager.DefaultSpacing * 1.5f) / _queuePathData.PathLength, 0.01f, 0.3f);
             for (int i = 0; i < _queueFollowers.Length; i++)
             {
-                QueuedPathFollower follower = _queueFollowers[i];
-                if (follower != null && follower.IsMoving)
-                    follower.Seek(Mathf.Clamp01((_queueFollowers.Length - 1 - i) * normalizedGap));
+                PathQueueMember follower = _queueFollowers[i];
+                if (follower != null && follower.Follower.IsMoving)
+                    follower.Follower.Seek(Mathf.Clamp01((_queueFollowers.Length - 1 - i) * normalizedGap));
             }
         }
 
@@ -492,10 +469,14 @@ namespace Common.TransformPath.Samples
             if (_completionEventsSubscribed)
                 return;
             _multiPathFollower.Completed += RestartMultiPath;
+            _queueRestarts = new Action[_queueFollowers.Length];
             for (int i = 0; i < _queueFollowers.Length; i++)
             {
-                if (_queueFollowers[i] != null)
-                    _queueFollowers[i].OnCompleted += RestartQueueFollower;
+                PathQueueMember member = _queueFollowers[i];
+                if (member == null)
+                    continue;
+                _queueRestarts[i] = () => RestartQueueFollower(member);
+                member.Follower.Completed += _queueRestarts[i];
             }
             _completionEventsSubscribed = true;
         }
@@ -510,8 +491,8 @@ namespace Common.TransformPath.Samples
             {
                 for (int i = 0; i < _queueFollowers.Length; i++)
                 {
-                    if (_queueFollowers[i] != null)
-                        _queueFollowers[i].OnCompleted -= RestartQueueFollower;
+                    if (_queueFollowers[i] != null && _queueRestarts != null && _queueRestarts[i] != null)
+                        _queueFollowers[i].Follower.Completed -= _queueRestarts[i];
                 }
             }
             _completionEventsSubscribed = false;
@@ -523,19 +504,18 @@ namespace Common.TransformPath.Samples
                 StartMultiPath();
         }
 
-        private void RestartQueueFollower(QueuedPathFollower follower)
+        private void RestartQueueFollower(PathQueueMember follower)
         {
             if (!_isInitialized || _isPaused || follower == null || !follower.isActiveAndEnabled)
                 return;
-            follower.StartPlayback(
-                PathPlaybackRequest.Sequence(_queuePathData, loop: false));
+            follower.StartQueuedPlayback(PathPlaybackRequest.Sequence(_queuePathData, loop: false));
         }
 
-        private QueuedPathFollower GetQueueLeader()
+        private PathQueueMember GetQueueLeader()
         {
-            if (_queueManager == null || _queueManager.AgentCount == 0)
+            if (_queueManager == null || _queueManager.MemberCount == 0)
                 return null;
-            return _queueManager.GetAgent(0) as QueuedPathFollower;
+            return _queueManager.GetMember(0);
         }
 
         private void SetActiveLane(ETransformPathShowcaseLane lane)
@@ -564,17 +544,17 @@ namespace Common.TransformPath.Samples
             {
                 case ETransformPathShowcaseLane.Normal:
                     _normalWasMovingWhenHidden = _pathFollower != null && _pathFollower.IsMoving;
-                    _pathFollower?.PauseMove();
+                    _pathFollower?.Pause();
                     break;
                 case ETransformPathShowcaseLane.MultiPath:
                     _multiWasMovingWhenHidden = _multiPathFollower != null && _multiPathFollower.IsMoving;
-                    _multiPathFollower?.PauseMove();
+                    _multiPathFollower?.Pause();
                     break;
                 case ETransformPathShowcaseLane.Queue:
                     for (int i = 0; i < _queueFollowers.Length; i++)
                     {
-                        _queueWasMovingWhenHidden[i] = _queueFollowers[i] != null && _queueFollowers[i].IsMoving;
-                        _queueFollowers[i]?.PauseMove();
+                        _queueWasMovingWhenHidden[i] = _queueFollowers[i] != null && _queueFollowers[i].Follower.IsMoving;
+                        _queueFollowers[i]?.Follower.Pause();
                     }
                     break;
             }
@@ -583,9 +563,9 @@ namespace Common.TransformPath.Samples
         private void ResumeSelectedLaneFromVisibilitySnapshot()
         {
             if (_activeLane == ETransformPathShowcaseLane.Normal && _normalWasMovingWhenHidden)
-                _pathFollower.ResumeMove();
+                _pathFollower.Resume();
             else if (_activeLane == ETransformPathShowcaseLane.MultiPath && _multiWasMovingWhenHidden)
-                _multiPathFollower.ResumeMove();
+                _multiPathFollower.Resume();
             else if (_activeLane == ETransformPathShowcaseLane.Queue && _queueVisible)
                 ResumeQueueFromVisibilitySnapshot();
         }
@@ -594,8 +574,8 @@ namespace Common.TransformPath.Samples
         {
             for (int i = 0; i < _queueFollowers.Length; i++)
             {
-                _queueWasMovingWhenHidden[i] = _queueFollowers[i] != null && _queueFollowers[i].IsMoving;
-                _queueFollowers[i]?.PauseMove();
+                _queueWasMovingWhenHidden[i] = _queueFollowers[i] != null && _queueFollowers[i].Follower.IsMoving;
+                _queueFollowers[i]?.Follower.Pause();
             }
         }
 
@@ -606,7 +586,7 @@ namespace Common.TransformPath.Samples
             for (int i = 0; i < _queueFollowers.Length; i++)
             {
                 if (_queueFollowers[i] != null && _queueWasMovingWhenHidden[i])
-                    _queueFollowers[i].ResumeMove();
+                    _queueFollowers[i].Follower.Resume();
                 _queueWasMovingWhenHidden[i] = false;
             }
         }
@@ -679,7 +659,7 @@ namespace Common.TransformPath.Samples
                 parent = transform;
             for (int i = 0; i < _multiPathData.SegmentCount; i++)
             {
-                PathData path = _multiPathData.GetAuthoringSegment(i).Provider as PathData;
+                PathData path = _multiPathData.GetSegmentPath(i);
                 if (path == null || !path.IsReady)
                     continue;
                 GameObject lineObject = new GameObject($"Multi Path Segment {i + 1} Line");

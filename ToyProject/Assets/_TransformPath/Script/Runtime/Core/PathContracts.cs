@@ -33,10 +33,6 @@ namespace Common.TransformPath
         All = X | Y | Z,
     }
 
-    /// <summary>
-    /// Runtime geometry build settings. Editor preview sampling is deliberately
-    /// not part of the runtime path contract.
-    /// </summary>
     [Serializable]
     public enum EPathCurveType
     {
@@ -45,160 +41,27 @@ namespace Common.TransformPath
         SplineInterpolating = 2,
     }
 
-    [Serializable]
-    public readonly struct PathBuildSettings
-    {
-        public EPathCurveType CurveType { get; }
-        public int SegmentCount { get; }
-
-        public PathBuildSettings(
-            EPathCurveType curveType = EPathCurveType.Linear,
-            int segmentCount = 500)
-        {
-            CurveType = curveType;
-            SegmentCount = segmentCount;
-        }
-    }
-
-    [Serializable]
-    public readonly struct PathMovementSettings
-    {
-        public EPathMoveType MoveType { get; }
-        public float Value { get; }
-        public AnimationCurve TimeCurve { get; }
-
-        public PathMovementSettings(
-            EPathMoveType moveType = EPathMoveType.TimeBased,
-            float value = 5f,
-            AnimationCurve timeCurve = null)
-        {
-            MoveType = moveType;
-            Value = value;
-            TimeCurve = moveType == EPathMoveType.TimeBased
-                ? timeCurve ?? AnimationCurve.Linear(0f, 0f, 1f, 1f)
-                : timeCurve;
-        }
-
-        public static PathMovementSettings Time(float duration, AnimationCurve curve = null)
-        {
-            return new PathMovementSettings(EPathMoveType.TimeBased, duration, curve);
-        }
-
-        public static PathMovementSettings Speed(float speed)
-        {
-            return new PathMovementSettings(EPathMoveType.SpeedBased, speed, null);
-        }
-    }
-
-    /// <summary>Runtime descriptor used by sequence providers.</summary>
-    public readonly struct PathSegmentDescriptor
-    {
-        public IPathProvider Provider { get; }
-        public PathMovementSettings MovementSettings { get; }
-        public bool PreservePreviousSpeed { get; }
-
-        public PathSegmentDescriptor(
-            IPathProvider provider,
-            PathMovementSettings movementSettings,
-            bool preservePreviousSpeed)
-        {
-            Provider = provider;
-            MovementSettings = movementSettings;
-            PreservePreviousSpeed = preservePreviousSpeed;
-        }
-    }
-
-    public enum EPathSegmentMovementSource
-    {
-        Provider = 0,
-        Override = 1,
-    }
-
     /// <summary>
-    /// Inspector-facing sequence segment. The provider object is intentionally
-    /// stored as a Unity component while runtime playback consumes the
-    /// interface-only descriptor below.
+    /// A path geometry that playback can sample. <see cref="Revision"/> rises on
+    /// every published change, <see cref="DefinitionRevision"/> only when the
+    /// movement settings, the events or the segment structure change. A playback
+    /// keeps going through a geometry change and stops at a definition change.
     /// </summary>
-    [Serializable]
-    public struct PathSegmentAuthoring
-    {
-        [SerializeField]
-        private MonoBehaviour _providerObject;
-        [SerializeField] private EPathSegmentMovementSource _movementSource;
-        [SerializeField] private EPathMoveType _moveType;
-        [SerializeField] private float _moveValue;
-        [SerializeField] private AnimationCurve _timeCurve;
-        [SerializeField] private bool _preservePreviousSpeed;
-
-        public MonoBehaviour ProviderObject => _providerObject;
-        public IPathProvider Provider => _providerObject as IPathProvider;
-        public EPathSegmentMovementSource MovementSource => _movementSource;
-        public EPathMoveType MoveType => _moveType;
-        public float MoveValue => _moveValue;
-        public AnimationCurve TimeCurve => _timeCurve;
-        public bool PreservePreviousSpeed => _preservePreviousSpeed;
-
-        public bool TryResolveMovementSettings(
-            out PathMovementSettings settings,
-            out string error)
-        {
-            IPathProvider provider = Provider;
-            if (provider == null)
-            {
-                settings = default(PathMovementSettings);
-                error = "A provider component is required.";
-                return false;
-            }
-
-            if (_movementSource == EPathSegmentMovementSource.Provider)
-            {
-                if (!(provider is IPathMovementProvider movementProvider))
-                {
-                    settings = default(PathMovementSettings);
-                    error = "Provider movement mode requires IPathMovementProvider.";
-                    return false;
-                }
-
-                settings = PathMovementSettingsUtility.Clone(
-                    movementProvider.MovementSettings);
-                error = null;
-                return true;
-            }
-
-            settings = new PathMovementSettings(
-                _moveType,
-                _moveValue,
-                _timeCurve);
-            if (!PathMovementSettingsUtility.TryValidate(settings, out error))
-                return false;
-            settings = PathMovementSettingsUtility.Clone(settings);
-            return true;
-        }
-    }
-
     public interface IPathProvider
     {
-        bool IsInitialized { get; }
         bool IsReady { get; }
         int Revision { get; }
+        int DefinitionRevision { get; }
         float PathLength { get; }
         event Action PathChanged;
 
-        Vector3 Sample(float normalizedTime);
-        Vector3 SampleDistance(float distance);
+        /// <summary>The point at a progress of 0..1 along the path's length.</summary>
+        Vector3 Sample(float progress);
     }
 
-    public interface IPathMovementProvider : IPathProvider
+    /// <summary>Hears the name of every event a follower reaches, after the event's effects applied.</summary>
+    public interface IPathEventReceiver
     {
-        PathMovementSettings MovementSettings { get; }
+        void OnPathEvent(string eventName, PathFollower follower);
     }
-
-    public interface IPathSequenceProvider : IPathProvider
-    {
-        int SegmentCount { get; }
-        PathSegmentDescriptor GetSegment(int index);
-        float GetSegmentStartDistance(int index);
-        float GetSegmentLength(int index);
-    }
-
 }

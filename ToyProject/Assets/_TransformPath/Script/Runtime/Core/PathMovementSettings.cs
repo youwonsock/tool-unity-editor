@@ -1,0 +1,153 @@
+using System;
+using UnityEngine;
+
+namespace Common.TransformPath
+{
+    /// <summary>
+    /// How one path or segment moves: a Duration with a time curve, or a Speed.
+    /// The time curve is copied once on construction and never handed out, so a
+    /// value can be shared by every follower without defensive copies.
+    /// </summary>
+    public readonly struct PathMovementSettings
+    {
+        private readonly AnimationCurve _timeCurve;
+
+        public EPathMoveType MoveType { get; }
+
+        /// <summary>The Duration in seconds when TimeBased, the Speed in units per second when SpeedBased.</summary>
+        public float Value { get; }
+
+        public PathMovementSettings(
+            EPathMoveType moveType,
+            float value,
+            AnimationCurve timeCurve = null)
+        {
+            MoveType = moveType;
+            Value = value;
+            _timeCurve = moveType == EPathMoveType.TimeBased
+                ? PathValueUtility.CloneCurve(timeCurve) ?? AnimationCurve.Linear(0f, 0f, 1f, 1f)
+                : null;
+        }
+
+        public static PathMovementSettings Time(float duration, AnimationCurve curve = null)
+        {
+            return new PathMovementSettings(EPathMoveType.TimeBased, duration, curve);
+        }
+
+        public static PathMovementSettings Speed(float speed)
+        {
+            return new PathMovementSettings(EPathMoveType.SpeedBased, speed);
+        }
+
+        /// <summary>A copy of the time curve, or null when SpeedBased.</summary>
+        public AnimationCurve CopyTimeCurve() => PathValueUtility.CloneCurve(_timeCurve);
+
+        /// <summary>Path progress after a raw time fraction of 0..1.</summary>
+        internal float EvaluateProgress(float rawProgress)
+        {
+            float raw = Mathf.Clamp01(rawProgress);
+            return Mathf.Clamp01(_timeCurve == null ? raw : _timeCurve.Evaluate(raw));
+        }
+
+        /// <summary>The raw time fraction at which the time curve reaches a progress.</summary>
+        internal float InverseProgress(float progress)
+        {
+            float target = Mathf.Clamp01(progress);
+            if (target <= 0f || target >= 1f || _timeCurve == null)
+                return target;
+            float low = 0f;
+            float high = 1f;
+            for (int i = 0; i < 32; i++)
+            {
+                float middle = (low + high) * 0.5f;
+                if (Mathf.Clamp01(_timeCurve.Evaluate(middle)) >= target) high = middle;
+                else low = middle;
+            }
+            return high;
+        }
+
+        internal bool IsSameAs(PathMovementSettings other)
+        {
+            if (MoveType != other.MoveType || !Mathf.Approximately(Value, other.Value))
+                return false;
+            return MoveType != EPathMoveType.TimeBased
+                || PathValueUtility.AreSameCurve(_timeCurve, other._timeCurve);
+        }
+
+        internal bool TryValidate(out string error)
+        {
+            if (!Enum.IsDefined(typeof(EPathMoveType), MoveType))
+            {
+                error = "MoveType is invalid.";
+                return false;
+            }
+            if (!PathValueUtility.IsInRange(Value, PathConstants.MIN_MOVE_VALUE, PathConstants.MAX_MOVE_VALUE))
+            {
+                error = $"Movement value must be finite and within {PathConstants.MIN_MOVE_VALUE}..{PathConstants.MAX_MOVE_VALUE}.";
+                return false;
+            }
+            if (MoveType == EPathMoveType.TimeBased)
+                return TryValidateTimeCurve(_timeCurve, out error);
+            error = null;
+            return true;
+        }
+
+        internal void Validate(string parameterName)
+        {
+            if (TryValidate(out string error))
+                return;
+            if (!Enum.IsDefined(typeof(EPathMoveType), MoveType)
+                || !PathValueUtility.IsInRange(Value, PathConstants.MIN_MOVE_VALUE, PathConstants.MAX_MOVE_VALUE))
+                throw new ArgumentOutOfRangeException(parameterName, error);
+            throw new ArgumentException(error, parameterName);
+        }
+
+        /// <summary>A time curve must run from 0 to 1 without going back.</summary>
+        internal static bool TryValidateTimeCurve(AnimationCurve curve, out string error)
+        {
+            if (curve == null || curve.length == 0)
+            {
+                error = "TimeCurve must contain at least one key.";
+                return false;
+            }
+            for (int i = 0; i < curve.length; i++)
+            {
+                Keyframe key = curve[i];
+                if (!PathValueUtility.IsFinite(key.time)
+                    || !PathValueUtility.IsFinite(key.value)
+                    || !PathValueUtility.IsFinite(key.inTangent)
+                    || !PathValueUtility.IsFinite(key.outTangent)
+                    || !PathValueUtility.IsFinite(key.inWeight)
+                    || !PathValueUtility.IsFinite(key.outWeight))
+                {
+                    error = "TimeCurve keys must be finite.";
+                    return false;
+                }
+            }
+
+            float previous = curve.Evaluate(0f);
+            if (!PathValueUtility.IsFinite(previous) || Mathf.Abs(previous) > 0.001f)
+            {
+                error = "TimeCurve must start at 0.";
+                return false;
+            }
+            for (int i = 1; i <= 64; i++)
+            {
+                float value = curve.Evaluate(i / 64f);
+                if (!PathValueUtility.IsFinite(value) || value + 0.001f < previous)
+                {
+                    error = "TimeCurve must be finite and non-decreasing.";
+                    return false;
+                }
+                previous = value;
+            }
+            if (Mathf.Abs(curve.Evaluate(1f) - 1f) > 0.001f)
+            {
+                error = "TimeCurve must end at 1.";
+                return false;
+            }
+            error = null;
+            return true;
+        }
+    }
+}

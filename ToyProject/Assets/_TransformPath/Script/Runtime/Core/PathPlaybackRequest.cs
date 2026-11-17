@@ -2,75 +2,64 @@ using System;
 
 namespace Common.TransformPath
 {
-    internal enum EPathPlaybackKind
-    {
-        Single,
-        Aggregate,
-        Sequence,
-    }
-
     /// <summary>
-    /// Runtime-only description of one playback request. The request is not
-    /// serialized; authoring data remains on the referenced provider.
+    /// What to play: one path with its own movement, a sequence with each
+    /// segment's movement, or any provider as a whole with given settings.
     /// </summary>
     public readonly struct PathPlaybackRequest
     {
-        private readonly IPathProvider _provider;
-        private readonly bool _loop;
-        private readonly EPathPlaybackKind _kind;
-        private readonly PathMovementSettings _movementOverride;
+        private enum EKind
+        {
+            None,
+            Provider,
+            Aggregate,
+        }
 
-        public IPathProvider Provider => _provider;
-        public bool Loop => _loop;
+        private readonly EKind _kind;
+        private readonly PathMovementSettings _movement;
 
-        internal EPathPlaybackKind Kind => _kind;
-        internal PathMovementSettings MovementOverride => _movementOverride;
+        public IPathProvider Provider { get; }
+        public bool Loop { get; }
 
-        private PathPlaybackRequest(
-            EPathPlaybackKind kind,
-            IPathProvider provider,
-            bool loop,
-            PathMovementSettings movementOverride)
+        private PathPlaybackRequest(EKind kind, IPathProvider provider, PathMovementSettings movement, bool loop)
         {
             _kind = kind;
-            _provider = provider;
-            _loop = loop;
-            _movementOverride = movementOverride;
+            Provider = provider;
+            _movement = movement;
+            Loop = loop;
         }
 
-        public static PathPlaybackRequest Single(
-            IPathMovementProvider provider,
-            bool loop = false)
+        public static PathPlaybackRequest Single(PathData path, bool loop = false)
         {
-            return new PathPlaybackRequest(
-                EPathPlaybackKind.Single,
-                provider,
-                loop,
-                default(PathMovementSettings));
+            return new PathPlaybackRequest(EKind.Provider, path, default(PathMovementSettings), loop);
         }
 
-        public static PathPlaybackRequest Aggregate(
-            IPathProvider provider,
-            PathMovementSettings movement,
-            bool loop = false)
+        public static PathPlaybackRequest Sequence(MultiPathData sequence, bool loop = false)
         {
-            return new PathPlaybackRequest(
-                EPathPlaybackKind.Aggregate,
-                provider,
-                loop,
-                movement);
+            return new PathPlaybackRequest(EKind.Provider, sequence, default(PathMovementSettings), loop);
         }
 
-        public static PathPlaybackRequest Sequence(
-            IPathSequenceProvider provider,
-            bool loop = false)
+        public static PathPlaybackRequest Aggregate(IPathProvider provider, PathMovementSettings movement, bool loop = false)
         {
-            return new PathPlaybackRequest(
-                EPathPlaybackKind.Sequence,
-                provider,
-                loop,
-                default(PathMovementSettings));
+            return new PathPlaybackRequest(EKind.Aggregate, provider, movement, loop);
+        }
+
+        /// <summary>Validates the request and returns the route to play. Throws before anything changes.</summary>
+        internal PathRoute CreateRoute()
+        {
+            if (Provider is PathProviderBehaviour behaviour && behaviour != null)
+                behaviour.EnsureBuilt();
+            PathProviderUtility.ThrowIfNotReady(Provider, nameof(Provider));
+            switch (_kind)
+            {
+                case EKind.Provider:
+                    return ((PathProviderBehaviour)Provider).GetRoute();
+                case EKind.Aggregate:
+                    _movement.Validate("movement");
+                    return PathRoute.Aggregate(Provider, _movement);
+                default:
+                    throw new InvalidOperationException("The playback request is empty.");
+            }
         }
     }
-
 }

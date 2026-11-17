@@ -37,7 +37,6 @@ namespace Common.TransformPath.PlayerProbe
         private readonly StringBuilder _rows = new StringBuilder("run,cpu,gpu,unity,scenario,metric,value\n");
         private readonly List<double> _updates = new List<double>(SteadyFrames);
         private readonly List<double> _frames = new List<double>(SteadyFrames);
-        private readonly List<Vector3> _points = new List<Vector3>(2);
         private string _run;
         private string _outputPath;
         private int _errors;
@@ -134,7 +133,7 @@ namespace Common.TransformPath.PlayerProbe
             Burst(scenario, "start", () =>
             {
                 for (int i = 0; i < count; i++)
-                    followers[i].StartPlayback(request);
+                    followers[i].Play(request);
             });
             yield return Frames(scenario + ".steady", SteadyFrames);
             RecordMoving(scenario + ".steady", followers);
@@ -150,13 +149,13 @@ namespace Common.TransformPath.PlayerProbe
             Burst(scenario, "pause", () =>
             {
                 for (int i = 0; i < count; i++)
-                    followers[i].PauseMove();
+                    followers[i].Pause();
             });
             yield return Frames(scenario + ".paused", 30);
             Burst(scenario, "resume", () =>
             {
                 for (int i = 0; i < count; i++)
-                    followers[i].ResumeMove();
+                    followers[i].Resume();
             });
             yield return Frames(scenario + ".afterResume", 5);
 
@@ -167,7 +166,7 @@ namespace Common.TransformPath.PlayerProbe
             Burst(scenario, "stop", () =>
             {
                 for (int i = 0; i < count; i++)
-                    followers[i].StopMove();
+                    followers[i].Stop();
             });
             Burst(scenario, "destroy", () => Object.DestroyImmediate(root));
             yield return null;
@@ -184,7 +183,7 @@ namespace Common.TransformPath.PlayerProbe
             QueuedPathManager manager = CreateManager(root, path);
             PathPlaybackRequest request = PathPlaybackRequest.Single(path);
 
-            var agents = new QueuedPathFollower[count];
+            var agents = new PathQueueMember[count];
             Burst(scenario, "create", () =>
             {
                 for (int i = 0; i < count; i++)
@@ -199,7 +198,7 @@ namespace Common.TransformPath.PlayerProbe
             Burst(scenario, "seek", () =>
             {
                 for (int i = 0; i < count; i++)
-                    agents[i].Seek((count - i) * 2f / length);
+                    agents[i].Follower.Seek((count - i) * 2f / length);
             });
             yield return Frames(scenario + ".settle", 60);
             yield return Frames(scenario + ".steady", SteadyFrames);
@@ -208,13 +207,13 @@ namespace Common.TransformPath.PlayerProbe
             Burst(scenario, "pause", () =>
             {
                 for (int i = 0; i < count; i++)
-                    agents[i].PauseMove();
+                    agents[i].Follower.Pause();
             });
             yield return Frames(scenario + ".paused", 30);
             Burst(scenario, "resume", () =>
             {
                 for (int i = 0; i < count; i++)
-                    agents[i].ResumeMove();
+                    agents[i].Follower.Resume();
             });
             yield return Frames(scenario + ".afterResume", 60);
             RecordQueue(scenario + ".afterResume", agents, length);
@@ -226,7 +225,7 @@ namespace Common.TransformPath.PlayerProbe
             Burst(scenario, "stop", () =>
             {
                 for (int i = 0; i < count; i++)
-                    agents[i].StopMove();
+                    agents[i].Follower.Stop();
             });
             Burst(scenario, "destroy", () => Object.DestroyImmediate(root));
             yield return null;
@@ -246,12 +245,12 @@ namespace Common.TransformPath.PlayerProbe
             QueuedPathManager manager = CreateManager(root, path);
             manager.DefaultSpacing = spacing;
             manager.SlowdownStartDistance = spacing * 2f;
-            var agents = new QueuedPathFollower[count];
+            var agents = new PathQueueMember[count];
             int completed = 0;
             for (int i = 0; i < count; i++)
             {
                 agents[i] = CreateAgent(root);
-                agents[i].Completed += () => completed++;
+                agents[i].Follower.Completed += () => completed++;
             }
             PathPlaybackRequest request = PathPlaybackRequest.Single(path);
             Burst(scenario, "start", () =>
@@ -298,14 +297,14 @@ namespace Common.TransformPath.PlayerProbe
             PathData path = CreatePath(root, Vector3.zero, Vector3.right * length,
                 new PathMovementSettings(EPathMoveType.SpeedBased, speed, null));
             QueuedPathManager manager = CreateManager(root, path);
-            var agents = new QueuedPathFollower[count];
+            var agents = new PathQueueMember[count];
             for (int i = 0; i < count; i++)
                 agents[i] = CreateAgent(root);
             PathPlaybackRequest request = PathPlaybackRequest.Single(path, true);
             for (int i = 0; i < count; i++)
                 agents[i].StartQueuedPlayback(manager, request);
             for (int i = 0; i < count; i++)
-                agents[i].Seek((count - i) * 2f / length);
+                agents[i].Follower.Seek((count - i) * 2f / length);
 
             _updates.Clear();
             _frames.Clear();
@@ -327,7 +326,7 @@ namespace Common.TransformPath.PlayerProbe
             Record(scenario, "seamOverlapFrames", seamOverlapFrames);
             int moving = 0;
             for (int i = 0; i < count; i++)
-                if (agents[i].IsMoving)
+                if (agents[i].Follower.IsMoving)
                     moving++;
             Record(scenario, "moving", moving);
             Object.DestroyImmediate(root);
@@ -351,11 +350,19 @@ namespace Common.TransformPath.PlayerProbe
             var host = new GameObject("Path");
             host.transform.SetParent(root.transform, false);
             var path = host.AddComponent<PathData>();
-            path.ConfigureMovementSettings(movement);
-            path.ConfigureBuildSettings(new PathBuildSettings(EPathCurveType.Linear, 500));
-            path.ConfigureControlPoints(new[] { start, end });
-            path.Init();
+            path.MovementSettings = movement;
+            path.CurveType = EPathCurveType.Linear;
+            path.SegmentCount = 500;
+            path.SetPathPoints(new[] { CreatePoint(host, start), CreatePoint(host, end) });
             return path;
+        }
+
+        private static Transform CreatePoint(GameObject host, Vector3 position)
+        {
+            var point = new GameObject("Point").transform;
+            point.SetParent(host.transform, false);
+            point.position = position;
+            return point;
         }
 
         // PathData has no runtime API for events. They are authored in the Inspector.
@@ -379,10 +386,10 @@ namespace Common.TransformPath.PlayerProbe
             var host = new GameObject("Sequence");
             host.transform.SetParent(root.transform, false);
             var sequence = host.AddComponent<MultiPathData>();
-            var segments = new PathSegmentDescriptor[paths.Count];
+            var segments = new PathSegmentAuthoring[paths.Count];
             for (int i = 0; i < paths.Count; i++)
-                segments[i] = new PathSegmentDescriptor(paths[i], paths[i].MovementSettings, false);
-            sequence.ConfigureSegments(segments);
+                segments[i] = new PathSegmentAuthoring(paths[i]);
+            sequence.SetSegments(segments);
             return sequence;
         }
 
@@ -396,30 +403,29 @@ namespace Common.TransformPath.PlayerProbe
             return manager;
         }
 
-        private static QueuedPathFollower CreateAgent(GameObject root)
+        private static PathQueueMember CreateAgent(GameObject root)
         {
             var agent = new GameObject("Agent");
             agent.transform.SetParent(root.transform, false);
-            return agent.AddComponent<QueuedPathFollower>();
+            return agent.AddComponent<PathQueueMember>();
         }
 
-        private void MovePathEnd(PathData path, Vector3 end)
+        // The last child Transform of the path is its end point.
+        private static void MovePathEnd(PathData path, Vector3 end)
         {
-            _points.Clear();
-            path.CopyControlPoints(_points);
-            _points[_points.Count - 1] = end;
-            path.ConfigureControlPoints(_points);
+            path.transform.GetChild(path.transform.childCount - 1).position = end;
+            path.Rebuild();
         }
 
         // Distance between neighbours on the route, leaving out those still
         // waiting at the very start. Across the seam the leader is compared with
         // the last one, as a closed loop would.
-        private static float MinimumGap(QueuedPathFollower[] agents, float length, bool acrossSeam)
+        private static float MinimumGap(PathQueueMember[] agents, float length, bool acrossSeam)
         {
             var progress = new List<float>(agents.Length);
             for (int i = 0; i < agents.Length; i++)
-                if (agents[i].IsRegistered && agents[i].IsMoving && agents[i].GlobalNormalizedTime > 0.0001f)
-                    progress.Add(agents[i].GlobalNormalizedTime);
+                if (agents[i].IsInQueue && agents[i].Follower.IsMoving && agents[i].Follower.Progress > 0.0001f)
+                    progress.Add(agents[i].Follower.Progress);
             if (progress.Count < 2)
                 return float.PositiveInfinity;
             progress.Sort();
@@ -483,15 +489,15 @@ namespace Common.TransformPath.PlayerProbe
             Record(scenario, "moving", moving);
         }
 
-        private void RecordQueue(string scenario, QueuedPathFollower[] agents, float length)
+        private void RecordQueue(string scenario, PathQueueMember[] agents, float length)
         {
             int moving = 0;
             int registered = 0;
             int blocked = 0;
             for (int i = 0; i < agents.Length; i++)
             {
-                if (agents[i].IsMoving) moving++;
-                if (agents[i].IsRegistered) registered++;
+                if (agents[i].Follower.IsMoving) moving++;
+                if (agents[i].IsInQueue) registered++;
                 if (agents[i].IsBlocked) blocked++;
             }
             Record(scenario, "moving", moving);

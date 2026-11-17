@@ -480,7 +480,7 @@ namespace Common.TransformPath
         {
             SerializedProperty property = serializedObject.FindProperty(propertyName);
             if (property != null)
-                property.animationCurveValue = PathMovementSettingsUtility.CloneCurve(value);
+                property.animationCurveValue = PathValueUtility.CloneCurve(value);
         }
 
         private void CacheInspectorSignatures()

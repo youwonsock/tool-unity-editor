@@ -4,292 +4,166 @@ using UnityEngine;
 namespace Common.TransformPath
 {
     /// <summary>
-    /// Single driver-driven path playback. A playback session owns the current
-    /// provider snapshot and event cursor, the cursor owns the position on the
-    /// route, so no coroutine or per-frame temporary object is required.
+    /// Moves its Transform along a path. Playback, events and their effects run
+    /// in <see cref="PathPlayback"/>; this component applies the result and
+    /// turns the CharacterController off while it moves.
+    /// Callbacks run after the command or frame that raised them has finished.
     /// </summary>
-    [RequireComponent(typeof(PathEventHandler))]
-    public sealed class PathFollower : MonoBehaviour, IPathFollower, IPathPlaybackIdentity, IPathRuntimeTickable, IPathConstraintTarget, IPathRuntimeFaultHandler
+    public sealed class PathFollower : PathRuntimeBehaviour
     {
-        #region Constants
+        [Header("Events")]
+        [Tooltip("An IPathEventReceiver that hears the name of every event this follower reaches.")]
+        [SerializeField] private MonoBehaviour _eventReceiver;
 
-        private const float EPSILON = 0.00001f;
-        private const int MAX_SEGMENT_TRANSITIONS_PER_TICK = 65;
-
-        #endregion
-
-
-        #region Member Variables
-
-        [Header("Runtime")]
-        [SerializeField] private PathEventHandler _pathEventHandler;
+        [Header("Rotation")]
+        [Tooltip("Turns to the direction of travel while moving. Turn it off to keep the rotation, as on an escalator.")]
+        [SerializeField] private bool _rotateToPathDirection = true;
 
         [Header("Movement Collision")]
         [SerializeField] private CharacterController _characterController;
         [SerializeField] private bool _suppressCharacterControllerDuringPlayback = true;
 
-        // 재생 중 경로 진행 방향으로 회전을 추종할지 여부.
-        // 에스컬레이터처럼 진입 시 한 번만 정렬하고 이후 회전을 고정해야 하는 연출에서 런타임에 끈다.
-        private bool _rotateToPathDirection = true;
-
+        private readonly PathPlaybackListeners _listeners = new PathPlaybackListeners();
+        private PathPlayback _playback;
         private bool _characterControllerDisabledByFollower;
-        private bool _isInitialized;
-        private bool _isMoving;
-        private EPathFollowerState _state = EPathFollowerState.Uninitialized;
-        private PathPlaybackSession _playbackSession;
-        private readonly PathPlaybackCursor _cursor = new PathPlaybackCursor();
-        private readonly PathQueueConstraintState _constraint = new PathQueueConstraintState();
-        private static ulong _nextPlaybackOwnerId;
-        private readonly ulong _playbackOwnerId = ++_nextPlaybackOwnerId;
-        [NonSerialized] private ulong _nextPlaybackId;
-        [NonSerialized] private ulong _playbackId;
-        [NonSerialized] private ulong _stateRevision;
-        private IPathFollower _eventTarget;
-        private readonly PathListeners _segmentChanged = new PathListeners();
-        private readonly PathListeners _stateChanged = new PathListeners();
-        private readonly PathListeners _completed = new PathListeners();
 
-        #endregion
+        private PathPlayback Playback => _playback ??= CreatePlayback();
 
+        public EPathFollowerState State => Playback.State;
+        public bool IsMoving => Playback.IsMoving;
+        /// <summary>Identifies the current playback. Each Play issues a new one; 0 when none runs.</summary>
+        public ulong PlaybackId => Playback.PlaybackId;
+        public IPathProvider CurrentProvider => Playback.Route?.Provider;
+        /// <summary>Progress along the whole route, 0..1.</summary>
+        public float Progress => Playback.Progress;
+        /// <summary>Progress within the current segment, 0..1. Equals Progress outside a sequence.</summary>
+        public float SegmentProgress => Playback.SegmentProgress;
+        public int SegmentIndex => Playback.SegmentIndex;
+        public EPathMoveType MoveType => Playback.MoveType;
+        public float Speed => Playback.Speed;
+        public float Duration => Playback.Duration;
 
-        #region Properties
+        public bool RotateToPathDirection
+        {
+            get => _rotateToPathDirection;
+            set => _rotateToPathDirection = value;
+        }
 
-        public bool IsInitialized => _isInitialized;
-        int IPathRuntimeTickable.RuntimeOrder => -100;
-        public bool IsMoving => _isMoving;
-        public IPathProvider CurrentProvider => _playbackSession?.Provider;
-        public IPathSequenceProvider CurrentSequence => _playbackSession?.Sequence;
-        public EPathFollowerState State => _state;
-        public float NormalizedTime => _cursor.Normalized;
-        public float GlobalNormalizedTime => _cursor.Global;
-        public int CurrentSegmentIndex => _cursor.Segment;
-        public int SnapshotRevision => _playbackSession?.ProviderRevision ?? -1;
-        public EPathMoveType MoveType => _cursor.MoveType;
-        public ulong PlaybackId => _playbackId;
-        public ulong StateRevision => _stateRevision;
-        ulong IPathPlaybackIdentity.PlaybackOwnerId => _playbackOwnerId;
-        public float Speed => _cursor.Speed;
-        public float Duration => _cursor.Duration;
+        internal override ulong TickPlaybackId => Playback.PlaybackId;
+        internal int SeekCount => Playback.SeekCount;
+        internal int RouteRevision => Playback.Route?.Revision ?? -1;
 
         public event Action<EPathFollowerState> StateChanged
         {
-            add => _stateChanged.Add(value);
-            remove => _stateChanged.Remove(value);
+            add => _listeners.StateChanged.Add(value);
+            remove => _listeners.StateChanged.Remove(value);
         }
+
+        /// <summary>A sequence entered a segment by moving. Seek does not raise it.</summary>
         public event Action<int> SegmentChanged
         {
-            add => _segmentChanged.Add(value);
-            remove => _segmentChanged.Remove(value);
+            add => _listeners.SegmentChanged.Add(value);
+            remove => _listeners.SegmentChanged.Remove(value);
         }
-        // The queue adapter reacts inside the operation that changed the state.
-        // Public listeners wait until that operation has returned.
-        internal event Action<EPathFollowerState> ObservedStateChanged;
-        internal event Action<int> ObservedSegmentChanged;
-        internal event Action ObservedCompleted;
-        internal event Action LoopBoundary;
+
         public event Action Completed
         {
-            add => _completed.Add(value);
-            remove => _completed.Remove(value);
+            add => _listeners.Completed.Add(value);
+            remove => _listeners.Completed.Remove(value);
         }
 
-        #endregion
-
-
-        #region Unity Events
-
-        public PathCommandReceipt Init()
+        /// <summary>The name of each event reached, after the receiver heard it.</summary>
+        public event Action<string> EventReached
         {
-            if (_isInitialized)
-                return CreateReceipt(false);
+            add => _listeners.EventReached.Add(value);
+            remove => _listeners.EventReached.Remove(value);
+        }
 
+        #region Commands
+
+        /// <summary>Starts a playback from the start of the route. Throws before anything changes when the request is invalid.</summary>
+        public bool Play(PathPlaybackRequest request)
+        {
             using var operation = PathExecutionBoundary.Enter();
-            if (_pathEventHandler == null)
-                TryGetComponent(out _pathEventHandler);
-            if (_characterController == null)
-                TryGetComponent(out _characterController);
-            if (_pathEventHandler != null && !_pathEventHandler.IsInitialized)
-                _pathEventHandler.Init();
-            _pathEventHandler?.Bind(this);
-            _eventTarget = this;
-
-            _isInitialized = true;
-            _state = EPathFollowerState.Ready;
-            _stateRevision++;
-            PathCommandReceipt receipt = CreateReceipt(true);
-            NotifyStateChanged(_state);
-            return receipt;
+            bool changed = Playback.Play(request);
+            TrySuppressCharacterController();
+            ApplyPositionIfChanged();
+            return changed;
         }
 
-        public PathCommandReceipt Release()
+        public bool Stop()
         {
-            if (!_isInitialized && _playbackSession == null)
-                return CreateReceipt(false);
-
             using var operation = PathExecutionBoundary.Enter();
-            StopMove();
-            _playbackSession = null;
-            _isInitialized = false;
-            _stateRevision++;
-            PathCommandReceipt receipt = CreateReceipt(true);
-            SetState(EPathFollowerState.Uninitialized);
-            return receipt;
+            bool changed = Playback.Stop();
+            AfterPlaybackWork();
+            return changed;
         }
 
-        private void Reset()
+        public bool Pause()
         {
-            TryGetComponent(out _pathEventHandler);
-            TryGetComponent(out _characterController);
-        }
-
-        private void Awake()
-        {
-            if (!Application.isPlaying)
-                return;
-            Init();
-            PathRuntimeDriverBehaviour.Instance.Register(this);
-        }
-
-        private void OnEnable()
-        {
-            if (!Application.isPlaying)
-                return;
-            if (!_isInitialized)
-                Init();
-            PathRuntimeDriverBehaviour.Instance.Register(this);
-        }
-
-        void IPathRuntimeTickable.Tick(
-            float deltaTime,
-            float unscaledDeltaTime,
-            int frameId)
-        {
-            Tick(deltaTime);
-        }
-
-        internal void Tick(float deltaTime)
-        {
-            if (!_isInitialized || !_isMoving || _playbackSession == null)
-                return;
             using var operation = PathExecutionBoundary.Enter();
-            if (!RefreshProviderSnapshotIfNeeded())
-                return;
-
-            if (deltaTime <= 0f)
-                return;
-
-            if (_constraint.IsBlocked)
-            {
-                _cursor.PendingTime = 0f;
-                ApplyCurrentPosition();
-                return;
-            }
-
-            float remaining = deltaTime + _cursor.PendingTime;
-            _cursor.PendingTime = 0f;
-            if (remaining <= 0f)
-                return;
-
-            int transitionCount = 0;
-            while (remaining > EPSILON
-                && transitionCount < MAX_SEGMENT_TRANSITIONS_PER_TICK)
-            {
-                float consumed = AdvanceOnce(remaining, out bool transitioned);
-
-                // A Pause event or the end of the path stops the tick here. The end
-                // has already applied its position.
-                if (!_isMoving)
-                {
-                    if (_state == EPathFollowerState.Paused)
-                        ApplyCurrentPosition();
-                    return;
-                }
-                if (transitioned)
-                    transitionCount++;
-                if (consumed <= EPSILON && !transitioned)
-                    break;
-                remaining -= consumed;
-            }
-
-            if (remaining > EPSILON
-                && transitionCount >= MAX_SEGMENT_TRANSITIONS_PER_TICK)
-                _cursor.PendingTime = remaining;
-
-            ApplyCurrentPosition();
+            bool changed = Playback.Pause();
+            AfterPlaybackWork();
+            return changed;
         }
 
-        void IPathRuntimeFaultHandler.HandleRuntimeFault(
-            ulong playbackId,
-            System.Exception exception)
+        public bool Resume()
         {
-            if (playbackId == 0 || PlaybackId != playbackId)
-                return;
             using var operation = PathExecutionBoundary.Enter();
-            try
-            {
-                StopMove();
-            }
-            catch
-            {
-                if (PlaybackId != playbackId)
-                    return;
-                StopPlaybackOnly();
-                EndPlayback();
-                SetState(EPathFollowerState.Ready);
-                TryRestoreCharacterController();
-            }
+            bool changed = Playback.Resume();
+            AfterPlaybackWork();
+            return changed;
         }
 
-        private void OnDisable()
+        /// <summary>Moves to a progress of 0..1. Events at and before it are skipped.</summary>
+        public bool Seek(float progress)
         {
-            if (Application.isPlaying)
-            {
-                if (PathRuntimeDriverBehaviour.HasInstance)
-                    PathRuntimeDriverBehaviour.Instance.Unregister(this);
-                StopMove();
-                TryRestoreCharacterController();
-            }
+            using var operation = PathExecutionBoundary.Enter();
+            bool changed = Playback.Seek(progress);
+            ApplyPositionIfChanged();
+            return changed;
         }
 
-        private void OnDestroy()
+        /// <summary>Moves to a progress within one segment of a sequence.</summary>
+        public bool SeekSegment(int segmentIndex, float localProgress)
         {
-            if (PathRuntimeDriverBehaviour.HasInstance)
-                PathRuntimeDriverBehaviour.Instance.Unregister(this);
-            Release();
+            using var operation = PathExecutionBoundary.Enter();
+            bool changed = Playback.SeekSegment(segmentIndex, localProgress);
+            ApplyPositionIfChanged();
+            return changed;
         }
 
-        #endregion
-
-
-        #region Public Methods
-
-        /// <summary>
-        /// 재생 중 경로 진행 방향으로 회전을 추종할지 설정합니다.
-        /// false로 끄면 위치만 갱신되고 transform.rotation은 유지됩니다.
-        /// </summary>
-        public void SetRotateToPathDirection(bool rotate)
+        public bool SetSpeed(float speed)
         {
-            _rotateToPathDirection = rotate;
+            using var operation = PathExecutionBoundary.Enter();
+            return Playback.SetSpeed(speed);
+        }
+
+        public bool SetDuration(float duration)
+        {
+            using var operation = PathExecutionBoundary.Enter();
+            return Playback.SetDuration(duration);
+        }
+
+        /// <summary>Runs an event asset now with its current values, as if the follower reached it.</summary>
+        public void TriggerEvent(PathEventSettingSO setting)
+        {
+            PathEventDefinition definition = PathEventDefinition.FromAuthoring(setting);
+            using var operation = PathExecutionBoundary.Enter();
+            Playback.TriggerEvent(definition);
+            AfterPlaybackWork();
         }
 
         /// <summary>
-        /// 현재 재생 위치의 경로 진행 방향으로 회전을 1회 정렬합니다.
-        /// 추종을 끈 뒤(<see cref="SetRotateToPathDirection"/>) 진입 시점 정렬용으로 사용합니다.
-        /// <paramref name="axes"/>에 포함된 euler 축만 경로 방향을 반영하고, 나머지 축은 현재값을 유지합니다.
+        /// Turns once to the direction of travel at the current position. Only the
+        /// chosen euler axes take the path direction; the others keep their value.
         /// </summary>
-        /// <param name="axes">경로 방향을 적용할 회전 축. 기본값은 전 축(<see cref="EPathAlignRotationAxes.All"/>).</param>
-        /// <returns>정렬에 성공하면 true.</returns>
-        public bool AlignRotationToPathDirection(
-            EPathAlignRotationAxes axes = EPathAlignRotationAxes.All)
+        public bool AlignRotationToPathDirection(EPathAlignRotationAxes axes = EPathAlignRotationAxes.All)
         {
-            if (axes == EPathAlignRotationAxes.None)
-                return false;
-
-            if (!TryEvaluatePathDirection(out Vector3 direction))
+            if (axes == EPathAlignRotationAxes.None || !Playback.TryEvaluateDirection(out Vector3 direction))
                 return false;
 
             Quaternion pathRotation = Quaternion.LookRotation(direction, Vector3.up);
-
             if (axes == EPathAlignRotationAxes.All)
             {
                 transform.rotation = pathRotation;
@@ -298,484 +172,107 @@ namespace Common.TransformPath
 
             Vector3 pathEuler = pathRotation.eulerAngles;
             Vector3 currentEuler = transform.rotation.eulerAngles;
-
-            if (!axes.HasFlag(EPathAlignRotationAxes.X))
-                pathEuler.x = currentEuler.x;
-            if (!axes.HasFlag(EPathAlignRotationAxes.Y))
-                pathEuler.y = currentEuler.y;
-            if (!axes.HasFlag(EPathAlignRotationAxes.Z))
-                pathEuler.z = currentEuler.z;
-
+            if ((axes & EPathAlignRotationAxes.X) == 0) pathEuler.x = currentEuler.x;
+            if ((axes & EPathAlignRotationAxes.Y) == 0) pathEuler.y = currentEuler.y;
+            if ((axes & EPathAlignRotationAxes.Z) == 0) pathEuler.z = currentEuler.z;
             transform.rotation = Quaternion.Euler(pathEuler);
             return true;
         }
 
-        public PathCommandReceipt StartPlayback(PathPlaybackRequest request)
-        {
-            return StartPreparedPlayback(PreparePlayback(request), request.Loop);
-        }
+        #endregion
 
-        internal PathPlaybackSession PreparePlayback(PathPlaybackRequest request)
-        {
-            EnsureInitialized();
-            PathPlaybackSession session = PathPlaybackSession.CreateOrReuse(
-                request,
-                _playbackSession);
-            if (session.IsSequence)
-                _pathEventHandler?.PrepareForSequence(this, session.Snapshot);
-            else
-                _pathEventHandler?.PrepareForPlayback(
-                    this,
-                    session.EventSource,
-                    session.MovementSettings.MoveType);
-            return session;
-        }
+        #region Runtime
 
-        internal PathCommandReceipt StartPreparedPlayback(PathPlaybackSession session, bool loop)
+        internal override void Initialize()
         {
-            EnsureInitialized();
-            return BeginPlayback(session, loop);
-        }
-
-        public PathCommandReceipt StopMove()
-        {
-            if (_state == EPathFollowerState.Uninitialized
-                || _state == EPathFollowerState.Ready)
-                return CreateReceipt(false);
+            if (_characterController == null)
+                TryGetComponent(out _characterController);
+            _listeners.Receiver = _eventReceiver as IPathEventReceiver;
+            if (_eventReceiver != null && _listeners.Receiver == null)
+                Debug.LogError($"PathFollower '{name}' event receiver does not implement IPathEventReceiver.", this);
             using var operation = PathExecutionBoundary.Enter();
-            StopPlaybackOnly();
-            EndPlayback();
-            PathCommandReceipt receipt = CreateReceipt(true);
+            Playback.Initialize();
+        }
+
+        internal override void Release()
+        {
+            using var operation = PathExecutionBoundary.Enter();
+            Playback.Release();
             TryRestoreCharacterController();
-            SetState(_isInitialized
-                ? EPathFollowerState.Ready
-                : EPathFollowerState.Uninitialized);
-            return receipt;
         }
 
-        public PathCommandReceipt PauseMove()
+        protected override void OnDisabled()
         {
-            if (!_isMoving)
-                return CreateReceipt(false);
+            Stop();
+            TryRestoreCharacterController();
+        }
 
+        internal override void Tick(EPathTickPhase phase, float deltaTime, int frameId)
+        {
+            if (phase == EPathTickPhase.Queue)
+                return;
             using var operation = PathExecutionBoundary.Enter();
-            _isMoving = false;
-            _cursor.PendingTime = 0f;
-            _stateRevision++;
-            _pathEventHandler?.CancelMovementAdjustments();
-            PathCommandReceipt receipt = CreateReceipt(true);
-            SetState(EPathFollowerState.Paused);
-            return receipt;
+            if (phase == EPathTickPhase.Effects)
+                Playback.TickEffects(deltaTime, frameId);
+            else
+                Playback.TickMovement(deltaTime);
+            AfterPlaybackWork();
         }
 
-        public PathCommandReceipt ResumeMove()
+        internal override void OnTickFault(Exception exception)
         {
-            if (!_isInitialized
-                || _playbackSession == null
-                || _state != EPathFollowerState.Paused)
-                return CreateReceipt(false);
-
             using var operation = PathExecutionBoundary.Enter();
-            _isMoving = true;
-            _stateRevision++;
-            PathCommandReceipt receipt = CreateReceipt(true);
-            SetState(EPathFollowerState.Moving);
-            return receipt;
+            Playback.Stop();
+            TryRestoreCharacterController();
         }
 
-        public PathCommandReceipt Seek(float normalizedTime)
-        {
-            EnsureInitialized();
-            if (_playbackSession == null)
-                throw new InvalidOperationException("PathFollower has no active provider.");
-            ValidateFinite(normalizedTime, nameof(normalizedTime));
-
-            float targetProgress = Mathf.Clamp01(normalizedTime);
-            int targetSegment = _playbackSession.FindSegment(targetProgress);
-            return SeekTo(targetSegment, _playbackSession.GetLocalProgress(targetSegment, targetProgress));
-        }
-
-        public PathCommandReceipt SeekSegment(int segmentIndex, float localNormalizedTime)
-        {
-            EnsureInitialized();
-            if (_playbackSession == null || !_playbackSession.IsSequence)
-                throw new InvalidOperationException("SeekSegment requires an active sequence.");
-            if (segmentIndex < 0 || segmentIndex >= _playbackSession.SegmentCount)
-                throw new ArgumentOutOfRangeException(nameof(segmentIndex));
-            ValidateFinite(localNormalizedTime, nameof(localNormalizedTime));
-
-            float local = Mathf.Clamp01(localNormalizedTime);
-            if (local >= 1f && segmentIndex < _playbackSession.SegmentCount - 1)
-            {
-                segmentIndex++;
-                local = 0f;
-            }
-
-            return SeekTo(segmentIndex, local);
-        }
-
-        private PathCommandReceipt SeekTo(int segmentIndex, float local)
-        {
-            if (!_playbackSession.Provider.IsReady)
-                throw new InvalidOperationException("Seek requires a ready path provider.");
-            if (_cursor.Segment == segmentIndex
-                && Mathf.Abs(_cursor.Normalized - local) <= EPSILON)
-                return CreateReceipt(false);
-
-            // A changed position keeps PlaybackId. Both seek APIs discard the old
-            // frame's remaining movement budget.
-            _cursor.PendingTime = 0f;
-            if (_constraint.HasRegistration)
-                _constraint.WaitForNextResult();
-
-            if (segmentIndex != _cursor.Segment)
-                ConfigureSegment(segmentIndex, 0f, false);
-            _cursor.MoveTo(_playbackSession, segmentIndex, local);
-            _playbackSession.ResetEventCursor(
-                _playbackSession.GetEventSource(segmentIndex),
-                _cursor.Normalized);
-            ApplyCurrentPosition();
-            _stateRevision++;
-            return CreateReceipt(true);
-        }
-
-        public PathCommandReceipt SetSpeed(float speed)
-        {
-            EnsureInitialized();
-            ValidateMovementValue(speed, nameof(speed));
-            if (_playbackSession == null)
-                throw new InvalidOperationException("Speed can only be changed during playback.");
-            if (_cursor.MoveType != EPathMoveType.SpeedBased)
-                throw new InvalidOperationException("Speed can only be changed in SpeedBased mode.");
-            if (Mathf.Approximately(_cursor.Speed, speed))
-                return CreateReceipt(false);
-            _cursor.SetSpeed(speed);
-            _stateRevision++;
-            return CreateReceipt(true);
-        }
-
-        public PathCommandReceipt SetDuration(float duration)
-        {
-            EnsureInitialized();
-            ValidateMovementValue(duration, nameof(duration));
-            if (_playbackSession == null)
-                throw new InvalidOperationException("Duration can only be changed during playback.");
-            if (_cursor.MoveType != EPathMoveType.TimeBased)
-                throw new InvalidOperationException("Duration can only be changed in TimeBased mode.");
-            if (Mathf.Approximately(_cursor.Duration, duration))
-                return CreateReceipt(false);
-
-            _cursor.SetDuration(duration);
-            _stateRevision++;
-            return CreateReceipt(true);
-        }
-
-        public bool AttachQueueConstraint(PathQueueRegistration registration)
-        {
-            if (!registration.IsValid || registration.PlaybackId == 0
-                || registration.PlaybackId != PlaybackId)
-                return false;
-
-            _constraint.Attach(registration);
-            return true;
-        }
-
-        public void ApplyQueueConstraint(
-            PathQueueRegistration registration,
-            PathQueueConstraint constraint)
-        {
-            if (registration.PlaybackId == PlaybackId && _playbackSession != null)
-                _constraint.Apply(registration, constraint, _playbackSession.Provider.Revision);
-        }
-
-        public void ReleaseQueueConstraint(PathQueueRegistration registration)
-        {
-            _constraint.Release(registration);
-        }
-
-        internal void SetEventTarget(IPathFollower target)
-        {
-            _eventTarget = target ?? this;
-            _pathEventHandler?.Bind(_eventTarget);
-        }
+        /// <summary>The queue writes the limit for the next movement here.</summary>
+        internal void SetMotionLimit(PathMotionLimit limit) => Playback.Limit = limit;
 
         #endregion
 
-
         #region Private Methods
 
-        private PathCommandReceipt BeginPlayback(
-            PathPlaybackSession session,
-            bool loop)
+        private PathPlayback CreatePlayback()
         {
-            using var operation = PathExecutionBoundary.Enter();
-            StopPlaybackOnly();
-            if (PlaybackId != 0)
-                EndPlayback();
-            _playbackSession = session;
-            _cursor.Begin(session, loop);
-            session.RestartEventCursor();
-            _constraint.Clear();
-            _isMoving = true;
-            _playbackId = ++_nextPlaybackId;
-            _stateRevision++;
-            PathCommandReceipt receipt = CreateReceipt(true);
-            TrySuppressCharacterController();
-            SetState(EPathFollowerState.Moving);
-            // The queue adapter can refuse the start inside SetState.
-            if (_isMoving)
-                ApplyCurrentPosition();
-            else
-                TryRestoreCharacterController();
-            return receipt;
+            _listeners.Owner = this;
+            return new PathPlayback(_listeners);
         }
 
-        private float AdvanceOnce(float availableTime, out bool transitioned)
+        private void AfterPlaybackWork()
         {
-            transitioned = false;
-            float cap = _constraint.MaxGlobalProgress;
-            float consumed = _cursor.Advance(
-                _playbackSession,
-                availableTime,
-                _constraint.SpeedMultiplier,
-                cap,
-                out bool moved);
-            if (!moved)
-                return consumed;
-
-            DispatchEvents(_playbackSession.GetEventSource(_cursor.Segment), _cursor.Normalized);
-            if (_state == EPathFollowerState.Moving
-                && _playbackSession.GetGlobalProgress(_cursor.Segment, 1f) <= cap
-                && _cursor.HasReachedSegmentEnd(_playbackSession))
-                ProcessSegmentEnd(out transitioned);
-            return Mathf.Max(consumed, EPSILON);
-        }
-
-        private void ProcessSegmentEnd(out bool transitioned)
-        {
-            transitioned = false;
-            IPathEventSource source = _playbackSession.GetEventSource(_cursor.Segment);
-            _cursor.MoveToSegmentEnd(_playbackSession);
-            bool hasNextSegment = _cursor.Segment + 1 < _playbackSession.SegmentCount;
-            if (!hasNextSegment && !_cursor.Loop)
-            {
-                CompletePlayback(source);
-                return;
-            }
-
-            if (!ApplyBoundaryPositionAndFlushEvents(source))
-                return;
-            EnterSegment(hasNextSegment ? _cursor.Segment + 1 : 0, !hasNextSegment);
-            transitioned = true;
-        }
-
-        private bool ApplyBoundaryPositionAndFlushEvents(IPathEventSource source)
-        {
-            ApplyCurrentPosition();
-            DispatchEvents(source, 1f);
-            return _state == EPathFollowerState.Moving;
-        }
-
-        private void EnterSegment(int index, bool loopBoundary)
-        {
-            // A Single or Aggregate lap keeps the values set during the last one.
-            if (_playbackSession.IsSequence)
-                ConfigureSegment(
-                    index,
-                    _cursor.GetNominalSpeed(_playbackSession),
-                    _playbackSession.PreservesPreviousSpeed(index));
-            _cursor.EnterSegment(_playbackSession, index);
-            _playbackSession.RestartEventCursor();
-            if (loopBoundary)
-                LoopBoundary?.Invoke();
-            if (_playbackSession.IsSequence)
-            {
-                ObservedSegmentChanged?.Invoke(index);
-                PathExecutionBoundary.PublishSegment(_segmentChanged, index);
-            }
-        }
-
-        private void ConfigureSegment(int index, float previousNominalSpeed, bool preserveSpeed)
-        {
-            // An adjustment drives the channel of the segment that started it.
-            if (_cursor.ConfigureSegment(_playbackSession, index, previousNominalSpeed, preserveSpeed))
-                _pathEventHandler?.CancelMovementAdjustments();
-        }
-
-        private void CompletePlayback(IPathEventSource source)
-        {
-            _isMoving = false;
-            _cursor.PendingTime = 0f;
-            if (!ApplyBoundaryPositionAndFlushEvents(source))
-            {
-                TryRestoreCharacterController();
-                return;
-            }
-            EndPlayback();
+            ApplyPositionIfChanged();
             TryRestoreCharacterController();
-            SetState(EPathFollowerState.Completed);
-            ObservedCompleted?.Invoke();
-            PathExecutionBoundary.PublishPlain(_completed);
         }
 
-        private bool RefreshProviderSnapshotIfNeeded()
+        private void ApplyPositionIfChanged()
         {
-            EPathSnapshotRefreshDecision decision = _playbackSession.EvaluateRefresh(
-                out PathSequenceSnapshot nextSequence,
-                out PathEventSourceSnapshot nextEvents);
-            if (decision == EPathSnapshotRefreshDecision.Unchanged)
-                return true;
-            if (decision != EPathSnapshotRefreshDecision.Refresh)
-            {
-                StopMove();
-                return false;
-            }
-
-            _playbackSession.ApplyRefresh(nextSequence, nextEvents);
-            _cursor.SyncToProvider(_playbackSession);
-            ApplyCurrentPosition();
-            return true;
-        }
-
-        private void ApplyCurrentPosition()
-        {
-            if (_playbackSession == null || !_playbackSession.Provider.IsReady)
+            if (!Playback.ConsumePositionDirty() || !Playback.CanSample)
                 return;
-
-            transform.position = _cursor.SamplePosition(_playbackSession);
-
-            if (_rotateToPathDirection && TryEvaluatePathDirection(out Vector3 direction))
+            transform.position = Playback.SamplePosition();
+            if (_rotateToPathDirection && Playback.TryEvaluateDirection(out Vector3 direction))
                 transform.rotation = Quaternion.LookRotation(direction, Vector3.up);
-        }
-
-        private bool TryEvaluatePathDirection(out Vector3 direction)
-        {
-            direction = Vector3.zero;
-            return _playbackSession != null
-                && _playbackSession.Provider.IsReady
-                && _cursor.TryEvaluateDirection(_playbackSession, out direction);
-        }
-
-        private void DispatchEvents(
-            IPathEventSource source,
-            float progress)
-        {
-            if (source == null)
-                return;
-
-            while (_playbackSession.NextEventIndex < source.EventCount)
-            {
-                PathRuntimeEvent entry = source.GetEvent(
-                    _playbackSession.NextEventIndex);
-                if (entry.NormalizedTime > progress + EPSILON)
-                    break;
-                _playbackSession.NextEventIndex++;
-                if (entry.Definition == null)
-                    continue;
-                _pathEventHandler?.HandleEvent(
-                    entry.Definition,
-                    _eventTarget ?? this);
-                if (_state != EPathFollowerState.Moving)
-                    return;
-            }
-        }
-
-        private void EnsureInitialized()
-        {
-            if (!_isInitialized)
-                throw new InvalidOperationException("PathFollower is not initialized.");
-        }
-
-        private static void ValidateMovementValue(float value, string parameterName)
-        {
-            if (!PathValueUtility.IsInRange(
-                    value,
-                    PathMovementSettingsUtility.MIN_VALUE,
-                    PathMovementSettingsUtility.MAX_VALUE))
-                throw new ArgumentOutOfRangeException(parameterName);
-        }
-
-        private static void ValidateFinite(float value, string parameterName)
-        {
-            if (!PathValueUtility.IsFinite(value))
-                throw new ArgumentOutOfRangeException(parameterName);
-        }
-
-        private void StopPlaybackOnly()
-        {
-            _isMoving = false;
-            _cursor.PendingTime = 0f;
-        }
-
-        private void EndPlayback()
-        {
-            ulong playbackId = _playbackId;
-            _playbackId = 0;
-            _stateRevision++;
-            if (playbackId != 0)
-                ReleasePlaybackResources(playbackId);
-        }
-
-        private void ReleasePlaybackResources(ulong playbackId)
-        {
-            try
-            {
-                _pathEventHandler?.CancelPlaybackEffects(playbackId);
-            }
-            catch
-            {
-                // Preserve best-effort cleanup: lifecycle notification must
-                // still run if one of the owned resources fails to release.
-            }
-
-            if (_constraint.Registration.PlaybackId == playbackId)
-                _constraint.Clear();
-        }
-
-        private PathCommandReceipt CreateReceipt(bool changed)
-        {
-            return new PathCommandReceipt(_playbackOwnerId, PlaybackId, StateRevision, changed);
-        }
-
-        private void SetState(EPathFollowerState state)
-        {
-            if (_state == state)
-                return;
-            _state = state;
-            NotifyStateChanged(state);
-        }
-
-        private void NotifyStateChanged(EPathFollowerState state)
-        {
-            ObservedStateChanged?.Invoke(state);
-            // The queue adapter can stop a start it refuses. Listeners then hear
-            // only the state that stands.
-            if (_state == state)
-                PathExecutionBoundary.PublishState(_stateChanged, state);
         }
 
         private void TrySuppressCharacterController()
         {
-            if (!_suppressCharacterControllerDuringPlayback
+            if (!Playback.IsMoving
+                || !_suppressCharacterControllerDuringPlayback
                 || _characterController == null
                 || !_characterController.enabled)
                 return;
-
             _characterController.enabled = false;
             _characterControllerDisabledByFollower = true;
         }
 
         private void TryRestoreCharacterController()
         {
-            if (!_characterControllerDisabledByFollower
-                || _characterController == null)
+            if (!_characterControllerDisabledByFollower || _characterController == null)
                 return;
-
             // A paused playback still owns the suppression.
-            if (isActiveAndEnabled && PlaybackId != 0
-                && (_isMoving || _state == EPathFollowerState.Paused))
+            if (isActiveAndEnabled && Playback.PlaybackId != 0
+                && (Playback.IsMoving || Playback.State == EPathFollowerState.Paused))
                 return;
-
             _characterController.enabled = true;
             _characterControllerDisabledByFollower = false;
         }

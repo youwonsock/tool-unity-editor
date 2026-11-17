@@ -11,19 +11,15 @@ namespace Common.TransformPath.Samples
     {
         #region Public Methods
 
-        public void ReceivePathEvent(string eventName, IPathPlaybackState follower)
+        public void OnPathEvent(string eventName, PathFollower follower)
         {
             if (string.IsNullOrEmpty(eventName))
                 throw new ArgumentException("Path event name is required.", nameof(eventName));
             if (follower == null)
                 throw new ArgumentNullException(nameof(follower));
 
-            Component followerComponent = follower as Component;
-            string actorName = followerComponent != null
-                ? followerComponent.name
-                : follower.GetType().Name;
             Debug.Log(
-                $"[TransformPath] Event received: event='{eventName}', actor='{actorName}'",
+                $"[TransformPath] Event received: event='{eventName}', actor='{follower.name}'",
                 this);
         }
 

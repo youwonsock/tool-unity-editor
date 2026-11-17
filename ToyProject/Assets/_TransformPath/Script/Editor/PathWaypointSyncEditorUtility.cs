@@ -211,7 +211,6 @@ namespace Common.TransformPath
                 {
                     if (pathData == null)
                         continue;
-                    pathData.Init();
                     pathData.Rebuild();
                     PathEditorUndoUtility.MarkDirty(pathData);
                 }
@@ -220,7 +219,6 @@ namespace Common.TransformPath
             if (multiPathData == null)
                 return;
 
-            multiPathData.Init();
             multiPathData.Rebuild();
             PathEditorUndoUtility.MarkDirty(multiPathData);
         }

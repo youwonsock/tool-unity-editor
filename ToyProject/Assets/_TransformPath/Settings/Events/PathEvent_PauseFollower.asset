@@ -13,8 +13,9 @@ MonoBehaviour:
   m_Name: PathEvent_PauseFollower
   m_EditorClassIdentifier: 
   EventName: PauseFollower
-  UseModifyPathMoveSpeed: 1
-  MoveSpeedTargetValue: 0
+  Lifecycle: 1
+  UseModifyPathMoveSpeed: 0
+  MoveSpeedTargetValue: 1
   MoveSpeedAdjustDuration: 0
   MoveSpeedAdjustCurve:
     serializedVersion: 2
@@ -40,8 +41,8 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  UseModifyPathMoveDuration: 1
-  MoveDurationTargetValue: 9999
+  UseModifyPathMoveDuration: 0
+  MoveDurationTargetValue: 5
   MoveDurationAdjustDuration: 0
   MoveDurationAdjustCurve:
     serializedVersion: 2

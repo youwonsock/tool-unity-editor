@@ -65,130 +65,61 @@ namespace Common.TransformPath
         #endregion
     }
 
+    /// <summary>
+    /// The geometry a PathData would build from its current control points,
+    /// rebuilt only when a point, the curve or the segment count changed.
+    /// </summary>
     internal sealed class PathDataScenePreview
     {
-        #region Constants
-
-        private const int MIN_PATH_POINTS = 2;
-
-        #endregion
-
-
-        #region Member Variables
-
         private readonly List<Vector3> _controlPoints = new List<Vector3>();
         private readonly List<Vector3> _lastControlPoints = new List<Vector3>();
-        private readonly PathGeometryBuildBuffer _geometryBuildBuffer =
-            new PathGeometryBuildBuffer();
-
-        private Vector3[] _sampledPoints;
-        private float[] _cumulativeDistances;
-        private float _pathLength;
+        private readonly PathGeometryBuildBuffer _buildBuffer = new PathGeometryBuildBuffer();
+        private PathPolyline _polyline;
         private EPathCurveType _curveType;
         private int _segmentCount;
-        private bool _hasSignature;
 
-        #endregion
-
-
-        #region Properties
-
-        public bool IsValid => _sampledPoints != null
-            && _cumulativeDistances != null
-            && _sampledPoints.Length >= MIN_PATH_POINTS
-            && _pathLength > 0f;
-        public Vector3[] SampledPoints => _sampledPoints;
-        public int SampledPointCount => _sampledPoints == null ? 0 : _sampledPoints.Length;
-        public float PathLength => _pathLength;
-
-        #endregion
-
-
-        #region Public Methods
+        public bool IsValid => _polyline != null;
+        public Vector3[] SampledPoints => _polyline?.Points;
+        public int SampledPointCount => _polyline == null ? 0 : _polyline.PointCount;
+        public float PathLength => _polyline == null ? 0f : _polyline.Length;
 
         public bool Update(PathData pathData)
         {
             if (pathData == null
                 || !pathData.CopyControlPoints(_controlPoints)
-                || _controlPoints.Count < MIN_PATH_POINTS
-                || pathData.BuildSegmentCount < MIN_PATH_POINTS)
+                || pathData.SegmentCount < PathConstants.MIN_PATH_POINTS)
             {
                 Invalidate();
                 return false;
             }
 
             EPathCurveType curveType = pathData.CurveType;
-            int segmentCount = pathData.BuildSegmentCount;
-            if (_hasSignature
+            int segmentCount = pathData.SegmentCount;
+            if (_polyline != null
                 && _curveType == curveType
                 && _segmentCount == segmentCount
-                && PathGeometryUtility.AreSamePoints(
-                    _controlPoints,
-                    _lastControlPoints))
-                return IsValid;
+                && PathGeometryUtility.AreSamePoints(_controlPoints, _lastControlPoints))
+                return true;
 
-            if (!PathGeometryUtility.TryBuild(
-                    _controlPoints,
-                    curveType,
-                    segmentCount,
-                    _geometryBuildBuffer,
-                    out PathGeometryResult geometry,
-                    out _))
+            if (!PathGeometryUtility.TryBuild(_controlPoints, curveType, segmentCount, _buildBuffer,
+                    out _polyline, out _))
             {
                 Invalidate();
                 return false;
             }
-
-            _sampledPoints = geometry.Points;
-            _cumulativeDistances = geometry.CumulativeDistances;
-            _pathLength = geometry.Length;
             _curveType = curveType;
             _segmentCount = segmentCount;
             _lastControlPoints.Clear();
             _lastControlPoints.AddRange(_controlPoints);
-            _hasSignature = true;
             return true;
         }
 
-        public Vector3 Sample(float normalizedTime)
-        {
-            if (!IsValid)
-                return Vector3.zero;
-            if (normalizedTime <= 0f)
-                return _sampledPoints[0];
-            if (normalizedTime >= 1f)
-                return _sampledPoints[_sampledPoints.Length - 1];
-
-            float targetDistance = Mathf.Clamp01(normalizedTime) * _pathLength;
-            int index = PathGeometryUtility.FindSegmentIndex(
-                _cumulativeDistances,
-                targetDistance);
-            float start = _cumulativeDistances[index];
-            float end = _cumulativeDistances[index + 1];
-            float segmentLength = end - start;
-            if (segmentLength <= Mathf.Epsilon)
-                return _sampledPoints[index];
-
-            return Vector3.Lerp(
-                _sampledPoints[index],
-                _sampledPoints[index + 1],
-                (targetDistance - start) / segmentLength);
-        }
-
-        #endregion
-
-
-        #region Private Methods
+        public Vector3 Sample(float normalizedTime) => _polyline == null ? Vector3.zero : _polyline.Sample(normalizedTime);
 
         private void Invalidate()
         {
-            _sampledPoints = null;
-            _cumulativeDistances = null;
-            _pathLength = 0f;
-            _hasSignature = false;
+            _polyline = null;
             _lastControlPoints.Clear();
         }
-
-        #endregion
     }
 }

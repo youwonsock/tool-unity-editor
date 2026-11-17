@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: PathEvent_ResumeFollower
   m_EditorClassIdentifier: 
   EventName: 
+  Lifecycle: 2
   UseModifyPathMoveSpeed: 1
   MoveSpeedTargetValue: 2
   MoveSpeedAdjustDuration: 0
