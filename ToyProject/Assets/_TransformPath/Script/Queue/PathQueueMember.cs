@@ -50,10 +50,11 @@ namespace Common.TransformPath
         private bool _showingPause;
         private bool _reportedBlocked;
         private float _reportedSpeedMultiplier = 1f;
-        private readonly PathListeners _blocked = new PathListeners();
-        private readonly PathListeners _resumed = new PathListeners();
-        private readonly PathListeners _speedChanged = new PathListeners();
-        private readonly PathListeners _invalidated = new PathListeners();
+        private readonly PathSignal<PathQueueMember> _blocked = new PathSignal<PathQueueMember>();
+        private readonly PathSignal<PathQueueMember> _resumed = new PathSignal<PathQueueMember>();
+        private readonly PathSignal<PathQueueMember, float> _speedChanged = new PathSignal<PathQueueMember, float>();
+        private readonly PathSignal<PathQueueMember, EPathQueueLeaveReason> _invalidated =
+            new PathSignal<PathQueueMember, EPathQueueLeaveReason>();
 
         public PathFollower Follower
         {
@@ -277,7 +278,7 @@ namespace Common.TransformPath
                 PathFollower follower = Follower;
                 if (follower != null && follower.State == EPathFollowerState.Moving)
                     follower.Stop();
-                PathExecutionBoundary.PublishMemberInvalidated(_invalidated, this, reason);
+                _invalidated.Publish(this, reason);
             }
         }
 
@@ -342,12 +343,12 @@ namespace Common.TransformPath
             if (_wait.IsBlocked != _reportedBlocked)
             {
                 _reportedBlocked = _wait.IsBlocked;
-                PathExecutionBoundary.PublishMember(_reportedBlocked ? _blocked : _resumed, this);
+                (_reportedBlocked ? _blocked : _resumed).Publish(this);
             }
             if (!Mathf.Approximately(_reportedSpeedMultiplier, _wait.SpeedMultiplier))
             {
                 _reportedSpeedMultiplier = _wait.SpeedMultiplier;
-                PathExecutionBoundary.PublishMemberSpeed(_speedChanged, this, _wait.SpeedMultiplier);
+                _speedChanged.Publish(this, _wait.SpeedMultiplier);
             }
         }
 

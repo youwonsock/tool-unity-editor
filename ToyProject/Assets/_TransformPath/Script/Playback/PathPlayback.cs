@@ -27,11 +27,12 @@ namespace Common.TransformPath
     /// <summary>The listeners a playback notifies. They run after the operation, through the boundary.</summary>
     internal sealed class PathPlaybackListeners
     {
-        public readonly PathListeners StateChanged = new PathListeners();
-        public readonly PathListeners SegmentChanged = new PathListeners();
-        public readonly PathListeners Completed = new PathListeners();
-        public readonly PathListeners EventReached = new PathListeners();
-        public IPathEventReceiver Receiver;
+        public readonly PathSignal<EPathFollowerState> StateChanged = new PathSignal<EPathFollowerState>();
+        public readonly PathSignal<int> SegmentChanged = new PathSignal<int>();
+        public readonly PathSignal Completed = new PathSignal();
+        /// <summary>The follower's IPathEventReceiver, heard before <see cref="EventReached"/>.</summary>
+        public readonly PathSignal<string, PathFollower> Receiver = new PathSignal<string, PathFollower>();
+        public readonly PathSignal<string> EventReached = new PathSignal<string>();
         public PathFollower Owner;
     }
 
@@ -407,7 +408,7 @@ namespace Common.TransformPath
             _cursor.EnterSegment(_route, index);
             _nextEventIndex = 0;
             if (_route.IsSequence)
-                PathExecutionBoundary.PublishSegment(_listeners.SegmentChanged, index);
+                _listeners.SegmentChanged.Publish(index);
         }
 
         private void ConfigureSegment(int index, float previousNominalSpeed, bool preserveSpeed)
@@ -426,7 +427,7 @@ namespace Common.TransformPath
                 return;
             EndPlayback();
             SetState(EPathFollowerState.Completed);
-            PathExecutionBoundary.PublishPlain(_listeners.Completed);
+            _listeners.Completed.Publish();
         }
 
         private bool RefreshRouteIfNeeded()
@@ -494,8 +495,8 @@ namespace Common.TransformPath
         {
             if (!string.IsNullOrEmpty(definition.EventName))
             {
-                PathExecutionBoundary.PublishEventReceiver(_listeners.Receiver, definition.EventName, _listeners.Owner);
-                PathExecutionBoundary.PublishEventName(_listeners.EventReached, definition.EventName);
+                _listeners.Receiver.Publish(definition.EventName, _listeners.Owner);
+                _listeners.EventReached.Publish(definition.EventName);
             }
 
             if (definition.Lifecycle == EPathEventLifecycle.Pause)
@@ -628,7 +629,7 @@ namespace Common.TransformPath
                 return;
             State = state;
             _changes++;
-            PathExecutionBoundary.PublishState(_listeners.StateChanged, state);
+            _listeners.StateChanged.Publish(state);
         }
 
         private void EnsureInitialized()

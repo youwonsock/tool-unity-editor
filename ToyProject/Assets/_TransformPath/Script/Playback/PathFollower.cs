@@ -188,8 +188,9 @@ namespace Common.TransformPath
         {
             if (_characterController == null)
                 TryGetComponent(out _characterController);
-            _listeners.Receiver = _eventReceiver as IPathEventReceiver;
-            if (_eventReceiver != null && _listeners.Receiver == null)
+            if (_eventReceiver is IPathEventReceiver receiver)
+                _listeners.Receiver.Add(receiver.OnPathEvent);
+            else if (_eventReceiver != null)
                 Debug.LogError($"PathFollower '{name}' event receiver does not implement IPathEventReceiver.", this);
             using var operation = PathExecutionBoundary.Enter();
             Playback.Initialize();
