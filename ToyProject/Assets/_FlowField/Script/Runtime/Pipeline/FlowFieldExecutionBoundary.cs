@@ -43,7 +43,7 @@ namespace Common.FlowField
         {
             if (IsInUserCode)
                 throw new InvalidOperationException(
-                    $"{command}은(는) Modifier의 Observe, CaptureSnapshot, Modify 안에서 호출할 수 없습니다.");
+                    $"{command} cannot be called from a Modifier's Observe, CaptureSnapshot or Modify.");
         }
 
         /// <summary>Queues the command when called from Modifier code. Otherwise the caller runs it.</summary>

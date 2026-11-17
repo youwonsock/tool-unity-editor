@@ -202,9 +202,9 @@ namespace Common.FlowField
             return field != null;
         }
 
-        // Registration commands issued from Modifier code wait until that
-        // operation has finished. The mode-specific sessions keep their
-        // different area-cache and rebuild policies behind the Now methods.
+        // Commands issued from Modifier code wait until that operation has
+        // finished. The Now methods are the same in both modes; the builder
+        // only rebuilds what a change touched.
         internal bool RegisterModifierCommand(IFlowFieldVectorModifier modifier)
             => Boundary.IsInUserCode ? DeferRegisterModifier(modifier) : RegisterModifierNow(modifier);
 
@@ -408,14 +408,9 @@ namespace Common.FlowField
             => RunPipeline(in budget, scheduled: true, waitForWorker: false);
 
         /// <summary>
-        /// The pipeline loop. The scheduler pumps with a frame budget and never
-        /// waits; a direct owner (a bake, an Editor preview) may wait for the
-        /// worker thread instead.
-        /// </summary>
-        /// <summary>
         /// A direct owner (a bake, the Editor preview) runs its own session and
-        /// waits for the worker; the scheduler never does. With no budget the
-        /// pending build runs to its end.
+        /// waits for the worker thread; the scheduler pumps with a frame budget
+        /// and never waits. With no budget the pending build runs to its end.
         /// </summary>
         internal void Pump() => RunPipeline(FlowFieldBuildBudget.Unlimited, scheduled: false, waitForWorker: true);
 

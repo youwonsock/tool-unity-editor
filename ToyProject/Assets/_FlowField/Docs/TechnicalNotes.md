@@ -71,7 +71,7 @@ Player 측정(`PlayerProbe` 폴더, `Tools/run-player-probe.sh`)은 Editor와 `F
 - 장애물·Modifier 단계는 64셀씩 진행합니다. 스텝마다 `OverlapBox`로 후보를 모아 후보가 닿는 셀만 정확히 검사합니다(`FlowFieldVolumeCellQuery`).
 - **부분 재계산:** Modifier만 바뀌면 게시된 내비게이션에 다시 합성하고, Goal만 바뀌면 장애물 결과와 Topology를 재사용합니다. Goal이 같은 셀 안에서 움직이면 빌드하지 않습니다. Goal을 지우면 진행 중인 빌드를 버립니다.
 - **등록하지 않은 Collider:** `RequestRebuild()`나 `NotifyCellsDirty()`의 전체 조회에서 반영됩니다.
-- **경로 안전성:** 공통 불확실 영역에 더해, 다음 셀·탈출 방향·Default Direction 경로가 그 영역이나 막힌 셀을 지나면 정지합니다(`FlowFieldVolumeSafetyState`).
+- **경로 안전성:** 공통 불확실 영역에 더해, 다음 셀·탈출 방향·Default Direction 경로가 그 영역이나 막힌 셀을 지나면 정지합니다(`FlowFieldVolumePathSafety`).
 - **배열 재사용:** 교체된 게시 배열을 다음 빌드에 씁니다(`FlowFieldSpareArrays`).
 
 ## Modifier

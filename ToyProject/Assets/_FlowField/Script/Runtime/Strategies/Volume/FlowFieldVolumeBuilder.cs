@@ -22,7 +22,9 @@ namespace Common.FlowField
         private readonly int[] _obstacleCells = new int[CellsPerStep];
         private readonly FlowFieldVolumeCellQuery _cellQuery = new FlowFieldVolumeCellQuery();
         private readonly FlowFieldSpareArrays _spares = new FlowFieldSpareArrays();
-        private readonly FlowFieldVolumeSafetyState _safety;
+        private readonly FlowFieldVolumePathSafety _pathSafety;
+        // The uncertain regions; the session owns them, as in Surface2D.
+        private FlowFieldSafety _safety => _session.Safety;
 
         private VolumeFieldData _committed;
         private BuildContext _build;
@@ -49,7 +51,7 @@ namespace Common.FlowField
         internal FlowFieldVolumeBuilder(FlowFieldSession session)
         {
             _session = session ?? throw new ArgumentNullException(nameof(session));
-            _safety = new FlowFieldVolumeSafetyState(session);
+            _pathSafety = new FlowFieldVolumePathSafety(session);
         }
 
         public FlowFieldSpaceMode SpaceMode => FlowFieldSpaceMode.Volume3D;

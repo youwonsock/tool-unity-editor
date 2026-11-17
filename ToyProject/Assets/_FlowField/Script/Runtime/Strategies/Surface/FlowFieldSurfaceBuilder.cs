@@ -296,18 +296,6 @@ namespace Common.FlowField
                 && _committedRequest.HasValue)
                 _safety.InvalidateRegion(request.SurfaceSettings.BakeBounds);
 
-            // A staged obstacle probe is valid only for the exact Surface,
-            // obstacle settings and registered collider set that produced it.
-            // If a newer request changes one of those inputs, discard the
-            // candidate before merging the request so the next build probes
-            // against the new input instead of consuming stale scratch data.
-            if ((inputFlags & (FlowFieldSurfaceDirtyFlags.Grid
-                    | FlowFieldSurfaceDirtyFlags.StaticObstacles
-                    | FlowFieldSurfaceDirtyFlags.DynamicObstacles
-                    | FlowFieldSurfaceDirtyFlags.Escape)) != 0)
-            {
-            }
-
             FlowFieldSurfaceDirtyFlags combinedFlags = inputFlags | request.DirtyFlags;
             _state.DirtyFlags |= combinedFlags;
             if ((combinedFlags & FlowFieldSurfaceDirtyFlags.FinalRegion) != 0)

@@ -7,21 +7,14 @@ namespace Common.FlowField
 {
     // The paths Volume3D checks against the shared uncertain regions: a cell,
     // the step to its next cell, its escape and its Default Direction.
-    internal sealed class FlowFieldVolumeSafetyState
+    internal sealed class FlowFieldVolumePathSafety
     {
         private readonly FlowFieldSession _session;
 
-        internal FlowFieldVolumeSafetyState(FlowFieldSession session) => _session = session;
+        internal FlowFieldVolumePathSafety(FlowFieldSession session) => _session = session;
 
         // The session owns the regions and marks them when an obstacle changes.
         private FlowFieldSafety _regions => _session.Safety;
-
-        internal int UncertainRegionCount => _regions.UncertainRegionCount;
-        internal void ClearRegions() => _regions.ClearRegions();
-        internal void BeginBuild() => _regions.BeginBuild();
-        internal void ClearObservedRegions() => _regions.ClearObservedRegions();
-        internal Bounds[] ObservedRegions() => _regions.ObservedRegions();
-        internal void InvalidateRegion(Bounds bounds) => _regions.InvalidateRegion(bounds);
 
         internal bool IsLatestCellUnknown(VolumeFieldData field, Vector3 center)
         {

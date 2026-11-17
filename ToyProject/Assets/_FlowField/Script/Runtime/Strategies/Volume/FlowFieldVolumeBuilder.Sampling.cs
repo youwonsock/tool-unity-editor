@@ -27,7 +27,7 @@ namespace Common.FlowField
             result = sample;
             field.Grid.FromFlatIndex(index, out int x, out int y, out int z);
             Vector3 center = field.Grid.LocalToWorldCenter(x, y, z);
-            if (_safety.IsLatestCellUnknown(field, center))
+            if (_pathSafety.IsLatestCellUnknown(field, center))
             {
                 result = Stopped;
                 return true;
@@ -35,7 +35,7 @@ namespace Common.FlowField
 
             if (field.Blocked[index])
             {
-                if (_safety.IsEscapePathUnsafe(field, index))
+                if (_pathSafety.IsEscapePathUnsafe(field, index))
                 {
                     result = Stopped;
                     return true;
@@ -46,8 +46,8 @@ namespace Common.FlowField
             }
 
             int next = field.NextCells[index];
-            if (next >= 0 && _safety.IsLatestPathUnsafe(field, index, next)
-                || next == -1 && _safety.IsDefaultDirectionPathUnsafe(field, index))
+            if (next >= 0 && _pathSafety.IsLatestPathUnsafe(field, index, next)
+                || next == -1 && _pathSafety.IsDefaultDirectionPathUnsafe(field, index))
             {
                 result = Stopped;
                 return true;
