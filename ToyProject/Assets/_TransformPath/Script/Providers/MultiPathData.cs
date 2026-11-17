@@ -10,9 +10,7 @@ namespace Common.TransformPath
     /// </summary>
     public sealed class MultiPathData : PathProviderBehaviour
     {
-#if UNITY_EDITOR
         private const float DEFAULT_MULTI_PATH_POINT_SIZE = 0.1f;
-#endif
 
         [SerializeField] private List<PathSegmentAuthoring> _segments = new List<PathSegmentAuthoring>();
 
@@ -282,7 +280,7 @@ namespace Common.TransformPath
             return false;
         }
 
-#if UNITY_EDITOR
+        // Editor settings, serialized in every build so both share one data layout.
         [Header("Editor Only")]
         [SerializeField] private bool _autoLinkPathPoints = true;
 
@@ -295,6 +293,5 @@ namespace Common.TransformPath
         internal bool AutoLinkPathPoints => _autoLinkPathPoints;
         internal PathPreviewStyle PreviewStyleTemplate => new PathPreviewStyle(
             _multiPathLineWidth, _multiPathPointSize, _multiPathSamplePointSize, _multiPathEventPointSize);
-#endif
     }
 }

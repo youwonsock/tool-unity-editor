@@ -280,7 +280,8 @@ namespace Common.TransformPath
             return new PathMovementSettings(_moveType, _moveValue, _timeCurve);
         }
 
-#if UNITY_EDITOR
+        // Scene View preview settings. They are serialized in every build so the
+        // Editor and the Player share one data layout; only the Editor reads them.
         private enum EPreviewSamplingType
         {
             Uniform,
@@ -309,10 +310,8 @@ namespace Common.TransformPath
         internal Color SamplePointColor => _samplePointColor;
         internal Color EventPointColor => _eventPointColor;
         internal PathPreviewStyle PreviewStyle => new PathPreviewStyle(_lineWidth, _pointSize, _samplePointSize, _eventPointSize);
-#endif
     }
 
-#if UNITY_EDITOR
     /// <summary>Sizes of a path's Scene View preview.</summary>
     internal readonly struct PathPreviewStyle
     {
@@ -329,5 +328,4 @@ namespace Common.TransformPath
             EventPointSize = eventPointSize;
         }
     }
-#endif
 }

@@ -118,6 +118,27 @@ namespace Common.TransformPath
             signature.Append(']');
         }
 
+        public static void SetFloat(SerializedObject serializedObject, string propertyName, float value)
+        {
+            SerializedProperty property = serializedObject.FindProperty(propertyName);
+            if (property != null)
+                property.floatValue = value;
+        }
+
+        public static void SetEnumIndex(SerializedObject serializedObject, string propertyName, int index)
+        {
+            SerializedProperty property = serializedObject.FindProperty(propertyName);
+            if (property != null)
+                property.enumValueIndex = index;
+        }
+
+        public static void SetCurve(SerializedObject serializedObject, string propertyName, AnimationCurve value)
+        {
+            SerializedProperty property = serializedObject.FindProperty(propertyName);
+            if (property != null)
+                property.animationCurveValue = PathValueUtility.CloneCurve(value);
+        }
+
         #endregion
     }
 }

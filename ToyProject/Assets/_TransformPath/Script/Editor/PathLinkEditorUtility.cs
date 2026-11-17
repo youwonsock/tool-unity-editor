@@ -25,6 +25,8 @@ namespace Common.TransformPath
         #region Member Variables
 
         private static readonly HashSet<string> DUPLICATE_WARNINGS = new HashSet<string>();
+        private static readonly Transform[] JointPoints = new Transform[2];
+        private static readonly Vector3[] JointSnapshots = new Vector3[2];
 
         #endregion
 
@@ -52,6 +54,7 @@ namespace Common.TransformPath
             return previousEnd != null && currentStart != null;
         }
 
+        /// <summary>After a drag, the joint's other point follows the one that moved (the start on a tie).</summary>
         public static bool TrySyncJointByMovement(
             PathData previous,
             PathData current,
@@ -61,54 +64,23 @@ namespace Common.TransformPath
             Vector3 currentStartSnapshot,
             float epsilonSqr)
         {
-            if (previous == null
-                || current == null
-                || previousEnd == null
-                || currentStart == null)
+            if (previous == null || current == null || previousEnd == null || currentStart == null)
                 return false;
 
-            float currentStartDelta = (currentStart.position - currentStartSnapshot).sqrMagnitude;
-            float previousEndDelta = (previousEnd.position - previousEndSnapshot).sqrMagnitude;
-            bool currentStartMoved = currentStartDelta > epsilonSqr;
-            bool previousEndMoved = previousEndDelta > epsilonSqr;
-
-            if (currentStartMoved && !previousEndMoved)
-            {
-                PathEditorUndoUtility.Record(previousEnd, SYNC_PATH_POINT_UNDO);
-                previousEnd.position = currentStart.position;
-                PathEditorUndoUtility.MarkDirty(previousEnd);
-                PathEditorUndoUtility.MarkDirty(previous);
-                return true;
-            }
-
-            if (previousEndMoved && !currentStartMoved)
-            {
-                PathEditorUndoUtility.Record(currentStart, SYNC_PATH_POINT_UNDO);
-                currentStart.position = previousEnd.position;
-                PathEditorUndoUtility.MarkDirty(currentStart);
-                PathEditorUndoUtility.MarkDirty(current);
-                return true;
-            }
-
-            if (!currentStartMoved || !previousEndMoved)
+            JointPoints[0] = currentStart;
+            JointPoints[1] = previousEnd;
+            JointSnapshots[0] = currentStartSnapshot;
+            JointSnapshots[1] = previousEndSnapshot;
+            int source = PathPointSync.FindMovedSource(JointPoints, JointSnapshots, epsilonSqr);
+            if (source < 0)
                 return false;
-
-            if (currentStartDelta >= previousEndDelta)
-            {
-                PathEditorUndoUtility.Record(previousEnd, SYNC_PATH_POINT_UNDO);
-                previousEnd.position = currentStart.position;
-                PathEditorUndoUtility.MarkDirty(previousEnd);
-                PathEditorUndoUtility.MarkDirty(previous);
-                return true;
-            }
-
-            PathEditorUndoUtility.Record(currentStart, SYNC_PATH_POINT_UNDO);
-            currentStart.position = previousEnd.position;
-            PathEditorUndoUtility.MarkDirty(currentStart);
-            PathEditorUndoUtility.MarkDirty(current);
+            if (PathPointSync.AlignTo(JointPoints, JointPoints[source], epsilonSqr, SYNC_PATH_POINT_UNDO) == 0)
+                return false;
+            PathEditorUndoUtility.MarkDirty(source == 0 ? previous : current);
             return true;
         }
 
+        /// <summary>Moves the start of <paramref name="current"/> onto the end of <paramref name="previous"/>.</summary>
         public static bool TryAlignStartToEnd(
             PathData previous,
             PathData current,
@@ -116,18 +88,12 @@ namespace Common.TransformPath
             Transform currentStart,
             float epsilonSqr)
         {
-            if (previous == null
-                || current == null
-                || previousEnd == null
-                || currentStart == null)
+            if (previous == null || current == null || previousEnd == null || currentStart == null)
                 return false;
-
             if ((currentStart.position - previousEnd.position).sqrMagnitude <= epsilonSqr)
                 return false;
 
-            PathEditorUndoUtility.Record(currentStart, SYNC_PATH_POINTS_UNDO);
-            currentStart.position = previousEnd.position;
-            PathEditorUndoUtility.MarkDirty(currentStart);
+            PathPointSync.MovePoint(currentStart, previousEnd.position, SYNC_PATH_POINTS_UNDO);
             PathEditorUndoUtility.MarkDirty(current);
             return true;
         }
