@@ -28,7 +28,7 @@
 
 ## 수명 규칙
 
-- **실행 순서:** `PathRuntimeDriver`가 매 프레임 세 단계를 실행합니다. 효과(Follower의 값 보간과 지연 이벤트) → Queue(Manager의 계산과 멤버의 제한 기록) → 이동(Follower). 같은 단계에서는 등록 순서를 따릅니다.
+- **실행 순서:** `PathRuntimeDriver`가 매 프레임 세 단계를 실행합니다. 효과(Follower의 값 보간과 지연 이벤트) → Queue(Manager의 계산과 멤버의 제한 기록) → 이동(Follower). Driver는 단계마다 목록을 따로 두어 Follower는 효과와 이동, Manager는 Queue 단계에서만 순회합니다. 같은 단계에서는 등록 순서를 따릅니다.
 - **프레임 고정:** Tick 시작에 대상, PlaybackId, 등록 버전을 복사하고 실행 직전에 다시 비교합니다. 그 프레임에 등록하거나 재생이 바뀐 대상은 다음 프레임부터 실행합니다.
 - **외부 코드:** 공개 명령과 Tick은 `PathExecutionBoundary.Enter()`로 작업을 엽니다. 가장 바깥 작업이 끝나면 쌓인 리스너와 수신기를 선입선출로 호출합니다. 호출 중 생긴 알림은 큐 끝에 붙어 중첩되지 않습니다. 호출 직전에 구독 여부를 다시 확인하고, 한 번에 10만 건을 넘으면 오류를 기록하고 남은 알림을 버립니다. 알림마다 `PathSignal`(인자 0~2개)이 리스너 배열과 대기 중인 인자를 갖고, Boundary는 어떤 신호가 다음인지 순서만 담은 정적 큐 하나를 둡니다. 여러 Follower와 Queue 사이의 발행 순서를 지키려면 순서 큐가 하나여야 하기 때문입니다. 발행 시점의 리스너 배열을 함께 담으므로 발행 뒤에 구독한 리스너는 그 알림을 받지 않습니다.
 - **PlaybackId:** 재생을 시작할 때마다 새로 발급하고 Seek와 Pause에서는 유지합니다. 재생이 끝나면 0입니다.
@@ -105,6 +105,9 @@
 
 - `PathEditorChangeMonitor`가 Hierarchy, 속성, Undo/Redo, 리로드 변경을 모으고, `PathTrackedTargets`가 Linker별 대상 목록을 그 변경에서만 다시 찾습니다. `MultiPathAutoLinker`(연결점)와 `PathWaypointSyncLinker`(그룹 동기화)는 동기화 규칙만 가집니다. Transform 이동만으로는 대상 캐시를 지우지 않아 이전 위치와 비교할 수 있습니다.
 - `PathDataScenePreviewCache`는 런타임의 `PathPolyline`을 만들어 살아 있는 경로의 미리보기를 재사용하고, 삭제된 경로의 항목을 지웁니다. PlayMode 전환과 리로드에서 비웁니다.
+- Inspector 클래스는 배치만 맡습니다. `PathDataEditor`는 `PathDataGizmoDrawer`(Scene View 미리보기)와 `PathPointTools`(지면 스냅, 점 생성, 자손에서 갱신)를, `MultiPathDataEditor`는 `PathSegmentListDrawer`(구간 목록), `PathSegmentMovementPanel`(선택 구간 이동, 일괄 이동 설정), `PathDrawingTools`(미리보기 크기, 구별 색)를 씁니다.
+- 연결점과 웨이포인트 그룹은 같은 규칙(`PathPointSync`)을 씁니다. 스냅샷보다 가장 많이 움직인 점을 기준으로 나머지를 옮기고, 동률이면 앞 멤버를 따릅니다. 연결점은 [다음 경로 시작점, 이전 경로 끝점] 두 멤버 그룹이라 동률이면 시작점을 따릅니다. 이미 같은 위치면 옮기지 않습니다.
+- 미리보기 설정 필드는 Player에서도 직렬화합니다. Editor와 Player의 데이터 레이아웃이 같아야 하기 때문이며, Player에서는 읽지 않습니다.
 - 이동 설정 UI와 Rebuild·이벤트 정렬 도구는 `PathInspectorGUI`에 있습니다. `MultiPathData`의 미리보기 크기 적용과 구별 색 지정은 버튼으로만 실행합니다.
 - Scene View는 이벤트 위치와 이름을 표시만 합니다. 이벤트 진행률은 Inspector에서 편집합니다.
 
@@ -129,4 +132,4 @@ java -Djava.awt.headless=true -Djava.io.tmpdir="$TMPDIR" -jar plantuml-1.2024.6.
   transformpath-frame.puml transformpath-structure.puml transformpath-queue.puml
 ```
 
-임시 폴더에 쓸 수 없으면 종료 코드 0으로 0바이트 PNG가 나오니 파일 크기를 확인합니다. 한글은 macOS의 `Apple SD Gothic Neo` 글꼴로 렌더링합니다.
+시스템에 Java가 없으면 Unity에 들어 있는 JDK(`<Unity.app>/../PlaybackEngines/AndroidPlayer/OpenJDK/bin/java`)를 씁니다. 임시 폴더에 쓸 수 없으면 종료 코드 0으로 0바이트 PNG가 나오니 파일 크기를 확인합니다. 한글은 macOS의 `Apple SD Gothic Neo` 글꼴로 렌더링합니다.

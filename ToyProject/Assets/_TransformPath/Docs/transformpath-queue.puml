@@ -21,8 +21,9 @@ Member -> Follower : SetMotionLimit(대기)
 note right of Follower : 첫 결과와 재출발 지연까지 대기
 
 == 매 프레임 (Queue 단계) ==
-Manager -> Manager : 끝난 멤버 제거\n진행률 정렬, 앞 멤버부터 간격 계산
+Manager -> Manager : 끝난 멤버 제거, MotionEpoch가 바뀐 멤버는 줄 뒤로\n진행률 정렬, 앞 멤버부터 간격 계산
 Manager -> Member : ApplyQueueStatus
+Member -> Member : MotionEpoch가 바뀌었으면\n새 출발처럼 대기 (Play, Seek, Loop 이음매)
 Member -> Member : 대기, 재출발 지연, 속도 완화
 Member -> Follower : SetMotionLimit
 note right of Follower : 이동 단계에서 제한 안으로 이동

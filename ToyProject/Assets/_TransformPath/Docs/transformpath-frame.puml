@@ -14,8 +14,8 @@ start
 :PathPlayback 시작\n새 PlaybackId, 초기 위치 적용;
 repeat
   :PathRuntimeDriver.Tick\n대상 · PlaybackId · 등록 버전 고정;
-  :1. 효과 (PathFollower)\n값 보간, 지연 이벤트;
-  :2. Queue (QueuedPathManager)\n정렬, 간격, 감속, 진행 상한\n→ PathQueueMember가 완화해 제한 기록;
+  :1. 효과 (PathFollower → PathEventEffects)\n값 보간, 지연 이벤트;
+  :2. Queue (QueuedPathManager)\nMotionEpoch가 바뀐 멤버는 줄 뒤로\n정렬, 간격, 감속, 진행 상한\n→ PathQueueMember가 완화해 제한 기록;
   :3. 이동 (PathFollower)\n리비전 확인, 이동, 이벤트 통과, 구간 전환;
 repeat while (재생 중?) is (예) not (아니오)
 :남은 이벤트 처리, 재생 효과 정리\nCharacterController 복원;
@@ -25,7 +25,8 @@ stop
 floating note right
   각 Tick과 공개 명령이 끝날 때마다
   PathExecutionBoundary가
-  모아 둔 리스너와 수신기를
-  순서대로 호출합니다.
+  신호(PathSignal)에 모아 둔
+  리스너와 수신기를
+  발행 순서대로 호출합니다.
 end note
 @enduml

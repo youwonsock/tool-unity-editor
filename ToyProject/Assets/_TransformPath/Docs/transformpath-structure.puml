@@ -11,7 +11,7 @@ hide empty members
 hide circle
 title TransformPath 구조
 
-interface IPathProvider
+interface IPathProvider <<internal>>
 class PathProviderBehaviour <<abstract>>
 class "PathData\nMultiPathData" as Providers
 class PathPolyline
@@ -21,9 +21,14 @@ class PathRuntimeBehaviour <<abstract>>
 class PathFollower
 class PathPlayback {
   PathPlaybackCursor
-  값 보간, 지연 이벤트
-  PathMotionLimit
+  PathMotionLimit, MotionEpoch
 }
+class PathEventEffects {
+  이름 알림, Pause/Resume
+  값 보간, 지연 이벤트
+}
+interface IPathEffectTarget <<internal>>
+class PathSignal
 class PathEventDefinition
 class QueuedPathManager
 class PathQueueMember
@@ -39,10 +44,14 @@ PathFollower -up-|> PathRuntimeBehaviour
 QueuedPathManager -up-|> PathRuntimeBehaviour
 PathFollower *--> PathPlayback
 PathPlayback --> PathRoute
+PathPlayback *--> PathEventEffects : 이벤트 통과
+PathPlayback .up.|> IPathEffectTarget
+PathEventEffects --> IPathEffectTarget
 PathQueueMember --> PathFollower : 제한 기록
 QueuedPathManager --> PathQueueMember : 결과 전달
 QueuedPathManager --> PathQueueCoordinator
-PathRuntimeDriver --> PathRuntimeBehaviour : 효과 → Queue → 이동
-PathPlayback ..> PathExecutionBoundary : 알림
-PathQueueMember ..> PathExecutionBoundary : 알림
+PathRuntimeDriver --> PathRuntimeBehaviour : 단계별 목록\n효과 → Queue → 이동
+PathPlayback --> PathSignal : 알림
+PathQueueMember --> PathSignal : 알림
+PathSignal ..> PathExecutionBoundary : 발행 순서
 @enduml
