@@ -111,17 +111,36 @@ namespace Common.TransformPath.Tests
             PathQueueMember member = CreateMember();
             member.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path, true));
             member.Follower.Seek(0.95f);
-            int laps = member.Follower.LoopCount;
-            for (int i = 0; i < 120 && member.Follower.LoopCount == laps; i++)
+            int epoch = member.Follower.MotionEpoch;
+            for (int i = 0; i < 120 && member.Follower.MotionEpoch == epoch; i++)
                 Frames(1);
 
             // The frame that crossed the seam dropped its remaining time there.
-            Assert.AreEqual(laps + 1, member.Follower.LoopCount);
+            Assert.AreEqual(epoch + 1, member.Follower.MotionEpoch);
             Assert.AreEqual(0f, member.Follower.Progress, 1e-5f);
             Frames(3);
             Assert.AreEqual(0f, member.Follower.Progress, 1e-5f);
             Frames(60);
             Assert.Greater(member.Follower.Progress, 0.05f);
+        }
+
+        [Test]
+        public void SeekingMember_WaitsTheRestartDelay_ThenMovesOn()
+        {
+            PathData path = Line(30f, 4f);
+            QueuedPathManager manager = CreateManager(path);
+            PathQueueMember member = CreateMember();
+            member.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            Frames(30);
+            Assert.Greater(member.Follower.Progress, 0f);
+
+            member.Follower.Seek(0.5f);
+            // The default restart delay is 0.1 seconds, six frames.
+            Frames(5);
+            Assert.AreEqual(0.5f, member.Follower.Progress, 1e-5f);
+            Frames(30);
+
+            Assert.Greater(member.Follower.Progress, 0.5f);
         }
 
         [Test]

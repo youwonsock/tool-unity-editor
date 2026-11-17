@@ -10,15 +10,18 @@ namespace Common.TransformPath
         public readonly bool Blocked;
         public readonly float SpeedMultiplier;
         public readonly float MaxProgress;
-        /// <summary>A queue member stops at a loop seam and waits for the queue before its next lap.</summary>
-        public readonly bool HoldAtLoopSeam;
+        /// <summary>
+        /// A jump while moving (a loop seam) drops the rest of that frame's time
+        /// and blocks, so the queue answers for the new position first.
+        /// </summary>
+        public readonly bool WaitOnDiscontinuity;
 
-        public PathMotionLimit(bool blocked, float speedMultiplier, float maxProgress, bool holdAtLoopSeam)
+        public PathMotionLimit(bool blocked, float speedMultiplier, float maxProgress, bool waitOnDiscontinuity)
         {
             Blocked = blocked;
             SpeedMultiplier = Mathf.Clamp01(speedMultiplier);
             MaxProgress = Mathf.Clamp01(maxProgress);
-            HoldAtLoopSeam = holdAtLoopSeam;
+            WaitOnDiscontinuity = waitOnDiscontinuity;
         }
     }
 }

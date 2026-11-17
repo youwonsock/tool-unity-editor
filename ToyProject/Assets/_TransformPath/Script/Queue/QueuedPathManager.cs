@@ -15,7 +15,7 @@ namespace Common.TransformPath
         {
             public PathQueueMember Member;
             public int Sequence;
-            public int LoopCount;
+            public int MotionEpoch;
             public float Progress;
             public PathQueueStatus? Status;
         }
@@ -194,10 +194,11 @@ namespace Common.TransformPath
                 Entry entry = _ordered[i];
                 PathFollower follower = entry.Member.Follower;
                 entry.Progress = Mathf.Clamp01(follower.Progress);
-                // A new lap joins the back of the line before this frame's order, as a new start would.
-                if (follower.LoopCount != entry.LoopCount)
+                // A jump (Seek, loop seam) joins the back of the line at its new
+                // progress before this frame's order, as a new start would.
+                if (follower.MotionEpoch != entry.MotionEpoch)
                 {
-                    entry.LoopCount = follower.LoopCount;
+                    entry.MotionEpoch = follower.MotionEpoch;
                     entry.Sequence = _nextSequence++;
                 }
             }
@@ -223,14 +224,18 @@ namespace Common.TransformPath
                 throw new InvalidOperationException("QueuedPathManager is not initialized.");
             if (_routeProvider == null || !ReferenceEquals(member.Follower.CurrentProvider, _routeProvider))
                 throw new InvalidOperationException("Queue member and manager must use the same route provider instance.");
-            if (_entries.ContainsKey(member))
+            if (_entries.TryGetValue(member, out Entry joined))
+            {
+                // Restarting in place keeps the member's place among equals.
+                joined.MotionEpoch = member.Follower.MotionEpoch;
                 return;
+            }
             Entry entry = _pool.Count > 0 ? _pool[_pool.Count - 1] : new Entry();
             if (_pool.Count > 0)
                 _pool.RemoveAt(_pool.Count - 1);
             entry.Member = member;
             entry.Sequence = _nextSequence++;
-            entry.LoopCount = member.Follower.LoopCount;
+            entry.MotionEpoch = member.Follower.MotionEpoch;
             entry.Progress = Mathf.Clamp01(member.Follower.Progress);
             entry.Status = null;
             _entries.Add(member, entry);

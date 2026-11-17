@@ -35,10 +35,11 @@ namespace Common.TransformPath
         public bool IsMoving { get; private set; }
         public ulong PlaybackId { get; private set; }
         public PathMotionLimit Limit { get; set; } = PathMotionLimit.None;
-        /// <summary>Rises on every Seek that moved the position, so a queue can drop limits from before it.</summary>
-        public int SeekCount { get; private set; }
-        /// <summary>Rises at every loop seam, so a queue can order the member again.</summary>
-        public int LoopCount { get; private set; }
+        /// <summary>
+        /// Rises whenever the position jumps instead of moving on: Play, a Seek
+        /// that moved, a loop seam. A queue treats each rise as a new start.
+        /// </summary>
+        public int MotionEpoch { get; private set; }
 
         public PathRoute Route => _route;
         public float Progress => _cursor.Global;
@@ -99,6 +100,7 @@ namespace Common.TransformPath
             _nextEventIndex = 0;
             IsMoving = true;
             PlaybackId = ++_nextPlaybackId;
+            MotionEpoch++;
             // Replacing a moving playback keeps the Moving state and raises nothing.
             SetState(EPathFollowerState.Moving);
             _positionDirty = true;
@@ -261,7 +263,7 @@ namespace Common.TransformPath
                 return false;
 
             _cursor.PendingTime = 0f;
-            SeekCount++;
+            MotionEpoch++;
             _changes++;
             if (segment != _cursor.Segment)
                 ConfigureSegment(segment, 0f, false);
@@ -306,9 +308,8 @@ namespace Common.TransformPath
             transitioned = true;
             if (hasNext)
                 return;
-            LoopCount++;
-            // The rest of this frame's time is dropped at the seam until the queue answers.
-            if (Limit.HoldAtLoopSeam)
+            MotionEpoch++;
+            if (Limit.WaitOnDiscontinuity)
                 Limit = new PathMotionLimit(true, 0f, 0f, true);
         }
 

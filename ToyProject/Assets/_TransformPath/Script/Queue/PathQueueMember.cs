@@ -44,9 +44,7 @@ namespace Common.TransformPath
         private PathQueueStatus _status;
         private bool _hasStatus;
         private float _requestedMaxProgress = 1f;
-        private ulong _playbackId;
-        private int _seekCount;
-        private int _loopCount;
+        private int _motionEpoch;
         private bool _showingPause;
         private bool _reportedBlocked;
         private float _reportedSpeedMultiplier = 1f;
@@ -247,16 +245,9 @@ namespace Common.TransformPath
                 }
                 return;
             }
-            // A new lap, a resumed or a replaced playback waits as a new start would.
-            if (follower.LoopCount != _loopCount || _showingPause || follower.PlaybackId != _playbackId)
+            // A jump (new playback, Seek, loop seam) or a resume waits as a new start would.
+            if (follower.MotionEpoch != _motionEpoch || _showingPause)
                 AwaitFirstResult(true);
-            if (follower.SeekCount != _seekCount)
-            {
-                // Limits from before a Seek no longer fit the new position.
-                _seekCount = follower.SeekCount;
-                _wait.IsBlocked = true;
-                _wait.SpeedMultiplier = 0f;
-            }
 
             _wait.Step(deltaTime, _hasStatus, _status, GetSpacing(), _resumeMovementDelay, _unblockHysteresis, _speedSmoothRate);
             ApplyLimit();
@@ -302,14 +293,11 @@ namespace Common.TransformPath
             _hasStatus = false;
         }
 
-        // A new or resumed playback waits for the manager and the restart delay.
+        // A new start waits for the manager and the restart delay.
         // A result that arrived this frame is already fresh and stays.
         private void AwaitFirstResult(bool keepStatus)
         {
-            PathFollower follower = Follower;
-            _playbackId = follower.PlaybackId;
-            _seekCount = follower.SeekCount;
-            _loopCount = follower.LoopCount;
+            _motionEpoch = Follower.MotionEpoch;
             _showingPause = false;
             if (!keepStatus)
                 _hasStatus = false;
