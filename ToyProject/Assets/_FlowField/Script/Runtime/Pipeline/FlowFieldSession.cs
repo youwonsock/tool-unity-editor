@@ -208,7 +208,7 @@ namespace Common.FlowField
             => Defer(() => RegisterModifierNow(modifier), "Modifier");
 
         private bool DeferUnregisterModifier(IFlowFieldVectorModifier modifier)
-            => Defer(() => UnregisterModifierNow(modifier));
+            => Defer(() => UnregisterModifierNow(modifier), removal: true);
 
         private void DeferNotifyModifierChanged(IFlowFieldVectorModifier modifier, FlowFieldModifierChange change)
             => Defer(() =>
@@ -221,20 +221,21 @@ namespace Common.FlowField
             => Defer(() => RegisterObstacleNow(collider), "장애물");
 
         private bool DeferUnregisterObstacle(Collider collider)
-            => Defer(() => UnregisterObstacleNow(collider));
+            => Defer(() => UnregisterObstacleNow(collider), removal: true);
 
-        private bool Defer(Func<bool> command, string registration = null)
+        private bool Defer(Func<bool> command, string registration = null, bool removal = false)
         {
-            Boundary.Defer(() => RunDeferred(command, registration));
+            Boundary.Defer(() => RunDeferred(command, registration, removal));
             return true;
         }
 
         // The session may have stopped by the time a deferred command runs. Stopping
         // already cleared what a removal would have changed, but a registration
-        // that was reported as accepted is lost, so it leaves a warning.
-        private void RunDeferred(Func<bool> command, string registration = null)
+        // that was reported as accepted is lost, so it leaves a warning. A removal
+        // still runs when the operation faulted, as it would have outside it.
+        private void RunDeferred(Func<bool> command, string registration, bool removal)
         {
-            if (IsInitialized)
+            if (IsInitialized || removal && IsFaulted)
                 command();
             else if (registration != null)
                 Debug.LogWarning($"[FlowField] 세션이 멈춰 대기 중이던 {registration} 등록을 처리하지 못했습니다.");
@@ -308,12 +309,15 @@ namespace Common.FlowField
             return true;
         }
 
+        // A faulted session still takes removals; its retry builds everything again.
         private bool UnregisterObstacleNow(Collider collider)
         {
-            ThrowIfInputUnavailable();
+            if (!IsInitialized && !IsFaulted)
+                throw FlowFieldFailures.NotInitialized();
             if (!Obstacles.Unregister(collider, out FlowFieldObstacleChange change))
                 return false;
-            ApplyObstacleChange(in change);
+            if (!IsFaulted)
+                ApplyObstacleChange(in change);
             return true;
         }
 

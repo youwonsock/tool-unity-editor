@@ -61,8 +61,10 @@ namespace Common.FlowField
 
         public bool UnregisterDynamicObstacle(Collider collider)
         {
-            // Removal needs no valid configuration, as with Modifiers.
-            ThrowIfLifecycleUnavailable();
+            // Removal needs no valid configuration, as with Modifiers. A faulted
+            // Manager still takes it, or a retry would keep the obstacle.
+            if (!IsFaulted)
+                ThrowIfLifecycleUnavailable();
             if (ReferenceEquals(collider, null))
                 throw new ArgumentNullException(nameof(collider));
             if (BakeMode == FlowFieldBakeMode.StaticBaked)

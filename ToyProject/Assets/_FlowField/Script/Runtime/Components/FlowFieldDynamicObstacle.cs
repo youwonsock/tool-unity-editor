@@ -61,7 +61,8 @@ namespace Common.FlowField
         {
             FlowFieldManager registered = _registered;
             _registered = null;
-            if (registered != null && registered.IsInitialized && _collider is not null)
+            // A faulted Manager takes the removal too, so its retry leaves it out.
+            if (registered != null && (registered.IsInitialized || registered.IsFaulted) && _collider is not null)
                 registered.UnregisterDynamicObstacle(_collider);
         }
     }
