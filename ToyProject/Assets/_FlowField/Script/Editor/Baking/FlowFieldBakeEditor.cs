@@ -536,13 +536,14 @@ namespace Common.FlowField.Editor
         {
             int undoGroup = -1;
             string assetPath = null;
+            string createdFolder = null;
             bool createdAsset = false;
             try
             {
                 // Read the published field before any asset changes.
                 Action<TAsset> apply = export();
                 assetPath = target.ResolvePath(manager);
-                FlowFieldBakeAssetUtility.CreateBakeFolder(assetPath);
+                createdFolder = FlowFieldBakeAssetUtility.CreateBakeFolder(assetPath);
                 // A failed bake reverts down to this group, so it must hold nothing older.
                 Undo.IncrementCurrentGroup();
                 undoGroup = Undo.GetCurrentGroup();
@@ -582,11 +583,13 @@ namespace Common.FlowField.Editor
                     try { Undo.RevertAllDownToGroup(undoGroup); }
                     catch (Exception undoException) { Debug.LogException(undoException, manager); }
                 }
-                if (createdAsset && !string.IsNullOrEmpty(assetPath)
-                    && AssetDatabase.LoadAssetAtPath<TAsset>(assetPath) != null)
+                // The Undo revert above destroys the created object but leaves
+                // its file, so check the file rather than the loaded asset.
+                if (createdAsset && !string.IsNullOrEmpty(assetPath) && File.Exists(assetPath))
                 {
                     AssetDatabase.DeleteAsset(assetPath);
                 }
+                FlowFieldBakeAssetUtility.DeleteFolderIfEmpty(createdFolder);
                 Debug.LogException(exception, manager);
             }
         }
@@ -801,21 +804,49 @@ namespace Common.FlowField.Editor
             return $"{bakeFolder}/{sceneGuid}_{managerId}_{manager.name}_{suffix}.asset";
         }
 
-        /// <summary>Creates the folders of a project asset path that do not exist yet.</summary>
-        internal static void CreateBakeFolder(string assetPath)
+        /// <summary>
+        /// Creates the folders of a project asset path that do not exist yet.
+        /// Returns the outermost folder it created, or null when all existed.
+        /// </summary>
+        internal static string CreateBakeFolder(string assetPath)
         {
             string folder = Path.GetDirectoryName(assetPath)?.Replace('\\', '/');
             if (string.IsNullOrEmpty(folder))
                 throw new InvalidOperationException($"Bake target '{assetPath}' has no folder.");
             string[] parts = folder.Split('/');
             string current = parts[0];
+            string created = null;
             for (int i = 1; i < parts.Length; i++)
             {
                 string next = current + "/" + parts[i];
-                if (!AssetDatabase.IsValidFolder(next) && string.IsNullOrEmpty(AssetDatabase.CreateFolder(current, parts[i])))
-                    throw new InvalidOperationException($"Unable to create bake folder '{next}'.");
+                if (!AssetDatabase.IsValidFolder(next))
+                {
+                    if (string.IsNullOrEmpty(AssetDatabase.CreateFolder(current, parts[i])))
+                    {
+                        DeleteFolderIfEmpty(created);
+                        throw new InvalidOperationException($"Unable to create bake folder '{next}'.");
+                    }
+                    created ??= next;
+                }
                 current = next;
             }
+            return created;
+        }
+
+        /// <summary>Deletes a folder a failed bake created, unless something else was put in it.</summary>
+        internal static void DeleteFolderIfEmpty(string folder)
+        {
+            if (string.IsNullOrEmpty(folder) || !AssetDatabase.IsValidFolder(folder))
+                return;
+            foreach (string file in Directory.GetFiles(folder, "*", SearchOption.AllDirectories))
+            {
+                // A subfolder's own .meta does not count as content.
+                bool folderMeta = file.EndsWith(".meta", StringComparison.Ordinal)
+                    && Directory.Exists(file.Substring(0, file.Length - ".meta".Length));
+                if (!folderMeta)
+                    return;
+            }
+            AssetDatabase.DeleteAsset(folder);
         }
 
         internal static void ValidateTargetOwnership(
