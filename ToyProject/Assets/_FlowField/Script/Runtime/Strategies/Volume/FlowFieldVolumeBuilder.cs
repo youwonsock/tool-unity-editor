@@ -24,8 +24,6 @@ namespace Common.FlowField
         private readonly int[] _obstacleCells = new int[CellsPerStep];
         private readonly FlowFieldVolumeCellQuery _cellQuery = new FlowFieldVolumeCellQuery();
         private readonly FlowFieldSpareArrays _spares = new FlowFieldSpareArrays();
-        // Volume3D finds a Modifier's cells per build, so it keeps no area data.
-        private readonly FlowFieldModifierRegistry<object> _modifierRegistry = new FlowFieldModifierRegistry<object>();
         private readonly FlowFieldVolumeSafetyState _safety;
 
         private VolumeFieldData _committed;
@@ -227,7 +225,7 @@ namespace Common.FlowField
             _hasPendingModifierRecompose = false;
             FlowFieldModifierWorkItem[] modifierSnapshots;
             using (_session.Boundary.EnterUserCode())
-                modifierSnapshots = _modifierRegistry.CaptureSnapshots();
+                modifierSnapshots = _session.Modifiers.CaptureSnapshots();
             long reservation = EstimateBuildBytes(request.Grid.CellCount, modifierSnapshots.Length);
             if (!CanReserveForBuild(request, reservation))
                 throw new InvalidOperationException(
@@ -313,58 +311,14 @@ namespace Common.FlowField
                 EnterBuildingUnlessStopped();
         }
 
-        internal bool RegisterModifier(IFlowFieldVectorModifier modifier)
+        // Volume3D finds a Modifier's cells per build, so it keeps no area data.
+        public IFlowFieldModifierArea CreateModifierArea() => null;
+
+        public void ApplyModifierChange(in FlowFieldModifierUpdate update)
         {
-            ThrowIfInputAvailable();
-            bool registered;
-            using (_session.Boundary.EnterUserCode())
-                registered = _modifierRegistry.Register(modifier);
-            if (!registered)
-                return false;
-            QueueModifierChange();
-            return true;
-        }
-
-        public bool RegisterModifierNow(IFlowFieldVectorModifier modifier)
-            => RegisterModifier(modifier);
-
-        internal bool UnregisterModifier(IFlowFieldVectorModifier modifier)
-        {
-            ThrowIfDisposed();
-            if (!_session.IsInitialized && !_session.IsFaulted)
-                throw new InvalidOperationException("FlowField volume session is unavailable.");
-            if (FlowFieldVectorUtility.IsMissingModifier(modifier) || !_modifierRegistry.Unregister(modifier))
-                return false;
-            // A retry builds everything again.
-            if (!_session.IsFaulted)
-                QueueModifierChange();
-            return true;
-        }
-
-        public bool UnregisterModifierNow(IFlowFieldVectorModifier modifier)
-            => UnregisterModifier(modifier);
-
-        public void NotifyModifierChangedNow(
-            IFlowFieldVectorModifier modifier,
-            FlowFieldModifierChange change)
-        {
-            ThrowIfInputAvailable();
-            if (!_modifierRegistry.Contains(modifier))
-                throw new InvalidOperationException("Modifier is not registered.");
-            // Nothing polls a Modifier, so the notification is where an
-            // invalid configuration is found. It faults, as in Surface2D.
-            try
-            {
-                using (_session.Boundary.EnterUserCode())
-                    _modifierRegistry.ApplyChange(modifier, change);
-            }
-            catch (Exception exception) when (exception is InvalidOperationException || exception is ArgumentException)
-            {
-                _session.ReportFault(exception);
+            if (update.Kind == FlowFieldModifierUpdateKind.Changed && update.Requested == FlowFieldModifierChange.None)
                 return;
-            }
-            if (change != FlowFieldModifierChange.None)
-                QueueModifierChange();
+            QueueModifierChange();
         }
 
         public void Stop()
@@ -398,7 +352,6 @@ namespace Common.FlowField
             _registeredObstacleOverlapBuffer = null;
             _cellQuery.Clear();
             _spares.Clear();
-            _modifierRegistry.Clear();
             _session.SetLifecycle(FlowFieldSessionLifecycle.Released);
         }
 
@@ -456,13 +409,6 @@ namespace Common.FlowField
         private static Vector3 ObstacleHalfExtents(float cellSize, float clearance)
             => Vector3.one * FlowFieldOverlapUtility.CellHalfExtent(cellSize, clearance);
 
-        private void ThrowIfInputAvailable()
-        {
-            ThrowIfDisposed();
-            if (!_session.IsInitialized || _session.IsFaulted)
-                throw new InvalidOperationException("FlowField volume session is unavailable.", _session.Fault);
-        }
-
         private void ThrowIfDisposed()
         {
             if (_session.Disposed)
@@ -494,7 +440,7 @@ namespace Common.FlowField
                 throw new InvalidOperationException(
                     "RuntimeDynamic Volume3D requests cannot carry a static bake asset.");
 
-            long buildReservation = EstimateBuildBytes(request.Grid.CellCount, _modifierRegistry.Count);
+            long buildReservation = EstimateBuildBytes(request.Grid.CellCount, _session.Modifiers.Count);
             long estimate = EstimateRequiredBytes(request, buildReservation);
             if (estimate > MemoryBudgetBytes)
                 throw new InvalidOperationException(
@@ -523,7 +469,6 @@ namespace Common.FlowField
             _registeredObstacleOverlapBuffer = null;
             _cellQuery.Clear();
             _spares.Clear();
-            _modifierRegistry.Clear();
             _safety.ClearRegions();
             _session.SetLifecycle(FlowFieldSessionLifecycle.Released);
             _session.MarkBaseDisposed();

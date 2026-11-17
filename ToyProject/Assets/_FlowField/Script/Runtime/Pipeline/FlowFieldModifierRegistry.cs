@@ -4,21 +4,27 @@ using UnityEngine;
 
 namespace Common.FlowField
 {
+    /// <summary>What a space mode keeps about the cells one Modifier touches.</summary>
+    internal interface IFlowFieldModifierArea
+    {
+        void Release();
+    }
+
     /// <summary>
     /// One registered Modifier. <see cref="Area"/> is what a space mode keeps
     /// about the cells it touches; Volume3D keeps nothing there.
     /// </summary>
-    internal sealed class FlowFieldModifierEntry<TArea> where TArea : class
+    internal sealed class FlowFieldModifierEntry
     {
         internal readonly IFlowFieldVectorModifier Modifier;
-        internal readonly TArea Area;
+        internal readonly IFlowFieldModifierArea Area;
         internal Collider InfluenceCollider;
         internal int Priority;
         internal int Revision;
         // The cells it touches must be found again before the next composition.
         internal bool AreaDirty = true;
 
-        internal FlowFieldModifierEntry(IFlowFieldVectorModifier modifier, TArea area, in FlowFieldModifierObservation observation)
+        internal FlowFieldModifierEntry(IFlowFieldVectorModifier modifier, IFlowFieldModifierArea area, in FlowFieldModifierObservation observation)
         {
             Modifier = modifier;
             Area = area;
@@ -43,6 +49,38 @@ namespace Common.FlowField
         internal bool Any => PriorityChanged || ValueChanged;
     }
 
+    internal enum FlowFieldModifierUpdateKind
+    {
+        Registered,
+        Unregistered,
+        Changed,
+    }
+
+    /// <summary>
+    /// A Modifier change the session accepted, for the builder to compose
+    /// again. <see cref="Entry"/> is still readable for an unregistered one.
+    /// </summary>
+    internal readonly struct FlowFieldModifierUpdate
+    {
+        internal readonly FlowFieldModifierUpdateKind Kind;
+        internal readonly FlowFieldModifierEntry Entry;
+        // What the notification asked for, and what it altered.
+        internal readonly FlowFieldModifierChange Requested;
+        internal readonly FlowFieldModifierChangeResult Result;
+
+        internal FlowFieldModifierUpdate(
+            FlowFieldModifierUpdateKind kind,
+            FlowFieldModifierEntry entry,
+            FlowFieldModifierChange requested = FlowFieldModifierChange.None,
+            FlowFieldModifierChangeResult result = default)
+        {
+            Kind = kind;
+            Entry = entry;
+            Requested = requested;
+            Result = result;
+        }
+    }
+
     /// <summary>
     /// The Modifiers of a session, the same in both space modes: registration,
     /// the configuration check, priority order (lowest first, no duplicates),
@@ -50,22 +88,22 @@ namespace Common.FlowField
     /// observes a Modifier between its notifications. The caller enters the
     /// user-code boundary around calls that run Modifier code.
     /// </summary>
-    internal sealed class FlowFieldModifierRegistry<TArea> where TArea : class
+    internal sealed class FlowFieldModifierRegistry
     {
-        private readonly List<FlowFieldModifierEntry<TArea>> _entries = new List<FlowFieldModifierEntry<TArea>>(16);
-        private readonly Func<TArea> _createArea;
-        private readonly Action<TArea> _releaseArea;
+        private readonly List<FlowFieldModifierEntry> _entries = new List<FlowFieldModifierEntry>(16);
+        private readonly Func<IFlowFieldModifierArea> _createArea;
 
-        internal FlowFieldModifierRegistry(Func<TArea> createArea = null, Action<TArea> releaseArea = null)
+        internal FlowFieldModifierRegistry(Func<IFlowFieldModifierArea> createArea)
         {
             _createArea = createArea;
-            _releaseArea = releaseArea;
         }
 
-        internal IReadOnlyList<FlowFieldModifierEntry<TArea>> Entries => _entries;
+        internal IReadOnlyList<FlowFieldModifierEntry> Entries => _entries;
         internal int Count => _entries.Count;
 
         internal bool Contains(IFlowFieldVectorModifier modifier) => Find(modifier) != null;
+
+        internal FlowFieldModifierEntry Get(IFlowFieldVectorModifier modifier) => Find(modifier);
 
         /// <summary>False when it is already registered.</summary>
         internal bool Register(IFlowFieldVectorModifier modifier)
@@ -77,7 +115,7 @@ namespace Common.FlowField
             if (Find(modifier) != null)
                 return false;
             ThrowIfPriorityTaken(modifier, observation.Priority);
-            _entries.Add(new FlowFieldModifierEntry<TArea>(modifier, _createArea?.Invoke(), in observation));
+            _entries.Add(new FlowFieldModifierEntry(modifier, _createArea?.Invoke(), in observation));
             _entries.Sort(CompareEntries);
             return true;
         }
@@ -86,11 +124,11 @@ namespace Common.FlowField
         /// Removes it and gives the entry, whose area the caller may still read;
         /// the registry releases that area afterwards. False when it is not registered.
         /// </summary>
-        internal bool Unregister(IFlowFieldVectorModifier modifier, Action<FlowFieldModifierEntry<TArea>> beforeRelease = null)
+        internal bool Unregister(IFlowFieldVectorModifier modifier, Action<FlowFieldModifierEntry> beforeRelease = null)
         {
             for (int i = 0; i < _entries.Count; i++)
             {
-                FlowFieldModifierEntry<TArea> entry = _entries[i];
+                FlowFieldModifierEntry entry = _entries[i];
                 if (!ReferenceEquals(entry.Modifier, modifier))
                     continue;
                 _entries.RemoveAt(i);
@@ -108,7 +146,7 @@ namespace Common.FlowField
         /// </summary>
         internal FlowFieldModifierChangeResult ApplyChange(IFlowFieldVectorModifier modifier, FlowFieldModifierChange change)
         {
-            FlowFieldModifierEntry<TArea> entry = Find(modifier)
+            FlowFieldModifierEntry entry = Find(modifier)
                 ?? throw new InvalidOperationException("Modifier is not registered.");
             FlowFieldModifierObservation observation = modifier.Observe();
             ValidateCollider(observation.InfluenceCollider);
@@ -181,13 +219,9 @@ namespace Common.FlowField
             }
         }
 
-        private void Release(FlowFieldModifierEntry<TArea> entry)
-        {
-            if (entry.Area != null)
-                _releaseArea?.Invoke(entry.Area);
-        }
+        private static void Release(FlowFieldModifierEntry entry) => entry.Area?.Release();
 
-        private FlowFieldModifierEntry<TArea> Find(IFlowFieldVectorModifier modifier)
+        private FlowFieldModifierEntry Find(IFlowFieldVectorModifier modifier)
         {
             if (modifier == null)
                 return null;
@@ -199,7 +233,7 @@ namespace Common.FlowField
             return null;
         }
 
-        private static int CompareEntries(FlowFieldModifierEntry<TArea> left, FlowFieldModifierEntry<TArea> right)
+        private static int CompareEntries(FlowFieldModifierEntry left, FlowFieldModifierEntry right)
             => left.Priority.CompareTo(right.Priority);
     }
 }

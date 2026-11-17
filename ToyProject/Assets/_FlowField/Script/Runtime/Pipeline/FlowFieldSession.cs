@@ -62,6 +62,12 @@ namespace Common.FlowField
         internal FlowFieldSurfaceBuilder Surface => _builder as FlowFieldSurfaceBuilder;
         internal FlowFieldVolumeBuilder Volume => _builder as FlowFieldVolumeBuilder;
 
+        private FlowFieldModifierRegistry _modifiers;
+
+        /// <summary>The registered Modifiers, the same in both modes.</summary>
+        internal FlowFieldModifierRegistry Modifiers
+            => _modifiers ??= new FlowFieldModifierRegistry(_builder.CreateModifierArea);
+
         /// <summary>The registered dynamic obstacles, the same in both modes.</summary>
         internal FlowFieldObstacleRegistry Obstacles { get; } = new FlowFieldObstacleRegistry();
 
@@ -174,17 +180,17 @@ namespace Common.FlowField
         // operation has finished. The mode-specific sessions keep their
         // different area-cache and rebuild policies behind the Now methods.
         internal bool RegisterModifierCommand(IFlowFieldVectorModifier modifier)
-            => Boundary.IsInUserCode ? DeferRegisterModifier(modifier) : _builder.RegisterModifierNow(modifier);
+            => Boundary.IsInUserCode ? DeferRegisterModifier(modifier) : RegisterModifierNow(modifier);
 
         internal bool UnregisterModifierCommand(IFlowFieldVectorModifier modifier)
-            => Boundary.IsInUserCode ? DeferUnregisterModifier(modifier) : _builder.UnregisterModifierNow(modifier);
+            => Boundary.IsInUserCode ? DeferUnregisterModifier(modifier) : UnregisterModifierNow(modifier);
 
         internal void NotifyModifierChangedCommand(IFlowFieldVectorModifier modifier, FlowFieldModifierChange change)
         {
             if (Boundary.IsInUserCode)
                 DeferNotifyModifierChanged(modifier, change);
             else
-                _builder.NotifyModifierChangedNow(modifier, change);
+                NotifyModifierChangedNow(modifier, change);
         }
 
         internal bool RegisterObstacleCommand(Collider collider)
@@ -200,15 +206,15 @@ namespace Common.FlowField
 
         // Kept apart so only a deferred call allocates the closure.
         private bool DeferRegisterModifier(IFlowFieldVectorModifier modifier)
-            => Defer(() => _builder.RegisterModifierNow(modifier), "Modifier");
+            => Defer(() => RegisterModifierNow(modifier), "Modifier");
 
         private bool DeferUnregisterModifier(IFlowFieldVectorModifier modifier)
-            => Defer(() => _builder.UnregisterModifierNow(modifier));
+            => Defer(() => UnregisterModifierNow(modifier));
 
         private void DeferNotifyModifierChanged(IFlowFieldVectorModifier modifier, FlowFieldModifierChange change)
             => Defer(() =>
             {
-                _builder.NotifyModifierChangedNow(modifier, change);
+                NotifyModifierChangedNow(modifier, change);
                 return true;
             });
 
@@ -242,6 +248,56 @@ namespace Common.FlowField
             ThrowIfInputUnavailable();
             ApplyObstacleChange(new FlowFieldObstacleChange(
                 FlowFieldObstacleChangeKind.RegionDirty, null, false, default, true, worldBounds));
+        }
+
+        private bool RegisterModifierNow(IFlowFieldVectorModifier modifier)
+        {
+            ThrowIfInputUnavailable();
+            bool registered;
+            using (Boundary.EnterUserCode())
+                registered = Modifiers.Register(modifier);
+            if (!registered)
+                return false;
+            _builder.ApplyModifierChange(new FlowFieldModifierUpdate(
+                FlowFieldModifierUpdateKind.Registered, Modifiers.Get(modifier)));
+            return true;
+        }
+
+        // A faulted session still takes removals; its retry builds everything again.
+        private bool UnregisterModifierNow(IFlowFieldVectorModifier modifier)
+        {
+            if (!IsInitialized && !IsFaulted)
+                throw FlowFieldFailures.NotInitialized();
+            if (FlowFieldVectorUtility.IsMissingModifier(modifier))
+                return false;
+            return Modifiers.Unregister(modifier, entry =>
+            {
+                if (!IsFaulted)
+                    _builder.ApplyModifierChange(new FlowFieldModifierUpdate(
+                        FlowFieldModifierUpdateKind.Unregistered, entry));
+            });
+        }
+
+        // Nothing polls a Modifier, so its notification is where an invalid
+        // configuration is found; it faults the session.
+        private void NotifyModifierChangedNow(IFlowFieldVectorModifier modifier, FlowFieldModifierChange change)
+        {
+            ThrowIfInputUnavailable();
+            if (!Modifiers.Contains(modifier))
+                throw new InvalidOperationException("Modifier is not registered.");
+            FlowFieldModifierChangeResult result;
+            try
+            {
+                using (Boundary.EnterUserCode())
+                    result = Modifiers.ApplyChange(modifier, change);
+            }
+            catch (Exception exception) when (exception is InvalidOperationException || exception is ArgumentException)
+            {
+                ReportFault(exception);
+                return;
+            }
+            _builder.ApplyModifierChange(new FlowFieldModifierUpdate(
+                FlowFieldModifierUpdateKind.Changed, Modifiers.Get(modifier), change, result));
         }
 
         private bool RegisterObstacleNow(Collider collider)
@@ -397,6 +453,7 @@ namespace Common.FlowField
         internal void Release()
         {
             Obstacles.Clear();
+            _modifiers?.Clear();
             _builder.Release();
         }
 

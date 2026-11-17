@@ -70,9 +70,10 @@ namespace Common.FlowField
         void SubmitConfig(in FlowFieldManagerConfig config, FlowFieldConfigChange change);
 
         // ----- Input ----------------------------------------------------------
-        bool RegisterModifierNow(IFlowFieldVectorModifier modifier);
-        bool UnregisterModifierNow(IFlowFieldVectorModifier modifier);
-        void NotifyModifierChangedNow(IFlowFieldVectorModifier modifier, FlowFieldModifierChange change);
+        // The session keeps the Modifiers; the builder keeps what each touches
+        // (Surface2D cell masks) and composes again after a change.
+        IFlowFieldModifierArea CreateModifierArea();
+        void ApplyModifierChange(in FlowFieldModifierUpdate update);
         // The session keeps the registered obstacles and marks the regions a
         // change touched as uncertain; the builder only rebuilds them.
         void ApplyObstacleChange(in FlowFieldObstacleChange change);

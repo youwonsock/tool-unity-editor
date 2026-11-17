@@ -63,7 +63,7 @@ namespace Common.FlowField
             bytes = checked(bytes + _spares.Bytes);
             if (_registeredObstacleOverlapBuffer != null)
                 bytes = checked(bytes + 8L * _registeredObstacleOverlapBuffer.Length);
-            bytes = checked(bytes + 8L * _modifierRegistry.Count);
+            bytes = checked(bytes + 8L * _session.Modifiers.Count);
             bytes = checked(bytes + 32L * _safety.UncertainRegionCount);
             return bytes;
         }

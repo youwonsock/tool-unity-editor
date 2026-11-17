@@ -3,7 +3,7 @@ using System.Collections.Generic;
 namespace Common.FlowField
 {
     /// <summary>The Surface2D cells one Modifier touches, kept between compositions.</summary>
-    internal sealed class FlowFieldSurfaceModifierArea
+    internal sealed class FlowFieldSurfaceModifierArea : IFlowFieldModifierArea
     {
         // Allocated on the first area rebuild.
         internal bool[] InfluenceMask;
@@ -12,7 +12,7 @@ namespace Common.FlowField
         internal bool InfluenceIndicesBuilt;
         internal FlowFieldCellRect InfluenceRect = FlowFieldCellRect.Invalid;
 
-        internal void Release()
+        public void Release()
         {
             InfluenceMask = null;
             InfluenceScratch = null;

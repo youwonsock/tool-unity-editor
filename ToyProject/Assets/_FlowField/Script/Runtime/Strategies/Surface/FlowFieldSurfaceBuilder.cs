@@ -289,10 +289,7 @@ namespace Common.FlowField
             _buildResolvesSafety = false;
             _session.BakeMode = bakeMode;
             _sourceKind = sourceKind;
-            _modifierPipeline ??= new FlowFieldSurfaceModifierPipeline(
-                new FlowFieldModifierRegistry<FlowFieldSurfaceModifierArea>(
-                    () => new FlowFieldSurfaceModifierArea(),
-                    area => area.Release()));
+            _modifierPipeline ??= new FlowFieldSurfaceModifierPipeline(_session.Modifiers);
             _solveStage.Prepare(sourceKind);
             _session.Fault = null;
             MarkDirty(FlowFieldSurfaceDirtyFlags.All, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
@@ -382,64 +379,34 @@ namespace Common.FlowField
             return true;
         }
 
-        public bool RegisterModifierNow(IFlowFieldVectorModifier modifier)
-        {
-            EnsureModifierServices();
-            bool registered;
-            using (_session.Boundary.EnterUserCode())
-                registered = _modifierPipeline.Registry.Register(modifier);
-            if (!registered)
-                return false;
-            ApplyModifierRegistryResult(new FlowFieldSurfaceModifierRegistryResult(
-                true, false, true, FlowFieldCellRect.Invalid));
-            return true;
-        }
+        public IFlowFieldModifierArea CreateModifierArea() => new FlowFieldSurfaceModifierArea();
 
-        public bool UnregisterModifierNow(IFlowFieldVectorModifier modifier)
+        public void ApplyModifierChange(in FlowFieldModifierUpdate update)
         {
             EnsureModifierServices();
-            if (FlowFieldVectorUtility.IsMissingModifier(modifier))
-                throw new ArgumentNullException(nameof(modifier));
-            FlowFieldCellRect touched = FlowFieldCellRect.Invalid;
-            if (!_modifierPipeline.Registry.Unregister(modifier, entry => touched = entry.Area.InfluenceRect))
-                return false;
-            // A retry builds everything again.
-            if (!_session.IsFaulted)
-                ApplyModifierRegistryResult(new FlowFieldSurfaceModifierRegistryResult(false, false, true, touched));
-            return true;
-        }
-
-        public void NotifyModifierChangedNow(
-            IFlowFieldVectorModifier modifier,
-            FlowFieldModifierChange change)
-        {
-            EnsureModifierServices();
-            FlowFieldModifierRegistry<FlowFieldSurfaceModifierArea> registry = _modifierPipeline.Registry;
-            if (!registry.Contains(modifier))
-                throw new InvalidOperationException("Modifier is not registered.");
-            // Nothing polls a Modifier, so the notification is where an
-            // invalid configuration is found. It faults, as in Volume3D.
-            FlowFieldModifierChangeResult result;
-            try
+            switch (update.Kind)
             {
-                using (_session.Boundary.EnterUserCode())
-                    result = registry.ApplyChange(modifier, change);
+                case FlowFieldModifierUpdateKind.Registered:
+                    ApplyModifierRegistryResult(new FlowFieldSurfaceModifierRegistryResult(
+                        true, false, true, FlowFieldCellRect.Invalid));
+                    return;
+                case FlowFieldModifierUpdateKind.Unregistered:
+                    ApplyModifierRegistryResult(new FlowFieldSurfaceModifierRegistryResult(
+                        false, false, true, FlowFieldSurfaceModifierPipeline.AreaOf(update.Entry).InfluenceRect));
+                    return;
             }
-            catch (Exception exception) when (exception is InvalidOperationException || exception is ArgumentException)
-            {
-                _session.ReportFault(exception);
-                return;
-            }
-            bool area = (change & FlowFieldModifierChange.Area) != 0;
+            bool area = (update.Requested & FlowFieldModifierChange.Area) != 0;
+            FlowFieldModifierChangeResult result = update.Result;
             if (!area && !result.Any)
                 return;
             // A new priority order recomposes every touched cell.
+            FlowFieldModifierRegistry registry = _session.Modifiers;
             FlowFieldCellRect dirty = FlowFieldCellRect.Invalid;
             for (int i = 0; i < registry.Entries.Count; i++)
             {
-                FlowFieldModifierEntry<FlowFieldSurfaceModifierArea> entry = registry.Entries[i];
-                if (result.PriorityChanged || ReferenceEquals(entry.Modifier, modifier))
-                    dirty = FlowFieldCellRect.Union(dirty, entry.Area.InfluenceRect);
+                FlowFieldModifierEntry entry = registry.Entries[i];
+                if (result.PriorityChanged || ReferenceEquals(entry, update.Entry))
+                    dirty = FlowFieldCellRect.Union(dirty, FlowFieldSurfaceModifierPipeline.AreaOf(entry).InfluenceRect);
             }
             ApplyModifierRegistryResult(new FlowFieldSurfaceModifierRegistryResult(
                 area, result.ValueChanged, result.Any, dirty));
