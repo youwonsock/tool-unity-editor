@@ -375,13 +375,9 @@ namespace Common.TransformPath.Samples
             PathData path,
             EPathMoveType moveType)
         {
-            if (path == null || path.Events.Count == 0)
-                return "none";
-
-            List<string> descriptions = new List<string>(path.Events.Count);
-            for (int i = 0; i < path.Events.Count; i++)
-                descriptions.Add(DescribeEvent(path.Events[i], moveType));
-            return string.Join(" · ", descriptions);
+            List<string> descriptions = new List<string>();
+            AddEventDescriptions(path, moveType, string.Empty, descriptions);
+            return descriptions.Count == 0 ? "none" : string.Join(" · ", descriptions);
         }
 
         private static string DescribeSequenceEvents(MultiPathData sequence)
@@ -392,39 +388,57 @@ namespace Common.TransformPath.Samples
             List<string> descriptions = new List<string>();
             for (int segment = 0; segment < sequence.SegmentCount; segment++)
             {
-                PathData path = sequence.GetSegmentPath(segment);
                 EPathMoveType moveType = sequence.GetSegmentMovement(segment).MoveType;
-                for (int i = 0; i < path.Events.Count; i++)
-                    descriptions.Add($"S{segment + 1} {DescribeEvent(path.Events[i], moveType)}");
+                AddEventDescriptions(sequence.GetSegmentPath(segment), moveType, $"S{segment + 1} ", descriptions);
             }
             return descriptions.Count == 0
                 ? "none"
                 : string.Join(" · ", descriptions);
         }
 
+        // The authored events in position order, as playback reaches them.
+        private static void AddEventDescriptions(
+            PathData path,
+            EPathMoveType moveType,
+            string prefix,
+            List<string> descriptions)
+        {
+            if (path == null || path.AuthoringEventCount == 0)
+                return;
+            List<PathEventEntry> entries = new List<PathEventEntry>(path.AuthoringEventCount);
+            for (int i = 0; i < path.AuthoringEventCount; i++)
+            {
+                PathEventEntry entry = path.GetAuthoringEvent(i);
+                int at = entries.Count;
+                while (at > 0 && entries[at - 1].NormalizedTime > entry.NormalizedTime)
+                    at--;
+                entries.Insert(at, entry);
+            }
+            for (int i = 0; i < entries.Count; i++)
+                descriptions.Add(prefix + DescribeEvent(entries[i], moveType));
+        }
+
         private static string DescribeEvent(
-            PathRuntimeEvent pathEvent,
+            PathEventEntry pathEvent,
             EPathMoveType moveType)
         {
-            PathEventDefinition definition = pathEvent.Definition;
-            if (definition == null)
+            PathEventSettingSO setting = pathEvent.EventSetting;
+            if (setting == null)
                 return $"event @ {pathEvent.NormalizedTime:F2}";
 
             string action = "notify";
-            PathValueChange change = moveType == EPathMoveType.SpeedBased
-                ? definition.SpeedChange
-                : definition.DurationChange;
-            if (definition.Lifecycle == EPathEventLifecycle.Pause)
+            bool speed = moveType == EPathMoveType.SpeedBased;
+            if (setting.Lifecycle == EPathEventLifecycle.Pause)
                 action = "Pause";
-            else if (change.Enabled)
-                action = moveType == EPathMoveType.SpeedBased
-                    ? $"Speed {change.Target:F2}"
-                    : $"Duration {change.Target:F2}s";
+            else if (speed && setting.UseSpeedChange)
+                action = $"Speed {setting.SpeedTarget:F2}";
+            else if (!speed && setting.UseDurationChange)
+                action = $"Duration {setting.DurationTarget:F2}s";
 
-            string delayed = definition.DelayedEvents.Count == 0
+            string delayed = setting.DelayedEvents == null || setting.DelayedEvents.Count == 0
                 ? string.Empty
-                : $" + delay {definition.DelayedEvents[0].Delay:F2}s";
-            return $"{definition.EventName} @ {pathEvent.NormalizedTime:F2} ({action}{delayed})";
+                : $" + delay {setting.DelayedEvents[0].Delay:F2}s";
+            return $"{setting.EventName} @ {pathEvent.NormalizedTime:F2} ({action}{delayed})";
         }
 
         private void StartNormalPath()

@@ -9,6 +9,8 @@ namespace Common.TransformPath
     /// </summary>
     public abstract class PathRuntimeBehaviour : MonoBehaviour, IPathRuntimeTickable
     {
+        private protected PathRuntimeBehaviour() { }
+
         /// <summary>The playback the driver protects within a frame, or 0.</summary>
         internal virtual ulong TickPlaybackId => 0UL;
         ulong IPathRuntimeTickable.PlaybackId => TickPlaybackId;

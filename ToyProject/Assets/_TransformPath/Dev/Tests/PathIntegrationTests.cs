@@ -50,7 +50,7 @@ namespace Common.TransformPath.Tests
             return follower.gameObject.AddComponent<PathQueueMember>();
         }
 
-        private QueuedPathManager CreateManager(IPathProvider route)
+        private QueuedPathManager CreateManager(PathProviderBehaviour route)
         {
             var host = new GameObject("Queue");
             _objects.Add(host);
@@ -180,16 +180,6 @@ namespace Common.TransformPath.Tests
 
             second.SetPathPoints(new[] { points[0], removed });
             Assert.IsTrue(sequence.IsReady);
-        }
-
-        [Test]
-        public void Events_CannotBeChangedFromOutside()
-        {
-            PathData path = Line(10f, 2f);
-            _scene.SetEvents(path, (0.5f, _scene.CreateEvent("e")));
-
-            Assert.IsNull(path.Events as PathRuntimeEvent[]);
-            Assert.AreEqual(1, path.Events.Count);
         }
 
         private static IReadOnlyList<Transform> GetPoints(PathData path) => path.PathPoints;

@@ -64,7 +64,7 @@ public sealed class TransformPathReadmeExample : MonoBehaviour
 | --- | --- |
 | `PathPlaybackRequest.Single(pathData, loop)` | 경로의 설정 |
 | `PathPlaybackRequest.Sequence(multiPathData, loop)` | 구간별 설정 |
-| `PathPlaybackRequest.Aggregate(provider, settings, loop)` | 지정한 설정으로 Provider 전체 |
+| `PathPlaybackRequest.Aggregate(provider, settings, loop)` | 지정한 설정으로 `PathData`나 `MultiPathData` 전체를 한 경로처럼 |
 
 | 명령 | 조건 |
 | --- | --- |
@@ -84,7 +84,7 @@ public sealed class TransformPathReadmeExample : MonoBehaviour
 _member.StartQueuedPlayback(_manager, PathPlaybackRequest.Single(_path));
 ```
 
-`PathQueueMember`는 `PathFollower`와 같은 GameObject에 둡니다. 멤버와 Manager는 같은 Provider 인스턴스를 씁니다. 세 번째 인자로 최대 진행률을 지정하면 그 지점에서 멈추며 완료되지 않습니다. 재생 제어(Pause, Seek, Stop)는 `member.Follower`로 합니다.
+`PathQueueMember`는 `PathFollower`와 같은 GameObject에 둡니다. 멤버와 Manager는 같은 Provider 인스턴스를 씁니다. 세 번째 인자로 최대 진행률을 지정하면 그 지점에서 멈추며 완료되지 않습니다. 재생 제어(Pause, Seek, Stop)는 `member.Follower`로 합니다. Seek한 멤버는 새로 출발할 때처럼 재출발 지연을 기다립니다.
 
 | 명령 | 의미 |
 | --- | --- |

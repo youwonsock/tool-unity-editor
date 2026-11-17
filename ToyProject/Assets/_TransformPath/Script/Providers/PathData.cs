@@ -34,7 +34,6 @@ namespace Common.TransformPath
         private PathPolyline _polyline;
         private PathMovementSettings _movement;
         private PathRuntimeEvent[] _events = Array.Empty<PathRuntimeEvent>();
-        private IReadOnlyList<PathRuntimeEvent> _eventsView = Array.Empty<PathRuntimeEvent>();
         private bool _failed;
 
         private readonly List<Vector3> _pointScratch = new List<Vector3>();
@@ -105,8 +104,6 @@ namespace Common.TransformPath
             }
         }
 
-        /// <summary>The published events in position order.</summary>
-        public IReadOnlyList<PathRuntimeEvent> Events => _eventsView;
         public int AuthoringEventCount => _pathEvents == null ? 0 : _pathEvents.Count;
         internal PathRuntimeEvent[] RuntimeEvents => _events;
         internal PathPolyline Polyline => _polyline;
@@ -224,8 +221,6 @@ namespace Common.TransformPath
                 || !PathRuntimeEvent.AreSame(_events, events);
             _polyline = polyline;
             _movement = movement;
-            if (!ReferenceEquals(_events, events))
-                _eventsView = Array.AsReadOnly(events);
             _events = events;
             _failed = false;
             return true;

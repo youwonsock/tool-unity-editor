@@ -14,7 +14,7 @@ namespace Common.TransformPath
     }
 
     /// <summary>An event placed on a path, copied from its authoring asset at build time.</summary>
-    public readonly struct PathRuntimeEvent
+    internal readonly struct PathRuntimeEvent
     {
         public float NormalizedTime { get; }
         public PathEventDefinition Definition { get; }
@@ -51,7 +51,7 @@ namespace Common.TransformPath
     }
 
     /// <summary>A Speed or Duration change, immediately or blended over game time.</summary>
-    public readonly struct PathValueChange
+    internal readonly struct PathValueChange
     {
         private readonly AnimationCurve _curve;
 
@@ -98,7 +98,7 @@ namespace Common.TransformPath
         }
     }
 
-    public readonly struct PathDelayedEventDefinition
+    internal readonly struct PathDelayedEventDefinition
     {
         public float Delay { get; }
         public PathEventDefinition Definition { get; }
@@ -115,7 +115,7 @@ namespace Common.TransformPath
     /// it is made. Playback applies it in this order: name notification,
     /// lifecycle, the value change of the current movement type, delayed events.
     /// </summary>
-    public sealed class PathEventDefinition
+    internal sealed class PathEventDefinition
     {
         private readonly PathDelayedEventDefinition[] _delayedEvents;
 

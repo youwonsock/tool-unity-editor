@@ -8,7 +8,7 @@ namespace Common.TransformPath
     /// </summary>
     [DefaultExecutionOrder(100)]
     [RequireComponent(typeof(LineRenderer))]
-    public class PathDataLineRenderer : MonoBehaviour
+    public sealed class PathDataLineRenderer : MonoBehaviour
     {
         #region Constants
 

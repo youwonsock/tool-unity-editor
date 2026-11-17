@@ -7,10 +7,13 @@ namespace Common.TransformPath
     /// Shared lifecycle of the path components. A provider builds into a
     /// temporary result, publishes it whole, and raises <see cref="PathChanged"/>
     /// once. Deciding what changed happens here and nowhere else: consumers only
-    /// compare <see cref="Revision"/> and <see cref="DefinitionRevision"/>.
+    /// compare <see cref="Revision"/> and the definition revision.
+    /// Only <see cref="PathData"/> and <see cref="MultiPathData"/> derive from it.
     /// </summary>
     public abstract class PathProviderBehaviour : MonoBehaviour, IPathProvider
     {
+        private protected PathProviderBehaviour() { }
+
         private int _revision;
         private int _definitionRevision;
         private bool _wasReady;
@@ -21,7 +24,9 @@ namespace Common.TransformPath
 
         public abstract bool IsReady { get; }
         public int Revision => _revision;
-        public int DefinitionRevision => _definitionRevision;
+        /// <summary>Rises only when the movement, the events or the segment structure change.</summary>
+        internal int DefinitionRevision => _definitionRevision;
+        int IPathProvider.DefinitionRevision => _definitionRevision;
         public abstract float PathLength { get; }
 
         public event Action PathChanged;

@@ -393,7 +393,7 @@ namespace Common.TransformPath.PlayerProbe
             return sequence;
         }
 
-        private static QueuedPathManager CreateManager(GameObject root, IPathProvider route)
+        private static QueuedPathManager CreateManager(GameObject root, PathProviderBehaviour route)
         {
             var host = new GameObject("Queue");
             host.transform.SetParent(root.transform, false);

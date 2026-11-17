@@ -33,7 +33,7 @@ namespace Common.TransformPath
         public bool IsMoving => Playback.IsMoving;
         /// <summary>Identifies the current playback. Each Play issues a new one; 0 when none runs.</summary>
         public ulong PlaybackId => Playback.PlaybackId;
-        public IPathProvider CurrentProvider => Playback.Route?.Provider;
+        public PathProviderBehaviour CurrentProvider => Playback.Route?.Provider as PathProviderBehaviour;
         /// <summary>Progress along the whole route, 0..1.</summary>
         public float Progress => Playback.Progress;
         /// <summary>Progress within the current segment, 0..1. Equals Progress outside a sequence.</summary>

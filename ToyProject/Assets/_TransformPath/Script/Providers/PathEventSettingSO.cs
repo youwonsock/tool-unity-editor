@@ -10,7 +10,7 @@ namespace Common.TransformPath
     /// change shows up after <see cref="PathProviderBehaviour.Rebuild"/>.
     /// </summary>
     [CreateAssetMenu(fileName = "Path Event Setting", menuName = "Path Setting/New Path Event Setting", order = 1)]
-    public class PathEventSettingSO : ScriptableObject
+    public sealed class PathEventSettingSO : ScriptableObject
     {
         [Serializable]
         public class DelayedEventEntry

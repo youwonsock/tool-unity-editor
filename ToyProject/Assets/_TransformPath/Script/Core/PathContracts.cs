@@ -47,7 +47,7 @@ namespace Common.TransformPath
     /// movement settings, the events or the segment structure change. A playback
     /// keeps going through a geometry change and stops at a definition change.
     /// </summary>
-    public interface IPathProvider
+    internal interface IPathProvider
     {
         bool IsReady { get; }
         int Revision { get; }

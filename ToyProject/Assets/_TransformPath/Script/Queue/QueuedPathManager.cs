@@ -21,7 +21,7 @@ namespace Common.TransformPath
         }
 
         [Header("Route")]
-        [SerializeField] private MonoBehaviour _routeProviderObject;
+        [SerializeField] private PathProviderBehaviour _routeProviderObject;
 
         [Header("Spacing")]
         [SerializeField, Min(0f)] private float _defaultSpacing = PathConstants.DEFAULT_QUEUE_SPACING;
@@ -41,7 +41,7 @@ namespace Common.TransformPath
         private readonly Dictionary<PathQueueMember, Entry> _entries = new Dictionary<PathQueueMember, Entry>(100);
         private readonly List<IPathProvider> _routeStructure = new List<IPathProvider>();
 
-        private IPathProvider _routeProvider;
+        private PathProviderBehaviour _routeProvider;
         private bool _isInitialized;
         private int _routeRevision = -1;
         private int _nextSequence;
@@ -54,7 +54,7 @@ namespace Common.TransformPath
         };
 
         public bool IsInitialized => _isInitialized;
-        public IPathProvider RouteProvider => _routeProvider;
+        public PathProviderBehaviour RouteProvider => _routeProvider;
         /// <summary>The route revision the last results were computed for.</summary>
         public int RouteRevision => _routeRevision;
         public int MemberCount => _ordered.Count;
@@ -113,10 +113,10 @@ namespace Common.TransformPath
         }
 
         /// <summary>Sets the route every member must play. Changing it removes the current members.</summary>
-        public void ConfigureRoute(IPathProvider provider)
+        public void ConfigureRoute(PathProviderBehaviour provider)
         {
-            if (provider is PathProviderBehaviour behaviour && behaviour != null)
-                behaviour.EnsureBuilt();
+            if (provider != null)
+                provider.EnsureBuilt();
             PathProviderUtility.ThrowIfNotReady(provider, nameof(provider));
             if (ReferenceEquals(_routeProvider, provider))
                 return;
@@ -144,16 +144,9 @@ namespace Common.TransformPath
             _errors.Reset();
             if (_routeProviderObject == null)
                 return;
-            if (!(_routeProviderObject is IPathProvider provider))
-            {
-                _isInitialized = false;
-                _errors.Report(this, $"QueuedPathManager '{name}' route object does not implement IPathProvider.");
-                return;
-            }
-            if (provider is PathProviderBehaviour behaviour)
-                behaviour.EnsureBuilt();
-            if (provider.IsReady)
-                ConfigureRoute(provider);
+            _routeProviderObject.EnsureBuilt();
+            if (_routeProviderObject.IsReady)
+                ConfigureRoute(_routeProviderObject);
         }
 
         internal override void Release()

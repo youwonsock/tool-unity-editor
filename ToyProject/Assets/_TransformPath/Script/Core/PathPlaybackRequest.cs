@@ -18,10 +18,10 @@ namespace Common.TransformPath
         private readonly EKind _kind;
         private readonly PathMovementSettings _movement;
 
-        public IPathProvider Provider { get; }
+        public PathProviderBehaviour Provider { get; }
         public bool Loop { get; }
 
-        private PathPlaybackRequest(EKind kind, IPathProvider provider, PathMovementSettings movement, bool loop)
+        private PathPlaybackRequest(EKind kind, PathProviderBehaviour provider, PathMovementSettings movement, bool loop)
         {
             _kind = kind;
             Provider = provider;
@@ -39,7 +39,8 @@ namespace Common.TransformPath
             return new PathPlaybackRequest(EKind.Provider, sequence, default(PathMovementSettings), loop);
         }
 
-        public static PathPlaybackRequest Aggregate(IPathProvider provider, PathMovementSettings movement, bool loop = false)
+        /// <summary>Plays a path or a sequence as one path with these settings, ignoring its own movement and events.</summary>
+        public static PathPlaybackRequest Aggregate(PathProviderBehaviour provider, PathMovementSettings movement, bool loop = false)
         {
             return new PathPlaybackRequest(EKind.Aggregate, provider, movement, loop);
         }
@@ -47,13 +48,13 @@ namespace Common.TransformPath
         /// <summary>Validates the request and returns the route to play. Throws before anything changes.</summary>
         internal PathRoute CreateRoute()
         {
-            if (Provider is PathProviderBehaviour behaviour && behaviour != null)
-                behaviour.EnsureBuilt();
+            if (Provider != null)
+                Provider.EnsureBuilt();
             PathProviderUtility.ThrowIfNotReady(Provider, nameof(Provider));
             switch (_kind)
             {
                 case EKind.Provider:
-                    return ((PathProviderBehaviour)Provider).GetRoute();
+                    return Provider.GetRoute();
                 case EKind.Aggregate:
                     _movement.Validate("movement");
                     return PathRoute.Aggregate(Provider, _movement);
