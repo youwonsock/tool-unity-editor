@@ -15,6 +15,7 @@ namespace Common.TransformPath
         private int _definitionRevision;
         private bool _wasReady;
         private bool _buildRequested;
+        private bool _destroyed;
         private PathRoute _route;
         private PathConfigurationErrorReporter _errors;
 
@@ -30,23 +31,26 @@ namespace Common.TransformPath
         /// <summary>Builds from the current authoring data and publishes the result if it changed.</summary>
         public void Rebuild()
         {
+            if (_destroyed)
+                return;
             _buildRequested = true;
             if (TryBuild(out bool geometryChanged, out bool definitionChanged, out string error))
             {
                 _errors.Reset();
+                bool recovered = !_wasReady;
                 _wasReady = true;
-                Publish(geometryChanged, definitionChanged);
+                if (geometryChanged || definitionChanged)
+                    Publish(definitionChanged);
+                else if (recovered)
+                    // Same content as before a failed build: a sequence that
+                    // failed with this path must hear it is back.
+                    PathProviderUtility.RaisePathChanged(PathChanged);
                 return;
             }
 
             MarkFailed();
             _errors.Report(this, $"{GetType().Name} '{name}' could not build: {error}");
-            // A follower or a sequence that uses this path must hear it went away.
-            if (_wasReady)
-            {
-                _wasReady = false;
-                PathProviderUtility.RaisePathChanged(PathChanged);
-            }
+            NotifyUnavailable();
         }
 
         /// <summary>The playback route of this provider's current revision, shared by every follower.</summary>
@@ -88,10 +92,34 @@ namespace Common.TransformPath
                 throw new InvalidOperationException($"{GetType().Name} '{name}' is not built and ready.");
         }
 
-        private void Publish(bool geometryChanged, bool definitionChanged)
+        /// <summary>A destroyed provider stops every playback and queue that uses it.</summary>
+        protected virtual void OnDestroy()
         {
-            if (!geometryChanged && !definitionChanged)
+            _destroyed = true;
+            MarkUnavailable();
+        }
+
+        /// <summary>
+        /// Takes the publication out of use without logging, because a provider
+        /// this one depends on already reported why.
+        /// </summary>
+        protected void MarkUnavailable()
+        {
+            MarkFailed();
+            NotifyUnavailable();
+        }
+
+        // A follower or a sequence that uses this path must hear it went away.
+        private void NotifyUnavailable()
+        {
+            if (!_wasReady)
                 return;
+            _wasReady = false;
+            PathProviderUtility.RaisePathChanged(PathChanged);
+        }
+
+        private void Publish(bool definitionChanged)
+        {
             _revision++;
             if (definitionChanged)
                 _definitionRevision++;

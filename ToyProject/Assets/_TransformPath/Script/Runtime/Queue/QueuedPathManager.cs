@@ -114,6 +114,8 @@ namespace Common.TransformPath
         /// <summary>Sets the route every member must play. Changing it removes the current members.</summary>
         public void ConfigureRoute(IPathProvider provider)
         {
+            if (provider is PathProviderBehaviour behaviour && behaviour != null)
+                behaviour.EnsureBuilt();
             PathProviderUtility.ThrowIfNotReady(provider, nameof(provider));
             if (ReferenceEquals(_routeProvider, provider))
                 return;
@@ -244,7 +246,7 @@ namespace Common.TransformPath
                 entry.Sequence = _nextSequence++;
         }
 
-                internal bool Contains(PathQueueMember member) => member != null && _entries.ContainsKey(member);
+        internal bool Contains(PathQueueMember member) => member != null && _entries.ContainsKey(member);
 
         private void LeaveAll(EPathQueueLeaveReason reason)
         {

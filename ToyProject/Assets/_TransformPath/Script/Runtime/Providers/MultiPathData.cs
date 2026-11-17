@@ -56,7 +56,11 @@ namespace Common.TransformPath
                 Rebuild();
         }
 
-        private void OnDestroy() => Unsubscribe();
+        protected override void OnDestroy()
+        {
+            Unsubscribe();
+            base.OnDestroy();
+        }
 
         /// <summary>Replaces the segments and rebuilds.</summary>
         public void SetSegments(IReadOnlyList<PathSegmentAuthoring> segments)
@@ -262,8 +266,27 @@ namespace Common.TransformPath
         // A path this build itself asked to build reports here too. The build reads it afterwards.
         private void HandlePathChanged()
         {
-            if (!_building)
+            if (_building)
+                return;
+            // A path that failed or was destroyed reported it already, so this
+            // sequence only goes out of use until the path is back.
+            if (HasUnavailablePath())
+                MarkUnavailable();
+            else
                 Rebuild();
+        }
+
+        private bool HasUnavailablePath()
+        {
+            if (_segments == null)
+                return true;
+            for (int i = 0; i < _segments.Count; i++)
+            {
+                PathData path = _segments[i].Path;
+                if (path == null || !path.IsReady)
+                    return true;
+            }
+            return false;
         }
 
 #if UNITY_EDITOR
