@@ -51,9 +51,13 @@ public sealed class FlowFieldReadmeMover : MonoBehaviour
 
 ## 구조
 
-<img src="Docs/Images/flowfield-uml.png" alt="FlowField 요청부터 조회까지의 핵심 흐름" width="45%">
+<img src="Docs/Images/flowfield-uml.png" alt="FlowField 요청부터 조회까지의 핵심 흐름" width="40%">
 
-<img src="Docs/Images/flowfield-structure.png" alt="FlowField 주요 타입의 구조" width="100%">
+<sub>PlantUML 원본: [Docs/flowfield-uml.puml](Docs/flowfield-uml.puml)</sub>
+
+<img src="Docs/Images/flowfield-structure.png" alt="FlowField 주요 타입의 구조" width="80%">
+
+<sub>PlantUML 원본: [Docs/flowfield-structure.puml](Docs/flowfield-structure.puml)</sub>
 
 - **Manager**는 직렬화 설정과 Unity 콜백을 맡고, 설정 스냅샷(`FlowFieldManagerConfig`)과 공개 API 호출을 Session에 넘깁니다. 호출이 계산 완료를 뜻하지는 않습니다.
 - **Session**은 두 공간 모드가 같이 쓰는 파이프라인입니다. 수명, 이벤트, 빌드 루프, 실패 규칙이 한 벌이고, 모드마다 다른 계산만 Builder(`Surface`·`Volume`)가 맡습니다.

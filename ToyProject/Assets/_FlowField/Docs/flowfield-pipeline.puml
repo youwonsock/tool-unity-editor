@@ -1,0 +1,33 @@
+@startuml flowfield-pipeline
+skinparam shadowing false
+skinparam defaultFontName "Apple SD Gothic Neo"
+skinparam defaultFontSize 15
+skinparam ArrowColor #496A88
+skinparam ParticipantBackgroundColor #EEF5FB
+skinparam ParticipantBorderColor #496A88
+skinparam NoteBackgroundColor #FFFDE7
+title 빌드와 게시 (두 모드 공통)
+
+participant "Manager" as M
+participant "Scheduler" as Q
+participant "Session" as S
+participant "Builder\n(Surface·Volume)" as B
+
+M -> S : 입력(설정·Goal·장애물·Modifier)
+S -> B : 입력 반영
+S -> S : 할 일이 생기면 Building
+loop 프레임마다, 예산 안에서
+  Q -> S : PumpInternal(예산)
+  S -> B : TryBeginBuild / StepBuild
+  B --> S : 계속 · 대기 · 버림 · 완료
+end
+S -> B : PublishBuild
+B --> S : 필드가 달라졌는지
+S --> M : FieldChanged·Ready (작업이 끝난 뒤)
+M -> S : TrySample(위치)
+S -> S : 게시 값 + 공통 샘플 안전 규칙
+note over B
+  Surface: 기본 단계를 한 프레임에, BFS는 Job
+  Volume: 64셀씩 나눠 계산, BFS는 Job
+end note
+@enduml

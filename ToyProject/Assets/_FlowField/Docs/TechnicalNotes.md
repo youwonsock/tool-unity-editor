@@ -35,6 +35,10 @@ Player 측정(`PlayerProbe` 폴더, `Tools/run-player-probe.sh`)은 Editor와 `F
 
 ## 수명과 게시 규칙
 
+<img src="Images/flowfield-pipeline.png" alt="두 모드 공통 빌드와 게시 흐름" width="65%">
+
+<sub>PlantUML 원본: [flowfield-pipeline.puml](flowfield-pipeline.puml)</sub>
+
 - **입력:** Builder는 최신 요청 한 벌과 대기 표시만 보관합니다(`FlowFieldRequestInbox`). Volume은 빌드 시작 때 요청을 BuildContext에 고정하고, Surface는 풀이가 끝나면 최신 요청으로 합성합니다. 빌드 중 온 입력은 다음 빌드로 넘기고, 그동안 두 모드 모두 Building을 유지합니다. Ready에서 받은 입력(설정, Goal, 장애물, Modifier)은 Session이 그 자리에서 Building으로 바꿉니다. 그래서 명령 직후 `State`와 `IsRebuilding`이 두 모드에서 같고, 다음 Pump를 기다리지 않습니다. 할 일이 없어진 Building은 게시된 필드가 있으면 Ready로 돌아갑니다.
 - **게시:** 완성된 결과만 게시하고, 일반 조회는 게시 값을 읽은 뒤 아래 샘플 안전 규칙을 적용합니다.
 - **샘플 안전 규칙(`FlowFieldSampleSafetyRule`, 두 모드·두 Bake 모드 공통):** 게시 값을 읽은 뒤 아래 순서로 덮어씁니다. "위험한 칸"은 불확실 영역에 있거나, 최신 정보에서 막혔거나, 걸을 수 없는(Surface 지면 없음) 칸입니다.
@@ -61,8 +65,6 @@ Player 측정(`PlayerProbe` 폴더, `Tools/run-player-probe.sh`)은 Editor와 `F
 
 ## Surface2D
 
-<img src="Images/flowfield-surface.png" alt="Surface2D 빌드와 게시 흐름" width="80%">
-
 - 통지가 dirty 표시와 요청을 남기면 Scheduler가 Session을 진행합니다. 직접 `Session.Pump()`를 호출하는 베이크와 미리보기는 호출자가 입력을 책임집니다.
 - 표면·장애물·Goal·Modifier 영역은 Physics 결과가 한 스냅샷이 되도록 한 프레임에 실행합니다. BFS와 방향은 워커 스레드, Topology는 메인 스레드의 Burst입니다. 합성은 예산에 맞춰 나눕니다.
 - BFS가 예정된 빌드는 사전 합성을 생략하고, 완료 후 전체를 한 번 합성합니다.
@@ -71,8 +73,6 @@ Player 측정(`PlayerProbe` 폴더, `Tools/run-player-probe.sh`)은 Editor와 `F
 - 한 번의 조회에서 겹치는 장애물이 4,096개에 이르면 Session이 Fault 납니다. 일부만 쓰면 장애물을 놓치기 때문입니다. Volume3D는 이때 셀별 검사로 넘어갑니다.
 
 ## Volume3D
-
-<img src="Images/flowfield-volume.png" alt="Volume3D 빌드와 게시 흐름" width="80%">
 
 - 셀은 `x + Width × (z + Depth × y)` 순서로 저장합니다. 두 축·세 축 대각선은 중간 셀이 모두 통과 가능할 때만 연결합니다.
 - 장애물·Modifier 단계는 64셀씩 진행합니다. 스텝마다 `OverlapBox`로 후보를 모아 후보가 닿는 셀만 정확히 검사합니다(`FlowFieldVolumeCellQuery`).
@@ -127,7 +127,7 @@ Player 측정(`PlayerProbe` 폴더, `Tools/run-player-probe.sh`)은 Editor와 `F
 ```sh
 java -Djava.awt.headless=true -Djava.io.tmpdir="$TMPDIR" -jar plantuml-1.2024.6.jar \
   -tpng -charset UTF-8 -o Images \
-  flowfield-uml.puml flowfield-structure.puml flowfield-surface.puml flowfield-volume.puml
+  flowfield-uml.puml flowfield-structure.puml flowfield-pipeline.puml
 ```
 
 임시 폴더에 쓸 수 없으면 종료 코드 0으로 0바이트 PNG가 나오니 파일 크기를 확인합니다. 한글은 macOS의 `Apple SD Gothic Neo` 글꼴로 렌더링합니다.

@@ -3,28 +3,22 @@ skinparam shadowing false
 skinparam defaultFontName "Apple SD Gothic Neo"
 skinparam defaultFontSize 15
 skinparam ArrowColor #496A88
-skinparam Padding 6
-skinparam activityBackgroundColor #EEF5FB
-skinparam activityBorderColor #496A88
+skinparam ActivityBackgroundColor #EEF5FB
+skinparam ActivityBorderColor #496A88
+skinparam ActivityDiamondBackgroundColor #EEF5FB
+skinparam ActivityDiamondBorderColor #496A88
 title FlowField 핵심 흐름
 
 start
-:공개 API·FlowField 컴포넌트의 통지\n(씬 폴링 없음);
-:Session이 Builder에 설정 스냅샷 전달\n통지 영역은 그 프레임부터 정지;
-:최신 요청 수락\n빌드 중 입력은 다음 빌드로;
-:BuildDriver.LateUpdate\nScheduler가 공통 예산(기본 2ms)으로 Session 실행;
-if (실행 모드) then (RuntimeDynamic)
-  :표면·장애물 준비\nBFS는 워커 스레드의 Burst Job;
+:공개 API·컴포넌트 통지\n(씬 폴링 없음);
+:Session이 입력을 받고 Building;
+:Scheduler가 프레임 예산(기본 2ms) 안에서 빌드;
+if (Bake 모드) then (RuntimeDynamic)
+  :장애물·Goal·BFS 계산\n(BFS는 워커 스레드);
 else (StaticBaked)
-  :검증한 v6 Bake 로드\nPhysics·BFS 없음;
+  :Bake Asset 로드;
 endif
-:Default Direction·Modifier 합성;
-:완성된 결과만 게시;
-:이동 주체가 TrySample로 조회;
-if (방향과 속도 배율이 유효?) then (예)
-  :방향 × 이동 속도 × SpeedMultiplier;
-else (아니오)
-  :정지;
-endif
+:Modifier 합성, 완성된 결과만 게시;
+:TrySample = 게시 값 + 공통 안전 규칙;
 stop
 @enduml

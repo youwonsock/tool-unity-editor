@@ -11,60 +11,51 @@ hide empty members
 hide circle
 title FlowField 구조
 
-class "IFlowFieldController\n: IFlowFieldProvider" as API <<interface>>
-class FlowFieldManager {
-  설정 묶음
-  FlowFieldManagerConfig
-  FlowFieldModifierAttachment
+class "FlowFieldDynamicObstacle\nFlowFieldGoalTarget\nModifier Volume" as Components {
+  변경을 스스로 통지
 }
-class FlowFieldExecutionBoundary
-class FlowFieldBuildDriver
-class FlowFieldBuildScheduler
-interface IFlowFieldBuildOperation
-class FlowFieldSpaceStrategy
+interface "IFlowFieldController" as API
+class FlowFieldManager {
+  직렬화 설정·공개 API
+}
+class FlowFieldSpaceStrategy {
+  모드별 Session 생성·검증·Bounds 맞춤
+}
 class "FlowFieldSession\n(공통 파이프라인)" as Session {
-  수명 전이·입력 시 Building·이벤트·빌드 루프
-  조회·FlowFieldFailures
-  FlowFieldObstacleRegistry
-  FlowFieldModifierRegistry
-  FlowFieldSafety
-  FlowFieldSampleSafetyRule
+  수명·상태·이벤트·빌드 루프
+  장애물·Modifier 등록부
+  샘플 안전 규칙
 }
 interface IFlowFieldSpaceBuilder {
-  요청·빌드 단계
-  게시 필드·격자
-  입력 반영·수명 훅
+  빌드 단계·게시 필드
+  최신 셀 정보·수명 훅
 }
-class "FlowFieldSurfaceBuilder (Surface2D)" as Surface {
-  SurfaceBaseStage
-  SurfaceSolveStage
-  SurfaceComposeStage
-  SurfaceFieldStore
-  SurfaceObstacleMasks
-  SurfaceModifierComposition
+class FlowFieldSurfaceBuilder {
+  Surface2D 계산
 }
-class "FlowFieldVolumeBuilder (Volume3D)" as Volume {
-  VolumeBuildContext
+class FlowFieldVolumeBuilder {
+  Volume3D 계산
 }
-class "FlowFieldField·FlowFieldSampler\nFlowFieldRequestInbox" as Shared
-class "FlowFieldBakeService\n(Editor)" as BakeService
-class "FlowFieldDynamicObstacle\nFlowFieldGoalTarget\nModifier Volume" as Components
+class FlowFieldBuildScheduler {
+  모든 Session에 프레임당 공통 예산
+}
+class FlowFieldExecutionBoundary {
+  이벤트·Modifier 명령을 작업 뒤로
+}
+class "Editor\n(BakeService·BakeEditor)" as Editor {
+  Bake·미리보기
+}
 
-FlowFieldManager .up.|> API
-FlowFieldManager --> Session
+Components ..> API : 통지
+FlowFieldManager ..|> API
 FlowFieldManager --> FlowFieldSpaceStrategy
 FlowFieldSpaceStrategy ..> Session : 생성
-BakeService ..> FlowFieldManager : CaptureConfig
-FlowFieldManager --> FlowFieldExecutionBoundary
-Components ..> API : 통지
+FlowFieldManager --> Session
 Session --> IFlowFieldSpaceBuilder
-Surface ..|> IFlowFieldSpaceBuilder
-Volume ..|> IFlowFieldSpaceBuilder
-Surface --> Shared
-Volume --> Shared
+FlowFieldSurfaceBuilder ..|> IFlowFieldSpaceBuilder
+FlowFieldVolumeBuilder ..|> IFlowFieldSpaceBuilder
+FlowFieldBuildScheduler --> Session : Pump(예산)
 Session --> FlowFieldExecutionBoundary
-Session --> Shared
-Session ..|> IFlowFieldBuildOperation
-FlowFieldBuildScheduler --> IFlowFieldBuildOperation
-FlowFieldBuildDriver -right-> FlowFieldBuildScheduler
+Editor ..> FlowFieldManager : CaptureConfig
+Editor ..> Session : 직접 Pump
 @enduml
