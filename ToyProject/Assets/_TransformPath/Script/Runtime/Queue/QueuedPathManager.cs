@@ -15,6 +15,7 @@ namespace Common.TransformPath
         {
             public PathQueueMember Member;
             public int Sequence;
+            public int LoopCount;
             public float Progress;
             public PathQueueStatus? Status;
         }
@@ -189,7 +190,17 @@ namespace Common.TransformPath
 
             RemoveEndedMembers();
             for (int i = 0; i < _ordered.Count; i++)
-                _ordered[i].Progress = Mathf.Clamp01(_ordered[i].Member.Follower.Progress);
+            {
+                Entry entry = _ordered[i];
+                PathFollower follower = entry.Member.Follower;
+                entry.Progress = Mathf.Clamp01(follower.Progress);
+                // A new lap joins the back of the line before this frame's order, as a new start would.
+                if (follower.LoopCount != entry.LoopCount)
+                {
+                    entry.LoopCount = follower.LoopCount;
+                    entry.Sequence = _nextSequence++;
+                }
+            }
             PathSortUtility.StableInsertionSort(_ordered, CompareOrder);
             CalculateStatuses();
             for (int i = 0; i < _joined.Count; i++)
@@ -219,6 +230,7 @@ namespace Common.TransformPath
                 _pool.RemoveAt(_pool.Count - 1);
             entry.Member = member;
             entry.Sequence = _nextSequence++;
+            entry.LoopCount = member.Follower.LoopCount;
             entry.Progress = Mathf.Clamp01(member.Follower.Progress);
             entry.Status = null;
             _entries.Add(member, entry);
@@ -237,13 +249,6 @@ namespace Common.TransformPath
             entry.Member = null;
             entry.Status = null;
             _pool.Add(entry);
-        }
-
-        /// <summary>Orders a member behind every other at the same progress.</summary>
-        internal void MoveToBack(PathQueueMember member)
-        {
-            if (member != null && _entries.TryGetValue(member, out Entry entry))
-                entry.Sequence = _nextSequence++;
         }
 
         internal bool Contains(PathQueueMember member) => member != null && _entries.ContainsKey(member);

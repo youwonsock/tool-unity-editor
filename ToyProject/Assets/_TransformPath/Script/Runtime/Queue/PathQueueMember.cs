@@ -246,13 +246,8 @@ namespace Common.TransformPath
                 }
                 return;
             }
-            if (follower.LoopCount != _loopCount)
-            {
-                // A new lap joins the back of the line, as a new start would.
-                _activeManager?.MoveToBack(this);
-                AwaitFirstResult(true);
-            }
-            else if (_showingPause || follower.PlaybackId != _playbackId)
+            // A new lap, a resumed or a replaced playback waits as a new start would.
+            if (follower.LoopCount != _loopCount || _showingPause || follower.PlaybackId != _playbackId)
                 AwaitFirstResult(true);
             if (follower.SeekCount != _seekCount)
             {
