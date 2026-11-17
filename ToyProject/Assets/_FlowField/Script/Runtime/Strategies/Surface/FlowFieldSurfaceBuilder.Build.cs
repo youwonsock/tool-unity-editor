@@ -21,82 +21,75 @@ namespace Common.FlowField
                 _safety.BeginBuild();
             _state.DirtyFlags = FlowFieldSurfaceDirtyFlags.None;
 
-            try
+            // A failure leaves through StepBuild and the session faults.
+            bool surfaceChanged = _baseStage.PrepareSurface(request, pending, _modifierComposition?.Registry);
+            // Surface preparation may invalidate every downstream stage
+            // (for example after a grid change). Include those flags in
+            // this build rather than leaving them for a later no-op tick.
+            if (surfaceChanged)
+                pending |= _state.DirtyFlags;
+            else
+                pending &= ~FlowFieldSurfaceDirtyFlags.Grid;
+            _state.DirtyFlags = FlowFieldSurfaceDirtyFlags.None;
+            if (request.SourceKind == FlowFieldSurfaceSourceKind.StaticSnapshot)
             {
-                bool surfaceChanged = _baseStage.PrepareSurface(request, pending, _modifierComposition?.Registry);
-                // Surface preparation may invalidate every downstream stage
-                // (for example after a grid change). Include those flags in
-                // this build rather than leaving them for a later no-op tick.
-                if (surfaceChanged)
-                    pending |= _state.DirtyFlags;
-                else
-                    pending &= ~FlowFieldSurfaceDirtyFlags.Grid;
-                _state.DirtyFlags = FlowFieldSurfaceDirtyFlags.None;
-                if (request.SourceKind == FlowFieldSurfaceSourceKind.StaticSnapshot)
-                {
-                    BuildStaticSnapshot(request, pending);
-                    return true;
-                }
-
-                _baseStage.BuildSceneBase(request, ref pending, surfaceChanged);
-                if ((pending & FlowFieldSurfaceDirtyFlags.ModifierArea) != 0)
-                {
-                    FlowFieldCellRect modifierRegion = RebuildModifierAreaData(request);
-                    bool modifierAreaChanged = modifierRegion.IsValid;
-                    if (modifierAreaChanged)
-                    {
-                        pending |= FlowFieldSurfaceDirtyFlags.FinalRegion;
-                        _state.ExpandFinalDirty(modifierRegion);
-                    }
-                    if (!modifierAreaChanged
-                        && _state.BaseComposed && _fieldStore.IsValid
-                        && (pending & (FlowFieldSurfaceDirtyFlags.ModifierValue
-                            | FlowFieldSurfaceDirtyFlags.DefaultDirection
-                            | FlowFieldSurfaceDirtyFlags.Grid
-                            | FlowFieldSurfaceDirtyFlags.StaticObstacles
-                            | FlowFieldSurfaceDirtyFlags.DynamicObstacles
-                            | FlowFieldSurfaceDirtyFlags.Escape
-                            | FlowFieldSurfaceDirtyFlags.Goal)) == 0)
-                    {
-                        pending &= ~(FlowFieldSurfaceDirtyFlags.ModifierArea | FlowFieldSurfaceDirtyFlags.FinalRegion);
-                        _state.DirtyFinalRegion = FlowFieldCellRect.Invalid;
-                    }
-                }
-                bool topologyChanged = (pending & (FlowFieldSurfaceDirtyFlags.Grid
-                    | FlowFieldSurfaceDirtyFlags.StaticObstacles
-                    | FlowFieldSurfaceDirtyFlags.DynamicObstacles
-                    | FlowFieldSurfaceDirtyFlags.Escape
-                    | FlowFieldSurfaceDirtyFlags.Goal)) != 0;
-                // A pending BFS recomposes the whole field when it completes
-                // (OnBfsCompleted), and a rejected solve restores the published
-                // field, so composing before the solve would never be visible.
-                if (_state.Workspace.HasActiveGoal && topologyChanged)
-                    return StartBfs(request);
-
-                if ((pending & (FlowFieldSurfaceDirtyFlags.ModifierValue | FlowFieldSurfaceDirtyFlags.FinalRegion)) != 0)
-                {
-                    ComposeThenCommit(
-                        request,
-                        rebuildBase: IsBaseDirty(pending)
-                            || (pending & FlowFieldSurfaceDirtyFlags.DefaultDirection) != 0
-                            || !_state.BaseComposed,
-                        resultChanged: (pending & FlowFieldSurfaceDirtyFlags.FinalRegion) != 0,
-                        includeBase: IsBaseDirty(pending) || !_fieldStore.IsValid);
-                    return true;
-                }
-
-                QueueCommit(
-                    request,
-                    resultChanged: (pending & FlowFieldSurfaceDirtyFlags.FinalRegion) != 0,
-                    includeBase: IsBaseDirty(pending) || !_fieldStore.IsValid,
-                    finalRegion: _state.LastComposedRegion);
+                BuildStaticSnapshot(request, pending);
                 return true;
             }
-            catch (Exception exception)
+
+            _baseStage.BuildSceneBase(request, ref pending, surfaceChanged);
+            if ((pending & FlowFieldSurfaceDirtyFlags.ModifierArea) != 0)
             {
-                _session.EnterFault(exception);
-                return false;
+                FlowFieldCellRect modifierRegion = RebuildModifierAreaData(request);
+                bool modifierAreaChanged = modifierRegion.IsValid;
+                if (modifierAreaChanged)
+                {
+                    pending |= FlowFieldSurfaceDirtyFlags.FinalRegion;
+                    _state.ExpandFinalDirty(modifierRegion);
+                }
+                if (!modifierAreaChanged
+                    && _state.BaseComposed && _fieldStore.IsValid
+                    && (pending & (FlowFieldSurfaceDirtyFlags.ModifierValue
+                        | FlowFieldSurfaceDirtyFlags.DefaultDirection
+                        | FlowFieldSurfaceDirtyFlags.Grid
+                        | FlowFieldSurfaceDirtyFlags.StaticObstacles
+                        | FlowFieldSurfaceDirtyFlags.DynamicObstacles
+                        | FlowFieldSurfaceDirtyFlags.Escape
+                        | FlowFieldSurfaceDirtyFlags.Goal)) == 0)
+                {
+                    pending &= ~(FlowFieldSurfaceDirtyFlags.ModifierArea | FlowFieldSurfaceDirtyFlags.FinalRegion);
+                    _state.DirtyFinalRegion = FlowFieldCellRect.Invalid;
+                }
             }
+            bool topologyChanged = (pending & (FlowFieldSurfaceDirtyFlags.Grid
+                | FlowFieldSurfaceDirtyFlags.StaticObstacles
+                | FlowFieldSurfaceDirtyFlags.DynamicObstacles
+                | FlowFieldSurfaceDirtyFlags.Escape
+                | FlowFieldSurfaceDirtyFlags.Goal)) != 0;
+            // A pending BFS recomposes the whole field when it completes
+            // (OnBfsCompleted), and a rejected solve restores the published
+            // field, so composing before the solve would never be visible.
+            if (_state.Workspace.HasActiveGoal && topologyChanged)
+                return StartBfs(request);
+
+            if ((pending & (FlowFieldSurfaceDirtyFlags.ModifierValue | FlowFieldSurfaceDirtyFlags.FinalRegion)) != 0)
+            {
+                ComposeThenCommit(
+                    request,
+                    rebuildBase: IsBaseDirty(pending)
+                        || (pending & FlowFieldSurfaceDirtyFlags.DefaultDirection) != 0
+                        || !_state.BaseComposed,
+                    resultChanged: (pending & FlowFieldSurfaceDirtyFlags.FinalRegion) != 0,
+                    includeBase: IsBaseDirty(pending) || !_fieldStore.IsValid);
+                return true;
+            }
+
+            QueueCommit(
+                request,
+                resultChanged: (pending & FlowFieldSurfaceDirtyFlags.FinalRegion) != 0,
+                includeBase: IsBaseDirty(pending) || !_fieldStore.IsValid,
+                finalRegion: _state.LastComposedRegion);
+            return true;
         }
 
         private void BuildStaticSnapshot(in FlowFieldSurfaceRequest request, FlowFieldSurfaceDirtyFlags pending)
@@ -214,11 +207,9 @@ namespace Common.FlowField
             bool finished;
             using (_session.Boundary.EnterUserCode())
                 finished = _modifierComposition.StepFinalField(in _composeStage.FrameBudget);
+            // StepBuild yields until the composition finishes.
             if (!finished)
-            {
-                _session.SetLifecycle(FlowFieldSessionLifecycle.Building);
                 return;
-            }
 
             _state.BaseComposed |= _composeStage.RebuildBase;
             QueueCommit(
@@ -249,31 +240,31 @@ namespace Common.FlowField
                 request.Goal.InfluenceRadius,
                 _state.Workspace.ResolvedGoalIndex);
 
-            _session.SetLifecycle(FlowFieldSessionLifecycle.Building);
             // Set first: a solve that completes synchronously reports through
             // the callback, which moves the phase on.
             _phase = BuildPhase.WaitingSolve;
             // Stop drops the backend; the next solve takes a new one.
             _solveStage.Prepare(_sourceKind);
             bool accepted = _solveStage.Start(bfsRequest, _ => RunBfsCallback(generation));
-            // A synchronous completion has already left the Building state.
+            // A synchronous completion has already moved the phase on.
             if (!accepted && IsCurrentBuild(generation))
                 throw new InvalidOperationException("FlowField BFS session could not be started.");
             return accepted;
         }
 
+        // The solve this build waits for. Stop and a fault cancel the build and
+        // advance the generation, so a late callback finds neither.
         private bool IsCurrentBuild(int generation)
             => !_session.Disposed
                 && generation == _session.LifetimeGeneration
-                && _session.Lifecycle == FlowFieldSessionLifecycle.Building;
+                && _phase == BuildPhase.WaitingSolve;
 
+        // The backend calls back from StartBfs or Poll, both inside StepBuild:
+        // a failure leaves through StepBuild and the session faults.
         private void RunBfsCallback(int generation)
         {
-            if (!IsCurrentBuild(generation))
-                return;
-            using FlowFieldExecutionBoundary.OperationScope operation = _session.Boundary.EnterOperation();
-            try { OnBfsCompleted(); }
-            catch (Exception exception) { _session.EnterFault(exception); }
+            if (IsCurrentBuild(generation))
+                OnBfsCompleted();
         }
 
         /// <summary>
@@ -291,7 +282,6 @@ namespace Common.FlowField
                 return false;
             RestoreStagingAfterStaleResult();
             RequeueRejectedGoal();
-            _session.SetLifecycle(FlowFieldSessionLifecycle.Active);
             return true;
         }
 
@@ -310,8 +300,6 @@ namespace Common.FlowField
 
         private void OnBfsCompleted()
         {
-            if (_session.Lifecycle != FlowFieldSessionLifecycle.Building)
-                return;
             if (RejectOutdatedWork())
             {
                 _phase = BuildPhase.Rejected;
@@ -363,7 +351,8 @@ namespace Common.FlowField
             }
         }
 
-        private void Commit(
+        // True when the published field now reads differently.
+        private bool Commit(
             in FlowFieldSurfaceRequest request,
             bool resultChanged,
             bool includeBase,
@@ -396,15 +385,7 @@ namespace Common.FlowField
                 _state.DirtyFinalRegion = FlowFieldCellRect.Invalid;
                 _state.DirtyObstacleRegion = FlowFieldCellRect.Invalid;
             }
-            _session.PublishRuntimeState();
-            if (actualChanged)
-            {
-                unchecked
-                {
-                    _session.Revision++;
-                }
-                _session.NotifyFieldCommitted();
-            }
+            return actualChanged;
         }
 
         private static bool SurfacesEqual(

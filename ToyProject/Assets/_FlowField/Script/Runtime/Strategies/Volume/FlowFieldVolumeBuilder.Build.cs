@@ -293,7 +293,7 @@ namespace Common.FlowField
             return new[] { reach };
         }
 
-        private void CommitBuild(BuildContext build)
+        private bool CommitBuild(BuildContext build)
         {
             // The solver or the static bake has already resolved the Goal. An
             // anchor flag must never change the published Goal identity.
@@ -320,8 +320,6 @@ namespace Common.FlowField
             bool changed = !FlowFieldField.HasSameContent(_committed, next);
             _spares.Retire(_committed, next);
             _committed = next;
-            if (changed)
-                _session.Revision++;
             _committedReservationBytes = EstimateCommittedBytes(build.Count);
             if (!build.IsModifierRecompose)
             {
@@ -335,8 +333,7 @@ namespace Common.FlowField
             }
             _build = null;
             _buildReservationBytes = 0;
-            if (changed)
-                _session.NotifyFieldCommitted();
+            return changed;
         }
     }
 }

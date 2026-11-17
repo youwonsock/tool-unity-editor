@@ -45,10 +45,14 @@ namespace Common.FlowField
         bool IsWaitingForExternalCompletion { get; }
 
         // ----- Build steps the session's pipeline runs ------------------------
+        // A builder never changes the session's state or raises its events: it
+        // reports each step's result, and a failure as an exception, and the
+        // session does the rest the same way in both modes.
         bool HasActiveBuild { get; }
         bool TryBeginBuild(bool scheduled);
         FlowFieldBuildStep StepBuild(in FlowFieldBuildBudget budget, bool waitForWorker);
-        void PublishBuild();
+        // Publishes the completed build; true when the field now reads differently.
+        bool PublishBuild();
         FlowFieldBuildPolicy BuildPolicy { get; }
         // Input that arrived during a build is built next; the session stays
         // Building until nothing is owed.

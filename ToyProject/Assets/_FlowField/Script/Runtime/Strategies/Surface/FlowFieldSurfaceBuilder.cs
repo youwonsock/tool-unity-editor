@@ -89,9 +89,7 @@ namespace Common.FlowField
 
         // Building without composing means a solve is running elsewhere.
         public bool IsWaitingForExternalCompletion
-            => !_composeStage.IsRunning
-                && _session.Lifecycle == FlowFieldSessionLifecycle.Building
-                && _phase == BuildPhase.WaitingSolve;
+            => !_composeStage.IsRunning && _phase == BuildPhase.WaitingSolve;
 
         public bool HasActiveBuild => _phase != BuildPhase.None;
 
@@ -164,10 +162,10 @@ namespace Common.FlowField
             }
         }
 
-        public void PublishBuild()
+        public bool PublishBuild()
         {
             _phase = BuildPhase.None;
-            Commit(_commitRequest, _commitResultChanged, _commitIncludeBase, _commitRegion);
+            return Commit(_commitRequest, _commitResultChanged, _commitIncludeBase, _commitRegion);
         }
 
         /// <summary>Marks the build ready to publish with what Commit needs.</summary>
@@ -310,8 +308,8 @@ namespace Common.FlowField
 
             _requests.Accept(request);
             _state.GoalRemoved = !request.Goal.IsValid;
-            // A new grid or source hides the published field at once.
-            _session.PublishRuntimeState();
+            // A new grid or source hides the published field at once; the session
+            // reports the state when the input is accepted.
             return true;
         }
 

@@ -9,6 +9,8 @@ namespace Common.FlowField
     /// </summary>
     internal interface IFlowFieldSurfaceSolveBackend : IDisposable
     {
+        // completed is called only from StartBfs (a solve finished at once) or
+        // Poll, both inside the builder's StepBuild.
         bool StartBfs(in FlowFieldSurfaceBfsRequest request, Action<FlowFieldSurfaceBfsRequest> completed);
 
         /// <summary>Reports a finished solve. With wait set, it first waits for one to finish.</summary>

@@ -86,6 +86,8 @@ namespace Common.FlowField
             _hasConfig = true;
             _builder.SubmitConfig(in config, change);
             EnterBuildingIfOwed();
+            // A new Grid can hide the published field without a lifecycle change.
+            PublishRuntimeState();
             return true;
         }
 
@@ -142,7 +144,7 @@ namespace Common.FlowField
         internal bool HasPendingRequest => _builder.HasPendingRequest;
         internal Exception Fault { get; private set; }
         internal string LastError => Fault?.Message;
-        internal int Revision { get; set; }
+        internal int Revision { get; private set; }
         internal bool Disposed { get; private set; }
         // Advances when the session stops being what earlier work was for:
         // Stop, Restart, Release and a fault, which must also drop a late
@@ -451,12 +453,20 @@ namespace Common.FlowField
                     switch (step)
                     {
                         case FlowFieldBuildStep.Completed:
-                            _builder.PublishBuild();
+                            // Only a field that reads differently is a new Revision.
+                            if (_builder.PublishBuild())
+                            {
+                                unchecked { Revision++; }
+                                NotifyFieldCommitted();
+                            }
+                            PublishRuntimeState();
                             if (!_builder.HasOwedInput)
                                 SetLifecycle(FlowFieldSessionLifecycle.Active);
                             continue;
                         case FlowFieldBuildStep.Rejected:
-                            SetLifecycle(FlowFieldSessionLifecycle.Active);
+                            // Owed input builds next without leaving Building.
+                            if (!_builder.HasOwedInput)
+                                SetLifecycle(FlowFieldSessionLifecycle.Active);
                             continue;
                         case FlowFieldBuildStep.Waiting when waitForWorker:
                             SetLifecycle(FlowFieldSessionLifecycle.Building);
@@ -557,7 +567,7 @@ namespace Common.FlowField
                 EnterFault(exception ?? new InvalidOperationException("FlowField session failed."));
         }
 
-        internal void EnterFault(Exception exception)
+        private void EnterFault(Exception exception)
         {
             using FlowFieldExecutionBoundary.OperationScope operation = Boundary.EnterOperation();
             AbandonWork();
@@ -600,7 +610,7 @@ namespace Common.FlowField
             Fault = null;
         }
 
-        internal void SetLifecycle(FlowFieldSessionLifecycle next)
+        private void SetLifecycle(FlowFieldSessionLifecycle next)
         {
             if (Lifecycle == next)
                 return;
@@ -608,7 +618,7 @@ namespace Common.FlowField
             PublishRuntimeState();
         }
 
-        internal void PublishRuntimeState()
+        private void PublishRuntimeState()
         {
             FlowFieldRuntimeState state = State;
             if (_publishedState == state)
@@ -621,7 +631,7 @@ namespace Common.FlowField
                 Publish(FlowFieldExecutionBoundary.EventKind.StateChanged, state);
         }
 
-        internal void NotifyFieldCommitted() => Publish(FlowFieldExecutionBoundary.EventKind.FieldCommitted);
+        private void NotifyFieldCommitted() => Publish(FlowFieldExecutionBoundary.EventKind.FieldCommitted);
 
         private void Publish(
             FlowFieldExecutionBoundary.EventKind kind,
