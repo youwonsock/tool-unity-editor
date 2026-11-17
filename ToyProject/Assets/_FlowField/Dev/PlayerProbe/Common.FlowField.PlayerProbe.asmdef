@@ -1,0 +1,18 @@
+{
+    "name": "Common.FlowField.PlayerProbe",
+    "rootNamespace": "Common.FlowField.PlayerProbe",
+    "references": [
+        "Common.FlowField"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_EDITOR || FLOWFIELD_PLAYER_PROBE"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -4,12 +4,14 @@
 
 ## 어셈블리
 
-| 어셈블리 | 내용 |
-| --- | --- |
-| `Common.FlowField` | 계약, 격자, Session, 계산 단계, 결과 저장소, Bake 데이터, `FlowFieldManager`와 Modifier 컴포넌트, 샘플, Player 측정 |
-| `Common.FlowField.Editor` | Inspector, Bake, Scene View 표시 |
+| 어셈블리 | 폴더 | 내용 |
+| --- | --- | --- |
+| `Common.FlowField` | `Script/` | 계약, 격자, Session, 계산 단계, 결과 저장소, Bake 데이터, `FlowFieldManager`와 Modifier 컴포넌트 |
+| `Common.FlowField.Editor` | `Script/Editor/` | Inspector, Bake, Scene View 표시 |
+| `Common.FlowField.Samples` | `Samples/Scripts/` | 샘플 씬의 에이전트·컨트롤러·UI(UGUI 참조) |
+| `Common.FlowField.PlayerProbe`, `.PlayerProbe.Editor` | `Dev/` | 이 저장소의 성능·회귀 측정 Player와 빌드 메뉴 |
 
-Player 측정(`PlayerProbe` 폴더, `Tools/run-player-probe.sh`)은 Editor와 `FLOWFIELD_PLAYER_PROBE`를 정의한 측정 빌드에서만 컴파일합니다. 샘플이 UGUI를 쓰므로 `Common.FlowField`는 `UnityEngine.UI`를 참조합니다.
+시스템과 에디터는 `Script/` 폴더 하나입니다. 샘플과 측정 도구는 시스템을 참조만 하고, 시스템은 둘을 모릅니다. 측정 어셈블리는 Editor와 `FLOWFIELD_PLAYER_PROBE`를 정의한 측정 빌드(`Tools/run-player-probe.sh`)에서만 컴파일합니다.
 
 ## 파이프라인과 전략
 

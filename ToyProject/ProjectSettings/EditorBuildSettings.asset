@@ -6,10 +6,10 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/_FlowField/Scene/FlowFieldSample.unity
+    path: Assets/_FlowField/Samples/Scenes/FlowFieldSample.unity
     guid: 2d61c3aeada20074ba232f6398c7c342
   - enabled: 1
-    path: Assets/_FlowField/Scene/FlowFieldVolume3DTest.unity
+    path: Assets/_FlowField/Samples/Scenes/FlowFieldVolume3DTest.unity
     guid: 4e0c5f04dff149c2a9b0f9c0e7af1a6d
   - enabled: 1
     path: Assets/_TransformPath/Scene/TransformPathSample.unity
