@@ -15,8 +15,8 @@ namespace Common.OptimizeTool
         public bool Overwrite { get; }
         public MeshSaveOptions(string folder, string name, bool overwrite = false)
         {
-            Folder = MeshAssetTransaction.ValidateFolder(folder);
-            MeshAssetTransaction.ValidateFileName(name);
+            Folder = AssetFileTransaction.ValidateFolder(folder);
+            AssetFileTransaction.ValidateFileName(name);
             Name = name; Overwrite = overwrite;
         }
         public List<string> CreatePaths(int count, bool singleMesh)
@@ -32,23 +32,6 @@ namespace Common.OptimizeTool
     /// <summary>Rolls back mesh assets, declared companion asset files, and Undo-recorded scene changes.</summary>
     public static class MeshAssetTransaction
     {
-        public static string ValidateFolder(string folder)
-        {
-            if (string.IsNullOrWhiteSpace(folder)) throw new ArgumentException("An output folder is required.");
-            string path = folder.Replace('\\', '/').TrimEnd('/');
-            if (!path.StartsWith("Assets/", StringComparison.Ordinal)) throw new ArgumentException("Output must be under Assets/.");
-            foreach (string part in path.Split('/')) ValidateFileName(part);
-            return path;
-        }
-
-        public static void ValidateFileName(string name)
-        {
-            if (string.IsNullOrWhiteSpace(name) || name == "." || name.Contains("..")
-                || name.IndexOfAny(new[] { '/', '\\', ':', '*', '?', '"', '<', '>', '|' }) >= 0
-                || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
-                throw new ArgumentException("Use a simple, valid asset file name.");
-        }
-
         public static Mesh[] Save(IList<Mesh> staged, IList<string> paths, bool overwrite, string undoName,
             Action<Mesh[]> apply = null, IReadOnlyList<string> companionAssetPaths = null)
         {
@@ -61,9 +44,9 @@ namespace Common.OptimizeTool
             {
                 if (staged[i] == null || staged[i].vertexCount == 0) throw new ArgumentException("Cannot save an empty mesh.");
                 string path = paths[i].Replace('\\', '/');
-                string folder = ValidateFolder(Path.GetDirectoryName(path));
+                string folder = AssetFileTransaction.ValidateFolder(Path.GetDirectoryName(path));
                 string file = Path.GetFileName(path);
-                ValidateFileName(file);
+                AssetFileTransaction.ValidateFileName(file);
                 if (!file.EndsWith(".asset", StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Mesh outputs need .asset extensions.");
                 normalized[i] = folder + "/" + file;
                 if (!unique.Add(normalized[i])) throw new ArgumentException("Several outputs resolve to the same asset.");
@@ -102,7 +85,7 @@ namespace Common.OptimizeTool
                 for (int i = 0; i < staged.Count; i++)
                 {
                     string folder = Path.GetDirectoryName(normalized[i]).Replace('\\', '/');
-                    if (ensuredFolders.Add(folder)) EnsureFolder(folder);
+                    if (ensuredFolders.Add(folder)) AssetFileTransaction.EnsureFolder(folder);
                     if (existing[i] != null)
                     {
                         Undo.RegisterCompleteObjectUndo(existing[i], undoName);
@@ -175,19 +158,6 @@ namespace Common.OptimizeTool
             SerializedProperty readable = serialized.FindProperty("m_IsReadable");
             if (readable != null && readable.boolValue)
             { readable.boolValue = false; serialized.ApplyModifiedPropertiesWithoutUndo(); }
-        }
-
-        private static void EnsureFolder(string path)
-        {
-            string current = "Assets";
-            string[] parts = path.Split('/');
-            for (int i = 1; i < parts.Length; i++)
-            {
-                string next = current + "/" + parts[i];
-                if (!AssetDatabase.IsValidFolder(next) && string.IsNullOrEmpty(AssetDatabase.CreateFolder(current, parts[i])))
-                    throw new IOException($"Cannot create folder '{next}'.");
-                current = next;
-            }
         }
     }
 }

@@ -78,14 +78,15 @@ Rigidbody가 있는 계층의 로컬 Transform을 물리 스텝마다 기록해,
 
 | API | 동작 |
 | --- | --- |
-| `Init()` / `Release()` | 기록 세션의 수명. Fault 뒤에는 `Release()` 후 다시 `Init()` |
-| `StartRecording(duration, animName)` | 설정을 고정하고 기록 시작 |
-| `StopRecording()` | `.anim`·`.prefab`·`.reference.asset`을 저장하고 반환 |
-| `Result` | `Succeeded`, `Clip`, `Prefab`, `Reference`, `StopReason`, `Metrics` |
+| `StartRecording(duration, animName)` | 설정을 고정하고 마지막 물리 스텝부터 기록 시작. 잘못된 호출·설정은 예외 |
+| `StopRecording()` | 마지막 물리 스텝까지를 `.anim`·`.prefab`·`.reference.asset`으로 저장하고 결과 반환 |
+| `CancelRecording()` | 에셋을 쓰지 않고 기록을 버림 |
+| `IsRecording` / `Result` | 기록 여부와 마지막 결과(`Succeeded`, `Error`, `Clip`, `Prefab`, `Reference`, `StopReason`, `Duration`) |
 
-- 정지 구간과 종료 자세를 보존하며 표본을 줄이고, Legacy Animation 형식의 클립으로 저장합니다.
+- 키는 `_positionTolerance`(기본 0.005m)·`_rotationTolerance`(기본 0.5°) 이내로 줄입니다. 저장된 클립을 선형 재생했을 때 모든 물리 스텝에서 오차가 이 값 이하이고, 0이면 모든 스텝을 키로 남깁니다.
+- 움직이지 않은 루트에는 커브를 쓰지 않으므로 저장한 Prefab을 어디에 두어도 그 자리에서 재생됩니다.
 - Prefab에서는 Rigidbody·Collider·게임 스크립트 등을 제거합니다. 원본 계층은 바꾸지 않습니다.
-- 세 에셋 중 하나라도 저장에 실패하면 이전 파일을 복원합니다. 기록 중 `Release()`나 비활성화가 일어나면 그때까지를 동기로 저장합니다.
+- 세 에셋 중 하나라도 저장에 실패하면 이전 파일을 복원하고, 실패는 예외가 아니라 `Result.Error`로 알립니다. 기록 중 비활성화되면 그때까지를 저장하고, 재컴파일은 저장이 끝날 때까지 미룹니다.
 
 샘플의 PHYSICS 모드에서 **RECORD**(`C`)를 누르면 6개 Rigidbody의 낙하 3.2초를 기록합니다. 저장이 끝나면 왼쪽은 녹화 당시의 원본 자세를, 오른쪽은 저장된 Prefab의 Animation을 같은 시간축으로 재생하고 최대 위치·회전 차이를 표시합니다. Play 진입이나 모드 전환만으로는 에셋을 저장하지 않습니다.
 

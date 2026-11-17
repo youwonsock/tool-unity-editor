@@ -92,8 +92,8 @@ namespace Common.OptimizeTool.Samples.Editor
             recorderSettings.FindProperty("_root").objectReferenceValue = source.transform;
             recorderSettings.FindProperty("_savePath").stringValue = OptimizeToolPhysicsDemo.RecordingFolder;
             recorderSettings.FindProperty("_animationFileName").stringValue = OptimizeToolPhysicsDemo.RecordingName;
-            recorderSettings.FindProperty("_recordInterval").floatValue = 0.02f;
-            recorderSettings.FindProperty("_recordOnlyIfMoved").boolValue = true;
+            recorderSettings.FindProperty("_positionTolerance").floatValue = 0.005f;
+            recorderSettings.FindProperty("_rotationTolerance").floatValue = 0.5f;
             recorderSettings.FindProperty("_overwriteExistingAssets").boolValue = true;
             recorderSettings.ApplyModifiedPropertiesWithoutUndo();
             OptimizeToolPhysicsDemo demo = root.GetComponent<OptimizeToolPhysicsDemo>();

@@ -53,7 +53,7 @@ namespace Common.OptimizeTool.Samples
         private Quaternion[] _initialRotations;
         private PhysicsPrefabPlayback _playback;
         private Transform[] _referenceSource, _referencePlayback;
-        private PhysicsPoseSample[] _referencePoses;
+        private Pose[] _referencePoses;
         private Coroutine _routine;
         private double _runStart;
         private bool _running, _released;
@@ -69,9 +69,8 @@ namespace Common.OptimizeTool.Samples
 
         private void PrepareForAssemblyReload()
         {
-            // Finish an active take through the same synchronous disable/save contract.
-            // Managed playback ownership will not survive the reload; dispose its instance now.
-            OnDisable();
+            // The recorder holds reloads until its take is saved, so only playback needs cleanup here:
+            // its managed ownership will not survive the reload.
             DestroyPlayback();
         }
 #endif
@@ -137,8 +136,6 @@ namespace Common.OptimizeTool.Samples
             yield return new WaitForFixedUpdate();
             try
             {
-                if (_recorder.IsFaulted) _recorder.Release();
-                if (!_recorder.IsInitialized) _recorder.Init();
                 _recorder.StartRecording(_duration);
                 StartClock();
             }
@@ -150,26 +147,35 @@ namespace Common.OptimizeTool.Samples
             }
             _running = false;
             FreezeSource();
-            try { AcceptRecordingResult(true); }
-            catch (Exception exception) { Fail(exception, true); yield break; }
+            if (_recorder.Result == null)
+            {
+                Fail(new InvalidOperationException("Recording assets were not saved."), true);
+                yield break;
+            }
+            if (!AcceptRecordingResult(_recorder.Result)) yield break;
             _routine = null;
             Compare();
         }
 
-        private void AcceptRecordingResult(bool required)
+        /// <summary>
+        /// Adopts a saved take, or shows its failure; the recorder has already logged that error.
+        /// A null result means nothing finished, so the previous take stays.
+        /// </summary>
+        private bool AcceptRecordingResult(PhysicsRecordingResult result)
         {
-            if (_recorder.IsFaulted)
-                throw _recorder.LastError ?? new InvalidOperationException("Recording assets were not saved.");
-            PhysicsRecordingResult result = _recorder.Result;
-            if (result?.Succeeded == true)
+            if (result != null && !result.Succeeded)
+            {
+                Fail(result.Error, true, alreadyLogged: true);
+                return false;
+            }
+            if (result != null)
             {
                 _savedPrefab = result.Prefab;
                 _recordingReference = result.Reference;
                 Elapsed = result.Duration;
             }
-            else if (required)
-                throw result?.Error ?? new InvalidOperationException("Recording assets were not saved.");
             SetState(DemoState.Ready);
+            return true;
         }
 #endif
 
@@ -229,19 +235,19 @@ namespace Common.OptimizeTool.Samples
                 _playback.Sample(observedTime);
                 for (int i = 0; i < _referencePlayback.Length; i++)
                 {
-                    PhysicsPoseSample pose = _recordingReference.Observation(i, ComparisonSampleCount);
+                    Pose pose = _recordingReference.Observation(i, ComparisonSampleCount);
                     MaxPositionError = Mathf.Max(MaxPositionError,
-                        Vector3.Distance(pose.Position, _referencePlayback[i].localPosition));
+                        Vector3.Distance(pose.position, _referencePlayback[i].localPosition));
                     MaxRotationError = Mathf.Max(MaxRotationError,
-                        PhysicsPoseSample.RotationDifference(pose.Rotation, _referencePlayback[i].localRotation));
+                        PhysicsPoseMath.RotationDifference(pose.rotation, _referencePlayback[i].localRotation));
                 }
                 ComparisonSampleCount++;
             }
             _recordingReference.SampleFrame(time, _referencePoses);
             for (int i = 0; i < _referenceSource.Length; i++)
             {
-                PhysicsPoseSample pose = _referencePoses[i];
-                _referenceSource[i].SetLocalPositionAndRotation(pose.Position, pose.Rotation);
+                Pose pose = _referencePoses[i];
+                _referenceSource[i].SetLocalPositionAndRotation(pose.position, pose.rotation);
             }
             foreach (Rigidbody body in _bodies)
             {
@@ -306,7 +312,7 @@ namespace Common.OptimizeTool.Samples
                 _recordingReference.Validate(_savedPrefab.GetComponent<Animation>().clip);
                 _referenceSource = new Transform[_recordingReference.TrackCount];
                 _referencePlayback = new Transform[_referenceSource.Length];
-                _referencePoses = new PhysicsPoseSample[_referenceSource.Length];
+                _referencePoses = new Pose[_referenceSource.Length];
                 for (int i = 0; i < _referenceSource.Length; i++)
                 {
                     string path = _recordingReference.Path(i);
@@ -392,14 +398,14 @@ namespace Common.OptimizeTool.Samples
             UpdateSourceLabel();
         }
 
-        private void Fail(Exception exception, bool recordingFailure = false)
+        private void Fail(Exception exception, bool recordingFailure = false, bool alreadyLogged = false)
         {
             _running = false;
             _routine = null;
             DestroyPlayback();
             FreezeSource();
             SetState(DemoState.Error, exception.Message, recordingFailure);
-            Debug.LogException(exception, this);
+            if (!alreadyLogged) Debug.LogException(exception, this);
         }
 
         private void OnDisable()
@@ -409,14 +415,9 @@ namespace Common.OptimizeTool.Samples
             if (State == DemoState.Comparing) SetState(DemoState.Ready);
             if (State != DemoState.Recording) return;
 #if UNITY_EDITOR
-            try
-            {
-                // Also finish when only this component is disabled. The recorder's
-                // OnDisable may already have saved if the whole hierarchy was disabled.
-                if (_recorder.IsRecording) _recorder.StopRecording();
-                AcceptRecordingResult(false);
-            }
-            catch (Exception exception) { Fail(exception, true); return; }
+            // Also finish when only this component is disabled. The recorder's
+            // OnDisable may already have saved if the whole hierarchy was disabled.
+            AcceptRecordingResult(_recorder.IsRecording ? _recorder.StopRecording() : _recorder.Result);
 #endif
 #if !UNITY_EDITOR
             SetState(DemoState.Ready);

@@ -28,7 +28,7 @@ namespace Common.OptimizeTool.Samples.Editor
         public static void BuildAt(string scenePath, string folder, int[] sides, int faceSubdivisions = 1)
         {
             MeshProcessingUtility.RequireEditMode();
-            MeshAssetTransaction.ValidateFolder(folder);
+            AssetFileTransaction.ValidateFolder(folder);
             if (SceneManager.GetSceneByPath(scenePath).isLoaded)
                 throw new InvalidOperationException("Close the scale benchmark scene before rebuilding it.");
             var paths = new List<string> { scenePath, folder + "/Source.mat" };

@@ -25,7 +25,7 @@ namespace Common.OptimizeTool
         private void ValidateSettings()
         {
             MeshProcessingUtility.RequireEditMode();
-            MeshAssetTransaction.ValidateFolder(_savePath);
+            AssetFileTransaction.ValidateFolder(_savePath);
             if (!_useCustomVector && _targetCamera == null) throw new ArgumentException("Assign a target camera.");
             if (_useCustomVector && (!MeshProcessingUtility.IsFinite(_customCameraVector) || _customCameraVector.sqrMagnitude < 0.000001f))
                 throw new ArgumentException("The custom view direction must be finite and non-zero.");
