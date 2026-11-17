@@ -85,7 +85,8 @@ namespace Common.FlowField
         internal bool IsRebuilding => Lifecycle == FlowFieldSessionLifecycle.Building;
         internal bool CanPump => !Disposed
             && (Lifecycle == FlowFieldSessionLifecycle.Active || Lifecycle == FlowFieldSessionLifecycle.Building);
-        internal bool IsReady => _builder.IsReady;
+        // TrySample can succeed inside the grid.
+        internal bool IsReady => CanPump && _builder.PublishedField != null;
         internal bool HasPendingRequest => _builder.HasPendingRequest;
         internal Exception Fault { get; set; }
         internal string LastError => Fault?.Message;
@@ -96,24 +97,58 @@ namespace Common.FlowField
         // solve callback. Queued events and late solve callbacks
         // from before that point are dropped.
         internal int LifetimeGeneration { get; private set; }
+        // The read both modes share; it never throws.
+        private FlowFieldSampleStatus TrySampleStatus(Vector3 worldPosition, out FlowFieldSample sample)
+        {
+            sample = FlowFieldSample.Stopped;
+            if (!IsReady)
+                return FlowFieldSampleStatus.NotReady;
+            return FlowFieldSampler.Sample(_builder.PublishedField, worldPosition, _builder, out sample);
+        }
+
         internal bool TrySample(Vector3 worldPosition, out FlowFieldSample sample)
-            => _builder.TrySample(worldPosition, out sample) == FlowFieldSampleStatus.Sampled;
+            => TrySampleStatus(worldPosition, out sample) == FlowFieldSampleStatus.Sampled;
 
         internal FlowFieldSample Sample(Vector3 worldPosition)
         {
-            FlowFieldSampleStatus status = _builder.TrySample(worldPosition, out FlowFieldSample sample);
+            FlowFieldSampleStatus status = TrySampleStatus(worldPosition, out FlowFieldSample sample);
             if (status != FlowFieldSampleStatus.Sampled)
                 throw FlowFieldFailures.ForSample(status, nameof(worldPosition));
             return sample;
         }
-        internal FlowFieldClampResult ClampPositionToGrid(Vector3 worldPosition) => _builder.ClampPositionToGrid(worldPosition);
+
+        /// <summary>
+        /// The nearest point inside the latest grid. Surface2D grids clamp X
+        /// and Z; Volume3D grids clamp all three axes.
+        /// </summary>
+        internal FlowFieldClampResult ClampPositionToGrid(Vector3 worldPosition)
+        {
+            if (!IsInitialized)
+                throw FlowFieldFailures.NotInitialized();
+            if (!FlowFieldGridSpace.IsFinite(worldPosition))
+                throw FlowFieldFailures.NotFinite(nameof(worldPosition));
+            FlowFieldGridSpace grid = _builder.LatestGrid;
+            if (!grid.IsValid)
+                throw FlowFieldFailures.NotReady();
+            bool volume = grid.SpaceMode == FlowFieldSpaceMode.Volume3D;
+            Vector3 clamped = volume ? grid.ClampWorldXYZ(worldPosition) : grid.ClampWorldXZ(worldPosition);
+            return new FlowFieldClampResult(
+                clamped,
+                !Mathf.Approximately(worldPosition.x, clamped.x),
+                volume && !Mathf.Approximately(worldPosition.y, clamped.y),
+                !Mathf.Approximately(worldPosition.z, clamped.z));
+        }
         internal bool TryGetFieldInfo(out FlowFieldFieldInfo info) => _builder.TryGetFieldInfo(out info);
 
         /// <summary>
         /// The published field, for display and bakes. It is valid until the
         /// next pump, after which its arrays may be reused.
         /// </summary>
-        internal bool TryGetPublishedField(out FlowFieldField field) => _builder.TryGetPublishedField(out field);
+        internal bool TryGetPublishedField(out FlowFieldField field)
+        {
+            field = IsReady ? _builder.PublishedField : null;
+            return field != null;
+        }
 
         // Registration commands issued from Modifier code wait until that
         // operation has finished. The mode-specific sessions keep their
@@ -211,8 +246,9 @@ namespace Common.FlowField
                 {
                     if (!_builder.HasActiveBuild)
                     {
-                        if (begun >= _builder.MaxBuildsBegunPerPump
-                            || !_builder.BeginsAfterBudget && budget.IsExpired
+                        FlowFieldBuildPolicy policy = _builder.BuildPolicy;
+                        if (begun >= policy.MaxBuildsBegunPerPump
+                            || !policy.BeginsAfterBudget && budget.IsExpired
                             || !_builder.TryBeginBuild(scheduled))
                             return;
                         begun++;
@@ -225,7 +261,7 @@ namespace Common.FlowField
                     {
                         case FlowFieldBuildStep.Completed:
                             _builder.PublishBuild();
-                            if (!(_builder.StaysBuildingWhileOwed && _builder.HasOwedInput))
+                            if (!_builder.HasOwedInput)
                                 SetLifecycle(FlowFieldSessionLifecycle.Active);
                             continue;
                         case FlowFieldBuildStep.Rejected:

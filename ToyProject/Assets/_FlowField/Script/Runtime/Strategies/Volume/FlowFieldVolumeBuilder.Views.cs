@@ -117,22 +117,5 @@ namespace Common.FlowField
                 resolvedGoal);
             return info.IsValid;
         }
-
-        public bool TryGetPublishedField(out FlowFieldField field)
-        {
-            field = null;
-            if (_committed == null
-                || _session.State == FlowFieldRuntimeState.Uninitialized
-                || _session.State == FlowFieldRuntimeState.Released
-                || _session.State == FlowFieldRuntimeState.Suspended
-                || _session.State == FlowFieldRuntimeState.Faulted)
-                return false;
-            // A newly accepted grid makes the published cells meaningless.
-            if (_requests.HasLatest
-                && !_committed.Request.HasSameGrid(_requests.Latest))
-                return false;
-            field = _committed;
-            return true;
-        }
     }
 }

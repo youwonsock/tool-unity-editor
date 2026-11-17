@@ -204,9 +204,7 @@ namespace Common.FlowField
             if (_session != null && _session.SpaceMode == _spaceMode)
                 return;
             _session?.Dispose();
-            _session = _spaceMode == FlowFieldSpaceMode.Volume3D
-                ? FlowFieldSession.CreateVolume(_boundary)
-                : FlowFieldSession.CreateSurface(_boundary);
+            _session = FlowFieldSpaceStrategy.For(_spaceMode).CreateSession(_boundary);
             ForwardSessionEvents(_session);
         }
 
@@ -224,10 +222,13 @@ namespace Common.FlowField
             AdoptGoalTransform();
             EnsureSessionForConfiguredMode();
             _session.Builder.Initialize(_bakeMode);
-            // A disabled Manager starts building when it is enabled.
+            // A disabled Manager starts building when it is enabled. It still
+            // holds the request, so its grid answers ClampPositionToGrid and
+            // takes obstacle input the same way in both modes.
             if (!isActiveAndEnabled)
             {
                 _session.Stop();
+                SubmitConfig(FlowFieldConfigChange.Rebuild);
                 return;
             }
             StartBuilding();

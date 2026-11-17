@@ -58,10 +58,7 @@ namespace Common.FlowField
                 throw new InvalidOperationException("FlowField Space Mode cannot change during an active Init session. Release and Init again.");
             FlowFieldManagerConfig config = CaptureConfig();
             bool bakeModeLocked = IsInitialized && BakeMode != _bakeMode;
-            if (_spaceMode == FlowFieldSpaceMode.Volume3D)
-                FlowFieldVolumeBuilder.Validate(in config, bakeModeLocked, validateStaticGoal);
-            else
-                FlowFieldSurfaceBuilder.Validate(in config, bakeModeLocked, validateStaticGoal);
+            FlowFieldSpaceStrategy.For(_spaceMode).Validate(in config, bakeModeLocked, validateStaticGoal);
         }
 
         // ----- Surface2D -----------------------------------------------------
@@ -146,9 +143,7 @@ namespace Common.FlowField
 
         internal void SetBakeBoundsLocal(Bounds localBounds)
         {
-            Bounds snapped = _spaceMode == FlowFieldSpaceMode.Volume3D
-                ? FlowFieldBakeBoundsUtility.SnapVolumeCenterAnchored(localBounds, _grid.CellSize)
-                : FlowFieldBakeBoundsUtility.SnapCenterAnchored(localBounds, _grid.CellSize);
+            Bounds snapped = FlowFieldSpaceStrategy.For(_spaceMode).SnapBounds(localBounds, _grid.CellSize);
             if (FlowFieldBakeBoundsUtility.Approximately(_grid.BakeBoundsLocal, snapped))
                 return;
             _grid.BakeBoundsLocal = snapped;

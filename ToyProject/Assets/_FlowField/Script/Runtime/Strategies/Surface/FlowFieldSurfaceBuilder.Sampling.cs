@@ -9,7 +9,7 @@ namespace Common.FlowField
         public bool TryGetFieldInfo(out FlowFieldFieldInfo info)
         {
             info = default;
-            if (!IsReady || !_fieldStore.Grid.IsValid || _fieldStore.Surface == null || !_fieldStore.Surface.IsValid)
+            if (!_session.IsReady || !_fieldStore.Grid.IsValid || _fieldStore.Surface == null || !_fieldStore.Surface.IsValid)
                 return false;
 
             bool hasRequestedGoal = false;
@@ -52,27 +52,6 @@ namespace Common.FlowField
                 hasResolvedGoal,
                 resolvedGoal);
             return info.IsValid;
-        }
-
-        public bool TryGetPublishedField(out FlowFieldField field)
-        {
-            field = null;
-            if (!_session.IsInitialized || !_state.Grid.IsValid || !IsReady)
-                return false;
-            field = _fieldStore.Field;
-            return field != null;
-        }
-
-        /// <summary>
-        /// The whole read without exceptions, so TrySample, which movers call
-        /// every physics step, never pays for one on an ordinary miss.
-        /// </summary>
-        public FlowFieldSampleStatus TrySample(Vector3 worldPosition, out FlowFieldSample sample)
-        {
-            sample = FlowFieldSample.Stopped;
-            if (!IsReady)
-                return FlowFieldSampleStatus.NotReady;
-            return FlowFieldSampler.Sample(_fieldStore.Field, worldPosition, this, out sample);
         }
 
         /// <summary>
@@ -157,22 +136,5 @@ namespace Common.FlowField
 
         private static FlowFieldSample Stop(in FlowFieldSample sample)
             => new FlowFieldSample(Vector3.zero, 0f, sample.SurfaceNormal, sample.HasSurface, sample.HasCell);
-
-        public FlowFieldClampResult ClampPositionToGrid(Vector3 worldPosition)
-        {
-            if (!_session.IsInitialized)
-                throw new InvalidOperationException("FlowField session is not initialized.");
-            if (!FlowFieldGridSpace.IsFinite(worldPosition))
-                throw new ArgumentOutOfRangeException(nameof(worldPosition));
-            FlowFieldGridSpace grid = _session.IsRebuilding && _fieldStore.Grid.IsValid ? _fieldStore.Grid : _state.Grid;
-            if (!grid.IsValid)
-                throw new InvalidOperationException("FlowField grid is not initialized.");
-            Vector3 clamped = grid.ClampWorldXZ(worldPosition);
-            return new FlowFieldClampResult(
-                clamped,
-                !Mathf.Approximately(worldPosition.x, clamped.x),
-                false,
-                !Mathf.Approximately(worldPosition.z, clamped.z));
-        }
     }
 }

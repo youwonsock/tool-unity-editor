@@ -96,21 +96,22 @@ namespace Common.FlowField
             if (!FlowFieldGridSpace.IsFinite(worldBounds.center)
                 || !FlowFieldGridSpace.IsFinite(worldBounds.size))
                 throw new ArgumentOutOfRangeException(nameof(worldBounds));
-            if (!_state.Grid.IsValid)
-                throw new InvalidOperationException("FlowField grid is not initialized.");
+            // Before the first build the latest request already holds the grid.
+            FlowFieldGridSpace grid = LatestGrid;
             MarkUncertain(worldBounds);
-            MarkObstacleDirty(FlowFieldCellRect.FromBounds(_state.Grid, worldBounds));
+            MarkObstacleDirty(grid.IsValid ? FlowFieldCellRect.FromBounds(grid, worldBounds) : FlowFieldCellRect.Invalid);
         }
 
         // Cells an obstacle change can reach stop from this frame until a
         // build that queried them is published.
         private void MarkUncertain(Bounds bounds)
         {
-            if (_session.BakeMode == FlowFieldBakeMode.StaticBaked || !_state.Grid.IsValid
+            FlowFieldGridSpace grid = LatestGrid;
+            if (_session.BakeMode == FlowFieldBakeMode.StaticBaked || !grid.IsValid
                 || !FlowFieldGridSpace.IsFinite(bounds.center) || !FlowFieldGridSpace.IsFinite(bounds.size))
                 return;
             float clearance = _requests.HasLatest ? _requests.Latest.ObstacleClearance : 0f;
-            _safety.MarkDirty(bounds, _state.Grid.CellSize + clearance);
+            _safety.MarkDirty(bounds, grid.CellSize + clearance);
         }
 
         public bool NotifyObstacleMovedNow(Collider collider)

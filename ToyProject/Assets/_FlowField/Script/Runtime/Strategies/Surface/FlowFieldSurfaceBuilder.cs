@@ -49,11 +49,18 @@ namespace Common.FlowField
         internal FlowFieldSurfaceData CommittedSurface => _fieldStore.Surface;
         internal FlowFieldGridSpace CommittedGrid => _fieldStore.Grid;
         public FlowFieldSpaceMode SpaceMode => FlowFieldSpaceMode.Surface2D;
-        public bool IsReady => (_session.Lifecycle == FlowFieldSessionLifecycle.Active
-                || _session.Lifecycle == FlowFieldSessionLifecycle.Building)
-            && _state.SurfaceReady
-            && _fieldStore.IsValid
-            && HasCompatibleCommittedSource();
+        public FlowFieldField PublishedField
+            => _state.SurfaceReady && _fieldStore.IsValid && HasCompatibleCommittedSource()
+                ? _fieldStore.Field
+                : null;
+
+        // While a build runs, the published grid; otherwise the grid of the
+        // latest build or, before the first one, of the latest request.
+        public FlowFieldGridSpace LatestGrid
+            => _session.IsRebuilding && _fieldStore.Grid.IsValid ? _fieldStore.Grid
+                : _state.Grid.IsValid ? _state.Grid
+                : _requests.HasLatest ? _requests.Latest.SurfaceSettings.Grid
+                : default;
 
         private bool HasCompatibleCommittedSource()
             => !_committedRequest.HasValue
@@ -100,13 +107,7 @@ namespace Common.FlowField
 
         // The base stages run in one frame so their Physics reads form one
         // snapshot, so one build begins per pump whatever the budget says.
-        public bool BeginsAfterBudget => true;
-
-        public int MaxBuildsBegunPerPump => 1;
-
-        // Input that arrived during a build is built next, so the session
-        // reports Ready only once nothing is owed, as in Volume3D.
-        public bool StaysBuildingWhileOwed => true;
+        public FlowFieldBuildPolicy BuildPolicy => new FlowFieldBuildPolicy(beginsAfterBudget: true, maxBuildsBegunPerPump: 1);
 
         public bool HasOwedInput => _requests.Pending || _configOwed;
 

@@ -16,6 +16,21 @@ namespace Common.FlowField
         Cells,
     }
 
+    /// <summary>How a mode's builds may begin within one pump.</summary>
+    internal readonly struct FlowFieldBuildPolicy
+    {
+        // A build may begin after the frame budget ran out (Surface2D takes its
+        // Physics snapshot in one frame whatever the budget says).
+        internal readonly bool BeginsAfterBudget;
+        internal readonly int MaxBuildsBegunPerPump;
+
+        internal FlowFieldBuildPolicy(bool beginsAfterBudget, int maxBuildsBegunPerPump)
+        {
+            BeginsAfterBudget = beginsAfterBudget;
+            MaxBuildsBegunPerPump = maxBuildsBegunPerPump;
+        }
+    }
+
     /// <summary>
     /// What one space mode does inside the common <see cref="FlowFieldSession"/>:
     /// how it builds a field, reads it, and takes obstacle and Modifier input.
@@ -23,10 +38,9 @@ namespace Common.FlowField
     /// these members; a builder reaches the session through the reference it
     /// was created with.
     /// </summary>
-    internal interface IFlowFieldSpaceBuilder : IDisposable
+    internal interface IFlowFieldSpaceBuilder : IFlowFieldSampleSafety, IDisposable
     {
         FlowFieldSpaceMode SpaceMode { get; }
-        bool IsReady { get; }
         bool HasPendingRequest { get; }
         bool IsWaitingForExternalCompletion { get; }
 
@@ -35,17 +49,19 @@ namespace Common.FlowField
         bool TryBeginBuild(bool scheduled);
         FlowFieldBuildStep StepBuild(in FlowFieldBuildBudget budget, bool waitForWorker);
         void PublishBuild();
-        bool BeginsAfterBudget { get; }
-        int MaxBuildsBegunPerPump { get; }
-        bool StaysBuildingWhileOwed { get; }
+        FlowFieldBuildPolicy BuildPolicy { get; }
+        // Input that arrived during a build is built next; the session stays
+        // Building until nothing is owed.
         bool HasOwedInput { get; }
 
         // ----- Reads ---------------------------------------------------------
-        // Never throws; the session turns a failed status into the contract's exception.
-        FlowFieldSampleStatus TrySample(Vector3 worldPosition, out FlowFieldSample sample);
-        FlowFieldClampResult ClampPositionToGrid(Vector3 worldPosition);
+        // The field reads answer from, or null while none does (no build yet,
+        // stopped, or a newer grid or source replaced it). The session reads,
+        // samples and clamps through it; TryOverride adds the mode's path checks.
+        FlowFieldField PublishedField { get; }
+        // The grid ClampPositionToGrid uses, valid once a request exists.
+        FlowFieldGridSpace LatestGrid { get; }
         bool TryGetFieldInfo(out FlowFieldFieldInfo info);
-        bool TryGetPublishedField(out FlowFieldField field);
 
         // ----- Configuration -------------------------------------------------
         // The builder turns the Manager's settings into its own request; every

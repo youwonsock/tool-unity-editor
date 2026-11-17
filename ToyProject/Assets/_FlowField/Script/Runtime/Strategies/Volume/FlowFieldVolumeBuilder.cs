@@ -63,11 +63,13 @@ namespace Common.FlowField
         public FlowFieldSpaceMode SpaceMode => FlowFieldSpaceMode.Volume3D;
         public bool IsWaitingForExternalCompletion
             => _build != null && _build.SolveRunning && !_build.SolveHandle.IsCompleted;
-        // TrySample can succeed inside the grid: a published field exists and
-        // no newer grid or source has replaced it.
-        public bool IsReady => _session.CanPump
-            && _committed != null
-            && (!_requests.HasLatest || _committed.Request.HasSameGrid(_requests.Latest));
+        // The published field, until a newer grid or source replaces it.
+        public FlowFieldField PublishedField
+            => _committed != null && (!_requests.HasLatest || _committed.Request.HasSameGrid(_requests.Latest))
+                ? _committed
+                : null;
+
+        public FlowFieldGridSpace LatestGrid => Grid;
         internal long TrackedMemoryBytes
         {
             get
@@ -183,9 +185,7 @@ namespace Common.FlowField
             _session.RunPipeline(in budget, scheduled: false, waitForWorker: true);
         }
 
-        public bool BeginsAfterBudget => false;
-
-        public int MaxBuildsBegunPerPump => int.MaxValue;
+        public FlowFieldBuildPolicy BuildPolicy => new FlowFieldBuildPolicy(beginsAfterBudget: false, maxBuildsBegunPerPump: int.MaxValue);
 
         public bool HasActiveBuild => _build != null;
 
@@ -210,9 +210,6 @@ namespace Common.FlowField
 
         public void PublishBuild() => CommitBuild(_build);
 
-        // The next build may already be owed, so the session reports Ready
-        // only once nothing is.
-        public bool StaysBuildingWhileOwed => true;
 
         public bool HasOwedInput => _requests.Pending || _hasPendingModifierRecompose;
 
