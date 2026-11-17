@@ -37,7 +37,6 @@ namespace Common.FlowField
         internal FlowFieldSurfaceDirtyFlags DirtyFlags => _state.DirtyFlags;
         internal FlowFieldCellRect DirtyFinalRegion => _state.DirtyFinalRegion;
         internal FlowFieldCellRect DirtyObstacleRegion => _state.DirtyObstacleRegion;
-        internal Vector3 ResolvedDefaultDirection => _state.ResolvedDefaultDirection;
         public FlowFieldSpaceMode SpaceMode => FlowFieldSpaceMode.Surface2D;
         public FlowFieldField PublishedField
             => _state.SurfaceReady && _fieldStore.IsValid && HasCompatibleCommittedSource()
