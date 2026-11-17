@@ -23,7 +23,6 @@ namespace Common.FlowField
             {
                 case FlowFieldConfigChange.Rebuild:
                     SubmitConfigRequest(in config, force: true, requeryObstacles: true);
-                    _session.AttachRuntimeScheduler();
                     break;
                 // A Goal change keeps the obstacle result unless an obstacle changed.
                 case FlowFieldConfigChange.Goal:
@@ -41,8 +40,6 @@ namespace Common.FlowField
 
         private void SubmitConfigRequest(in FlowFieldManagerConfig config, bool force, bool requeryObstacles)
         {
-            if (!_session.IsInitialized || _session.IsFaulted)
-                return;
             FlowFieldVolumeRequest request = CreateRequest(in config);
             if (!force
                 && TryGetLatestRequestedInput(out FlowFieldVolumeRequest latest)

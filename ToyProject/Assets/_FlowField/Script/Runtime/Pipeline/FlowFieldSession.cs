@@ -74,13 +74,19 @@ namespace Common.FlowField
         internal FlowFieldSafety Safety
             => _safety ??= new FlowFieldSafety(planar: _builder.SpaceMode == FlowFieldSpaceMode.Surface2D);
 
-        /// <summary>Passes the settings to the builder, which turns them into its request.</summary>
-        internal void SubmitConfig(in FlowFieldManagerConfig config, FlowFieldConfigChange change)
+        /// <summary>
+        /// Passes the settings to the builder, which turns them into its request.
+        /// A session that has not started or has faulted ignores them; false then.
+        /// </summary>
+        internal bool SubmitConfig(in FlowFieldManagerConfig config, FlowFieldConfigChange change)
         {
+            if (!IsInitialized || IsFaulted)
+                return false;
             _config = config;
             _hasConfig = true;
             _builder.SubmitConfig(in config, change);
             EnterBuildingIfOwed();
+            return true;
         }
 
         // Accepted input is owed work: from that moment the session is Building,

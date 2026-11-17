@@ -72,12 +72,8 @@ namespace Common.FlowField.Editor
             var session = FlowFieldSession.CreateSurface();
             session.Initialize(manager.BakeMode);
             RegisterModifiers(manager, session);
-            FlowFieldSurfaceBakeSettings settings = manager.CreateSurfaceBakeSettings();
-            session.Surface.Submit(manager.CreateSurfaceRequest(
-                settings,
-                session.Surface.DirtyFlags,
-                session.Surface.DirtyFinalRegion,
-                session.Surface.DirtyObstacleRegion));
+            // The same submission as a running Manager, without the runtime scheduler.
+            session.SubmitConfig(manager.CaptureConfig(), FlowFieldConfigChange.Rebuild);
             // The preview owns its session and waits for the worker, so it
             // completes in the same editor repaint that asked for it.
             session.Pump();

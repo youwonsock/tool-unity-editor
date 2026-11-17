@@ -295,11 +295,13 @@ namespace Common.FlowField
             _explicitGoalWorld = _goalTransform.position;
         }
 
-        // The builder turns the current settings into its request.
+        // The builder turns the current settings into its request. A full
+        // request is what the runtime scheduler builds from, so it starts here.
         private void SubmitConfig(FlowFieldConfigChange change)
         {
             FlowFieldManagerConfig config = CaptureConfig();
-            _session.SubmitConfig(in config, change);
+            if (_session.SubmitConfig(in config, change) && change == FlowFieldConfigChange.Rebuild)
+                _session.AttachRuntimeScheduler();
         }
 
         // Modifiers enabled while the session could not take them join

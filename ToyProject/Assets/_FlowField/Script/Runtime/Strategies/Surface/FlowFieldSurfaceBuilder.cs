@@ -34,9 +34,6 @@ namespace Common.FlowField
         private FlowFieldManagerConfig _owedConfig;
         private bool _configOwed;
 
-        internal FlowFieldSurfaceDirtyFlags DirtyFlags => _state.DirtyFlags;
-        internal FlowFieldCellRect DirtyFinalRegion => _state.DirtyFinalRegion;
-        internal FlowFieldCellRect DirtyObstacleRegion => _state.DirtyObstacleRegion;
         public FlowFieldSpaceMode SpaceMode => FlowFieldSpaceMode.Surface2D;
         public FlowFieldField PublishedField
             => _state.SurfaceReady && _fieldStore.IsValid && HasCompatibleCommittedSource()

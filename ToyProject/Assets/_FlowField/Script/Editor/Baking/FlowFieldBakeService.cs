@@ -35,23 +35,6 @@ namespace Common.FlowField.Editor
             return FlowFieldSurfaceBuilder.ResolveGoal(in config, grid);
         }
 
-        internal static FlowFieldSurfaceRequest CreateSurfaceRequest(
-            this FlowFieldManager manager,
-            FlowFieldSurfaceBakeSettings settings,
-            FlowFieldSurfaceDirtyFlags dirtyFlags,
-            FlowFieldCellRect dirtyFinalRegion,
-            FlowFieldCellRect dirtyObstacleRegion)
-        {
-            FlowFieldManagerConfig config = manager.CaptureConfig();
-            return FlowFieldSurfaceBuilder.CreateRequest(
-                in config,
-                manager.BakeMode,
-                in settings,
-                dirtyFlags,
-                dirtyFinalRegion,
-                dirtyObstacleRegion);
-        }
-
         internal static bool TryValidateSurfaceBake(this FlowFieldManager manager, out string reason)
             => manager.TryValidateSurfaceBake(out reason, includeStaticGoal: true);
 

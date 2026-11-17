@@ -8,8 +8,6 @@ namespace Common.FlowField
     {
         public void SubmitConfig(in FlowFieldManagerConfig config, FlowFieldConfigChange change)
         {
-            if (!_session.IsInitialized || _session.IsFaulted)
-                return;
             switch (change)
             {
                 case FlowFieldConfigChange.Rebuild:
@@ -21,7 +19,6 @@ namespace Common.FlowField
                         _state.DirtyFinalRegion,
                         _state.DirtyObstacleRegion));
                     _configOwed = false;
-                    _session.AttachRuntimeScheduler();
                     break;
                 case FlowFieldConfigChange.Goal:
                     _goalTracker.ResetWarning();
