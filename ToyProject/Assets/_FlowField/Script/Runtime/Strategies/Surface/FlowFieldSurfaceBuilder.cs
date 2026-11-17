@@ -262,7 +262,6 @@ namespace Common.FlowField
         {
             if (flags == FlowFieldSurfaceDirtyFlags.None)
                 return;
-            if ((flags & (FlowFieldSurfaceDirtyFlags.Grid | FlowFieldSurfaceDirtyFlags.StaticObstacles)) != 0)
             // A base or final-input change always requires final composition.
             // Adding the derived flag at the point where the input is
             // versioned keeps Submit from counting the same change twice when
