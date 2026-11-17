@@ -34,7 +34,7 @@ namespace Common.FlowField
             => new FlowFieldSurfaceGoalResolution(false, false, 0, 0, -1, 0f, default);
     }
 
-    internal static class FlowFieldSurfaceGoalPipeline
+    internal static class FlowFieldSurfaceGoalResolver
     {
         internal static FlowFieldSurfaceGoalResolution Resolve(
             FlowFieldGridSpace grid,

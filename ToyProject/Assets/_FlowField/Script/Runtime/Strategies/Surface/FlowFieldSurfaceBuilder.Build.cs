@@ -23,7 +23,7 @@ namespace Common.FlowField
 
             try
             {
-                bool surfaceChanged = _baseStage.PrepareSurface(request, pending, _modifierPipeline?.Registry);
+                bool surfaceChanged = _baseStage.PrepareSurface(request, pending, _modifierComposition?.Registry);
                 // Surface preparation may invalidate every downstream stage
                 // (for example after a grid change). Include those flags in
                 // this build rather than leaving them for a later no-op tick.
@@ -169,7 +169,7 @@ namespace Common.FlowField
         private FlowFieldCellRect RebuildModifierAreaData(in FlowFieldSurfaceRequest request)
         {
             using FlowFieldExecutionBoundary.OperationScope userCode = _session.Boundary.EnterUserCode();
-            return _modifierPipeline.RebuildAreaData(
+            return _modifierComposition.RebuildAreaData(
                 new FlowFieldSurfaceModifierBuildRequest(
                     _state.Grid,
                     _state.Surface,
@@ -191,7 +191,7 @@ namespace Common.FlowField
                 : FlowFieldCellRect.Full(_state.Grid);
             using (_session.Boundary.EnterUserCode())
             {
-                _modifierPipeline.BeginFinalField(
+                _modifierComposition.BeginFinalField(
                     new FlowFieldSurfaceModifierBuildRequest(
                         _state.Grid,
                         _state.Surface,
@@ -213,7 +213,7 @@ namespace Common.FlowField
         {
             bool finished;
             using (_session.Boundary.EnterUserCode())
-                finished = _modifierPipeline.StepFinalField(in _composeStage.FrameBudget);
+                finished = _modifierComposition.StepFinalField(in _composeStage.FrameBudget);
             if (!finished)
             {
                 _session.SetLifecycle(FlowFieldSessionLifecycle.Building);

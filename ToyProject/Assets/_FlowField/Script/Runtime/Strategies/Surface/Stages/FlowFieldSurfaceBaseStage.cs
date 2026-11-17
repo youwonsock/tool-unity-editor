@@ -10,19 +10,19 @@ namespace Common.FlowField
     internal sealed class FlowFieldSurfaceBaseStage
     {
         private readonly FlowFieldSurfaceState _state;
-        private readonly FlowFieldSurfaceObstaclePipeline _obstaclePipeline;
+        private readonly FlowFieldSurfaceObstacleMasks _obstacleMasks;
         private readonly FlowFieldSurfaceGoalTracker _goalTracker;
         private readonly IFlowFieldSurfaceSource _surfaceSource;
         private FlowFieldGridSpace? _observedGrid;
 
         internal FlowFieldSurfaceBaseStage(
             FlowFieldSurfaceState state,
-            FlowFieldSurfaceObstaclePipeline obstaclePipeline,
+            FlowFieldSurfaceObstacleMasks obstacleMasks,
             FlowFieldSurfaceGoalTracker goalTracker,
             IFlowFieldSurfaceSource surfaceSource)
         {
             _state = state;
-            _obstaclePipeline = obstaclePipeline;
+            _obstacleMasks = obstacleMasks;
             _goalTracker = goalTracker;
             _surfaceSource = surfaceSource;
         }
@@ -163,7 +163,7 @@ namespace Common.FlowField
 
             bool hadObstacleMask = _state.HasObstacleMask;
             FlowFieldSurfaceGoalResolution goal = request.Goal;
-            FlowFieldSurfaceBuildResult prepared = FlowFieldSurfaceBuildPipeline.PrepareBase(
+            FlowFieldSurfaceBuildResult prepared = FlowFieldSurfaceBaseFieldBuild.PrepareBase(
                 new FlowFieldSurfaceBuildRequest(
                     new FlowFieldSurfaceObstacleRequest(
                         _state.Grid,
@@ -176,7 +176,7 @@ namespace Common.FlowField
                         _state.DirtyObstacleRegion),
                     goal,
                     surfaceChanged),
-                _obstaclePipeline,
+                _obstacleMasks,
                 _goalTracker,
                 rebuildStatic,
                 rebuildDynamic,
@@ -218,7 +218,7 @@ namespace Common.FlowField
             if (prepared.ObstacleMaskChanged || !hadObstacleMask)
             {
                 if (!prepared.ObstacleMaskChanged)
-                    _obstaclePipeline.CommitCombinedAndBuildEscape(
+                    _obstacleMasks.CommitCombinedAndBuildEscape(
                         _state.Grid,
                         _state.Surface,
                         _state.Workspace,
@@ -258,14 +258,14 @@ namespace Common.FlowField
 
         private void UpdateBlockedWarning(bool hasWalkableCell)
         {
-            if (!hasWalkableCell && !_obstaclePipeline.AllBlockedWarningIssued)
+            if (!hasWalkableCell && !_obstacleMasks.AllBlockedWarningIssued)
             {
-                _obstaclePipeline.AllBlockedWarningIssued = true;
+                _obstacleMasks.AllBlockedWarningIssued = true;
                 Debug.LogWarning("[FlowField] 모든 유효한 Surface 셀이 장애물로 막혔습니다.");
             }
             else if (hasWalkableCell)
             {
-                _obstaclePipeline.AllBlockedWarningIssued = false;
+                _obstacleMasks.AllBlockedWarningIssued = false;
             }
         }
     }

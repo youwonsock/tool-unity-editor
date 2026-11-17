@@ -28,7 +28,7 @@ namespace Common.FlowField
                 return;
             _backend = _factory != null
                 ? _factory()
-                : _injected ?? new FlowFieldSurfaceBuildPipeline();
+                : _injected ?? new FlowFieldSurfaceBaseFieldBuild();
             if (_backend == null)
                 throw new InvalidOperationException("The FlowField solve backend factory returned null.");
         }

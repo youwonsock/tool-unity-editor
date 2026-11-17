@@ -61,17 +61,17 @@ namespace Common.FlowField
     /// BFS itself is started separately so a caller keeps its own
     /// commit/session lifetime rules.
     /// </summary>
-    internal sealed partial class FlowFieldSurfaceBuildPipeline
+    internal sealed partial class FlowFieldSurfaceBaseFieldBuild
     {
         internal static FlowFieldSurfaceBuildResult PrepareBase(
             in FlowFieldSurfaceBuildRequest request,
-            FlowFieldSurfaceObstaclePipeline obstaclePipeline,
+            FlowFieldSurfaceObstacleMasks obstacleMasks,
             FlowFieldSurfaceGoalTracker goalTracker,
             bool rebuildStaticObstacles,
             bool rebuildDynamicObstacles,
             bool rebuildGoal)
         {
-            ValidateRequest(request, obstaclePipeline);
+            ValidateRequest(request, obstacleMasks);
             FlowFieldSurfaceWorkspace workspace = request.Obstacles.Workspace;
             bool obstacleChanged = false;
             FlowFieldCellRect obstacleDirtyRegion = FlowFieldCellRect.Invalid;
@@ -80,7 +80,7 @@ namespace Common.FlowField
 
             if (rebuildStaticObstacles || rebuildDynamicObstacles)
             {
-                FlowFieldSurfaceObstacleResult obstacleResult = obstaclePipeline.RebuildMasks(
+                FlowFieldSurfaceObstacleResult obstacleResult = obstacleMasks.RebuildMasks(
                     request.Obstacles,
                     rebuildStaticObstacles,
                     rebuildDynamicObstacles);
@@ -88,7 +88,7 @@ namespace Common.FlowField
                 obstacleDirtyRegion = obstacleResult.DirtyRegion;
                 if (obstacleChanged)
                 {
-                    obstaclePipeline.CommitCombinedAndBuildEscape(
+                    obstacleMasks.CommitCombinedAndBuildEscape(
                         request.Grid,
                         request.Surface,
                         workspace,
@@ -137,7 +137,7 @@ namespace Common.FlowField
             bool forceRebuild)
         {
             FlowFieldSurfaceGoalTracker tracker = goalTracker ?? new FlowFieldSurfaceGoalTracker();
-            FlowFieldSurfaceGoalBuildStatus status = FlowFieldSurfaceGoalPipeline.Build(
+            FlowFieldSurfaceGoalBuildStatus status = FlowFieldSurfaceGoalResolver.Build(
                 request.Goal,
                 request.Grid,
                 request.Surface,
@@ -172,14 +172,14 @@ namespace Common.FlowField
 
         private static void ValidateRequest(
             in FlowFieldSurfaceBuildRequest request,
-            FlowFieldSurfaceObstaclePipeline obstaclePipeline)
+            FlowFieldSurfaceObstacleMasks obstacleMasks)
         {
             if (!request.Grid.IsValid)
                 throw new ArgumentException("FlowField base build requires a valid grid.", nameof(request));
             if (!request.Surface.IsValid)
                 throw new ArgumentException("FlowField base build requires a valid surface view.", nameof(request));
-            if (obstaclePipeline == null)
-                throw new ArgumentNullException(nameof(obstaclePipeline));
+            if (obstacleMasks == null)
+                throw new ArgumentNullException(nameof(obstacleMasks));
             if (request.Obstacles.Workspace == null
                 || request.Obstacles.Workspace.Capacity != request.Grid.CellCount)
                 throw new ArgumentException("FlowField base workspace capacity does not match the grid.", nameof(request));
@@ -296,7 +296,7 @@ namespace Common.FlowField
         internal void Release() => _pins.Release();
     }
 
-    internal sealed partial class FlowFieldSurfaceBuildPipeline : IFlowFieldSurfaceSolveBackend
+    internal sealed partial class FlowFieldSurfaceBaseFieldBuild : IFlowFieldSurfaceSolveBackend
     {
         private FlowFieldSurfaceSolve _solve;
         private JobHandle _handle;

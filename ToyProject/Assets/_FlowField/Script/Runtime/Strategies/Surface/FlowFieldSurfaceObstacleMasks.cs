@@ -50,14 +50,14 @@ namespace Common.FlowField
         }
     }
 
-    internal sealed class FlowFieldSurfaceObstaclePipeline
+    internal sealed class FlowFieldSurfaceObstacleMasks
     {
         private Collider[] _overlapBuffer;
         private Collider[] _targetOverlapBuffer;
         // The session's registered obstacles; the dynamic mask is built from them.
         private readonly FlowFieldObstacleRegistry _registry;
 
-        internal FlowFieldSurfaceObstaclePipeline(FlowFieldObstacleRegistry registry)
+        internal FlowFieldSurfaceObstacleMasks(FlowFieldObstacleRegistry registry)
         {
             _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         }

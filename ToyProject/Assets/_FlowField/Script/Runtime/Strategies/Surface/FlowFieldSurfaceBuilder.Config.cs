@@ -112,7 +112,7 @@ namespace Common.FlowField
         internal static FlowFieldSurfaceGoalResolution ResolveGoal(
             in FlowFieldManagerConfig config,
             FlowFieldGridSpace grid)
-            => FlowFieldSurfaceGoalPipeline.Resolve(
+            => FlowFieldSurfaceGoalResolver.Resolve(
                 grid,
                 null,
                 config.HasGoal,

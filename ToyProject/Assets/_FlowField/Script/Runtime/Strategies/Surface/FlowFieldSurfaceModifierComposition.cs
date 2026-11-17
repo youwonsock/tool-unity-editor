@@ -27,7 +27,7 @@ namespace Common.FlowField
         }
     }
 
-    internal sealed class FlowFieldSurfaceModifierPipeline
+    internal sealed class FlowFieldSurfaceModifierComposition
     {
         private readonly FlowFieldModifierRegistry _registry;
         private readonly List<FlowFieldSurfaceModifierLayer> _runtimeLayers = new List<FlowFieldSurfaceModifierLayer>(16);
@@ -36,11 +36,11 @@ namespace Common.FlowField
 
         internal FlowFieldModifierRegistry Registry => _registry;
 
-        // The cells a Modifier touches, which this pipeline created for it.
+        // The cells a Modifier touches, which this composition created for it.
         internal static FlowFieldSurfaceModifierArea AreaOf(FlowFieldModifierEntry entry)
             => (FlowFieldSurfaceModifierArea)entry.Area;
 
-        internal FlowFieldSurfaceModifierPipeline(FlowFieldModifierRegistry registry)
+        internal FlowFieldSurfaceModifierComposition(FlowFieldModifierRegistry registry)
         {
             if (registry == null)
                 throw new ArgumentNullException(nameof(registry));

@@ -13,7 +13,7 @@ namespace Common.FlowField
     {
         private readonly FlowFieldSurfaceState _state = new FlowFieldSurfaceState();
         private readonly FlowFieldSurfaceFieldStore _fieldStore = new FlowFieldSurfaceFieldStore();
-        private readonly FlowFieldSurfaceObstaclePipeline _obstaclePipeline;
+        private readonly FlowFieldSurfaceObstacleMasks _obstacleMasks;
         private readonly FlowFieldSurfaceGoalTracker _goalTracker = new FlowFieldSurfaceGoalTracker();
         // Regions a notified obstacle change made uncertain; the session marks them.
         private FlowFieldSafety _safety => _session.Safety;
@@ -25,7 +25,7 @@ namespace Common.FlowField
         private readonly FlowFieldSurfaceBaseStage _baseStage;
         private readonly FlowFieldSurfaceSolveStage _solveStage;
         private readonly FlowFieldSurfaceComposeStage _composeStage = new FlowFieldSurfaceComposeStage();
-        private FlowFieldSurfaceModifierPipeline _modifierPipeline;
+        private FlowFieldSurfaceModifierComposition _modifierComposition;
         private FlowFieldSurfaceRequest? _committedRequest;
         private Vector3? _latestDefaultDirection;
         private FlowFieldSurfaceSourceKind _sourceKind;
@@ -224,11 +224,11 @@ namespace Common.FlowField
             Func<IFlowFieldSurfaceSolveBackend> solveBackendFactory = null)
         {
             _session = session ?? throw new ArgumentNullException(nameof(session));
-            _obstaclePipeline = new FlowFieldSurfaceObstaclePipeline(session.Obstacles);
+            _obstacleMasks = new FlowFieldSurfaceObstacleMasks(session.Obstacles);
             _solveStage = new FlowFieldSurfaceSolveStage(solveBackend, solveBackendFactory);
             _baseStage = new FlowFieldSurfaceBaseStage(
                 _state,
-                _obstaclePipeline,
+                _obstacleMasks,
                 _goalTracker,
                 surfaceSource ?? FlowFieldRaycastSurfaceSource.Instance);
         }
@@ -240,7 +240,7 @@ namespace Common.FlowField
                 ? FlowFieldSurfaceSourceKind.StaticSnapshot
                 : FlowFieldSurfaceSourceKind.SceneBuild;
             _buildResolvesSafety = false;
-            _modifierPipeline ??= new FlowFieldSurfaceModifierPipeline(_session.Modifiers);
+            _modifierComposition ??= new FlowFieldSurfaceModifierComposition(_session.Modifiers);
             _solveStage.Prepare(_sourceKind);
             MarkDirty(FlowFieldSurfaceDirtyFlags.All, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
         }
@@ -328,7 +328,7 @@ namespace Common.FlowField
                     return;
                 case FlowFieldModifierUpdateKind.Unregistered:
                     ApplyModifierRegistryResult(new FlowFieldSurfaceModifierRegistryResult(
-                        false, false, true, FlowFieldSurfaceModifierPipeline.AreaOf(update.Entry).InfluenceRect));
+                        false, false, true, FlowFieldSurfaceModifierComposition.AreaOf(update.Entry).InfluenceRect));
                     return;
             }
             bool area = (update.Requested & FlowFieldModifierChange.Area) != 0;
@@ -342,7 +342,7 @@ namespace Common.FlowField
             {
                 FlowFieldModifierEntry entry = registry.Entries[i];
                 if (result.PriorityChanged || ReferenceEquals(entry, update.Entry))
-                    dirty = FlowFieldCellRect.Union(dirty, FlowFieldSurfaceModifierPipeline.AreaOf(entry).InfluenceRect);
+                    dirty = FlowFieldCellRect.Union(dirty, FlowFieldSurfaceModifierComposition.AreaOf(entry).InfluenceRect);
             }
             ApplyModifierRegistryResult(new FlowFieldSurfaceModifierRegistryResult(
                 area, result.ValueChanged, result.Any, dirty));
@@ -350,7 +350,7 @@ namespace Common.FlowField
 
         private void EnsureModifierServices()
         {
-            if (_modifierPipeline == null)
+            if (_modifierComposition == null)
                 throw new InvalidOperationException("FlowField modifier services are not initialized.");
         }
 
@@ -403,8 +403,8 @@ namespace Common.FlowField
         public void ReleaseResources()
         {
             _solveStage.DetachBackend();
-            _modifierPipeline?.Clear();
-            _modifierPipeline = null;
+            _modifierComposition?.Clear();
+            _modifierComposition = null;
             _goalTracker.Clear();
             _baseStage.Clear();
 
