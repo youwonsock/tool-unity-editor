@@ -106,6 +106,8 @@ namespace Common.TransformPath
         public int AuthoringEventCount => _pathEvents == null ? 0 : _pathEvents.Count;
         internal PathRuntimeEvent[] RuntimeEvents => _events;
         internal PathPolyline Polyline => _polyline;
+        /// <summary>The authored control points, for the Editor. Never modify the list.</summary>
+        internal IReadOnlyList<Transform> PathPoints => _pathPoints;
 
         private void Awake()
         {
@@ -278,7 +280,6 @@ namespace Common.TransformPath
         }
 
 #if UNITY_EDITOR
-#pragma warning disable 0414
         private enum EPreviewSamplingType
         {
             Uniform,
@@ -298,7 +299,34 @@ namespace Common.TransformPath
         [SerializeField, Range(0f, 1f)] private float _pointSize = 0.1f;
         [SerializeField, Range(0f, 1f)] private float _samplePointSize = 0f;
         [SerializeField, Range(0f, 1f)] private float _eventPointSize = 0.15f;
-#pragma warning restore 0414
+
+        internal bool ShowPathInEditor => _showPathInEditor;
+        internal int PreviewSamplingType => (int)_previewSamplingType;
+        internal int PreviewSampleCount => _previewSampleCount;
+        internal Color PointColor => _pointColor;
+        internal Color PathColor => _pathColor;
+        internal Color SamplePointColor => _samplePointColor;
+        internal Color EventPointColor => _eventPointColor;
+        internal PathPreviewStyle PreviewStyle => new PathPreviewStyle(_lineWidth, _pointSize, _samplePointSize, _eventPointSize);
 #endif
     }
+
+#if UNITY_EDITOR
+    /// <summary>Sizes of a path's Scene View preview.</summary>
+    internal readonly struct PathPreviewStyle
+    {
+        public readonly float LineWidth;
+        public readonly float PointSize;
+        public readonly float SamplePointSize;
+        public readonly float EventPointSize;
+
+        public PathPreviewStyle(float lineWidth, float pointSize, float samplePointSize, float eventPointSize)
+        {
+            LineWidth = lineWidth;
+            PointSize = pointSize;
+            SamplePointSize = samplePointSize;
+            EventPointSize = eventPointSize;
+        }
+    }
+#endif
 }

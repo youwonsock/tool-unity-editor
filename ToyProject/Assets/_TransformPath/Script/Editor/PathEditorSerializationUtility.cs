@@ -24,14 +24,8 @@ namespace Common.TransformPath
             List<PathData> result = new List<PathData>();
             if (multiPathData == null)
                 return result;
-
-            SerializedObject serializedMultiPath = new SerializedObject(multiPathData);
-            SerializedProperty segments = serializedMultiPath.FindProperty(SEGMENTS_PROPERTY);
-            if (segments == null)
-                return result;
-
-            for (int i = 0; i < segments.arraySize; i++)
-                result.Add(GetPathData(segments, i));
+            for (int i = 0; i < multiPathData.AuthoringSegmentCount; i++)
+                result.Add(multiPathData.GetAuthoringSegment(i).Path);
             return result;
         }
 
@@ -65,25 +59,9 @@ namespace Common.TransformPath
 
         public static List<Transform> GetPathPoints(PathData pathData)
         {
-            List<Transform> result = new List<Transform>();
-            if (pathData == null)
-                return result;
-
-            SerializedObject serializedPathData = new SerializedObject(pathData);
-            SerializedProperty points = serializedPathData.FindProperty("_pathPoints");
-            if (points == null)
-                return result;
-
-            for (int i = 0; i < points.arraySize; i++)
-                result.Add(GetPathPoint(points, i));
-            return result;
-        }
-
-        public static Transform GetPathPoint(SerializedProperty points, int index)
-        {
-            if (points == null || index < 0 || index >= points.arraySize)
-                return null;
-            return points.GetArrayElementAtIndex(index).objectReferenceValue as Transform;
+            return pathData == null || pathData.PathPoints == null
+                ? new List<Transform>()
+                : new List<Transform>(pathData.PathPoints);
         }
 
         public static void CollectTransformsWithPathPointPrefix(
@@ -108,17 +86,12 @@ namespace Common.TransformPath
             if (multiPathData == null)
                 return "null";
 
-            SerializedObject serializedMultiPath = new SerializedObject(multiPathData);
-            SerializedProperty segments = serializedMultiPath.FindProperty(SEGMENTS_PROPERTY);
-            if (segments == null)
-                return "null";
-
             StringBuilder signature = new StringBuilder();
-            signature.Append(segments.arraySize);
+            signature.Append(multiPathData.AuthoringSegmentCount);
             signature.Append('|');
-            for (int i = 0; i < segments.arraySize; i++)
+            for (int i = 0; i < multiPathData.AuthoringSegmentCount; i++)
             {
-                PathData pathData = GetPathData(segments, i);
+                PathData pathData = multiPathData.GetAuthoringSegment(i).Path;
                 signature.Append(pathData == null ? 0 : pathData.GetInstanceID());
                 signature.Append(':');
                 AppendPathPointSignature(signature, pathData);
@@ -132,7 +105,9 @@ namespace Common.TransformPath
             StringBuilder signature,
             PathData pathData)
         {
-            List<Transform> points = GetPathPoints(pathData);
+            IReadOnlyList<Transform> points = pathData == null || pathData.PathPoints == null
+                ? (IReadOnlyList<Transform>)Array.Empty<Transform>()
+                : pathData.PathPoints;
             signature.Append(points.Count);
             signature.Append('[');
             for (int i = 0; i < points.Count; i++)

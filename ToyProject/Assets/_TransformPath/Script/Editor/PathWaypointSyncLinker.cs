@@ -20,7 +20,7 @@ namespace Common.TransformPath
 
         #region Inner Classes / Structs
 
-        private sealed class TrackedRegistry
+        private sealed class TrackedRegistry : IPathTrackedTarget
         {
             private readonly List<PathWaypointSyncGroup> _groups = new List<PathWaypointSyncGroup>();
             private readonly List<Vector3[]> _groupSnapshots = new List<Vector3[]>();
@@ -31,6 +31,7 @@ namespace Common.TransformPath
             public PathWaypointSyncRegistry Target { get; }
             public MultiPathData MultiPathData { get; private set; }
             public int Id { get; }
+            public bool IsAlive => Target != null;
 
             public TrackedRegistry(PathWaypointSyncRegistry target)
             {
@@ -42,7 +43,6 @@ namespace Common.TransformPath
 
             public void RefreshReferences()
             {
-                
                 if (Target == null)
                 {
                     _structureSignature = string.Empty;
@@ -180,121 +180,17 @@ namespace Common.TransformPath
 
         #region Member Variables
 
-        private static readonly List<TrackedRegistry> TRACKED_REGISTRIES =
-            new List<TrackedRegistry>();
-        private static readonly Dictionary<int, TrackedRegistry> TRACKED_BY_ID =
-            new Dictionary<int, TrackedRegistry>();
-        private static readonly HashSet<int> LIVE_IDS = new HashSet<int>();
-        private static bool _trackedTargetsDirty = true;
+        private static readonly PathTrackedTargets<PathWaypointSyncRegistry, TrackedRegistry> TARGETS =
+            new PathTrackedTargets<PathWaypointSyncRegistry, TrackedRegistry>(
+                target => new TrackedRegistry(target),
+                changed => changed is MultiPathData || changed is PathData || changed is PathWaypointSyncRegistry);
 
         #endregion
 
 
-        #region Unity Events
-
+        // The static field subscribes to the change monitor when the Editor loads.
         static PathWaypointSyncLinker()
         {
-            PathEditorChangeMonitor.Updated += OnEditorUpdate;
-            PathEditorChangeMonitor.StructureChanged += MarkTrackedTargetsDirty;
-            PathEditorChangeMonitor.DefinitionChanged += HandleDefinitionChanged;
-            PathEditorChangeMonitor.UndoRedo += HandleUndoRedo;
-            PathEditorChangeMonitor.BeforeReload += Clear;
         }
-
-        #endregion
-
-
-        #region Private Methods
-
-        private static void OnEditorUpdate()
-        {
-            if (_trackedTargetsDirty)
-                RefreshTrackedTargets();
-
-            bool syncedAny = false;
-            for (int i = TRACKED_REGISTRIES.Count - 1; i >= 0; i--)
-            {
-                TrackedRegistry tracked = TRACKED_REGISTRIES[i];
-                if (tracked.Target == null)
-                {
-                    TRACKED_BY_ID.Remove(tracked.Id);
-                    TRACKED_REGISTRIES.RemoveAt(i);
-                    continue;
-                }
-
-                if (tracked.Sync())
-                    syncedAny = true;
-            }
-
-            if (syncedAny)
-                PathEditorUndoUtility.RepaintScene();
-        }
-
-        private static void RefreshTrackedTargets()
-        {
-            PathWaypointSyncRegistry[] allRegistries =
-                UnityEngine.Object.FindObjectsByType<PathWaypointSyncRegistry>(
-                    FindObjectsInactive.Include,
-                    FindObjectsSortMode.None);
-            LIVE_IDS.Clear();
-
-            for (int i = 0; i < allRegistries.Length; i++)
-            {
-                PathWaypointSyncRegistry registry = allRegistries[i];
-                if (registry == null)
-                    continue;
-
-                int id = registry.GetInstanceID();
-                LIVE_IDS.Add(id);
-                if (!TRACKED_BY_ID.TryGetValue(id, out TrackedRegistry tracked))
-                {
-                    tracked = new TrackedRegistry(registry);
-                    TRACKED_BY_ID.Add(id, tracked);
-                    TRACKED_REGISTRIES.Add(tracked);
-                }
-
-                tracked.RefreshReferences();
-            }
-
-            for (int i = TRACKED_REGISTRIES.Count - 1; i >= 0; i--)
-            {
-                if (LIVE_IDS.Contains(TRACKED_REGISTRIES[i].Id))
-                    continue;
-                TRACKED_BY_ID.Remove(TRACKED_REGISTRIES[i].Id);
-                TRACKED_REGISTRIES.RemoveAt(i);
-            }
-
-            _trackedTargetsDirty = false;
-        }
-
-        private static void HandleDefinitionChanged(UnityEngine.Object changedObject)
-        {
-            if (changedObject is MultiPathData || changedObject is PathData || changedObject is PathWaypointSyncRegistry)
-                MarkTrackedTargetsDirty();
-        }
-
-        private static void HandleUndoRedo()
-        {
-            MarkTrackedTargetsDirty();
-        }
-
-        private static void MarkTrackedTargetsDirty()
-        {
-            _trackedTargetsDirty = true;
-        }
-
-        private static void Clear()
-        {
-            PathEditorChangeMonitor.Updated -= OnEditorUpdate;
-            PathEditorChangeMonitor.StructureChanged -= MarkTrackedTargetsDirty;
-            PathEditorChangeMonitor.DefinitionChanged -= HandleDefinitionChanged;
-            PathEditorChangeMonitor.UndoRedo -= HandleUndoRedo;
-            PathEditorChangeMonitor.BeforeReload -= Clear;
-            TRACKED_REGISTRIES.Clear();
-            TRACKED_BY_ID.Clear();
-            LIVE_IDS.Clear();
-        }
-
-        #endregion
     }
 }

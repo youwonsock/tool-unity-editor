@@ -24,7 +24,7 @@ namespace Common.TransformPath
 
         #region Inner Classes / Structs
 
-        private sealed class TrackedMultiPath
+        private sealed class TrackedMultiPath : IPathTrackedTarget
         {
             private readonly List<PathData> _pathDatas = new List<PathData>();
             private readonly List<List<Transform>> _pathPoints =
@@ -37,6 +37,7 @@ namespace Common.TransformPath
 
             public MultiPathData Target { get; }
             public int Id { get; }
+            public bool IsAlive => Target != null;
 
             public string CachedStructureSignature => _structureSignature;
 
@@ -64,7 +65,7 @@ namespace Common.TransformPath
                     return;
                 }
 
-                _autoLinkEnabled = ReadAutoLinkEnabled(Target);
+                _autoLinkEnabled = Target.AutoLinkPathPoints;
                 List<PathData> pathDatas = PathEditorSerializationUtility.GetPathDatas(Target);
                 _pathDatas.Clear();
                 _pathDatas.AddRange(pathDatas);
@@ -165,13 +166,6 @@ namespace Common.TransformPath
                 _snapshot.Capture(_pathPoints);
                 return syncedAny;
             }
-
-            private static bool ReadAutoLinkEnabled(MultiPathData multiPathData)
-            {
-                SerializedObject serializedMultiPath = new SerializedObject(multiPathData);
-                SerializedProperty property = serializedMultiPath.FindProperty("_autoLinkPathPoints");
-                return property == null || property.boolValue;
-            }
         }
 
         private sealed class PathLinkSnapshot
@@ -213,149 +207,49 @@ namespace Common.TransformPath
 
         #region Member Variables
 
-        private static readonly List<TrackedMultiPath> TRACKED_MULTI_PATHS =
-            new List<TrackedMultiPath>();
-        private static readonly Dictionary<int, TrackedMultiPath> TRACKED_BY_ID =
-            new Dictionary<int, TrackedMultiPath>();
-        private static readonly HashSet<int> LIVE_IDS = new HashSet<int>();
-        private static bool _trackedTargetsDirty = true;
-
-        #endregion
-
-
-        #region Unity Events
-
-        static MultiPathAutoLinker()
-        {
-            PathEditorChangeMonitor.Updated += OnEditorUpdate;
-            PathEditorChangeMonitor.StructureChanged += MarkTrackedTargetsDirty;
-            PathEditorChangeMonitor.DefinitionChanged += HandleDefinitionChanged;
-            PathEditorChangeMonitor.UndoRedo += HandleUndoRedo;
-            PathEditorChangeMonitor.BeforeReload += Clear;
-        }
+        private static readonly PathTrackedTargets<MultiPathData, TrackedMultiPath> TARGETS =
+            new PathTrackedTargets<MultiPathData, TrackedMultiPath>(
+                target => new TrackedMultiPath(target),
+                changed => changed is MultiPathData || changed is PathData,
+                HandleUndoRedo);
 
         #endregion
 
 
         #region Private Methods
 
-        private static void OnEditorUpdate()
+        static MultiPathAutoLinker()
         {
-            if (_trackedTargetsDirty)
-                RefreshTrackedTargets();
-
-            bool syncedAny = false;
-            for (int i = TRACKED_MULTI_PATHS.Count - 1; i >= 0; i--)
-            {
-                TrackedMultiPath tracked = TRACKED_MULTI_PATHS[i];
-                if (tracked.Target == null)
-                {
-                    TRACKED_BY_ID.Remove(tracked.Id);
-                    TRACKED_MULTI_PATHS.RemoveAt(i);
-                    continue;
-                }
-
-                if (tracked.Sync())
-                    syncedAny = true;
-            }
-
-            if (syncedAny)
-                PathEditorUndoUtility.RepaintScene();
+            TARGETS.Cleared += PathLinkEditorUtility.ClearDuplicateWarnings;
         }
 
-        private static void RefreshTrackedTargets()
+        // An undo that kept every segment only needs the joints aligned again.
+        private static void HandleUndoRedo(PathTrackedTargets<MultiPathData, TrackedMultiPath> targets)
         {
-            MultiPathData[] allMultiPathData = UnityEngine.Object.FindObjectsByType<MultiPathData>(
-                FindObjectsInactive.Include,
-                FindObjectsSortMode.None);
-            LIVE_IDS.Clear();
-            for (int i = 0; i < allMultiPathData.Length; i++)
+            IReadOnlyList<TrackedMultiPath> tracked = targets.Tracked;
+            if (tracked.Count == 0)
             {
-                MultiPathData multiPathData = allMultiPathData[i];
-                if (multiPathData == null)
-                    continue;
-
-                int id = multiPathData.GetInstanceID();
-                LIVE_IDS.Add(id);
-                if (!TRACKED_BY_ID.TryGetValue(id, out TrackedMultiPath tracked))
-                {
-                    tracked = new TrackedMultiPath(multiPathData);
-                    TRACKED_BY_ID.Add(id, tracked);
-                    TRACKED_MULTI_PATHS.Add(tracked);
-                }
-                tracked.RefreshReferences();
-            }
-
-            for (int i = TRACKED_MULTI_PATHS.Count - 1; i >= 0; i--)
-            {
-                if (LIVE_IDS.Contains(TRACKED_MULTI_PATHS[i].Id))
-                    continue;
-                TRACKED_BY_ID.Remove(TRACKED_MULTI_PATHS[i].Id);
-                TRACKED_MULTI_PATHS.RemoveAt(i);
-            }
-
-            _trackedTargetsDirty = false;
-        }
-
-        private static void HandleDefinitionChanged(UnityEngine.Object changedObject)
-        {
-            if (changedObject is MultiPathData || changedObject is PathData)
-                MarkTrackedTargetsDirty();
-        }
-
-        private static void HandleUndoRedo()
-        {
-            if (TRACKED_MULTI_PATHS.Count == 0)
-            {
-                MarkTrackedTargetsDirty();
+                targets.MarkDirty();
                 return;
             }
-
-            for (int i = 0; i < TRACKED_MULTI_PATHS.Count; i++)
+            for (int i = 0; i < tracked.Count; i++)
             {
-                TrackedMultiPath tracked = TRACKED_MULTI_PATHS[i];
-                if (tracked.Target == null)
+                if (tracked[i].Target == null)
                     continue;
-
-                string liveSignature = PathEditorSerializationUtility.BuildPathConfigsSignature(
-                    tracked.Target);
-                if (!string.Equals(
-                        tracked.CachedStructureSignature,
-                        liveSignature,
-                        StringComparison.Ordinal))
+                string liveSignature = PathEditorSerializationUtility.BuildPathConfigsSignature(tracked[i].Target);
+                if (!string.Equals(tracked[i].CachedStructureSignature, liveSignature, StringComparison.Ordinal))
                 {
-                    MarkTrackedTargetsDirty();
+                    targets.MarkDirty();
                     return;
                 }
             }
-
-            for (int i = 0; i < TRACKED_MULTI_PATHS.Count; i++)
+            for (int i = 0; i < tracked.Count; i++)
             {
-                if (TRACKED_MULTI_PATHS[i].Target != null)
-                    TRACKED_MULTI_PATHS[i].RequestInitialSync();
+                if (tracked[i].Target != null)
+                    tracked[i].RequestInitialSync();
             }
         }
 
-        private static void MarkTrackedTargetsDirty()
-        {
-            _trackedTargetsDirty = true;
-        }
-
-        private static void Clear()
-        {
-            PathEditorChangeMonitor.Updated -= OnEditorUpdate;
-            PathEditorChangeMonitor.StructureChanged -= MarkTrackedTargetsDirty;
-            PathEditorChangeMonitor.DefinitionChanged -= HandleDefinitionChanged;
-            PathEditorChangeMonitor.UndoRedo -= HandleUndoRedo;
-            PathEditorChangeMonitor.BeforeReload -= Clear;
-            TRACKED_MULTI_PATHS.Clear();
-            TRACKED_BY_ID.Clear();
-            LIVE_IDS.Clear();
-            PathLinkEditorUtility.ClearDuplicateWarnings();
-        }
-
         #endregion
-
-
     }
 }

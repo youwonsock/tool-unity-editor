@@ -36,9 +36,9 @@ namespace Common.TransformPath
             EditorGUI.BeginChangeCheck();
             DrawPropertiesExcluding(
                 serializedObject,
-                "_moveType",
-                "_moveValue",
-                "_timeCurve");
+                PathInspectorGUI.MOVE_TYPE,
+                PathInspectorGUI.MOVE_VALUE,
+                PathInspectorGUI.TIME_CURVE);
             bool inspectorChanged = EditorGUI.EndChangeCheck();
             inspectorChanged |= DrawMovementSettings();
             inspectorChanged |= serializedObject.ApplyModifiedProperties();
@@ -65,11 +65,11 @@ namespace Common.TransformPath
                     MessageType.Info);
 
             if (GUILayout.Button("Rebuild Runtime Path"))
-                RebuildRuntimePaths();
+                PathInspectorGUI.Rebuild(PathInspectorGUI.TargetsOf<PathData>(targets), "Rebuild Runtime Path");
 
             EditorGUI.BeginDisabledGroup(!authoringToolsEnabled);
             if (GUILayout.Button("Sort Path Events"))
-                SortPathEvents();
+                PathInspectorGUI.SortEvents(PathInspectorGUI.TargetsOf<PathData>(targets), "Sort Path Events");
             EditorGUI.EndDisabledGroup();
         }
 
@@ -86,181 +86,71 @@ namespace Common.TransformPath
             if (Event.current != null && Event.current.type != EventType.Repaint)
                 return;
 
-            SerializedObject serializedPathData = new SerializedObject(pathData);
-            serializedPathData.Update();
-            SerializedProperty showPathProperty = serializedPathData.FindProperty(
-                PathDataEditorProperties.SHOW_PATH_IN_EDITOR);
-            if (showPathProperty == null || !showPathProperty.boolValue)
+            if (!pathData.ShowPathInEditor)
+                return;
+            IReadOnlyList<Transform> pathPoints = pathData.PathPoints;
+            if (pathPoints == null || pathPoints.Count == 0)
                 return;
 
-            SerializedProperty pathPointsProperty = serializedPathData.FindProperty("_pathPoints");
-            if (pathPointsProperty == null || pathPointsProperty.arraySize == 0)
-                return;
-
-            Color pointColor = ReadColor(
-                serializedPathData,
-                PathDataEditorProperties.POINT_COLOR,
-                Color.red);
-            Color pathColor = ReadColor(
-                serializedPathData,
-                PathDataEditorProperties.PATH_COLOR,
-                Color.blue);
-            Color sampleColor = ReadColor(
-                serializedPathData,
-                PathDataEditorProperties.SAMPLE_POINT_COLOR,
-                Color.yellow);
-            Color eventColor = ReadColor(
-                serializedPathData,
-                PathDataEditorProperties.EVENT_POINT_COLOR,
-                Color.green);
-            float lineWidth = ReadFloat(
-                serializedPathData,
-                PathDataEditorProperties.LINE_WIDTH,
-                2f);
-            float pointSize = ReadFloat(
-                serializedPathData,
-                PathDataEditorProperties.POINT_SIZE,
-                DEFAULT_POINT_SIZE);
-            float sampleSize = ReadFloat(
-                serializedPathData,
-                PathDataEditorProperties.SAMPLE_POINT_SIZE,
-                0f);
-            float eventSize = ReadFloat(
-                serializedPathData,
-                PathDataEditorProperties.EVENT_POINT_SIZE,
-                0.15f);
-            SerializedProperty previewTypeProperty = serializedPathData.FindProperty(
-                "_previewSamplingType");
-            SerializedProperty previewCountProperty = serializedPathData.FindProperty(
-                "_previewSampleCount");
-
-            DrawControlPoints(pathPointsProperty, pointColor, pointSize);
-            if (!PathDataScenePreviewCache.TryGet(
-                    pathData,
-                    out PathDataScenePreview preview))
+            PathPreviewStyle style = pathData.PreviewStyle;
+            DrawControlPoints(pathPoints, pathData.PointColor, style.PointSize);
+            if (!PathDataScenePreviewCache.TryGet(pathData, out PathDataScenePreview preview))
             {
-                DrawFallbackPath(pathPointsProperty, pathColor, lineWidth);
+                DrawFallbackPath(pathPoints, pathData.PathColor, style.LineWidth);
                 return;
             }
 
-            Handles.color = pathColor;
-            Handles.DrawAAPolyLine(Mathf.Max(0.1f, lineWidth), preview.SampledPoints);
-            int previewType = previewTypeProperty == null
-                ? 0
-                : previewTypeProperty.enumValueIndex;
-            int previewCount = previewCountProperty == null
-                ? 0
-                : previewCountProperty.intValue;
-            DrawSamplingPreview(
-                preview,
-                pathData,
-                previewType,
-                previewCount,
-                sampleColor,
-                sampleSize);
-            DrawPathEvents(preview, pathData, eventColor, eventSize);
+            Handles.color = pathData.PathColor;
+            Handles.DrawAAPolyLine(Mathf.Max(0.1f, style.LineWidth), preview.SampledPoints);
+            DrawSamplingPreview(preview, pathData, pathData.PreviewSamplingType, pathData.PreviewSampleCount,
+                pathData.SamplePointColor, style.SamplePointSize);
+            DrawPathEvents(preview, pathData, pathData.EventPointColor, style.EventPointSize);
         }
-
         private bool DrawMovementSettings()
         {
-            SerializedProperty moveTypeProperty = serializedObject.FindProperty("_moveType");
-            SerializedProperty moveValueProperty = serializedObject.FindProperty("_moveValue");
-            SerializedProperty timeCurveProperty = serializedObject.FindProperty("_timeCurve");
-            if (moveTypeProperty == null || moveValueProperty == null || timeCurveProperty == null)
-                return false;
-
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Movement", EditorStyles.boldLabel);
-            EditorGUI.BeginChangeCheck();
-            EditorGUILayout.PropertyField(moveTypeProperty, new GUIContent("Mode"));
-            string valueLabel = moveTypeProperty.enumValueIndex == (int)EPathMoveType.SpeedBased
-                ? "Speed"
-                : "Duration";
-            EditorGUILayout.PropertyField(moveValueProperty, new GUIContent(valueLabel));
-            bool changed = EditorGUI.EndChangeCheck();
-            if (moveTypeProperty.enumValueIndex == (int)EPathMoveType.TimeBased)
-            {
-                if (timeCurveProperty.animationCurveValue == null
-                    || timeCurveProperty.animationCurveValue.length == 0)
-                {
-                    timeCurveProperty.animationCurveValue = AnimationCurve.Linear(0f, 0f, 1f, 1f);
-                    changed = true;
-                }
-                EditorGUILayout.PropertyField(timeCurveProperty, new GUIContent("Time Curve"));
-            }
-
-            return changed;
+            return PathInspectorGUI.DrawMovement(
+                serializedObject.FindProperty(PathInspectorGUI.MOVE_TYPE),
+                serializedObject.FindProperty(PathInspectorGUI.MOVE_VALUE),
+                serializedObject.FindProperty(PathInspectorGUI.TIME_CURVE));
         }
 
-        private static Color ReadColor(
-            SerializedObject serializedObject,
-            string propertyName,
-            Color fallback)
+        private static void DrawControlPoints(IReadOnlyList<Transform> points, Color pointColor, float pointSize)
         {
-            SerializedProperty property = serializedObject.FindProperty(propertyName);
-            return property == null ? fallback : property.colorValue;
-        }
-
-        private static float ReadFloat(
-            SerializedObject serializedObject,
-            string propertyName,
-            float fallback)
-        {
-            SerializedProperty property = serializedObject.FindProperty(propertyName);
-            return property == null ? fallback : property.floatValue;
-        }
-
-        private static void DrawControlPoints(
-            SerializedProperty pathPointsProperty,
-            Color pointColor,
-            float pointSize)
-        {
-            if (pathPointsProperty == null || pointSize <= 0f)
+            if (pointSize <= 0f)
                 return;
-
             Gizmos.color = pointColor;
             GUIStyle labelStyle = GetPointLabelStyle(pointSize);
-            for (int i = 0; i < pathPointsProperty.arraySize; i++)
+            for (int i = 0; i < points.Count; i++)
             {
-                Transform point = PathEditorSerializationUtility.GetPathPoint(
-                    pathPointsProperty,
-                    i);
-                if (point == null)
+                if (points[i] == null)
                     continue;
-                Gizmos.DrawSphere(point.position, pointSize);
-                Handles.Label(point.position + Vector3.up * 0.3f, $"P{i}", labelStyle);
+                Gizmos.DrawSphere(points[i].position, pointSize);
+                Handles.Label(points[i].position + Vector3.up * 0.3f, $"P{i}", labelStyle);
             }
         }
 
-        private static void DrawFallbackPath(
-            SerializedProperty pathPointsProperty,
-            Color pathColor,
-            float lineWidth)
+        // Without a valid build, draw the straight runs between the points that exist.
+        private static void DrawFallbackPath(IReadOnlyList<Transform> points, Color pathColor, float lineWidth)
         {
-            List<Vector3> points = new List<Vector3>();
-            for (int i = 0; i < pathPointsProperty.arraySize; i++)
+            var run = new List<Vector3>();
+            for (int i = 0; i < points.Count; i++)
             {
-                Transform point = PathEditorSerializationUtility.GetPathPoint(
-                    pathPointsProperty,
-                    i);
-                if (point == null)
+                if (points[i] == null)
                 {
-                    DrawFallbackPolyline(points, pathColor, lineWidth);
-                    points.Clear();
+                    DrawFallbackPolyline(run, pathColor, lineWidth);
+                    run.Clear();
                     continue;
                 }
-                points.Add(point.position);
+                run.Add(points[i].position);
             }
-
-            DrawFallbackPolyline(points, pathColor, lineWidth);
+            DrawFallbackPolyline(run, pathColor, lineWidth);
         }
 
-        private static void DrawFallbackPolyline(
-            List<Vector3> points,
-            Color color,
-            float lineWidth)
+        private static void DrawFallbackPolyline(List<Vector3> points, Color color, float lineWidth)
         {
-            if (points == null || points.Count < 2)
+            if (points.Count < 2)
                 return;
             Handles.color = color;
             Handles.DrawAAPolyLine(Mathf.Max(0.1f, lineWidth), points.ToArray());
@@ -363,35 +253,6 @@ namespace Common.TransformPath
                 Mathf.RoundToInt(14f * (size / DEFAULT_POINT_SIZE)));
             _eventLabelStyle.normal.textColor = Color.white;
             return _eventLabelStyle;
-        }
-
-        private void RebuildRuntimePaths()
-        {
-            for (int i = 0; i < targets.Length; i++)
-            {
-                PathData pathData = targets[i] as PathData;
-                if (pathData == null)
-                    continue;
-                PathEditorUndoUtility.Record(pathData, "Rebuild Runtime Path");
-                pathData.Rebuild();
-                PathEditorUndoUtility.MarkDirty(pathData);
-            }
-            PathEditorUndoUtility.RepaintScene();
-        }
-
-        private void SortPathEvents()
-        {
-            for (int i = 0; i < targets.Length; i++)
-            {
-                PathData pathData = targets[i] as PathData;
-                if (pathData == null)
-                    continue;
-                PathEditorUndoUtility.Record(pathData, "Sort Path Events");
-                if (!pathData.SortPathEventsByNormalizedTime())
-                    continue;
-                PathEditorUndoUtility.MarkDirty(pathData);
-            }
-            PathEditorUndoUtility.RepaintScene();
         }
 
         private void SnapSelectedPathsToGround()
@@ -546,24 +407,6 @@ namespace Common.TransformPath
             serializedPathData.ApplyModifiedProperties();
             PathEditorUndoUtility.MarkDirty(pathData);
         }
-
-        #endregion
-    }
-
-    /// <summary>Serialized field names shared by PathData and MultiPathData editors.</summary>
-    internal static class PathDataEditorProperties
-    {
-        #region Constants
-
-        public const string SHOW_PATH_IN_EDITOR = "_showPathInEditor";
-        public const string POINT_COLOR = "_pointColor";
-        public const string PATH_COLOR = "_pathColor";
-        public const string SAMPLE_POINT_COLOR = "_samplePointColor";
-        public const string EVENT_POINT_COLOR = "_eventPointColor";
-        public const string LINE_WIDTH = "_lineWidth";
-        public const string POINT_SIZE = "_pointSize";
-        public const string SAMPLE_POINT_SIZE = "_samplePointSize";
-        public const string EVENT_POINT_SIZE = "_eventPointSize";
 
         #endregion
     }

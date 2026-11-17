@@ -267,7 +267,6 @@ namespace Common.TransformPath
         }
 
 #if UNITY_EDITOR
-#pragma warning disable 0414
         [Header("Editor Only")]
         [SerializeField] private bool _autoLinkPathPoints = true;
 
@@ -276,7 +275,10 @@ namespace Common.TransformPath
         [SerializeField, Range(0f, 1f)] private float _multiPathPointSize = DEFAULT_MULTI_PATH_POINT_SIZE;
         [SerializeField, Range(0f, 1f)] private float _multiPathSamplePointSize;
         [SerializeField, Range(0f, 1f)] private float _multiPathEventPointSize = 0.15f;
-#pragma warning restore 0414
+
+        internal bool AutoLinkPathPoints => _autoLinkPathPoints;
+        internal PathPreviewStyle PreviewStyleTemplate => new PathPreviewStyle(
+            _multiPathLineWidth, _multiPathPointSize, _multiPathSamplePointSize, _multiPathEventPointSize);
 #endif
     }
 }

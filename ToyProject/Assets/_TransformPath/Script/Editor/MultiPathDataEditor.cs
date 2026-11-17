@@ -19,45 +19,22 @@ namespace Common.TransformPath
         private const string SEGMENTS_PROPERTY = "_segments";
         private const string PROVIDER_OBJECT_PROPERTY = "_providerObject";
         private const string MOVEMENT_SOURCE_PROPERTY = "_movementSource";
-        private const string MOVE_TYPE_PROPERTY = "_moveType";
-        private const string MOVE_VALUE_PROPERTY = "_moveValue";
-        private const string TIME_CURVE_PROPERTY = "_timeCurve";
+        private const string MOVE_TYPE_PROPERTY = PathInspectorGUI.MOVE_TYPE;
+        private const string MOVE_VALUE_PROPERTY = PathInspectorGUI.MOVE_VALUE;
+        private const string TIME_CURVE_PROPERTY = PathInspectorGUI.TIME_CURVE;
+        // PathData preview fields the drawing tools write.
+        private const string PATH_COLOR_PROPERTY = "_pathColor";
+        private const string LINE_WIDTH_PROPERTY = "_lineWidth";
+        private const string POINT_SIZE_PROPERTY = "_pointSize";
+        private const string SAMPLE_POINT_SIZE_PROPERTY = "_samplePointSize";
+        private const string EVENT_POINT_SIZE_PROPERTY = "_eventPointSize";
         private const string PRESERVE_PROPERTY = "_preservePreviousSpeed";
-
-        #endregion
-
-
-        #region Inner Classes / Structs
-
-        private readonly struct DrawingTemplate
-        {
-            public float LineWidth { get; }
-            public float PointSize { get; }
-            public float SamplePointSize { get; }
-            public float EventPointSize { get; }
-
-            public DrawingTemplate(
-                float lineWidth,
-                float pointSize,
-                float samplePointSize,
-                float eventPointSize)
-            {
-                LineWidth = lineWidth;
-                PointSize = pointSize;
-                SamplePointSize = samplePointSize;
-                EventPointSize = eventPointSize;
-            }
-        }
 
         #endregion
 
 
         #region Member Variables
 
-        private readonly Dictionary<int, string> _pathConfigsSignatureByTargetId =
-            new Dictionary<int, string>();
-        private readonly Dictionary<int, DrawingTemplate> _drawingTemplateByTargetId =
-            new Dictionary<int, DrawingTemplate>();
         private readonly HashSet<PathData> _bulkPathDataSet = new HashSet<PathData>();
 
         private ReorderableList _segmentsList;
@@ -75,7 +52,6 @@ namespace Common.TransformPath
         {
             Undo.undoRedoPerformed += HandleUndoRedo;
             SetupSegmentsList();
-            CacheInspectorSignatures();
         }
 
         private void OnDisable()
@@ -95,10 +71,11 @@ namespace Common.TransformPath
             DrawMovementBulkTools(authoringToolsEnabled);
 
             EditorGUILayout.Space();
-            EditorGUILayout.HelpBox(
-                "MultiPath drawing settings are applied to every referenced PathData. "
-                + "Path references and order changes assign distinct preview colors.",
-                MessageType.Info);
+            EditorGUILayout.LabelField("Drawing Tools", EditorStyles.boldLabel);
+            if (GUILayout.Button("Apply Drawing Sizes To All Paths"))
+                ForEachTarget(ApplySharedDrawingSettings);
+            if (GUILayout.Button("Assign Distinct Path Colors"))
+                ForEachTarget(AssignDistinctPathColors);
 
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Path Link Tools", EditorStyles.boldLabel);
@@ -106,7 +83,7 @@ namespace Common.TransformPath
             if (GUILayout.Button("Force Sync All Path Points"))
                 ForceSyncAllPathPoints();
             if (GUILayout.Button("Sort Path Events (All PathData)"))
-                SortAllPathEventsForMultiPath();
+                PathInspectorGUI.SortEvents(CollectTargetPaths(), "Sort Path Events (All PathData)");
             EditorGUI.EndDisabledGroup();
             if (!authoringToolsEnabled)
                 EditorGUILayout.HelpBox(
@@ -116,21 +93,14 @@ namespace Common.TransformPath
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Sequence Tools", EditorStyles.boldLabel);
             if (GUILayout.Button("Rebuild Sequence"))
-                RebuildSequences();
+                PathInspectorGUI.Rebuild(PathInspectorGUI.TargetsOf<MultiPathData>(targets), "Rebuild Sequence");
 
             inspectorChanged |= serializedObject.ApplyModifiedProperties();
             if (inspectorChanged)
                 PathEditorUndoUtility.RepaintScene();
-            SyncDrawingAndColorsAfterInspectorEdit();
         }
 
-        private void HandleUndoRedo()
-        {
-            _pathConfigsSignatureByTargetId.Clear();
-            _drawingTemplateByTargetId.Clear();
-            CacheInspectorSignatures();
-            PathEditorUndoUtility.RepaintScene();
-        }
+        private void HandleUndoRedo() => PathEditorUndoUtility.RepaintScene();
 
         #endregion
 
@@ -319,18 +289,10 @@ namespace Common.TransformPath
             if (movementSource != null
                 && movementSource.enumValueIndex == (int)EPathSegmentMovementSource.Override)
             {
-                EditorGUI.BeginChangeCheck();
-                EditorGUILayout.PropertyField(
+                bool overrideChanged = PathInspectorGUI.DrawMovement(
                     element.FindPropertyRelative(MOVE_TYPE_PROPERTY),
-                    new GUIContent("Mode"));
-                EditorGUILayout.PropertyField(
                     element.FindPropertyRelative(MOVE_VALUE_PROPERTY),
-                    new GUIContent("Value"));
-                SerializedProperty curve = element.FindPropertyRelative(TIME_CURVE_PROPERTY);
-                SerializedProperty type = element.FindPropertyRelative(MOVE_TYPE_PROPERTY);
-                if (type != null && type.enumValueIndex == (int)EPathMoveType.TimeBased)
-                    EditorGUILayout.PropertyField(curve, new GUIContent("Time Curve"));
-                bool overrideChanged = EditorGUI.EndChangeCheck();
+                    element.FindPropertyRelative(TIME_CURVE_PROPERTY));
                 if (overrideChanged)
                     serializedObject.ApplyModifiedProperties();
                 EditorGUILayout.EndVertical();
@@ -348,34 +310,10 @@ namespace Common.TransformPath
 
             SerializedObject child = new SerializedObject(pathData);
             child.Update();
-            SerializedProperty moveType = child.FindProperty("_moveType");
-            SerializedProperty moveValue = child.FindProperty("_moveValue");
-            SerializedProperty timeCurve = child.FindProperty("_timeCurve");
-            if (moveType == null || moveValue == null || timeCurve == null)
-            {
-                EditorGUILayout.HelpBox(
-                    "PathData movement properties are unavailable.",
-                    MessageType.Warning);
-                EditorGUILayout.EndVertical();
-                return false;
-            }
-
-            EditorGUI.BeginChangeCheck();
-            EditorGUILayout.PropertyField(moveType, new GUIContent("Mode"));
-            EditorGUILayout.PropertyField(
-                moveValue,
-                new GUIContent(
-                    moveType.enumValueIndex == (int)EPathMoveType.SpeedBased
-                        ? "Speed"
-                        : "Duration"));
-            if (moveType.enumValueIndex == (int)EPathMoveType.TimeBased)
-            {
-                if (timeCurve.animationCurveValue == null
-                    || timeCurve.animationCurveValue.length == 0)
-                    timeCurve.animationCurveValue = AnimationCurve.Linear(0f, 0f, 1f, 1f);
-                EditorGUILayout.PropertyField(timeCurve, new GUIContent("Time Curve"));
-            }
-            bool changed = EditorGUI.EndChangeCheck();
+            bool changed = PathInspectorGUI.DrawMovement(
+                child.FindProperty(MOVE_TYPE_PROPERTY),
+                child.FindProperty(MOVE_VALUE_PROPERTY),
+                child.FindProperty(TIME_CURVE_PROPERTY));
             if (changed)
             {
                 child.ApplyModifiedProperties();
@@ -442,10 +380,10 @@ namespace Common.TransformPath
             {
                 SerializedObject child = new SerializedObject(pathData);
                 child.Update();
-                SetEnum(child, "_moveType", _bulkMoveType);
-                SetFloat(child, "_moveValue", _bulkMoveValue);
+                SetEnum(child, MOVE_TYPE_PROPERTY, _bulkMoveType);
+                SetFloat(child, MOVE_VALUE_PROPERTY, _bulkMoveValue);
                 if (_bulkMoveType == EPathMoveType.TimeBased)
-                    SetCurve(child, "_timeCurve", _bulkTimeCurve);
+                    SetCurve(child, TIME_CURVE_PROPERTY, _bulkTimeCurve);
                 child.ApplyModifiedProperties();
                 PathEditorUndoUtility.MarkDirty(pathData);
             }
@@ -483,91 +421,24 @@ namespace Common.TransformPath
                 property.animationCurveValue = PathValueUtility.CloneCurve(value);
         }
 
-        private void CacheInspectorSignatures()
+        private void ForEachTarget(System.Action<MultiPathData> action)
         {
-            for (int i = 0; i < targets.Length; i++)
-            {
-                MultiPathData multiPathData = targets[i] as MultiPathData;
-                if (multiPathData == null)
-                    continue;
-                int id = multiPathData.GetInstanceID();
-                _pathConfigsSignatureByTargetId[id] =
-                    PathEditorSerializationUtility.BuildPathConfigsSignature(multiPathData);
-                _drawingTemplateByTargetId[id] = ReadDrawingTemplate(multiPathData);
-            }
+            foreach (MultiPathData multiPathData in PathInspectorGUI.TargetsOf<MultiPathData>(targets))
+                action(multiPathData);
         }
 
-        private void SyncDrawingAndColorsAfterInspectorEdit()
+        private IEnumerable<PathData> CollectTargetPaths()
         {
-            for (int i = 0; i < targets.Length; i++)
-            {
-                MultiPathData multiPathData = targets[i] as MultiPathData;
-                if (multiPathData == null)
-                    continue;
-
-                int id = multiPathData.GetInstanceID();
-                DrawingTemplate currentTemplate = ReadDrawingTemplate(multiPathData);
-                if (!_drawingTemplateByTargetId.TryGetValue(
-                        id,
-                        out DrawingTemplate previousTemplate))
-                    _drawingTemplateByTargetId[id] = currentTemplate;
-                else if (!AreSameTemplate(currentTemplate, previousTemplate))
-                {
-                    ApplySharedDrawingSettings(multiPathData, currentTemplate);
-                    _drawingTemplateByTargetId[id] = currentTemplate;
-                }
-
-                string currentSignature = PathEditorSerializationUtility.BuildPathConfigsSignature(
-                    multiPathData);
-                if (!_pathConfigsSignatureByTargetId.TryGetValue(
-                        id,
-                        out string previousSignature))
-                    _pathConfigsSignatureByTargetId[id] = currentSignature;
-                else if (!string.Equals(
-                             currentSignature,
-                             previousSignature,
-                             StringComparison.Ordinal))
-                {
-                    _pathConfigsSignatureByTargetId[id] = currentSignature;
-                    AssignDistinctPathColors(multiPathData);
-                    PathEditorUndoUtility.RepaintScene();
-                }
-            }
+            var paths = new HashSet<PathData>();
+            foreach (MultiPathData multiPathData in PathInspectorGUI.TargetsOf<MultiPathData>(targets))
+                paths.UnionWith(PathEditorSerializationUtility.CollectUniquePathDatas(multiPathData));
+            return paths;
         }
 
-        private static DrawingTemplate ReadDrawingTemplate(MultiPathData multiPathData)
+        // Copies this MultiPath's drawing sizes to every PathData it plays.
+        private static void ApplySharedDrawingSettings(MultiPathData multiPathData)
         {
-            SerializedObject serializedMultiPath = new SerializedObject(multiPathData);
-            return new DrawingTemplate(
-                ReadFloat(serializedMultiPath, "_multiPathLineWidth", 2f),
-                ReadFloat(serializedMultiPath, "_multiPathPointSize", 0.1f),
-                ReadFloat(serializedMultiPath, "_multiPathSamplePointSize", 0f),
-                ReadFloat(serializedMultiPath, "_multiPathEventPointSize", 0.15f));
-        }
-
-        private static float ReadFloat(
-            SerializedObject serializedObject,
-            string propertyName,
-            float fallback)
-        {
-            SerializedProperty property = serializedObject.FindProperty(propertyName);
-            return property == null ? fallback : property.floatValue;
-        }
-
-        private static bool AreSameTemplate(
-            DrawingTemplate left,
-            DrawingTemplate right)
-        {
-            return Mathf.Approximately(left.LineWidth, right.LineWidth)
-                && Mathf.Approximately(left.PointSize, right.PointSize)
-                && Mathf.Approximately(left.SamplePointSize, right.SamplePointSize)
-                && Mathf.Approximately(left.EventPointSize, right.EventPointSize);
-        }
-
-        private static void ApplySharedDrawingSettings(
-            MultiPathData multiPathData,
-            DrawingTemplate template)
-        {
+            PathPreviewStyle template = multiPathData.PreviewStyleTemplate;
             List<PathData> pathDatas = PathEditorSerializationUtility.CollectUniquePathDatas(
                 multiPathData);
             UnityEngine.Object[] undoTargets = new UnityEngine.Object[pathDatas.Count];
@@ -582,19 +453,19 @@ namespace Common.TransformPath
                 serializedPathData.Update();
                 SetFloat(
                     serializedPathData,
-                    PathDataEditorProperties.LINE_WIDTH,
+                    LINE_WIDTH_PROPERTY,
                     template.LineWidth);
                 SetFloat(
                     serializedPathData,
-                    PathDataEditorProperties.POINT_SIZE,
+                    POINT_SIZE_PROPERTY,
                     template.PointSize);
                 SetFloat(
                     serializedPathData,
-                    PathDataEditorProperties.SAMPLE_POINT_SIZE,
+                    SAMPLE_POINT_SIZE_PROPERTY,
                     template.SamplePointSize);
                 SetFloat(
                     serializedPathData,
-                    PathDataEditorProperties.EVENT_POINT_SIZE,
+                    EVENT_POINT_SIZE_PROPERTY,
                     template.EventPointSize);
                 serializedPathData.ApplyModifiedProperties();
                 PathEditorUndoUtility.MarkDirty(pathDatas[i]);
@@ -624,7 +495,7 @@ namespace Common.TransformPath
                 SerializedObject serializedPathData = new SerializedObject(uniquePathDatas[i]);
                 serializedPathData.Update();
                 SerializedProperty colorProperty = serializedPathData.FindProperty(
-                    PathDataEditorProperties.PATH_COLOR);
+                    PATH_COLOR_PROPERTY);
                 if (colorProperty != null)
                     colorProperty.colorValue = pathColor;
                 serializedPathData.ApplyModifiedProperties();
@@ -663,45 +534,6 @@ namespace Common.TransformPath
                     multiPathData);
             }
             PathEditorUndoUtility.RepaintScene();
-        }
-
-        private void SortAllPathEventsForMultiPath()
-        {
-            for (int i = 0; i < targets.Length; i++)
-            {
-                MultiPathData multiPathData = targets[i] as MultiPathData;
-                if (multiPathData == null)
-                    continue;
-                List<PathData> pathDatas = PathEditorSerializationUtility.CollectUniquePathDatas(
-                    multiPathData);
-                bool changed = false;
-                for (int pathIndex = 0; pathIndex < pathDatas.Count; pathIndex++)
-                {
-                    PathData pathData = pathDatas[pathIndex];
-                    PathEditorUndoUtility.Record(
-                        pathData,
-                        "Sort Path Events (All PathData)");
-                    if (!pathData.SortPathEventsByNormalizedTime())
-                        continue;
-                    changed = true;
-                    PathEditorUndoUtility.MarkDirty(pathData);
-                }
-                if (changed)
-                    PathEditorUndoUtility.RepaintScene();
-            }
-        }
-
-        private void RebuildSequences()
-        {
-            for (int i = 0; i < targets.Length; i++)
-            {
-                MultiPathData multiPathData = targets[i] as MultiPathData;
-                if (multiPathData == null)
-                    continue;
-                PathEditorUndoUtility.Record(multiPathData, "Rebuild Sequence");
-                multiPathData.Rebuild();
-                PathEditorUndoUtility.MarkDirty(multiPathData);
-            }
         }
 
         #endregion
