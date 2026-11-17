@@ -121,6 +121,8 @@
 - EditMode 테스트: `Tools/run-transformpath-tests.sh`
 - Player 측정: `Tools/run-transformpath-probe.sh`
 - IL2CPP 빌드: `Tools/run-il2cpp-build.sh`
+- 측정을 비교할 커밋은 해시로 넘깁니다(`UNITY_TREE=$(git rev-parse HEAD)`). `HEAD`라고 쓰면 스냅샷 worktree 자신의 HEAD로 해석되어 다른 커밋을 빌드합니다.
+- 2차 리팩터링 측정(Mac Mono Player, 5회, main 7db7dda 대비 중앙값): Queue 1000명 Steady 2.52→2.11ms(Speed), 3.69→3.32ms(Time), queueDrain.300 0.54→0.39ms, 시작 할당 감소(queue.time.1000 792→224KB). 일시정지한 Queue는 0.66→0.83ms로 느려졌습니다. 멈춘 멤버도 장애물로 계산에 남기 때문입니다. Loop 이음매 겹침 프레임과 나머지 Free 시나리오는 main 범위 안입니다. 5회 중 1회는 모든 시나리오가 함께 느려 범위 상단이 넓습니다.
 
 ## UML 갱신
 
