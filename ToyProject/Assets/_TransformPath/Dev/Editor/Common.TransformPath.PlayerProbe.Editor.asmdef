@@ -1,0 +1,19 @@
+{
+    "name": "Common.TransformPath.PlayerProbe.Editor",
+    "rootNamespace": "Common.TransformPath.PlayerProbe",
+    "references": [
+        "Common.TransformPath",
+        "Common.TransformPath.PlayerProbe"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

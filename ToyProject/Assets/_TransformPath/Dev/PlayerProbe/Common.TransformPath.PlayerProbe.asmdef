@@ -2,7 +2,7 @@
     "name": "Common.TransformPath.PlayerProbe",
     "rootNamespace": "Common.TransformPath.PlayerProbe",
     "references": [
-        "Common.TransformPath.Runtime"
+        "Common.TransformPath"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

@@ -1,17 +1,16 @@
 {
-    "name": "Common.TransformPath.PlayerProbe.Editor",
-    "rootNamespace": "Common.TransformPath.PlayerProbe",
+    "name": "Common.TransformPath.Samples",
+    "rootNamespace": "Common.TransformPath.Samples",
     "references": [
-        "Common.TransformPath.PlayerProbe"
+        "Common.TransformPath",
+        "UnityEngine.UI"
     ],
-    "includePlatforms": [
-        "Editor"
-    ],
+    "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,
     "precompiledReferences": [],
-    "autoReferenced": false,
+    "autoReferenced": true,
     "defineConstraints": [],
     "versionDefines": [],
     "noEngineReferences": false

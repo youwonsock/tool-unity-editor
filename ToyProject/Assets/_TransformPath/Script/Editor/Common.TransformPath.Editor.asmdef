@@ -2,7 +2,7 @@
     "name": "Common.TransformPath.Editor",
     "rootNamespace": "Common.TransformPath",
     "references": [
-        "Common.TransformPath.Runtime"
+        "Common.TransformPath"
     ],
     "includePlatforms": [
         "Editor"

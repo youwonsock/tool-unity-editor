@@ -2,7 +2,7 @@
     "name": "Common.TransformPath.Tests",
     "rootNamespace": "Common.TransformPath.Tests",
     "references": [
-        "Common.TransformPath.Runtime",
+        "Common.TransformPath",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

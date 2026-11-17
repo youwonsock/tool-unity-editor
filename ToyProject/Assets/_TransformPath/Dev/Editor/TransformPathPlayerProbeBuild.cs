@@ -17,7 +17,7 @@ namespace Common.TransformPath.PlayerProbe
     internal static class TransformPathPlayerProbeBuild
     {
         private const string ScenePath = "Assets/TransformPathPlayerProbe.unity";
-        private const string SampleScenePath = "Assets/_TransformPath/Scene/TransformPathSample.unity";
+        private const string SampleScenePath = "Assets/_TransformPath/Samples/Scenes/TransformPathSample.unity";
         private const string OutputArgument = "-transformPathProbeApp";
 
         internal static void Build()

@@ -4,15 +4,17 @@
 
 ## 어셈블리
 
-| 어셈블리 | 내용 |
-| --- | --- |
-| `Common.TransformPath.Runtime` | 계약, Provider, Route, 재생, 이벤트, Queue |
-| `Common.TransformPath.Editor` | Inspector, 연결점과 그룹 동기화, Scene View 미리보기 |
-| `Common.TransformPath.Tests` | EditMode 테스트(기하, Route, 재생 엔진, Queue 계산) |
-| `Common.TransformPath.Samples` | Showcase UI, 샘플 카메라 |
-| `Common.TransformPath.PlayerProbe` | Player 측정 (`Tools/run-transformpath-probe.sh`). Editor와 측정 빌드에서만 컴파일 |
+| 어셈블리 | 폴더 | 내용 |
+| --- | --- | --- |
+| `Common.TransformPath` | `Script/` | 계약, Provider, Route, 재생, 이벤트, Queue, 실행 기반, `PathDataLineRenderer`, 그룹 동기화 데이터 |
+| `Common.TransformPath.Editor` | `Script/Editor/` | Inspector, 연결점과 그룹 동기화, Scene View 미리보기 |
+| `Common.TransformPath.Samples` | `Samples/Scripts/` | 샘플 씬의 컨트롤러·UI·카메라·수신기(UGUI 참조) |
+| `Common.TransformPath.Tests` | `Dev/Tests/` | EditMode 테스트 |
+| `Common.TransformPath.PlayerProbe`, `.PlayerProbe.Editor` | `Dev/` | 이 저장소의 성능 측정 Player(`Tools/run-transformpath-probe.sh`)와 빌드 메뉴 |
 
-Runtime 폴더는 역할로 나눕니다: `Core`(계약, 상수, 이벤트 정의), `Geometry`, `Providers`, `Playback`, `Queue`, `Execution`(Driver, Boundary), `Components`, `Utilities`.
+시스템과 에디터는 `Script/` 폴더 하나입니다. 샘플, 테스트, 측정 도구는 시스템을 참조만 하고, 시스템은 이들을 모릅니다. 샘플에는 내부 접근을 주지 않으므로 샘플은 공개 API만으로 만들어집니다. 측정 어셈블리는 Editor와 `TRANSFORMPATH_PLAYER_PROBE`를 정의한 측정 빌드에서만 컴파일합니다.
+
+`Script/` 아래 시스템 코드는 역할로 나눕니다: `Core`(계약, 상수, 이벤트 정의), `Geometry`, `Providers`, `Playback`, `Queue`, `Execution`(Driver, Boundary), `Components`, `Sync`, `Utilities`.
 
 ## 구조 규칙
 
