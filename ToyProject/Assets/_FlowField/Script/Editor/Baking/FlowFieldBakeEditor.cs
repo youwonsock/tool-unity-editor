@@ -186,249 +186,69 @@ namespace Common.FlowField.Editor
             FlowFieldSurfaceBakeJob bakeJob = new FlowFieldSurfaceBakeJob(
                 settings,
                 ReportSurfaceProgress);
-            FlowFieldSession session = null;
-            int generation = _callbackGeneration;
-            bool cleaned = false;
-            void Cleanup()
-            {
-                if (cleaned) return;
-                cleaned = true;
-                EditorApplication.update -= Pump;
-                _cancel = null;
-                _asyncPending = false;
-                if (session != null)
-                {
-                    session.FieldCommitted -= Complete;
-                    session.Failed -= Failed;
-                    session.Dispose();
-                }
-                bakeJob.Dispose();
-                EditorUtility.ClearProgressBar();
-                _progressLabel = string.Empty;
-                if (!_processingQueue)
-                    ScheduleNextOrStop();
-            }
-
-            bool InputChanged()
-            {
-                if (input.IsCurrent(manager))
-                    return false;
-                Debug.LogWarning("Static Flow Bake input changed; existing asset was preserved.", manager);
-                return true;
-            }
-
-            void Failed(Exception exception)
-            {
-                try
-                {
-                    if (generation == _callbackGeneration)
-                        Debug.LogError($"[{nameof(FlowFieldManager)}] Static Flow Bake failed: {exception?.Message}", manager);
-                }
-                finally { Cleanup(); }
-            }
-
-            void StartSession(FlowFieldSurfaceBakeResult result)
-            {
-                if (cleaned)
-                    return;
-                if (generation != _callbackGeneration)
-                {
-                    Cleanup();
-                    return;
-                }
-                if (InputChanged())
-                {
-                    Cleanup();
-                    return;
-                }
-
-                FlowFieldSurfaceData surface = FlowFieldSurfaceData.FromRuntime(settings, result, 1);
-                session = FlowFieldSession.CreateSurface(surfaceSource: new FlowFieldFixedSurfaceSource(surface));
-                session.FieldCommitted += Complete;
-                session.Failed += Failed;
-                try
-                {
-                    session.Initialize(FlowFieldBakeMode.RuntimeDynamic);
-
-                    FlowFieldSurfaceGoalResolution goalSnapshot = manager.ResolveConfiguredGoal(settings.Grid);
-                    bool accepted = session.Surface.Submit(FlowFieldSurfaceRequest.ForSceneBuild(
-                        settings,
-                        input.ObstacleLayer,
-                        input.CheckHeight,
-                        input.CheckCenterOffset,
-                        input.Clearance,
-                        goalSnapshot,
-                        manager.CaptureConfig().Flow.DefaultDirection,
-                        FlowFieldSurfaceDirtyFlags.All,
-                        FlowFieldCellRect.Full(settings.Grid),
-                        FlowFieldCellRect.Full(settings.Grid)));
-                    if (!accepted && !session.IsFaulted)
-                        throw new InvalidOperationException("Static Flow Bake session could not be started.");
-                    if (session.IsFaulted)
-                        throw session.Fault ?? new InvalidOperationException("Static Flow Bake failed.");
-                    session.Pump();
-                }
-                catch
-                {
-                    Cleanup();
-                    throw;
-                }
-            }
-
-            void Pump()
-            {
-                if (cleaned)
-                    return;
-                try
-                {
-                    if (generation != _callbackGeneration)
-                    {
-                        Cleanup();
-                        return;
-                    }
-
-                    if (InputChanged())
-                    {
-                        Cleanup();
-                        return;
-                    }
-
-                    if (session != null)
-                    {
-                        session.Pump();
-                        if (session.IsFaulted)
-                            Failed(session.Fault ?? new InvalidOperationException("Static Flow Bake failed."));
-                        return;
-                    }
-
-                    bakeJob.Step(2.0);
-                    if (_shuttingDown)
-                    {
-                        Cleanup();
-                        return;
-                    }
-                    _progressLabel = $"Baking Surface {bakeJob.Progress:P0}";
-                    if (EditorUtility.DisplayCancelableProgressBar(
-                            "FlowField Static Bake",
-                            _progressLabel,
-                            bakeJob.Progress))
-                    {
-                        bakeJob.Cancel();
-                    }
-                    if (!bakeJob.IsComplete)
-                        return;
-                    if (bakeJob.Status == FlowFieldSurfaceBakeJobStatus.Cancelled)
-                    {
-                        Debug.Log("Static Flow Bake cancelled.");
-                        Cleanup();
-                        return;
-                    }
-                    if (!bakeJob.IsValid)
-                        throw new InvalidOperationException(bakeJob.Error);
-                    StartSession(bakeJob.Result);
-                }
-                catch (OperationCanceledException)
-                {
-                    Debug.Log("Static Flow Bake cancelled.");
-                    Cleanup();
-                }
-                catch (Exception exception)
-                {
-                    Failed(exception);
-                }
-            }
-
-            void Complete()
-            {
-                try
-                {
-                    if (generation != _callbackGeneration || InputChanged())
-                        return;
-                    SaveSurfaceBake(manager, settings, session);
-                }
-                finally { Cleanup(); }
-            }
-
-            _cancel = Cleanup;
-            _asyncPending = true;
-            EditorApplication.update += Pump;
-            EditorUtility.DisplayProgressBar(
-                "FlowField Static Bake",
-                "Baking Surface",
-                0f);
+            var run = new BakeRun(
+                manager,
+                "Static Flow Bake",
+                () => input.IsCurrent(manager),
+                session => session.Pump(),
+                session => SaveSurfaceBake(manager, settings, session),
+                bakeJob.Dispose);
+            // The ground scan runs first; the session starts on its result.
+            run.Prepare = () => StepSurfaceGroundScan(run, manager, settings, input, bakeJob);
+            run.Start("Baking Surface");
         }
 
-        private static void SaveSurfaceBake(
+        // One editor frame of the ground scan. True once the session has started.
+        private static bool StepSurfaceGroundScan(
+            BakeRun run,
             FlowFieldManager manager,
             FlowFieldSurfaceBakeSettings settings,
-            FlowFieldSession session)
+            in SurfaceBakeInput input,
+            FlowFieldSurfaceBakeJob bakeJob)
         {
-            int undoGroup = -1;
-            string assetPath = null;
-            FlowFieldStaticBakeData asset = null;
-            bool createdAsset = false;
-            try
+            bakeJob.Step(2.0);
+            if (_shuttingDown)
             {
-                if (!session.Surface.TryExportBakeData(out FlowFieldSurfaceData committedSurface, out FlowFieldSurfaceWorkspace workspace))
-                    throw new InvalidOperationException("Static Flow Bake produced no committed field.");
-                if (manager.CaptureConfig().HasGoal && (!workspace.HasActiveGoal || workspace.ResolvedGoalIndex < 0))
-                    throw new InvalidOperationException(
-                        "Cannot bake a Surface2D Goal without a walkable resolved Goal cell.");
+                run.Stop();
+                return false;
+            }
+            _progressLabel = $"Baking Surface {bakeJob.Progress:P0}";
+            if (EditorUtility.DisplayCancelableProgressBar(
+                    "FlowField Static Bake",
+                    _progressLabel,
+                    bakeJob.Progress))
+            {
+                bakeJob.Cancel();
+            }
+            if (!bakeJob.IsComplete)
+                return false;
+            if (bakeJob.Status == FlowFieldSurfaceBakeJobStatus.Cancelled)
+                throw new OperationCanceledException();
+            if (!bakeJob.IsValid)
+                throw new InvalidOperationException(bakeJob.Error);
 
-                assetPath = FlowFieldBakeAssetUtility.ResolveStaticAssetPath(manager);
-                FlowFieldBakeAssetUtility.CreateBakeFolder();
-                // A failed bake reverts down to this group, so it must hold nothing older.
-                Undo.IncrementCurrentGroup();
-                undoGroup = Undo.GetCurrentGroup();
-                Undo.SetCurrentGroupName("Bake FlowField Static Snapshot");
-                asset = AssetDatabase.LoadAssetAtPath<FlowFieldStaticBakeData>(assetPath);
-                FlowFieldBakeAssetUtility.ValidateTargetOwnership(
-                    manager.CaptureConfig().BakeAssets.Surface,
-                    asset,
-                    AssetDatabase.LoadMainAssetAtPath(assetPath),
-                    assetPath,
-                    "Surface2D");
-                if (asset == null)
-                {
-                    asset = ScriptableObject.CreateInstance<FlowFieldStaticBakeData>();
-                    createdAsset = true;
-                    asset.name = Path.GetFileNameWithoutExtension(assetPath);
-                    AssetDatabase.CreateAsset(asset, assetPath);
-                    Undo.RegisterCreatedObjectUndo(asset, "Create FlowField Static Snapshot");
-                }
-                Undo.RecordObject(asset, "Bake FlowField Static Snapshot");
-                bool hasGoal = workspace.HasActiveGoal && workspace.ResolvedGoalIndex >= 0;
-                FlowFieldSurfaceGoalResolution goal = manager.ResolveConfiguredGoal(settings.Grid);
-                FlowFieldManagerConfig config = manager.CaptureConfig();
-                asset.Apply(settings, committedSurface, config.Obstacles.Layer,
-                    config.Surface.ObstacleCheckHeight, config.Surface.ObstacleCheckCenterOffset,
-                    config.Obstacles.Clearance, hasGoal, goal.RequestedWorld,
-                    goal.InfluenceRadius, hasGoal ? workspace.ResolvedGoalIndex : -1, workspace);
-                EditorUtility.SetDirty(asset);
-                Undo.RecordObject(manager, "Assign FlowField Static Snapshot");
-                manager.AssignStaticBakeData(asset);
-                FlowFieldEditorPreview.Invalidate(manager);
-                EditorUtility.SetDirty(manager);
-                if (manager.gameObject.scene.IsValid())
-                    EditorSceneManager.MarkSceneDirty(manager.gameObject.scene);
-                FlowFieldBakeAssetUtility.Save(asset);
-                Undo.CollapseUndoOperations(undoGroup);
-                Debug.Log($"[{nameof(FlowFieldManager)}] Static Flow Bake complete: {assetPath}", manager);
-            }
-            catch (Exception exception)
-            {
-                if (undoGroup >= 0)
-                {
-                    try { Undo.RevertAllDownToGroup(undoGroup); }
-                    catch (Exception undoException) { Debug.LogException(undoException, manager); }
-                }
-                if (createdAsset && !string.IsNullOrEmpty(assetPath)
-                    && AssetDatabase.LoadAssetAtPath<FlowFieldStaticBakeData>(assetPath) != null)
-                {
-                    AssetDatabase.DeleteAsset(assetPath);
-                }
-                Debug.LogException(exception, manager);
-            }
+            FlowFieldSurfaceData surface = FlowFieldSurfaceData.FromRuntime(settings, bakeJob.Result, 1);
+            FlowFieldSession session = FlowFieldSession.CreateSurface(surfaceSource: new FlowFieldFixedSurfaceSource(surface));
+            run.Attach(session);
+            session.Initialize(FlowFieldBakeMode.RuntimeDynamic);
+            FlowFieldSurfaceGoalResolution goalSnapshot = manager.ResolveConfiguredGoal(settings.Grid);
+            bool accepted = session.Surface.Submit(FlowFieldSurfaceRequest.ForSceneBuild(
+                settings,
+                input.ObstacleLayer,
+                input.CheckHeight,
+                input.CheckCenterOffset,
+                input.Clearance,
+                goalSnapshot,
+                manager.CaptureConfig().Flow.DefaultDirection,
+                FlowFieldSurfaceDirtyFlags.All,
+                FlowFieldCellRect.Full(settings.Grid),
+                FlowFieldCellRect.Full(settings.Grid)));
+            if (!accepted && !session.IsFaulted)
+                throw new InvalidOperationException("Static Flow Bake session could not be started.");
+            if (session.IsFaulted)
+                throw session.Fault ?? new InvalidOperationException("Static Flow Bake failed.");
+            session.Pump();
+            return true;
         }
 
         private static void BakeVolumeAndAssign(FlowFieldManager manager)
@@ -440,88 +260,130 @@ namespace Common.FlowField.Editor
                 manager,
                 out FlowFieldVolumeRequest request);
             int bakeInputGeneration = FlowFieldBakeService.CaptureInputGeneration(manager);
-            int generation = _callbackGeneration;
-            bool cleaned = false;
+            var run = new BakeRun(
+                manager,
+                "Volume3D Static Flow Bake",
+                () => IsCurrentVolumeInput(manager, request, bakeInputGeneration),
+                current =>
+                {
+                    if (!ReportVolumeProgress(current.Volume.BuildProgress))
+                        throw new OperationCanceledException();
+                    current.Pump(2.0);
+                },
+                current => SaveVolumeBake(manager, current),
+                null);
+            run.Attach(session);
+            run.Start(null);
+        }
 
-            void Cleanup()
+        /// <summary>
+        /// One asynchronous bake of one Manager, the same in both modes: it pumps
+        /// from the editor update loop, drops the bake when a newer bake or the
+        /// user cancels it or its input changes, and saves on the published field.
+        /// </summary>
+        private sealed class BakeRun
+        {
+            private readonly FlowFieldManager _manager;
+            private readonly string _name;
+            private readonly int _generation = _callbackGeneration;
+            private readonly Func<bool> _inputIsCurrent;
+            private readonly Action<FlowFieldSession> _pump;
+            private readonly Action<FlowFieldSession> _save;
+            private readonly Action _disposeExtra;
+            private FlowFieldSession _session;
+            private bool _cleaned;
+
+            // Runs each frame before the session exists; true once it started it.
+            internal Func<bool> Prepare;
+
+            internal BakeRun(
+                FlowFieldManager manager,
+                string name,
+                Func<bool> inputIsCurrent,
+                Action<FlowFieldSession> pump,
+                Action<FlowFieldSession> save,
+                Action disposeExtra)
             {
-                if (cleaned)
+                _manager = manager;
+                _name = name;
+                _inputIsCurrent = inputIsCurrent;
+                _pump = pump;
+                _save = save;
+                _disposeExtra = disposeExtra;
+            }
+
+            /// <summary>Takes the session before it starts, so a build that completes at once is seen.</summary>
+            internal void Attach(FlowFieldSession session)
+            {
+                _session = session;
+                session.FieldCommitted += Complete;
+                session.Failed += Failed;
+            }
+
+            internal void Start(string initialLabel)
+            {
+                _cancel = Stop;
+                _asyncPending = true;
+                EditorApplication.update += Pump;
+                if (initialLabel != null)
+                    EditorUtility.DisplayProgressBar("FlowField Static Bake", initialLabel, 0f);
+            }
+
+            internal void Stop()
+            {
+                if (_cleaned)
                     return;
-                cleaned = true;
+                _cleaned = true;
                 EditorApplication.update -= Pump;
                 _cancel = null;
                 _asyncPending = false;
-                session.FieldCommitted -= Complete;
-                session.Failed -= Failed;
-                session.Dispose();
+                if (_session != null)
+                {
+                    _session.FieldCommitted -= Complete;
+                    _session.Failed -= Failed;
+                    _session.Dispose();
+                }
+                _disposeExtra?.Invoke();
                 EditorUtility.ClearProgressBar();
                 _progressLabel = string.Empty;
                 if (!_processingQueue)
                     ScheduleNextOrStop();
             }
 
-            void Failed(Exception exception)
+            private bool IsStale()
             {
-                try
-                {
-                    if (generation == _callbackGeneration && !_shuttingDown)
-                        Debug.LogError(
-                            $"[{nameof(FlowFieldManager)}] Volume3D Static Flow Bake failed: {exception?.Message}",
-                            manager);
-                }
-                finally
-                {
-                    Cleanup();
-                }
+                if (_generation != _callbackGeneration)
+                    return true;
+                if (_inputIsCurrent())
+                    return false;
+                Debug.LogWarning($"{_name} input changed; existing asset was preserved.", _manager);
+                return true;
             }
 
-            void Complete()
+            private void Pump()
             {
-                try
-                {
-                    if (generation != _callbackGeneration)
-                        return;
-                    if (!IsCurrentVolumeInput(manager, request, bakeInputGeneration))
-                    {
-                        Debug.LogWarning(
-                            "Volume3D Static Flow Bake input changed; existing asset was preserved.",
-                            manager);
-                        return;
-                    }
-                    SaveVolumeBake(manager, session);
-                }
-                finally
-                {
-                    Cleanup();
-                }
-            }
-
-            void Pump()
-            {
-                if (cleaned)
+                if (_cleaned)
                     return;
                 try
                 {
-                    if (generation != _callbackGeneration)
+                    if (IsStale())
                     {
-                        Cleanup();
+                        Stop();
                         return;
                     }
-                    if (!ReportVolumeProgress(session.Volume.BuildProgress))
+                    if (_session == null)
                     {
-                        Debug.Log("Volume3D Static Flow Bake cancelled.");
-                        Cleanup();
+                        Prepare();
                         return;
                     }
-                    session.Pump(2.0);
-                    if (session.IsFaulted)
-                        Failed(new InvalidOperationException(
-                            session.LastError ?? "Volume3D Static Flow Bake failed."));
+                    _pump(_session);
+                    if (!_cleaned && _session.IsFaulted)
+                        Failed(_session.Fault ?? new InvalidOperationException($"{_name} failed."));
                 }
                 catch (OperationCanceledException)
                 {
-                    Debug.Log("Volume3D Static Flow Bake cancelled.");
-                    Cleanup();
+                    Debug.Log($"{_name} cancelled.");
+                    Stop();
                 }
                 catch (Exception exception)
                 {
@@ -529,83 +391,189 @@ namespace Common.FlowField.Editor
                 }
             }
 
-            session.FieldCommitted += Complete;
-            session.Failed += Failed;
-            _cancel = Cleanup;
-            _asyncPending = true;
-            EditorApplication.update += Pump;
+            private void Complete()
+            {
+                try
+                {
+                    if (!IsStale())
+                        _save(_session);
+                }
+                finally
+                {
+                    Stop();
+                }
+            }
+
+            private void Failed(Exception exception)
+            {
+                try
+                {
+                    if (_generation == _callbackGeneration && !_shuttingDown)
+                        Debug.LogError($"[{nameof(FlowFieldManager)}] {_name} failed: {exception?.Message}", _manager);
+                }
+                finally
+                {
+                    Stop();
+                }
+            }
         }
 
-        private static void SaveVolumeBake(FlowFieldManager manager, FlowFieldSession session)
+        // What differs between the two modes' bake assets when one is saved.
+        private readonly struct BakeTarget
         {
-            string assetPath = null;
-            FlowFieldVolumeBakeData asset = null;
-            bool created = false;
+            internal readonly string Snapshot;
+            internal readonly string ModeName;
+            internal readonly string CompleteLabel;
+            internal readonly Func<FlowFieldManager, string> ResolvePath;
+            internal readonly Func<FlowFieldManagerConfig, UnityEngine.Object> Assigned;
+
+            internal BakeTarget(
+                string snapshot,
+                string modeName,
+                string completeLabel,
+                Func<FlowFieldManager, string> resolvePath,
+                Func<FlowFieldManagerConfig, UnityEngine.Object> assigned)
+            {
+                Snapshot = snapshot;
+                ModeName = modeName;
+                CompleteLabel = completeLabel;
+                ResolvePath = resolvePath;
+                Assigned = assigned;
+            }
+        }
+
+        private static readonly BakeTarget SurfaceTarget = new BakeTarget(
+            "Static",
+            "Surface2D",
+            "Static Flow Bake",
+            FlowFieldBakeAssetUtility.ResolveStaticAssetPath,
+            config => config.BakeAssets.Surface);
+
+        private static readonly BakeTarget VolumeTarget = new BakeTarget(
+            "Volume",
+            "Volume3D",
+            "Volume3D Static Bake",
+            FlowFieldBakeAssetUtility.ResolveVolumeAssetPath,
+            config => config.BakeAssets.Volume);
+
+        private static void SaveSurfaceBake(
+            FlowFieldManager manager,
+            FlowFieldSurfaceBakeSettings settings,
+            FlowFieldSession session)
+            => SaveBakeAsset<FlowFieldStaticBakeData>(
+                manager,
+                SurfaceTarget,
+                () =>
+                {
+                    if (!session.Surface.TryExportBakeData(out FlowFieldSurfaceData committedSurface, out FlowFieldSurfaceWorkspace workspace))
+                        throw new InvalidOperationException("Static Flow Bake produced no committed field.");
+                    if (manager.CaptureConfig().HasGoal && (!workspace.HasActiveGoal || workspace.ResolvedGoalIndex < 0))
+                        throw new InvalidOperationException(
+                            "Cannot bake a Surface2D Goal without a walkable resolved Goal cell.");
+                    return asset =>
+                    {
+                        bool hasGoal = workspace.HasActiveGoal && workspace.ResolvedGoalIndex >= 0;
+                        FlowFieldSurfaceGoalResolution goal = manager.ResolveConfiguredGoal(settings.Grid);
+                        FlowFieldManagerConfig config = manager.CaptureConfig();
+                        asset.Apply(settings, committedSurface, config.Obstacles.Layer,
+                            config.Surface.ObstacleCheckHeight, config.Surface.ObstacleCheckCenterOffset,
+                            config.Obstacles.Clearance, hasGoal, goal.RequestedWorld,
+                            goal.InfluenceRadius, hasGoal ? workspace.ResolvedGoalIndex : -1, workspace);
+                    };
+                },
+                (target, asset) => target.AssignStaticBakeData(asset));
+
+        private static void SaveVolumeBake(FlowFieldManager manager, FlowFieldSession session)
+            => SaveBakeAsset<FlowFieldVolumeBakeData>(
+                manager,
+                VolumeTarget,
+                () =>
+                {
+                    if (!session.Volume.TryExportBakeData(
+                            out FlowFieldVolumeRequest committedRequest,
+                            out bool[] blocked,
+                            out uint[] topology,
+                            out FlowFieldGoalFlags[] goalFlags,
+                            out int[] next,
+                            out Vector3[] directions,
+                            out float[] speeds,
+                            out Vector3[] escapeDirections,
+                            out int resolvedGoalIndex))
+                        throw new InvalidOperationException("Volume3D bake produced no committed field.");
+                    return asset =>
+                    {
+                        FlowFieldManagerConfig config = manager.CaptureConfig();
+                        asset.Apply(
+                            committedRequest.Grid,
+                            committedRequest.WorldBounds,
+                            config.Obstacles.Layer,
+                            config.Obstacles.Clearance,
+                            committedRequest.HasGoal,
+                            committedRequest.GoalWorld,
+                            committedRequest.GoalInfluenceRadius,
+                            resolvedGoalIndex,
+                            blocked,
+                            topology,
+                            goalFlags,
+                            next,
+                            directions,
+                            speeds,
+                            escapeDirections);
+                    };
+                },
+                (target, asset) => target.AssignVolumeBakeData(asset));
+
+        /// <summary>
+        /// Writes a bake into this Manager's asset as one Undo step and assigns it.
+        /// A failure reverts that step and removes an asset it created.
+        /// </summary>
+        private static void SaveBakeAsset<TAsset>(
+            FlowFieldManager manager,
+            in BakeTarget target,
+            Func<Action<TAsset>> export,
+            Action<FlowFieldManager, TAsset> assign)
+            where TAsset : ScriptableObject
+        {
             int undoGroup = -1;
+            string assetPath = null;
+            bool createdAsset = false;
             try
             {
-                if (!session.Volume.TryExportBakeData(
-                        out FlowFieldVolumeRequest committedRequest,
-                        out bool[] blocked,
-                        out uint[] topology,
-                        out FlowFieldGoalFlags[] goalFlags,
-                        out int[] next,
-                        out Vector3[] directions,
-                        out float[] speeds,
-                        out Vector3[] escapeDirections,
-                        out int resolvedGoalIndex))
-                    throw new InvalidOperationException("Volume3D bake produced no committed field.");
-
-                assetPath = FlowFieldBakeAssetUtility.ResolveVolumeAssetPath(manager);
+                // Read the published field before any asset changes.
+                Action<TAsset> apply = export();
+                assetPath = target.ResolvePath(manager);
                 FlowFieldBakeAssetUtility.CreateBakeFolder();
                 // A failed bake reverts down to this group, so it must hold nothing older.
                 Undo.IncrementCurrentGroup();
                 undoGroup = Undo.GetCurrentGroup();
-                Undo.SetCurrentGroupName("Bake FlowField Volume Snapshot");
-                asset = AssetDatabase.LoadAssetAtPath<FlowFieldVolumeBakeData>(assetPath);
+                Undo.SetCurrentGroupName($"Bake FlowField {target.Snapshot} Snapshot");
+                TAsset asset = AssetDatabase.LoadAssetAtPath<TAsset>(assetPath);
                 FlowFieldBakeAssetUtility.ValidateTargetOwnership(
-                    manager.CaptureConfig().BakeAssets.Volume,
+                    target.Assigned(manager.CaptureConfig()),
                     asset,
                     AssetDatabase.LoadMainAssetAtPath(assetPath),
                     assetPath,
-                    "Volume3D");
+                    target.ModeName);
                 if (asset == null)
                 {
-                    asset = ScriptableObject.CreateInstance<FlowFieldVolumeBakeData>();
+                    asset = ScriptableObject.CreateInstance<TAsset>();
+                    createdAsset = true;
                     asset.name = Path.GetFileNameWithoutExtension(assetPath);
                     AssetDatabase.CreateAsset(asset, assetPath);
-                    Undo.RegisterCreatedObjectUndo(asset, "Create FlowField Volume Snapshot");
-                    created = true;
+                    Undo.RegisterCreatedObjectUndo(asset, $"Create FlowField {target.Snapshot} Snapshot");
                 }
-                Undo.RecordObject(asset, "Bake FlowField Volume Snapshot");
-                asset.Apply(
-                    committedRequest.Grid,
-                    committedRequest.WorldBounds,
-                    manager.CaptureConfig().Obstacles.Layer,
-                    manager.CaptureConfig().Obstacles.Clearance,
-                    committedRequest.HasGoal,
-                    committedRequest.GoalWorld,
-                    committedRequest.GoalInfluenceRadius,
-                    resolvedGoalIndex,
-                    blocked,
-                    topology,
-                    goalFlags,
-                    next,
-                    directions,
-                    speeds,
-                    escapeDirections);
+                Undo.RecordObject(asset, $"Bake FlowField {target.Snapshot} Snapshot");
+                apply(asset);
                 EditorUtility.SetDirty(asset);
-                Undo.RecordObject(manager, "Assign FlowField Volume Snapshot");
-                manager.AssignVolumeBakeData(asset);
+                Undo.RecordObject(manager, $"Assign FlowField {target.Snapshot} Snapshot");
+                assign(manager, asset);
                 FlowFieldEditorPreview.Invalidate(manager);
                 EditorUtility.SetDirty(manager);
                 if (manager.gameObject.scene.IsValid())
                     EditorSceneManager.MarkSceneDirty(manager.gameObject.scene);
                 FlowFieldBakeAssetUtility.Save(asset);
                 Undo.CollapseUndoOperations(undoGroup);
-                Debug.Log(
-                    $"[{nameof(FlowFieldManager)}] Volume3D Static Bake complete: {assetPath}",
-                    manager);
+                Debug.Log($"[{nameof(FlowFieldManager)}] {target.CompleteLabel} complete: {assetPath}", manager);
             }
             catch (Exception exception)
             {
@@ -614,8 +582,11 @@ namespace Common.FlowField.Editor
                     try { Undo.RevertAllDownToGroup(undoGroup); }
                     catch (Exception undoException) { Debug.LogException(undoException, manager); }
                 }
-                if (created && !string.IsNullOrEmpty(assetPath))
+                if (createdAsset && !string.IsNullOrEmpty(assetPath)
+                    && AssetDatabase.LoadAssetAtPath<TAsset>(assetPath) != null)
+                {
                     AssetDatabase.DeleteAsset(assetPath);
+                }
                 Debug.LogException(exception, manager);
             }
         }
