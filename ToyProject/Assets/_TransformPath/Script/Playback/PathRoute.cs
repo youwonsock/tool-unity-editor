@@ -105,6 +105,13 @@ namespace Common.TransformPath
         public Vector3 Sample(int segment, float localProgress) =>
             _segments[segment].Sampler.Sample(Mathf.Clamp01(localProgress));
 
+        /// <summary>The point at a progress of 0..1 along the whole route.</summary>
+        public Vector3 Sample(float globalProgress)
+        {
+            int segment = FindSegment(globalProgress);
+            return Sample(segment, GetLocalProgress(segment, globalProgress));
+        }
+
         public float GetGlobalProgress(int segment, float localProgress)
         {
             if (_segments.Length == 1)

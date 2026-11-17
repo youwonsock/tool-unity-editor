@@ -104,15 +104,8 @@ namespace Common.TransformPath
 
         public override Vector3 Sample(float progress)
         {
-            ThrowIfNotReady();
             PathValueUtility.ThrowIfNotFinite(progress, nameof(progress));
-            float distance = Mathf.Clamp01(progress) * _pathLength;
-            int index = distance >= _pathLength
-                ? _paths.Length - 1
-                : PathGeometryUtility.FindSegmentStartIndex(_starts, distance);
-            float length = _lengths[index];
-            float local = length > Mathf.Epsilon ? (distance - _starts[index]) / length : 0f;
-            return _paths[index].Sample(local);
+            return GetRoute().Sample(progress);
         }
 
         protected override bool TryBuild(out bool geometryChanged, out bool definitionChanged, out string error)
