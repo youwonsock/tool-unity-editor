@@ -27,6 +27,11 @@ namespace Common.FlowField
     {
         internal readonly FlowFieldExecutionBoundary Boundary;
         private readonly IFlowFieldSpaceBuilder _builder;
+        private FlowFieldSafety _safety;
+        // The settings the latest request was built from; the uncertain-region
+        // margin uses their Obstacle Clearance.
+        private FlowFieldManagerConfig _config;
+        private bool _hasConfig;
         private bool _baseDisposed;
         private bool _runtimeScheduled;
         private FlowFieldRuntimeState _publishedState = FlowFieldRuntimeState.Uninitialized;
@@ -56,6 +61,21 @@ namespace Common.FlowField
         internal IFlowFieldSpaceBuilder Builder => _builder;
         internal FlowFieldSurfaceBuilder Surface => _builder as FlowFieldSurfaceBuilder;
         internal FlowFieldVolumeBuilder Volume => _builder as FlowFieldVolumeBuilder;
+
+        /// <summary>The registered dynamic obstacles, the same in both modes.</summary>
+        internal FlowFieldObstacleRegistry Obstacles { get; } = new FlowFieldObstacleRegistry();
+
+        /// <summary>Regions an obstacle change made uncertain. Surface2D compares them in XZ.</summary>
+        internal FlowFieldSafety Safety
+            => _safety ??= new FlowFieldSafety(planar: _builder.SpaceMode == FlowFieldSpaceMode.Surface2D);
+
+        /// <summary>Passes the settings to the builder, which turns them into its request.</summary>
+        internal void SubmitConfig(in FlowFieldManagerConfig config, FlowFieldConfigChange change)
+        {
+            _config = config;
+            _hasConfig = true;
+            _builder.SubmitConfig(in config, change);
+        }
 
         internal event Action FieldCommitted;
         internal event Action<Exception> Failed;
@@ -168,15 +188,15 @@ namespace Common.FlowField
         }
 
         internal bool RegisterObstacleCommand(Collider collider)
-            => Boundary.IsInUserCode ? DeferRegisterObstacle(collider) : _builder.RegisterObstacleNow(collider);
+            => Boundary.IsInUserCode ? DeferRegisterObstacle(collider) : RegisterObstacleNow(collider);
 
         internal bool UnregisterObstacleCommand(Collider collider)
-            => Boundary.IsInUserCode ? DeferUnregisterObstacle(collider) : _builder.UnregisterObstacleNow(collider);
+            => Boundary.IsInUserCode ? DeferUnregisterObstacle(collider) : UnregisterObstacleNow(collider);
 
         internal bool NotifyObstacleMovedCommand(Collider collider)
             => Boundary.IsInUserCode
-                ? Defer(() => _builder.NotifyObstacleMovedNow(collider))
-                : _builder.NotifyObstacleMovedNow(collider);
+                ? Defer(() => NotifyObstacleMovedNow(collider))
+                : NotifyObstacleMovedNow(collider);
 
         // Kept apart so only a deferred call allocates the closure.
         private bool DeferRegisterModifier(IFlowFieldVectorModifier modifier)
@@ -193,10 +213,10 @@ namespace Common.FlowField
             });
 
         private bool DeferRegisterObstacle(Collider collider)
-            => Defer(() => _builder.RegisterObstacleNow(collider), "장애물");
+            => Defer(() => RegisterObstacleNow(collider), "장애물");
 
         private bool DeferUnregisterObstacle(Collider collider)
-            => Defer(() => _builder.UnregisterObstacleNow(collider));
+            => Defer(() => UnregisterObstacleNow(collider));
 
         private bool Defer(Func<bool> command, string registration = null)
         {
@@ -216,7 +236,73 @@ namespace Common.FlowField
         }
 
         internal void NotifyObstacleRegionDirtyCommand(Bounds worldBounds)
-            => _builder.NotifyObstacleRegionDirtyCommand(worldBounds);
+        {
+            if (!FlowFieldGridSpace.IsFinite(worldBounds.center) || !FlowFieldGridSpace.IsFinite(worldBounds.size))
+                throw new ArgumentOutOfRangeException(nameof(worldBounds));
+            ThrowIfInputUnavailable();
+            ApplyObstacleChange(new FlowFieldObstacleChange(
+                FlowFieldObstacleChangeKind.RegionDirty, null, false, default, true, worldBounds));
+        }
+
+        private bool RegisterObstacleNow(Collider collider)
+        {
+            ThrowIfInputUnavailable();
+            if (!Obstacles.Register(collider, out FlowFieldObstacleChange change))
+                return false;
+            ApplyObstacleChange(in change);
+            return true;
+        }
+
+        private bool UnregisterObstacleNow(Collider collider)
+        {
+            ThrowIfInputUnavailable();
+            if (!Obstacles.Unregister(collider, out FlowFieldObstacleChange change))
+                return false;
+            ApplyObstacleChange(in change);
+            return true;
+        }
+
+        private bool NotifyObstacleMovedNow(Collider collider)
+        {
+            ThrowIfInputUnavailable();
+            if (!Obstacles.NotifyMoved(collider, out FlowFieldObstacleChange change, out bool changed))
+                return false;
+            if (changed)
+                ApplyObstacleChange(in change);
+            return true;
+        }
+
+        // Cells a change can reach stop from this frame until a build that
+        // queried them is published; the builder then rebuilds them.
+        private void ApplyObstacleChange(in FlowFieldObstacleChange change)
+        {
+            if (BakeMode != FlowFieldBakeMode.StaticBaked)
+            {
+                if (change.HasPrevious)
+                    MarkUncertain(change.Previous);
+                if (change.HasCurrent)
+                    MarkUncertain(change.Current);
+            }
+            _builder.ApplyObstacleChange(in change);
+        }
+
+        // Grown by the cell size and the Obstacle Clearance a change can reach.
+        private void MarkUncertain(Bounds bounds)
+        {
+            FlowFieldGridSpace grid = _builder.LatestGrid;
+            if (!grid.IsValid)
+                return;
+            float clearance = _hasConfig ? _config.Obstacles.Clearance : 0f;
+            Safety.MarkDirty(bounds, grid.CellSize + clearance);
+        }
+
+        private void ThrowIfInputUnavailable()
+        {
+            if (IsFaulted)
+                throw FlowFieldFailures.Faulted(Fault);
+            if (!IsInitialized)
+                throw FlowFieldFailures.NotInitialized();
+        }
 
         internal bool IsWaitingForExternalCompletion => _builder.IsWaitingForExternalCompletion;
         internal bool IsBuilding => CanPump && (IsRebuilding || HasPendingRequest);
@@ -308,7 +394,11 @@ namespace Common.FlowField
         // specific Init and request creation stay on the builders.
         internal void Stop() => _builder.Stop();
         internal void Restart() => _builder.Restart();
-        internal void Release() => _builder.Release();
+        internal void Release()
+        {
+            Obstacles.Clear();
+            _builder.Release();
+        }
 
         internal void ReportFault(Exception exception)
         {

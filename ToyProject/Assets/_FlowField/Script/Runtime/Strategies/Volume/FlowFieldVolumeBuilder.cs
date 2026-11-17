@@ -20,14 +20,13 @@ namespace Common.FlowField
         private const int ArrayElementsPerStep = FlowFieldVolumeNavigation.ArrayElementsPerStep;
         private const double DefaultBudgetMilliseconds = 2.0;
         private const long MemoryBudgetBytes = 512L * 1024L * 1024L;
-        private readonly FlowFieldVolumeObstacleTracker _obstacles;
         private Collider[] _registeredObstacleOverlapBuffer;
         private readonly int[] _obstacleCells = new int[CellsPerStep];
         private readonly FlowFieldVolumeCellQuery _cellQuery = new FlowFieldVolumeCellQuery();
         private readonly FlowFieldSpareArrays _spares = new FlowFieldSpareArrays();
         // Volume3D finds a Modifier's cells per build, so it keeps no area data.
         private readonly FlowFieldModifierRegistry<object> _modifierRegistry = new FlowFieldModifierRegistry<object>();
-        private readonly FlowFieldVolumeSafetyState _safety = new FlowFieldVolumeSafetyState();
+        private readonly FlowFieldVolumeSafetyState _safety;
 
         private VolumeFieldData _committed;
         private BuildContext _build;
@@ -56,7 +55,7 @@ namespace Common.FlowField
         internal FlowFieldVolumeBuilder(FlowFieldSession session)
         {
             _session = session ?? throw new ArgumentNullException(nameof(session));
-            _obstacles = new FlowFieldVolumeObstacleTracker(MarkObstacleRegionDirty);
+            _safety = new FlowFieldVolumeSafetyState(session);
             _pumpElapsedMilliseconds = () => _pumpTimer.Elapsed.TotalMilliseconds;
         }
 
@@ -304,48 +303,15 @@ namespace Common.FlowField
             _hasPendingModifierRecompose = false;
         }
 
-        internal bool RegisterDynamicObstacle(Collider collider)
+        // The session marked the uncertain regions; the next build queries them.
+        public void ApplyObstacleChange(in FlowFieldObstacleChange change)
         {
-            ThrowIfInputAvailable();
-            return _obstacles.Register(collider);
-        }
-
-        public bool RegisterObstacleNow(Collider collider)
-            => RegisterDynamicObstacle(collider);
-
-        internal bool UnregisterDynamicObstacle(Collider collider)
-        {
-            ThrowIfInputAvailable();
-            return _obstacles.Unregister(collider);
-        }
-
-        public bool UnregisterObstacleNow(Collider collider)
-            => UnregisterDynamicObstacle(collider);
-
-        public bool NotifyObstacleMovedNow(Collider collider)
-        {
-            ThrowIfInputAvailable();
-            return _obstacles.NotifyMoved(collider);
-        }
-
-        internal void MarkObstacleRegionDirty(Bounds bounds)
-        {
-            if (!FlowFieldGridSpace.IsFinite(bounds.center) || !FlowFieldGridSpace.IsFinite(bounds.size))
-                throw new ArgumentOutOfRangeException(nameof(bounds));
-            FlowFieldVolumeRequest request = _requests.Latest;
-            float margin = request.Grid.IsValid
-                ? request.Grid.CellSize + request.ObstacleClearance
-                : 1f;
-            _safety.MarkDirty(bounds, margin);
             if (_requests.Pending)
                 return;
-            _requests.Pending = _requests.HasLatest && request.Grid.IsValid;
+            _requests.Pending = _requests.HasLatest && _requests.Latest.Grid.IsValid;
             if (_requests.Pending)
                 EnterBuildingUnlessStopped();
         }
-
-        public void NotifyObstacleRegionDirtyCommand(Bounds worldBounds)
-            => MarkObstacleRegionDirty(worldBounds);
 
         internal bool RegisterModifier(IFlowFieldVectorModifier modifier)
         {
@@ -429,7 +395,6 @@ namespace Common.FlowField
             _requests.Clear();
             _safety.ClearRegions();
             _session.DetachRuntimeScheduler();
-            _obstacles.Clear();
             _registeredObstacleOverlapBuffer = null;
             _cellQuery.Clear();
             _spares.Clear();
@@ -555,7 +520,6 @@ namespace Common.FlowField
             CancelCurrentBuild();
             _requests.Clear();
             DropCommittedField();
-            _obstacles.Clear();
             _registeredObstacleOverlapBuffer = null;
             _cellQuery.Clear();
             _spares.Clear();

@@ -71,13 +71,13 @@ namespace Common.FlowField
             return bounds;
         }
 
-        internal void BeginObstacleStep(Bounds stepBox, LayerMask obstacleLayer, FlowFieldVolumeObstacleTracker tracker)
+        internal void BeginObstacleStep(Bounds stepBox, LayerMask obstacleLayer, FlowFieldObstacleRegistry registry)
         {
             CollectLayerCandidates(stepBox, obstacleLayer);
             _registeredCount = 0;
-            for (int index = 0; index < tracker.RegisteredCount; index++)
+            for (int index = 0; index < registry.Count; index++)
             {
-                Collider collider = tracker.GetRegisteredObstacle(index);
+                Collider collider = registry.GetCollider(index);
                 if (collider == null || collider.isTrigger)
                     continue;
                 Bounds bounds = ExpandedBounds(collider);

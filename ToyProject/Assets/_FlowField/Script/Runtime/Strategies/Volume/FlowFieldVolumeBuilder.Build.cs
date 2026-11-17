@@ -168,7 +168,7 @@ namespace Common.FlowField
             _cellQuery.BeginObstacleStep(
                 FlowFieldVolumeCellQuery.StepBounds(grid, _obstacleCells, count, half),
                 build.Request.ObstacleLayer,
-                _obstacles);
+                _session.Obstacles);
             for (int i = 0; i < count; i++)
             {
                 int index = _obstacleCells[i];

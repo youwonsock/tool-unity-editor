@@ -13,10 +13,10 @@ namespace Common.FlowField
     {
         private readonly FlowFieldSurfaceState _state = new FlowFieldSurfaceState();
         private readonly FlowFieldSurfaceFieldStore _fieldStore = new FlowFieldSurfaceFieldStore();
-        private readonly FlowFieldSurfaceObstaclePipeline _obstaclePipeline = new FlowFieldSurfaceObstaclePipeline();
+        private readonly FlowFieldSurfaceObstaclePipeline _obstaclePipeline;
         private readonly FlowFieldSurfaceGoalTracker _goalTracker = new FlowFieldSurfaceGoalTracker();
-        // Regions a notified obstacle change made uncertain; shared with Volume3D.
-        private readonly FlowFieldSafety _safety = new FlowFieldSafety(planar: true);
+        // Regions a notified obstacle change made uncertain; the session marks them.
+        private FlowFieldSafety _safety => _session.Safety;
         // The running build queries obstacles, so its publication resolves
         // the regions it began with.
         private bool _buildResolvesSafety;
@@ -252,6 +252,7 @@ namespace Common.FlowField
             Func<IFlowFieldSurfaceSolveBackend> solveBackendFactory = null)
         {
             _session = session ?? throw new ArgumentNullException(nameof(session));
+            _obstaclePipeline = new FlowFieldSurfaceObstaclePipeline(session.Obstacles);
             _solveStage = new FlowFieldSurfaceSolveStage(solveBackend, solveBackendFactory);
             _baseStage = new FlowFieldSurfaceBaseStage(
                 _state,
@@ -526,7 +527,6 @@ namespace Common.FlowField
             _solveStage.DetachBackend();
             _modifierPipeline?.Clear();
             _modifierPipeline = null;
-            _obstaclePipeline.ClearDynamicObstacles();
             _goalTracker.Clear();
             _baseStage.Clear();
 

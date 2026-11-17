@@ -299,7 +299,7 @@ namespace Common.FlowField
         private void SubmitConfig(FlowFieldConfigChange change)
         {
             FlowFieldManagerConfig config = CaptureConfig();
-            _session.Builder.SubmitConfig(in config, change);
+            _session.SubmitConfig(in config, change);
         }
 
         // Modifiers enabled while the session could not take them join

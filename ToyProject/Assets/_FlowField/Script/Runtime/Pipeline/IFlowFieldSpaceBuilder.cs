@@ -73,11 +73,9 @@ namespace Common.FlowField
         bool RegisterModifierNow(IFlowFieldVectorModifier modifier);
         bool UnregisterModifierNow(IFlowFieldVectorModifier modifier);
         void NotifyModifierChangedNow(IFlowFieldVectorModifier modifier, FlowFieldModifierChange change);
-        bool RegisterObstacleNow(Collider collider);
-        bool UnregisterObstacleNow(Collider collider);
-        // A registered obstacle moved: its last built and current bounds are dirty.
-        bool NotifyObstacleMovedNow(Collider collider);
-        void NotifyObstacleRegionDirtyCommand(Bounds worldBounds);
+        // The session keeps the registered obstacles and marks the regions a
+        // change touched as uncertain; the builder only rebuilds them.
+        void ApplyObstacleChange(in FlowFieldObstacleChange change);
 
         // ----- Lifecycle -----------------------------------------------------
         // Stop: a running session drops its work and its field and waits.

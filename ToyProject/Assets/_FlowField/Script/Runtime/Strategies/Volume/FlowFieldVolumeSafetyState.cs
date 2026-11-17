@@ -9,7 +9,12 @@ namespace Common.FlowField
     // the step to its next cell, its escape and its Default Direction.
     internal sealed class FlowFieldVolumeSafetyState
     {
-        private readonly FlowFieldSafety _regions = new FlowFieldSafety(planar: false);
+        private readonly FlowFieldSession _session;
+
+        internal FlowFieldVolumeSafetyState(FlowFieldSession session) => _session = session;
+
+        // The session owns the regions and marks them when an obstacle changes.
+        private FlowFieldSafety _regions => _session.Safety;
 
         internal int UncertainRegionCount => _regions.UncertainRegionCount;
         internal void ClearRegions() => _regions.ClearRegions();
@@ -17,7 +22,6 @@ namespace Common.FlowField
         internal void ClearObservedRegions() => _regions.ClearObservedRegions();
         internal Bounds[] ObservedRegions() => _regions.ObservedRegions();
         internal void InvalidateRegion(Bounds bounds) => _regions.InvalidateRegion(bounds);
-        internal void MarkDirty(Bounds bounds, float margin) => _regions.MarkDirty(bounds, margin);
 
         internal bool IsLatestCellUnknown(VolumeFieldData field, Vector3 center)
         {

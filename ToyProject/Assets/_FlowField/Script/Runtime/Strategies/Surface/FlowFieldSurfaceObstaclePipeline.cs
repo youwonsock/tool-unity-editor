@@ -54,73 +54,15 @@ namespace Common.FlowField
     {
         private Collider[] _overlapBuffer;
         private Collider[] _targetOverlapBuffer;
-        private readonly List<Collider> _dynamicObstacles = new List<Collider>(32);
-        private readonly List<Bounds> _dynamicBounds = new List<Bounds>(32);
-        // Last observed bounds are kept separate from the last-built bounds.
-        // This prevents LateUpdate from versioning the same transform change
-        // on every poll while a solve is still in flight, while the
-        // rebuild still receives the complete previous→latest dirty range.
-        private readonly List<Bounds> _observedDynamicBounds = new List<Bounds>(32);
-        private readonly HashSet<Collider> _dynamicSet = new HashSet<Collider>();
+        // The session's registered obstacles; the dynamic mask is built from them.
+        private readonly FlowFieldObstacleRegistry _registry;
 
-        public IReadOnlyList<Collider> DynamicObstacles => _dynamicObstacles;
+        internal FlowFieldSurfaceObstaclePipeline(FlowFieldObstacleRegistry registry)
+        {
+            _registry = registry ?? throw new ArgumentNullException(nameof(registry));
+        }
+
         public bool AllBlockedWarningIssued;
-
-        public bool RegisterDynamicObstacle(Collider collider)
-        {
-            // ReferenceEquals distinguishes an actual null argument from a
-            // destroyed Unity object. Registration of a destroyed object is
-            // invalid, while an already registered object is a normal
-            // idempotent no-op handled by the set.
-            if (ReferenceEquals(collider, null) || collider == null
-                || !_dynamicSet.Add(collider))
-                return false;
-
-            _dynamicObstacles.Add(collider);
-            _dynamicBounds.Add(collider.bounds);
-            _observedDynamicBounds.Add(collider.bounds);
-            return true;
-        }
-
-        public bool UnregisterDynamicObstacle(Collider collider)
-        {
-            // A destroyed Unity Collider can still be removed by reference;
-            // its cached bounds are retained until this method completes.
-            if (ReferenceEquals(collider, null) || !_dynamicSet.Remove(collider))
-                return false;
-
-            int index = _dynamicObstacles.IndexOf(collider);
-            if (index >= 0)
-            {
-                _dynamicObstacles.RemoveAt(index);
-                _dynamicBounds.RemoveAt(index);
-                _observedDynamicBounds.RemoveAt(index);
-            }
-
-            return true;
-        }
-
-        internal bool TryGetDynamicObstacleBounds(
-            Collider collider,
-            out Bounds bounds)
-        {
-            bounds = default;
-            if (ReferenceEquals(collider, null))
-                return false;
-            int index = _dynamicObstacles.IndexOf(collider);
-            if (index < 0 || index >= _dynamicBounds.Count)
-                return false;
-            bounds = _dynamicBounds[index];
-            return true;
-        }
-
-        public void ClearDynamicObstacles()
-        {
-            _dynamicObstacles.Clear();
-            _dynamicBounds.Clear();
-            _observedDynamicBounds.Clear();
-            _dynamicSet.Clear();
-        }
 
         internal FlowFieldObstacleResult RebuildMasks(
             in FlowFieldObstacleRequest request,
@@ -141,7 +83,7 @@ namespace Common.FlowField
                     request.CheckHeight,
                     request.CenterOffset,
                     request.Clearance,
-                    _dynamicSet,
+                    _registry.Set,
                     ref _overlapBuffer,
                     ref _targetOverlapBuffer);
             }
@@ -325,27 +267,23 @@ namespace Common.FlowField
             float halfXZ = FlowFieldOverlapUtility.CellHalfExtent(grid.CellSize, clearance);
             Vector3 cellHalfExtents = new Vector3(halfXZ, halfHeight, halfXZ);
 
-            for (int i = _dynamicObstacles.Count - 1; i >= 0; i--)
+            for (int i = _registry.Count - 1; i >= 0; i--)
             {
-                Collider collider = _dynamicObstacles[i];
+                Collider collider = _registry.GetCollider(i);
                 if (collider == null)
                 {
                     dirty = FlowFieldCellRect.Union(
                         dirty,
-                        FlowFieldCellRect.FromBounds(grid, _dynamicBounds[i]));
-                    _dynamicSet.Remove(collider);
-                    _dynamicObstacles.RemoveAt(i);
-                    _dynamicBounds.RemoveAt(i);
-                    _observedDynamicBounds.RemoveAt(i);
+                        FlowFieldCellRect.FromBounds(grid, _registry.GetBounds(i)));
+                    _registry.RemoveAt(i);
                     continue;
                 }
 
-                Bounds previous = _dynamicBounds[i];
+                Bounds previous = _registry.GetBounds(i);
                 Bounds current = collider.bounds;
                 dirty = FlowFieldCellRect.Union(dirty, FlowFieldCellRect.FromBounds(grid, previous));
                 dirty = FlowFieldCellRect.Union(dirty, FlowFieldCellRect.FromBounds(grid, current));
-                _dynamicBounds[i] = current;
-                _observedDynamicBounds[i] = current;
+                _registry.SetBounds(i, current);
 
                 Bounds expanded = current;
                 expanded.Expand(new Vector3(halfXZ * 2f, 0f, halfXZ * 2f));
@@ -386,42 +324,6 @@ namespace Common.FlowField
             }
 
             return dirty;
-        }
-
-        /// <summary>
-        /// A registered collider says it moved. Gives the bounds its cells were
-        /// last built with and its bounds now. A destroyed collider stops being
-        /// registered, and its last built bounds stay dirty.
-        /// </summary>
-        internal bool TryObserveMove(
-            Collider collider,
-            out Bounds built,
-            out Bounds current,
-            out bool moved)
-        {
-            built = default;
-            current = default;
-            moved = false;
-            int index = _dynamicObstacles.IndexOf(collider);
-            if (index < 0)
-                return false;
-            built = _dynamicBounds[index];
-            if (collider == null)
-            {
-                _dynamicSet.Remove(collider);
-                _dynamicObstacles.RemoveAt(index);
-                _dynamicBounds.RemoveAt(index);
-                _observedDynamicBounds.RemoveAt(index);
-                moved = true;
-                return true;
-            }
-            current = collider.bounds;
-            Bounds previous = _observedDynamicBounds[index];
-            moved = (current.center - previous.center).sqrMagnitude > 0.0001f
-                || (current.size - previous.size).sqrMagnitude > 0.0001f;
-            if (moved)
-                _observedDynamicBounds[index] = current;
-            return true;
         }
 
         public bool CommitCombinedAndBuildEscape(
