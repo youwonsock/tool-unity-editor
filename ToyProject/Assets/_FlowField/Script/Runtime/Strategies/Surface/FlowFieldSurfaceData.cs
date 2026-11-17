@@ -122,8 +122,8 @@ namespace Common.FlowField
             if (!_grid.MatchesBounds(settings.Grid)
                 || !FlowFieldBakeBoundsUtility.Approximately(_bakeBounds, settings.BakeBounds)
                 || _groundLayer.value != settings.GroundLayer.value
-                || !Approximately(_maxSurfaceSlope, settings.MaxSurfaceSlope)
-                || !Approximately(_maxStepHeight, settings.MaxStepHeight))
+                || !FlowFieldBakeBoundsUtility.Approximately(_maxSurfaceSlope, settings.MaxSurfaceSlope)
+                || !FlowFieldBakeBoundsUtility.Approximately(_maxStepHeight, settings.MaxStepHeight))
             {
                 reason = "Surface signature does not match the requested settings.";
                 return false;
@@ -137,8 +137,8 @@ namespace Common.FlowField
                 || !_grid.MatchesBounds(other._grid)
                 || !FlowFieldBakeBoundsUtility.Approximately(_bakeBounds, other._bakeBounds)
                 || _groundLayer.value != other._groundLayer.value
-                || !Approximately(_maxSurfaceSlope, other._maxSurfaceSlope)
-                || !Approximately(_maxStepHeight, other._maxStepHeight)
+                || !FlowFieldBakeBoundsUtility.Approximately(_maxSurfaceSlope, other._maxSurfaceSlope)
+                || !FlowFieldBakeBoundsUtility.Approximately(_maxStepHeight, other._maxStepHeight)
                 || _surfaceHeights.Length != other._surfaceHeights.Length)
                 return false;
 
@@ -256,9 +256,6 @@ namespace Common.FlowField
 
         private bool IsSurfaceValidUnchecked(int index)
             => (_surfaceFlags[index] & VALID_SURFACE) != 0;
-
-        private static bool Approximately(float left, float right)
-            => Mathf.Abs(left - right) <= 0.0001f;
     }
 
     internal interface IFlowFieldSurfaceSource

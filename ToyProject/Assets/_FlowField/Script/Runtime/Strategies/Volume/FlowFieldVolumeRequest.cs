@@ -50,7 +50,7 @@ namespace Common.FlowField
 
         internal bool HasSameGrid(in FlowFieldVolumeRequest other)
             => Grid.MatchesBounds(other.Grid)
-                && Approximately(WorldBounds, other.WorldBounds)
+                && FlowFieldBakeBoundsUtility.Approximately(WorldBounds, other.WorldBounds)
                 && BakeMode == other.BakeMode
                 && ReferenceEquals(StaticBakeData, other.StaticBakeData)
                 && StaticBakeRevision == other.StaticBakeRevision
@@ -114,9 +114,5 @@ namespace Common.FlowField
                 return Grid.ToFlatIndex(x, y, z);
             }
         }
-
-        private static bool Approximately(Bounds left, Bounds right)
-            => FlowFieldGridSpace.Approximately(left.center, right.center, 0.00000001d)
-                && FlowFieldGridSpace.Approximately(left.size, right.size, 0.00000001d);
     }
 }

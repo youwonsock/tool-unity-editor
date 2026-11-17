@@ -466,7 +466,7 @@ namespace Common.FlowField
                 || (flags & ~(FlowFieldGoalFlags.Directed
                     | FlowFieldGoalFlags.Anchor
                     | FlowFieldGoalFlags.Unreachable)) != 0
-                || !NormalizedOrZero(escape)
+                || !FlowFieldVectorUtility.IsUnitOrZero(escape)
                 || (_view.TopologyMasks[index] & ~validTopologyBits) != 0u)
             {
                 reason = DescribeCell(index, "invalid numeric, sentinel, flags, escape direction, or topology");
@@ -601,9 +601,5 @@ namespace Common.FlowField
             _expectedGrid.FromFlatIndex(index, out int x, out int y, out int z);
             return $"Static Volume3D Bake cell {index} ({x}, {y}, {z}) is invalid: {reason}.";
         }
-
-        private static bool NormalizedOrZero(Vector3 direction)
-            => direction == Vector3.zero
-                || Mathf.Abs(direction.magnitude - 1f) <= 0.001f;
     }
 }

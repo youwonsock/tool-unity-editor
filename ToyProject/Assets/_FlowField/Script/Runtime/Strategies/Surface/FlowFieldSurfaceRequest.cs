@@ -129,9 +129,9 @@ namespace Common.FlowField
                 && SurfaceSettingsMatch(SurfaceSettings, other.SurfaceSettings)
                 && HasSameStaticBake(other)
                 && ObstacleLayer.value == other.ObstacleLayer.value
-                && Approximately(ObstacleCheckHeight, other.ObstacleCheckHeight)
-                && Approximately(ObstacleCheckCenterOffset, other.ObstacleCheckCenterOffset)
-                && Approximately(ObstacleClearance, other.ObstacleClearance)
+                && FlowFieldBakeBoundsUtility.Approximately(ObstacleCheckHeight, other.ObstacleCheckHeight)
+                && FlowFieldBakeBoundsUtility.Approximately(ObstacleCheckCenterOffset, other.ObstacleCheckCenterOffset)
+                && FlowFieldBakeBoundsUtility.Approximately(ObstacleClearance, other.ObstacleClearance)
                 && GoalMatch(Goal, other.Goal);
 
         internal bool HasSameFinalInputs(in FlowFieldSurfaceRequest other)
@@ -148,9 +148,9 @@ namespace Common.FlowField
                 flags |= FlowFieldSurfaceDirtyFlags.All;
             }
             else if (ObstacleLayer.value != other.ObstacleLayer.value
-                || !Approximately(ObstacleCheckHeight, other.ObstacleCheckHeight)
-                || !Approximately(ObstacleCheckCenterOffset, other.ObstacleCheckCenterOffset)
-                || !Approximately(ObstacleClearance, other.ObstacleClearance))
+                || !FlowFieldBakeBoundsUtility.Approximately(ObstacleCheckHeight, other.ObstacleCheckHeight)
+                || !FlowFieldBakeBoundsUtility.Approximately(ObstacleCheckCenterOffset, other.ObstacleCheckCenterOffset)
+                || !FlowFieldBakeBoundsUtility.Approximately(ObstacleClearance, other.ObstacleClearance))
             {
                 flags |= FlowFieldSurfaceDirtyFlags.StaticObstacles
                     | FlowFieldSurfaceDirtyFlags.DynamicObstacles
@@ -176,8 +176,8 @@ namespace Common.FlowField
             => left.Grid.MatchesBounds(right.Grid)
                 && FlowFieldBakeBoundsUtility.Approximately(left.BakeBounds, right.BakeBounds)
                 && left.GroundLayer.value == right.GroundLayer.value
-                && Approximately(left.MaxSurfaceSlope, right.MaxSurfaceSlope)
-                && Approximately(left.MaxStepHeight, right.MaxStepHeight);
+                && FlowFieldBakeBoundsUtility.Approximately(left.MaxSurfaceSlope, right.MaxSurfaceSlope)
+                && FlowFieldBakeBoundsUtility.Approximately(left.MaxStepHeight, right.MaxStepHeight);
 
         private static bool GoalMatch(
             in FlowFieldSurfaceGoalResolution left,
@@ -187,13 +187,10 @@ namespace Common.FlowField
                 && left.LocalX == right.LocalX
                 && left.LocalZ == right.LocalZ
                 && left.SourceCellIndex == right.SourceCellIndex
-                && Approximately(left.InfluenceRadius, right.InfluenceRadius)
+                && FlowFieldBakeBoundsUtility.Approximately(left.InfluenceRadius, right.InfluenceRadius)
                 && VectorMatch(left.RequestedWorld, right.RequestedWorld);
 
         private static bool VectorMatch(Vector3 left, Vector3 right)
             => (left - right).sqrMagnitude <= 0.00000001f;
-
-        private static bool Approximately(float left, float right)
-            => Mathf.Abs(left - right) <= 0.0001f;
     }
 }

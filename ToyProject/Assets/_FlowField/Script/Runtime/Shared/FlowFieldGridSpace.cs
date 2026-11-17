@@ -682,6 +682,10 @@ namespace Common.FlowField
             return true;
         }
 
+        /// <summary>The tolerance settings and requests compare their values with.</summary>
+        internal static bool Approximately(float left, float right)
+            => Mathf.Abs(left - right) <= CompareEpsilon;
+
         public static bool Approximately(Bounds left, Bounds right)
             => FlowFieldGridSpace.Approximately(
                     left.center,

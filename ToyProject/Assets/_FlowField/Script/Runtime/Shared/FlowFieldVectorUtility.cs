@@ -7,6 +7,13 @@ namespace Common.FlowField
     {
         internal const float DIRECTION_EPSILON_SQR = 0.00000001f;
 
+        /// <summary>A stored direction: zero, or of unit length within 1% of its square.</summary>
+        internal static bool IsUnitOrZero(Vector3 value)
+        {
+            float sqr = value.sqrMagnitude;
+            return sqr <= DIRECTION_EPSILON_SQR || Mathf.Abs(sqr - 1f) <= 0.01f;
+        }
+
         /// <summary>
         /// Shared Surface2D/Volume3D rule: Modifiers apply only to open cells
         /// that move. Blocked, Goal anchor, unreachable and zero-direction

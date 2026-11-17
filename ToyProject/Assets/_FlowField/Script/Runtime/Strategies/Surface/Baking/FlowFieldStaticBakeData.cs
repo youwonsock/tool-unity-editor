@@ -346,7 +346,7 @@ namespace Common.FlowField
                     || valid && (_surfaceNormals[i].sqrMagnitude <= FlowFieldVectorUtility.DIRECTION_EPSILON_SQR
                         || !ApproximatelyUnit(_surfaceNormals[i])))
                     return Fail(out reason, "FlowField Static Bake contains an invalid Surface cell.");
-                if (!NormalizedOrZero(_escapeDirections[i]) || !NormalizedOrZero(_goalDirections[i]))
+                if (!FlowFieldVectorUtility.IsUnitOrZero(_escapeDirections[i]) || !FlowFieldVectorUtility.IsUnitOrZero(_goalDirections[i]))
                     return Fail(out reason, "FlowField Static Bake contains an invalid direction.");
                 if ((_goalFlags[i] & ~(FlowFieldGoalFlags.Directed
                     | FlowFieldGoalFlags.Anchor
@@ -630,8 +630,6 @@ namespace Common.FlowField
         private static bool ApproximatelyUnit(Vector3 value)
             => Mathf.Abs(value.sqrMagnitude - 1f) <= 0.01f;
 
-        private static bool NormalizedOrZero(Vector3 value)
-            => value.sqrMagnitude <= FlowFieldVectorUtility.DIRECTION_EPSILON_SQR || ApproximatelyUnit(value);
 
         internal bool MatchesSurface(in FlowFieldSurfaceBakeSettings settings, out string reason)
         {
