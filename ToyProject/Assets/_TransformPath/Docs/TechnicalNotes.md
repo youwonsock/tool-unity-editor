@@ -20,7 +20,7 @@
 
 1. **상태 소유자는 하나입니다.** 재생 상태는 `PathPlayback`, Queue 순서와 계산은 `QueuedPathManager`, 경로 데이터는 Provider만 바꿉니다. 다른 타입은 읽기만 하고 사본을 두지 않습니다.
 2. **변경 판정은 Provider가 한 번만 합니다.** `PathProviderBehaviour.Rebuild`가 이전 게시와 비교해 `Revision`과 `DefinitionRevision`을 올리고, 소비자는 이 두 값만 비교합니다.
-3. **순수 계산과 Unity 연결을 나눕니다.** `PathPolyline`, `PathRoute`, `PathPlaybackCursor`, `PathPlayback`, Queue 계산은 MonoBehaviour와 정적 상태에 기대지 않아 EditMode 테스트로 검증합니다. 컴포넌트는 직렬화, 생명주기, Transform 적용만 맡습니다.
+3. **순수 계산과 Unity 연결을 나눕니다.** `PathPolyline`, `PathRoute`, `PathPlaybackCursor`, `PathPlayback`, `PathEventEffects`, Queue 계산은 MonoBehaviour와 정적 상태에 기대지 않아 EditMode 테스트로 검증합니다. 컴포넌트는 직렬화, 생명주기, Transform 적용만 맡습니다.
 4. **검증은 경계에서 한 번만 합니다.** 공개 명령의 입력과 Provider 빌드만 검증합니다.
 5. **공통 값과 헬퍼는 한 곳에 둡니다.** 상수는 `PathConstants`, 수치 검증과 곡선 복사는 `PathValueUtility`, 정렬은 `PathSortUtility`, 1회 오류 보고는 `PathConfigurationErrorReporter`입니다.
 6. **인터페이스는 교체할 이유가 있을 때만 둡니다.** 공개 인터페이스는 `IPathProvider`와 `IPathEventReceiver`뿐입니다.
@@ -96,7 +96,8 @@
 - 지연 이벤트는 게임 시간을 쓰고, 다음 경로 이벤트가 실행되면 남은 지연이 취소됩니다. 지연 0은 바로 실행합니다. 상태나 값을 바꾼 지연 이벤트가 있으면 같은 프레임의 나머지 지연 이벤트는 다음 프레임으로 미룹니다.
 - 값 보간은 시작한 구간의 이동 방식까지만 이어집니다. 이동 방식이 다른 구간에 들어가거나 Pause하면 취소합니다.
 - `TriggerEvent(setting)`은 전달한 에셋의 현재 값을 바로 실행하며, 경로에 등록된 복사본에는 다음 빌드 전까지 반영되지 않습니다.
-- 재생이 끝나면 지연 이벤트와 값 보간을 함께 정리합니다.
+- 재생이 끝나면 지연 이벤트와 값 보간을 함께 정리합니다. 재생이 없을 때(완료 뒤) `TriggerEvent`로 실행한 값 변경은 보간 없이 목표값을 바로 적용하고, 지연 이벤트는 예약하지 않습니다. 움직이지 않는 재생에서는 보간의 최종값만 의미가 있고, 지연을 진행할 재생도 없기 때문입니다.
+- 엔진(`PathPlayback`)은 이벤트를 언제 지나는지만 정하고, 이벤트가 하는 일(이름 알림, Pause와 Resume, 값 보간, 지연 이벤트)은 `PathEventEffects`가 맡습니다. 효과는 좁은 내부 인터페이스 `IPathEffectTarget`으로만 엔진을 읽고 조작합니다. 변경 카운터는 엔진에 있습니다. 명령과 상태 변경으로도 오르기 때문입니다.
 
 ## Editor
 

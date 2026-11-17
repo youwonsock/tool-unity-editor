@@ -1,0 +1,230 @@
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace Common.TransformPath
+{
+    internal enum EPathEffectChannel
+    {
+        None,
+        Speed,
+        Duration,
+    }
+
+    /// <summary>What a playback lets its event effects read and do.</summary>
+    internal interface IPathEffectTarget
+    {
+        EPathMoveType MoveType { get; }
+        /// <summary>0 when no playback runs.</summary>
+        ulong PlaybackId { get; }
+        bool HasRoute { get; }
+        float Speed { get; }
+        float Duration { get; }
+        /// <summary>Rises whenever the state or a value changes, by an effect or by a command.</summary>
+        int ChangeCount { get; }
+        bool Pause();
+        bool Resume();
+        bool ApplyValue(EPathEffectChannel channel, float value);
+        void PublishEvent(string eventName);
+    }
+
+    /// <summary>
+    /// What path events do to a playback: names, Pause and Resume, value blends
+    /// and delayed events. The playback decides when an event is reached; this
+    /// decides what follows from it.
+    /// </summary>
+    internal sealed class PathEventEffects
+    {
+        private struct Blend
+        {
+            public EPathEffectChannel Channel;
+            public float StartValue;
+            public PathValueChange Change;
+            public float Elapsed;
+            public int StartFrame;
+            public ulong PlaybackId;
+        }
+
+        private struct DelayedEvent
+        {
+            public PathEventDefinition Definition;
+            public ulong PlaybackId;
+            public float RemainingTime;
+            public int StartFrame;
+            public ulong Order;
+        }
+
+        private readonly IPathEffectTarget _target;
+        private readonly List<DelayedEvent> _delayed = new List<DelayedEvent>();
+        private Blend _blend;
+        private ulong _delayedOrder;
+        private int _effectsFrame;
+
+        public PathEventEffects(IPathEffectTarget target)
+        {
+            _target = target;
+        }
+
+        /// <summary>Whether a blend or a delayed event waits for the effects tick.</summary>
+        public bool HasPending =>
+            _target.PlaybackId != 0 && (_blend.Channel != EPathEffectChannel.None || _delayed.Count > 0);
+
+        /// <summary>Runs an event the follower reached or that was triggered. It cancels what earlier events left waiting.</summary>
+        public void Run(PathEventDefinition definition)
+        {
+            _delayed.Clear();
+            Process(definition);
+        }
+
+        /// <summary>Advances the blend and the delayed events. Runs every frame, before any queue or movement.</summary>
+        public void Tick(float deltaTime, int frame)
+        {
+            _effectsFrame = frame;
+            if (!HasPending)
+                return;
+            TickBlend(deltaTime, frame);
+            if (deltaTime > 0f)
+            {
+                for (int i = 0; i < _delayed.Count; i++)
+                {
+                    DelayedEvent item = _delayed[i];
+                    if (item.StartFrame >= frame)
+                        continue;
+                    item.RemainingTime -= deltaTime;
+                    _delayed[i] = item;
+                }
+            }
+
+            // A delayed event that changed something ends this frame's delayed events.
+            while (TryTakeDueEvent(frame, out DelayedEvent due))
+            {
+                if (due.PlaybackId != _target.PlaybackId)
+                    continue;
+                int before = _target.ChangeCount;
+                Process(due.Definition);
+                if (_target.ChangeCount != before)
+                    break;
+            }
+        }
+
+        public void CancelBlend() => _blend = default(Blend);
+
+        /// <summary>The playback ended: nothing waiting belongs to the next one.</summary>
+        public void Clear()
+        {
+            _delayed.Clear();
+            CancelBlend();
+        }
+
+        private void Process(PathEventDefinition definition)
+        {
+            if (!string.IsNullOrEmpty(definition.EventName))
+                _target.PublishEvent(definition.EventName);
+
+            if (definition.Lifecycle == EPathEventLifecycle.Pause)
+            {
+                CancelBlend();
+                _target.Pause();
+            }
+            else
+            {
+                if (definition.Lifecycle == EPathEventLifecycle.Resume)
+                    _target.Resume();
+                PathValueChange change = definition.GetChange(_target.MoveType);
+                if (change.Enabled && _target.HasRoute)
+                    StartBlend(_target.MoveType == EPathMoveType.SpeedBased ? EPathEffectChannel.Speed : EPathEffectChannel.Duration, change);
+            }
+
+            ulong playbackId = _target.PlaybackId;
+            IReadOnlyList<PathDelayedEventDefinition> delayed = definition.DelayedEvents;
+            for (int i = 0; i < delayed.Count; i++)
+            {
+                PathDelayedEventDefinition entry = delayed[i];
+                if (entry.Delay <= 0f)
+                {
+                    int before = _target.ChangeCount;
+                    Process(entry.Definition);
+                    if (_target.ChangeCount != before || _target.PlaybackId != playbackId)
+                        return;
+                    continue;
+                }
+                // Without a playback nothing would ever tick the delay.
+                if (playbackId == 0)
+                    continue;
+                _delayed.Add(new DelayedEvent
+                {
+                    Definition = entry.Definition,
+                    PlaybackId = playbackId,
+                    RemainingTime = entry.Delay,
+                    StartFrame = CurrentEffectsFrame(),
+                    Order = ++_delayedOrder,
+                });
+            }
+        }
+
+        // The earliest due event, ties by schedule order.
+        private bool TryTakeDueEvent(int frame, out DelayedEvent due)
+        {
+            int selected = -1;
+            for (int i = 0; i < _delayed.Count; i++)
+            {
+                DelayedEvent candidate = _delayed[i];
+                if (candidate.StartFrame >= frame || candidate.RemainingTime > 0f)
+                    continue;
+                if (selected < 0
+                    || candidate.RemainingTime < _delayed[selected].RemainingTime
+                    || (Mathf.Approximately(candidate.RemainingTime, _delayed[selected].RemainingTime)
+                        && candidate.Order < _delayed[selected].Order))
+                    selected = i;
+            }
+            if (selected < 0)
+            {
+                due = default(DelayedEvent);
+                return false;
+            }
+            due = _delayed[selected];
+            _delayed.RemoveAt(selected);
+            return true;
+        }
+
+        private void StartBlend(EPathEffectChannel channel, PathValueChange change)
+        {
+            // A finished playback no longer moves, so its final value is the target.
+            if (change.BlendTime <= 0f || _target.PlaybackId == 0)
+            {
+                _target.ApplyValue(channel, change.Target);
+                return;
+            }
+            _blend = new Blend
+            {
+                Channel = channel,
+                StartValue = channel == EPathEffectChannel.Speed ? _target.Speed : _target.Duration,
+                Change = change,
+                Elapsed = 0f,
+                StartFrame = CurrentEffectsFrame(),
+                PlaybackId = _target.PlaybackId,
+            };
+        }
+
+        private void TickBlend(float deltaTime, int frame)
+        {
+            if (_blend.Channel == EPathEffectChannel.None || _blend.StartFrame >= frame || deltaTime <= 0f)
+                return;
+            if (_blend.PlaybackId != _target.PlaybackId)
+            {
+                CancelBlend();
+                return;
+            }
+            _blend.Elapsed += deltaTime;
+            float weight = _blend.Change.Evaluate(_blend.Elapsed);
+            _target.ApplyValue(_blend.Channel, Mathf.Lerp(_blend.StartValue, _blend.Change.Target, weight));
+            if (_blend.Elapsed >= _blend.Change.BlendTime)
+            {
+                _target.ApplyValue(_blend.Channel, _blend.Change.Target);
+                CancelBlend();
+            }
+        }
+
+        // Effects started now begin counting on the next effects tick.
+        private int CurrentEffectsFrame() => _effectsFrame > 0 ? _effectsFrame : Time.frameCount;
+    }
+}

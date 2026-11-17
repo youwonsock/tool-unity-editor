@@ -1,86 +1,25 @@
 using System;
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace Common.TransformPath
 {
-    /// <summary>What a queue currently allows one follower.</summary>
-    internal readonly struct PathMotionLimit
-    {
-        public static readonly PathMotionLimit None = new PathMotionLimit(false, 1f, 1f, false);
-
-        public readonly bool Blocked;
-        public readonly float SpeedMultiplier;
-        public readonly float MaxProgress;
-        /// <summary>A queue member stops at a loop seam and waits for the queue before its next lap.</summary>
-        public readonly bool HoldAtLoopSeam;
-
-        public PathMotionLimit(bool blocked, float speedMultiplier, float maxProgress, bool holdAtLoopSeam)
-        {
-            Blocked = blocked;
-            SpeedMultiplier = Mathf.Clamp01(speedMultiplier);
-            MaxProgress = Mathf.Clamp01(maxProgress);
-            HoldAtLoopSeam = holdAtLoopSeam;
-        }
-    }
-
-    /// <summary>The listeners a playback notifies. They run after the operation, through the boundary.</summary>
-    internal sealed class PathPlaybackListeners
-    {
-        public readonly PathSignal<EPathFollowerState> StateChanged = new PathSignal<EPathFollowerState>();
-        public readonly PathSignal<int> SegmentChanged = new PathSignal<int>();
-        public readonly PathSignal Completed = new PathSignal();
-        /// <summary>The follower's IPathEventReceiver, heard before <see cref="EventReached"/>.</summary>
-        public readonly PathSignal<string, PathFollower> Receiver = new PathSignal<string, PathFollower>();
-        public readonly PathSignal<string> EventReached = new PathSignal<string>();
-        public PathFollower Owner;
-    }
-
     /// <summary>
     /// One follower's playback without Unity: the route, the position on it,
-    /// path events and their effects, and the queue's limit. It owns all of that
-    /// state, so nothing has to check whether another object changed it.
-    /// The owner applies the position after a call reports it changed.
+    /// which path events it passes, and the queue's limit. What an event does
+    /// is <see cref="PathEventEffects"/>' work. The playback owns its state, so
+    /// nothing has to check whether another object changed it. The owner applies
+    /// the position after a call reports it changed.
     /// </summary>
-    internal sealed class PathPlayback
+    internal sealed class PathPlayback : IPathEffectTarget
     {
         private const float EPSILON = PathConstants.EPSILON;
 
-        private enum EChannel
-        {
-            None,
-            Speed,
-            Duration,
-        }
-
-        private struct Blend
-        {
-            public EChannel Channel;
-            public float StartValue;
-            public PathValueChange Change;
-            public float Elapsed;
-            public int StartFrame;
-            public ulong PlaybackId;
-        }
-
-        private struct DelayedEvent
-        {
-            public PathEventDefinition Definition;
-            public ulong PlaybackId;
-            public float RemainingTime;
-            public int StartFrame;
-            public ulong Order;
-        }
-
         private readonly PathPlaybackListeners _listeners;
         private readonly PathPlaybackCursor _cursor = new PathPlaybackCursor();
-        private readonly List<DelayedEvent> _delayed = new List<DelayedEvent>();
+        private readonly PathEventEffects _effects;
         private PathRoute _route;
         private int _nextEventIndex;
-        private Blend _blend;
         private ulong _nextPlaybackId;
-        private ulong _delayedOrder;
-        private int _effectsFrame;
         private bool _positionDirty;
         // Rises whenever an event or command changes the state or a value. A
         // delayed event that changed something ends that frame's delayed events.
@@ -89,6 +28,7 @@ namespace Common.TransformPath
         public PathPlayback(PathPlaybackListeners listeners)
         {
             _listeners = listeners ?? new PathPlaybackListeners();
+            _effects = new PathEventEffects(this);
         }
 
         public EPathFollowerState State { get; private set; } = EPathFollowerState.Uninitialized;
@@ -109,7 +49,7 @@ namespace Common.TransformPath
         public float Duration => _cursor.Duration;
         public bool CanSample => _route != null && _route.Provider.IsReady;
         /// <summary>Whether a blend or a delayed event waits for the effects tick.</summary>
-        public bool HasPendingEffects => PlaybackId != 0 && (_blend.Channel != EChannel.None || _delayed.Count > 0);
+        public bool HasPendingEffects => _effects.HasPending;
 
         /// <summary>Whether the position changed since the last call. Clears the flag.</summary>
         public bool ConsumePositionDirty()
@@ -181,7 +121,7 @@ namespace Common.TransformPath
                 return false;
             IsMoving = false;
             _cursor.PendingTime = 0f;
-            CancelBlend();
+            _effects.CancelBlend();
             SetState(EPathFollowerState.Paused);
             return true;
         }
@@ -236,7 +176,7 @@ namespace Common.TransformPath
                 throw new InvalidOperationException("Speed can only be changed during playback.");
             if (_cursor.MoveType != EPathMoveType.SpeedBased)
                 throw new InvalidOperationException("Speed can only be changed in SpeedBased mode.");
-            return ApplyValue(EChannel.Speed, speed);
+            return ApplyValue(EPathEffectChannel.Speed, speed);
         }
 
         public bool SetDuration(float duration)
@@ -247,7 +187,7 @@ namespace Common.TransformPath
                 throw new InvalidOperationException("Duration can only be changed during playback.");
             if (_cursor.MoveType != EPathMoveType.TimeBased)
                 throw new InvalidOperationException("Duration can only be changed in TimeBased mode.");
-            return ApplyValue(EChannel.Duration, duration);
+            return ApplyValue(EPathEffectChannel.Duration, duration);
         }
 
         /// <summary>Runs an event now, as if the follower reached it. Pending delayed events are dropped.</summary>
@@ -256,8 +196,7 @@ namespace Common.TransformPath
             if (definition == null)
                 throw new ArgumentNullException(nameof(definition));
             EnsureInitialized();
-            _delayed.Clear();
-            ProcessEvent(definition);
+            _effects.Run(definition);
         }
 
         #endregion
@@ -265,34 +204,7 @@ namespace Common.TransformPath
         #region Tick
 
         /// <summary>Advances value blends and delayed events. Runs every frame, before any queue or movement.</summary>
-        public void TickEffects(float deltaTime, int frame)
-        {
-            _effectsFrame = frame;
-            if (!HasPendingEffects)
-                return;
-            TickBlend(deltaTime, frame);
-            if (deltaTime > 0f)
-            {
-                for (int i = 0; i < _delayed.Count; i++)
-                {
-                    DelayedEvent item = _delayed[i];
-                    if (item.StartFrame >= frame)
-                        continue;
-                    item.RemainingTime -= deltaTime;
-                    _delayed[i] = item;
-                }
-            }
-
-            while (TryTakeDueEvent(frame, out DelayedEvent due))
-            {
-                if (due.PlaybackId != PlaybackId)
-                    continue;
-                int before = _changes;
-                ProcessEvent(due.Definition);
-                if (_changes != before)
-                    break;
-            }
-        }
+        public void TickEffects(float deltaTime, int frame) => _effects.Tick(deltaTime, frame);
 
         /// <summary>Moves for one frame within the queue's limit.</summary>
         public void TickMovement(float deltaTime)
@@ -415,7 +327,7 @@ namespace Common.TransformPath
         {
             // A blend drives the channel of the segment that started it.
             if (_cursor.ConfigureSegment(_route, index, previousNominalSpeed, preserveSpeed))
-                CancelBlend();
+                _effects.CancelBlend();
         }
 
         private void Complete(PathRuntimeEvent[] events)
@@ -457,8 +369,7 @@ namespace Common.TransformPath
         private void EndPlayback()
         {
             PlaybackId = 0;
-            _delayed.Clear();
-            CancelBlend();
+            _effects.Clear();
         }
 
         #endregion
@@ -475,9 +386,7 @@ namespace Common.TransformPath
                 _nextEventIndex++;
                 if (entry.Definition == null)
                     continue;
-                // A path event cancels what earlier events left waiting.
-                _delayed.Clear();
-                ProcessEvent(entry.Definition);
+                _effects.Run(entry.Definition);
                 if (State != EPathFollowerState.Moving)
                     return;
             }
@@ -491,119 +400,24 @@ namespace Common.TransformPath
                 _nextEventIndex++;
         }
 
-        private void ProcessEvent(PathEventDefinition definition)
+        #endregion
+
+        #region Effect target
+
+        bool IPathEffectTarget.HasRoute => _route != null;
+        int IPathEffectTarget.ChangeCount => _changes;
+
+        bool IPathEffectTarget.ApplyValue(EPathEffectChannel channel, float value) => ApplyValue(channel, value);
+
+        void IPathEffectTarget.PublishEvent(string eventName)
         {
-            if (!string.IsNullOrEmpty(definition.EventName))
-            {
-                _listeners.Receiver.Publish(definition.EventName, _listeners.Owner);
-                _listeners.EventReached.Publish(definition.EventName);
-            }
-
-            if (definition.Lifecycle == EPathEventLifecycle.Pause)
-            {
-                CancelBlend();
-                Pause();
-            }
-            else
-            {
-                if (definition.Lifecycle == EPathEventLifecycle.Resume)
-                    Resume();
-                PathValueChange change = definition.GetChange(_cursor.MoveType);
-                if (change.Enabled && _route != null)
-                    StartBlend(_cursor.MoveType == EPathMoveType.SpeedBased ? EChannel.Speed : EChannel.Duration, change);
-            }
-
-            ulong playbackId = PlaybackId;
-            IReadOnlyList<PathDelayedEventDefinition> delayed = definition.DelayedEvents;
-            for (int i = 0; i < delayed.Count; i++)
-            {
-                PathDelayedEventDefinition entry = delayed[i];
-                if (entry.Delay <= 0f)
-                {
-                    int before = _changes;
-                    ProcessEvent(entry.Definition);
-                    if (_changes != before || PlaybackId != playbackId)
-                        return;
-                    continue;
-                }
-                _delayed.Add(new DelayedEvent
-                {
-                    Definition = entry.Definition,
-                    PlaybackId = playbackId,
-                    RemainingTime = entry.Delay,
-                    StartFrame = CurrentEffectsFrame(),
-                    Order = ++_delayedOrder,
-                });
-            }
+            _listeners.Receiver.Publish(eventName, _listeners.Owner);
+            _listeners.EventReached.Publish(eventName);
         }
 
-        // The earliest due event, ties by schedule order.
-        private bool TryTakeDueEvent(int frame, out DelayedEvent due)
+        private bool ApplyValue(EPathEffectChannel channel, float value)
         {
-            int selected = -1;
-            for (int i = 0; i < _delayed.Count; i++)
-            {
-                DelayedEvent candidate = _delayed[i];
-                if (candidate.StartFrame >= frame || candidate.RemainingTime > 0f)
-                    continue;
-                if (selected < 0
-                    || candidate.RemainingTime < _delayed[selected].RemainingTime
-                    || (Mathf.Approximately(candidate.RemainingTime, _delayed[selected].RemainingTime)
-                        && candidate.Order < _delayed[selected].Order))
-                    selected = i;
-            }
-            if (selected < 0)
-            {
-                due = default(DelayedEvent);
-                return false;
-            }
-            due = _delayed[selected];
-            _delayed.RemoveAt(selected);
-            return true;
-        }
-
-        private void StartBlend(EChannel channel, PathValueChange change)
-        {
-            if (change.BlendTime <= 0f)
-            {
-                ApplyValue(channel, change.Target);
-                return;
-            }
-            _blend = new Blend
-            {
-                Channel = channel,
-                StartValue = channel == EChannel.Speed ? _cursor.Speed : _cursor.Duration,
-                Change = change,
-                Elapsed = 0f,
-                StartFrame = CurrentEffectsFrame(),
-                PlaybackId = PlaybackId,
-            };
-        }
-
-        private void TickBlend(float deltaTime, int frame)
-        {
-            if (_blend.Channel == EChannel.None || _blend.StartFrame >= frame || deltaTime <= 0f)
-                return;
-            if (_blend.PlaybackId != PlaybackId)
-            {
-                CancelBlend();
-                return;
-            }
-            _blend.Elapsed += deltaTime;
-            float weight = _blend.Change.Evaluate(_blend.Elapsed);
-            ApplyValue(_blend.Channel, Mathf.Lerp(_blend.StartValue, _blend.Change.Target, weight));
-            if (_blend.Elapsed >= _blend.Change.BlendTime)
-            {
-                ApplyValue(_blend.Channel, _blend.Change.Target);
-                CancelBlend();
-            }
-        }
-
-        private void CancelBlend() => _blend = default(Blend);
-
-        private bool ApplyValue(EChannel channel, float value)
-        {
-            if (channel == EChannel.Speed)
+            if (channel == EPathEffectChannel.Speed)
             {
                 if (Mathf.Approximately(_cursor.Speed, value))
                     return false;
@@ -617,9 +431,6 @@ namespace Common.TransformPath
             _changes++;
             return true;
         }
-
-        // Effects started now begin counting on the next effects tick.
-        private int CurrentEffectsFrame() => _effectsFrame > 0 ? _effectsFrame : Time.frameCount;
 
         #endregion
 
