@@ -583,13 +583,16 @@ namespace Common.FlowField.Editor
                     try { Undo.RevertAllDownToGroup(undoGroup); }
                     catch (Exception undoException) { Debug.LogException(undoException, manager); }
                 }
-                // The Undo revert above destroys the created object but leaves
-                // its file, so check the file rather than the loaded asset.
-                if (createdAsset && !string.IsNullOrEmpty(assetPath) && File.Exists(assetPath))
+                // Cleanup must not hide the bake's own error.
+                try
                 {
-                    AssetDatabase.DeleteAsset(assetPath);
+                    // The Undo revert above destroys the created object but
+                    // leaves its asset, so ask the AssetDatabase, not the object.
+                    if (createdAsset && FlowFieldBakeAssetUtility.AssetExists(assetPath))
+                        AssetDatabase.DeleteAsset(assetPath);
+                    FlowFieldBakeAssetUtility.DeleteFolderIfEmpty(createdFolder);
                 }
-                FlowFieldBakeAssetUtility.DeleteFolderIfEmpty(createdFolder);
+                catch (Exception cleanupException) { Debug.LogException(cleanupException, manager); }
                 Debug.LogException(exception, manager);
             }
         }
@@ -833,17 +836,20 @@ namespace Common.FlowField.Editor
             return created;
         }
 
+        // Project paths, not disk paths: a Packages/ path need not exist on disk under the project.
+        internal static bool AssetExists(string assetPath)
+            => !string.IsNullOrEmpty(assetPath)
+                && !string.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(assetPath, AssetPathToGUIDOptions.OnlyExistingAssets));
+
         /// <summary>Deletes a folder a failed bake created, unless something else was put in it.</summary>
         internal static void DeleteFolderIfEmpty(string folder)
         {
             if (string.IsNullOrEmpty(folder) || !AssetDatabase.IsValidFolder(folder))
                 return;
-            foreach (string file in Directory.GetFiles(folder, "*", SearchOption.AllDirectories))
+            // Every asset below it, subfolders included; only subfolders may remain.
+            foreach (string guid in AssetDatabase.FindAssets(string.Empty, new[] { folder }))
             {
-                // A subfolder's own .meta does not count as content.
-                bool folderMeta = file.EndsWith(".meta", StringComparison.Ordinal)
-                    && Directory.Exists(file.Substring(0, file.Length - ".meta".Length));
-                if (!folderMeta)
+                if (!AssetDatabase.IsValidFolder(AssetDatabase.GUIDToAssetPath(guid)))
                     return;
             }
             AssetDatabase.DeleteAsset(folder);
