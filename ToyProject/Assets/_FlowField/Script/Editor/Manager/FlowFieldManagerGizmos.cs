@@ -11,7 +11,7 @@ namespace Common.FlowField.Editor
         {
             if (!FlowFieldDisplay.Of(manager).ShowField)
                 return;
-            if (manager.ConfiguredSpaceMode == FlowFieldSpaceMode.Volume3D)
+            if (manager.CaptureConfig().SpaceMode == FlowFieldSpaceMode.Volume3D)
             {
                 FlowFieldVolumeVisualizationEditor.Draw(manager);
                 return;
@@ -22,7 +22,7 @@ namespace Common.FlowField.Editor
         [DrawGizmo(GizmoType.Selected | GizmoType.Active)]
         private static void DrawBakeBounds(FlowFieldManager manager, GizmoType gizmoType)
         {
-            bool volume = manager.ConfiguredSpaceMode == FlowFieldSpaceMode.Volume3D;
+            bool volume = manager.CaptureConfig().SpaceMode == FlowFieldSpaceMode.Volume3D;
             Bounds worldBounds;
             bool validLayout = volume
                 ? manager.TryGetVolumeLayout(out worldBounds, out _)
@@ -60,7 +60,7 @@ namespace Common.FlowField.Editor
             if (!view.IsValid)
                 return;
 
-            FlowFieldStaticBakeData bake = manager.StaticBakeData;
+            FlowFieldStaticBakeData bake = manager.CaptureConfig().BakeAssets.Surface;
             FlowFieldSurfaceGoalResolution goal = manager.BakeMode == FlowFieldBakeMode.StaticBaked && bake != null
                 ? new FlowFieldSurfaceGoalResolution(
                     bake.HasGoal,
@@ -75,7 +75,7 @@ namespace Common.FlowField.Editor
             FlowFieldGizmoDrawer.Draw(new FlowFieldGizmoRequest(
                 grid,
                 view,
-                manager.CellSize,
+                manager.CaptureConfig().Grid.CellSize,
                 goal.IsValid,
                 goal.RequestedWorld,
                 goal.InfluenceRadius));

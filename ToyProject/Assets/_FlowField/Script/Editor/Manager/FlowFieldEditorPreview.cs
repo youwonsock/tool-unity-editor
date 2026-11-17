@@ -80,7 +80,7 @@ namespace Common.FlowField.Editor
                 session.Surface.DirtyObstacleRegion));
             // The preview owns its session and waits for the worker, so it
             // completes in the same editor repaint that asked for it.
-            session.Surface.Pump();
+            session.Pump();
             return session;
         }
 

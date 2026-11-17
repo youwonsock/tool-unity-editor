@@ -12,29 +12,11 @@ namespace Common.FlowField
     /// <summary>Exports and read views of the published Volume3D field for bakes and tools.</summary>
     internal sealed partial class FlowFieldVolumeBuilder
     {
-        internal bool TryExport(
-            out FlowFieldVolumeRequest request,
-            out bool[] blocked,
-            out uint[] topology,
-            out FlowFieldGoalFlags[] goalFlags,
-            out int[] next,
-            out Vector3[] directions,
-            out float[] speeds,
-            out Vector3[] escapeDirections)
-        {
-            return TryExport(
-                out request,
-                out blocked,
-                out topology,
-                out goalFlags,
-                out next,
-                out directions,
-                out speeds,
-                out escapeDirections,
-                out _);
-        }
-
-        internal bool TryExport(
+        /// <summary>
+        /// What a Static Bake stores: copies of the published base field.
+        /// False while nothing is published.
+        /// </summary>
+        internal bool TryExportBakeData(
             out FlowFieldVolumeRequest request,
             out bool[] blocked,
             out uint[] topology,

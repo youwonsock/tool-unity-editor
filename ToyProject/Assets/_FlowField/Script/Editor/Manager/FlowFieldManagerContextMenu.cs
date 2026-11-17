@@ -13,7 +13,7 @@ namespace Common.FlowField.Editor
         private static void RefreshVolumeVisualization(MenuCommand command)
         {
             var manager = (FlowFieldManager)command.context;
-            if (manager.ConfiguredSpaceMode != FlowFieldSpaceMode.Volume3D)
+            if (manager.CaptureConfig().SpaceMode != FlowFieldSpaceMode.Volume3D)
                 return;
             FlowFieldVolumeVisualizationEditor.RequestRefresh(manager);
             SceneView.RepaintAll();

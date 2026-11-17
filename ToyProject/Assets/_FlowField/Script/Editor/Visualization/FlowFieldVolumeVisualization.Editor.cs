@@ -418,25 +418,26 @@ namespace Common.FlowField.Editor
                 return refreshRequested;
             }
 
-            FlowFieldVolumeBakeData asset = manager.VolumeStaticBakeData;
+            FlowFieldVolumeBakeData asset = manager.CaptureConfig().BakeAssets.Volume;
             if (asset == null)
             {
                 SetUnavailable(state, "StaticBaked Volume3D에는 Bake Asset이 필요합니다.");
                 return false;
             }
 
+            FlowFieldManagerConfig config = manager.CaptureConfig();
             string metadataReason;
             string goalReason;
             bool metadataMatches = asset.MatchesMetadata(
                 grid,
                 worldBounds,
-                manager.ObstacleLayer,
-                manager.ObstacleClearance,
+                config.Obstacles.Layer,
+                config.Obstacles.Clearance,
                 out metadataReason);
             bool goalMatches = asset.MatchesGoal(
-                manager.HasConfiguredGoal,
-                manager.ConfiguredGoalWorld,
-                manager.ConfiguredGoalInfluenceRadius,
+                config.HasGoal,
+                config.GoalWorld,
+                config.Flow.GoalInfluenceRadius,
                 out goalReason);
             if (!metadataMatches || !goalMatches)
             {
@@ -706,7 +707,7 @@ namespace Common.FlowField.Editor
 
             if (state.Code != FlowFieldVolumeVisualizationStatusCode.Valid)
                 return false;
-            FlowFieldVolumeBakeData asset = manager.VolumeStaticBakeData;
+            FlowFieldVolumeBakeData asset = manager.CaptureConfig().BakeAssets.Volume;
             if (asset == null
                 || !manager.TryGetVolumeLayout(
                     out Bounds worldBounds,
@@ -754,7 +755,7 @@ namespace Common.FlowField.Editor
             if (!manager.TryGetVolumeLayout(out Bounds worldBounds, out FlowFieldGridSpace grid))
                 return false;
             FlowFieldVolumeBakeData asset = manager.BakeMode == FlowFieldBakeMode.StaticBaked
-                ? manager.VolumeStaticBakeData
+                ? manager.CaptureConfig().BakeAssets.Volume
                 : null;
             source = new FlowFieldVolumeVisualizationSource(
                 grid,
@@ -773,8 +774,8 @@ namespace Common.FlowField.Editor
             var used = new HashSet<FlowFieldVolumeBakeData>();
             foreach (ManagerState state in Managers.Values)
             {
-                if (state.Manager != null && state.Manager.VolumeStaticBakeData != null)
-                    used.Add(state.Manager.VolumeStaticBakeData);
+                if (state.Manager != null && state.Manager.CaptureConfig().BakeAssets.Volume != null)
+                    used.Add(state.Manager.CaptureConfig().BakeAssets.Volume);
             }
             var remove = new List<FlowFieldVolumeBakeData>();
             foreach (KeyValuePair<FlowFieldVolumeBakeData, AssetState> pair in Assets)

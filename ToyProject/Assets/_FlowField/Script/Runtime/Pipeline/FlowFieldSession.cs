@@ -58,7 +58,6 @@ namespace Common.FlowField
         internal static FlowFieldSession CreateVolume(FlowFieldExecutionBoundary boundary = null)
             => new FlowFieldSession(boundary, session => new FlowFieldVolumeBuilder(session));
 
-        internal IFlowFieldSpaceBuilder Builder => _builder;
         internal FlowFieldSurfaceBuilder Surface => _builder as FlowFieldSurfaceBuilder;
         internal FlowFieldVolumeBuilder Volume => _builder as FlowFieldVolumeBuilder;
 
@@ -376,6 +375,20 @@ namespace Common.FlowField
         /// waits; a direct owner (a bake, an Editor preview) may wait for the
         /// worker thread instead.
         /// </summary>
+        /// <summary>
+        /// A direct owner (a bake, the Editor preview) runs its own session and
+        /// waits for the worker; the scheduler never does. With no budget the
+        /// pending build runs to its end.
+        /// </summary>
+        internal void Pump() => RunPipeline(FlowFieldBuildBudget.Unlimited, scheduled: false, waitForWorker: true);
+
+        internal void Pump(double budgetMilliseconds)
+        {
+            System.Diagnostics.Stopwatch timer = System.Diagnostics.Stopwatch.StartNew();
+            var budget = new FlowFieldBuildBudget(budgetMilliseconds, () => timer.Elapsed.TotalMilliseconds);
+            RunPipeline(in budget, scheduled: false, waitForWorker: true);
+        }
+
         internal void RunPipeline(in FlowFieldBuildBudget budget, bool scheduled, bool waitForWorker)
         {
             if (!CanPump)

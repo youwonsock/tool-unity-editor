@@ -68,8 +68,8 @@ namespace Common.FlowField.Editor
                             FlowFieldBakeEditor.ScheduleBake(manager);
 
                         bool hasBakeAsset = manager.SpaceMode == FlowFieldSpaceMode.Volume3D
-                            ? manager.VolumeStaticBakeData != null
-                            : manager.StaticBakeData != null;
+                            ? manager.CaptureConfig().BakeAssets.Volume != null
+                            : manager.CaptureConfig().BakeAssets.Surface != null;
                         using (new EditorGUI.DisabledScope(!hasBakeAsset))
                         {
                             if (GUILayout.Button("Clear Bake"))
@@ -129,7 +129,7 @@ namespace Common.FlowField.Editor
             Vector3 movedCenter = Handles.PositionHandle(worldBounds.center, Quaternion.identity);
             if (EditorGUI.EndChangeCheck())
             {
-                Bounds moved = manager.BakeBoundsLocal;
+                Bounds moved = manager.CaptureConfig().Grid.BakeBoundsLocal;
                 moved.center = movedCenter - manager.transform.position;
                 ApplyBoundsChange(manager, moved, "Move FlowField Bake Bounds");
                 Handles.color = previousHandlesColor;
@@ -148,15 +148,16 @@ namespace Common.FlowField.Editor
                 var candidateLocal = new Bounds(
                     candidateWorld.center - manager.transform.position,
                     candidateWorld.size);
+                FlowFieldManagerConfig config = manager.CaptureConfig();
                 Bounds snapped = manager.SpaceMode == FlowFieldSpaceMode.Volume3D
                     ? FlowFieldBakeBoundsUtility.SnapVolumeResizedKeepingOppositeFace(
-                        manager.BakeBoundsLocal,
+                        config.Grid.BakeBoundsLocal,
                         candidateLocal,
-                        manager.CellSize)
+                        config.Grid.CellSize)
                     : FlowFieldBakeBoundsUtility.SnapResizedKeepingOppositeFace(
-                        manager.BakeBoundsLocal,
+                        config.Grid.BakeBoundsLocal,
                         candidateLocal,
-                        manager.CellSize);
+                        config.Grid.CellSize);
                 ApplyBoundsChange(manager, snapped, "Resize FlowField Bake Bounds");
             }
 
@@ -193,8 +194,7 @@ namespace Common.FlowField.Editor
             Bounds localBounds,
             string undoName)
         {
-            Undo.RecordObject(manager, undoName);
-            manager.SetBakeBoundsLocal(localBounds);
+            manager.SetBakeBoundsLocal(localBounds, undoName);
             FlowFieldEditorPreview.Invalidate(manager);
             FlowFieldVolumeVisualizationEditor.RequestRefresh(manager);
             EditorUtility.SetDirty(manager);
@@ -250,8 +250,8 @@ namespace Common.FlowField.Editor
             if (manager.TryValidateSurfaceBake(out string reason))
             {
                 bool hasStaticAsset = manager.SpaceMode == FlowFieldSpaceMode.Volume3D
-                    ? manager.VolumeStaticBakeData != null
-                    : manager.StaticBakeData != null;
+                    ? manager.CaptureConfig().BakeAssets.Volume != null
+                    : manager.CaptureConfig().BakeAssets.Surface != null;
                 if (manager.BakeMode == FlowFieldBakeMode.StaticBaked && hasStaticAsset)
                 {
                     EditorGUILayout.HelpBox(

@@ -29,25 +29,15 @@ namespace Common.FlowField
         private FlowFieldSurfaceRequest? _committedRequest;
         private Vector3? _latestDefaultDirection;
         private FlowFieldSurfaceSourceKind _sourceKind;
-        // Only the Manager can tell that its current settings are valid, so the
-        // scheduler builds nothing until it has submitted them. Dirty input waits.
         // Configuration input that arrived while a build ran. The next build
         // submits it before it begins.
         private FlowFieldManagerConfig _owedConfig;
         private bool _configOwed;
 
-        internal FlowFieldGridSpace StagingGrid => _state.Grid;
-        internal bool StagingSurfaceReady => _state.SurfaceReady;
         internal FlowFieldSurfaceDirtyFlags DirtyFlags => _state.DirtyFlags;
         internal FlowFieldCellRect DirtyFinalRegion => _state.DirtyFinalRegion;
         internal FlowFieldCellRect DirtyObstacleRegion => _state.DirtyObstacleRegion;
         internal Vector3 ResolvedDefaultDirection => _state.ResolvedDefaultDirection;
-        // Editor and bake adapters request an explicit snapshot only at their
-        // boundary. Runtime sampling reads the compact store directly.
-        internal FlowFieldSurfaceWorkspace CommittedWorkspace => _fieldStore.CreateWorkspaceSnapshot();
-        internal FlowFieldSurfaceGoalTracker GoalTracker => _goalTracker;
-        internal FlowFieldSurfaceData CommittedSurface => _fieldStore.Surface;
-        internal FlowFieldGridSpace CommittedGrid => _fieldStore.Grid;
         public FlowFieldSpaceMode SpaceMode => FlowFieldSpaceMode.Surface2D;
         public FlowFieldField PublishedField
             => _state.SurfaceReady && _fieldStore.IsValid && HasCompatibleCommittedSource()
@@ -90,12 +80,16 @@ namespace Common.FlowField
         private FlowFieldCellRect _commitRegion;
 
         /// <summary>
-        /// Advances a pending Surface2D request at the owning execution
-        /// boundary. A direct caller (a bake, a test) waits for the worker
-        /// thread; the scheduler never does.
+        /// What a Static Bake stores: the published Surface and a copy of its
+        /// arrays, taken at the bake's boundary (runtime sampling reads the
+        /// compact store directly). False while nothing is published.
         /// </summary>
-        internal void Pump()
-            => _session.RunPipeline(FlowFieldBuildBudget.Unlimited, scheduled: false, waitForWorker: true);
+        internal bool TryExportBakeData(out FlowFieldSurfaceData surface, out FlowFieldSurfaceWorkspace workspace)
+        {
+            surface = _fieldStore.Surface;
+            workspace = surface != null ? _fieldStore.CreateWorkspaceSnapshot() : null;
+            return workspace != null;
+        }
 
         // Building without composing means a solve is running elsewhere.
         public bool IsWaitingForExternalCompletion

@@ -1,5 +1,4 @@
 using System;
-using System.Diagnostics;
 using System.Threading;
 using UnityEngine;
 using BuildContext = Common.FlowField.FlowFieldVolumeBuildContext;
@@ -18,7 +17,6 @@ namespace Common.FlowField
     {
         private const int CellsPerStep = FlowFieldVolumeNavigation.CellsPerStep;
         private const int ArrayElementsPerStep = FlowFieldVolumeNavigation.ArrayElementsPerStep;
-        private const double DefaultBudgetMilliseconds = 2.0;
         private const long MemoryBudgetBytes = 512L * 1024L * 1024L;
         private Collider[] _registeredObstacleOverlapBuffer;
         private readonly int[] _obstacleCells = new int[CellsPerStep];
@@ -43,8 +41,6 @@ namespace Common.FlowField
         private long _buildReservationBytes;
         private long _committedReservationBytes;
 
-        private readonly Stopwatch _pumpTimer = new Stopwatch();
-        private readonly Func<double> _pumpElapsedMilliseconds;
 
         // The session that runs this builder. Lifecycle, events and the build
         // loop live there.
@@ -54,7 +50,6 @@ namespace Common.FlowField
         {
             _session = session ?? throw new ArgumentNullException(nameof(session));
             _safety = new FlowFieldVolumeSafetyState(session);
-            _pumpElapsedMilliseconds = () => _pumpTimer.Elapsed.TotalMilliseconds;
         }
 
         public FlowFieldSpaceMode SpaceMode => FlowFieldSpaceMode.Volume3D;
@@ -163,17 +158,6 @@ namespace Common.FlowField
         {
             if (!_session.IsFaulted && _session.Lifecycle != FlowFieldSessionLifecycle.Suspended)
                 _session.SetLifecycle(FlowFieldSessionLifecycle.Building);
-        }
-
-        internal void Pump(double budgetMilliseconds = DefaultBudgetMilliseconds)
-        {
-            if (budgetMilliseconds <= 0d)
-                budgetMilliseconds = DefaultBudgetMilliseconds;
-            _pumpTimer.Restart();
-            FlowFieldBuildBudget budget = new FlowFieldBuildBudget(
-                budgetMilliseconds,
-                _pumpElapsedMilliseconds);
-            _session.RunPipeline(in budget, scheduled: false, waitForWorker: true);
         }
 
         public FlowFieldBuildPolicy BuildPolicy => new FlowFieldBuildPolicy(beginsAfterBudget: false, maxBuildsBegunPerPump: int.MaxValue);
