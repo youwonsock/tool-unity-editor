@@ -17,7 +17,7 @@ participant "풀이 Job\n(워커 스레드)" as J
 participant "ComposeStage" as C
 participant "FieldStore" as P
 
-M -> S : 통지 → SubmitConfig·dirty 표시\n통지 영역은 그 프레임부터 정지
+M -> S : 통지 → SubmitConfig·dirty 표시\n입력을 받으면 그 자리에서 Building, 통지 영역은 그 프레임부터 정지
 Q -> S : PumpInternal(예산)
 note over Q,S : 빌드 중 온 입력은 다음 빌드 시작 때 제출한다
 alt RuntimeDynamic
@@ -34,5 +34,5 @@ S -> P : 완성된 결과 게시
 S --> M : FieldChanged (작업이 끝난 뒤)
 M -> S : TrySample(위치)
 S -> P : 게시 값 읽기
-note over S,P : 공통 불확실 영역과 최신 장애물·탈출 검사를 더한다
+note over S,P : 공통 샘플 안전 규칙(FlowFieldSampleSafetyRule)이 불확실 영역과\n진행 중 빌드의 최신 셀 정보(막힘·연결·탈출)로 정지·탈출을 정한다
 @enduml

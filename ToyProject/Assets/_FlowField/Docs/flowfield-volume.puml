@@ -12,11 +12,11 @@ title Volume3D 빌드와 게시
 participant "Manager" as M
 participant "Scheduler" as Q
 participant "Session·VolumeBuilder" as S
-participant "Tracker·Registry" as O
+participant "장애물·Modifier\n등록부(Session)" as O
 participant "BuildContext\n·풀이 Job" as B
-participant "SafetyState\n·FieldData" as P
+participant "게시 필드" as P
 
-M -> S : 통지 → SubmitConfig·불확실 영역 표시
+M -> S : 통지 → SubmitConfig·불확실 영역 표시\n입력을 받으면 그 자리에서 Building
 loop 실행 가능한 동안
   Q -> S : PumpInternal(예산)
   opt 새 빌드 시작
@@ -36,6 +36,6 @@ loop 실행 가능한 동안
   end
 end
 M -> S : TrySample(위치)
-S -> P : 게시 값 + 최신 안전성 상태
-note over S,P : 불확실 셀은 true와 속도 0을 돌려줄 수 있다 (두 모드 공통)
+S -> P : 게시 값 읽기
+note over S,P : 공통 샘플 안전 규칙(FlowFieldSampleSafetyRule)이 불확실 영역과\n게시 필드로 정지·탈출을 정한다. 불확실 셀은 true와 속도 0 (두 모드 공통)
 @enduml
