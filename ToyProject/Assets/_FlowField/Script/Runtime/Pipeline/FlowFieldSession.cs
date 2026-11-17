@@ -157,7 +157,12 @@ namespace Common.FlowField
             sample = FlowFieldSample.Stopped;
             if (!IsReady)
                 return FlowFieldSampleStatus.NotReady;
-            return FlowFieldSampler.Sample(_builder.PublishedField, worldPosition, _builder, out sample);
+            FlowFieldField field = _builder.PublishedField;
+            FlowFieldSampleStatus status = FlowFieldSampler.Sample(field, worldPosition, out sample, out int index);
+            if (status == FlowFieldSampleStatus.Sampled
+                && FlowFieldSampleSafetyRule.Apply(field, index, in sample, Safety, _builder.LatestCells, out FlowFieldSample safe))
+                sample = safe;
+            return status;
         }
 
         internal bool TrySample(Vector3 worldPosition, out FlowFieldSample sample)

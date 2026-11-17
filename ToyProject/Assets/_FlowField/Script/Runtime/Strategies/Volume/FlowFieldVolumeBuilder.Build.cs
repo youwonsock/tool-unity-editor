@@ -228,7 +228,7 @@ namespace Common.FlowField
                     continue;
 
                 build.Request.Grid.FromFlatIndex(index, out int x, out int y, out int z);
-                Vector3 center = CellCenter(build.Request.Grid, index);
+                Vector3 center = build.Request.Grid.CellCenter(index);
                 FlowFieldVectorState current = new FlowFieldVectorState(
                     build.FinalDirections[index],
                     build.FinalSpeeds[index]);

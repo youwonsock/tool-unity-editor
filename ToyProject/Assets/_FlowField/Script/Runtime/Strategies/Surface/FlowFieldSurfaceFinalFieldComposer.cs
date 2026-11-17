@@ -284,57 +284,6 @@ namespace Common.FlowField
         }
     }
 
-    /// <summary>
-    /// Samples the latest staging escape direction for the safety overlay.
-    /// Ordinary public samples are read from the committed FieldStore.
-    /// </summary>
-    internal static class FlowFieldSurfaceCellSampler
-    {
-        internal static bool TrySampleEscape(
-            FlowFieldGridSpace grid,
-            FlowFieldSurfaceData surface,
-            FlowFieldSurfaceWorkspace workspace,
-            Vector3 worldPosition,
-            out FlowFieldSample sample)
-        {
-            sample = FlowFieldSample.Stopped;
-            if (!grid.IsValid
-                || surface == null
-                || !surface.IsValid
-                || workspace == null
-                || workspace.Capacity != grid.CellCount
-                || workspace.EscapeDirections == null
-                || workspace.EscapeDirections.Length != grid.CellCount
-                || !grid.TryWorldToLocal(worldPosition, out int x, out int z))
-                return false;
-
-            int index = grid.ToFlatIndex(x, z);
-            if (!workspace.Blocked[index])
-                return false;
-            if (!surface.IsSurfaceValid(index))
-                return true;
-
-            Vector3 normal = FlowFieldVectorUtility.ValidateSurfaceNormal(surface.GetSurfaceNormal(index));
-            Vector3 direction = workspace.EscapeDirections[index];
-            bool hasEscapeDirection = FlowFieldGridSpace.IsFinite(direction)
-                && direction.sqrMagnitude > FlowFieldVectorUtility.DIRECTION_EPSILON_SQR;
-            if (!hasEscapeDirection)
-            {
-                sample = new FlowFieldSample(Vector3.zero, 0f, normal, true, true);
-                return true;
-            }
-
-            direction = Vector3.ProjectOnPlane(direction, normal);
-            if (direction.sqrMagnitude > FlowFieldVectorUtility.DIRECTION_EPSILON_SQR)
-                direction.Normalize();
-            else
-                direction = Vector3.zero;
-
-            sample = new FlowFieldSample(direction, 1f, normal, true, true);
-            return true;
-        }
-    }
-
     internal readonly struct FlowFieldSurfaceModifierLayer
     {
         public IFlowFieldModifierSnapshot Snapshot { get; }

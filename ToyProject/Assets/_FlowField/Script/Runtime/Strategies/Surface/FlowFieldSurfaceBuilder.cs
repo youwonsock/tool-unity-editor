@@ -9,7 +9,7 @@ namespace Common.FlowField
     /// recomposition. Stage algorithms stay in their own files; this class owns
     /// the staging state, request coalescing and the solve backend boundary.
     /// </summary>
-    internal sealed partial class FlowFieldSurfaceBuilder : IFlowFieldSpaceBuilder, IFlowFieldSampleSafety
+    internal sealed partial class FlowFieldSurfaceBuilder : IFlowFieldSpaceBuilder, IFlowFieldLatestCells
     {
         private readonly FlowFieldSurfaceState _state = new FlowFieldSurfaceState();
         private readonly FlowFieldSurfaceFieldStore _fieldStore = new FlowFieldSurfaceFieldStore();

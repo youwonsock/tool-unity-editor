@@ -54,87 +54,29 @@ namespace Common.FlowField
             return info.IsValid;
         }
 
-        /// <summary>
-        /// The staging workspace already knows about obstacles the published
-        /// field was not built with. A mover inside one escapes it, and one
-        /// whose next step a change has blocked stops.
-        /// </summary>
-        bool IFlowFieldSampleSafety.TryOverride(
-            FlowFieldField field,
-            int sampleIndex,
-            Vector3 worldPosition,
-            in FlowFieldSample published,
-            out FlowFieldSample sample)
-        {
-            sample = published;
-            FlowFieldGridSpace sampleGrid = field.Grid;
-            int latestX = 0;
-            int latestZ = 0;
-            bool latestLayoutMatchesSample = _state.Grid.IsValid
+        public IFlowFieldLatestCells LatestCells => this;
+
+        // The base stage of a build in progress already knows obstacles the
+        // published field was not built with. The solve job only reads these
+        // arrays, and the base stage writes them on this thread.
+        bool IFlowFieldLatestCells.Describes(FlowFieldField field)
+            => _state.Grid.IsValid
                 && _state.Workspace != null
                 && _state.Workspace.Capacity == _state.Grid.CellCount
-                && sampleGrid.MatchesBounds(_state.Grid)
-                && ReferenceEquals(field.Surface, _state.Surface)
-                && _state.Grid.TryWorldToLocal(worldPosition, out latestX, out latestZ);
-            if (!latestLayoutMatchesSample)
-                return false;
+                && field.Grid.MatchesBounds(_state.Grid)
+                && ReferenceEquals(field.Surface, _state.Surface);
 
-            // A notified obstacle change stops movers in its region until a
-            // build that queried it is published, as in Volume3D.
-            if (_safety.IsCellUncertain(sampleGrid, CellCenter(sampleGrid, sampleIndex)))
-            {
-                sample = Stop(published);
-                return true;
-            }
+        bool IFlowFieldLatestCells.IsBlocked(int index) => _state.Workspace.Blocked[index];
 
-            int latestIndex = _state.Grid.ToFlatIndex(latestX, latestZ);
-            FlowFieldSurfaceWorkspace latestWorkspace = _state.Workspace;
-            FlowFieldSurfaceData latestSurface = _state.Surface;
-            bool latestBlocked = latestWorkspace.Blocked[latestIndex];
-            if (_session.IsRebuilding && latestBlocked)
-            {
-                sample = FlowFieldSurfaceCellSampler.TrySampleEscape(
-                        _state.Grid,
-                        latestSurface,
-                        latestWorkspace,
-                        worldPosition,
-                        out FlowFieldSample escapeSample)
-                    ? escapeSample
-                    : Stop(published);
-                return true;
-            }
-            int next = field.NextCells[sampleIndex];
-            if (next < 0)
-                return false;
-            bool nextBlocked = next >= sampleGrid.CellCount
-                || latestWorkspace.Blocked[next]
-                || _safety.IsCellUncertain(sampleGrid, CellCenter(sampleGrid, next))
-                || latestSurface == null
-                || !latestSurface.IsSurfaceValid(next);
-            bool topologyChanged = false;
-            if (!_session.IsRebuilding && !nextBlocked && next != sampleIndex)
-            {
-                sampleGrid.FromFlatIndex(sampleIndex, out int currentX, out int currentZ);
-                sampleGrid.FromFlatIndex(next, out int nextX, out int nextZ);
-                int directionIndex = FlowFieldNeighborUtility.FindDirectionIndex(nextX - currentX, nextZ - currentZ);
-                topologyChanged = directionIndex < 0
-                    || latestWorkspace.TopologyMasks == null
-                    || sampleIndex >= latestWorkspace.TopologyMasks.Length
-                    || (latestWorkspace.TopologyMasks[sampleIndex] & (1 << directionIndex)) == 0;
-            }
-            if (!nextBlocked && !topologyChanged)
-                return false;
-            sample = Stop(published);
-            return true;
-        }
+        bool IFlowFieldLatestCells.IsWalkable(int index)
+            => _state.Surface != null && _state.Surface.IsSurfaceValid(index);
 
-        private static Vector3 CellCenter(FlowFieldGridSpace grid, int index)
-        {
-            grid.FromFlatIndex(index, out int x, out int z);
-            return grid.LocalToWorldCenter(x, z);
-        }
+        bool IFlowFieldLatestCells.HasLink(int index, int direction)
+            => _state.Workspace.TopologyMasks != null
+                && index < _state.Workspace.TopologyMasks.Length
+                && (_state.Workspace.TopologyMasks[index] & (1 << direction)) != 0;
 
-        private static FlowFieldSample Stop(in FlowFieldSample sample)
-            => new FlowFieldSample(Vector3.zero, 0f, sample.SurfaceNormal, sample.HasSurface, sample.HasCell);
+        Vector3 IFlowFieldLatestCells.EscapeDirection(int index)
+            => _state.Workspace.EscapeDirections != null ? _state.Workspace.EscapeDirections[index] : Vector3.zero;
     }
 }

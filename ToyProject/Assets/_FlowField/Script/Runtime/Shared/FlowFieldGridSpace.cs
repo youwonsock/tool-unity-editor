@@ -238,6 +238,46 @@ namespace Common.FlowField
             localX = remainder - localZ * Width;
         }
 
+        // ----- Mode-neutral cell access: Surface2D cells have localY 0 -------
+
+        /// <summary>The local coordinates of a flat index; localY is 0 on a Surface2D grid.</summary>
+        internal void Locate(int index, out int localX, out int localY, out int localZ)
+        {
+            if (SpaceMode == FlowFieldSpaceMode.Volume3D)
+            {
+                FromFlatIndex(index, out localX, out localY, out localZ);
+                return;
+            }
+            localY = 0;
+            FromFlatIndex(index, out localX, out localZ);
+        }
+
+        /// <summary>The flat index of local coordinates, or false outside the grid.</summary>
+        internal bool TryLocal(int localX, int localY, int localZ, out int index)
+        {
+            index = -1;
+            if (SpaceMode == FlowFieldSpaceMode.Volume3D)
+            {
+                if (!IsLocalInBounds(localX, localY, localZ, Width, Height, Depth))
+                    return false;
+                index = ToFlatIndex(localX, localY, localZ);
+                return true;
+            }
+            if (localY != 0 || !IsLocalInBounds(localX, localZ, Width, Depth))
+                return false;
+            index = ToFlatIndex(localX, localZ);
+            return true;
+        }
+
+        /// <summary>The world center of a cell; a Surface2D cell sits at the grid's origin height.</summary>
+        internal Vector3 CellCenter(int index)
+        {
+            Locate(index, out int localX, out int localY, out int localZ);
+            return SpaceMode == FlowFieldSpaceMode.Volume3D
+                ? LocalToWorldCenter(localX, localY, localZ)
+                : LocalToWorldCenter(localX, localZ);
+        }
+
         public bool IsLocalInBounds(int localX, int localZ)
         {
             ThrowIfVolumeForSurfaceApi();

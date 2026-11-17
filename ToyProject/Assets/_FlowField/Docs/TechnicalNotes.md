@@ -19,11 +19,10 @@ Player 측정(`PlayerProbe` 폴더, `Tools/run-player-probe.sh`)은 Editor와 `F
   - Surface 풀이 완료 콜백은 세대 번호와 빌드 단계(`WaitingSolve`)로 유효성을 판단합니다. 콜백은 `StartBfs`나 `Poll` 안, 곧 `StepBuild` 안에서만 옵니다.
   - 조회(`TrySample`·`ClampPositionToGrid`·`IsReady`)와 조회 실패를 예외로 바꾸는 일(`FlowFieldFailures`)
   - 장애물 등록(`FlowFieldObstacleRegistry`), Modifier 등록(`FlowFieldModifierRegistry`), 통지 영역을 불확실 영역으로 표시하는 일(`FlowFieldSafety`, 여백 = 셀 크기 + Obstacle Clearance)
-- 모드마다 다른 일은 `IFlowFieldSpaceBuilder`(`FlowFieldSurfaceBuilder`, `FlowFieldVolumeBuilder`)가 맡습니다. 자기 멤버 20개와 상속한 `TryOverride`·`Dispose`입니다.
+- 모드마다 다른 일은 `IFlowFieldSpaceBuilder`(`FlowFieldSurfaceBuilder`, `FlowFieldVolumeBuilder`)가 맡습니다. 자기 멤버 21개와 상속한 `Dispose`입니다.
   - 요청 만들기(`Initialize`, `SubmitConfig`)
   - 빌드 단계(`TryBeginBuild`·`StepBuild`·`PublishBuild`, `BuildPolicy`)
-  - 게시 필드와 격자(`PublishedField`·`LatestGrid`·`TryGetFieldInfo`), 경로 안전 검사(`TryOverride`)
-    - 남은 차이: 두 모드 모두 불확실 영역의 셀은 멈추고, 다음 칸이 막히거나 불확실하면 멈춥니다. 세부 규칙은 아직 모드마다 다릅니다. Volume은 탈출 경로와 Default Direction 경로도 검사하고, Surface는 다음 빌드의 스테이징 데이터(최신 막힘·지면 연결)를 함께 봅니다. 묶으면 멈추는 조건이 바뀌므로 따로 결정할 일로 남겼습니다.
+  - 게시 필드와 격자(`PublishedField`·`LatestGrid`·`TryGetFieldInfo`), 게시 필드보다 새 셀 정보(`LatestCells`: Surface는 진행 중인 빌드의 기본 단계 결과, Volume은 없음)
   - 입력 반영(`ApplyObstacleChange`·`ApplyModifierChange`·`CreateModifierArea`)
   - 수명 훅(`CancelWork`·`DropComputedState`·`ReleaseResources`)
 - Manager는 모드별 정적 묘사 `FlowFieldSpaceStrategy.For(mode)`로 세션 생성, 검증, 격자, Bounds 스냅을 고릅니다. Builder는 `FlowFieldManagerConfig` 스냅샷으로 검증(`Validate`), 격자(`TryCreateLayout`), 요청을 스스로 만듭니다. 공통 검사는 `FlowFieldManagerConfig.ValidateShared`가 같은 순서와 메시지로 합니다.
@@ -73,7 +72,12 @@ Player 측정(`PlayerProbe` 폴더, `Tools/run-player-probe.sh`)은 Editor와 `F
 - 장애물·Modifier 단계는 64셀씩 진행합니다. 스텝마다 `OverlapBox`로 후보를 모아 후보가 닿는 셀만 정확히 검사합니다(`FlowFieldVolumeCellQuery`).
 - **부분 재계산:** Modifier만 바뀌면 게시된 내비게이션에 다시 합성하고, Goal만 바뀌면 장애물 결과와 Topology를 재사용합니다. Goal이 같은 셀 안에서 움직이면 빌드하지 않습니다. Goal을 지우면 진행 중인 빌드를 버립니다.
 - **등록하지 않은 Collider:** `RequestRebuild()`나 `NotifyCellsDirty()`의 전체 조회에서 반영됩니다.
-- **경로 안전성:** 공통 불확실 영역에 더해, 다음 셀·탈출 방향·Default Direction 경로가 그 영역이나 막힌 셀을 지나면 정지합니다(`FlowFieldVolumePathSafety`).
+- **샘플 안전 규칙(`FlowFieldSampleSafetyRule`, 두 모드·두 Bake 모드 공통):** 게시 값을 읽은 뒤 아래 순서로 덮어씁니다. "위험한 칸"은 불확실 영역에 있거나, 최신 정보에서 막혔거나, 걸을 수 없는(Surface 지면 없음) 칸입니다.
+  1. 지금 칸이 불확실 영역이거나 걸을 수 없으면 정지합니다.
+  2. 지금 칸이 막혔으면 탈출 방향으로 내보냅니다. 탈출 방향이 없거나, 그 방향 이웃이 격자 밖이거나 불확실 영역이거나 걸을 수 없으면 정지합니다. 이웃이 막힌 것은 괜찮습니다(장애물 깊은 곳에서는 여러 칸을 지나 빠져나갑니다).
+  3. 다음 칸이 있으면 지금 칸과 다음 칸을 감싸는 칸 중 하나라도 위험하거나 그 방향 연결이 끊겼으면 정지합니다.
+  4. Default Direction 칸(`NextCells == -1`)은 기본 방향의 축 부호로 갈 수 있는 이웃 조합 중 하나라도 격자 밖이거나 위험하면 정지합니다.
+  - "최신 정보"는 Surface의 경우 진행 중인 빌드의 작업 공간이 게시 필드와 같은 격자·지면일 때의 막힘·지면·연결·탈출이고, 그 밖에는 게시 필드입니다. 세션 상태(`IsRebuilding`)는 보지 않습니다.
 - **배열 재사용:** 교체된 게시 배열을 다음 빌드에 씁니다(`FlowFieldSpareArrays`).
 
 ## Modifier

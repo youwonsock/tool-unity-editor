@@ -38,7 +38,7 @@ namespace Common.FlowField
     /// these members; a builder reaches the session through the reference it
     /// was created with.
     /// </summary>
-    internal interface IFlowFieldSpaceBuilder : IFlowFieldSampleSafety, IDisposable
+    internal interface IFlowFieldSpaceBuilder : IDisposable
     {
         FlowFieldSpaceMode SpaceMode { get; }
         bool HasPendingRequest { get; }
@@ -61,8 +61,11 @@ namespace Common.FlowField
         // ----- Reads ---------------------------------------------------------
         // The field reads answer from, or null while none does (no build yet,
         // stopped, or a newer grid or source replaced it). The session reads,
-        // samples and clamps through it; TryOverride adds the mode's path checks.
+        // samples and clamps through it.
         FlowFieldField PublishedField { get; }
+        // What the mode knows about its cells beyond the published field, for
+        // the shared sample safety rule; null when it knows nothing newer.
+        IFlowFieldLatestCells LatestCells { get; }
         // The grid ClampPositionToGrid uses, valid once a request exists.
         FlowFieldGridSpace LatestGrid { get; }
         bool TryGetFieldInfo(out FlowFieldFieldInfo info);

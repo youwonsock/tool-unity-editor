@@ -28,6 +28,7 @@ class "FlowFieldSession\n(공통 파이프라인)" as Session {
   FlowFieldObstacleRegistry
   FlowFieldModifierRegistry
   FlowFieldSafety
+  FlowFieldSampleSafetyRule
 }
 interface IFlowFieldSpaceBuilder {
   요청·빌드 단계
@@ -44,7 +45,6 @@ class "FlowFieldSurfaceBuilder (Surface2D)" as Surface {
 }
 class "FlowFieldVolumeBuilder (Volume3D)" as Volume {
   VolumeBuildContext
-  VolumePathSafety
 }
 class "FlowFieldField·FlowFieldSampler\nFlowFieldRequestInbox" as Shared
 class "FlowFieldBakeService\n(Editor)" as BakeService

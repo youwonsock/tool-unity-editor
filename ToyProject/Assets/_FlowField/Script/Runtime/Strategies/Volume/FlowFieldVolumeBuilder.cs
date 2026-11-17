@@ -13,7 +13,7 @@ namespace Common.FlowField
     /// filling the Bounds, 26-neighbour navigation on worker threads, and
     /// re-queries limited to the regions whose obstacles changed.
     /// </summary>
-    internal sealed partial class FlowFieldVolumeBuilder : IFlowFieldSpaceBuilder, IFlowFieldSampleSafety
+    internal sealed partial class FlowFieldVolumeBuilder : IFlowFieldSpaceBuilder
     {
         private const int CellsPerStep = FlowFieldVolumeNavigation.CellsPerStep;
         private const int ArrayElementsPerStep = FlowFieldVolumeNavigation.ArrayElementsPerStep;
@@ -22,7 +22,6 @@ namespace Common.FlowField
         private readonly int[] _obstacleCells = new int[CellsPerStep];
         private readonly FlowFieldVolumeCellQuery _cellQuery = new FlowFieldVolumeCellQuery();
         private readonly FlowFieldSpareArrays _spares = new FlowFieldSpareArrays();
-        private readonly FlowFieldVolumePathSafety _pathSafety;
         // The uncertain regions; the session owns them, as in Surface2D.
         private FlowFieldSafety _safety => _session.Safety;
 
@@ -51,7 +50,6 @@ namespace Common.FlowField
         internal FlowFieldVolumeBuilder(FlowFieldSession session)
         {
             _session = session ?? throw new ArgumentNullException(nameof(session));
-            _pathSafety = new FlowFieldVolumePathSafety(session);
         }
 
         public FlowFieldSpaceMode SpaceMode => FlowFieldSpaceMode.Volume3D;

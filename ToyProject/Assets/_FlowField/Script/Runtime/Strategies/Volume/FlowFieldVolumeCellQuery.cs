@@ -58,11 +58,11 @@ namespace Common.FlowField
         /// <summary>World box enclosing the query boxes of the listed cells.</summary>
         internal static Bounds StepBounds(FlowFieldGridSpace grid, int[] cells, int count, Vector3 halfExtents)
         {
-            Vector3 min = FlowFieldVolumeNavigation.CellCenter(grid, cells[0]);
+            Vector3 min = grid.CellCenter(cells[0]);
             Vector3 max = min;
             for (int i = 1; i < count; i++)
             {
-                Vector3 center = FlowFieldVolumeNavigation.CellCenter(grid, cells[i]);
+                Vector3 center = grid.CellCenter(cells[i]);
                 min = Vector3.Min(min, center);
                 max = Vector3.Max(max, center);
             }
