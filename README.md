@@ -23,4 +23,5 @@ Unity 프로젝트에서 쓰던 기능을 독립 모듈로 분리하고, `ToyPro
 | --- | --- |
 | `Tools/run-player-probe.sh` | Mac Player에서 FlowField 측정과 모든 샘플 씬 실행. 결과는 CSV |
 | `Tools/run-transformpath-probe.sh` | Mac Player에서 TransformPath 측정 |
+| `Tools/run-transformpath-tests.sh` | TransformPath EditMode 테스트 |
 | `Tools/run-il2cpp-build.sh` | Android IL2CPP 빌드. 기기에서 실행하지는 않습니다 |

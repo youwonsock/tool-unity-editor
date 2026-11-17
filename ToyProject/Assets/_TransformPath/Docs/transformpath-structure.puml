@@ -12,44 +12,37 @@ hide circle
 title TransformPath 구조
 
 interface IPathProvider
+class PathProviderBehaviour <<abstract>>
 class "PathData\nMultiPathData" as Providers
+class PathPolyline
+class PathRoute
 class PathRuntimeDriver
-class "IPathFollower" as Follower <<interface>>
-class QueuedPathFollower
-class PathFollower {
+class PathRuntimeBehaviour <<abstract>>
+class PathFollower
+class PathPlayback {
   PathPlaybackCursor
-  PathQueueConstraintState
+  값 보간, 지연 이벤트
+  PathMotionLimit
 }
-class PathPlaybackSession {
-  PathSequenceSnapshot
-  PathEventSourceSnapshot
-}
-class PathEventHandler {
-  PathEventScheduler
-  PathScalarAdjustment
-}
-class PathTimeScaleCoordinator
-class PathQueueSession
+class PathEventDefinition
 class QueuedPathManager
+class PathQueueMember
 class PathQueueCoordinator <<static>>
 class PathExecutionBoundary <<static>>
 
-Providers .up.|> IPathProvider
-PathFollower .up.|> Follower
-QueuedPathFollower .up.|> Follower
-QueuedPathFollower --> PathFollower : 재생 위임
-QueuedPathFollower --> PathQueueSession
-PathQueueSession --> QueuedPathManager : 등록
+PathProviderBehaviour .up.|> IPathProvider
+Providers -up-|> PathProviderBehaviour
+Providers --> PathPolyline : PathData
+PathProviderBehaviour --> PathRoute : 리비전별 캐시
+PathRoute --> PathEventDefinition
+PathFollower -up-|> PathRuntimeBehaviour
+QueuedPathManager -up-|> PathRuntimeBehaviour
+PathFollower *--> PathPlayback
+PathPlayback --> PathRoute
+PathQueueMember --> PathFollower : 제한 기록
+QueuedPathManager --> PathQueueMember : 결과 전달
 QueuedPathManager --> PathQueueCoordinator
-PathFollower --> PathPlaybackSession
-PathPlaybackSession --> IPathProvider
-PathFollower --> PathEventHandler
-PathEventHandler --> PathTimeScaleCoordinator
-PathRuntimeDriver --> PathFollower : 순서 -100
-PathRuntimeDriver --> QueuedPathFollower : 순서 -110
-PathRuntimeDriver --> QueuedPathManager : 순서 -180
-PathRuntimeDriver --> PathEventHandler : 순서 -200
-PathFollower ..> PathExecutionBoundary : 알림
-QueuedPathFollower ..> PathExecutionBoundary : 알림
-PathEventHandler ..> PathExecutionBoundary : 알림
+PathRuntimeDriver --> PathRuntimeBehaviour : 효과 → Queue → 이동
+PathPlayback ..> PathExecutionBoundary : 알림
+PathQueueMember ..> PathExecutionBoundary : 알림
 @enduml
