@@ -59,7 +59,7 @@ namespace Common.FlowField.Editor
             var session = FlowFieldSession.CreateVolume();
             try
             {
-                session.Volume.Initialize(FlowFieldBakeMode.RuntimeDynamic);
+                session.Initialize(FlowFieldBakeMode.RuntimeDynamic);
                 session.Volume.Submit(request);
                 return session;
             }

@@ -57,23 +57,20 @@ namespace Common.FlowField.Editor
             if (manager is null || !Sessions.TryGetValue(manager, out FlowFieldSession session))
                 return;
             Sessions.Remove(manager);
-            session.Surface.DisposePermanently();
+            session.Dispose();
         }
 
         internal static void InvalidateAll()
         {
             foreach (FlowFieldSession session in Sessions.Values)
-                session.Surface.DisposePermanently();
+                session.Dispose();
             Sessions.Clear();
         }
 
         private static FlowFieldSession Build(FlowFieldManager manager)
         {
             var session = FlowFieldSession.CreateSurface();
-            FlowFieldSurfaceSourceKind sourceKind = manager.BakeMode == FlowFieldBakeMode.StaticBaked
-                ? FlowFieldSurfaceSourceKind.StaticSnapshot
-                : FlowFieldSurfaceSourceKind.SceneBuild;
-            session.Surface.Initialize(manager.BakeMode, sourceKind);
+            session.Initialize(manager.BakeMode);
             RegisterModifiers(manager, session);
             FlowFieldSurfaceBakeSettings settings = manager.CreateSurfaceBakeSettings();
             session.Surface.Submit(manager.CreateSurfaceRequest(

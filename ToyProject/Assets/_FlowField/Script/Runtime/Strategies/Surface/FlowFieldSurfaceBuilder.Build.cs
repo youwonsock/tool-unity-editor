@@ -253,6 +253,8 @@ namespace Common.FlowField
             // Set first: a solve that completes synchronously reports through
             // the callback, which moves the phase on.
             _phase = BuildPhase.WaitingSolve;
+            // Stop drops the backend; the next solve takes a new one.
+            _solveStage.Prepare(_sourceKind);
             bool accepted = _solveStage.Start(bfsRequest, _ => RunBfsCallback(generation));
             // A synchronous completion has already left the Building state.
             if (!accepted && IsCurrentBuild(generation))

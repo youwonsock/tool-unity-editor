@@ -66,6 +66,7 @@ namespace Common.FlowField
         // ----- Configuration -------------------------------------------------
         // The builder turns the Manager's settings into its own request; every
         // change arrives as a notification, never by polling the scene.
+        // Initialize prepares a builder that has no request yet.
         void Initialize(FlowFieldBakeMode bakeMode);
         void SubmitConfig(in FlowFieldManagerConfig config, FlowFieldConfigChange change);
 
@@ -79,13 +80,15 @@ namespace Common.FlowField
         void ApplyObstacleChange(in FlowFieldObstacleChange change);
 
         // ----- Lifecycle -----------------------------------------------------
-        // Stop: a running session drops its work and its field and waits.
-        // Restart: a stopped or faulted session starts again from nothing,
-        // keeping its registrations. Release: everything is cleared.
-        void Stop();
-        void Restart();
-        void Release();
-        void AbandonWorkForFault();
-        void ApplyFaultedState();
+        // The session runs every transition (Initialize, Stop, Restart,
+        // Release, a fault) and calls these for the mode's own state.
+        // CancelWork: drop the build in progress, its callbacks and owed input.
+        // DropComputedState: drop the published field and what was computed;
+        // the next build is complete and starts from the latest request.
+        // ReleaseResources: forget the requests and free what the builder holds.
+        // Dispose (after ReleaseResources): free what outlives a Release.
+        void CancelWork();
+        void DropComputedState();
+        void ReleaseResources();
     }
 }

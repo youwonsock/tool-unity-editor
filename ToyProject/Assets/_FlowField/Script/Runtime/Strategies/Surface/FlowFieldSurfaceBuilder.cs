@@ -210,24 +210,6 @@ namespace Common.FlowField
             _latestDefaultDirection = FlowFieldVectorUtility.NormalizeDefaultDirection(direction);
         }
 
-        /// <summary>
-        /// Starts a stopped or faulted session again from nothing. Registered
-        /// obstacles and Modifiers stay; the caller submits a new request.
-        /// </summary>
-        public void Restart()
-        {
-            if (_session.Disposed)
-                throw new ObjectDisposedException(nameof(FlowFieldSurfaceBuilder));
-            if (_session.Lifecycle != FlowFieldSessionLifecycle.Suspended
-                && _session.Lifecycle != FlowFieldSessionLifecycle.Faulted)
-                return;
-            ClearComputedState();
-            // A fault may have interrupted a Goal that was prepared but not
-            // solved. Forget it so the Goal stage cannot report it as unchanged.
-            _goalTracker.ForgetLastBuild();
-            Start(_session.BakeMode, _sourceKind);
-        }
-
         internal bool HasSameBaseInputs(in FlowFieldSurfaceRequest request)
             => _requests.HasLatest && _requests.Latest.HasSameBaseInputs(request);
 
@@ -261,39 +243,16 @@ namespace Common.FlowField
                 surfaceSource ?? FlowFieldRaycastSurfaceSource.Instance);
         }
 
-        internal void Initialize(
-            FlowFieldBakeMode bakeMode,
-            FlowFieldSurfaceSourceKind sourceKind)
+        // The session set the bake mode and cleared the uncertain regions.
+        public void Initialize(FlowFieldBakeMode bakeMode)
         {
-            if (_session.Disposed)
-                throw new ObjectDisposedException(nameof(FlowFieldSurfaceBuilder));
-            if (_session.Lifecycle == FlowFieldSessionLifecycle.Active
-                || _session.Lifecycle == FlowFieldSessionLifecycle.Building)
-                throw new InvalidOperationException("FlowField session is already initialized.");
-            if (_session.Lifecycle == FlowFieldSessionLifecycle.Faulted)
-                throw new InvalidOperationException("FlowField session is faulted. Retry the pending request or Release before Initialize.", _session.Fault);
-            if (_session.Lifecycle == FlowFieldSessionLifecycle.Suspended
-                && (_session.BakeMode != bakeMode
-                    || _sourceKind != sourceKind))
-            {
-                throw new InvalidOperationException(
-                    "FlowField bake mode and source are fixed until Release.");
-            }
-
-            _safety.ClearRegions();
-            Start(bakeMode, sourceKind);
-        }
-
-        private void Start(FlowFieldBakeMode bakeMode, FlowFieldSurfaceSourceKind sourceKind)
-        {
+            _sourceKind = bakeMode == FlowFieldBakeMode.StaticBaked
+                ? FlowFieldSurfaceSourceKind.StaticSnapshot
+                : FlowFieldSurfaceSourceKind.SceneBuild;
             _buildResolvesSafety = false;
-            _session.BakeMode = bakeMode;
-            _sourceKind = sourceKind;
             _modifierPipeline ??= new FlowFieldSurfaceModifierPipeline(_session.Modifiers);
-            _solveStage.Prepare(sourceKind);
-            _session.Fault = null;
+            _solveStage.Prepare(_sourceKind);
             MarkDirty(FlowFieldSurfaceDirtyFlags.All, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
-            _session.SetLifecycle(FlowFieldSessionLifecycle.Active);
         }
 
         internal void MarkDirty(
@@ -431,37 +390,20 @@ namespace Common.FlowField
                 MarkDirty(flags, result.DirtyRegion, FlowFieldCellRect.Invalid);
         }
 
-        private void InvalidateCallbacks()
+        // The session advanced its generation, so a late solve callback is dropped.
+        public void CancelWork()
         {
-            _session.AdvanceLifetimeGeneration();
             _solveStage.Cancel();
             _composeStage.Clear();
             _phase = BuildPhase.None;
-        }
-
-        public void AbandonWorkForFault() => InvalidateCallbacks();
-
-        public void ApplyFaultedState()
-        {
             _state.DirtyFlags = FlowFieldSurfaceDirtyFlags.None;
-            _session.SetLifecycle(FlowFieldSessionLifecycle.Faulted);
         }
 
-        public void Stop()
+        // Drops the published field and the computed Surface, keeping the
+        // latest request, registered obstacles and Modifiers. The complete
+        // rebuild queries every obstacle again.
+        public void DropComputedState()
         {
-            if (_session.Disposed
-                || _session.Lifecycle != FlowFieldSessionLifecycle.Active
-                && _session.Lifecycle != FlowFieldSessionLifecycle.Building)
-                return;
-            ClearComputedState();
-            _session.SetLifecycle(FlowFieldSessionLifecycle.Suspended);
-        }
-
-        // Drops every build, the published field and the computed Surface,
-        // keeping registered obstacles and Modifiers.
-        private void ClearComputedState()
-        {
-            InvalidateCallbacks();
             _solveStage.DetachBackend();
             _baseStage.LoadedSnapshot = null;
 
@@ -473,24 +415,16 @@ namespace Common.FlowField
             _state.HasObstacleMask = false;
             _state.Surface = null;
             _state.Workspace.ClearAll();
-            // The complete rebuild on restart queries every obstacle again;
-            // the registered colliders themselves stay.
-            _state.DirtyFlags = FlowFieldSurfaceDirtyFlags.All;
             _configOwed = false;
-            _session.Fault = null;
+            _buildResolvesSafety = false;
+            // A Goal that was prepared but not solved must not be reported as
+            // unchanged by the next build.
+            _goalTracker.ForgetLastBuild();
+            MarkDirty(FlowFieldSurfaceDirtyFlags.All, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
         }
 
-        public void Release()
+        public void ReleaseResources()
         {
-            if (_session.Disposed)
-                return;
-            ReleaseResources();
-        }
-
-        private void ReleaseResources()
-        {
-            InvalidateCallbacks();
-            _session.DetachRuntimeScheduler();
             _solveStage.DetachBackend();
             _modifierPipeline?.Clear();
             _modifierPipeline = null;
@@ -514,31 +448,13 @@ namespace Common.FlowField
             _configOwed = false;
             _state.GoalRemoved = false;
             _latestDefaultDirection = null;
-            _safety.ClearRegions();
             _buildResolvesSafety = false;
-            _session.Fault = null;
-            _session.SetLifecycle(FlowFieldSessionLifecycle.Released);
         }
 
-        internal void DisposePermanently()
-        {
-            if (_session.Disposed)
-                return;
-            using FlowFieldExecutionBoundary.OperationScope operation = _session.Boundary.EnterOperation();
-            // Disposal is terminal before Released subscribers run, so they
-            // cannot recreate resources or recursively dispose this owner.
-            _session.Disposed = true;
-            ReleaseResources();
-            // A directly injected backend is deliberately kept alive across
-            // Release so the same Session can be initialized again. Permanent
-            // disposal is the ownership boundary where it is finally freed.
-            _solveStage.DisposeInjected();
-            _session.MarkBaseDisposed();
-            _session.SetLifecycle(FlowFieldSessionLifecycle.Released);
-        }
-
-        public void Dispose()
-            => DisposePermanently();
+        // A directly injected backend is deliberately kept alive across
+        // Release so the same session can be initialized again. Disposal is
+        // the ownership boundary where it is finally freed.
+        public void Dispose() => _solveStage.DisposeInjected();
 
         private const FlowFieldSurfaceDirtyFlags BaseDirtyMask = FlowFieldSurfaceDirtyFlags.Grid
             | FlowFieldSurfaceDirtyFlags.StaticObstacles

@@ -6,13 +6,6 @@ namespace Common.FlowField
     /// <summary>How Surface2D reads a Manager configuration: its grid, checks and requests.</summary>
     internal sealed partial class FlowFieldSurfaceBuilder
     {
-        public void Initialize(FlowFieldBakeMode bakeMode)
-            => Initialize(
-                bakeMode,
-                bakeMode == FlowFieldBakeMode.StaticBaked
-                    ? FlowFieldSurfaceSourceKind.StaticSnapshot
-                    : FlowFieldSurfaceSourceKind.SceneBuild);
-
         public void SubmitConfig(in FlowFieldManagerConfig config, FlowFieldConfigChange change)
         {
             if (!_session.IsInitialized || _session.IsFaulted)

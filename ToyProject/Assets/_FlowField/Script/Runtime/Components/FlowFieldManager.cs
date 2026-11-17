@@ -221,7 +221,7 @@ namespace Common.FlowField
             using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
             AdoptGoalTransform();
             EnsureSessionForConfiguredMode();
-            _session.Builder.Initialize(_bakeMode);
+            _session.Initialize(_bakeMode);
             // A disabled Manager starts building when it is enabled. It still
             // holds the request, so its grid answers ClampPositionToGrid and
             // takes obstacle input the same way in both modes.

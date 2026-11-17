@@ -101,21 +101,15 @@ namespace Common.FlowField
             }
         }
 
+        // The session set the bake mode and cleared the uncertain regions.
+        // Running with no request yet; the first Submit starts a build.
         public void Initialize(FlowFieldBakeMode bakeMode)
         {
-            ThrowIfDisposed();
-            if (_session.IsInitialized)
-                throw new InvalidOperationException("FlowField volume session is already initialized.");
-            _session.BakeMode = bakeMode;
-            _session.Fault = null;
             _requests.Clear();
             _hasPendingModifierRecompose = false;
             _obstacleQueryRequired = false;
-            _safety.ClearRegions();
             _buildReservationBytes = 0;
             _committedReservationBytes = 0;
-            // Running with no request yet; the first Submit starts a build.
-            _session.SetLifecycle(FlowFieldSessionLifecycle.Active);
         }
 
         internal bool Submit(in FlowFieldVolumeRequest request, bool requeryObstacles = false)
@@ -293,9 +287,9 @@ namespace Common.FlowField
             previous?.Dispose();
         }
 
-        private void CancelCurrentBuild()
+        // The session advanced its generation, so the discarded build cannot publish.
+        public void CancelWork()
         {
-            _session.AdvanceLifetimeGeneration();
             DiscardBuild();
             _requests.Pending = false;
             _hasPendingModifierRecompose = false;
@@ -321,59 +315,25 @@ namespace Common.FlowField
             QueueModifierChange();
         }
 
-        public void Stop()
-        {
-            if (_session.Lifecycle != FlowFieldSessionLifecycle.Active
-                && _session.Lifecycle != FlowFieldSessionLifecycle.Building)
-                return;
-            CancelCurrentBuild();
-            DropCommittedField();
-            _session.SetLifecycle(FlowFieldSessionLifecycle.Suspended);
-        }
-
         // The world may have changed while nothing observed it, so the session
-        // is not Ready again until a new build publishes.
-        private void DropCommittedField()
+        // is not Ready again until a new build publishes. The latest request
+        // builds again.
+        public void DropComputedState()
         {
             _committed = null;
             _committedReservationBytes = 0;
+            _requests.Pending = _requests.HasLatest;
         }
 
-        public void Release()
+        public void ReleaseResources()
         {
-            if (!_session.IsInitialized && !_session.IsFaulted)
-                return;
-            CancelCurrentBuild();
-            _session.Fault = null;
-            DropCommittedField();
+            _committed = null;
+            _committedReservationBytes = 0;
             _requests.Clear();
-            _safety.ClearRegions();
-            _session.DetachRuntimeScheduler();
             _registeredObstacleOverlapBuffer = null;
             _cellQuery.Clear();
             _spares.Clear();
-            _session.SetLifecycle(FlowFieldSessionLifecycle.Released);
         }
-
-        /// <summary>
-        /// Starts a stopped or faulted session again from nothing. Registered
-        /// obstacles and Modifiers stay; the latest request builds again.
-        /// </summary>
-        public void Restart()
-        {
-            ThrowIfDisposed();
-            if (_session.Lifecycle != FlowFieldSessionLifecycle.Suspended && !_session.IsFaulted)
-                return;
-            CancelCurrentBuild();
-            _session.Fault = null;
-            DropCommittedField();
-            _requests.Pending = _requests.HasLatest;
-            _session.SetLifecycle(FlowFieldSessionLifecycle.Building);
-        }
-
-        public void AbandonWorkForFault() => CancelCurrentBuild();
-
-        public void ApplyFaultedState() => _session.SetLifecycle(FlowFieldSessionLifecycle.Faulted);
 
         private void QueueModifierChange()
         {
@@ -456,22 +416,9 @@ namespace Common.FlowField
                 throw new InvalidOperationException(staticReason);
         }
 
+        // Release already freed everything a Volume3D builder holds.
         public void Dispose()
         {
-            if (_session.Disposed)
-                return;
-            using FlowFieldExecutionBoundary.OperationScope operation = _session.Boundary.EnterOperation();
-            _session.Disposed = true;
-            _session.DetachRuntimeScheduler();
-            CancelCurrentBuild();
-            _requests.Clear();
-            DropCommittedField();
-            _registeredObstacleOverlapBuffer = null;
-            _cellQuery.Clear();
-            _spares.Clear();
-            _safety.ClearRegions();
-            _session.SetLifecycle(FlowFieldSessionLifecycle.Released);
-            _session.MarkBaseDisposed();
         }
     }
 

@@ -89,7 +89,7 @@ namespace Common.FlowField
         internal event Action<Exception> EventFailed;
 
         internal FlowFieldSpaceMode SpaceMode => _builder.SpaceMode;
-        internal FlowFieldBakeMode BakeMode { get; set; }
+        internal FlowFieldBakeMode BakeMode { get; private set; }
         internal FlowFieldSessionLifecycle Lifecycle { get; private set; }
 
         internal FlowFieldRuntimeState State => Lifecycle switch
@@ -114,10 +114,10 @@ namespace Common.FlowField
         // TrySample can succeed inside the grid.
         internal bool IsReady => CanPump && _builder.PublishedField != null;
         internal bool HasPendingRequest => _builder.HasPendingRequest;
-        internal Exception Fault { get; set; }
+        internal Exception Fault { get; private set; }
         internal string LastError => Fault?.Message;
         internal int Revision { get; set; }
-        internal bool Disposed { get; set; }
+        internal bool Disposed { get; private set; }
         // Advances when the session stops being what earlier work was for:
         // Stop, Restart, Release and a fault, which must also drop a late
         // solve callback. Queued events and late solve callbacks
@@ -446,15 +446,60 @@ namespace Common.FlowField
             _runtimeScheduled = false;
         }
 
-        // Lifecycle commands with the same contract in both modes. Mode
-        // specific Init and request creation stay on the builders.
-        internal void Stop() => _builder.Stop();
-        internal void Restart() => _builder.Restart();
+        // ----- Lifecycle -----------------------------------------------------
+        // The same transitions in both modes. The builder only cancels its
+        // work, drops what it computed and frees what it holds.
+
+        /// <summary>Starts a new or released session with no field yet.</summary>
+        internal void Initialize(FlowFieldBakeMode bakeMode)
+        {
+            if (Disposed)
+                throw new ObjectDisposedException(nameof(FlowFieldSession));
+            if (IsFaulted)
+                throw new InvalidOperationException(
+                    "FlowField session is faulted. Retry the pending request or Release before Initialize.", Fault);
+            if (IsInitialized)
+                throw new InvalidOperationException("FlowField session is already initialized.");
+            BakeMode = bakeMode;
+            Fault = null;
+            Safety.ClearRegions();
+            _builder.Initialize(bakeMode);
+            SetLifecycle(FlowFieldSessionLifecycle.Active);
+        }
+
+        /// <summary>A running session drops its work and its field and waits.</summary>
+        internal void Stop()
+        {
+            if (!CanPump)
+                return;
+            AbandonWork();
+            _builder.DropComputedState();
+            SetLifecycle(FlowFieldSessionLifecycle.Suspended);
+        }
+
+        /// <summary>
+        /// A stopped or faulted session starts again from nothing. Registered
+        /// obstacles and Modifiers stay; the latest request builds again.
+        /// </summary>
+        internal void Restart()
+        {
+            if (Disposed)
+                throw new ObjectDisposedException(nameof(FlowFieldSession));
+            if (Lifecycle != FlowFieldSessionLifecycle.Suspended && !IsFaulted)
+                return;
+            AbandonWork();
+            _builder.DropComputedState();
+            Fault = null;
+            SetLifecycle(FlowFieldSessionLifecycle.Building);
+        }
+
+        /// <summary>Clears everything, registrations included. Initialize may follow.</summary>
         internal void Release()
         {
-            Obstacles.Clear();
-            _modifiers?.Clear();
-            _builder.Release();
+            if (Disposed)
+                return;
+            ReleaseState();
+            SetLifecycle(FlowFieldSessionLifecycle.Released);
         }
 
         internal void ReportFault(Exception exception)
@@ -466,15 +511,44 @@ namespace Common.FlowField
         internal void EnterFault(Exception exception)
         {
             using FlowFieldExecutionBoundary.OperationScope operation = Boundary.EnterOperation();
-            _builder.AbandonWorkForFault();
+            AbandonWork();
             Fault = exception;
-            _builder.ApplyFaultedState();
+            SetLifecycle(FlowFieldSessionLifecycle.Faulted);
             Publish(FlowFieldExecutionBoundary.EventKind.Failed, exception: exception);
         }
 
-        internal void AdvanceLifetimeGeneration()
+        /// <summary>Released for good: nothing can Initialize this session again.</summary>
+        public void Dispose()
+        {
+            if (Disposed)
+                return;
+            using FlowFieldExecutionBoundary.OperationScope operation = Boundary.EnterOperation();
+            // Disposal is terminal before Released subscribers run, so they
+            // cannot recreate resources or recursively dispose this owner.
+            Disposed = true;
+            ReleaseState();
+            SetLifecycle(FlowFieldSessionLifecycle.Released);
+            _builder.Dispose();
+            MarkBaseDisposed();
+        }
+
+        // Work begun before this point must not publish, and its queued
+        // events and late solve callbacks are dropped.
+        private void AbandonWork()
         {
             unchecked { LifetimeGeneration++; }
+            _builder.CancelWork();
+        }
+
+        private void ReleaseState()
+        {
+            AbandonWork();
+            DetachRuntimeScheduler();
+            Obstacles.Clear();
+            _modifiers?.Clear();
+            _builder.ReleaseResources();
+            Safety.ClearRegions();
+            Fault = null;
         }
 
         internal void SetLifecycle(FlowFieldSessionLifecycle next)
@@ -514,7 +588,7 @@ namespace Common.FlowField
                     exception));
         }
 
-        internal void MarkBaseDisposed()
+        private void MarkBaseDisposed()
         {
             if (_baseDisposed)
                 return;
@@ -572,7 +646,5 @@ namespace Common.FlowField
                 Debug.LogException(reportingException);
             }
         }
-
-        public void Dispose() => _builder.Dispose();
     }
 }

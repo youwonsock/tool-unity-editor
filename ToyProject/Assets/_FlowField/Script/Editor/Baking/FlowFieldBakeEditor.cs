@@ -200,7 +200,7 @@ namespace Common.FlowField.Editor
                 {
                     session.FieldCommitted -= Complete;
                     session.Failed -= Failed;
-                    session.Surface.DisposePermanently();
+                    session.Dispose();
                 }
                 bakeJob.Dispose();
                 EditorUtility.ClearProgressBar();
@@ -248,9 +248,7 @@ namespace Common.FlowField.Editor
                 session.Failed += Failed;
                 try
                 {
-                    session.Surface.Initialize(
-                        FlowFieldBakeMode.RuntimeDynamic,
-                        FlowFieldSurfaceSourceKind.SceneBuild);
+                    session.Initialize(FlowFieldBakeMode.RuntimeDynamic);
 
                     FlowFieldSurfaceGoalResolution goalSnapshot = manager.ResolveConfiguredGoal(settings.Grid);
                     bool accepted = session.Surface.Submit(FlowFieldSurfaceRequest.ForSceneBuild(
