@@ -80,6 +80,27 @@ namespace Common.FlowField
             _config = config;
             _hasConfig = true;
             _builder.SubmitConfig(in config, change);
+            EnterBuildingIfOwed();
+        }
+
+        // Accepted input is owed work: from that moment the session is Building,
+        // the same in both modes, until a build publishes it. A stopped or
+        // faulted session is not Active and keeps its state.
+        private void EnterBuildingIfOwed()
+        {
+            if (Lifecycle == FlowFieldSessionLifecycle.Active
+                && (_builder.HasPendingRequest || _builder.HasOwedInput))
+                SetLifecycle(FlowFieldSessionLifecycle.Building);
+        }
+
+        // Building with nothing left to build and a field to read is Ready again.
+        private void LeaveBuildingIfIdle()
+        {
+            if (Lifecycle == FlowFieldSessionLifecycle.Building
+                && !_builder.HasActiveBuild
+                && !_builder.HasOwedInput
+                && _builder.PublishedField != null)
+                SetLifecycle(FlowFieldSessionLifecycle.Active);
         }
 
         internal event Action FieldCommitted;
@@ -260,6 +281,7 @@ namespace Common.FlowField
                 return false;
             _builder.ApplyModifierChange(new FlowFieldModifierUpdate(
                 FlowFieldModifierUpdateKind.Registered, Modifiers.Get(modifier)));
+            EnterBuildingIfOwed();
             return true;
         }
 
@@ -270,12 +292,15 @@ namespace Common.FlowField
                 throw FlowFieldFailures.NotInitialized();
             if (FlowFieldVectorUtility.IsMissingModifier(modifier))
                 return false;
-            return Modifiers.Unregister(modifier, entry =>
+            bool removed = Modifiers.Unregister(modifier, entry =>
             {
                 if (!IsFaulted)
                     _builder.ApplyModifierChange(new FlowFieldModifierUpdate(
                         FlowFieldModifierUpdateKind.Unregistered, entry));
             });
+            if (removed)
+                EnterBuildingIfOwed();
+            return removed;
         }
 
         // Nothing polls a Modifier, so its notification is where an invalid
@@ -298,6 +323,7 @@ namespace Common.FlowField
             }
             _builder.ApplyModifierChange(new FlowFieldModifierUpdate(
                 FlowFieldModifierUpdateKind.Changed, Modifiers.Get(modifier), change, result));
+            EnterBuildingIfOwed();
         }
 
         private bool RegisterObstacleNow(Collider collider)
@@ -343,6 +369,7 @@ namespace Common.FlowField
                     MarkUncertain(change.Current);
             }
             _builder.ApplyObstacleChange(in change);
+            EnterBuildingIfOwed();
         }
 
         // Grown by the cell size and the Obstacle Clearance a change can reach.
@@ -407,9 +434,13 @@ namespace Common.FlowField
                     {
                         FlowFieldBuildPolicy policy = _builder.BuildPolicy;
                         if (begun >= policy.MaxBuildsBegunPerPump
-                            || !policy.BeginsAfterBudget && budget.IsExpired
-                            || !_builder.TryBeginBuild(scheduled))
+                            || !policy.BeginsAfterBudget && budget.IsExpired)
                             return;
+                        if (!_builder.TryBeginBuild(scheduled))
+                        {
+                            LeaveBuildingIfIdle();
+                            return;
+                        }
                         begun++;
                     }
 

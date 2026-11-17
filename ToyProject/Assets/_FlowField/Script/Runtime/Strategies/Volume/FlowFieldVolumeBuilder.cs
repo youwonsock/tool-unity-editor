@@ -134,7 +134,6 @@ namespace Common.FlowField
             if (goalMovedWithinCell)
                 return true;
             _requests.Pending = true;
-            EnterBuildingUnlessStopped();
             return true;
         }
 
@@ -151,13 +150,6 @@ namespace Common.FlowField
                 return false;
             FlowFieldVolumeRequest current = _build != null ? _build.Request : _committed.Request;
             return !current.HasSameGoal(request) && current.HasSameResult(request);
-        }
-
-        // Accepted input waits while the session is stopped.
-        private void EnterBuildingUnlessStopped()
-        {
-            if (!_session.IsFaulted && _session.Lifecycle != FlowFieldSessionLifecycle.Suspended)
-                _session.SetLifecycle(FlowFieldSessionLifecycle.Building);
         }
 
         public FlowFieldBuildPolicy BuildPolicy => new FlowFieldBuildPolicy(beginsAfterBudget: false, maxBuildsBegunPerPump: int.MaxValue);
@@ -191,11 +183,7 @@ namespace Common.FlowField
         private bool TryBeginPendingBuild()
         {
             if (!_requests.Pending && !_hasPendingModifierRecompose)
-            {
-                if (_committed != null && _session.IsRebuilding)
-                    _session.SetLifecycle(FlowFieldSessionLifecycle.Active);
                 return false;
-            }
 
             bool recompose = !_requests.Pending;
             FlowFieldVolumeRequest request = recompose ? _committed.Request : _requests.Latest;
@@ -285,8 +273,6 @@ namespace Common.FlowField
             if (_requests.Pending)
                 return;
             _requests.Pending = _requests.HasLatest && _requests.Latest.Grid.IsValid;
-            if (_requests.Pending)
-                EnterBuildingUnlessStopped();
         }
 
         // Volume3D finds a Modifier's cells per build, so it keeps no area data.
@@ -334,7 +320,6 @@ namespace Common.FlowField
                 && _committed.Request.HasSameResult(_requests.Latest))
             {
                 _hasPendingModifierRecompose = true;
-                EnterBuildingUnlessStopped();
                 return;
             }
             if (_requests.HasLatest)
@@ -342,7 +327,6 @@ namespace Common.FlowField
                 // The latest input was already accepted, and a Goal move within
                 // its cell must not make Submit skip this build.
                 _requests.Pending = true;
-                EnterBuildingUnlessStopped();
             }
             else if (_committed != null)
                 Submit(_committed.Request);
