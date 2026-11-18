@@ -34,7 +34,7 @@ namespace Common.OptimizeTool.MeshOptimization
         public static Mesh[] Save(IList<Mesh> staged, IList<string> paths, bool overwrite, string undoName,
             Action<Mesh[]> apply = null, IReadOnlyList<string> companionAssetPaths = null)
         {
-            MeshProcessingUtility.RequireEditMode();
+            AssetFileTransaction.RequireEditMode();
             if (staged.Count == 0 || staged.Count != paths.Count) throw new ArgumentException("Mesh and path counts must match.");
             var existing = new Mesh[staged.Count];
             var normalized = new string[paths.Count];
@@ -49,12 +49,7 @@ namespace Common.OptimizeTool.MeshOptimization
                 if (!file.EndsWith(".asset", StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Mesh outputs need .asset extensions.");
                 normalized[i] = folder + "/" + file;
                 if (!unique.Add(normalized[i])) throw new ArgumentException("Several outputs resolve to the same asset.");
-                Object asset = AssetDatabase.LoadMainAssetAtPath(normalized[i]);
-                if (asset == null && File.Exists(normalized[i]))
-                    throw new InvalidOperationException($"An unrecognized file occupies '{path}'.");
-                if (asset != null && !(asset is Mesh)) throw new InvalidOperationException($"A non-mesh asset occupies '{path}'.");
-                if (asset != null && !overwrite) throw new InvalidOperationException($"Asset already exists: {path}");
-                existing[i] = asset as Mesh;
+                existing[i] = (Mesh)AssetFileTransaction.ValidateOutputTarget(normalized[i], typeof(Mesh), overwrite);
             }
 
             var companions = new List<AssetFileSnapshot>();

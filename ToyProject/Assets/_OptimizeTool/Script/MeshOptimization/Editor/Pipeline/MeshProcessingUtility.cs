@@ -11,12 +11,6 @@ namespace Common.OptimizeTool.MeshOptimization
     /// <summary>Shared static-mesh processing. It never mutates source meshes or importer settings.</summary>
     public static class MeshProcessingUtility
     {
-        public static void RequireEditMode()
-        {
-            if (EditorApplication.isPlayingOrWillChangePlaymode)
-                throw new InvalidOperationException("Bake meshes in Edit Mode.");
-        }
-
         public static bool IsFinite(Vector3 v) => IsFinite(v.x) && IsFinite(v.y) && IsFinite(v.z);
         private static bool IsFinite(float v) => !float.IsNaN(v) && !float.IsInfinity(v);
 

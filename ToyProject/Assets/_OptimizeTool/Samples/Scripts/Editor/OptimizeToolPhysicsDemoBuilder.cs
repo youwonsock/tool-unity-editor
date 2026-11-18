@@ -22,7 +22,7 @@ namespace Common.OptimizeTool.Samples.Editor
         [MenuItem("Tools/OptimizeTool/Build Physics Recorder Demo")]
         public static void BuildPhysicsDemo()
         {
-            MeshProcessingUtility.RequireEditMode();
+            AssetFileTransaction.RequireEditMode();
             GameObject root = PrefabUtility.LoadPrefabContents(OptimizeToolShowcaseEditor.PrefabPath);
             try
             {
@@ -41,7 +41,7 @@ namespace Common.OptimizeTool.Samples.Editor
 
         public static GameObject BuildContents(GameObject root)
         {
-            EnsureFolder(MaterialFolder);
+            AssetFileTransaction.EnsureFolder(MaterialFolder);
             Material bodyMaterial = GetMaterial("PhysicsDemoBody", new Color(1f, 0.61f, 0.15f));
             Material floorMaterial = GetMaterial("PhysicsDemoFloor", new Color(0.12f, 0.2f, 0.29f));
             Material rampMaterial = GetMaterial("PhysicsDemoRamp", new Color(0.3f, 0.43f, 0.54f));
@@ -187,14 +187,6 @@ namespace Common.OptimizeTool.Samples.Editor
             if (material.HasProperty("_Color")) material.SetColor("_Color", color);
             AssetDatabase.CreateAsset(material, path);
             return material;
-        }
-
-        private static void EnsureFolder(string path)
-        {
-            if (AssetDatabase.IsValidFolder(path)) return;
-            int split = path.LastIndexOf('/');
-            EnsureFolder(path.Substring(0, split));
-            AssetDatabase.CreateFolder(path.Substring(0, split), path.Substring(split + 1));
         }
     }
 }

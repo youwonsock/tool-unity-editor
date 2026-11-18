@@ -75,7 +75,7 @@ namespace Common.OptimizeTool.MeshOptimization
         private static MeshBuildRequest CaptureBuildRequest(MeshCombiner combiner, out bool skippedDisabledChild)
         {
             skippedDisabledChild = false;
-            MeshProcessingUtility.RequireEditMode();
+            AssetFileTransaction.RequireEditMode();
             MeshFilter[] direct = combiner.TargetMeshFilters;
             if (combiner.CollectChildMeshes == (direct != null && direct.Length > 0))
                 throw new ArgumentException("Choose direct MeshFilters or child collection, not both.");
@@ -122,7 +122,7 @@ namespace Common.OptimizeTool.MeshOptimization
 
         private static void ValidateSettings(BackfaceCullMeshBaker baker)
         {
-            MeshProcessingUtility.RequireEditMode();
+            AssetFileTransaction.RequireEditMode();
             AssetFileTransaction.ValidateFolder(baker.SavePath);
             if (!baker.UseCustomVector && baker.TargetCamera == null) throw new ArgumentException("Assign a target camera.");
             if (baker.UseCustomVector && (!MeshProcessingUtility.IsFinite(baker.CustomCameraVector) || baker.CustomCameraVector.sqrMagnitude < 0.000001f))

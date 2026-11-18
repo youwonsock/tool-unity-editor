@@ -18,10 +18,10 @@ namespace Common.OptimizeTool.PhysicsRecording
         /// <summary>Rejects an output path that exists without overwrite, or that holds another kind of asset.</summary>
         internal static void ValidateTargets(in PhysicsTakeSettings settings)
         {
-            ValidateTarget(settings.ClipPath, typeof(AnimationClip), settings.Overwrite);
-            ValidateTarget(settings.PrefabPath, typeof(GameObject), settings.Overwrite);
+            AssetFileTransaction.ValidateOutputTarget(settings.ClipPath, typeof(AnimationClip), settings.Overwrite);
+            AssetFileTransaction.ValidateOutputTarget(settings.PrefabPath, typeof(GameObject), settings.Overwrite);
             if (settings.SaveReference)
-                ValidateTarget(settings.ReferencePath, typeof(PhysicsRecordingReference), settings.Overwrite);
+                AssetFileTransaction.ValidateOutputTarget(settings.ReferencePath, typeof(PhysicsRecordingReference), settings.Overwrite);
         }
 
         internal static PhysicsRecordingAssets Write(Transform root, PhysicsTake take, in PhysicsTakeSettings settings)
@@ -103,17 +103,6 @@ namespace Common.OptimizeTool.PhysicsRecording
             animation.wrapMode = WrapMode.ClampForever;
             // Still under the inactive staging parent, so no callbacks run.
             playback.SetActive(true);
-        }
-
-        private static void ValidateTarget(string path, Type type, bool overwrite)
-        {
-            Object existing = AssetDatabase.LoadMainAssetAtPath(path);
-            if (existing == null && !File.Exists(path) && !Directory.Exists(path))
-                return;
-            if (!overwrite)
-                throw new InvalidOperationException($"Recording output already exists: {path}");
-            if (existing == null || existing.GetType() != type || AssetDatabase.IsValidFolder(path))
-                throw new InvalidOperationException($"Recording output path is occupied by an incompatible asset: {path}");
         }
     }
 }

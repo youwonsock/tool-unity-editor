@@ -46,7 +46,7 @@ namespace Common.OptimizeTool.MeshOptimization
 
         internal static MeshRendererSettings Validate(MeshBuildRequest request)
         {
-            MeshProcessingUtility.RequireEditMode();
+            AssetFileTransaction.RequireEditMode();
             if (request == null) throw new ArgumentNullException(nameof(request));
             MeshProcessingUtility.ValidateAngle(request.BackfaceAngle);
             if ((request.Backfaces || request.Occlusion) && request.Camera == null)

@@ -19,7 +19,7 @@ namespace Common.OptimizeTool.Samples.Editor
 
         public static void BuildShowcaseAssets(string prefabPath, string outputFolder)
         {
-            MeshProcessingUtility.RequireEditMode();
+            AssetFileTransaction.RequireEditMode();
             AssetFileTransaction.ValidateFolder(outputFolder);
             GameObject root = PrefabUtility.LoadPrefabContents(prefabPath);
             var results = new List<MeshBuildResult>();

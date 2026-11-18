@@ -14,6 +14,33 @@ namespace Common.OptimizeTool
     {
         private static readonly char[] ForbiddenNameChars = { '/', '\\', ':', '*', '?', '"', '<', '>', '|' };
 
+        /// <summary>Asset outputs are written in Edit Mode only.</summary>
+        public static void RequireEditMode()
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode)
+                throw new InvalidOperationException("Bake meshes in Edit Mode.");
+        }
+
+        /// <summary>
+        /// Checks an output path before anything is written and returns the asset that will be replaced, or null.
+        /// A folder, an unrecognized file or an asset of another type always fails; an asset of the expected
+        /// type fails unless <paramref name="overwrite"/> is set.
+        /// </summary>
+        public static Object ValidateOutputTarget(string path, Type type, bool overwrite)
+        {
+            if (Directory.Exists(path)) throw new InvalidOperationException($"A folder occupies the output path: {path}");
+            Object existing = AssetDatabase.LoadMainAssetAtPath(path);
+            if (existing == null)
+            {
+                if (File.Exists(path)) throw new InvalidOperationException($"An unrecognized file occupies the output path: {path}");
+                return null;
+            }
+            if (existing.GetType() != type)
+                throw new InvalidOperationException($"An incompatible {existing.GetType().Name} occupies the output path: {path}");
+            if (!overwrite) throw new InvalidOperationException($"Output already exists: {path}");
+            return existing;
+        }
+
         /// <summary>Returns the normalized folder path; it must be under Assets/ and every part a valid name.</summary>
         public static string ValidateFolder(string folder)
         {

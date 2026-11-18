@@ -76,7 +76,8 @@ flowchart LR
 
 실선은 호출·생성, 점선은 결과 데이터 전달이나 인터페이스 구현입니다.
 - `PhysicsRecorder`는 `PhysicsTake`를 채워 Exporter에 넘기며, Take는 Writer를 호출하지 않습니다.
-- 출력 경로 검증, 폴더 생성, GUID를 유지하는 덮어쓰기와 파일 복원은 두 시스템 모두 `AssetFileTransaction`을 씁니다.
+- 출력 경로 검증, 출력 자리 검사, 폴더 생성, GUID를 유지하는 덮어쓰기, 파일 복원, Edit Mode 확인은 두 시스템과 샘플 빌더가 모두 `AssetFileTransaction`을 씁니다.
+- 출력 자리 검사(`ValidateOutputTarget`)는 폴더, 인식할 수 없는 파일, 다른 타입의 에셋이 있으면 덮어쓰기 설정과 관계없이 거부합니다. 같은 타입의 에셋은 덮어쓰기를 허용한 경우에만 교체합니다.
 - 메시의 씬 출력과 MeshFilter 교체는 각 명령이 넘긴 `apply` 콜백에서 수행합니다. 콜백은 트랜잭션의 최종 저장 완료 전에 실행되며, 실패하면 에셋과 Undo에 등록된 씬 변경을 복원합니다.
 
 메시 작업은 요청마다 검증·계산·저장하며 초기화 상태를 유지하지 않습니다. 물리 기록은 여러 물리 틱에 걸친 take를 소유하므로 `StartRecording`부터 `StopRecording`·`CancelRecording`·비활성화까지가 한 take의 수명입니다. 별도 초기화나 Fault 상태는 없습니다.

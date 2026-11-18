@@ -28,7 +28,7 @@ namespace Common.OptimizeTool.Samples.Editor
 
         public static void BuildAt(string scenePath, string folder, int[] sides, int faceSubdivisions = 1)
         {
-            MeshProcessingUtility.RequireEditMode();
+            AssetFileTransaction.RequireEditMode();
             AssetFileTransaction.ValidateFolder(folder);
             if (SceneManager.GetSceneByPath(scenePath).isLoaded)
                 throw new InvalidOperationException("Close the scale benchmark scene before rebuilding it.");
@@ -45,7 +45,7 @@ namespace Common.OptimizeTool.Samples.Editor
 
         private static void BuildScene(string path, string folder, int[] sides, int faceSubdivisions)
         {
-            EnsureFolder(folder);
+            AssetFileTransaction.EnsureFolder(folder);
             Material source = AssetDatabase.LoadAssetAtPath<Material>("Assets/_OptimizeTool/Samples/Settings/OptimizeToolSource.mat");
             if (source == null) throw new InvalidOperationException("The source material is missing.");
             Material material = AssetDatabase.LoadAssetAtPath<Material>(folder + "/Source.mat");
@@ -168,13 +168,6 @@ namespace Common.OptimizeTool.Samples.Editor
         private static GameObject Create(Scene scene, string name, params Type[] components)
         {
             var obj = new GameObject(name, components); SceneManager.MoveGameObjectToScene(obj, scene); return obj;
-        }
-
-        private static void EnsureFolder(string folder)
-        {
-            if (AssetDatabase.IsValidFolder(folder)) return;
-            int split = folder.LastIndexOf('/'); EnsureFolder(folder.Substring(0, split));
-            AssetDatabase.CreateFolder(folder.Substring(0, split), folder.Substring(split + 1));
         }
     }
 }
