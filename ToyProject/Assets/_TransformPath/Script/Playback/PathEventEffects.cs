@@ -19,8 +19,7 @@ namespace Common.TransformPath
         bool HasRoute { get; }
         float Speed { get; }
         float Duration { get; }
-        /// <summary>Rises whenever the state or a value changes, by an effect or by a command.</summary>
-        int ChangeCount { get; }
+        // Each returns whether it changed the state or the value.
         bool Pause();
         bool Resume();
         bool ApplyValue(EPathEffectChannel channel, float value);
@@ -99,9 +98,7 @@ namespace Common.TransformPath
             {
                 if (due.PlaybackId != _target.PlaybackId)
                     continue;
-                int before = _target.ChangeCount;
-                Process(due.Definition);
-                if (_target.ChangeCount != before)
+                if (Process(due.Definition))
                     break;
             }
         }
@@ -115,23 +112,26 @@ namespace Common.TransformPath
             CancelBlend();
         }
 
-        private void Process(PathEventDefinition definition)
+        // Returns whether the event changed the state or a value. Only the calls
+        // made here can: listeners run after the boundary, never in between.
+        private bool Process(PathEventDefinition definition)
         {
             if (!string.IsNullOrEmpty(definition.EventName))
                 _target.PublishEvent(definition.EventName);
 
+            bool changed = false;
             if (definition.Lifecycle == EPathEventLifecycle.Pause)
             {
                 CancelBlend();
-                _target.Pause();
+                changed = _target.Pause();
             }
             else
             {
                 if (definition.Lifecycle == EPathEventLifecycle.Resume)
-                    _target.Resume();
+                    changed = _target.Resume();
                 PathValueChange change = definition.GetChange(_target.MoveType);
                 if (change.Enabled && _target.HasRoute)
-                    StartBlend(_target.MoveType == EPathMoveType.SpeedBased ? EPathEffectChannel.Speed : EPathEffectChannel.Duration, change);
+                    changed |= StartBlend(_target.MoveType == EPathMoveType.SpeedBased ? EPathEffectChannel.Speed : EPathEffectChannel.Duration, change);
             }
 
             ulong playbackId = _target.PlaybackId;
@@ -141,10 +141,11 @@ namespace Common.TransformPath
                 PathDelayedEventDefinition entry = delayed[i];
                 if (entry.Delay <= 0f)
                 {
-                    int before = _target.ChangeCount;
-                    Process(entry.Definition);
-                    if (_target.ChangeCount != before || _target.PlaybackId != playbackId)
-                        return;
+                    // A change ends this chain, as it ends a frame's delayed events.
+                    if (Process(entry.Definition))
+                        return true;
+                    if (_target.PlaybackId != playbackId)
+                        return changed;
                     continue;
                 }
                 // Without a playback nothing would ever tick the delay.
@@ -159,6 +160,7 @@ namespace Common.TransformPath
                     Order = ++_delayedOrder,
                 });
             }
+            return changed;
         }
 
         // The earliest due event, ties by schedule order.
@@ -186,14 +188,12 @@ namespace Common.TransformPath
             return true;
         }
 
-        private void StartBlend(EPathEffectChannel channel, PathValueChange change)
+        // Returns whether the value changed now. A blend changes it from the next tick.
+        private bool StartBlend(EPathEffectChannel channel, PathValueChange change)
         {
             // A finished playback no longer moves, so its final value is the target.
             if (change.BlendTime <= 0f || _target.PlaybackId == 0)
-            {
-                _target.ApplyValue(channel, change.Target);
-                return;
-            }
+                return _target.ApplyValue(channel, change.Target);
             _blend = new Blend
             {
                 Channel = channel,
@@ -203,6 +203,7 @@ namespace Common.TransformPath
                 StartFrame = CurrentEffectsFrame(),
                 PlaybackId = _target.PlaybackId,
             };
+            return false;
         }
 
         private void TickBlend(float deltaTime, int frame)

@@ -20,9 +20,6 @@ namespace Common.TransformPath
         private PathRoute _route;
         private ulong _nextPlaybackId;
         private bool _positionDirty;
-        // Rises whenever an event or command changes the state or a value. A
-        // delayed event that changed something ends that frame's delayed events.
-        private int _changes;
 
         public PathPlayback(PathPlaybackListeners listeners)
         {
@@ -176,7 +173,7 @@ namespace Common.TransformPath
                 throw new InvalidOperationException("Speed can only be changed during playback.");
             if (_cursor.MoveType != EPathMoveType.SpeedBased)
                 throw new InvalidOperationException("Speed can only be changed in SpeedBased mode.");
-            return ApplyValue(EPathEffectChannel.Speed, speed);
+            return _cursor.TrySetValue(EPathEffectChannel.Speed, speed);
         }
 
         public bool SetDuration(float duration)
@@ -187,7 +184,7 @@ namespace Common.TransformPath
                 throw new InvalidOperationException("Duration can only be changed during playback.");
             if (_cursor.MoveType != EPathMoveType.TimeBased)
                 throw new InvalidOperationException("Duration can only be changed in TimeBased mode.");
-            return ApplyValue(EPathEffectChannel.Duration, duration);
+            return _cursor.TrySetValue(EPathEffectChannel.Duration, duration);
         }
 
         /// <summary>Runs an event now, as if the follower reached it. Pending delayed events are dropped.</summary>
@@ -262,7 +259,6 @@ namespace Common.TransformPath
 
             _cursor.PendingTime = 0f;
             MotionEpoch++;
-            _changes++;
             if (segment != _cursor.Segment)
                 ConfigureSegment(segment, 0f, false);
             _cursor.MoveTo(_route, segment, local);
@@ -386,22 +382,13 @@ namespace Common.TransformPath
         #region Effect target
 
         bool IPathEffectTarget.HasRoute => _route != null;
-        int IPathEffectTarget.ChangeCount => _changes;
 
-        bool IPathEffectTarget.ApplyValue(EPathEffectChannel channel, float value) => ApplyValue(channel, value);
+        bool IPathEffectTarget.ApplyValue(EPathEffectChannel channel, float value) => _cursor.TrySetValue(channel, value);
 
         void IPathEffectTarget.PublishEvent(string eventName)
         {
             _listeners.Receiver.Publish(eventName, _listeners.Owner);
             _listeners.EventReached.Publish(eventName);
-        }
-
-        private bool ApplyValue(EPathEffectChannel channel, float value)
-        {
-            if (!_cursor.TrySetValue(channel, value))
-                return false;
-            _changes++;
-            return true;
         }
 
         #endregion
@@ -411,7 +398,6 @@ namespace Common.TransformPath
             if (State == state)
                 return;
             State = state;
-            _changes++;
             _listeners.StateChanged.Publish(state);
         }
 

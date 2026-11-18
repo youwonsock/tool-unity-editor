@@ -17,19 +17,16 @@ namespace Common.TransformPath.Tests
             public bool HasRoute => true;
             public float Speed { get; private set; } = 2f;
             public float Duration => 1f;
-            public int ChangeCount { get; private set; }
 
             public bool Pause()
             {
                 Log.Add("pause");
-                ChangeCount++;
                 return true;
             }
 
             public bool Resume()
             {
                 Log.Add("resume");
-                ChangeCount++;
                 return true;
             }
 
@@ -38,7 +35,6 @@ namespace Common.TransformPath.Tests
                 if (Mathf.Approximately(Speed, value))
                     return false;
                 Speed = value;
-                ChangeCount++;
                 return true;
             }
 
@@ -106,6 +102,19 @@ namespace Common.TransformPath.Tests
             Run(Event("a", (0f, Event("now"))));
 
             CollectionAssert.AreEqual(new[] { "a", "now" }, _target.Log);
+            Assert.IsFalse(_effects.HasPending);
+        }
+
+        [Test]
+        public void ZeroDelayChildThatChangesSomething_StopsTheRest()
+        {
+            PathEventSettingSO pause = Event("p");
+            pause.Lifecycle = EPathEventLifecycle.Pause;
+            Run(Event("a", (0f, pause), (0f, Event("n")), (STEP, Event("later"))));
+            Tick();
+            Tick();
+
+            CollectionAssert.AreEqual(new[] { "a", "p", "pause" }, _target.Log);
             Assert.IsFalse(_effects.HasPending);
         }
 
