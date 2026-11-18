@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
@@ -44,6 +45,36 @@ namespace Common.OptimizeTool.MeshOptimization
             combiner.GeneratedRoot = root;
             combiner.SourceRendererStates = states;
             PrefabUtility.RecordPrefabInstancePropertyModifications(combiner);
+        }
+
+        /// <summary>
+        /// Removes the result objects and gives every recorded source its original enabled state, as one Undo step.
+        /// Saved mesh assets are kept.
+        /// </summary>
+        internal static void Restore(MeshCombiner combiner)
+        {
+            RequireReplaceable(combiner.GeneratedRoot);
+            Undo.IncrementCurrentGroup();
+            int group = Undo.GetCurrentGroup();
+            Undo.SetCurrentGroupName("Restore combined sources");
+            Undo.RegisterCompleteObjectUndo(combiner, "Restore combined sources");
+            foreach (MeshSourceRendererState state in combiner.SourceRendererStates)
+                if (state.Renderer != null) SetEnabled(state.Renderer, state.Enabled);
+            if (combiner.GeneratedRoot != null) Undo.DestroyObjectImmediate(combiner.GeneratedRoot);
+            combiner.GeneratedRoot = null;
+            combiner.SourceRendererStates = new List<MeshSourceRendererState>();
+            PrefabUtility.RecordPrefabInstancePropertyModifications(combiner);
+            Undo.CollapseUndoOperations(group);
+        }
+
+        /// <summary>
+        /// Fails before any change when the result objects belong to a Prefab instance, where they cannot be destroyed.
+        /// Result objects added to an instance as an override can be.
+        /// </summary>
+        internal static void RequireReplaceable(GameObject root)
+        {
+            if (root != null && PrefabUtility.IsPartOfPrefabInstance(root) && !PrefabUtility.IsAddedGameObjectOverride(root))
+                throw new InvalidOperationException($"The combined output '{root.name}' is part of a Prefab instance and cannot be replaced here. Open the Prefab or unpack the instance first.");
         }
 
         /// <summary>

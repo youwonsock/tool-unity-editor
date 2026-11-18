@@ -114,7 +114,7 @@ flowchart LR
 - 같은 Material의 SubMesh를 `CombineInstance`로 묶고, `_combineAllIntoSingleMesh`가 켜지면 하나의 Mesh로 다시 결합합니다. `_optimizeMesh`는 정점·인덱스 재정렬이며 폴리곤 단순화가 아닙니다.
 - 병합 입력은 Layer·그림자·Probe·정렬·Rendering Layer·Motion Vector·Static Flag·Receive GI 설정이 같아야 하며, 지원하는 설정은 출력 Renderer에 복사합니다. PropertyBlock, Additional Vertex Streams, 할당된 Lightmap, LODGroup, forceRenderingOff는 저장 전에 거부합니다.
 - `_createSceneOutput`은 결과 MeshFilter·MeshRenderer와 Material 배열을 만들고, `_disableSourceRenderers`는 원본 Renderer만 끕니다(Collider 유지). 재실행 시 도구가 만든 결과는 자식 수집에서 제외합니다.
-- 재빌드에서는 다음 입력에도 남는 원본 Renderer를 계속 끄고, 제거된 원본만 기록해 둔 활성 상태로 복원합니다. 이 정보는 컴포넌트에 직렬화되어 Undo/Redo와 Prefab 인스턴스에도 유지됩니다.
+- 재빌드에서는 다음 입력에도 남는 원본 Renderer를 계속 끄고, 제거된 원본만 기록해 둔 활성 상태로 복원합니다. `RestoreSources()`(Inspector의 **Restore Sources**)는 결과 오브젝트를 지우고 기록한 모든 원본을 원래 활성 상태로 되돌린 뒤 기록을 비웁니다. 이 작업은 Undo 한 단계이며 저장한 Mesh 에셋은 지우지 않습니다. 결과 오브젝트가 Prefab 인스턴스의 일부(추가 오버라이드가 아닌 것)이면 다시 굽기와 복원 모두 아무것도 바꾸기 전에 거부합니다. 이 정보는 컴포넌트에 직렬화되어 Undo/Redo와 Prefab 인스턴스에도 유지됩니다.
 - 출력 좌표는 Combiner의 로컬 공간입니다. 조명은 결합한 결과 Renderer를 대상으로 베이크합니다.
 - 결과 이름은 단일 출력에서 `_meshName.asset`, 여러 출력에서 `_meshName_0.asset` 형식입니다. 기존 에셋은 `_overwriteExistingAssets`가 켜진 경우에만 GUID를 유지해 갱신합니다.
 - 저장에 실패하면 Mesh 에셋·선언한 부속 에셋·Undo에 등록한 씬 변경을 복원하고, 복구 오류가 나도 나머지 복구를 계속한 뒤 원래 오류와 함께 보고합니다. Undo 시 새로 만든 에셋 파일은 남습니다.

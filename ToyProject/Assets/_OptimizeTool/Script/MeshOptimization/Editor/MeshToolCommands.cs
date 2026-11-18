@@ -27,6 +27,7 @@ namespace Common.OptimizeTool.MeshOptimization
         {
             string folder = AssetFileTransaction.ValidateFolder(combiner.SavePath);
             AssetFileTransaction.ValidateFileName(combiner.MeshName);
+            if (combiner.CreateSceneOutput) MeshSceneOutput.RequireReplaceable(combiner.GeneratedRoot);
             using (MeshBuildResult result = combiner.BuildMeshes())
             {
                 Mesh[] meshes = result.GetMeshes();
@@ -34,6 +35,16 @@ namespace Common.OptimizeTool.MeshOptimization
                 return MeshAssetTransaction.Save(meshes, paths, combiner.OverwriteExistingAssets, "Combine meshes",
                     saved => { if (combiner.CreateSceneOutput) MeshSceneOutput.Apply(combiner, saved, result); });
             }
+        }
+
+        /// <summary>
+        /// Removes the scene output and re-enables the source Renderers this combiner disabled, as one Undo step.
+        /// Saved mesh assets are kept.
+        /// </summary>
+        public static void RestoreSources(this MeshCombiner combiner)
+        {
+            AssetFileTransaction.RequireEditMode();
+            MeshSceneOutput.Restore(combiner);
         }
 
         /// <summary>A single-mesh build is saved as <c>name.asset</c>; otherwise <c>name_0.asset</c>, <c>name_1.asset</c>, ...</summary>
