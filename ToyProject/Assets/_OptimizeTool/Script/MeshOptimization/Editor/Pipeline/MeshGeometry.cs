@@ -30,7 +30,7 @@ namespace Common.OptimizeTool.MeshOptimization
         }
 
         // Compared with the edge lengths, so a triangle counts by shape and not by size.
-        private static bool IsDegenerate(Vector3 edgeA, Vector3 edgeB, Vector3 cross)
+        internal static bool IsDegenerate(Vector3 edgeA, Vector3 edgeB, Vector3 cross)
             => cross.sqrMagnitude <= 1e-12f * edgeA.sqrMagnitude * edgeB.sqrMagnitude;
 
         public static Mesh ReadableCopy(Mesh source, bool allowReadableCopy, bool allowNormalRecalculation)

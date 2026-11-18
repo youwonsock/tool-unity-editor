@@ -122,8 +122,8 @@ flowchart LR
 
 ## Occlusion과 Backface
 
-- **Occlusion:** 입력이 속한 PhysicsScene에서 `_cullingLayerMask`의 Collider로 Raycast합니다. 대상 자신과 자식의 Collider, Trigger는 제외하고, 결과 버퍼가 가득 차면 확장합니다. Orthographic 카메라는 평행 광선을 씁니다.
-- Vertex 수가 `_vertexSamplingCount` 이하이면 모든 Vertex를, 더 많으면 균등 간격 표본을 검사합니다. 보이는 비율이 `_visibilityThreshold`보다 작으면 MeshFilter 전체를 뺍니다. Camera, 양수 샘플 수, `0..1` 임계값, 유효한 LayerMask가 필요합니다.
+- **Occlusion:** 입력이 속한 PhysicsScene에서 `_cullingLayerMask`의 Collider로 Raycast합니다. 대상 자신과 자식의 Collider, Trigger는 제외하고, 결과 버퍼가 가득 차면 확장합니다. 조상의 Box·Sphere·Capsule·볼록 Mesh Collider는 표본 점을 안에 품을 때만 제외합니다(자식 비주얼을 감싼 부모 Collider처럼 대상 자신의 프록시로 봄). 표면 위의 점도 안으로 보므로 지오메트리를 남기는 쪽으로 기웁니다. 오목한 Mesh Collider나 Terrain인 조상, 그리고 대상 밖에서 앞을 막는 조상 Collider는 가림물로 남습니다. Orthographic 카메라는 평행 광선을 씁니다.
+- 표본 후보는 모든 Vertex와 퇴화하지 않은 삼각형의 중심점입니다. 그래서 Vertex가 적은 큰 면도 안쪽을 검사합니다. 후보 수가 `_vertexSamplingCount` 이하이면 모두를, 더 많으면 균등 간격 표본을 검사합니다(결정적). 보이는 비율이 `_visibilityThreshold`보다 작으면 MeshFilter 전체를 뺍니다. Camera, 양수 샘플 수, `0..1` 임계값, 유효한 LayerMask가 필요합니다.
 - **Backface:** `MeshCombiner`는 결합 중 `_enableBackfaceCulling`과 `_backfaceCullingAngle`로 삼각형마다 World-space Normal과 관찰 방향의 각도를 판정합니다.
 - Perspective는 삼각형 중심에서 카메라로 향하는 방향, Orthographic은 `-camera.forward`를 씁니다. 비균일·음수 Scale은 법선 역전치 변환과 winding 보정으로 처리합니다.
 

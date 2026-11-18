@@ -83,7 +83,7 @@ public static class MeshBuildExample
 ```
 
 - **입력:** 대상을 직접 지정하거나 자식 계층에서 수집합니다(동시 사용 불가). 병합 입력은 Layer·그림자·Probe·정렬 등 Renderer 설정이 같아야 하며, PropertyBlock·할당된 Lightmap·LODGroup 같은 입력은 저장 전에 거부합니다.
-- **Occlusion:** 카메라에서 표본 Vertex로 Raycast해 보이는 비율이 임계값보다 낮은 MeshFilter를 결합에서 뺍니다. Collider 기반 근사이며 픽셀 단위 판정이 아닙니다.
+- **Occlusion:** 카메라에서 표본 점(Vertex와 삼각형 중심)으로 Raycast해 보이는 비율이 임계값보다 낮은 MeshFilter를 결합에서 뺍니다. Collider 기반 근사이며 픽셀 단위 판정이 아닙니다.
 - **Backface:** 결합하면서 삼각형 법선과 카메라 방향의 각도로 보이지 않는 면을 지웁니다. 원본 Mesh를 제자리에서 바꾸는 별도 도구는 없습니다. 카메라나 Transform이 바뀌면 다시 베이크합니다.
 - **출력:** `Assets/` 하위에 저장하며 덮어쓰기는 명시적으로 허용해야 합니다. 실패하면 에셋과 Undo에 등록한 씬 변경을 복원합니다.
 
