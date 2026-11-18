@@ -17,6 +17,11 @@ namespace Common.OptimizeTool.MeshOptimization
         public bool AllowNormalRecalculation { get; set; }
         /// <summary>Reorder vertices and indices of each output for the GPU cache. Not a polygon reduction.</summary>
         public bool OptimizeMesh { get; set; } = true;
+        /// <summary>
+        /// When the sources are lightmap static, give each source its own tile of the output's lightmap UVs (UV2, or
+        /// UV0 for a source without UV2) so their lightmaps do not overlap. Off leaves the UVs as they are.
+        /// </summary>
+        public bool PackLightmapUVs { get; set; } = true;
         /// <summary>Merge the per-material outputs into one mesh with one submesh per material.</summary>
         public bool CombineIntoSingleMesh { get; set; }
         public bool BackfaceCulling { get; set; }

@@ -49,6 +49,9 @@ namespace Common.OptimizeTool.MeshOptimization
 
         private static bool IsLightmapped(int index) => index >= 0 && index < 65534;
 
+        /// <summary>The output will be lightmapped by a bake: it contributes to GI and receives it from lightmaps.</summary>
+        internal bool UsesBakedLightmaps => (_staticFlags & StaticEditorFlags.ContributeGI) != 0 && _receiveGI == ReceiveGI.Lightmaps;
+
         internal void ValidateCompatible(MeshRenderer source)
         {
             ValidateSupported(source);

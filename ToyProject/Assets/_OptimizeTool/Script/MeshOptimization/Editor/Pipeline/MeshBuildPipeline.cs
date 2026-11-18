@@ -11,6 +11,9 @@ namespace Common.OptimizeTool.MeshOptimization
         private const string TransparentWarning = "Transparent sorting and double-sided material appearance are not guaranteed by mesh merging or backface removal.";
         private const string ProbeWarning = "Merging changes renderer bounds and implicit light-probe sampling positions. Use an explicit shared probe anchor or validate lighting after baking.";
         private const string ViewWarning = "View-dependent bake: removed geometry may still be needed by other cameras, shadows or reflections.";
+        private const string PackedLightmapWarning = "Each source got its own equal tile of the lightmap UVs (UV2). Lightmap resolution per source follows the tile, not the source size.";
+        private const string MissingLightmapUvWarning = "Some lightmap static sources have no lightmap UVs (UV2); their UV0 was packed instead and may overlap itself. Enable Generate Lightmap UVs on their importer.";
+        private const string OverlappingLightmapWarning = "The combined sources share lightmap UV space, so a lightmap baked for this output overlaps. Enable Pack Lightmap UVs or bake lighting before combining.";
         private const string OccluderWarning = "Occlusion treats every external non-trigger Collider on the mask as opaque, including invisible or transparent proxies. Use dedicated occluder layers.";
 
         /// <summary>
@@ -32,11 +35,22 @@ namespace Common.OptimizeTool.MeshOptimization
             if (settings.BackfaceCulling || settings.OcclusionCulling) result.AddWarning(ViewWarning);
             if (settings.OcclusionCulling) result.AddWarning(OccluderWarning);
             foreach (string warning in sourceWarnings) result.AddWarning(warning);
-            var work = new BuildWork();
+            var work = new BuildWork { PackLightmaps = settings.PackLightmapUVs && rendererSettings.UsesBakedLightmaps };
+            if (rendererSettings.UsesBakedLightmaps)
+            {
+                if (!work.PackLightmaps) result.AddWarning(OverlappingLightmapWarning);
+                else
+                {
+                    result.AddWarning(PackedLightmapWarning);
+                    foreach (MeshFilter filter in inputs)
+                        if (!filter.sharedMesh.HasVertexAttribute(VertexAttribute.TexCoord1)) { result.AddWarning(MissingLightmapUvWarning); break; }
+                }
+            }
             try
             {
                 Physics.SyncTransforms();
                 foreach (MeshFilter filter in inputs) ProcessSource(filter, destinationWorldToLocal, settings, work, result);
+                if (work.PackLightmaps) MeshGeometry.PackLightmapUVs(work.LightmapParts);
                 CombineGroups(work, settings, result);
                 if (result.Parts.Count == 0) throw new InvalidOperationException("No triangles remained after culling.");
                 if (settings.CombineIntoSingleMesh && result.Parts.Count > 1) MergeToSingle(work, settings, result);
@@ -102,6 +116,7 @@ namespace Common.OptimizeTool.MeshOptimization
                 mesh = culled;
             }
             Matrix4x4 matrix = destinationWorldToLocal * filter.transform.localToWorldMatrix;
+            var sourceParts = work.PackLightmaps ? new List<Mesh>() : null;
             for (int submesh = 0; submesh < mesh.subMeshCount; submesh++)
             {
                 if (mesh.GetIndexCount(submesh) == 0) continue;
@@ -109,7 +124,9 @@ namespace Common.OptimizeTool.MeshOptimization
                 work.Temporaries.Add(part);
                 MeshGeometry.TransformMesh(part, matrix);
                 work.AddToGroup(materials[submesh], part);
+                sourceParts?.Add(part);
             }
+            if (sourceParts != null && sourceParts.Count > 0) work.LightmapParts.Add(sourceParts);
             // The culled copy belongs to this source only; free it before the next source.
             if (culled != null) Object.DestroyImmediate(culled);
         }
@@ -150,6 +167,9 @@ namespace Common.OptimizeTool.MeshOptimization
             internal readonly List<Mesh> Temporaries = new List<Mesh>();
             internal readonly Dictionary<Material, List<CombineInstance>> Groups = new Dictionary<Material, List<CombineInstance>>();
             internal readonly List<Material> MaterialOrder = new List<Material>();
+            /// <summary>Whether lightmap UVs are packed, and the parts of every kept source in input order.</summary>
+            internal bool PackLightmaps;
+            internal readonly List<List<Mesh>> LightmapParts = new List<List<Mesh>>();
 
             /// <summary>One readable copy per source mesh, shared by every filter that uses it.</summary>
             internal Mesh ReadableCopy(Mesh original, MeshBuildSettings settings)

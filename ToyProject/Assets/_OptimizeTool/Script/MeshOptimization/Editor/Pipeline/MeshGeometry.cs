@@ -208,6 +208,45 @@ namespace Common.OptimizeTool.MeshOptimization
         }
 
         /// <summary>
+        /// Moves the lightmap UVs of each source (one entry of <paramref name="partsBySource"/>) into its own cell of a
+        /// square grid, keeping the aspect ratio and a margin, and writes them as UV2. A source without UV2 uses its
+        /// UV0. Vertex count and layout order do not change.
+        /// </summary>
+        internal static void PackLightmapUVs(IReadOnlyList<List<Mesh>> partsBySource)
+        {
+            if (partsBySource.Count == 0) return;
+            int grid = Mathf.CeilToInt(Mathf.Sqrt(partsBySource.Count));
+            float cell = 1f / grid, margin = cell * 0.02f, inner = cell - 2f * margin;
+            var uvs = new List<Vector2>();
+            for (int s = 0; s < partsBySource.Count; s++)
+            {
+                Vector2 min = new Vector2(float.MaxValue, float.MaxValue), max = new Vector2(float.MinValue, float.MinValue);
+                foreach (Mesh part in partsBySource[s])
+                {
+                    ReadLightmapUVs(part, uvs);
+                    foreach (Vector2 uv in uvs) { min = Vector2.Min(min, uv); max = Vector2.Max(max, uv); }
+                }
+                float extent = Mathf.Max(max.x - min.x, max.y - min.y);
+                float scale = extent > 1e-8f ? inner / extent : 0f;
+                var origin = new Vector2((s % grid) * cell + margin, (s / grid) * cell + margin);
+                foreach (Mesh part in partsBySource[s])
+                {
+                    ReadLightmapUVs(part, uvs);
+                    for (int i = 0; i < uvs.Count; i++) uvs[i] = origin + (uvs[i] - min) * scale;
+                    part.SetUVs(1, uvs);
+                }
+            }
+        }
+
+        private static void ReadLightmapUVs(Mesh mesh, List<Vector2> uvs)
+        {
+            uvs.Clear();
+            if (mesh.HasVertexAttribute(VertexAttribute.TexCoord1)) mesh.GetUVs(1, uvs);
+            else if (mesh.HasVertexAttribute(VertexAttribute.TexCoord0)) mesh.GetUVs(0, uvs);
+            while (uvs.Count < mesh.vertexCount) uvs.Add(Vector2.zero);
+        }
+
+        /// <summary>
         /// CombineMeshes keeps only the channels every input has. Inputs that miss a color, tangent or UV channel
         /// another input has are replaced by a copy with that channel filled; the copies are added to
         /// <paramref name="copies"/> for the caller to destroy.

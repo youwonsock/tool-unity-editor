@@ -30,6 +30,8 @@ namespace Common.OptimizeTool.MeshOptimization
         [SerializeField] private float _backfaceCullingAngle = 90f;
         [Header("Final Combine Options")]
         [SerializeField] private bool _combineAllIntoSingleMesh;
+        [Tooltip("For lightmap static sources, pack each source's lightmap UVs into its own tile so baked lightmaps do not overlap.")]
+        [SerializeField] private bool _packLightmapUVs = true;
         [SerializeField] private bool _createSceneOutput = true;
         [SerializeField] private bool _disableSourceRenderers = true;
         [SerializeField, HideInInspector] private GameObject _generatedRoot;
@@ -46,6 +48,7 @@ namespace Common.OptimizeTool.MeshOptimization
             AllowNormalRecalculation = _allowNormalRecalculation,
             OptimizeMesh = _optimizeMesh,
             CombineIntoSingleMesh = _combineAllIntoSingleMesh,
+            PackLightmapUVs = _packLightmapUVs,
             BackfaceCulling = _enableBackfaceCulling,
             BackfaceAngle = _backfaceCullingAngle,
             OcclusionCulling = _enableOcclusionCulling,
