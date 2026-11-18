@@ -18,7 +18,6 @@ namespace Common.TransformPath
         private readonly PathPlaybackCursor _cursor = new PathPlaybackCursor();
         private readonly PathEventEffects _effects;
         private PathRoute _route;
-        private int _nextEventIndex;
         private ulong _nextPlaybackId;
         private bool _positionDirty;
         // Rises whenever an event or command changes the state or a value. A
@@ -97,7 +96,6 @@ namespace Common.TransformPath
                 EndPlayback();
             _route = route;
             _cursor.Begin(route, request.Loop);
-            _nextEventIndex = 0;
             IsMoving = true;
             PlaybackId = ++_nextPlaybackId;
             MotionEpoch++;
@@ -268,7 +266,7 @@ namespace Common.TransformPath
             if (segment != _cursor.Segment)
                 ConfigureSegment(segment, 0f, false);
             _cursor.MoveTo(_route, segment, local);
-            SkipEventsUpTo(_route.GetEvents(segment), _cursor.Normalized);
+            _cursor.SkipEventsToPosition(_route.GetEvents(segment));
             _positionDirty = true;
             return true;
         }
@@ -319,7 +317,6 @@ namespace Common.TransformPath
             if (_route.IsSequence)
                 ConfigureSegment(index, _cursor.GetNominalSpeed(_route), _route.PreservesPreviousSpeed(index));
             _cursor.EnterSegment(_route, index);
-            _nextEventIndex = 0;
             if (_route.IsSequence)
                 _listeners.SegmentChanged.Publish(index);
         }
@@ -377,28 +374,11 @@ namespace Common.TransformPath
 
         #region Events
 
+        // An event that pauses or ends the playback stops the rest.
         private void DispatchEvents(PathRuntimeEvent[] events, float progress)
         {
-            while (_nextEventIndex < events.Length)
-            {
-                PathRuntimeEvent entry = events[_nextEventIndex];
-                if (entry.NormalizedTime > progress + EPSILON)
-                    break;
-                _nextEventIndex++;
-                if (entry.Definition == null)
-                    continue;
-                _effects.Run(entry.Definition);
-                if (State != EPathFollowerState.Moving)
-                    return;
-            }
-        }
-
-        // A Seek skips the target position and everything before it.
-        private void SkipEventsUpTo(PathRuntimeEvent[] events, float progress)
-        {
-            _nextEventIndex = 0;
-            while (_nextEventIndex < events.Length && events[_nextEventIndex].NormalizedTime <= progress + EPSILON)
-                _nextEventIndex++;
+            while (State == EPathFollowerState.Moving && _cursor.TryTakeEvent(events, progress, out PathEventDefinition definition))
+                _effects.Run(definition);
         }
 
         #endregion
@@ -418,17 +398,8 @@ namespace Common.TransformPath
 
         private bool ApplyValue(EPathEffectChannel channel, float value)
         {
-            if (channel == EPathEffectChannel.Speed)
-            {
-                if (Mathf.Approximately(_cursor.Speed, value))
-                    return false;
-                _cursor.SetSpeed(value);
-                _changes++;
-                return true;
-            }
-            if (Mathf.Approximately(_cursor.Duration, value))
+            if (!_cursor.TrySetValue(channel, value))
                 return false;
-            _cursor.SetDuration(value);
             _changes++;
             return true;
         }

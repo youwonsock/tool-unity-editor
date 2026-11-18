@@ -18,7 +18,7 @@
 
 ## 구조 규칙
 
-1. **상태 소유자는 하나입니다.** 재생 상태는 `PathPlayback`, Queue 순서와 계산은 `QueuedPathManager`, 경로 데이터는 Provider만 바꿉니다. 다른 타입은 읽기만 하고 사본을 두지 않습니다.
+1. **상태 소유자는 하나입니다.** 재생 상태는 `PathPlayback`, Queue 순서와 계산은 `QueuedPathManager`, 경로 데이터는 Provider만 바꿉니다. 다른 타입은 읽기만 하고 사본을 두지 않습니다. `PathPlayback`의 상태 머신, 이동 루프, 구간 전환은 같은 상태를 함께 바꾸므로 한 클래스에 두고, 위치에 딸린 값(구간, 진행률, Speed·Duration, 다음 이벤트)은 `PathPlaybackCursor`가, 이벤트가 하는 일은 `PathEventEffects`가 맡습니다.
 2. **변경 판정은 Provider가 한 번만 합니다.** `PathProviderBehaviour.Rebuild`가 이전 게시와 비교해 `Revision`과 `DefinitionRevision`을 올리고, 소비자는 이 두 값만 비교합니다.
 3. **순수 계산과 Unity 연결을 나눕니다.** `PathPolyline`, `PathRoute`, `PathPlaybackCursor`, `PathPlayback`, `PathEventEffects`, Queue 계산은 MonoBehaviour와 정적 상태(알림 순서 큐 제외)에 기대지 않아 EditMode 테스트로 검증합니다. 컴포넌트는 직렬화, 생명주기, Transform 적용만 맡습니다.
 4. **검증은 경계에서 한 번만 합니다.** 공개 명령의 입력과 Provider 빌드만 검증합니다.

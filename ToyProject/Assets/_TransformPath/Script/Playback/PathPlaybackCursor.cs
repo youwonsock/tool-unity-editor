@@ -4,8 +4,8 @@ namespace Common.TransformPath
 {
     /// <summary>
     /// Where a playback is on its route and how it advances: the current segment,
-    /// its progress, and the movement values of that segment. It knows nothing of
-    /// events, transforms or the queue.
+    /// its progress, the movement values of that segment and the next event to
+    /// pass. It knows nothing of what events do, transforms or the queue.
     /// </summary>
     internal sealed class PathPlaybackCursor
     {
@@ -15,6 +15,7 @@ namespace Common.TransformPath
 
         private float _elapsed;
         private float _distance;
+        private int _nextEvent;
 
         public EPathMoveType MoveType { get; private set; }
         public float Speed { get; private set; }
@@ -73,6 +74,28 @@ namespace Common.TransformPath
             _distance = 0f;
             Normalized = 0f;
             Global = session.GetGlobalProgress(index, 0f);
+            _nextEvent = 0;
+        }
+
+        /// <summary>The next event of the segment at or before the progress, in position order.</summary>
+        public bool TryTakeEvent(PathRuntimeEvent[] events, float progress, out PathEventDefinition definition)
+        {
+            while (_nextEvent < events.Length && events[_nextEvent].NormalizedTime <= progress + EPSILON)
+            {
+                definition = events[_nextEvent++].Definition;
+                if (definition != null)
+                    return true;
+            }
+            definition = null;
+            return false;
+        }
+
+        /// <summary>After a Seek: the current position and everything before it count as passed.</summary>
+        public void SkipEventsToPosition(PathRuntimeEvent[] events)
+        {
+            _nextEvent = 0;
+            while (_nextEvent < events.Length && events[_nextEvent].NormalizedTime <= Normalized + EPSILON)
+                _nextEvent++;
         }
 
         /// <summary>
@@ -151,12 +174,24 @@ namespace Common.TransformPath
             MoveTo(session, Segment, Normalized);
         }
 
-        public void SetSpeed(float speed)
+        /// <summary>Sets Speed or Duration. Returns false when the value is already that.</summary>
+        public bool TrySetValue(EPathEffectChannel channel, float value)
         {
-            Speed = speed;
+            if (channel == EPathEffectChannel.Speed)
+            {
+                if (Mathf.Approximately(Speed, value))
+                    return false;
+                Speed = value;
+                return true;
+            }
+            if (Mathf.Approximately(Duration, value))
+                return false;
+            SetDuration(value);
+            return true;
         }
 
-        public void SetDuration(float duration)
+        // Keeps the progress by rescaling the elapsed time.
+        private void SetDuration(float duration)
         {
             float normalized = Duration >= PathConstants.MIN_MOVE_VALUE
                 ? _movement.EvaluateProgress(_elapsed / Duration)
