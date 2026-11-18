@@ -94,7 +94,7 @@ namespace Common.FlowField.Editor
                 throw new ArgumentNullException(nameof(manager));
             if (manager.BakeMode != FlowFieldBakeMode.StaticBaked)
             {
-                Debug.Log("RuntimeDynamic does not persist a bake asset; Surface is rebuilt by the runtime session.", manager);
+                Debug.Log("RuntimeDynamic은 Bake 에셋을 저장하지 않습니다. Surface는 런타임 세션이 다시 만듭니다.", manager);
                 return;
             }
             if (_isBaking)
@@ -136,7 +136,7 @@ namespace Common.FlowField.Editor
             }
             catch (OperationCanceledException)
             {
-                Debug.Log("FlowField Static Bake cancelled.");
+                Debug.Log("FlowField Static Bake를 취소했습니다.");
             }
             catch (Exception exception)
             {
@@ -356,7 +356,7 @@ namespace Common.FlowField.Editor
                     return true;
                 if (_inputIsCurrent())
                     return false;
-                Debug.LogWarning($"{_name} input changed; existing asset was preserved.", _manager);
+                Debug.LogWarning($"{_name}: 입력이 바뀌어 기존 에셋을 그대로 두었습니다.", _manager);
                 return true;
             }
 
@@ -382,7 +382,7 @@ namespace Common.FlowField.Editor
                 }
                 catch (OperationCanceledException)
                 {
-                    Debug.Log($"{_name} cancelled.");
+                    Debug.Log($"{_name}: 취소했습니다.");
                     Stop();
                 }
                 catch (Exception exception)
@@ -409,7 +409,7 @@ namespace Common.FlowField.Editor
                 try
                 {
                     if (_generation == _callbackGeneration && !_shuttingDown)
-                        Debug.LogError($"[{nameof(FlowFieldManager)}] {_name} failed: {exception?.Message}", _manager);
+                        Debug.LogError($"[{nameof(FlowFieldManager)}] {_name} 실패: {exception?.Message}", _manager);
                 }
                 finally
                 {
@@ -574,7 +574,7 @@ namespace Common.FlowField.Editor
                     EditorSceneManager.MarkSceneDirty(manager.gameObject.scene);
                 FlowFieldBakeAssetUtility.Save(asset);
                 Undo.CollapseUndoOperations(undoGroup);
-                Debug.Log($"[{nameof(FlowFieldManager)}] {target.CompleteLabel} complete: {assetPath}", manager);
+                Debug.Log($"[{nameof(FlowFieldManager)}] {target.CompleteLabel} 완료: {assetPath}", manager);
             }
             catch (Exception exception)
             {

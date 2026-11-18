@@ -340,7 +340,7 @@ namespace Common.FlowField
         private void OnSessionStateChanged(FlowFieldRuntimeState state)
         {
             if (state == FlowFieldRuntimeState.Faulted && !string.IsNullOrEmpty(LastError))
-                Debug.LogError($"[{nameof(FlowFieldManager)}] FlowField build failed: {LastError}", this);
+                Debug.LogError($"[{nameof(FlowFieldManager)}] FlowField 빌드에 실패했습니다: {LastError}", this);
             StateChanged?.Invoke(state);
         }
 
