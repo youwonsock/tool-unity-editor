@@ -23,7 +23,7 @@
 3. **순수 계산과 Unity 연결을 나눕니다.** `PathPolyline`, `PathRoute`, `PathPlaybackCursor`, `PathPlayback`, `PathEventEffects`, Queue 계산은 MonoBehaviour와 정적 상태(알림 순서 큐 제외)에 기대지 않아 EditMode 테스트로 검증합니다. 컴포넌트는 직렬화, 생명주기, Transform 적용만 맡습니다.
 4. **검증은 경계에서 한 번만 합니다.** 공개 명령의 입력과 Provider 빌드만 검증합니다.
 5. **공통 값과 헬퍼는 한 곳에 둡니다.** 상수는 `PathConstants`, 수치 검증과 곡선 복사는 `PathValueUtility`, 정렬은 `PathSortUtility`, 1회 오류 보고는 `PathConfigurationErrorReporter`입니다.
-6. **인터페이스는 교체할 이유가 있을 때만 둡니다.** 공개 인터페이스는 `IPathEventReceiver` 하나입니다. `IPathProvider`는 내부 계약이며(테스트의 가짜 Provider가 씁니다), 공개 시그니처는 `PathProviderBehaviour`를 받습니다. Route와 Queue는 Provider 종류를 확인하지 않고 이 계약과 Route의 구간만 봅니다. 런타임에서 종류를 확인하는 곳은 "Aggregate는 `PathData`의 이벤트만 실행한다"는 규칙 한 곳입니다.
+6. **인터페이스는 교체할 이유가 있을 때만 둡니다.** 공개 인터페이스는 `IPathEventReceiver` 하나입니다. `IPathProvider`는 내부 계약이며(테스트의 가짜 Provider가 씁니다), 공개 시그니처는 `PathProviderBehaviour`를 받습니다. Route 갱신과 Queue의 구간 구성 비교는 Provider 종류를 확인하지 않고 이 계약과 Route의 구간만 봅니다. 런타임에서 종류를 확인하는 곳은 `PathRoute.Aggregate`의 "Aggregate는 `PathData`의 이벤트만 실행한다"는 규칙 한 곳입니다.
 7. **공개 API는 닫혀 있습니다.** 공개 타입은 컴포넌트(`PathFollower`, `PathQueueMember`, `QueuedPathManager`, `PathData`, `MultiPathData`, `PathDataLineRenderer`, `PathWaypointSyncRegistry`), 설정과 요청(`PathPlaybackRequest`, `PathMovementSettings`, `PathEventSettingSO`, `PathEventEntry`, `PathSegmentAuthoring`, `PathWaypointSyncGroup`, `PathQueueStatus`), 수신기와 enum뿐입니다. 기반 클래스 `PathProviderBehaviour`와 `PathRuntimeBehaviour`는 `private protected` 생성자로 외부 상속을 막습니다. 이벤트의 런타임 복사본(`PathEventDefinition` 등)은 내부 타입이며, 바깥에서는 `PathData.GetAuthoringEvent`로 작성 데이터를 읽습니다.
 
 ## 수명 규칙
@@ -95,7 +95,7 @@
 - 작성 위치는 `0..0.995`이고 같은 위치는 작성 순서를 따릅니다. 위치 0의 이벤트도 재생 시작 후 첫 이동에서 실행됩니다.
 - `PathEventDefinition`은 `PathEventSettingSO`의 불변 복사본이며, 만들 때 한 번 검증합니다(목표값 `0.001..9999`, 보간 시간과 지연 0 이상, 보간에는 곡선 필요, 지연 체인 순환 금지). 잘못된 이벤트가 있으면 경로 빌드가 실패합니다.
 - 한 이벤트의 처리 순서는 이름 알림 예약 → Lifecycle(Pause 또는 Resume) → 현재 이동 방식의 값 변경 → 지연 이벤트 예약입니다. Pause 이벤트는 값을 바꾸지 않습니다. 알림은 경계 뒤에 전달되므로 수신기는 효과가 적용된 상태를 봅니다. 수신기가 `EventReached`보다 먼저 호출됩니다.
-- 지연 이벤트는 게임 시간을 쓰고, 다음 경로 이벤트가 실행되면 남은 지연이 취소됩니다. 지연 0은 바로 실행합니다. 상태나 값을 바꾼 지연 이벤트가 있으면 같은 프레임의 나머지 지연 이벤트는 다음 프레임으로 미룹니다.
+- 지연 이벤트는 게임 시간을 쓰고, 다음 경로 이벤트가 실행되면 남은 지연이 취소됩니다. 지연 0은 바로 실행하며, 그 이벤트가 상태나 값을 바꾸면 같은 목록의 나머지 항목은 실행도 예약도 하지 않습니다(main과 같은 동작). 상태나 값을 바꾼 지연 이벤트가 있으면 같은 프레임의 나머지 지연 이벤트는 다음 프레임으로 미룹니다.
 - 값 보간은 시작한 구간의 이동 방식까지만 이어집니다. 이동 방식이 다른 구간에 들어가거나 Pause하면 취소합니다.
 - `TriggerEvent(setting)`은 전달한 에셋의 현재 값을 바로 실행하며, 경로에 등록된 복사본에는 다음 빌드 전까지 반영되지 않습니다.
 - 재생이 끝나면 지연 이벤트와 값 보간을 함께 정리합니다. 재생이 없을 때(완료 뒤) `TriggerEvent`로 실행한 값 변경은 보간 없이 목표값을 바로 적용하고, 지연 이벤트는 예약하지 않습니다. 움직이지 않는 재생에서는 보간의 최종값만 의미가 있고, 지연을 진행할 재생도 없기 때문입니다.
