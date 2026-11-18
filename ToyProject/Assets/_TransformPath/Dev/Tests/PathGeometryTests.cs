@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace Common.TransformPath.Tests
 {
-    public sealed class PathGeometryTests
+    public sealed class PathGeometryTests : PathBoundaryIsolatedTest
     {
         private static PathPolyline Build(EPathCurveType curve, int segments, params Vector3[] points)
         {

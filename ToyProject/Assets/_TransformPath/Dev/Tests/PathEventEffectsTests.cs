@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace Common.TransformPath.Tests
 {
-    public sealed class PathEventEffectsTests
+    public sealed class PathEventEffectsTests : PathBoundaryIsolatedTest
     {
         private const float STEP = 0.25f;
 

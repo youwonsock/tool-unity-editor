@@ -118,7 +118,7 @@
 
 ## 검증
 
-- EditMode 테스트: `Tools/run-transformpath-tests.sh`
+- EditMode 테스트: `Tools/run-transformpath-tests.sh`. 테스트마다 알림 순서 큐를 새로 쓰고(`PathBoundaryIsolatedTest`), 끝날 때 열린 작업이나 전달되지 않은 알림이 남으면 실패합니다.
 - Player 측정: `Tools/run-transformpath-probe.sh`
 - IL2CPP 빌드: `Tools/run-il2cpp-build.sh`
 - 측정을 비교할 커밋은 해시로 넘깁니다(`UNITY_TREE=$(git rev-parse HEAD)`). `HEAD`라고 쓰면 스냅샷 worktree 자신의 HEAD로 해석되어 다른 커밋을 빌드합니다.

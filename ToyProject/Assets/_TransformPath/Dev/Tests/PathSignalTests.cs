@@ -6,7 +6,7 @@ using UnityEngine.TestTools;
 
 namespace Common.TransformPath.Tests
 {
-    public sealed class PathSignalTests
+    public sealed class PathSignalTests : PathBoundaryIsolatedTest
     {
         [Test]
         public void OutsideAnOperation_DeliversAtOnce()

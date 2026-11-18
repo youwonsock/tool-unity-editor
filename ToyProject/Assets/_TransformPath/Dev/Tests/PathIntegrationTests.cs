@@ -7,7 +7,7 @@ using UnityEngine.TestTools;
 namespace Common.TransformPath.Tests
 {
     /// <summary>Components wired together and ticked in the driver's phase order.</summary>
-    public sealed class PathIntegrationTests
+    public sealed class PathIntegrationTests : PathBoundaryIsolatedTest
     {
         private PathTestScene _scene;
         private readonly List<GameObject> _objects = new List<GameObject>();

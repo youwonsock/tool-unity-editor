@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace Common.TransformPath.Tests
 {
-    public sealed class PathRouteTests
+    public sealed class PathRouteTests : PathBoundaryIsolatedTest
     {
         private static PathRoute ThreeSegments()
         {

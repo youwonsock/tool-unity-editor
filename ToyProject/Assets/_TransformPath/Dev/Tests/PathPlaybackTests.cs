@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace Common.TransformPath.Tests
 {
-    public sealed class PathPlaybackTests
+    public sealed class PathPlaybackTests : PathBoundaryIsolatedTest
     {
         private PathTestScene _scene;
 

@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace Common.TransformPath.Tests
 {
-    public sealed class PathQueueTests
+    public sealed class PathQueueTests : PathBoundaryIsolatedTest
     {
         private static PathQueueStatus Status(bool blocked, float multiplier, float? distance) =>
             new PathQueueStatus(null, distance, blocked, multiplier, 1f);
