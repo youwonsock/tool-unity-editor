@@ -106,6 +106,14 @@ namespace Common.TransformPath
                 return syncedAny;
             }
 
+            /// <summary>An undo or redo put the members where the user chose: compare from there instead of syncing to it.</summary>
+            public void ResetAfterUndoRedo()
+            {
+                RefreshReferences();
+                if (Target != null)
+                    CaptureSnapshots();
+            }
+
             private string BuildStructureSignature()
             {
                 if (Target == null)
@@ -183,7 +191,8 @@ namespace Common.TransformPath
         private static readonly PathTrackedTargets<PathWaypointSyncRegistry, TrackedRegistry> TARGETS =
             new PathTrackedTargets<PathWaypointSyncRegistry, TrackedRegistry>(
                 target => new TrackedRegistry(target),
-                changed => changed is MultiPathData || changed is PathData || changed is PathWaypointSyncRegistry);
+                changed => changed is MultiPathData || changed is PathData || changed is PathWaypointSyncRegistry,
+                HandleUndoRedo);
 
         #endregion
 
@@ -191,6 +200,17 @@ namespace Common.TransformPath
         // The static field subscribes to the change monitor when the Editor loads.
         static PathWaypointSyncLinker()
         {
+        }
+
+        // Without this the next update would read the restored positions as a
+        // drag, sync the group to them and clear the redo stack.
+        private static void HandleUndoRedo(PathTrackedTargets<PathWaypointSyncRegistry, TrackedRegistry> targets)
+        {
+            IReadOnlyList<TrackedRegistry> tracked = targets.Tracked;
+            for (int i = 0; i < tracked.Count; i++)
+                tracked[i].ResetAfterUndoRedo();
+            // An undo may also add or remove a registry.
+            targets.MarkDirty();
         }
     }
 }

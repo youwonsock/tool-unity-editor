@@ -31,10 +31,10 @@ namespace Common.TransformPath
         [SerializeField, Min(0.001f)] private float _moveValue = 5f;
         [SerializeField] private AnimationCurve _timeCurve = null;
 
-        private PathPolyline _polyline;
-        private PathMovementSettings _movement;
-        private PathRuntimeEvent[] _events = Array.Empty<PathRuntimeEvent>();
-        private bool _failed;
+        [NonSerialized] private PathPolyline _polyline;
+        [NonSerialized] private PathMovementSettings _movement;
+        [NonSerialized] private PathRuntimeEvent[] _events = Array.Empty<PathRuntimeEvent>();
+        [NonSerialized] private bool _failed;
 
         private readonly List<Vector3> _pointScratch = new List<Vector3>();
         private readonly PathGeometryBuildBuffer _buildBuffer = new PathGeometryBuildBuffer();

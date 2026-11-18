@@ -14,13 +14,16 @@ namespace Common.TransformPath
     {
         private protected PathProviderBehaviour() { }
 
-        private int _revision;
-        private int _definitionRevision;
-        private bool _wasReady;
-        private bool _buildRequested;
-        private bool _destroyed;
-        private PathRoute _route;
-        private PathConfigurationErrorReporter _errors;
+        // Build results are never serialized. Unity keeps private fields across an
+        // Edit Mode domain reload, which would leave half a build and lost event
+        // subscriptions; after a reload a provider starts unbuilt instead.
+        [NonSerialized] private int _revision;
+        [NonSerialized] private int _definitionRevision;
+        [NonSerialized] private bool _wasReady;
+        [NonSerialized] private bool _buildRequested;
+        [NonSerialized] private bool _destroyed;
+        [NonSerialized] private PathRoute _route;
+        [NonSerialized] private PathConfigurationErrorReporter _errors;
 
         public abstract bool IsReady { get; }
         public int Revision => _revision;

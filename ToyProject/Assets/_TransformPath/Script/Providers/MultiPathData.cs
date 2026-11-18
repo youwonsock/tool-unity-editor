@@ -14,17 +14,17 @@ namespace Common.TransformPath
 
         [SerializeField] private List<PathSegmentAuthoring> _segments = new List<PathSegmentAuthoring>();
 
-        private PathData[] _paths;
-        private PathMovementSettings[] _movements;
-        private bool[] _preserve;
-        private float[] _starts;
-        private float[] _lengths;
-        private int[] _childRevisions;
-        private int[] _childDefinitionRevisions;
-        private float _pathLength;
-        private bool _failed;
-        private bool _building;
-        private readonly List<PathData> _subscribed = new List<PathData>();
+        [NonSerialized] private PathData[] _paths;
+        [NonSerialized] private PathMovementSettings[] _movements;
+        [NonSerialized] private bool[] _preserve;
+        [NonSerialized] private float[] _starts;
+        [NonSerialized] private float[] _lengths;
+        [NonSerialized] private int[] _childRevisions;
+        [NonSerialized] private int[] _childDefinitionRevisions;
+        [NonSerialized] private float _pathLength;
+        [NonSerialized] private bool _failed;
+        [NonSerialized] private bool _building;
+        [NonSerialized] private readonly List<PathData> _subscribed = new List<PathData>();
 
         public override bool IsReady => _paths != null && !_failed;
 
