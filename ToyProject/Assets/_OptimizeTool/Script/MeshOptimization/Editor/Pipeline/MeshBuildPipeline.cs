@@ -109,13 +109,13 @@ namespace Common.OptimizeTool.MeshOptimization
                     if (request.Occlusion && MeshOcclusion.IsOccluded(filter, mesh, request.Camera,
                         request.SamplingCount, request.VisibilityThreshold, request.LayerMask))
                     {
-                        result.CulledObjectCount++;
+                        result.AddRemoved(renderer);
                         continue;
                     }
                     if (request.Backfaces)
                     {
                         Mesh culled = MeshGeometry.CullBackfaces(mesh, filter.transform, request.Camera, request.BackfaceAngle);
-                        if (culled == null) { result.CulledObjectCount++; continue; }
+                        if (culled == null) { result.AddRemoved(renderer); continue; }
                         temporary.Add(culled);
                         mesh = culled;
                     }
@@ -146,11 +146,11 @@ namespace Common.OptimizeTool.MeshOptimization
                     foreach (CombineInstance input in group) UnityEngine.Object.DestroyImmediate(input.mesh);
                     group.Clear();
                 }
-                if (result.Meshes.Count == 0) throw new InvalidOperationException("No triangles remained after culling.");
-                if (request.SingleMesh && result.Meshes.Count > 1)
+                if (result.Parts.Count == 0) throw new InvalidOperationException("No triangles remained after culling.");
+                if (request.SingleMesh && result.Parts.Count > 1)
                 {
                     var combines = new List<CombineInstance>();
-                    foreach (Mesh mesh in result.Meshes) combines.Add(new CombineInstance { mesh = mesh, transform = Matrix4x4.identity });
+                    foreach (MeshBuildPart part in result.Parts) combines.Add(new CombineInstance { mesh = part.Mesh, transform = Matrix4x4.identity });
                     Mesh single = MeshGeometry.Combine(combines, false, request.Optimize);
                     result.ReplaceWithSingle(single, materialOrder.ToArray());
                 }

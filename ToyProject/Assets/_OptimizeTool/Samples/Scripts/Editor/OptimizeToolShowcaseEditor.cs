@@ -62,13 +62,13 @@ namespace Common.OptimizeTool.Samples.Editor
                 for (int mode = 0; mode < MeshNames.Length; mode++)
                     results.Add(MeshBuildPipeline.Build(new MeshBuildRequest(filters, original.worldToLocalMatrix,
                         camera, allowReadableCopy: true, singleMesh: true, backfaces: mode == 1, occlusion: mode == 2)));
-                if (TriangleCount(results[1].Meshes[0]) >= TriangleCount(results[0].Meshes[0])
-                    || results[2].CulledObjectCount != 6)
+                if (TriangleCount(results[1].Parts[0].Mesh) >= TriangleCount(results[0].Parts[0].Mesh)
+                    || results[2].RemovedSources.Count != 6)
                     throw new InvalidOperationException("The showcase must remove backfaces and six occluded cubes.");
                 var meshes = new List<Mesh>();
                 var paths = new List<string>();
                 for (int i = 0; i < results.Count; i++)
-                { meshes.Add(results[i].Meshes[0]); paths.Add(outputFolder + "/" + MeshNames[i] + ".asset"); }
+                { meshes.Add(results[i].Parts[0].Mesh); paths.Add(outputFolder + "/" + MeshNames[i] + ".asset"); }
                 // Update all three real outputs on every build, preserving their existing GUIDs.
                 MeshAssetTransaction.Save(meshes, paths, true, "Build OptimizeTool showcase", saved =>
                 {
@@ -89,8 +89,7 @@ namespace Common.OptimizeTool.Samples.Editor
                         outputs[0].transform.localScale = Vector3.one;
                         outputs[0].sharedMesh = saved[i];
                         MeshRenderer renderer = outputs[0].GetComponent<MeshRenderer>();
-                        renderer.sharedMaterials = results[i].Parts[0].Materials;
-                        results[i].RendererSettings.ApplyTo(renderer);
+                        results[i].RendererSettings.ApplyTo(renderer, results[i].Parts[0].Materials);
                         group.gameObject.SetActive(false);
                         groups[i + 1] = group.gameObject;
                     }
@@ -108,7 +107,7 @@ namespace Common.OptimizeTool.Samples.Editor
                     if (PrefabUtility.SaveAsPrefabAsset(root, prefabPath) == null)
                         throw new InvalidOperationException("Could not save the showcase prefab.");
                 }, new List<string>(OptimizeToolPhysicsDemoBuilder.OutputAssetPaths) { prefabPath });
-                Debug.Log($"OptimizeTool showcase rebuilt using MeshCombiner: combined {TriangleCount(meshes[0])} triangles, "
+                Debug.Log($"OptimizeTool showcase rebuilt with MeshBuildPipeline: combined {TriangleCount(meshes[0])} triangles, "
                     + $"backface {TriangleCount(meshes[1])}, occlusion {TriangleCount(meshes[2])} (6 objects removed).");
             }
             finally

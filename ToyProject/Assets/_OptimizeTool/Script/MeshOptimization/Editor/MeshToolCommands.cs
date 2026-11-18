@@ -28,9 +28,10 @@ namespace Common.OptimizeTool.MeshOptimization
             var save = new MeshSaveOptions(combiner.SavePath, combiner.MeshName, combiner.OverwriteExistingAssets);
             using (MeshBuildResult result = combiner.BuildMeshes())
             {
-                List<string> paths = save.CreatePaths(result.Meshes.Count, combiner.CombineAllIntoSingleMesh);
-                return MeshAssetTransaction.Save(result.Meshes, paths, save.Overwrite, "Combine meshes",
-                    meshes => { if (combiner.CreateSceneOutput) CreateSceneOutput(combiner, meshes, result); });
+                Mesh[] meshes = result.GetMeshes();
+                List<string> paths = save.CreatePaths(meshes.Length, combiner.CombineAllIntoSingleMesh);
+                return MeshAssetTransaction.Save(meshes, paths, save.Overwrite, "Combine meshes",
+                    saved => { if (combiner.CreateSceneOutput) CreateSceneOutput(combiner, saved, result); });
             }
         }
 

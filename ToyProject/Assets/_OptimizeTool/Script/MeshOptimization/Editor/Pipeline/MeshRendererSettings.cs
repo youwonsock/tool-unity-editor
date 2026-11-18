@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -61,8 +62,15 @@ namespace Common.OptimizeTool.MeshOptimization
                 throw new ArgumentException($"'{source.name}' has incompatible renderer settings. Combine matching layers, shadows, probes, sorting and static flags separately.");
         }
 
-        public void ApplyTo(MeshRenderer target)
+        /// <summary>
+        /// Assigns the output materials and the shared renderer settings. The caller assigns the mesh, because only it
+        /// knows whether the transient build mesh or the saved asset belongs on the renderer.
+        /// </summary>
+        public void ApplyTo(MeshRenderer target, IReadOnlyList<Material> materials)
         {
+            var array = new Material[materials.Count];
+            for (int i = 0; i < array.Length; i++) array[i] = materials[i];
+            target.sharedMaterials = array;
             target.gameObject.layer = _layer;
             target.sortingLayerID = _sortingLayer;
             target.sortingOrder = _sortingOrder;

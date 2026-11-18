@@ -118,14 +118,13 @@ namespace Common.OptimizeTool.Samples.Editor
                             camera, allowReadableCopy: true, singleMesh: true, backfaces: mode == 2,
                             backfaceAngle: 89f, occlusion: mode == 3, samplingCount: 24));
                         results.Add(result);
-                        if (mode == 3 && result.CulledObjectCount != count * 2 / 3)
+                        if (mode == 3 && result.RemovedSources.Count != count * 2 / 3)
                             throw new InvalidOperationException("Occlusion must remove exactly the rear two layers.");
                         GameObject output = Create(scene, OptimizeToolSampleModes.All[mode].Name, typeof(MeshFilter), typeof(MeshRenderer));
                         output.transform.SetParent(group.transform, false); data.modes[mode] = output;
-                        MeshFilter filter = output.GetComponent<MeshFilter>(); filter.sharedMesh = result.Meshes[0]; outputs.Add(filter);
-                        MeshRenderer renderer = output.GetComponent<MeshRenderer>(); renderer.sharedMaterials = result.Parts[0].Materials;
-                        result.RendererSettings.ApplyTo(renderer);
-                        meshes.Add(result.Meshes[0]); assetPaths.Add($"{folder}/Cubes-{count}-Mode-{mode}.asset");
+                        MeshFilter filter = output.GetComponent<MeshFilter>(); filter.sharedMesh = result.Parts[0].Mesh; outputs.Add(filter);
+                        result.RendererSettings.ApplyTo(output.GetComponent<MeshRenderer>(), result.Parts[0].Materials);
+                        meshes.Add(result.Parts[0].Mesh); assetPaths.Add($"{folder}/Cubes-{count}-Mode-{mode}.asset");
                     }
                     // Colliders are authoring inputs only; they add no Player workload.
                     foreach (Collider collider in data.modes[0].GetComponentsInChildren<Collider>()) Object.DestroyImmediate(collider);

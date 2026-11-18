@@ -49,7 +49,7 @@ flowchart LR
         Commands[MeshToolCommands] --> Pipeline[MeshBuildPipeline]
         Pipeline --> Result[MeshBuildResult / Parts]
         Commands -->|Save| MeshSave[MeshAssetTransaction]
-        Result -. Meshes / Parts .-> MeshSave
+        Result -. Parts .-> MeshSave
         MeshSave -->|씬 출력 콜백| Scene[MeshSceneOutput / Undo]
         Commands --> Geometry[MeshGeometry]
     end
@@ -118,7 +118,7 @@ flowchart LR
 - 출력 좌표는 Combiner의 로컬 공간입니다. 조명은 결합한 결과 Renderer를 대상으로 베이크합니다.
 - 결과 이름은 단일 출력에서 `_meshName.asset`, 여러 출력에서 `_meshName_0.asset` 형식입니다. 기존 에셋은 `_overwriteExistingAssets`가 켜진 경우에만 GUID를 유지해 갱신합니다.
 - 저장에 실패하면 Mesh 에셋·선언한 부속 에셋·Undo에 등록한 씬 변경을 복원하고, 복구 오류가 나도 나머지 복구를 계속한 뒤 원래 오류와 함께 보고합니다. Undo 시 새로 만든 에셋 파일은 남습니다.
-- `MeshBuildResult.Warnings`와 Inspector 진단은 Collider 기반 Occlusion, 투명·양면 재질, 다른 카메라·그림자·반사와 Probe 샘플 위치의 한계를 설명합니다. `using` 범위를 벗어난 결과의 `Parts[i].Mesh`를 보관하거나 MeshFilter에 할당하면 안 됩니다.
+- `MeshBuildResult.Warnings`와 Inspector 진단은 Collider 기반 Occlusion, 투명·양면 재질, 다른 카메라·그림자·반사와 Probe 샘플 위치의 한계를 설명합니다. `using` 범위를 벗어난 결과의 `Parts[i].Mesh`를 보관하거나 MeshFilter에 할당하면 안 됩니다. 결과 Renderer에는 `RendererSettings.ApplyTo(renderer, part.Materials)`로 Material과 설정을 적용하고, 메시는 저장된 에셋을 직접 할당합니다. 완전히 제거된 입력은 `RemovedSources`에 있습니다.
 
 ## Occlusion과 Backface
 
@@ -146,7 +146,7 @@ flowchart LR
 
 ## 샘플
 
-- 메시 비교 결과는 `Build Showcase Assets`가 격리된 Preview Scene에서 `MeshCombiner.BuildMeshes()`로 다시 계산합니다. Backface와 Occlusion은 각각 원본 입력에서 독립적으로 계산하고, 기존 GUID를 유지해 갱신합니다. 쇼케이스의 Combiner는 씬 출력 생성을 끈 상태로 저장합니다.
+- 메시 비교 결과는 `Build Showcase Assets`가 격리된 Preview Scene에서 `MeshBuildPipeline.Build()`로 다시 계산합니다. Backface와 Occlusion은 각각 원본 입력에서 독립적으로 계산하고, 기존 GUID를 유지해 갱신합니다. 쇼케이스의 Combiner는 씬 출력 생성을 끈 상태로 저장합니다.
 - 녹화는 `Samples/Settings/Generated/PhysicsRecordings/OptimizeToolPhysicsTake`에 저장하고(데모 Recorder는 `_saveReference`를 켬), 다음 Play에서도 마지막 기록으로 비교할 수 있습니다. 녹화 중에는 모드 변경과 Reset을 막고, Rigidbody는 0.4초 정지 뒤 낙하합니다. 비교 중 왼쪽 Rigidbody는 Kinematic으로 둡니다.
 - 비교는 같은 재생 시각을 쓰며, 프레임이 건너뛰어도 시작·종료를 포함한 모든 원본 관찰 시각에서 오차를 검사합니다. 대응하는 Transform 경로의 로컬 위치·회전을 비교하므로 두 전시 공간의 간격은 오차에 들어가지 않습니다. 표본 간격·움직임 임계값에 따른 축약 오차도 그대로 표시합니다.
 - 기준 데이터가 없거나 클립·계층이 맞지 않으면 재생을 중단하고 RECORD를 안내합니다. 기본 Showcase Prefab에는 녹화에 대응하는 `PhysicsRecordingReference`가 직렬화되어 있어 Player에서도 AssetDatabase 없이 씁니다.

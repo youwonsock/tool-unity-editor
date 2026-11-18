@@ -33,8 +33,7 @@ namespace Common.OptimizeTool.MeshOptimization
                 output.transform.SetParent(root.transform, false);
                 output.GetComponent<MeshFilter>().sharedMesh = meshes[i];
                 MeshRenderer renderer = output.GetComponent<MeshRenderer>();
-                renderer.sharedMaterials = result.Parts[i].Materials;
-                result.RendererSettings.ApplyTo(renderer);
+                result.RendererSettings.ApplyTo(renderer, result.Parts[i].Materials);
             }
             if (disableSources)
                 foreach (Renderer renderer in result.SourceRenderers)

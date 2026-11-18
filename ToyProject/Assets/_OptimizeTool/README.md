@@ -75,7 +75,7 @@ public static class MeshBuildExample
         using (MeshBuildResult result = combiner.BuildMeshes())
         {
             foreach (MeshBuildPart part in result.Parts)
-                Debug.Log($"{part.Mesh.name}: {part.Mesh.vertexCount} vertices, {part.Materials.Length} materials");
+                Debug.Log($"{part.Mesh.name}: {part.Mesh.vertexCount} vertices, {part.Materials.Count} materials");
         }
     }
 }
