@@ -1,64 +1,33 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using UnityEngine;
 
 namespace Common.OptimizeTool.MeshOptimization
 {
-    /// <summary>Build inputs and geometry options only; no save path or scene mutation policy.</summary>
-    public sealed class MeshBuildRequest
-    {
-        public ReadOnlyCollection<MeshFilter> Sources { get; }
-        public Matrix4x4 DestinationWorldToLocal { get; }
-        public Camera Camera { get; }
-        public bool AllowReadableCopy { get; }
-        public bool AllowNormalRecalculation { get; }
-        public bool Optimize { get; }
-        public bool SingleMesh { get; }
-        public bool Backfaces { get; }
-        public float BackfaceAngle { get; }
-        public bool Occlusion { get; }
-        public int SamplingCount { get; }
-        public double VisibilityThreshold { get; }
-        public int LayerMask { get; }
-
-        public MeshBuildRequest(IList<MeshFilter> sources, Matrix4x4 destinationWorldToLocal,
-            Camera camera = null, bool allowReadableCopy = false, bool allowNormalRecalculation = false,
-            bool optimize = true, bool singleMesh = false, bool backfaces = false, float backfaceAngle = 90f,
-            bool occlusion = false, int samplingCount = 100, double visibilityThreshold = 0.01, int layerMask = ~0)
-        {
-            if (sources == null) throw new ArgumentNullException(nameof(sources));
-            Sources = new List<MeshFilter>(sources).AsReadOnly();
-            DestinationWorldToLocal = destinationWorldToLocal; Camera = camera;
-            AllowReadableCopy = allowReadableCopy; AllowNormalRecalculation = allowNormalRecalculation;
-            Optimize = optimize; SingleMesh = singleMesh; Backfaces = backfaces; BackfaceAngle = backfaceAngle;
-            Occlusion = occlusion; SamplingCount = samplingCount; VisibilityThreshold = visibilityThreshold; LayerMask = layerMask;
-        }
-    }
-
     public static class MeshBuildPipeline
     {
-        public static MeshBuildResult Build(MeshBuildRequest request)
-        {
-            MeshRendererSettings rendererSettings = Validate(request);
-            return BuildValidated(request, rendererSettings);
-        }
-
-        internal static MeshRendererSettings Validate(MeshBuildRequest request)
+        /// <summary>
+        /// Builds the combined meshes of <paramref name="sources"/> in the space of
+        /// <paramref name="destinationWorldToLocal"/>. The result owns the new meshes; dispose it.
+        /// </summary>
+        public static MeshBuildResult Build(IReadOnlyList<MeshFilter> sources, Matrix4x4 destinationWorldToLocal, MeshBuildSettings settings)
         {
             AssetFileTransaction.RequireEditMode();
-            if (request == null) throw new ArgumentNullException(nameof(request));
-            MeshGeometry.ValidateAngle(request.BackfaceAngle);
-            if ((request.Backfaces || request.Occlusion) && request.Camera == null)
-                throw new ArgumentException("Culling requires a target camera.");
-            if (request.Occlusion && (request.SamplingCount <= 0 || double.IsNaN(request.VisibilityThreshold)
-                || double.IsInfinity(request.VisibilityThreshold) || request.VisibilityThreshold < 0
-                || request.VisibilityThreshold > 1 || request.LayerMask == 0))
-                throw new ArgumentException("Occlusion sampling settings are invalid.");
-            if (request.Sources.Count == 0) throw new ArgumentException("No source MeshFilters were supplied.");
+            if (sources == null) throw new ArgumentNullException(nameof(sources));
+            if (settings == null) throw new ArgumentNullException(nameof(settings));
+            settings.Validate();
+            var copy = new MeshFilter[sources.Count];
+            for (int i = 0; i < copy.Length; i++) copy[i] = sources[i];
+            MeshRendererSettings rendererSettings = ValidateSources(copy);
+            return BuildValidated(copy, destinationWorldToLocal, settings, rendererSettings);
+        }
+
+        private static MeshRendererSettings ValidateSources(IReadOnlyList<MeshFilter> sources)
+        {
+            if (sources.Count == 0) throw new ArgumentException("No source MeshFilters were supplied.");
             var seen = new HashSet<MeshFilter>();
             MeshRendererSettings rendererSettings = null;
-            foreach (MeshFilter filter in request.Sources)
+            foreach (MeshFilter filter in sources)
             {
                 if (filter == null || !seen.Add(filter)) throw new ArgumentException("Sources must be present and unique.");
                 MeshRenderer renderer = filter.GetComponent<MeshRenderer>();
@@ -70,12 +39,13 @@ namespace Common.OptimizeTool.MeshOptimization
             return rendererSettings;
         }
 
-        private static MeshBuildResult BuildValidated(MeshBuildRequest request, MeshRendererSettings rendererSettings)
+        private static MeshBuildResult BuildValidated(IReadOnlyList<MeshFilter> sources, Matrix4x4 destinationWorldToLocal,
+            MeshBuildSettings settings, MeshRendererSettings rendererSettings)
         {
             var result = new MeshBuildResult { RendererSettings = rendererSettings };
-            if (request.Backfaces || request.Occlusion)
+            if (settings.BackfaceCulling || settings.OcclusionCulling)
                 result.AddWarning("View-dependent bake: removed geometry may still be needed by other cameras, shadows or reflections.");
-            if (request.Occlusion)
+            if (settings.OcclusionCulling)
                 result.AddWarning("Occlusion treats every external non-trigger Collider on the mask as opaque, including invisible or transparent proxies. Use dedicated occluder layers.");
             var temporary = new List<Mesh>();
             var readableSources = new Dictionary<Mesh, Mesh>();
@@ -84,7 +54,7 @@ namespace Common.OptimizeTool.MeshOptimization
             try
             {
                 Physics.SyncTransforms();
-                foreach (MeshFilter filter in request.Sources)
+                foreach (MeshFilter filter in sources)
                 {
                     MeshRenderer renderer = filter.GetComponent<MeshRenderer>();
                     if (renderer == null) throw new ArgumentException($"'{filter.name}' needs a MeshRenderer.");
@@ -92,7 +62,7 @@ namespace Common.OptimizeTool.MeshOptimization
                     if (original == null) throw new ArgumentException($"'{filter.name}' has no mesh.");
                     if (!readableSources.TryGetValue(original, out Mesh mesh))
                     {
-                        mesh = MeshGeometry.ReadableCopy(original, request.AllowReadableCopy, request.AllowNormalRecalculation);
+                        mesh = MeshGeometry.ReadableCopy(original, settings.AllowReadableCopy, settings.AllowNormalRecalculation);
                         readableSources.Add(original, mesh); temporary.Add(mesh);
                     }
                     Material[] materials = renderer.sharedMaterials;
@@ -106,21 +76,21 @@ namespace Common.OptimizeTool.MeshOptimization
                     if (renderer.probeAnchor == null && renderer.lightProbeUsage != UnityEngine.Rendering.LightProbeUsage.Off)
                         result.AddWarning("Merging changes renderer bounds and implicit light-probe sampling positions. Use an explicit shared probe anchor or validate lighting after baking.");
                     result.AddSource(renderer);
-                    if (request.Occlusion && MeshOcclusion.IsOccluded(filter, mesh, request.Camera,
-                        request.SamplingCount, request.VisibilityThreshold, request.LayerMask))
+                    if (settings.OcclusionCulling && MeshOcclusion.IsOccluded(filter, mesh, settings.Camera,
+                        settings.OcclusionSampleCount, settings.VisibilityThreshold, settings.OcclusionLayerMask))
                     {
                         result.AddRemoved(renderer);
                         continue;
                     }
-                    if (request.Backfaces)
+                    if (settings.BackfaceCulling)
                     {
-                        Mesh culled = MeshGeometry.CullBackfaces(mesh, filter.transform, request.Camera, request.BackfaceAngle);
+                        Mesh culled = MeshGeometry.CullBackfaces(mesh, filter.transform, settings.Camera, settings.BackfaceAngle);
                         if (culled == null) { result.AddRemoved(renderer); continue; }
                         temporary.Add(culled);
                         mesh = culled;
                     }
                     Mesh culledForSource = mesh != readableSources[original] ? mesh : null;
-                    Matrix4x4 matrix = request.DestinationWorldToLocal * filter.transform.localToWorldMatrix;
+                    Matrix4x4 matrix = destinationWorldToLocal * filter.transform.localToWorldMatrix;
                     for (int submesh = 0; submesh < mesh.subMeshCount; submesh++)
                     {
                         if (mesh.GetIndexCount(submesh) == 0) continue;
@@ -142,16 +112,16 @@ namespace Common.OptimizeTool.MeshOptimization
                 foreach (Material material in materialOrder)
                 {
                     List<CombineInstance> group = materialGroups[material];
-                    result.Add(MeshGeometry.Combine(group, true, request.Optimize), new[] { material });
+                    result.Add(MeshGeometry.Combine(group, true, settings.OptimizeMesh), new[] { material });
                     foreach (CombineInstance input in group) UnityEngine.Object.DestroyImmediate(input.mesh);
                     group.Clear();
                 }
                 if (result.Parts.Count == 0) throw new InvalidOperationException("No triangles remained after culling.");
-                if (request.SingleMesh && result.Parts.Count > 1)
+                if (settings.CombineIntoSingleMesh && result.Parts.Count > 1)
                 {
                     var combines = new List<CombineInstance>();
                     foreach (MeshBuildPart part in result.Parts) combines.Add(new CombineInstance { mesh = part.Mesh, transform = Matrix4x4.identity });
-                    Mesh single = MeshGeometry.Combine(combines, false, request.Optimize);
+                    Mesh single = MeshGeometry.Combine(combines, false, settings.OptimizeMesh);
                     result.ReplaceWithSingle(single, materialOrder.ToArray());
                 }
                 return result;

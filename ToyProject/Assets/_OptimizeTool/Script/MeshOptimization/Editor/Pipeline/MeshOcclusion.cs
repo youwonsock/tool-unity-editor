@@ -9,8 +9,6 @@ namespace Common.OptimizeTool.MeshOptimization
     {
         public static bool IsOccluded(MeshFilter filter, Mesh readable, Camera camera, int samplingCount, double threshold, int layerMask)
         {
-            if (samplingCount <= 0 || double.IsNaN(threshold) || threshold < 0 || threshold > 1 || camera == null)
-                throw new ArgumentException("Invalid occlusion settings.");
             Vector3[] vertices = readable.vertices;
             int count = Mathf.Min(vertices.Length, samplingCount), visible = 0;
             PhysicsScene physics = filter.gameObject.scene.GetPhysicsScene();

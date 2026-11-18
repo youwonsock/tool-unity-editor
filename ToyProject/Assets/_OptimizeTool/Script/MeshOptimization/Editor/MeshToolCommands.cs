@@ -15,7 +15,8 @@ namespace Common.OptimizeTool.MeshOptimization
         public static MeshBuildResult BuildMeshes(this MeshCombiner combiner)
         {
             combiner.LastBuildWarnings = Array.Empty<string>();
-            var result = MeshBuildPipeline.Build(CaptureBuildRequest(combiner, out bool skippedDisabledChild));
+            MeshFilter[] sources = CollectSources(combiner, out bool skippedDisabledChild);
+            var result = MeshBuildPipeline.Build(sources, combiner.transform.worldToLocalMatrix, combiner.CreateSettings());
             if (skippedDisabledChild)
                 result.AddWarning("Child MeshFilters with a disabled Renderer were left out. Assign them directly to bake them.");
             combiner.LastBuildWarnings = result.Warnings;
@@ -29,19 +30,22 @@ namespace Common.OptimizeTool.MeshOptimization
             using (MeshBuildResult result = combiner.BuildMeshes())
             {
                 Mesh[] meshes = result.GetMeshes();
-                List<string> paths = save.CreatePaths(meshes.Length, combiner.CombineAllIntoSingleMesh);
+                List<string> paths = save.CreatePaths(meshes.Length, combiner.CreateSettings().CombineIntoSingleMesh);
                 return MeshAssetTransaction.Save(meshes, paths, save.Overwrite, "Combine meshes",
                     saved => { if (combiner.CreateSceneOutput) CreateSceneOutput(combiner, saved, result); });
             }
         }
 
-        private static MeshBuildRequest CaptureBuildRequest(MeshCombiner combiner, out bool skippedDisabledChild)
+        private static MeshFilter[] CollectSources(MeshCombiner combiner, out bool skippedDisabledChild)
         {
             skippedDisabledChild = false;
             AssetFileTransaction.RequireEditMode();
             MeshFilter[] direct = combiner.TargetMeshFilters;
-            if (combiner.CollectChildMeshes == (direct != null && direct.Length > 0))
+            bool hasDirect = direct != null && direct.Length > 0;
+            if (combiner.CollectChildMeshes && hasDirect)
                 throw new ArgumentException("Choose direct MeshFilters or child collection, not both.");
+            if (!combiner.CollectChildMeshes && !hasDirect)
+                throw new ArgumentException("Assign target MeshFilters or enable child collection.");
             MeshFilter[] filters = combiner.CollectChildMeshes
                 ? combiner.GetComponentsInChildren<MeshFilter>(combiner.IncludeInactive) : direct;
             GameObject generatedRoot = combiner.GeneratedRoot;
@@ -56,10 +60,7 @@ namespace Common.OptimizeTool.MeshOptimization
                 }
                 inputs.Add(filter);
             }
-            return new MeshBuildRequest(inputs, combiner.transform.worldToLocalMatrix, combiner.TargetCamera,
-                combiner.AllowReadableCopy, combiner.AllowNormalRecalculation, combiner.OptimizeMesh, combiner.CombineAllIntoSingleMesh,
-                combiner.EnableBackfaceCulling, combiner.BackfaceCullingAngle, combiner.EnableOcclusionCulling,
-                combiner.VertexSamplingCount, combiner.VisibilityThreshold, combiner.CullingLayerMask);
+            return inputs.ToArray();
         }
 
         // A source this component disabled in an earlier bake is still an input.

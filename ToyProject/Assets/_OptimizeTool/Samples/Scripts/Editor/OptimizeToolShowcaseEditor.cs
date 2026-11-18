@@ -60,8 +60,11 @@ namespace Common.OptimizeTool.Samples.Editor
                 camera.nearClipPlane = 0.1f;
                 camera.farClipPlane = 100f;
                 for (int mode = 0; mode < MeshNames.Length; mode++)
-                    results.Add(MeshBuildPipeline.Build(new MeshBuildRequest(filters, original.worldToLocalMatrix,
-                        camera, allowReadableCopy: true, singleMesh: true, backfaces: mode == 1, occlusion: mode == 2)));
+                    results.Add(MeshBuildPipeline.Build(filters, original.worldToLocalMatrix, new MeshBuildSettings
+                    {
+                        Camera = camera, AllowReadableCopy = true, CombineIntoSingleMesh = true,
+                        BackfaceCulling = mode == 1, OcclusionCulling = mode == 2,
+                    }));
                 if (TriangleCount(results[1].Parts[0].Mesh) >= TriangleCount(results[0].Parts[0].Mesh)
                     || results[2].RemovedSources.Count != 6)
                     throw new InvalidOperationException("The showcase must remove backfaces and six occluded cubes.");

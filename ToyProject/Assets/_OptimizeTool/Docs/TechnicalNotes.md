@@ -84,9 +84,9 @@ flowchart LR
 
 | 어셈블리 | 클래스 | 역할 |
 | --- | --- | --- |
-| MeshOptimization | `MeshCombiner` / `MeshSourceRendererState` | Inspector 설정, 결합 씬 출력과 원본 Renderer 상태 |
+| MeshOptimization | `MeshCombiner` / `MeshBuildSettings` / `MeshSourceRendererState` | Inspector 설정, 그 설정에서 만든 빌드 옵션(직렬화하지 않음), 결합 씬 출력과 원본 Renderer 상태 |
 | MeshOptimization.Editor | `MeshToolCommands` | 설정을 빌드 요청으로 만들고 빌드·저장·씬 적용·베이크를 호출하는 확장 메서드 |
-| MeshOptimization.Editor | `MeshBuildRequest` / `MeshBuildPipeline` | 저장 경로와 분리된 입력·옵션 검증, 컬링·변환·Material별 결합. 기하 연산은 `MeshGeometry`, 씬 Physics 조회는 `MeshOcclusion` |
+| MeshOptimization.Editor | `MeshBuildPipeline` | `Build(sources, destinationWorldToLocal, settings)`. 저장 경로와 분리된 입력 검증, 컬링·변환·Material별 결합. 기하 연산은 `MeshGeometry`, 씬 Physics 조회는 `MeshOcclusion` |
 | MeshOptimization.Editor | `MeshBuildResult` | Mesh와 Material 매핑을 항목별로 묶고 임시 Mesh만 소유. `Dispose()`는 원본을 파괴하지 않음 |
 | MeshOptimization.Editor | `MeshSaveOptions` / `MeshAssetTransaction` | Mesh 출력 충돌 사전 검증, Undo와 함께 GUID 유지 저장. 콜백이 쓰는 Prefab·부속 에셋 경로도 먼저 선언해야 복구 대상에 포함 |
 | MeshOptimization.Editor | `MeshSceneOutput` | Undo에 등록하며 결과 Renderer를 만들고 원본 Renderer를 비활성화 |
@@ -107,8 +107,8 @@ flowchart LR
 
 ## Mesh 결합
 
-- `_targetMeshFilterArray`로 대상을 직접 지정하거나 `_collectChildMeshes`로 자식 계층을 수집합니다. 두 방식은 동시에 쓸 수 없습니다. 직접 지정한 MeshFilter는 Renderer 활성 여부와 관계없이 입력이고, 자식 수집은 사용자가 끈 Renderer를 경고와 함께 제외하되 이전 베이크가 끈 원본은 포함합니다.
-- 입력 MeshFilter, MeshRenderer, Material, SubMesh, Triangle 인덱스를 처리 전에 검증합니다. Normal 데이터가 불완전하면 `_allowNormalRecalculation`이 켜진 경우에만 재계산합니다.
+- `_targetMeshFilterArray`로 대상을 직접 지정하거나 `_collectChildMeshes`로 자식 계층을 수집합니다. 둘 중 정확히 하나를 써야 하며, 둘 다 쓰거나 둘 다 비우면 서로 다른 오류로 알립니다. 직접 지정한 MeshFilter는 Renderer 활성 여부와 관계없이 입력이고, 자식 수집은 사용자가 끈 Renderer를 경고와 함께 제외하되 이전 베이크가 끈 원본은 포함합니다.
+- 빌드 옵션(각도, 카메라, Occlusion 표본 설정)은 `MeshBuildSettings.Validate()` 한 곳에서만 검증합니다. 입력 MeshFilter, MeshRenderer, Material, SubMesh, Triangle 인덱스는 처리 전에 검증합니다. Normal 데이터가 불완전하면 `_allowNormalRecalculation`이 켜진 경우에만 재계산합니다.
 - Read/Write가 꺼진 입력은 `_allowReadableCopy`가 켜진 경우 `UnityEditor.MeshUtility.AcquireReadOnlyMeshData`로 복사합니다. 원본 importer와 Mesh는 바꾸지 않습니다.
 - SubMesh 추출과 Backface 제거는 원시 정점 레이아웃을 복사해 Tangent·Color·UV0~UV7을 보존합니다. 정점 65,535개를 넘으면 UInt32 인덱스를 씁니다. Skinned/BlendShape 메시와 삼각형 이외 토폴로지는 거부합니다.
 - 같은 Material의 SubMesh를 `CombineInstance`로 묶고, `_combineAllIntoSingleMesh`가 켜지면 하나의 Mesh로 다시 결합합니다. `_optimizeMesh`는 정점·인덱스 재정렬이며 폴리곤 단순화가 아닙니다.

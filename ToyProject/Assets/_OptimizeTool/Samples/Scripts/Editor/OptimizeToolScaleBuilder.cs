@@ -114,9 +114,11 @@ namespace Common.OptimizeTool.Samples.Editor
                     }
                     for (int mode = 1; mode < 4; mode++)
                     {
-                        MeshBuildResult result = MeshBuildPipeline.Build(new MeshBuildRequest(sources, Matrix4x4.identity,
-                            camera, allowReadableCopy: true, singleMesh: true, backfaces: mode == 2,
-                            backfaceAngle: 89f, occlusion: mode == 3, samplingCount: 24));
+                        MeshBuildResult result = MeshBuildPipeline.Build(sources, Matrix4x4.identity, new MeshBuildSettings
+                        {
+                            Camera = camera, AllowReadableCopy = true, CombineIntoSingleMesh = true,
+                            BackfaceCulling = mode == 2, BackfaceAngle = 89f, OcclusionCulling = mode == 3, OcclusionSampleCount = 24,
+                        });
                         results.Add(result);
                         if (mode == 3 && result.RemovedSources.Count != count * 2 / 3)
                             throw new InvalidOperationException("Occlusion must remove exactly the rear two layers.");

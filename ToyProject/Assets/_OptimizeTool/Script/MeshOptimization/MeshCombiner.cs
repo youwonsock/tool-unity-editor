@@ -38,23 +38,29 @@ namespace Common.OptimizeTool.MeshOptimization
         /// <summary>Warnings of the last build, shown by the inspector.</summary>
         public IReadOnlyList<string> LastBuildWarnings { get; internal set; } = Array.Empty<string>();
 
-        internal string SavePath => _savePath;
-        internal string MeshName => _meshName;
-        internal bool OptimizeMesh => _optimizeMesh;
-        internal bool IncludeInactive => _includeInactive;
-        internal Camera TargetCamera => _targetCamera;
+        /// <summary>The geometry options of these fields. A new object each call; editing it does not change the component.</summary>
+        internal MeshBuildSettings CreateSettings() => new MeshBuildSettings
+        {
+            Camera = _targetCamera,
+            AllowReadableCopy = _allowReadableCopy,
+            AllowNormalRecalculation = _allowNormalRecalculation,
+            OptimizeMesh = _optimizeMesh,
+            CombineIntoSingleMesh = _combineAllIntoSingleMesh,
+            BackfaceCulling = _enableBackfaceCulling,
+            BackfaceAngle = _backfaceCullingAngle,
+            OcclusionCulling = _enableOcclusionCulling,
+            OcclusionSampleCount = _vertexSamplingCount,
+            VisibilityThreshold = _visibilityThreshold,
+            OcclusionLayerMask = _cullingLayerMask,
+        };
+
+        // Input selection, save target and scene output: what the editor commands need besides the build options.
         internal MeshFilter[] TargetMeshFilters => _targetMeshFilterArray;
         internal bool CollectChildMeshes => _collectChildMeshes;
-        internal bool AllowReadableCopy => _allowReadableCopy;
-        internal bool AllowNormalRecalculation => _allowNormalRecalculation;
+        internal bool IncludeInactive => _includeInactive;
+        internal string SavePath => _savePath;
+        internal string MeshName => _meshName;
         internal bool OverwriteExistingAssets => _overwriteExistingAssets;
-        internal bool EnableOcclusionCulling => _enableOcclusionCulling;
-        internal int VertexSamplingCount => _vertexSamplingCount;
-        internal double VisibilityThreshold => _visibilityThreshold;
-        internal LayerMask CullingLayerMask => _cullingLayerMask;
-        internal bool EnableBackfaceCulling => _enableBackfaceCulling;
-        internal float BackfaceCullingAngle => _backfaceCullingAngle;
-        internal bool CombineAllIntoSingleMesh => _combineAllIntoSingleMesh;
         internal bool CreateSceneOutput => _createSceneOutput;
         internal bool DisableSourceRenderers => _disableSourceRenderers;
 

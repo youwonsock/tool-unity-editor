@@ -32,10 +32,6 @@ namespace Common.OptimizeTool.MeshOptimization
         // Compared with the edge lengths, so a triangle counts by shape and not by size.
         private static bool IsDegenerate(Vector3 edgeA, Vector3 edgeB, Vector3 cross)
             => cross.sqrMagnitude <= 1e-12f * edgeA.sqrMagnitude * edgeB.sqrMagnitude;
-        public static void ValidateAngle(float angle)
-        {
-            if (!IsFinite(angle) || angle < 0 || angle > 180) throw new ArgumentOutOfRangeException(nameof(angle));
-        }
 
         public static Mesh ReadableCopy(Mesh source, bool allowReadableCopy, bool allowNormalRecalculation)
         {
@@ -136,8 +132,6 @@ namespace Common.OptimizeTool.MeshOptimization
 
         public static Mesh CullBackfaces(Mesh mesh, Transform source, Camera camera, float angle)
         {
-            ValidateAngle(angle);
-            if (camera == null) throw new ArgumentException("Assign a camera.");
             Matrix4x4 matrix = source.localToWorldMatrix;
             if (matrix.determinant == 0f || !IsFinite(matrix.determinant)) throw new ArgumentException("Zero-scale meshes cannot be baked.");
             Matrix4x4 normalMatrix = matrix.inverse.transpose;
