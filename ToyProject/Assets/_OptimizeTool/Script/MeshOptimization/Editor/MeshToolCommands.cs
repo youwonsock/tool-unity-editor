@@ -26,14 +26,24 @@ namespace Common.OptimizeTool.MeshOptimization
         /// <summary>Saves the combined meshes as assets and applies the scene output.</summary>
         public static Mesh[] CombineAndSaveMeshes(this MeshCombiner combiner)
         {
-            var save = new MeshSaveOptions(combiner.SavePath, combiner.MeshName, combiner.OverwriteExistingAssets);
+            string folder = AssetFileTransaction.ValidateFolder(combiner.SavePath);
+            AssetFileTransaction.ValidateFileName(combiner.MeshName);
             using (MeshBuildResult result = combiner.BuildMeshes())
             {
                 Mesh[] meshes = result.GetMeshes();
-                List<string> paths = save.CreatePaths(meshes.Length, combiner.CreateSettings().CombineIntoSingleMesh);
-                return MeshAssetTransaction.Save(meshes, paths, save.Overwrite, "Combine meshes",
+                List<string> paths = OutputPaths(folder, combiner.MeshName, meshes.Length, combiner.CreateSettings().CombineIntoSingleMesh);
+                return MeshAssetTransaction.Save(meshes, paths, combiner.OverwriteExistingAssets, "Combine meshes",
                     saved => { if (combiner.CreateSceneOutput) CreateSceneOutput(combiner, saved, result); });
             }
+        }
+
+        /// <summary>A single-mesh build is saved as <c>name.asset</c>; otherwise <c>name_0.asset</c>, <c>name_1.asset</c>, ...</summary>
+        private static List<string> OutputPaths(string folder, string name, int count, bool singleMesh)
+        {
+            if (singleMesh && count != 1) throw new ArgumentException("Single-mesh output requires exactly one result.");
+            var paths = new List<string>(count);
+            for (int i = 0; i < count; i++) paths.Add(singleMesh ? $"{folder}/{name}.asset" : $"{folder}/{name}_{i}.asset");
+            return paths;
         }
 
         private static MeshFilter[] CollectSources(MeshCombiner combiner, out bool skippedDisabledChild)
