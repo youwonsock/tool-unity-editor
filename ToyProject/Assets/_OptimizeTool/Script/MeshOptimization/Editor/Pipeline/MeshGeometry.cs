@@ -8,8 +8,13 @@ using Object = UnityEngine.Object;
 
 namespace Common.OptimizeTool.MeshOptimization
 {
-    /// <summary>Shared static-mesh processing. It never mutates source meshes or importer settings.</summary>
-    public static class MeshProcessingUtility
+    /// <summary>
+    /// Static-mesh geometry operations of the build pipeline. They never mutate source meshes or importer settings.
+    /// Copies and triangle selection move raw vertex buffers, so every attribute and format survives; transforms and
+    /// backface tests read the managed arrays instead. Both styles are kept on purpose: switching one of them would
+    /// change the bytes of every output.
+    /// </summary>
+    internal static class MeshGeometry
     {
         public static bool IsFinite(Vector3 v) => IsFinite(v.x) && IsFinite(v.y) && IsFinite(v.z);
         private static bool IsFinite(float v) => !float.IsNaN(v) && !float.IsInfinity(v);
@@ -199,57 +204,7 @@ namespace Common.OptimizeTool.MeshOptimization
             var copies = new List<Mesh>();
             try
             {
-                // CombineMeshes keeps only channels shared by every input. Supply missing channels explicitly.
-                bool colors = false, tangents = false;
-                var uvDimensions = new int[8];
-                foreach (CombineInstance input in inputs)
-                {
-                    colors |= input.mesh.HasVertexAttribute(VertexAttribute.Color);
-                    tangents |= input.mesh.HasVertexAttribute(VertexAttribute.Tangent);
-                    for (int channel = 0; channel < 8; channel++)
-                        uvDimensions[channel] = Mathf.Max(uvDimensions[channel], input.mesh.GetVertexAttributeDimension((VertexAttribute)((int)VertexAttribute.TexCoord0 + channel)));
-                }
-                var combines = new CombineInstance[inputs.Count];
-                for (int i = 0; i < inputs.Count; i++)
-                {
-                    Mesh source = inputs[i].mesh;
-                    bool needsCopy = colors && !source.HasVertexAttribute(VertexAttribute.Color)
-                        || tangents && !source.HasVertexAttribute(VertexAttribute.Tangent);
-                    for (int channel = 0; channel < 8; channel++)
-                        needsCopy |= uvDimensions[channel] != source.GetVertexAttributeDimension((VertexAttribute)((int)VertexAttribute.TexCoord0 + channel));
-                    if (!needsCopy) { combines[i] = inputs[i]; continue; }
-                    Mesh copy = Object.Instantiate(source);
-                    copies.Add(copy);
-                    if (colors && !copy.HasVertexAttribute(VertexAttribute.Color))
-                    {
-                        var values = new Color[copy.vertexCount];
-                        for (int j = 0; j < values.Length; j++) values[j] = Color.white;
-                        copy.colors = values;
-                    }
-                    if (tangents && !copy.HasVertexAttribute(VertexAttribute.Tangent))
-                    {
-                        if (copy.HasVertexAttribute(VertexAttribute.TexCoord0)) copy.RecalculateTangents();
-                        else
-                        {
-                            var values = new Vector4[copy.vertexCount];
-                            for (int j = 0; j < values.Length; j++) values[j] = new Vector4(1, 0, 0, 1);
-                            copy.tangents = values;
-                        }
-                    }
-                    for (int channel = 0; channel < 8; channel++)
-                    {
-                        if (uvDimensions[channel] == 0) continue;
-                        var uvs = new List<Vector4>();
-                        copy.GetUVs(channel, uvs);
-                        while (uvs.Count < copy.vertexCount) uvs.Add(Vector4.zero);
-                        if (uvDimensions[channel] <= 2) copy.SetUVs(channel, uvs.ConvertAll(v => new Vector2(v.x, v.y)));
-                        else if (uvDimensions[channel] == 3) copy.SetUVs(channel, uvs.ConvertAll(v => new Vector3(v.x, v.y, v.z)));
-                        else copy.SetUVs(channel, uvs);
-                    }
-                    combines[i] = inputs[i];
-                    combines[i].mesh = copy;
-                }
-                output.CombineMeshes(combines, mergeSubmeshes, true, false);
+                output.CombineMeshes(MatchVertexChannels(inputs, copies), mergeSubmeshes, true, false);
                 if (optimize) output.Optimize();
                 output.RecalculateBounds();
                 return output;
@@ -258,8 +213,66 @@ namespace Common.OptimizeTool.MeshOptimization
             finally { foreach (Mesh copy in copies) Object.DestroyImmediate(copy); }
         }
 
-        public static bool IsOccluded(MeshFilter filter, Mesh readable, Camera camera, int samplingCount, double threshold, int layerMask)
-            => MeshVisibilityQuery.IsOccluded(filter, readable, camera, samplingCount, threshold, layerMask);
+        /// <summary>
+        /// CombineMeshes keeps only the channels every input has. Inputs that miss a color, tangent or UV channel
+        /// another input has are replaced by a copy with that channel filled; the copies are added to
+        /// <paramref name="copies"/> for the caller to destroy.
+        /// </summary>
+        private static CombineInstance[] MatchVertexChannels(IList<CombineInstance> inputs, List<Mesh> copies)
+        {
+            bool colors = false, tangents = false;
+            var uvDimensions = new int[8];
+            foreach (CombineInstance input in inputs)
+            {
+                colors |= input.mesh.HasVertexAttribute(VertexAttribute.Color);
+                tangents |= input.mesh.HasVertexAttribute(VertexAttribute.Tangent);
+                for (int channel = 0; channel < 8; channel++)
+                    uvDimensions[channel] = Mathf.Max(uvDimensions[channel], UvDimension(input.mesh, channel));
+            }
+            var combines = new CombineInstance[inputs.Count];
+            for (int i = 0; i < inputs.Count; i++)
+            {
+                combines[i] = inputs[i];
+                Mesh source = inputs[i].mesh;
+                bool needsCopy = colors && !source.HasVertexAttribute(VertexAttribute.Color)
+                    || tangents && !source.HasVertexAttribute(VertexAttribute.Tangent);
+                for (int channel = 0; channel < 8; channel++)
+                    needsCopy |= uvDimensions[channel] != UvDimension(source, channel);
+                if (!needsCopy) continue;
+                Mesh copy = Object.Instantiate(source);
+                copies.Add(copy);
+                if (colors && !copy.HasVertexAttribute(VertexAttribute.Color))
+                {
+                    var values = new Color[copy.vertexCount];
+                    for (int j = 0; j < values.Length; j++) values[j] = Color.white;
+                    copy.colors = values;
+                }
+                if (tangents && !copy.HasVertexAttribute(VertexAttribute.Tangent))
+                {
+                    if (copy.HasVertexAttribute(VertexAttribute.TexCoord0)) copy.RecalculateTangents();
+                    else
+                    {
+                        var values = new Vector4[copy.vertexCount];
+                        for (int j = 0; j < values.Length; j++) values[j] = new Vector4(1, 0, 0, 1);
+                        copy.tangents = values;
+                    }
+                }
+                for (int channel = 0; channel < 8; channel++)
+                {
+                    if (uvDimensions[channel] == 0) continue;
+                    var uvs = new List<Vector4>();
+                    copy.GetUVs(channel, uvs);
+                    while (uvs.Count < copy.vertexCount) uvs.Add(Vector4.zero);
+                    if (uvDimensions[channel] <= 2) copy.SetUVs(channel, uvs.ConvertAll(v => new Vector2(v.x, v.y)));
+                    else if (uvDimensions[channel] == 3) copy.SetUVs(channel, uvs.ConvertAll(v => new Vector3(v.x, v.y, v.z)));
+                    else copy.SetUVs(channel, uvs);
+                }
+                combines[i].mesh = copy;
+            }
+            return combines;
+        }
 
+        private static int UvDimension(Mesh mesh, int channel)
+            => mesh.GetVertexAttributeDimension((VertexAttribute)((int)VertexAttribute.TexCoord0 + channel));
     }
 }

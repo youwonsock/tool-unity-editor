@@ -51,7 +51,7 @@ flowchart LR
         Commands -->|Save| MeshSave[MeshAssetTransaction]
         Result -. Meshes / Parts .-> MeshSave
         MeshSave -->|씬 출력 콜백| Scene[MeshSceneOutput / Undo]
-        Commands --> Geometry[MeshProcessingUtility]
+        Commands --> Geometry[MeshGeometry]
     end
     subgraph Physics[PhysicsRecording]
         Recorder[PhysicsRecorder] -->|Capture / Finish| Take[PhysicsTake]
@@ -86,7 +86,7 @@ flowchart LR
 | --- | --- | --- |
 | MeshOptimization | `MeshCombiner` / `MeshSourceRendererState` | Inspector 설정, 결합 씬 출력과 원본 Renderer 상태 |
 | MeshOptimization.Editor | `MeshToolCommands` | 설정을 빌드 요청으로 만들고 빌드·저장·씬 적용·베이크를 호출하는 확장 메서드 |
-| MeshOptimization.Editor | `MeshBuildRequest` / `MeshBuildPipeline` | 저장 경로와 분리된 입력·옵션 검증, 컬링·변환·Material별 결합. 씬 Physics 조회는 `MeshVisibilityQuery` |
+| MeshOptimization.Editor | `MeshBuildRequest` / `MeshBuildPipeline` | 저장 경로와 분리된 입력·옵션 검증, 컬링·변환·Material별 결합. 기하 연산은 `MeshGeometry`, 씬 Physics 조회는 `MeshOcclusion` |
 | MeshOptimization.Editor | `MeshBuildResult` | Mesh와 Material 매핑을 항목별로 묶고 임시 Mesh만 소유. `Dispose()`는 원본을 파괴하지 않음 |
 | MeshOptimization.Editor | `MeshSaveOptions` / `MeshAssetTransaction` | Mesh 출력 충돌 사전 검증, Undo와 함께 GUID 유지 저장. 콜백이 쓰는 Prefab·부속 에셋 경로도 먼저 선언해야 복구 대상에 포함 |
 | MeshOptimization.Editor | `MeshSceneOutput` | Undo에 등록하며 결과 Renderer를 만들고 원본 Renderer를 비활성화 |

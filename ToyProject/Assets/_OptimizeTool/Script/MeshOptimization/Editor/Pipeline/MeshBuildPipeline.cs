@@ -48,7 +48,7 @@ namespace Common.OptimizeTool.MeshOptimization
         {
             AssetFileTransaction.RequireEditMode();
             if (request == null) throw new ArgumentNullException(nameof(request));
-            MeshProcessingUtility.ValidateAngle(request.BackfaceAngle);
+            MeshGeometry.ValidateAngle(request.BackfaceAngle);
             if ((request.Backfaces || request.Occlusion) && request.Camera == null)
                 throw new ArgumentException("Culling requires a target camera.");
             if (request.Occlusion && (request.SamplingCount <= 0 || double.IsNaN(request.VisibilityThreshold)
@@ -92,7 +92,7 @@ namespace Common.OptimizeTool.MeshOptimization
                     if (original == null) throw new ArgumentException($"'{filter.name}' has no mesh.");
                     if (!readableSources.TryGetValue(original, out Mesh mesh))
                     {
-                        mesh = MeshProcessingUtility.ReadableCopy(original, request.AllowReadableCopy, request.AllowNormalRecalculation);
+                        mesh = MeshGeometry.ReadableCopy(original, request.AllowReadableCopy, request.AllowNormalRecalculation);
                         readableSources.Add(original, mesh); temporary.Add(mesh);
                     }
                     Material[] materials = renderer.sharedMaterials;
@@ -106,7 +106,7 @@ namespace Common.OptimizeTool.MeshOptimization
                     if (renderer.probeAnchor == null && renderer.lightProbeUsage != UnityEngine.Rendering.LightProbeUsage.Off)
                         result.AddWarning("Merging changes renderer bounds and implicit light-probe sampling positions. Use an explicit shared probe anchor or validate lighting after baking.");
                     result.AddSource(renderer);
-                    if (request.Occlusion && MeshProcessingUtility.IsOccluded(filter, mesh, request.Camera,
+                    if (request.Occlusion && MeshOcclusion.IsOccluded(filter, mesh, request.Camera,
                         request.SamplingCount, request.VisibilityThreshold, request.LayerMask))
                     {
                         result.CulledObjectCount++;
@@ -114,7 +114,7 @@ namespace Common.OptimizeTool.MeshOptimization
                     }
                     if (request.Backfaces)
                     {
-                        Mesh culled = MeshProcessingUtility.CullBackfaces(mesh, filter.transform, request.Camera, request.BackfaceAngle);
+                        Mesh culled = MeshGeometry.CullBackfaces(mesh, filter.transform, request.Camera, request.BackfaceAngle);
                         if (culled == null) { result.CulledObjectCount++; continue; }
                         temporary.Add(culled);
                         mesh = culled;
@@ -124,10 +124,10 @@ namespace Common.OptimizeTool.MeshOptimization
                     for (int submesh = 0; submesh < mesh.subMeshCount; submesh++)
                     {
                         if (mesh.GetIndexCount(submesh) == 0) continue;
-                        Mesh part = MeshProcessingUtility.SelectTriangles(mesh,
+                        Mesh part = MeshGeometry.SelectTriangles(mesh,
                             new List<int[]> { mesh.GetTriangles(submesh) }, mesh.name + "_Part");
                         temporary.Add(part);
-                        MeshProcessingUtility.TransformMesh(part, matrix);
+                        MeshGeometry.TransformMesh(part, matrix);
                         Material material = materials[submesh];
                         if (!materialGroups.TryGetValue(material, out List<CombineInstance> group))
                         {
@@ -142,7 +142,7 @@ namespace Common.OptimizeTool.MeshOptimization
                 foreach (Material material in materialOrder)
                 {
                     List<CombineInstance> group = materialGroups[material];
-                    result.Add(MeshProcessingUtility.Combine(group, true, request.Optimize), new[] { material });
+                    result.Add(MeshGeometry.Combine(group, true, request.Optimize), new[] { material });
                     foreach (CombineInstance input in group) UnityEngine.Object.DestroyImmediate(input.mesh);
                     group.Clear();
                 }
@@ -151,7 +151,7 @@ namespace Common.OptimizeTool.MeshOptimization
                 {
                     var combines = new List<CombineInstance>();
                     foreach (Mesh mesh in result.Meshes) combines.Add(new CombineInstance { mesh = mesh, transform = Matrix4x4.identity });
-                    Mesh single = MeshProcessingUtility.Combine(combines, false, request.Optimize);
+                    Mesh single = MeshGeometry.Combine(combines, false, request.Optimize);
                     result.ReplaceWithSingle(single, materialOrder.ToArray());
                 }
                 return result;

@@ -5,7 +5,7 @@ using UnityEngine.SceneManagement;
 namespace Common.OptimizeTool.MeshOptimization
 {
     /// <summary>Scene-dependent visibility approximation, kept separate from geometry processing.</summary>
-    internal static class MeshVisibilityQuery
+    internal static class MeshOcclusion
     {
         public static bool IsOccluded(MeshFilter filter, Mesh readable, Camera camera, int samplingCount, double threshold, int layerMask)
         {
