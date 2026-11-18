@@ -20,7 +20,7 @@
 
 1. **상태 소유자는 하나입니다.** 재생 상태는 `PathPlayback`, Queue 순서와 계산은 `QueuedPathManager`, 경로 데이터는 Provider만 바꿉니다. 다른 타입은 읽기만 하고 사본을 두지 않습니다.
 2. **변경 판정은 Provider가 한 번만 합니다.** `PathProviderBehaviour.Rebuild`가 이전 게시와 비교해 `Revision`과 `DefinitionRevision`을 올리고, 소비자는 이 두 값만 비교합니다.
-3. **순수 계산과 Unity 연결을 나눕니다.** `PathPolyline`, `PathRoute`, `PathPlaybackCursor`, `PathPlayback`, `PathEventEffects`, Queue 계산은 MonoBehaviour와 정적 상태에 기대지 않아 EditMode 테스트로 검증합니다. 컴포넌트는 직렬화, 생명주기, Transform 적용만 맡습니다.
+3. **순수 계산과 Unity 연결을 나눕니다.** `PathPolyline`, `PathRoute`, `PathPlaybackCursor`, `PathPlayback`, `PathEventEffects`, Queue 계산은 MonoBehaviour와 정적 상태(알림 순서 큐 제외)에 기대지 않아 EditMode 테스트로 검증합니다. 컴포넌트는 직렬화, 생명주기, Transform 적용만 맡습니다.
 4. **검증은 경계에서 한 번만 합니다.** 공개 명령의 입력과 Provider 빌드만 검증합니다.
 5. **공통 값과 헬퍼는 한 곳에 둡니다.** 상수는 `PathConstants`, 수치 검증과 곡선 복사는 `PathValueUtility`, 정렬은 `PathSortUtility`, 1회 오류 보고는 `PathConfigurationErrorReporter`입니다.
 6. **인터페이스는 교체할 이유가 있을 때만 둡니다.** 공개 인터페이스는 `IPathEventReceiver` 하나입니다. `IPathProvider`는 내부 계약이며(테스트의 가짜 Provider가 씁니다), 공개 시그니처는 `PathProviderBehaviour`를 받습니다.
@@ -58,7 +58,7 @@
 ### Seek
 
 - 먼저 입력과 Provider 준비 상태를 검증합니다. 실패하면 아무것도 바뀌지 않습니다.
-- 같은 위치면 `false`입니다. 위치가 바뀌면 잔여 시간을 버리고, Queue 멤버는 다음 결과에서 속도를 0부터 다시 올립니다.
+- 같은 위치면 `false`입니다. 위치가 바뀌면 잔여 시간을 버리고, Queue 멤버는 새로 출발할 때처럼 첫 결과와 재출발 지연을 기다립니다(`MotionEpoch`).
 - 이벤트 커서는 목표 위치와 그 이전을 건너뜁니다. 뒤로 Seek하면 다시 통과하는 이벤트는 또 실행됩니다. Seek는 `SegmentChanged`를 보내지 않습니다.
 - `Seek(1f)`는 즉시 완료하지 않고 다음 이동 Tick에서 판정합니다.
 - 구간 경계는 `[start, end)`이며 마지막 구간의 끝 1은 허용합니다.

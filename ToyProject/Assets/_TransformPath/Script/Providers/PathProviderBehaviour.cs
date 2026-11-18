@@ -74,8 +74,6 @@ namespace Common.TransformPath
                 Rebuild();
         }
 
-        protected bool BuildRequested => _buildRequested;
-
         /// <summary>Builds into fields of the subclass only when every check passed.</summary>
         protected abstract bool TryBuild(out bool geometryChanged, out bool definitionChanged, out string error);
 

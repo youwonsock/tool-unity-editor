@@ -15,8 +15,8 @@ namespace Common.TransformPath
     [Serializable]
     public struct PathSegmentAuthoring
     {
-        // MonoBehaviour keeps existing scenes and prefabs readable. Only PathData is accepted.
-        [SerializeField] private MonoBehaviour _providerObject;
+        // The name stays from when any provider was allowed, so scenes and prefabs keep their references.
+        [SerializeField] private PathData _providerObject;
         [SerializeField] private EPathSegmentMovementSource _movementSource;
         [SerializeField] private EPathMoveType _moveType;
         [SerializeField] private float _moveValue;
@@ -43,7 +43,7 @@ namespace Common.TransformPath
             _preservePreviousSpeed = preservePreviousSpeed;
         }
 
-        public PathData Path => _providerObject as PathData;
+        public PathData Path => _providerObject;
         public EPathSegmentMovementSource MovementSource => _movementSource;
         public bool PreservePreviousSpeed => _preservePreviousSpeed;
 

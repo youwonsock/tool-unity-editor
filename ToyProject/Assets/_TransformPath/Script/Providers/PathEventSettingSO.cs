@@ -13,7 +13,7 @@ namespace Common.TransformPath
     public sealed class PathEventSettingSO : ScriptableObject
     {
         [Serializable]
-        public class DelayedEventEntry
+        public sealed class DelayedEventEntry
         {
             public float Delay = 0f;
             public PathEventSettingSO EventSetting = null;

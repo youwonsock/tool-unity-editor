@@ -80,8 +80,6 @@ namespace Common.TransformPath
 
         public bool IsValid => _polyline != null;
         public Vector3[] SampledPoints => _polyline?.Points;
-        public int SampledPointCount => _polyline == null ? 0 : _polyline.PointCount;
-        public float PathLength => _polyline == null ? 0f : _polyline.Length;
 
         public bool Update(PathData pathData)
         {

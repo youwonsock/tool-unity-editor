@@ -44,7 +44,6 @@ namespace Common.TransformPath.Samples
         private bool _normalWasMovingWhenHidden;
         private bool _multiWasMovingWhenHidden;
         private bool _completionEventsSubscribed;
-        private int _presentationMode;
         private ETransformPathShowcaseLane _activeLane = ETransformPathShowcaseLane.Normal;
 
         #endregion
@@ -54,11 +53,8 @@ namespace Common.TransformPath.Samples
 
         public bool IsInitialized => _isInitialized;
         public bool IsPaused => _isPaused;
-        public int PresentationMode => _presentationMode;
         public bool QueueVisible => _queueVisible;
         public ETransformPathShowcaseLane ActiveLane => _activeLane;
-        public MultiPathData QueuePathData => _queuePathData;
-        public EPathCurveType CurrentCurveType => _pathData == null ? EPathCurveType.Linear : _pathData.CurveType;
 
         #endregion
 
@@ -179,7 +175,6 @@ namespace Common.TransformPath.Samples
             _pathData.CurveType = curve;
             if (_pathFollower != null && ReferenceEquals(_pathFollower.CurrentProvider, _pathData))
                 _pathFollower.Seek(progress);
-            _presentationMode = mode;
         }
 
         public void TogglePauseAll()

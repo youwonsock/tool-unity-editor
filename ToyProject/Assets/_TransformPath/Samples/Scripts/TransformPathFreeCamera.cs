@@ -43,7 +43,6 @@ namespace Common.TransformPath.Samples
         #region Properties
 
         public bool IsLookMode => _isLookMode;
-        public float MoveSpeed => _moveSpeed;
 
         #endregion
 

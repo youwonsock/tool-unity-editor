@@ -106,7 +106,6 @@ namespace Common.TransformPath
 
         public int AuthoringEventCount => _pathEvents == null ? 0 : _pathEvents.Count;
         internal PathRuntimeEvent[] RuntimeEvents => _events;
-        internal PathPolyline Polyline => _polyline;
         /// <summary>The authored control points, for the Editor. Never modify the list.</summary>
         internal IReadOnlyList<Transform> PathPoints => _pathPoints;
 

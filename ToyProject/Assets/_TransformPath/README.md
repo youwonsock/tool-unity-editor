@@ -53,7 +53,7 @@ public sealed class TransformPathReadmeExample : MonoBehaviour
 
 <img src="Docs/Images/transformpath-structure.png" alt="TransformPath 주요 타입의 구조" width="100%">
 
-- **Provider** (`PathData`, `MultiPathData`)는 검증한 기하와 이벤트를 한 번에 발행합니다. 무엇이든 바뀌면 `Revision`을, 이동 설정·이벤트·구간 구성이 바뀌면 `DefinitionRevision`도 올립니다.
+- **Provider** (`PathData`, `MultiPathData`)는 검증한 기하와 이벤트를 한 번에 발행합니다. 무엇이든 바뀌면 `Revision`을 올리고, 이동 설정·이벤트·구간 구성이 바뀌면 내부 정의 리비전도 올립니다. 재생은 기하 변경에는 이어지고 정의 변경에는 멈춥니다.
 - **PathFollower**는 Transform에 위치를 적용하고, 재생은 내부의 `PathPlayback`, 이벤트 효과는 `PathEventEffects`가 맡습니다. Single, Sequence, Aggregate 재생은 모두 구간 배열 하나(`PathRoute`)로 표현됩니다.
 - **QueuedPathManager**가 매 프레임 멤버를 정렬해 간격을 계산하고, **PathQueueMember**가 그 결과를 완화해 Follower의 이동을 제한합니다.
 - **PathRuntimeDriver**가 효과 → Queue → 이동 순서로 한 프레임을 실행하고, **PathExecutionBoundary**가 콜백 시점을 정합니다.
@@ -124,7 +124,7 @@ _member.StartQueuedPlayback(_manager, PathPlaybackRequest.Single(_path));
   <img src="Docs/Images/feature-playback-seek.png" alt="곡선 경로에서 Seek한 화면" width="48%">
 </p>
 
-**연결 경로:** `MultiPathData`가 여러 Provider를 구간별 이동 설정과 함께 잇습니다. 전체와 구간 진행률을 각각 Seek할 수 있습니다.
+**연결 경로:** `MultiPathData`가 여러 `PathData`를 구간별 이동 설정과 함께 잇습니다. 전체와 구간 진행률을 각각 Seek할 수 있습니다.
 
 <p align="center">
   <img src="Docs/Images/feature-multipath-sequence.png" alt="MultiPath 구간 재생 화면" width="48%">

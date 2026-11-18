@@ -92,8 +92,6 @@ namespace Common.TransformPath
                 : ((PathProviderBehaviour)Provider).GetRoute();
         }
 
-        public ref readonly Segment GetSegment(int index) => ref _segments[index];
-
         public float GetLength(int segment) => _segments[segment].Length;
 
         public PathMovementSettings GetMovementSettings(int segment) => _segments[segment].Movement;
