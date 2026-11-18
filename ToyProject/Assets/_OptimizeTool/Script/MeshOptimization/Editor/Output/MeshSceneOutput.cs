@@ -1,28 +1,64 @@
-using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
 namespace Common.OptimizeTool.MeshOptimization
 {
-    /// <summary>Undo-aware scene application, independent from geometry construction and asset paths.</summary>
+    /// <summary>
+    /// The scene side of a combine: the generated result objects and the source Renderers the combiner disabled.
+    /// Every change is recorded with Undo and as a Prefab instance override.
+    /// </summary>
     internal static class MeshSceneOutput
     {
-        internal static GameObject Replace(Transform parent, string name, GameObject previous,
-            Mesh[] meshes, MeshBuildResult result, bool disableSources, List<MeshSourceRendererState> sourceStates)
+        /// <summary>
+        /// Replaces the previous result objects with renderers for <paramref name="meshes"/> and disables the sources
+        /// when the combiner asks for it. Sources the previous bake disabled and that are still inputs stay disabled
+        /// and keep their recorded original state; dropped sources get their original state back.
+        /// </summary>
+        internal static void Apply(MeshCombiner combiner, Mesh[] meshes, MeshBuildResult result)
         {
-            var previousStates = new Dictionary<Renderer, MeshSourceRendererState>();
+            Undo.RegisterCompleteObjectUndo(combiner, "Assign combined result");
+            // Undo can serialize the owner while Destroy/RegisterCreatedObjectUndo runs. Build the new
+            // ledger on the side and assign it only after every scene operation has completed.
+            var states = new List<MeshSourceRendererState>();
+            bool disableSources = combiner.DisableSourceRenderers;
             var nextSources = disableSources ? new HashSet<Renderer>(result.SourceRenderers) : null;
+            var previousStates = new Dictionary<Renderer, MeshSourceRendererState>();
             // Sources retained by this output remain disabled. Preserve their original state
             // without a temporary enable/disable pair or redundant renderer Undo records.
-            foreach (MeshSourceRendererState state in sourceStates)
+            foreach (MeshSourceRendererState state in combiner.SourceRendererStates)
                 if (state.Renderer != null)
                 {
                     previousStates[state.Renderer] = state;
                     if (nextSources == null || !nextSources.Contains(state.Renderer)) SetEnabled(state.Renderer, state.Enabled);
                 }
-            sourceStates.Clear();
-            if (previous != null) Undo.DestroyObjectImmediate(previous);
+            if (combiner.GeneratedRoot != null) Undo.DestroyObjectImmediate(combiner.GeneratedRoot);
+            GameObject root = CreateResults(combiner.transform, combiner.MeshName, meshes, result);
+            if (disableSources)
+                foreach (Renderer renderer in result.SourceRenderers)
+                {
+                    if (previousStates.TryGetValue(renderer, out MeshSourceRendererState state)) states.Add(state);
+                    else states.Add(new MeshSourceRendererState { Renderer = renderer, Enabled = renderer.enabled });
+                    SetEnabled(renderer, false);
+                }
+            combiner.GeneratedRoot = root;
+            combiner.SourceRendererStates = states;
+            PrefabUtility.RecordPrefabInstancePropertyModifications(combiner);
+        }
+
+        /// <summary>
+        /// A disabled Renderer the combiner did not disable itself. A source an earlier bake disabled is still an input.
+        /// </summary>
+        internal static bool IsDisabledByUser(MeshCombiner combiner, MeshRenderer renderer)
+        {
+            if (renderer == null || renderer.enabled) return false;
+            foreach (MeshSourceRendererState state in combiner.SourceRendererStates)
+                if (state.Renderer == renderer) return !state.Enabled;
+            return true;
+        }
+
+        private static GameObject CreateResults(Transform parent, string name, Mesh[] meshes, MeshBuildResult result)
+        {
             var root = new GameObject(name + " Results");
             Undo.RegisterCreatedObjectUndo(root, "Create combined result");
             root.transform.SetParent(parent, false);
@@ -32,16 +68,8 @@ namespace Common.OptimizeTool.MeshOptimization
                 Undo.RegisterCreatedObjectUndo(output, "Create combined renderer");
                 output.transform.SetParent(root.transform, false);
                 output.GetComponent<MeshFilter>().sharedMesh = meshes[i];
-                MeshRenderer renderer = output.GetComponent<MeshRenderer>();
-                result.RendererSettings.ApplyTo(renderer, result.Parts[i].Materials);
+                result.RendererSettings.ApplyTo(output.GetComponent<MeshRenderer>(), result.Parts[i].Materials);
             }
-            if (disableSources)
-                foreach (Renderer renderer in result.SourceRenderers)
-                {
-                    if (previousStates.TryGetValue(renderer, out MeshSourceRendererState state)) sourceStates.Add(state);
-                    else sourceStates.Add(new MeshSourceRendererState { Renderer = renderer, Enabled = renderer.enabled });
-                    SetEnabled(renderer, false);
-                }
             return root;
         }
 

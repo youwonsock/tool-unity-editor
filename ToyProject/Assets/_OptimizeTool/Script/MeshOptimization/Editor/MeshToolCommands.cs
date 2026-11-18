@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using UnityEditor;
 using UnityEngine;
 
 namespace Common.OptimizeTool.MeshOptimization
@@ -33,7 +32,7 @@ namespace Common.OptimizeTool.MeshOptimization
                 Mesh[] meshes = result.GetMeshes();
                 List<string> paths = OutputPaths(folder, combiner.MeshName, meshes.Length, combiner.CreateSettings().CombineIntoSingleMesh);
                 return MeshAssetTransaction.Save(meshes, paths, combiner.OverwriteExistingAssets, "Combine meshes",
-                    saved => { if (combiner.CreateSceneOutput) CreateSceneOutput(combiner, saved, result); });
+                    saved => { if (combiner.CreateSceneOutput) MeshSceneOutput.Apply(combiner, saved, result); });
             }
         }
 
@@ -63,7 +62,7 @@ namespace Common.OptimizeTool.MeshOptimization
             foreach (MeshFilter filter in filters)
             {
                 if (filter != null && generatedRoot != null && filter.transform.IsChildOf(generatedRoot.transform)) continue;
-                if (combiner.CollectChildMeshes && filter != null && IsDisabledByUser(combiner, filter.GetComponent<MeshRenderer>()))
+                if (combiner.CollectChildMeshes && filter != null && MeshSceneOutput.IsDisabledByUser(combiner, filter.GetComponent<MeshRenderer>()))
                 {
                     skippedDisabledChild = true;
                     continue;
@@ -71,27 +70,6 @@ namespace Common.OptimizeTool.MeshOptimization
                 inputs.Add(filter);
             }
             return inputs.ToArray();
-        }
-
-        // A source this component disabled in an earlier bake is still an input.
-        private static bool IsDisabledByUser(MeshCombiner combiner, MeshRenderer renderer)
-        {
-            if (renderer == null || renderer.enabled) return false;
-            foreach (MeshSourceRendererState state in combiner.SourceRendererStates)
-                if (state.Renderer == renderer) return !state.Enabled;
-            return true;
-        }
-
-        private static void CreateSceneOutput(MeshCombiner combiner, Mesh[] meshes, MeshBuildResult result)
-        {
-            Undo.RegisterCompleteObjectUndo(combiner, "Assign combined result");
-            // Undo can serialize the owner while Destroy/RegisterCreatedObjectUndo runs.
-            // Keep its old ledger intact until every scene operation has completed.
-            var nextStates = new List<MeshSourceRendererState>(combiner.SourceRendererStates);
-            combiner.GeneratedRoot = MeshSceneOutput.Replace(combiner.transform, combiner.MeshName, combiner.GeneratedRoot, meshes, result,
-                combiner.DisableSourceRenderers, nextStates);
-            combiner.SourceRendererStates = nextStates;
-            PrefabUtility.RecordPrefabInstancePropertyModifications(combiner);
         }
     }
 }
