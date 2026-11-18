@@ -237,7 +237,7 @@ namespace Common.TransformPath
             for (int i = 0; i < _segments.Count; i++)
             {
                 PathData path = _segments[i].Path;
-                if (path == null || ReferenceEquals(path, this) || _subscribed.Contains(path))
+                if (path == null || _subscribed.Contains(path))
                     continue;
                 path.PathChanged += HandlePathChanged;
                 _subscribed.Add(path);

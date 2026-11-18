@@ -64,7 +64,7 @@ public sealed class TransformPathReadmeExample : MonoBehaviour
 | --- | --- |
 | `PathPlaybackRequest.Single(pathData, loop)` | 경로의 설정 |
 | `PathPlaybackRequest.Sequence(multiPathData, loop)` | 구간별 설정 |
-| `PathPlaybackRequest.Aggregate(provider, settings, loop)` | 지정한 설정으로 `PathData`나 `MultiPathData` 전체를 한 경로처럼 |
+| `PathPlaybackRequest.Aggregate(provider, settings, loop)` | 지정한 설정으로 `PathData`나 `MultiPathData` 전체를 한 경로처럼. `PathData`의 이벤트는 실행하고 `MultiPathData`는 이벤트 없이 |
 
 | 명령 | 조건 |
 | --- | --- |

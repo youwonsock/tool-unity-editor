@@ -166,6 +166,8 @@ namespace Common.TransformPath
             PathValueUtility.ThrowIfNotFinite(maxProgress, nameof(maxProgress));
             PathFollower follower = RequireFollower();
             using var operation = PathExecutionBoundary.Enter();
+            // Validate before configuring or leaving, so an invalid request changes nothing.
+            request.CreateRoute();
             if (manager.RouteProvider == null)
                 manager.ConfigureRoute(request.Provider);
             if (!ReferenceEquals(manager.RouteProvider, request.Provider))

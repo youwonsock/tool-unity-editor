@@ -144,6 +144,30 @@ namespace Common.TransformPath.Tests
         }
 
         [Test]
+        public void InvalidQueuedRequest_LeavesTheMemberWhereItWas()
+        {
+            PathData path = Line(30f, 4f);
+            QueuedPathManager first = CreateManager(path);
+            var otherHost = new GameObject("Other Queue");
+            _objects.Add(otherHost);
+            QueuedPathManager other = otherHost.AddComponent<QueuedPathManager>();
+            other.Initialize();
+            PathQueueMember member = CreateMember();
+            member.StartQueuedPlayback(first, PathPlaybackRequest.Single(path));
+            Frames(30);
+            float progress = member.Follower.Progress;
+
+            Assert.Catch<System.ArgumentException>(() => member.StartQueuedPlayback(
+                other, PathPlaybackRequest.Aggregate(path, default(PathMovementSettings))));
+
+            Assert.IsNull(other.RouteProvider);
+            Assert.IsTrue(member.IsInQueue);
+            Assert.AreEqual(1, first.MemberCount);
+            Frames(30);
+            Assert.Greater(member.Follower.Progress, progress);
+        }
+
+        [Test]
         public void DestroyedPath_StopsItsFollowers()
         {
             PathData path = Line(10f, 2f);

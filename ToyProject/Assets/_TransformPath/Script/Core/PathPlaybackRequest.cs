@@ -39,7 +39,10 @@ namespace Common.TransformPath
             return new PathPlaybackRequest(EKind.Provider, sequence, default(PathMovementSettings), loop);
         }
 
-        /// <summary>Plays a path or a sequence as one path with these settings, ignoring its own movement and events.</summary>
+        /// <summary>
+        /// Plays a path or a sequence as one path with these settings instead of
+        /// its own movement. A PathData keeps its events; a sequence plays without events.
+        /// </summary>
         public static PathPlaybackRequest Aggregate(PathProviderBehaviour provider, PathMovementSettings movement, bool loop = false)
         {
             return new PathPlaybackRequest(EKind.Aggregate, provider, movement, loop);
