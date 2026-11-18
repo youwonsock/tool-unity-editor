@@ -2,13 +2,12 @@ using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
-using Object = UnityEngine.Object;
 
 namespace Common.OptimizeTool.MeshOptimization
 {
     /// <summary>
-    /// The editor operations of the mesh components. They are extension methods, so editor code keeps calling
-    /// <c>combiner.BuildMeshes()</c> while the components themselves hold only settings.
+    /// The editor operations of <see cref="MeshCombiner"/>. They are extension methods, so editor code keeps calling
+    /// <c>combiner.BuildMeshes()</c> while the component itself holds only settings.
     /// </summary>
     public static class MeshToolCommands
     {
@@ -33,43 +32,6 @@ namespace Common.OptimizeTool.MeshOptimization
                 return MeshAssetTransaction.Save(result.Meshes, paths, save.Overwrite, "Combine meshes",
                     meshes => { if (combiner.CreateSceneOutput) CreateSceneOutput(combiner, meshes, result); });
             }
-        }
-
-        /// <summary>Stages every result before changing any asset or MeshFilter.</summary>
-        public static Mesh[] BakeBackFaceCullingMesh(this BackfaceCullMeshBaker baker)
-        {
-            ValidateSettings(baker);
-            MeshFilter[] filters = baker.CollectChildMeshes ? baker.GetComponentsInChildren<MeshFilter>() : baker.TargetMeshFilters;
-            if (filters.Length == 0) throw new ArgumentException("No MeshFilters were supplied.");
-            var staged = new List<Mesh>();
-            var paths = new List<string>();
-            try
-            {
-                foreach (MeshFilter filter in filters)
-                {
-                    if (filter == null) throw new ArgumentException("A target MeshFilter is missing.");
-                    Mesh readable = MeshProcessingUtility.ReadableCopy(filter.sharedMesh, baker.AllowReadableCopy, baker.AllowNormalRecalculation);
-                    try
-                    {
-                        Mesh culled = MeshProcessingUtility.CullBackfaces(readable, filter.transform, baker.TargetCamera,
-                            baker.BackfaceCullingAngle, baker.UseCustomVector, baker.CustomCameraVector);
-                        if (culled == null) throw new InvalidOperationException($"All triangles were removed from '{filter.name}'.");
-                        staged.Add(culled);
-                        paths.Add($"{baker.SavePath}/{filter.name}_BackfaceCulled.asset");
-                    }
-                    finally { Object.DestroyImmediate(readable); }
-                }
-                return MeshAssetTransaction.Save(staged, paths, baker.OverwriteExistingAssets, "Bake backfaces", meshes =>
-                {
-                    for (int i = 0; i < filters.Length; i++)
-                    {
-                        Undo.RegisterCompleteObjectUndo(filters[i], "Assign baked mesh");
-                        filters[i].sharedMesh = meshes[i];
-                        PrefabUtility.RecordPrefabInstancePropertyModifications(filters[i]);
-                    }
-                });
-            }
-            finally { foreach (Mesh mesh in staged) if (mesh != null) Object.DestroyImmediate(mesh); }
         }
 
         private static MeshBuildRequest CaptureBuildRequest(MeshCombiner combiner, out bool skippedDisabledChild)
@@ -118,19 +80,6 @@ namespace Common.OptimizeTool.MeshOptimization
                 combiner.DisableSourceRenderers, nextStates);
             combiner.SourceRendererStates = nextStates;
             PrefabUtility.RecordPrefabInstancePropertyModifications(combiner);
-        }
-
-        private static void ValidateSettings(BackfaceCullMeshBaker baker)
-        {
-            AssetFileTransaction.RequireEditMode();
-            AssetFileTransaction.ValidateFolder(baker.SavePath);
-            if (!baker.UseCustomVector && baker.TargetCamera == null) throw new ArgumentException("Assign a target camera.");
-            if (baker.UseCustomVector && (!MeshProcessingUtility.IsFinite(baker.CustomCameraVector) || baker.CustomCameraVector.sqrMagnitude < 0.000001f))
-                throw new ArgumentException("The custom view direction must be finite and non-zero.");
-            MeshFilter[] direct = baker.TargetMeshFilters;
-            if (baker.CollectChildMeshes == (direct != null && direct.Length > 0))
-                throw new ArgumentException("Choose direct MeshFilters or child collection, not both.");
-            MeshProcessingUtility.ValidateAngle(baker.BackfaceCullingAngle);
         }
     }
 }

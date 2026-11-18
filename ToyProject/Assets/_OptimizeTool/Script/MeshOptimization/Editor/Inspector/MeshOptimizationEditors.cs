@@ -21,20 +21,4 @@ namespace Common.OptimizeTool.MeshOptimization
                 }
         }
     }
-
-    [CustomEditor(typeof(BackfaceCullMeshBaker))]
-    public sealed class BackfaceCullMeshBakerEditor : UnityEditor.Editor
-    {
-        public override void OnInspectorGUI()
-        {
-            DrawDefaultInspector();
-            EditorGUILayout.HelpBox("Bake in Edit Mode. All results are calculated before replacing MeshFilters. Undo restores mesh references and overwritten mesh data. New asset files are retained after Undo.", MessageType.Info);
-            using (new EditorGUI.DisabledScope(EditorApplication.isPlayingOrWillChangePlaymode))
-                if (GUILayout.Button("Bake and Save Backfaces"))
-                {
-                    try { ((BackfaceCullMeshBaker)target).BakeBackFaceCullingMesh(); }
-                    catch (Exception exception) { Debug.LogException(exception, target); }
-                }
-        }
-    }
 }

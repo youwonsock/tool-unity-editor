@@ -15,15 +15,14 @@ set separator none
 title OptimizeTool 구조
 
 package "MeshOptimization (Runtime)" {
-  class "MeshCombiner\nBackfaceCullMeshBaker" as MeshComponents {
+  class MeshCombiner as MeshComponents {
     설정·씬 출력 상태만 보관
   }
 }
 
 package "MeshOptimization.Editor" {
   class MeshToolCommands {
-    BuildMeshes · CombineAndSaveMeshes
-    BakeBackFaceCullingMesh (확장 메서드)
+    BuildMeshes · CombineAndSaveMeshes (확장 메서드)
   }
   class MeshBuildPipeline {
     검증·컬링·Material별 결합

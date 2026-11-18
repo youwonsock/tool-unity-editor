@@ -43,7 +43,7 @@ MeshFilter 수집 → 설정·입력 검증 → Readable·Normal 처리
 ```mermaid
 flowchart LR
     subgraph Mesh[MeshOptimization]
-        Combiner[MeshCombiner / BackfaceCullMeshBaker 설정]
+        Combiner[MeshCombiner 설정]
     end
     subgraph MeshEditor[MeshOptimization.Editor]
         Commands[MeshToolCommands] --> Pipeline[MeshBuildPipeline]
@@ -84,7 +84,7 @@ flowchart LR
 
 | 어셈블리 | 클래스 | 역할 |
 | --- | --- | --- |
-| MeshOptimization | `MeshCombiner` / `BackfaceCullMeshBaker` / `MeshSourceRendererState` | Inspector 설정, 결합 씬 출력과 원본 Renderer 상태 |
+| MeshOptimization | `MeshCombiner` / `MeshSourceRendererState` | Inspector 설정, 결합 씬 출력과 원본 Renderer 상태 |
 | MeshOptimization.Editor | `MeshToolCommands` | 설정을 빌드 요청으로 만들고 빌드·저장·씬 적용·베이크를 호출하는 확장 메서드 |
 | MeshOptimization.Editor | `MeshBuildRequest` / `MeshBuildPipeline` | 저장 경로와 분리된 입력·옵션 검증, 컬링·변환·Material별 결합. 씬 Physics 조회는 `MeshVisibilityQuery` |
 | MeshOptimization.Editor | `MeshBuildResult` | Mesh와 Material 매핑을 항목별로 묶고 임시 Mesh만 소유. `Dispose()`는 원본을 파괴하지 않음 |
@@ -124,9 +124,8 @@ flowchart LR
 
 - **Occlusion:** 입력이 속한 PhysicsScene에서 `_cullingLayerMask`의 Collider로 Raycast합니다. 대상 자신과 자식의 Collider, Trigger는 제외하고, 결과 버퍼가 가득 차면 확장합니다. Orthographic 카메라는 평행 광선을 씁니다.
 - Vertex 수가 `_vertexSamplingCount` 이하이면 모든 Vertex를, 더 많으면 균등 간격 표본을 검사합니다. 보이는 비율이 `_visibilityThreshold`보다 작으면 MeshFilter 전체를 뺍니다. Camera, 양수 샘플 수, `0..1` 임계값, 유효한 LayerMask가 필요합니다.
-- **Backface:** `MeshCombiner`는 결합 중 `_enableBackfaceCulling`과 `_backfaceCullingAngle`로, `BackfaceCullMeshBaker`는 삼각형마다 World-space Normal과 관찰 방향의 각도로 판정합니다.
-- Perspective는 삼각형 중심에서 카메라로 향하는 방향, Orthographic은 `-camera.forward`를 씁니다. `_useCustomVector`는 지정한 관찰 방향의 반대 벡터를 쓰며 Camera가 필요 없습니다. 비균일·음수 Scale은 법선 역전치 변환과 winding 보정으로 처리합니다.
-- Baker는 모든 입력 결과를 먼저 계산한 뒤 한 배치로 저장·교체합니다. 결과는 입력 이름에 `_BackfaceCulled`를 붙인 `.asset`이며, 출력 충돌이나 모든 삼각형이 제거되는 입력은 변경 전에 중단합니다.
+- **Backface:** `MeshCombiner`는 결합 중 `_enableBackfaceCulling`과 `_backfaceCullingAngle`로 삼각형마다 World-space Normal과 관찰 방향의 각도를 판정합니다.
+- Perspective는 삼각형 중심에서 카메라로 향하는 방향, Orthographic은 `-camera.forward`를 씁니다. 비균일·음수 Scale은 법선 역전치 변환과 winding 보정으로 처리합니다.
 
 ## PhysicsRecorder
 

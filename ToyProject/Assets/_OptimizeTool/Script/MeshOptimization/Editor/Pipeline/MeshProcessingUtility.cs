@@ -129,12 +129,10 @@ namespace Common.OptimizeTool.MeshOptimization
             catch { Object.DestroyImmediate(output); throw; }
         }
 
-        public static Mesh CullBackfaces(Mesh mesh, Transform source, Camera camera, float angle, bool useCustomVector, Vector3 customVector)
+        public static Mesh CullBackfaces(Mesh mesh, Transform source, Camera camera, float angle)
         {
             ValidateAngle(angle);
-            if (!useCustomVector && camera == null) throw new ArgumentException("Assign a camera.");
-            if (useCustomVector && (!IsFinite(customVector) || customVector.sqrMagnitude < 0.000001f))
-                throw new ArgumentException("Custom view direction must be finite and non-zero.");
+            if (camera == null) throw new ArgumentException("Assign a camera.");
             Matrix4x4 matrix = source.localToWorldMatrix;
             if (matrix.determinant == 0f || !IsFinite(matrix.determinant)) throw new ArgumentException("Zero-scale meshes cannot be baked.");
             Matrix4x4 normalMatrix = matrix.inverse.transpose;
@@ -152,8 +150,7 @@ namespace Common.OptimizeTool.MeshOptimization
                     if (IsDegenerate(b - a, c - a, cross)) continue;
                     Vector3 normal = Direction(normalMatrix.MultiplyVector(cross));
                     if (normal.sqrMagnitude < 0.000001f) continue;
-                    Vector3 toCamera = useCustomVector ? -customVector.normalized
-                        : camera.orthographic ? -camera.transform.forward
+                    Vector3 toCamera = camera.orthographic ? -camera.transform.forward
                         : (camera.transform.position - matrix.MultiplyPoint3x4((a + b + c) / 3f)).normalized;
                     if (Vector3.Dot(normal, toCamera) + 0.000001f < minimumDot) continue;
                     kept.Add(triangles[i]); kept.Add(triangles[i + 1]); kept.Add(triangles[i + 2]);

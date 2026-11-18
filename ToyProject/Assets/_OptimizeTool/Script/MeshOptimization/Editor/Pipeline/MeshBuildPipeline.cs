@@ -114,8 +114,7 @@ namespace Common.OptimizeTool.MeshOptimization
                     }
                     if (request.Backfaces)
                     {
-                        Mesh culled = MeshProcessingUtility.CullBackfaces(mesh, filter.transform, request.Camera,
-                            request.BackfaceAngle, false, Vector3.zero);
+                        Mesh culled = MeshProcessingUtility.CullBackfaces(mesh, filter.transform, request.Camera, request.BackfaceAngle);
                         if (culled == null) { result.CulledObjectCount++; continue; }
                         temporary.Add(culled);
                         mesh = culled;
