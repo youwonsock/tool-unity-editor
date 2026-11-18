@@ -15,17 +15,24 @@ set separator none
 title OptimizeTool 구조
 
 package "MeshOptimization (Runtime)" {
-  class MeshCombiner as MeshComponents {
+  class "MeshCombiner" as MeshComponents {
     설정·씬 출력 상태만 보관
+  }
+  class MeshBuildSettings {
+    빌드 옵션과 유일한 검증
   }
 }
 
 package "MeshOptimization.Editor" {
   class MeshToolCommands {
-    BuildMeshes · CombineAndSaveMeshes (확장 메서드)
+    BuildMeshes · CombineAndSaveMeshes
+    RestoreSources (확장 메서드)
   }
   class MeshBuildPipeline {
-    검증·컬링·Material별 결합
+    입력 검증·컬링·Material별 결합
+  }
+  class MeshSceneOutput {
+    결과 오브젝트·원본 Renderer 기록
   }
   class MeshAssetTransaction {
     GUID 유지 저장·Undo 복원
@@ -67,7 +74,10 @@ package "OptimizeTool.Editor (공용)" {
 }
 
 MeshToolCommands ..> MeshComponents : 설정 읽기
+MeshComponents ..> MeshBuildSettings : CreateSettings
 MeshToolCommands --> MeshBuildPipeline
+MeshBuildPipeline ..> MeshBuildSettings
+MeshToolCommands --> MeshSceneOutput
 MeshToolCommands --> MeshAssetTransaction
 MeshAssetTransaction --> AssetFileTransaction
 
