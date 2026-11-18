@@ -85,7 +85,7 @@ namespace Common.TransformPath
             return true;
         }
 
-        /// <summary>A curve with at least one finite key, for blends.</summary>
+        /// <summary>A curve with at least one key, for blends.</summary>
         public static bool IsUsableCurve(AnimationCurve curve)
         {
             return curve != null && curve.length > 0;

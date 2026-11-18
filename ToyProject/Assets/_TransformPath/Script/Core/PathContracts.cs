@@ -20,8 +20,8 @@ namespace Common.TransformPath
     }
 
     /// <summary>
-    /// <see cref="PathFollower.AlignRotationToPathDirection"/>에서 경로 방향을 반영할 euler 축.
-    /// 선택되지 않은 축은 현재 회전값을 유지합니다.
+    /// The euler axes <see cref="PathFollower.AlignRotationToPathDirection"/> takes
+    /// from the path direction. The other axes keep their current rotation.
     /// </summary>
     [Flags]
     public enum EPathAlignRotationAxes

@@ -3,8 +3,9 @@ using UnityEngine;
 namespace Common.TransformPath
 {
     /// <summary>
-    /// <see cref="PathData"/>가 계산한 샘플 경로를 런타임 LineRenderer로 표시합니다.
-    /// 갱신 시 항상 컨트롤 포인트의 현재 월드 위치를 기준으로 경로를 재계산합니다.
+    /// Draws the samples a <see cref="PathData"/> published with a LineRenderer at
+    /// runtime, and redraws whenever the path publishes a change. It never builds
+    /// the path: after moving control points, call <see cref="PathProviderBehaviour.Rebuild"/>.
     /// </summary>
     [DefaultExecutionOrder(100)]
     [RequireComponent(typeof(LineRenderer))]
@@ -116,7 +117,7 @@ namespace Common.TransformPath
         #region Public Methods
 
         /// <summary>
-        /// 컨트롤 포인트 현재 위치를 기준으로 PathData를 재계산하고 LineRenderer를 갱신합니다.
+        /// Copies the path's current samples into the LineRenderer. Hides the line while the path is not ready.
         /// </summary>
         public void Refresh()
         {
@@ -145,9 +146,8 @@ namespace Common.TransformPath
         }
 
         /// <summary>
-        /// 경로 라인 표시 여부를 설정합니다.
+        /// Shows or hides the line. A shown line still stays hidden while the path is not ready.
         /// </summary>
-        /// <param name="visible">표시 여부</param>
         public void SetVisible(bool visible)
         {
             if (!_isInitialized)

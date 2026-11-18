@@ -16,6 +16,7 @@ Transform 제어점으로 경로를 만들고 단일 경로, 연결 경로, Queu
 
 - `Assets/_TransformPath/Script/` 폴더를 `.meta`와 함께 복사합니다. 시스템(`Common.TransformPath`)과 에디터(`Common.TransformPath.Editor`) 어셈블리가 들어 있습니다.
 - 추가 패키지는 필요 없습니다. CharacterController를 쓰므로 기본 Physics 모듈이 켜져 있어야 합니다. Unity 2023.2.20f1 빈 프로젝트(기본 모듈만)에 `Script/`만 복사해 두 어셈블리가 경고와 오류 없이 컴파일되는 것을 확인했습니다.
+- 이전 버전의 이벤트 에셋을 가져오면 Pause와 Resume을 **Lifecycle**로 다시 지정해야 합니다. 이전 버전은 목표 속도 0이나 Duration 9999를 Pause로, 멈춘 동안 받은 양수 값을 Resume으로 해석했습니다. 지금 버전은 이 값을 변환하지 않습니다. 목표 속도 0은 목표값 범위(`0.001..9999`)를 벗어나 그 경로의 빌드가 실패하고, Duration 9999는 Pause가 아니라 Duration 변경으로 적용됩니다.
 - `Samples/`(샘플 씬·스크립트·이벤트 에셋. UGUI 필요)와 `Dev/`(테스트와 측정 도구)는 옮기지 않아도 됩니다. 문서가 필요하면 이 README와 `Docs/`를 함께 옮깁니다.
 
 ## 시작하기
