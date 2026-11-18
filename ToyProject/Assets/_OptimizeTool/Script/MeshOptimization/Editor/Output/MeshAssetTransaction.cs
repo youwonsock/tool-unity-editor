@@ -15,11 +15,12 @@ namespace Common.OptimizeTool.MeshOptimization
         /// meshes. Existing meshes are overwritten in place so their GUIDs survive. If anything fails, the meshes, the
         /// declared companion files and every Undo-recorded change of this call are restored.
         /// </summary>
+        /// <param name="keepReadable">Keep Read/Write on the saved meshes. Off frees their CPU copy in Players.</param>
         public static Mesh[] Save(IList<Mesh> staged, IList<string> paths, bool overwrite, string undoName,
-            Action<Mesh[]> apply = null, IReadOnlyList<string> companionAssetPaths = null)
+            Action<Mesh[]> apply = null, IReadOnlyList<string> companionAssetPaths = null, bool keepReadable = false)
         {
             AssetFileTransaction.RequireEditMode();
-            var save = new Transaction(staged, paths, overwrite, companionAssetPaths);
+            var save = new Transaction(staged, paths, overwrite, companionAssetPaths) { KeepReadable = keepReadable };
             Undo.IncrementCurrentGroup();
             save.UndoGroup = Undo.GetCurrentGroup();
             Undo.SetCurrentGroupName(undoName);
@@ -52,6 +53,7 @@ namespace Common.OptimizeTool.MeshOptimization
 
             internal Mesh[] Saved { get; }
             internal int UndoGroup { get; set; }
+            internal bool KeepReadable { get; set; }
 
             /// <summary>Checks every path before the first write.</summary>
             internal Transaction(IList<Mesh> staged, IList<string> paths, bool overwrite, IReadOnlyList<string> companionPaths)
@@ -108,7 +110,7 @@ namespace Common.OptimizeTool.MeshOptimization
                 Undo.RegisterCompleteObjectUndo(_existing[i], undoName);
                 EditorUtility.CopySerialized(_staged[i], _existing[i]);
                 Saved[i] = _existing[i];
-                PrepareMesh(Saved[i], _paths[i]);
+                PrepareMesh(Saved[i], _paths[i], KeepReadable);
                 EditorUtility.SetDirty(Saved[i]);
             }
 
@@ -120,7 +122,7 @@ namespace Common.OptimizeTool.MeshOptimization
                 // Track before CreateAsset so rollback also handles a partial CreateAsset failure.
                 try
                 {
-                    PrepareMesh(Saved[i], _paths[i]);
+                    PrepareMesh(Saved[i], _paths[i], KeepReadable);
                     _created.Add(_paths[i]);
                     AssetDatabase.CreateAsset(Saved[i], _paths[i]);
                 }
@@ -167,14 +169,15 @@ namespace Common.OptimizeTool.MeshOptimization
             }
         }
 
-        private static void PrepareMesh(Mesh mesh, string path)
+        private static void PrepareMesh(Mesh mesh, string path, bool keepReadable)
         {
             mesh.name = Path.GetFileNameWithoutExtension(path);
-            // Keep CPU geometry for serialization; UploadMeshData(true) can discard it.
+            // Set the flag through serialization: the editor keeps the CPU geometry needed to write the asset,
+            // while UploadMeshData(true) could discard it.
             var serialized = new SerializedObject(mesh);
             SerializedProperty readable = serialized.FindProperty("m_IsReadable");
-            if (readable != null && readable.boolValue)
-            { readable.boolValue = false; serialized.ApplyModifiedPropertiesWithoutUndo(); }
+            if (readable != null && readable.boolValue != keepReadable)
+            { readable.boolValue = keepReadable; serialized.ApplyModifiedPropertiesWithoutUndo(); }
         }
     }
 }

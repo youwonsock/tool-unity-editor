@@ -20,6 +20,8 @@ namespace Common.OptimizeTool.MeshOptimization
         [SerializeField] private bool _allowReadableCopy;
         [SerializeField] private bool _allowNormalRecalculation;
         [SerializeField] private bool _overwriteExistingAssets;
+        [Tooltip("Keep Read/Write on the saved meshes, for scripts or colliders that read them at runtime. Off saves memory in Players.")]
+        [SerializeField] private bool _keepReadable;
         [Header("Occlusion Culling Options")]
         [SerializeField] private bool _enableOcclusionCulling;
         [SerializeField] private int _vertexSamplingCount = 100;
@@ -64,6 +66,7 @@ namespace Common.OptimizeTool.MeshOptimization
         internal string SavePath => _savePath;
         internal string MeshName => _meshName;
         internal bool OverwriteExistingAssets => _overwriteExistingAssets;
+        internal bool KeepReadable => _keepReadable;
         internal bool CreateSceneOutput => _createSceneOutput;
         internal bool DisableSourceRenderers => _disableSourceRenderers;
 

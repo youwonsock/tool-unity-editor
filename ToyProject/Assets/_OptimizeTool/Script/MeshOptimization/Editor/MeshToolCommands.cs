@@ -35,7 +35,8 @@ namespace Common.OptimizeTool.MeshOptimization
                 Mesh[] meshes = result.GetMeshes();
                 List<string> paths = OutputPaths(folder, combiner.MeshName, meshes.Length, combiner.CreateSettings().CombineIntoSingleMesh);
                 Mesh[] saved = MeshAssetTransaction.Save(meshes, paths, combiner.OverwriteExistingAssets, "Combine meshes",
-                    written => { if (combiner.CreateSceneOutput) MeshSceneOutput.Apply(combiner, written, result); });
+                    written => { if (combiner.CreateSceneOutput) MeshSceneOutput.Apply(combiner, written, result); },
+                    keepReadable: combiner.KeepReadable);
                 List<string> stale = StaleOutputs(folder, combiner.MeshName, paths);
                 if (stale.Count > 0)
                     combiner.LastBuildWarnings = new List<string>(combiner.LastBuildWarnings)

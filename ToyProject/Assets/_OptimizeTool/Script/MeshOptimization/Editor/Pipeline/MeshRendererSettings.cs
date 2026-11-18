@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
+using Object = UnityEngine.Object;
 
 namespace Common.OptimizeTool.MeshOptimization
 {
@@ -20,6 +21,11 @@ namespace Common.OptimizeTool.MeshOptimization
         private readonly MotionVectorGenerationMode _motionVectors;
         private readonly StaticEditorFlags _staticFlags;
         private readonly ReceiveGI _receiveGI;
+        private readonly UnityEngine.Experimental.Rendering.RayTracingMode _rayTracing;
+        private readonly int _priority;
+        private readonly bool _staticShadowCaster, _stitchSeams;
+        private readonly Object _lightmapParameters;
+        private readonly float _scaleInLightmap;
 
         internal MeshRendererSettings(MeshRenderer source)
         {
@@ -37,7 +43,18 @@ namespace Common.OptimizeTool.MeshOptimization
             _motionVectors = source.motionVectorGenerationMode;
             _staticFlags = GameObjectUtility.GetStaticEditorFlags(source.gameObject);
             _receiveGI = source.receiveGI;
+            _rayTracing = source.rayTracingMode;
+            _priority = source.rendererPriority;
+            _staticShadowCaster = source.staticShadowCaster;
+            _stitchSeams = source.stitchLightmapSeams;
+            // Lightmap parameters and scale have no public property; they live in the serialized renderer.
+            var serialized = new SerializedObject(source);
+            _lightmapParameters = serialized.FindProperty(LightmapParametersProperty)?.objectReferenceValue;
+            _scaleInLightmap = serialized.FindProperty(ScaleInLightmapProperty)?.floatValue ?? 1f;
         }
+
+        private const string LightmapParametersProperty = "m_LightmapParameters";
+        private const string ScaleInLightmapProperty = "m_ScaleInLightmap";
 
         internal static void ValidateSupported(MeshRenderer source)
         {
@@ -61,8 +78,11 @@ namespace Common.OptimizeTool.MeshOptimization
                 || _receiveShadows != other._receiveShadows || _occlusion != other._occlusion
                 || _lightProbes != other._lightProbes || _reflectionProbes != other._reflectionProbes
                 || _probeAnchor != other._probeAnchor || _proxyVolume != other._proxyVolume
-                || _motionVectors != other._motionVectors || _staticFlags != other._staticFlags || _receiveGI != other._receiveGI)
-                throw new ArgumentException($"'{source.name}' has incompatible renderer settings. Combine matching layers, shadows, probes, sorting and static flags separately.");
+                || _motionVectors != other._motionVectors || _staticFlags != other._staticFlags || _receiveGI != other._receiveGI
+                || _rayTracing != other._rayTracing || _priority != other._priority || _staticShadowCaster != other._staticShadowCaster
+                || _stitchSeams != other._stitchSeams || _lightmapParameters != other._lightmapParameters
+                || !Mathf.Approximately(_scaleInLightmap, other._scaleInLightmap))
+                throw new ArgumentException($"'{source.name}' has incompatible renderer settings. Combine matching layers, shadows, probes, sorting, ray tracing, priority, lightmap settings and static flags separately.");
         }
 
         /// <summary>
@@ -87,7 +107,17 @@ namespace Common.OptimizeTool.MeshOptimization
             target.lightProbeProxyVolumeOverride = _proxyVolume;
             target.motionVectorGenerationMode = _motionVectors;
             target.receiveGI = _receiveGI;
+            target.rayTracingMode = _rayTracing;
+            target.rendererPriority = _priority;
+            target.staticShadowCaster = _staticShadowCaster;
+            target.stitchLightmapSeams = _stitchSeams;
             GameObjectUtility.SetStaticEditorFlags(target.gameObject, _staticFlags);
+            var serialized = new SerializedObject(target);
+            SerializedProperty parameters = serialized.FindProperty(LightmapParametersProperty);
+            if (parameters != null) parameters.objectReferenceValue = _lightmapParameters;
+            SerializedProperty scale = serialized.FindProperty(ScaleInLightmapProperty);
+            if (scale != null) scale.floatValue = _scaleInLightmap;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
         }
     }
 }
