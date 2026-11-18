@@ -6,13 +6,14 @@ Unity 프로젝트에서 쓰던 기능을 독립 모듈로 분리하고, `ToyPro
 | --- | --- |
 | [FlowField](./ToyProject/Assets/_FlowField/README.md) | Goal과 장애물로 방향과 속도 배율을 계산하는 방향장 (Surface2D, Volume3D) |
 | [TransformPath](./ToyProject/Assets/_TransformPath/README.md) | Transform 제어점 경로의 재생, 연결 경로, Queue 이동 |
-| [OptimizeTool](./ToyProject/Assets/_OptimizeTool/README.md) | Mesh 결합·컬링 베이크와 물리 움직임 기록을 수행하는 Editor 도구 |
+| [OptimizeTool](./ToyProject/Assets/_OptimizeTool/README.md) | 서로 독립된 두 시스템: Mesh 결합·컬링 베이크(Editor)와 물리 움직임을 Animation Prefab으로 저장하는 Physics Recorder |
 
 ## 실행
 
 - Unity 2023.2.20f1 / URP로 `ToyProject`를 엽니다.
 - 샘플 씬은 `FlowFieldSample`, `FlowFieldVolume3DTest`, `TransformPathSample`, `OptimizeToolSample`이며, 화면의 Overview Board가 상태와 조작법을 보여 줍니다.
-- 모듈은 `Assets/_모듈명/` 아래에 `Script`, `Scene`, `Prefab`, `Settings`, `Docs`로 나뉘고, 샘플 코드는 `Script/Samples`에 따로 둡니다. FlowField는 다른 프로젝트로 옮기기 쉽게 시스템·에디터만 `Script/`에 두고 샘플(씬·프리팹·설정 포함)은 `Samples/`, 측정 도구는 `Dev/`에 둡니다.
+- TransformPath는 `Assets/_TransformPath/` 아래에 `Script`, `Scene`, `Prefab`, `Settings`, `Docs`로 나뉘고, 샘플 코드는 `Script/Samples`에 따로 둡니다.
+- FlowField와 OptimizeTool은 다른 프로젝트로 옮기기 쉽게 시스템·에디터 어셈블리만 `Script/`에 두고, 샘플(씬·프리팹·설정 포함)은 `Samples/`에 둡니다. FlowField의 측정 도구는 `Dev/`에 있고, OptimizeTool은 Mesh 최적화와 Physics Recorder를 `Script/` 안에서 따로 옮길 수 있습니다.
 
 ## 빌드 확인
 

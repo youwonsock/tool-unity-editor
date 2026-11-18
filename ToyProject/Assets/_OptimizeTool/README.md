@@ -11,35 +11,48 @@ Unity Editor에서 Mesh 결합·컬링과 물리 움직임 기록을 수행하�
 
 구현 세부는 [TechnicalNotes.md](Docs/TechnicalNotes.md)에 있습니다.
 
-## 폴더와 이주
-
-```
-_OptimizeTool/
-  Script/                      다른 프로젝트로 옮기는 코드는 여기에만 있습니다
-    Shared/Editor/             Common.OptimizeTool.Editor        에셋 저장 공용 규칙 (Editor 전용)
-    MeshOptimization/          Common.OptimizeTool.MeshOptimization         컴포넌트와 설정
-      Editor/                  Common.OptimizeTool.MeshOptimization.Editor  결합·컬링·저장, Inspector
-    PhysicsRecording/          Common.OptimizeTool.PhysicsRecording         녹화, 원본 관찰값, 재생 규칙
-      Editor/                  Common.OptimizeTool.PhysicsRecording.Editor  클립·Prefab 저장
-  Samples/                     이 프로젝트의 샘플·벤치마크 (Scripts, Scenes, Prefabs, Settings)
-  Docs/
-```
-
-| 옮길 시스템 | 복사할 폴더 | 필요한 패키지·모듈 |
-| --- | --- | --- |
-| Mesh 최적화 | `Script/Shared` + `Script/MeshOptimization` | `com.unity.collections`, Physics 모듈(Occlusion Raycast) |
-| Physics Recorder | `Script/Shared` + `Script/PhysicsRecording` | Physics, Physics 2D, Cloth, Particle System, Animation 모듈 |
-| 둘 다 | `Script/` | 위 둘의 합 |
-
-- Runtime 어셈블리 두 개는 패키지를 참조하지 않고 `UnityEditor` 코드도 없어 Player에 그대로 들어갑니다.
-- 결합·베이크·녹화 저장은 Editor 어셈블리에서만 동작합니다.
-- 공용 Editor 어셈블리 이름은 `Common.OptimizeTool.Editor`입니다. 옮길 프로젝트에 같은 이름의 어셈블리가 없어야 합니다.
-
 ## 시작하기
 
 1. `Tools > OptimizeTool > Build Showcase Assets`로 비교용 결과를 만듭니다. 선택 오브젝트는 필요 없습니다.
 2. `Samples/Scenes/OptimizeToolSample.unity`를 Play합니다. `1~4`로 Original / Combined / Backface / Occlusion을, `5`로 PHYSICS 모드를 봅니다.
 3. `F`는 베이크 시점으로 카메라를 되돌립니다. 우클릭 자유 카메라로 다른 각도에서도 볼 수 있습니다.
+
+## 다른 프로젝트로 옮기기
+
+`Assets/_OptimizeTool/Script/` 아래만 `.meta`와 함께 복사합니다. 두 시스템은 서로 참조하지 않으므로 필요한 쪽만 옮길 수 있습니다.
+
+| 옮길 시스템 | 복사할 폴더 | 패키지·모듈 |
+| --- | --- | --- |
+| Mesh 최적화 | `Script/Shared` + `Script/MeshOptimization` | Collections(1.4.0), Physics 모듈(Occlusion Raycast) |
+| Physics Recorder | `Script/Shared` + `Script/PhysicsRecording` | Physics, Physics 2D, Cloth, Particle System, Animation 모듈 |
+| 둘 다 | `Script/` | 위 둘의 합 |
+
+- 세 경우 모두 Unity 2023.2.20f1 빈 프로젝트에 위 패키지만 넣고 해당 폴더만 복사해 확인했습니다. 어셈블리가 오류 없이 컴파일되고 컴포넌트를 붙일 수 있습니다. 괄호는 이 프로젝트가 쓰는 버전입니다.
+- Runtime 어셈블리(`Common.OptimizeTool.MeshOptimization`, `Common.OptimizeTool.PhysicsRecording`)는 패키지를 참조하지 않고 `UnityEditor` 코드도 없어 Player에 그대로 들어갑니다. 결합·베이크·녹화 저장은 각 시스템의 Editor 어셈블리에서만 동작합니다.
+- 공용 Editor 어셈블리 이름은 `Common.OptimizeTool.Editor`입니다. 옮길 프로젝트에 같은 이름의 어셈블리가 없어야 합니다.
+- `Samples/`(샘플·벤치마크 스크립트, 씬, Prefab, 설정. UGUI와 URP 필요)는 옮기지 않아도 됩니다. 문서가 필요하면 이 README와 `Docs/`를 함께 옮깁니다.
+
+## 구조
+
+<img src="Docs/Images/optimizetool-structure.png" alt="OptimizeTool 두 시스템의 어셈블리와 주요 타입" width="85%">
+
+<sub>PlantUML 원본: [Docs/optimizetool-structure.puml](Docs/optimizetool-structure.puml)</sub>
+
+```
+_OptimizeTool/
+  Script/
+    Shared/Editor/        Common.OptimizeTool.Editor                    에셋 저장 공용 규칙
+    MeshOptimization/     Common.OptimizeTool.MeshOptimization          컴포넌트 설정과 씬 출력 상태
+      Editor/             Common.OptimizeTool.MeshOptimization.Editor   결합·컬링·저장, Inspector
+    PhysicsRecording/     Common.OptimizeTool.PhysicsRecording          녹화, 원본 관찰값, 재생 규칙
+      Editor/             Common.OptimizeTool.PhysicsRecording.Editor   클립·Prefab 저장
+  Samples/                Scripts, Scenes, Prefabs, Settings
+  Docs/
+```
+
+- **Mesh 최적화**의 컴포넌트는 설정만 갖고, 결합·베이크는 Editor 어셈블리의 `MeshToolCommands`가 수행합니다.
+- **Physics Recorder**는 Play Mode 캡처를 Runtime 어셈블리에서 합니다. 저장은 Editor 어셈블리가 `[InitializeOnLoad]`로 등록하는 Exporter가 맡습니다.
+- 두 시스템이 함께 쓰는 것은 `AssetFileTransaction`(경로 규칙, GUID를 유지하는 덮어쓰기, 실패 시 복원) 하나입니다.
 
 ## Mesh 도구
 
@@ -115,8 +128,7 @@ Rigidbody가 있는 계층의 로컬 Transform을 물리 스텝마다 기록해,
 샘플의 PHYSICS 모드에서 **RECORD**(`C`)를 누르면 6개 Rigidbody의 낙하 3.2초를 기록합니다. 저장이 끝나면 왼쪽은 녹화 당시의 원본 자세를, 오른쪽은 저장된 Prefab의 Animation을 같은 시간축으로 재생하고 최대 위치·회전 차이를 표시합니다. Play 진입이나 모드 전환만으로는 에셋을 저장하지 않습니다.
 
 <p align="center">
-  <img src="Docs/Images/feature-physics-recorded-original-comparison.png" alt="녹화 당시 원본 관찰값과 저장된 Prefab을 같은 시각에 재생해 비교하는 Game View" width="45%">
-  <img src="Docs/Images/feature-physics-recorder-settings.png" alt="PhysicsRecorder 설정 Inspector" width="45%">
+  <img src="Docs/Images/feature-physics-recorded-original-comparison.png" alt="녹화 당시 원본 관찰값과 저장된 Prefab을 같은 시각에 재생해 161개 관찰 전부에서 최대 0.0048m / 0.48° 차이를 확인한 Game View" width="80%">
 </p>
 
 ## 벤치마크

@@ -1,0 +1,87 @@
+@startuml optimizetool-structure
+!pragma layout smetana
+skinparam shadowing false
+skinparam defaultFontName "Apple SD Gothic Neo"
+skinparam defaultFontSize 15
+skinparam ArrowColor #496A88
+skinparam Padding 6
+skinparam classBackgroundColor #EEF5FB
+skinparam classBorderColor #496A88
+skinparam packageBorderColor #8AA4BC
+skinparam packageStyle rectangle
+hide empty members
+hide circle
+set separator none
+title OptimizeTool 구조
+
+package "MeshOptimization (Runtime)" {
+  class "MeshCombiner\nBackfaceCullMeshBaker" as MeshComponents {
+    설정·씬 출력 상태만 보관
+  }
+}
+
+package "MeshOptimization.Editor" {
+  class MeshToolCommands {
+    BuildMeshes · CombineAndSaveMeshes
+    BakeBackFaceCullingMesh (확장 메서드)
+  }
+  class MeshBuildPipeline {
+    검증·컬링·Material별 결합
+  }
+  class MeshAssetTransaction {
+    GUID 유지 저장·Undo 복원
+  }
+}
+
+package "PhysicsRecording (Runtime)" {
+  class PhysicsRecorder {
+    Start · Stop · Cancel · Result
+    fixed time 기준 캡처
+  }
+  class PhysicsTake {
+    frame-major 관찰값
+  }
+  interface IPhysicsRecordingExporter {
+    검증·리로드 잠금·저장
+  }
+  class PhysicsRecordingReference {
+    축약 전 관찰값 (선택 저장)
+  }
+}
+
+package "PhysicsRecording.Editor" {
+  class PhysicsRecordingEditorExporter {
+    [InitializeOnLoad] 등록
+  }
+  class PhysicsRecordingAssetWriter {
+    clip·prefab·reference 트랜잭션
+  }
+  class PhysicsClipBuilder {
+    보간 오차 기준 키 축약
+  }
+}
+
+package "OptimizeTool.Editor (공용)" {
+  class AssetFileTransaction {
+    경로 규칙·폴더·덮어쓰기·복원
+  }
+}
+
+MeshToolCommands ..> MeshComponents : 설정 읽기
+MeshToolCommands --> MeshBuildPipeline
+MeshToolCommands --> MeshAssetTransaction
+MeshAssetTransaction --> AssetFileTransaction
+
+PhysicsRecorder --> PhysicsTake : 물리 스텝마다 캡처
+PhysicsRecorder --> IPhysicsRecordingExporter
+PhysicsRecordingEditorExporter ..|> IPhysicsRecordingExporter
+PhysicsRecordingEditorExporter --> PhysicsRecordingAssetWriter
+PhysicsRecordingAssetWriter --> PhysicsClipBuilder
+PhysicsRecordingAssetWriter ..> PhysicsRecordingReference : 선택 저장
+PhysicsRecordingAssetWriter --> AssetFileTransaction
+
+note bottom of AssetFileTransaction
+Mesh 최적화와 Physics Recorder는 서로 참조하지 않습니다.
+옮길 때는 Script/Shared와 필요한 시스템 폴더만 복사합니다.
+end note
+@enduml
