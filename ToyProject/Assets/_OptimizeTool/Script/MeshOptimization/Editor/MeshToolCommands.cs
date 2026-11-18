@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Text.RegularExpressions;
 using UnityEngine;
 
 namespace Common.OptimizeTool.MeshOptimization
@@ -32,9 +34,36 @@ namespace Common.OptimizeTool.MeshOptimization
             {
                 Mesh[] meshes = result.GetMeshes();
                 List<string> paths = OutputPaths(folder, combiner.MeshName, meshes.Length, combiner.CreateSettings().CombineIntoSingleMesh);
-                return MeshAssetTransaction.Save(meshes, paths, combiner.OverwriteExistingAssets, "Combine meshes",
-                    saved => { if (combiner.CreateSceneOutput) MeshSceneOutput.Apply(combiner, saved, result); });
+                Mesh[] saved = MeshAssetTransaction.Save(meshes, paths, combiner.OverwriteExistingAssets, "Combine meshes",
+                    written => { if (combiner.CreateSceneOutput) MeshSceneOutput.Apply(combiner, written, result); });
+                List<string> stale = StaleOutputs(folder, combiner.MeshName, paths);
+                if (stale.Count > 0)
+                    combiner.LastBuildWarnings = new List<string>(combiner.LastBuildWarnings)
+                    {
+                        $"Earlier outputs that this bake did not write are still in '{folder}': {string.Join(", ", stale)}. Delete them if nothing references them.",
+                    };
+                return saved;
             }
+        }
+
+        /// <summary>
+        /// Output files of this name that the last save did not write, such as <c>name_2.asset</c> after the build went
+        /// from three meshes to two, or <c>name.asset</c> after switching from single to per-material output.
+        /// </summary>
+        private static List<string> StaleOutputs(string folder, string name, List<string> written)
+        {
+            var stale = new List<string>();
+            if (!Directory.Exists(folder)) return stale;
+            var pattern = new Regex("^" + Regex.Escape(name) + @"(_\d+)?\.asset$", RegexOptions.IgnoreCase);
+            var writtenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string path in written) writtenNames.Add(Path.GetFileName(path));
+            foreach (string file in Directory.GetFiles(folder, "*.asset"))
+            {
+                string fileName = Path.GetFileName(file);
+                if (pattern.IsMatch(fileName) && !writtenNames.Contains(fileName)) stale.Add(fileName);
+            }
+            stale.Sort(StringComparer.OrdinalIgnoreCase);
+            return stale;
         }
 
         /// <summary>
