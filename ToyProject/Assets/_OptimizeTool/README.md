@@ -1,25 +1,49 @@
 # OptimizeTool
 
-Unity Editor에서 Mesh 결합·컬링과 물리 움직임 기록을 수행하고, 결과를 재사용 가능한 에셋으로 저장하는 도구 모음입니다. 에셋 생성 코드는 `Common.OptimizeTool` 네임스페이스의 `#if UNITY_EDITOR` 범위에 있습니다.
+Unity Editor에서 Mesh 결합·컬링과 물리 움직임 기록을 수행하고, 결과를 재사용 가능한 에셋으로 저장하는 도구 모음입니다. Mesh 최적화와 Physics Recorder는 서로 의존하지 않는 독립 시스템이며, 각각 Runtime과 Editor 어셈블리로 나뉩니다.
 
 | 항목 | 내용 |
 | --- | --- |
 | 개발 | 유원석 (You Won Sock) · [GitHub](https://github.com/youwonsock) · qazwsx233434@gmail.com |
-| 환경 | Unity 2023.2.20f1, C#, URP 16.0.6 |
+| 환경 | Unity 2023.2.20f1, C#, URP 16.0.6 (샘플만 URP 사용) |
 | 도구 | `MeshCombiner`: Material별 Mesh 결합, Occlusion·Backface 컬링 · `BackfaceCullMeshBaker`: 방향 기준 삼각형 제거 베이크 · `PhysicsRecorder`: 물리 움직임을 AnimationClip과 Prefab으로 기록 |
-| 예제 | `Scene/OptimizeToolSample.unity` |
+| 예제 | `Samples/Scenes/OptimizeToolSample.unity` |
 
 구현 세부는 [TechnicalNotes.md](Docs/TechnicalNotes.md)에 있습니다.
+
+## 폴더와 이주
+
+```
+_OptimizeTool/
+  Script/                      다른 프로젝트로 옮기는 코드는 여기에만 있습니다
+    Shared/Editor/             Common.OptimizeTool.Editor        에셋 저장 공용 규칙 (Editor 전용)
+    MeshOptimization/          Common.OptimizeTool.MeshOptimization         컴포넌트와 설정
+      Editor/                  Common.OptimizeTool.MeshOptimization.Editor  결합·컬링·저장, Inspector
+    PhysicsRecording/          Common.OptimizeTool.PhysicsRecording         녹화, 원본 관찰값, 재생 규칙
+      Editor/                  Common.OptimizeTool.PhysicsRecording.Editor  클립·Prefab 저장
+  Samples/                     이 프로젝트의 샘플·벤치마크 (Scripts, Scenes, Prefabs, Settings)
+  Docs/
+```
+
+| 옮길 시스템 | 복사할 폴더 | 필요한 패키지·모듈 |
+| --- | --- | --- |
+| Mesh 최적화 | `Script/Shared` + `Script/MeshOptimization` | `com.unity.collections`, Physics 모듈(Occlusion Raycast) |
+| Physics Recorder | `Script/Shared` + `Script/PhysicsRecording` | Physics, Physics 2D, Cloth, Particle System, Animation 모듈 |
+| 둘 다 | `Script/` | 위 둘의 합 |
+
+- Runtime 어셈블리 두 개는 패키지를 참조하지 않고 `UnityEditor` 코드도 없어 Player에 그대로 들어갑니다.
+- 결합·베이크·녹화 저장은 Editor 어셈블리에서만 동작합니다.
+- 공용 Editor 어셈블리 이름은 `Common.OptimizeTool.Editor`입니다. 옮길 프로젝트에 같은 이름의 어셈블리가 없어야 합니다.
 
 ## 시작하기
 
 1. `Tools > OptimizeTool > Build Showcase Assets`로 비교용 결과를 만듭니다. 선택 오브젝트는 필요 없습니다.
-2. `Scene/OptimizeToolSample.unity`를 Play합니다. `1~4`로 Original / Combined / Backface / Occlusion을, `5`로 PHYSICS 모드를 봅니다.
+2. `Samples/Scenes/OptimizeToolSample.unity`를 Play합니다. `1~4`로 Original / Combined / Backface / Occlusion을, `5`로 PHYSICS 모드를 봅니다.
 3. `F`는 베이크 시점으로 카메라를 되돌립니다. 우클릭 자유 카메라로 다른 각도에서도 볼 수 있습니다.
 
 ## Mesh 도구
 
-Edit Mode에서 Inspector 버튼이나 아래 API로 실행합니다. 별도 초기화 없이 호출하고, 설정을 고친 뒤 같은 API로 재시도합니다.
+Edit Mode에서 Inspector 버튼이나 아래 API로 실행합니다. 별도 초기화 없이 호출하고, 설정을 고친 뒤 같은 API로 재시도합니다. 컴포넌트는 설정만 갖고, 아래 API는 `MeshOptimization.Editor` 어셈블리의 확장 메서드(`MeshToolCommands`)입니다. 그래서 Editor 어셈블리의 코드에서만 호출할 수 있습니다.
 
 | API | 동작 |
 | --- | --- |
@@ -28,8 +52,8 @@ Edit Mode에서 Inspector 버튼이나 아래 API로 실행합니다. 별도 초
 | `BackfaceCullMeshBaker.BakeBackFaceCullingMesh()` | 보이는 삼각형만 남긴 Mesh를 저장하고 `MeshFilter.sharedMesh`를 교체합니다 |
 
 ```csharp
-#if UNITY_EDITOR
-using Common.OptimizeTool;
+// Editor 폴더 또는 Common.OptimizeTool.MeshOptimization.Editor를 참조하는 Editor 어셈블리
+using Common.OptimizeTool.MeshOptimization;
 using UnityEngine;
 
 public static class MeshBuildExample
@@ -43,7 +67,6 @@ public static class MeshBuildExample
         }
     }
 }
-#endif
 ```
 
 - **입력:** 대상을 직접 지정하거나 자식 계층에서 수집합니다(동시 사용 불가). 병합 입력은 Layer·그림자·Probe·정렬 등 Renderer 설정이 같아야 하며, PropertyBlock·할당된 Lightmap·LODGroup 같은 입력은 저장 전에 거부합니다.
@@ -74,19 +97,20 @@ public static class MeshBuildExample
 
 ## PhysicsRecorder
 
-Rigidbody가 있는 계층의 로컬 Transform을 물리 스텝마다 기록해, 물리 계산 없이 재생할 수 있는 에셋으로 저장합니다. Play Mode 코드에서 호출합니다.
+Rigidbody가 있는 계층의 로컬 Transform을 물리 스텝마다 기록해, 물리 계산 없이 재생할 수 있는 에셋으로 저장합니다. Play Mode 코드에서 `using Common.OptimizeTool.PhysicsRecording;`으로 호출합니다. 컴포넌트와 API는 Runtime 어셈블리에 있지만 저장은 Editor가 맡으므로, Player에서 `StartRecording`을 부르면 "Editor 전용" 예외가 납니다.
 
 | API | 동작 |
 | --- | --- |
 | `StartRecording(duration, animName)` | 설정을 고정하고 마지막 물리 스텝부터 기록 시작. 잘못된 호출·설정은 예외 |
-| `StopRecording()` | 마지막 물리 스텝까지를 `.anim`·`.prefab`·`.reference.asset`으로 저장하고 결과 반환 |
+| `StopRecording()` | 마지막 물리 스텝까지를 `.anim`·`.prefab`으로 저장하고 결과 반환. `_saveReference`를 켜면 `.reference.asset`도 저장 |
 | `CancelRecording()` | 에셋을 쓰지 않고 기록을 버림 |
 | `IsRecording` / `Result` | 기록 여부와 마지막 결과(`Succeeded`, `Error`, `Clip`, `Prefab`, `Reference`, `StopReason`, `Duration`) |
 
 - 키는 `_positionTolerance`(기본 0.005m)·`_rotationTolerance`(기본 0.5°) 이내로 줄입니다. 저장된 클립을 선형 재생했을 때 모든 물리 스텝에서 오차가 이 값 이하이고, 0이면 모든 스텝을 키로 남깁니다.
 - 움직이지 않은 루트에는 커브를 쓰지 않으므로 저장한 Prefab을 어디에 두어도 그 자리에서 재생됩니다.
 - Prefab에서는 Rigidbody·Collider·게임 스크립트 등을 제거합니다. 원본 계층은 바꾸지 않습니다.
-- 세 에셋 중 하나라도 저장에 실패하면 이전 파일을 복원하고, 실패는 예외가 아니라 `Result.Error`로 알립니다. 기록 중 비활성화되면 그때까지를 저장하고, 재컴파일은 저장이 끝날 때까지 미룹니다.
+- `_saveReference`(기본 꺼짐)를 켜면 축약 전 원본 관찰값을 `.reference.asset`으로 함께 저장합니다. 클립 정확도를 나중에 확인할 때 쓰며, 샘플 비교가 이 파일을 읽습니다. 끈 채로 다시 녹화해도 이전 Reference 파일은 지우지 않습니다.
+- 저장할 에셋 중 하나라도 실패하면 이전 파일을 복원하고, 실패는 예외가 아니라 `Result.Error`로 알립니다. 기록 중 비활성화되면 그때까지를 저장하고, 재컴파일은 저장이 끝날 때까지 미룹니다.
 
 샘플의 PHYSICS 모드에서 **RECORD**(`C`)를 누르면 6개 Rigidbody의 낙하 3.2초를 기록합니다. 저장이 끝나면 왼쪽은 녹화 당시의 원본 자세를, 오른쪽은 저장된 Prefab의 Animation을 같은 시간축으로 재생하고 최대 위치·회전 차이를 표시합니다. Play 진입이나 모드 전환만으로는 에셋을 저장하지 않습니다.
 
@@ -97,7 +121,7 @@ Rigidbody가 있는 계층의 로컬 Transform을 물리 스텝마다 기록해,
 
 ## 벤치마크
 
-`Scene/OptimizeToolScaleBenchmark.unity`는 225·900·3,600개 Renderer에 대한 Combined / Backface / Occlusion 결과를 제공합니다. `1–4`로 결과를, `Q/E`로 규모를 바꿉니다.
+`Samples/Scenes/OptimizeToolScaleBenchmark.unity`는 225·900·3,600개 Renderer에 대한 Combined / Backface / Occlusion 결과를 제공합니다. `1–4`로 결과를, `Q/E`로 규모를 바꿉니다.
 
 1. `Tools > OptimizeTool > Benchmark > Build Scale Benchmark Scene`, 이어서 `Build macOS Development Player`를 실행합니다. 활성 빌드 타깃은 macOS여야 하며, Apple Silicon ARM64·Metal·1920×1080이 필요합니다.
 2. Console에 나온 앱 경로로 저장소 루트에서 측정하고 요약합니다.

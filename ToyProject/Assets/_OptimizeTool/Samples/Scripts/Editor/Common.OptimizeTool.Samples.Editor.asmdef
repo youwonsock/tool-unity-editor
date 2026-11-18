@@ -1,0 +1,15 @@
+{
+    "name": "Common.OptimizeTool.Samples.Editor",
+    "rootNamespace": "Common.OptimizeTool.Samples.Editor",
+    "references": [
+        "Common.OptimizeTool.Editor",
+        "Common.OptimizeTool.MeshOptimization",
+        "Common.OptimizeTool.MeshOptimization.Editor",
+        "Common.OptimizeTool.PhysicsRecording",
+        "Common.OptimizeTool.Samples"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "autoReferenced": true
+}

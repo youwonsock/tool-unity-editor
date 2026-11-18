@@ -1,0 +1,19 @@
+{
+    "name": "Common.OptimizeTool.PhysicsRecording.Editor",
+    "rootNamespace": "Common.OptimizeTool.PhysicsRecording",
+    "references": [
+        "Common.OptimizeTool.PhysicsRecording",
+        "Common.OptimizeTool.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -10,57 +10,67 @@ skinparam nodesep 28
 skinparam ranksep 36
 hide empty members
 
-package "Editor Tools\n(#if UNITY_EDITOR asset generation)" as EditorTools {
+package "Common.OptimizeTool.MeshOptimization\n(Runtime)" as MeshRuntime {
   class MeshCombiner {
-    +BuildMeshes()
-    +CombineAndSaveMeshes()
     +LastBuildWarnings
+    settings, scene output state
   }
 
   class BackfaceCullMeshBaker {
-    +BakeBackFaceCullingMesh()
+    settings
   }
+}
 
+package "Common.OptimizeTool.MeshOptimization.Editor" as MeshEditor {
+  class MeshToolCommands <<static>> {
+    +BuildMeshes(this MeshCombiner)
+    +CombineAndSaveMeshes(this MeshCombiner)
+    +BakeBackFaceCullingMesh(this BackfaceCullMeshBaker)
+  }
+  class MeshBuildPipeline <<static>>
+  class MeshAssetTransaction <<static>>
+}
+
+package "Common.OptimizeTool.PhysicsRecording\n(Runtime)" as PhysicsRuntime {
   class PhysicsRecorder {
-    +IsInitialized
-    +IsFaulted
-    +Init()
+    +IsRecording
     +StartRecording(duration, animName)
-    +StopRecording()
-    +Release()
+    +StopRecording() : PhysicsRecordingResult
+    +CancelRecording()
     +Result : PhysicsRecordingResult
   }
+  interface IPhysicsRecordingExporter
+  class PhysicsTake
+  class PhysicsRecordingReference
 }
 
-package "Unity Types" as UnityTypes {
-  class MeshFilter <<Unity>>
-  class Camera <<Unity>>
-  class Material <<Unity>>
-  class Mesh <<Unity>>
-  class Rigidbody <<Unity>>
-  class Transform <<Unity>>
-  class AnimationClip <<Unity>>
-  class GameObject <<Unity>>
+package "Common.OptimizeTool.PhysicsRecording.Editor" as PhysicsEditor {
+  class PhysicsRecordingEditorExporter <<InitializeOnLoad>>
+  class PhysicsRecordingAssetWriter <<static>>
+  class PhysicsClipBuilder <<static>>
 }
 
-MeshCombiner --> MeshFilter : reads input
-MeshCombiner --> Camera : optional culling target
-MeshCombiner --> Material : groups by material
-MeshCombiner --> Mesh : combines / saves
+package "Common.OptimizeTool.Editor\n(shared)" as SharedEditor {
+  class AssetFileTransaction <<static>>
+}
 
-BackfaceCullMeshBaker --> MeshFilter : reads / replaces
-BackfaceCullMeshBaker --> Camera : camera direction
-BackfaceCullMeshBaker --> Mesh : bakes / saves
+MeshToolCommands ..> MeshCombiner : reads settings
+MeshToolCommands ..> BackfaceCullMeshBaker : reads settings
+MeshToolCommands --> MeshBuildPipeline : builds
+MeshToolCommands --> MeshAssetTransaction : saves
+MeshAssetTransaction --> AssetFileTransaction : paths / rollback
 
-PhysicsRecorder --> Rigidbody : tracks children
-PhysicsRecorder --> Transform : records local pose
-PhysicsRecorder --> AnimationClip : saves curves
-PhysicsRecorder --> GameObject : saves prefab
+PhysicsRecorder --> PhysicsTake : captures steps
+PhysicsRecorder --> IPhysicsRecordingExporter : validate / export
+PhysicsRecordingEditorExporter ..|> IPhysicsRecordingExporter
+PhysicsRecordingEditorExporter --> PhysicsRecordingAssetWriter
+PhysicsRecordingAssetWriter --> PhysicsClipBuilder : reduces keys
+PhysicsRecordingAssetWriter --> PhysicsRecordingReference : optional
+PhysicsRecordingAssetWriter --> AssetFileTransaction : saves
 
-note right of EditorTools
-Mesh combination, culling bake and physics recording
-asset-generation paths are guarded by #if UNITY_EDITOR.
-Only core editor asset-generation paths are shown.
+note bottom of SharedEditor
+Mesh optimization and the physics recorder never reference each other.
+Copy Script/Shared plus one system folder to move that system.
 end note
 
 @enduml

@@ -1,0 +1,20 @@
+{
+    "name": "Common.OptimizeTool.MeshOptimization.Editor",
+    "rootNamespace": "Common.OptimizeTool.MeshOptimization",
+    "references": [
+        "Common.OptimizeTool.MeshOptimization",
+        "Common.OptimizeTool.Editor",
+        "Unity.Collections"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
