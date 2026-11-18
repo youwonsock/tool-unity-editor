@@ -333,15 +333,15 @@ namespace Common.TransformPath
         }
 
         // The geometry may change under the members. Different segments may not.
+        // A segment is known by the provider that draws it.
         private bool IsSameRouteStructure()
         {
-            if (!(_routeProvider is MultiPathData sequence))
-                return true;
-            if (sequence.SegmentCount != _routeStructure.Count)
+            PathRoute route = _routeProvider.GetRoute();
+            if (route.SegmentCount != _routeStructure.Count)
                 return false;
             for (int i = 0; i < _routeStructure.Count; i++)
             {
-                if (!ReferenceEquals(sequence.GetSegmentPath(i), _routeStructure[i]))
+                if (!ReferenceEquals(route.GetSampler(i), _routeStructure[i]))
                     return false;
             }
             return true;
@@ -350,11 +350,9 @@ namespace Common.TransformPath
         private void CaptureRouteStructure()
         {
             _routeStructure.Clear();
-            if (_routeProvider is MultiPathData sequence)
-            {
-                for (int i = 0; i < sequence.SegmentCount; i++)
-                    _routeStructure.Add(sequence.GetSegmentPath(i));
-            }
+            PathRoute route = _routeProvider.GetRoute();
+            for (int i = 0; i < route.SegmentCount; i++)
+                _routeStructure.Add(route.GetSampler(i));
         }
 
         private bool TryValidateSettings(out string error)

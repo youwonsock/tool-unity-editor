@@ -57,6 +57,9 @@ namespace Common.TransformPath
 
         /// <summary>The point at a progress of 0..1 along the path's length.</summary>
         Vector3 Sample(float progress);
+
+        /// <summary>The playback route of the current revision, with the provider's own segments and movement.</summary>
+        PathRoute GetRoute();
     }
 
     /// <summary>Hears the name of every event a follower reaches, after the event's effects applied.</summary>

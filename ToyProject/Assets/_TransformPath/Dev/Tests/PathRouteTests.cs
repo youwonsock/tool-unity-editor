@@ -50,6 +50,20 @@ namespace Common.TransformPath.Tests
         }
 
         [Test]
+        public void Refresh_RebuildsFromTheProvidersCurrentRoute()
+        {
+            var provider = new LineProvider(4f);
+            PathRoute route = provider.GetRoute();
+            provider.PathLength = 6f;
+            provider.Revision = 2;
+
+            PathRoute refreshed = route.Refresh();
+
+            Assert.AreEqual(2, refreshed.Revision);
+            Assert.AreEqual(6f, refreshed.TotalLength, 1e-5f);
+        }
+
+        [Test]
         public void TimeCurve_InverseMatchesEvaluation()
         {
             var movement = PathMovementSettings.Time(2f, AnimationCurve.EaseInOut(0f, 0f, 1f, 1f));

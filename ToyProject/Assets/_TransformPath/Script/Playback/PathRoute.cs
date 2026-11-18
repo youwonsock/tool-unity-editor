@@ -89,10 +89,13 @@ namespace Common.TransformPath
         {
             return _source == ESource.Aggregate
                 ? Aggregate(Provider, _segments[0].Movement)
-                : ((PathProviderBehaviour)Provider).GetRoute();
+                : Provider.GetRoute();
         }
 
         public float GetLength(int segment) => _segments[segment].Length;
+
+        /// <summary>The provider that draws a segment: a sequence's own path, or the provider itself.</summary>
+        public IPathProvider GetSampler(int segment) => _segments[segment].Sampler;
 
         public PathMovementSettings GetMovementSettings(int segment) => _segments[segment].Movement;
 

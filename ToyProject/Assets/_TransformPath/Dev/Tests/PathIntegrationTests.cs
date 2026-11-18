@@ -206,6 +206,39 @@ namespace Common.TransformPath.Tests
             Assert.IsTrue(sequence.IsReady);
         }
 
+        [Test]
+        public void SequenceQueue_KeepsMembersOnGeometryChange_ReleasesThemOnSegmentChange()
+        {
+            PathData first = Line(5f, 2f);
+            PathData second = _scene.CreatePath(PathMovementSettings.Speed(2f), EPathCurveType.Linear,
+                new Vector3(5f, 0f, 0f), new Vector3(9f, 0f, 0f));
+            PathData third = _scene.CreatePath(PathMovementSettings.Speed(2f), EPathCurveType.Linear,
+                new Vector3(5f, 0f, 0f), new Vector3(12f, 0f, 0f));
+            var host = new GameObject("Sequence");
+            _objects.Add(host);
+            MultiPathData sequence = host.AddComponent<MultiPathData>();
+            sequence.SetSegments(new[] { new PathSegmentAuthoring(first), new PathSegmentAuthoring(second) });
+            QueuedPathManager manager = CreateManager(sequence);
+            PathQueueMember member = CreateMember();
+            var reasons = new List<EPathQueueLeaveReason>();
+            member.QueueInvalidated += (_, reason) => reasons.Add(reason);
+            member.StartQueuedPlayback(manager, PathPlaybackRequest.Sequence(sequence));
+            Frames(10);
+
+            // Only the geometry changes: the members keep their place.
+            GetPoints(second)[1].position = new Vector3(10f, 0f, 0f);
+            second.Rebuild();
+            Frames(2);
+            Assert.IsTrue(member.IsInQueue);
+            Assert.IsEmpty(reasons);
+
+            // Another path in a segment: the manager lets everyone go.
+            sequence.SetSegments(new[] { new PathSegmentAuthoring(first), new PathSegmentAuthoring(third) });
+            Frames(1);
+            CollectionAssert.AreEqual(new[] { EPathQueueLeaveReason.ManagerReleased }, reasons);
+            Assert.IsFalse(member.IsInQueue);
+        }
+
         private static IReadOnlyList<Transform> GetPoints(PathData path) => path.PathPoints;
     }
 }

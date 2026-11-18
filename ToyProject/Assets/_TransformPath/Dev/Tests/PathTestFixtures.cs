@@ -18,6 +18,10 @@ namespace Common.TransformPath.Tests
 
         public Vector3 Sample(float progress) => Vector3.right * (Mathf.Clamp01(progress) * PathLength);
 
+        /// <summary>Itself as the one segment of its current revision.</summary>
+        public PathRoute GetRoute() => PathRoute.FromProvider(this,
+            new[] { new PathRoute.Segment(this, 0f, PathLength, PathMovementSettings.Speed(1f), false, null) }, false);
+
         public void Raise() => PathChanged?.Invoke();
     }
 

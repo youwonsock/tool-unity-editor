@@ -70,6 +70,8 @@ namespace Common.TransformPath
             return _route;
         }
 
+        PathRoute IPathProvider.GetRoute() => GetRoute();
+
         /// <summary>Builds once if nothing asked for a build yet, such as a sequence waking first.</summary>
         internal void EnsureBuilt()
         {
