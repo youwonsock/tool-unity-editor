@@ -11,10 +11,10 @@ MeshFilter 수집 → 설정·입력 검증 → Readable·Normal 처리
   → 설정된 Assets/ 하위 출력 폴더에 Mesh 에셋 저장
 
 물리 기록 (Play Mode 캡처는 Runtime, 저장은 Editor)
-설정·계층 검증 → 시작 자세 → 물리 스텝별 localPosition / localRotation 관찰
-  → 보간 오차 기준 키 축약 → AnimationClip 커브 생성
-  → 물리·게임플레이 컴포넌트를 제거한 Prefab 생성
-  → .anim / .prefab (+ 선택한 경우 .reference.asset) 동기 저장 또는 실패 복원 → Result 게시
+설정·계층 검증 → 첫 물리 스텝(t=0)부터 스텝별 또는 표본 간격별 localPosition / localRotation 관찰
+  (새로 생긴 Rigidbody는 track으로 추가) → 보간 오차 기준 키 축약 → Legacy 또는 Generic 클립 생성
+  → (Legacy) 물리·게임플레이 컴포넌트를 제거한 Prefab 생성
+  → .anim (+ Legacy면 .prefab, 선택한 경우 .reference.asset) 동기 저장 또는 실패 복원 → Result와 Metrics 게시
 
 샘플 비교
 원본 기준 데이터 + 저장된 Prefab → 같은 시각의 자세 재현·오차 검사
@@ -105,15 +105,16 @@ flowchart LR
 | MeshOptimization.Editor | `MeshSceneOutput` | `MeshSceneEdit`를 거쳐 결과 Renderer를 만들고 원본 Renderer를 비활성화. 끈 원본의 기록과 `Restore`, Prefab 인스턴스 안의 결과 거부 |
 | MeshOptimization.Editor | `MeshSceneEdit` | 씬 변경 방식을 Editor 모드로 한 곳에서 정함. Edit Mode는 Undo와 Prefab 오버라이드 기록, Play Mode는 기록 없이 바꾼 값을 들고 있다가 실패하면 직접 되돌리고 성공하면 숨겨 둔 이전 결과를 지움 |
 | OptimizeTool.Editor | `AssetFileTransaction` | 공용 출력 규칙: Edit Mode 확인, Play Mode 전환 중 거부, `Assets/` 아래 경로·이름 검증(`ValidateAssetPath`, 같은 에셋을 두 번 적은 목록을 거부하는 `ValidateAssetPaths`), 출력 자리 검사(`ValidateOutputTarget`), 폴더 생성, GUID를 유지하는 `CreateOrReplace`, 선언한 파일의 백업과 실패 시 복원(`Execute`) |
-| PhysicsRecording | `PhysicsRecorder` / `PhysicsTakeSettings` / `PhysicsRecordingResult` | take 시작·종료·취소, 설정 스냅샷과 경로, fixed time 기준, 저장 직전 계층 검증, 결과 게시 |
-| PhysicsRecording | `PhysicsTake` | 물리 스텝마다 쌓는 frame-major 원본 관찰값, 회전 부호 연속성, 요청한 종료 시각의 보간 |
+| PhysicsRecording | `PhysicsRecorder` / `PhysicsTakeSettings` / `PhysicsRecordingResult` | take 시작·종료·취소, 설정 스냅샷과 경로, fixed time 기준, 표본 간격, 녹화 중 생긴 Rigidbody 추가, 저장 직전 계층 검증, 결과 게시 |
+| PhysicsRecording | `PhysicsClipFormat` / `PhysicsRecordingMetrics` | 저장 형식(Legacy Prefab, Generic 클립)과 저장된 take의 프레임·track·키 수, 생략한 track 수, 최대 오차 |
+| PhysicsRecording | `PhysicsTake` | 기록한 스텝의 track별 원본 관찰값, 표본 사이에 들고 있는 마지막 스텝, 녹화 중 추가된 track과 보이기 시작한 시각, 회전 부호 연속성, 요청한 종료 시각의 보간. Reference에는 frame-major로 씀 |
 | PhysicsRecording | `IPhysicsRecordingExporter` | Runtime 녹화가 Editor 저장을 부르는 경계: 검증, 리로드 잠금, 저장 |
 | PhysicsRecording | `PhysicsRecordingReference` | 축약 전 원본 관찰값, Transform 경로, 클립·계층 검증. Player에서도 읽음 |
 | PhysicsRecording | `PhysicsPoseMath` | 원본 보간(Slerp)과 커브 재생 보간(성분별 선형 + 정규화), 회전 차이 |
 | PhysicsRecording | `PhysicsPlaybackPolicy` | 출력 시 제거하고 재생 시 거부하는 물리·게임플레이 컴포넌트 규칙과 재생 검증 |
 | PhysicsRecording.Editor | `PhysicsRecordingEditorExporter` | `[InitializeOnLoad]` 등록, 경로 규칙 검증, `LockReloadAssemblies` |
-| PhysicsRecording.Editor | `PhysicsClipBuilder` | 보간 오차 기준 키 축약과 선형 커브·Legacy 클립 생성, 정지한 루트 커브 생략 |
-| PhysicsRecording.Editor | `PhysicsRecordingAssetWriter` / `PhysicsPlaybackStripper` | 재생용 복제본의 의존성 순서 제거, 에셋을 한 트랜잭션으로 저장하고 서로 연결됐는지 확인 |
+| PhysicsRecording.Editor | `PhysicsClipBuilder` | 보간 오차 기준 키 축약과 선형 커브, Legacy·Generic 클립 생성, 정지한 루트와 (옵션) 정지한 track의 커브 생략, 숨김 구간의 GameObject 활성 커브, Metrics 계산 |
+| PhysicsRecording.Editor | `PhysicsRecordingAssetWriter` / `PhysicsPlaybackStripper` | Legacy 재생용 복제본의 의존성 순서 제거와 생략한 track의 첫 자세, 에셋을 한 트랜잭션으로 저장하고 서로 연결됐는지 확인 |
 | Samples | `PhysicsPrefabPlayback` | 검증한 Prefab 인스턴스 1개와 Animation 표본 재생·파괴 |
 | Samples | `OptimizeToolPhysicsDemo` | 녹화·비교 상태, 원본 Rigidbody 정지, 코루틴과 재컴파일 정리 |
 | Samples | `OptimizeToolOverviewController` / `OptimizeToolShowcaseUI` | 다섯 모드 선택, 상태 갱신, 버튼 상태와 소유 리스너 관리 |
@@ -151,18 +152,21 @@ flowchart LR
 
 ## PhysicsRecorder
 
-- `_root` 계층에는 Rigidbody가 하나 이상 필요합니다. 비활성 자식과 Rigidbody가 없는 부모의 움직임도 보존하도록 계층 전체 Transform의 `localPosition`·`localRotation`을 기록합니다.
+- `_root` 계층에는 Rigidbody가 하나 이상 필요합니다. 비활성 자식과 Rigidbody가 없는 부모의 움직임도 보존하도록 계층 전체 Transform의 `localPosition`·`localRotation`을 기록합니다. 기록 중에는 스텝마다 `_root` 아래의 켜진 Rigidbody를 찾아, 새 것은 그 위의 새 Transform과 함께 track으로 더합니다.
 - 트랙 경로는 `Root` 아래 이름을 `/`로 이은 값이며 `AnimationUtility.CalculateTransformPath`와 같습니다. Runtime에서 계산하므로 녹화 코드에 Editor API가 없습니다.
 - `_saveReference`(기본 꺼짐)를 켜야 `.reference.asset`을 저장하고 `Result.Reference`가 채워집니다. 끄면 트랜잭션은 clip과 prefab을 다루고, 덮어쓰는 clip을 가리키는 이전 Reference가 같은 경로에 있으면 같은 트랜잭션에서 지웁니다(실패하면 GUID와 함께 복원).
-- 시간은 `Time.fixedTimeAsDouble` 기준입니다. 시작 자세를 마지막 물리 스텝 시각 `t=0`에 저장하고, 물리 스텝이 끝날 때마다 표본을 모읍니다. Update에서 시작해도 첫 표본은 `fixedDeltaTime`에 놓입니다. `FixedUpdate`에서 시작하면 그 스텝의 물리 계산 직후 자세가 `t=0`이 되므로 표본 간격이 한 스텝씩 유지됩니다. 요청한 종료 시각이 스텝 사이에 있으면 양쪽 표본을 보간합니다. 누적된 스텝 시각이 종료 시각보다 아주 조금(스텝의 1% 이내) 모자라면 그 표본을 종료 표본으로 씁니다. `StopRecording`은 마지막으로 끝난 물리 스텝까지를 저장합니다. Rigidbody 보간을 켜도 물리 스텝 직후의 Transform은 물리 자세와 같습니다.
+- 시간은 `Time.fixedTimeAsDouble` 기준입니다. `StartRecording`은 자세를 저장하지 않고, 그 뒤 처음 끝나는 물리 스텝(`WaitForFixedUpdate`)의 물리 계산 직후 자세가 `t=0`입니다. Update에서 시작하든 `FixedUpdate`에서 시작하든 첫 표본은 같은 방식으로 놓이고 표본 간격은 한 스텝씩 유지됩니다. 그 시각은 `TryGetTakeStartTime`으로 읽습니다. 첫 스텝 전에 멈추면 프레임이 없으므로 "No physics step was recorded"로 실패하고 `Duration`은 0입니다. 요청한 종료 시각이 스텝 사이에 있으면 양쪽 표본을 보간합니다. 누적된 스텝 시각이 종료 시각보다 아주 조금(스텝의 1% 이내) 모자라면 그 표본을 종료 표본으로 씁니다. `StopRecording`은 마지막으로 끝난 물리 스텝까지를 저장합니다. Rigidbody 보간을 켜도 물리 스텝 직후의 Transform은 물리 자세와 같습니다.
+- `_sampleInterval`이 0보다 크면 마지막 기록 뒤 그 간격(스텝의 1% 허용치 포함)이 지난 스텝만 기록하고, 기록하지 않은 스텝은 마지막 하나만 들고 있습니다. 멈추거나 꺼지면 들고 있던 스텝을 마지막 프레임으로 기록하고, 녹화 시간을 넘는 스텝은 들고 있던 바로 앞 스텝과 보간합니다.
 - `Physics.simulationMode`가 `FixedUpdate`여야 합니다. 다른 모드에서는 `StartRecording`이 예외를 던집니다.
 - 회전은 트랙마다 직전 표본과 같은 반구로 부호를 맞춰 저장하므로, 기준 데이터의 회전 부호가 원래 값과 다를 수 있습니다. 비교는 부호와 무관한 각도를 씁니다.
-- 키 축약은 첫·끝 표본을 남긴 뒤, 구간 안 모든 물리 스텝의 재생 오차를 재고 허용치를 가장 많이 넘는 스텝에서 구간을 나눕니다. 재생 오차는 Legacy 재생과 같은 성분별 선형 보간 + 정규화로 계산하므로, 저장된 클립은 모든 관찰 시각에서 허용치 이내입니다. 스텝 사이 렌더 프레임의 오차는 보장하지 않습니다.
+- 키 축약은 첫·끝 표본을 남긴 뒤, 구간 안 모든 물리 스텝의 재생 오차를 재고 허용치를 가장 많이 넘는 스텝에서 구간을 나눕니다. 재생 오차는 Legacy와 Generic 재생이 모두 쓰는 성분별 선형 보간 + 정규화로 계산하므로, 저장된 클립은 모든 관찰 시각에서 허용치 이내입니다. `Metrics`의 최대 오차도 같은 방식으로 모든 기록 프레임에서 잽니다. 스텝 사이 렌더 프레임의 오차는 보장하지 않습니다.
 - 키의 tangent는 이웃 키로의 기울기를 직접 넣어 선형으로 재생하므로, 편집기용 커브(`m_EditorCurves`·`m_EulerEditorCurves`)를 따로 저장하지 않습니다.
-- `StartRecording`은 설정을 스냅샷으로 고정하고 중복 시작·중복 계층 경로를 거부합니다. 추가·삭제, 이름·부모·스케일 변경은 저장 직전에 한 번 검사해 실패로 처리하므로, 기록 중 바뀌었다가 되돌아온 변경은 잡지 못합니다. 기록 중 Transform이 파괴되면 `StopReason.Failed`로 즉시 끝납니다. 활성 상태 변화는 기록하지 않습니다.
+- `StartRecording`은 설정을 스냅샷으로 고정하고 중복 시작·중복 계층 경로를 거부합니다. 기록한 Transform의 삭제, 이름·부모·스케일 변경은 저장 직전에 한 번 검사해 실패로 처리하므로, 기록 중 바뀌었다가 되돌아온 변경은 잡지 못합니다. 새로 생긴 Transform은 허용하고, 새 Rigidbody는 이미 track입니다. 기록 중 Transform이 파괴되거나 새 track의 경로가 겹치면 `StopReason.Failed`로 즉시 끝납니다.
+- 활성 상태는 두 경우만 클립에 넣습니다. 녹화 중 생긴 track은 생긴 시각까지, 시작할 때 꺼져 있던 자식은 take 내내 GameObject `m_IsActive` 계단 커브로 숨깁니다. Legacy Animation과 Animator 모두 이 커브를 재생합니다(Editor에서 `SampleAnimation`, `Animation.Sample`, 일반 재생으로 확인). 그 밖의 켜고 끄기는 기록하지 않습니다.
+- `_omitStillTracks`를 켜면 모든 프레임이 0번 프레임의 위치·회전 허용치 안에 있는 track의 커브를 빼고, 저장할 Prefab 사본에 그 track의 0번 자세를 넣습니다. 끝 자세를 남기면 오차가 허용치의 2배까지 커질 수 있기 때문입니다. 루트는 이 옵션과 관계없이 같은 규칙으로 커브를 뺍니다. 허용치가 0이면 정확히 같은 자세만 정지로 봅니다. Transform 커브가 하나도 남지 않으면 루트 커브를 남겨 클립 길이가 take와 맞게 합니다.
 - 실패는 그 take의 `Result.Error`로만 남고 다음 `StartRecording`은 그대로 동작합니다. 실패한 take의 `Result`는 이전 녹화의 에셋을 게시하지 않습니다.
 - Prefab은 비활성 임시 계층에서 복제해 원본 스크립트의 Awake/OnEnable 실행을 막고, MonoBehaviour(누락 스크립트 포함), Rigidbody·Rigidbody2D·ArticulationBody, Collider·Collider2D, Joint·Joint2D, ConstantForce·ConstantForce2D, Cloth, 기존 Animator/Animation을 `RequireComponent`가 막지 않는 순서로 제거하고, ParticleSystem의 Collision·Trigger 모듈을 끕니다.
-- 클립은 Legacy Animation 형식이며 재생용 Animation의 기본 클립과 자동 재생을 설정합니다. `_overwriteExistingAssets`를 허용하면 기존 GUID를 유지하고, 실패하면 기존 파일을 복원하거나 불완전한 새 파일을 지웁니다.
+- `LegacyPrefab` 클립은 Legacy Animation 형식이며 재생용 Animation의 기본 클립과 자동 재생을 설정합니다. `Generic` 클립은 `legacy = false`로 clip과 Reference만 저장하고 Prefab, Animation, `PhysicsPlaybackPolicy.Validate`를 건너뜁니다. 같은 이름의 Prefab 파일이 있으면 그것을 지우지 않고 저장 전에 실패합니다(예: `OptimizeToolShowcase.prefab`이 참조하는 `OptimizeToolPhysicsTake.prefab`). `_overwriteExistingAssets`를 허용하면 기존 GUID를 유지하고, 실패하면 기존 파일을 복원하거나 불완전한 새 파일을 지웁니다.
 - 기록 중 비활성화·파괴·Play 종료가 일어나면 그때까지를 동기로 저장합니다. 스크립트 리로드 중에는 Prefab을 저장할 수 없으므로, 기록하는 동안 `LockReloadAssemblies`로 재컴파일을 take 저장 뒤로 미룹니다. 기록을 시작하는 Inspector 버튼은 없습니다.
 - 출력 이름과 폴더는 `AssetFileTransaction` 규칙을 따릅니다. 앞뒤 공백, `.`로 끝나는 이름, `..`, 경로 금지 문자를 거부하며, 이 규칙은 Mesh 도구에도 같이 적용됩니다.
 
@@ -172,7 +176,7 @@ flowchart LR
 - 녹화는 `Samples/Settings/Generated/PhysicsRecordings/OptimizeToolPhysicsTake`에 저장하고(데모 Recorder는 `_saveReference`를 켬), 다음 Play에서도 마지막 기록으로 비교할 수 있습니다. 녹화 중에는 모드 변경과 Reset을 막고, Rigidbody는 0.4초 정지 뒤 낙하합니다. 비교 중 왼쪽 Rigidbody는 Kinematic으로 둡니다.
 - 비교는 같은 재생 시각을 쓰며, 프레임이 건너뛰어도 시작·종료를 포함한 모든 원본 관찰 시각에서 오차를 검사합니다. 대응하는 Transform 경로의 로컬 위치·회전을 비교하므로 두 전시 공간의 간격은 오차에 들어가지 않습니다. 표시되는 오차는 `_positionTolerance`·`_rotationTolerance` 이내로 줄인 키 축약 오차입니다.
 - 기준 데이터가 없거나 클립·계층이 맞지 않으면 재생을 중단하고 RECORD를 안내합니다. 기본 Showcase Prefab에는 녹화에 대응하는 `PhysicsRecordingReference`가 직렬화되어 있어 Player에서도 AssetDatabase 없이 씁니다.
-- 녹화 중 쇼케이스나 데모를 비활성화하면 그 시점까지 저장합니다. 첫 물리 틱 전이면 녹화를 시작하지 않습니다. 녹화 중 재컴파일은 recorder가 take 저장 뒤로 미루고, 데모는 재로드 전에 재생 인스턴스를 정리하며, 재로드 후 UI가 패널과 리스너를 복구합니다.
+- 녹화 중 쇼케이스나 데모를 비활성화하면 그 시점까지 저장합니다. 첫 물리 스텝 전에 비활성화하면 "No physics step was recorded"로 실패를 표시하고 이전 take를 그대로 둡니다. 데모는 녹화 시계를 Recorder의 `TryGetTakeStartTime`에 맞추므로 몸체를 놓는 시각이 녹화 시각 0.4초입니다. 녹화 중 재컴파일은 recorder가 take 저장 뒤로 미루고, 데모는 재로드 전에 재생 인스턴스를 정리하며, 재로드 후 UI가 패널과 리스너를 복구합니다.
 - 데모 컴포넌트만 파괴하면 RECORD·COMPARE·RESET을 비활성화하고 `Physics Recorder demo is unavailable.`을 표시합니다. 다른 모드와 카메라 버튼은 계속 동작합니다.
 - 샘플 계층은 `Tools > OptimizeTool > Build Physics Recorder Demo`로 다시 만듭니다. `Build Showcase Assets`도 이 구성을 포함합니다.
 - 모드의 이름·그룹·버튼 정의는 `OptimizeToolSampleModes`에 있습니다. Mesh 통계 문자열은 캐시해 모드 변경 때 갱신하고, 물리 상태 표시는 상태 변화나 0.1초 간격으로 갱신합니다.

@@ -11,16 +11,22 @@ using Object = UnityEngine.Object;
 namespace Common.OptimizeTool.PhysicsRecording.Editor
 {
     /// <summary>
-    /// Saves a take as its clip, playback prefab and, when enabled, reference. Either every output is saved
-    /// and linked, or the previous files are restored.
+    /// Saves a take as its clip, the playback prefab of a Legacy take and, when enabled, the reference. Either every
+    /// output is saved and linked, or the previous files are restored.
     /// </summary>
     internal static class PhysicsRecordingAssetWriter
     {
-        /// <summary>Rejects an output path that exists without overwrite, or that holds another kind of asset.</summary>
+        /// <summary>
+        /// Rejects an output path that exists without overwrite, or that holds another kind of asset. A Generic take
+        /// also fails when a Legacy prefab of the same name exists: overwriting the clip it plays would break it.
+        /// </summary>
         internal static void ValidateTargets(in PhysicsTakeSettings settings)
         {
             AssetFileTransaction.ValidateOutputTarget(settings.ClipPath, typeof(AnimationClip), settings.Overwrite);
-            AssetFileTransaction.ValidateOutputTarget(settings.PrefabPath, typeof(GameObject), settings.Overwrite);
+            if (settings.ClipFormat == PhysicsClipFormat.LegacyPrefab)
+                AssetFileTransaction.ValidateOutputTarget(settings.PrefabPath, typeof(GameObject), settings.Overwrite);
+            else if (File.Exists(settings.PrefabPath))
+                throw new InvalidOperationException($"A Legacy recording prefab uses this take name: {settings.PrefabPath}. A Generic clip saved as {settings.ClipName} would break it; delete the prefab or record under another name.");
             if (settings.SaveReference)
                 AssetFileTransaction.ValidateOutputTarget(settings.ReferencePath, typeof(PhysicsRecordingReference), settings.Overwrite);
         }
@@ -35,10 +41,17 @@ namespace Common.OptimizeTool.PhysicsRecording.Editor
             try
             {
                 // Build everything in memory first; a failure here leaves the disk untouched.
-                clip = PhysicsClipBuilder.Build(take, settings.ClipName, settings.PositionTolerance, settings.RotationTolerance);
-                previewScene = EditorSceneManager.NewPreviewScene();
-                GameObject playback = CreatePlaybackCopy(root, previewScene, settings.ClipName);
-                clip.SampleAnimation(playback, 0f);
+                PhysicsClip built = PhysicsClipBuilder.Build(take, settings);
+                clip = built.Clip;
+                bool legacy = settings.ClipFormat == PhysicsClipFormat.LegacyPrefab;
+                GameObject playback = null;
+                if (legacy)
+                {
+                    previewScene = EditorSceneManager.NewPreviewScene();
+                    playback = CreatePlaybackCopy(root, previewScene, settings.ClipName);
+                    HoldFirstPoses(playback.transform, take, built.Omitted);
+                    clip.SampleAnimation(playback, 0f);
+                }
                 if (settings.SaveReference)
                 {
                     reference = ScriptableObject.CreateInstance<PhysicsRecordingReference>();
@@ -49,7 +62,8 @@ namespace Common.OptimizeTool.PhysicsRecording.Editor
                 string name = settings.ClipName;
                 string clipPath = settings.ClipPath, prefabPath = settings.PrefabPath, referencePath = settings.ReferencePath;
                 bool deleteStaleReference = reference == null && HasStaleReference(settings);
-                var outputs = new List<string> { clipPath, prefabPath };
+                var outputs = new List<string> { clipPath };
+                if (legacy) outputs.Add(prefabPath);
                 if (reference != null || deleteStaleReference) outputs.Add(referencePath);
                 AssetFileTransaction.EnsureFolder(settings.Folder);
                 AssetFileTransaction.Execute(outputs, () =>
@@ -62,18 +76,21 @@ namespace Common.OptimizeTool.PhysicsRecording.Editor
                         take.WriteTo(reference, clip);
                         reference = AssetFileTransaction.CreateOrReplace(reference, referencePath);
                     }
-                    AttachAnimation(playback, clip, name);
-                    PhysicsPlaybackPolicy.Validate(playback);
-                    prefab = PrefabUtility.SaveAsPrefabAsset(playback, prefabPath, out bool saved);
-                    if (!saved || prefab == null)
-                        throw new InvalidOperationException($"Unable to save the recording prefab: {prefabPath}");
-                    Animation savedAnimation = prefab.GetComponent<Animation>();
-                    if (savedAnimation == null || savedAnimation.clip != clip)
-                        throw new InvalidOperationException($"The saved prefab does not play the saved clip: {prefabPath}");
+                    if (legacy)
+                    {
+                        AttachAnimation(playback, clip, name);
+                        PhysicsPlaybackPolicy.Validate(playback);
+                        prefab = PrefabUtility.SaveAsPrefabAsset(playback, prefabPath, out bool saved);
+                        if (!saved || prefab == null)
+                            throw new InvalidOperationException($"Unable to save the recording prefab: {prefabPath}");
+                        Animation savedAnimation = prefab.GetComponent<Animation>();
+                        if (savedAnimation == null || savedAnimation.clip != clip)
+                            throw new InvalidOperationException($"The saved prefab does not play the saved clip: {prefabPath}");
+                    }
                     if (reference != null && reference.Clip != clip)
                         throw new InvalidOperationException($"The saved reference does not belong to the saved clip: {referencePath}");
                 });
-                return new PhysicsRecordingAssets(clip, prefab, reference);
+                return new PhysicsRecordingAssets(clip, prefab, reference, built.Metrics);
             }
             finally
             {
@@ -109,6 +126,20 @@ namespace Common.OptimizeTool.PhysicsRecording.Editor
             playback.name = name;
             PhysicsPlaybackStripper.Strip(playback);
             return playback;
+        }
+
+        /// <summary>A track without curves keeps the first recorded pose, which its error is measured against.</summary>
+        private static void HoldFirstPoses(Transform playback, PhysicsTake take, bool[] omitted)
+        {
+            for (int track = 0; track < take.TrackCount; track++)
+            {
+                if (!omitted[track]) continue;
+                string path = take.Paths[track];
+                Transform tf = path.Length == 0 ? playback : playback.Find(path);
+                if (tf == null) throw new InvalidOperationException($"The recorded Transform '{path}' is missing from the playback copy.");
+                Pose first = take.PoseAt(track, 0);
+                tf.SetLocalPositionAndRotation(first.position, first.rotation);
+            }
         }
 
         private static void AttachAnimation(GameObject playback, AnimationClip clip, string name)

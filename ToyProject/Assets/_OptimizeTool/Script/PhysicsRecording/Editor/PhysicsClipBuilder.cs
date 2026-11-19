@@ -3,7 +3,16 @@ using UnityEngine;
 
 namespace Common.OptimizeTool.PhysicsRecording.Editor
 {
-    /// <summary>Turns a take into a Legacy clip whose linear keys stay within the tolerances at every observation.</summary>
+    /// <summary>A built clip, the tracks it leaves without curves, and the metrics of the take.</summary>
+    internal sealed class PhysicsClip
+    {
+        public AnimationClip Clip;
+        /// <summary>For each track, whether it has no curves; the saved copy must hold its first pose.</summary>
+        public bool[] Omitted;
+        public PhysicsRecordingMetrics Metrics;
+    }
+
+    /// <summary>Turns a take into a clip whose linear keys stay within the tolerances at every observation.</summary>
     internal static class PhysicsClipBuilder
     {
         private static readonly string[] Properties =
@@ -12,38 +21,58 @@ namespace Common.OptimizeTool.PhysicsRecording.Editor
             "localRotation.x", "localRotation.y", "localRotation.z", "localRotation.w"
         };
 
-        public static AnimationClip Build(PhysicsTake take, string name, float positionTolerance, float rotationTolerance)
+        public static PhysicsClip Build(PhysicsTake take, in PhysicsTakeSettings settings)
         {
             // Keys sit on physics steps; show a whole step rate such as 50 rather than 50.000034.
             float stepRate = 1f / Time.fixedDeltaTime;
             var clip = new AnimationClip
             {
-                name = name, frameRate = Mathf.Approximately(stepRate, Mathf.Round(stepRate)) ? Mathf.Round(stepRate) : stepRate,
-                legacy = true, wrapMode = WrapMode.ClampForever,
+                name = settings.ClipName,
+                frameRate = Mathf.Approximately(stepRate, Mathf.Round(stepRate)) ? Mathf.Round(stepRate) : stepRate,
+                legacy = settings.ClipFormat == PhysicsClipFormat.LegacyPrefab, wrapMode = WrapMode.ClampForever,
             };
             try
             {
-                int stillRoot = -1;
-                int[] stillRootKeys = null;
+                float positionTolerance = settings.PositionTolerance, rotationTolerance = settings.RotationTolerance;
+                var omitted = new bool[take.TrackCount];
+                var error = new Error();
+                int root = -1, keyCount = 0;
                 bool hasCurves = false;
                 for (int track = 0; track < take.TrackCount; track++)
                 {
-                    int[] keys = ReduceKeys(take, track, positionTolerance, rotationTolerance);
+                    bool isRoot = take.Paths[track].Length == 0;
+                    if (isRoot) root = track;
                     // An unmoving root gets no curves, so the saved prefab can be placed anywhere.
-                    if (take.Paths[track].Length == 0
-                        && IsStill(take, track, keys, positionTolerance, rotationTolerance))
+                    if ((isRoot || settings.OmitStillTracks) && IsStill(take, track, positionTolerance, rotationTolerance))
                     {
-                        stillRoot = track;
-                        stillRootKeys = keys;
+                        omitted[track] = true;
                         continue;
                     }
-                    SetCurves(clip, take, track, keys);
+                    keyCount += SetCurves(clip, take, track, ReduceKeys(take, track, positionTolerance, rotationTolerance), error);
                     hasCurves = true;
                 }
-                // A clip without curves would have no length; keep the root so the clip spans the take.
-                if (!hasCurves && stillRoot >= 0)
-                    SetCurves(clip, take, stillRoot, stillRootKeys);
-                return clip;
+                // A clip without Transform curves would not span the take; keep the root so its length matches.
+                if (!hasCurves && root >= 0)
+                {
+                    omitted[root] = false;
+                    keyCount += SetCurves(clip, take, root, ReduceKeys(take, root, positionTolerance, rotationTolerance), error);
+                }
+                int omittedCount = 0;
+                for (int track = 0; track < take.TrackCount; track++)
+                {
+                    if (omitted[track])
+                    {
+                        omittedCount++;
+                        error.MeasureStill(take, track);
+                    }
+                    if (take.VisibleFrom(track) > 0f) SetVisibility(clip, take, track);
+                }
+                return new PhysicsClip
+                {
+                    Clip = clip, Omitted = omitted,
+                    Metrics = new PhysicsRecordingMetrics(take.FrameCount, take.TrackCount, keyCount, omittedCount,
+                        error.Position, error.Rotation),
+                };
             }
             catch
             {
@@ -86,14 +115,11 @@ namespace Common.OptimizeTool.PhysicsRecording.Editor
         /// <summary>The frame whose playback error most exceeds a tolerance, or -1 when the span is within both.</summary>
         private static int WorstFrame(PhysicsTake take, int track, int from, int to, float positionTolerance, float rotationTolerance)
         {
-            Pose a = take.PoseAt(track, from), b = take.PoseAt(track, to);
-            float start = take.TimeAt(from), end = take.TimeAt(to);
             int worst = -1;
             float worstExcess = 1f;
             for (int frame = from + 1; frame < to; frame++)
             {
-                Pose played = PhysicsPoseMath.CurveLerp(a, b, Mathf.InverseLerp(start, end, take.TimeAt(frame)));
-                Pose observed = take.PoseAt(track, frame);
+                Pose played = Played(take, track, from, to, frame), observed = take.PoseAt(track, frame);
                 float excess = Mathf.Max(
                     Excess(Vector3.Distance(played.position, observed.position), positionTolerance),
                     Excess(PhysicsPoseMath.RotationDifference(played.rotation, observed.rotation), rotationTolerance));
@@ -109,15 +135,29 @@ namespace Common.OptimizeTool.PhysicsRecording.Editor
         private static float Excess(float error, float tolerance) =>
             tolerance > 0f ? error / tolerance : error > 0f ? float.PositiveInfinity : 0f;
 
-        private static bool IsStill(PhysicsTake take, int track, int[] keys, float positionTolerance, float rotationTolerance)
+        /// <summary>What playback shows at <paramref name="frame"/> between the keys at frames <paramref name="from"/> and <paramref name="to"/>.</summary>
+        private static Pose Played(PhysicsTake take, int track, int from, int to, int frame) =>
+            PhysicsPoseMath.CurveLerp(take.PoseAt(track, from), take.PoseAt(track, to),
+                Mathf.InverseLerp(take.TimeAt(from), take.TimeAt(to), take.TimeAt(frame)));
+
+        /// <summary>Every frame is within the tolerances of the first one, which is the pose the saved copy holds.</summary>
+        private static bool IsStill(PhysicsTake take, int track, float positionTolerance, float rotationTolerance)
         {
-            if (keys.Length > 2) return false;
-            Pose first = take.PoseAt(track, keys[0]), last = take.PoseAt(track, keys[keys.Length - 1]);
-            return Vector3.Distance(first.position, last.position) <= positionTolerance
-                && PhysicsPoseMath.RotationDifference(first.rotation, last.rotation) <= rotationTolerance;
+            Pose first = take.PoseAt(track, 0);
+            for (int frame = 1; frame < take.FrameCount; frame++)
+            {
+                Pose pose = take.PoseAt(track, frame);
+                // Exact equality first, so zero tolerances accept a track that never moved at all.
+                if (pose.position.Equals(first.position) && pose.rotation.Equals(first.rotation)) continue;
+                if (Vector3.Distance(first.position, pose.position) > positionTolerance
+                    || PhysicsPoseMath.RotationDifference(first.rotation, pose.rotation) > rotationTolerance)
+                    return false;
+            }
+            return true;
         }
 
-        private static void SetCurves(AnimationClip clip, PhysicsTake take, int track, int[] keys)
+        /// <summary>Writes the track's curves and returns its key count.</summary>
+        private static int SetCurves(AnimationClip clip, PhysicsTake take, int track, int[] keys, Error error)
         {
             var values = new float[Properties.Length][];
             for (int c = 0; c < values.Length; c++) values[c] = new float[keys.Length];
@@ -130,6 +170,10 @@ namespace Common.OptimizeTool.PhysicsRecording.Editor
             }
             for (int c = 0; c < Properties.Length; c++)
                 clip.SetCurve(take.Paths[track], typeof(Transform), Properties[c], LinearCurve(take, keys, values[c]));
+            for (int k = 1; k < keys.Length; k++)
+                for (int frame = keys[k - 1] + 1; frame < keys[k]; frame++)
+                    error.Add(Played(take, track, keys[k - 1], keys[k], frame), take.PoseAt(track, frame));
+            return keys.Length;
         }
 
         /// <summary>Each key's tangents are the slopes to its neighbours, so every span plays linearly.</summary>
@@ -148,5 +192,40 @@ namespace Common.OptimizeTool.PhysicsRecording.Editor
 
         private static float Slope(PhysicsTake take, int[] keys, float[] values, int k) =>
             (values[k + 1] - values[k]) / (take.TimeAt(keys[k + 1]) - take.TimeAt(keys[k]));
+
+        /// <summary>
+        /// Hides a track with a stepped GameObject active curve: until the time it appeared, or for the whole take when
+        /// it was inactive at the start.
+        /// </summary>
+        private static void SetVisibility(AnimationClip clip, PhysicsTake take, int track)
+        {
+            float visibleFrom = take.VisibleFrom(track), end = take.Duration;
+            AnimationCurve curve;
+            if (float.IsPositiveInfinity(visibleFrom))
+                curve = end > 0f ? new AnimationCurve(Step(0f, 0f), Step(end, 0f)) : new AnimationCurve(Step(0f, 0f));
+            else curve = new AnimationCurve(Step(0f, 0f), Step(Mathf.Min(visibleFrom, end), 1f));
+            clip.SetCurve(take.Paths[track], typeof(GameObject), "m_IsActive", curve);
+        }
+
+        private static Keyframe Step(float time, float value) =>
+            new Keyframe(time, value, float.PositiveInfinity, float.PositiveInfinity);
+
+        /// <summary>The largest difference between what the clip plays and what was recorded, over every frame.</summary>
+        private sealed class Error
+        {
+            public float Position, Rotation;
+
+            public void Add(Pose played, Pose observed)
+            {
+                Position = Mathf.Max(Position, Vector3.Distance(played.position, observed.position));
+                Rotation = Mathf.Max(Rotation, PhysicsPoseMath.RotationDifference(played.rotation, observed.rotation));
+            }
+
+            /// <summary>A track without curves plays its first pose at every frame.</summary>
+            public void MeasureStill(PhysicsTake take, int track)
+            {
+                for (int frame = 1; frame < take.FrameCount; frame++) Add(take.PoseAt(track, 0), take.PoseAt(track, frame));
+            }
+        }
     }
 }

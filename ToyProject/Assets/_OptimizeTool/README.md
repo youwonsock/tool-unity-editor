@@ -126,19 +126,25 @@ Rigidbody가 있는 계층의 로컬 Transform을 물리 스텝마다 기록해,
 
 | API | 동작 |
 | --- | --- |
-| `StartRecording(duration, clipName)` | 설정을 고정하고 마지막 물리 스텝부터 기록 시작. `clipName`을 비우면 `_clipName`을 씀. 잘못된 호출·설정은 예외 |
-| `StopRecording()` | 마지막 물리 스텝까지를 `.anim`·`.prefab`으로 저장하고 결과 반환. `_saveReference`를 켜면 `.reference.asset`도 저장 |
+| `StartRecording(duration, clipName)` | 설정을 고정하고 기록 시작. 다음에 끝나는 물리 스텝이 시각 0의 첫 자세입니다. `clipName`을 비우면 `_clipName`을 씀. 잘못된 호출·설정은 예외 |
+| `StopRecording()` | 마지막으로 끝난 물리 스텝까지를 저장하고 결과 반환. Legacy면 `.anim`·`.prefab`, Generic이면 `.anim`만 저장하고, `_saveReference`를 켜면 `.reference.asset`도 저장. 첫 물리 스텝 전에 멈추면 "No physics step was recorded" 실패 |
 | `CancelRecording()` | 에셋을 쓰지 않고 기록을 버림 |
-| `IsRecording` / `Result` | 기록 여부와 마지막 결과(`Succeeded`, `Error`, `Clip`, `Prefab`, `Reference`, `StopReason`, `Duration`) |
+| `IsRecording` / `Result` | 기록 여부와 마지막 결과(`Succeeded`, `Error`, `Clip`, `Prefab`, `Reference`, `Metrics`, `StopReason`, `Duration`) |
+| `ClipFormat` | 다음 take를 저장할 형식(`LegacyPrefab` 또는 `Generic`) |
+| `TryGetTakeStartTime(out fixedTime)` | 진행 중인 take의 첫 물리 스텝 `Time.fixedTimeAsDouble`, 즉 클립의 시각 0. 기록 중이 아니거나 첫 스텝 전이면 false. 녹화 시계에 맞춰 무언가를 시작할 때 씁니다 |
+| `Result.Metrics` | 프레임 수, track 수, 키 수, 커브 없이 저장한 track 수, 저장된 클립의 최대 위치·회전 오차(`PhysicsRecordingMetrics`) |
 
 - `_root` 아래 모든 Transform을 기록하며, 하나 이상에 Rigidbody가 있어야 합니다. 출력은 `_savePath`(Assets/ 아래 폴더)에 `_clipName` 이름의 `.anim`·`.prefab`(·`.reference.asset`)으로 저장하고, `_overwriteExistingAssets`를 켜야 같은 이름의 기존 출력을 GUID를 유지한 채 덮어씁니다.
+- **표본 간격:** `_sampleInterval`(초, 기본 0)이 0이면 모든 물리 스텝을, 아니면 마지막 기록 뒤 그만큼 지난 스텝만 기록합니다. 녹화 시간에 닿는 스텝, 그리고 멈추거나 꺼질 때의 마지막 스텝은 항상 기록하므로 take는 실제 마지막 자세로 끝납니다. 허용치는 기록한 스텝에서만 보장합니다.
+- **녹화 중 생긴 오브젝트:** 기록 중 `_root` 아래에 새로 켜진 Rigidbody는 그 위의 새 Transform과 함께 track이 됩니다. 이전 프레임은 처음 관찰한 자세로 채우고, 클립에서는 GameObject 활성 커브로 생긴 시각까지 숨깁니다. 처음부터 꺼져 있던 자식은 take 내내 숨깁니다. 그 밖의 활성 상태 변화는 기록하지 않습니다. 새 오브젝트의 경로는 고유해야 하므로, 같은 이름으로 여러 번 생성되면 take가 실패합니다.
 - 키는 `_positionTolerance`(기본 0.005m)·`_rotationTolerance`(기본 0.5°) 이내로 줄입니다. 저장된 클립을 선형 재생했을 때 모든 물리 스텝에서 오차가 이 값 이하이고, 0이면 모든 스텝을 키로 남깁니다.
-- 움직이지 않은 루트에는 커브를 쓰지 않으므로 저장한 Prefab을 어디에 두어도 그 자리에서 재생됩니다.
-- Prefab에서는 Rigidbody·Collider·게임 스크립트 등을 제거합니다. 원본 계층은 바꾸지 않습니다.
+- 움직이지 않은 루트에는 커브를 쓰지 않으므로 저장한 Prefab을 어디에 두어도 그 자리에서 재생됩니다. `_omitStillTracks`(기본 꺼짐)를 켜면 모든 프레임이 첫 자세의 허용치 안에 있는 다른 track도 커브 없이 저장하고, 저장한 Prefab에 첫 자세를 넣어 오차를 허용치 안에 둡니다.
+- **클립 형식:** `_clipFormat`이 `LegacyPrefab`(기본)이면 Legacy 클립과 그것을 재생하는 Prefab을, `Generic`이면 Animator Controller에 넣을 Generic 클립만(·Reference) 저장합니다. Generic으로 저장할 때 같은 이름의 Legacy Prefab이 있으면 그 Prefab이 재생할 수 없는 클립으로 덮이므로 저장 전에 실패합니다. Prefab을 지우거나 다른 이름을 씁니다.
+- Legacy Prefab에서는 Rigidbody·Collider·게임 스크립트 등을 제거합니다. 원본 계층은 바꾸지 않습니다.
 - `_saveReference`(기본 꺼짐)를 켜면 축약 전 원본 관찰값을 `.reference.asset`으로 함께 저장합니다. 클립 정확도를 나중에 확인할 때 쓰며, 샘플 비교가 이 파일을 읽습니다. 끈 채로 같은 클립을 덮어쓰면, 그 클립을 가리키던 이전 Reference는 새 클립과 맞지 않으므로 같은 저장에서 지웁니다(실패하면 함께 복원).
 - 저장할 에셋 중 하나라도 실패하면 이전 파일을 복원하고, 실패는 예외가 아니라 `Result.Error`로 알립니다. 기록 중 비활성화되면 그때까지를 저장하고, 재컴파일은 저장이 끝날 때까지 미룹니다.
 
-샘플의 PHYSICS 모드에서 **RECORD**(`C`)를 누르면 6개 Rigidbody의 낙하 3.2초를 기록합니다. 저장이 끝나면 왼쪽은 녹화 당시의 원본 자세를, 오른쪽은 저장된 Prefab의 Animation을 같은 시간축으로 재생하고 최대 위치·회전 차이를 표시합니다. Play 진입이나 모드 전환만으로는 에셋을 저장하지 않습니다.
+샘플의 PHYSICS 모드에서 **RECORD**(`C`)를 누르면 6개 Rigidbody의 낙하 3.2초를 기록합니다. 몸체는 녹화 시계로 0.4초에 놓이며, 데모는 Legacy Prefab을 비교하므로 Recorder의 Clip Format이 Generic이면 녹화 전에 거부합니다. 저장이 끝나면 왼쪽은 녹화 당시의 원본 자세를, 오른쪽은 저장된 Prefab의 Animation을 같은 시간축으로 재생하고 최대 위치·회전 차이를 표시합니다. Play 진입이나 모드 전환만으로는 에셋을 저장하지 않습니다.
 
 <p align="center">
   <img src="Docs/Images/feature-physics-recorded-original-comparison.png" alt="녹화 당시 원본 관찰값과 저장된 Prefab을 같은 시각에 재생해 161개 관찰 전부에서 최대 0.0048m / 0.48° 차이를 확인한 Game View" width="80%">

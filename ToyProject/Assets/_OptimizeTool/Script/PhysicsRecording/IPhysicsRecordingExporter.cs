@@ -21,24 +21,30 @@ namespace Common.OptimizeTool.PhysicsRecording
         void EndTake();
 
         /// <summary>
-        /// Saves the clip, the playback prefab and, when enabled, the reference. If any of them fails, the previous
-        /// files are restored and the error is thrown.
+        /// Saves the clip, the playback prefab for a Legacy take and, when enabled, the reference. If any of them fails,
+        /// the previous files are restored and the error is thrown.
         /// </summary>
         PhysicsRecordingAssets Export(Transform root, PhysicsTake take, in PhysicsTakeSettings settings);
     }
 
-    /// <summary>The persistent assets of one saved take; Reference is null when it was not saved.</summary>
+    /// <summary>
+    /// The persistent assets of one saved take and its metrics. Prefab is null for a Generic clip, and Reference when
+    /// it was not saved.
+    /// </summary>
     internal readonly struct PhysicsRecordingAssets
     {
         public AnimationClip Clip { get; }
         public GameObject Prefab { get; }
         public PhysicsRecordingReference Reference { get; }
+        public PhysicsRecordingMetrics Metrics { get; }
 
-        public PhysicsRecordingAssets(AnimationClip clip, GameObject prefab, PhysicsRecordingReference reference)
+        public PhysicsRecordingAssets(AnimationClip clip, GameObject prefab, PhysicsRecordingReference reference,
+            PhysicsRecordingMetrics metrics)
         {
             Clip = clip;
             Prefab = prefab;
             Reference = reference;
+            Metrics = metrics;
         }
     }
 }

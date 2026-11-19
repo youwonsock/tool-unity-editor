@@ -55,7 +55,6 @@ namespace Common.OptimizeTool.Samples
         private Transform[] _referenceSource, _referencePlayback;
         private Pose[] _referencePoses;
         private Coroutine _routine;
-        private double _runStart;
         private bool _running, _released;
 
 #if UNITY_EDITOR
@@ -100,7 +99,9 @@ namespace Common.OptimizeTool.Samples
 
         private void FixedUpdate()
         {
-            if (!_running || _released || Time.fixedTimeAsDouble - _runStart < _releaseDelay - 0.000001d)
+            // The recording clock starts at the recorder's first step, so the release lands at Release Delay on it.
+            if (!_running || _released || !_recorder.TryGetTakeStartTime(out double start)
+                || Time.fixedTimeAsDouble - start < _releaseDelay - 0.000001d)
                 return;
             for (int i = 0; i < _bodies.Length; i++)
             {
@@ -127,6 +128,16 @@ namespace Common.OptimizeTool.Samples
             ComparisonSampleCount = 0;
             _takeStarted = false;
             SetState(DemoState.Recording);
+            try
+            {
+                if (_recorder.ClipFormat != PhysicsClipFormat.LegacyPrefab)
+                    throw new InvalidOperationException("The demo compares a Legacy prefab; set the recorder's Clip Format to LegacyPrefab.");
+                _recorder.StartRecording(_duration);
+            }
+            catch (Exception exception) { Fail(exception, true); return; }
+            _takeStarted = true;
+            _released = false;
+            _running = true;
             _routine = StartCoroutine(RecordPhysics());
 #endif
         }
@@ -134,17 +145,10 @@ namespace Common.OptimizeTool.Samples
 #if UNITY_EDITOR
         private IEnumerator RecordPhysics()
         {
-            yield return new WaitForFixedUpdate();
-            try
-            {
-                _recorder.StartRecording(_duration);
-                _takeStarted = true;
-                StartClock();
-            }
-            catch (Exception exception) { Fail(exception, true); yield break; }
             while (_recorder.IsRecording)
             {
-                Elapsed = Mathf.Clamp((float)(Time.timeAsDouble - _runStart), 0f, _duration);
+                Elapsed = _recorder.TryGetTakeStartTime(out double start)
+                    ? Mathf.Clamp((float)(Time.timeAsDouble - start), 0f, _duration) : 0f;
                 yield return null;
             }
             _running = false;
@@ -290,13 +294,6 @@ namespace Common.OptimizeTool.Samples
         }
 
         public string GetStatusText() => OptimizeToolPhysicsStatusFormatter.Format(this);
-
-        private void StartClock()
-        {
-            _runStart = Time.fixedTimeAsDouble;
-            _released = false;
-            _running = true;
-        }
 
         private void CreatePlayback()
         {
