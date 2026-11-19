@@ -53,7 +53,8 @@ namespace Common.TransformPath
             return progress != 0 ? progress : left.Sequence.CompareTo(right.Sequence);
         };
 
-        internal bool IsInitialized => _isInitialized;
+        /// <summary>Whether the manager validated its settings and can take members.</summary>
+        public bool IsInitialized => _isInitialized;
         public PathProviderBehaviour RouteProvider => _routeProvider;
         /// <summary>The route revision the last results were computed for.</summary>
         public int RouteRevision => _routeRevision;

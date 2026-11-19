@@ -40,6 +40,14 @@ namespace Common.TransformPath
         #endregion
 
 
+        #region Properties
+
+        /// <summary>Whether <see cref="Init"/> found its LineRenderer and PathData.</summary>
+        public bool IsInitialized => _isInitialized;
+
+        #endregion
+
+
         #region Unity Events
 
         public void Init()

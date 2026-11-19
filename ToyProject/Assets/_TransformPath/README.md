@@ -79,8 +79,9 @@ public sealed class TransformPathReadmeExample : MonoBehaviour
 | 조회와 설정 | 내용 |
 | --- | --- |
 | `PathFollower` | `IsMoving`, `CurrentProvider`, `MoveType`, `Speed`, `Duration`, `RotateToPathDirection`(지속 회전), `AlignRotationToPathDirection(axes)`(일회 정렬) |
-| `PathData` | `CurveType`, `SegmentCount`, `MovementSettings`, `SetPathPoints`, `CopyControlPoints`, `SamplePointCount`, `GetSamplePoint`, `AuthoringEventCount`, `GetAuthoringEvent`, `SortPathEventsByNormalizedTime` |
+| `PathData` | `CurveType`, `SegmentCount`, `MovementSettings`, `SetPathPoints`, `CopyControlPoints`, `SamplePointCount`, `GetSamplePoint`, `AuthoringEventCount`, `GetAuthoringEvent`, `SortPathEventsByNormalizedTime`, `MaxEventNormalizedTime`, `ClampPathEventNormalizedTime` |
 | `MultiPathData` | `SegmentCount`, `GetSegmentPath`, `GetSegmentMovement`, `GetSegmentStartDistance`, `GetSegmentLength`, `SetSegments`, `AuthoringSegmentCount`, `GetAuthoringSegment` |
+| `PathDataLineRenderer` | `Init`, `Release`, `IsInitialized`, `Refresh`, `SetVisible`. `PathData`가 발행한 샘플을 LineRenderer로 그리고, 경로가 바뀌면 다시 그림 |
 | 공통 (`PathData`, `MultiPathData`) | `IsReady`, `PathLength`, `Revision`, `PathChanged`, `Rebuild()`, `Sample(progress)` |
 - 런타임에 제어점이나 `PathEventSettingSO`를 바꾸면 `path.Rebuild()`를 호출합니다. `MovementSettings`, `CurveType`, `SegmentCount` 속성은 바꾸는 즉시 다시 빌드합니다. 기하만 바뀌면 재생이 이어지고, 이동 설정·이벤트·구간 구성이 바뀌면 멈춥니다.
 - 콜백(`StateChanged`, `SegmentChanged`, `Completed`, `EventReached`, Queue 알림, 이벤트 수신기)은 그것을 일으킨 작업이 끝난 뒤 순서대로 호출됩니다. 콜백 안에서 모든 명령을 쓸 수 있고, 예외는 Console에 기록만 됩니다.
@@ -102,8 +103,8 @@ _member.StartQueuedPlayback(_manager, PathPlaybackRequest.Single(_path));
 
 | 조회와 설정 | 내용 |
 | --- | --- |
-| `PathQueueMember` | `Follower`, `Manager`, `IsInQueue`, `IsBlocked`, `IsHeld`, `CurrentSpeedMultiplier`, `ActorSpacing`, `UseManagerSpacing`, `EnableGradualSlowdown`, `EnableOvertakeProtection` |
-| `QueuedPathManager` | `ConfigureRoute(provider)`, `RouteProvider`, `RouteRevision`, `MemberCount`, `GetMember(index)`(앞에서부터), `TryGetMemberStatus`, `DefaultSpacing`, `EnableGradualSlowdown`, `SlowdownStartDistance`, `MinSpeedMultiplier` |
+| `PathQueueMember` | `Follower`, `Manager`, `ActiveManager`(참여 중인 Manager), `IsInQueue`, `IsBlocked`, `IsHeld`, `CurrentSpeedMultiplier`, `ActorSpacing`, `UseManagerSpacing`, `EnableGradualSlowdown`, `EnableOvertakeProtection` |
+| `QueuedPathManager` | `IsInitialized`, `ConfigureRoute(provider)`, `RouteProvider`, `RouteRevision`, `MemberCount`, `GetMember(index)`(앞에서부터), `TryGetMemberStatus`, `DefaultSpacing`, `EnableGradualSlowdown`, `SlowdownStartDistance`, `MinSpeedMultiplier` |
 
 `Blocked`·`Resumed`·`SpeedChanged`로 대기 상태를, `QueueInvalidated`로 경로 무효와 Manager 해제를 알립니다. `QueueInvalidated`가 오면 그 경로의 재생은 일시정지 중이어도 멈추고, 이미 다른 경로를 재생하는 Follower는 그대로 둡니다. 경로의 이동 설정·이벤트·구간 구성이 바뀌면 이전 설정으로 재생 중인 멤버만 `ManagerReleased`로 빠지고, 새 설정으로 다시 시작한 멤버는 남습니다. 기하만 바뀌면 멤버가 Queue 단계에서 새 기하를 먼저 받으므로, 경로가 매 프레임 바뀌어도 Queue가 움직입니다. 재생이 끝나거나 멈춘 멤버는 다음 프레임에 Queue에서 빠집니다. Queue는 같은 경로 위의 진행 거리만 봅니다. Loop 이음매의 간격, 물리 충돌, 교차 경로 회피는 처리하지 않습니다.
 

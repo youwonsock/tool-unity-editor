@@ -192,7 +192,11 @@ namespace Common.TransformPath
             return changed;
         }
 
-        internal static float ClampPathEventNormalizedTime(float normalizedTime)
+        /// <summary>The highest position an event may be authored at. An event at 1 would race completion.</summary>
+        public static float MaxEventNormalizedTime => PathConstants.MAX_EVENT_POSITION;
+
+        /// <summary>Clamps an event position to 0..<see cref="MaxEventNormalizedTime"/>.</summary>
+        public static float ClampPathEventNormalizedTime(float normalizedTime)
         {
             return Mathf.Clamp(normalizedTime, 0f, PathConstants.MAX_EVENT_POSITION);
         }

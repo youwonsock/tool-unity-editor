@@ -70,6 +70,8 @@ namespace Common.TransformPath
             set => _manager = value;
         }
 
+        /// <summary>The manager whose queue this member joined, or null outside a queue.</summary>
+        public QueuedPathManager ActiveManager => _activeManager;
         public bool IsInQueue => _activeManager != null && _activeManager.Contains(this);
         public bool IsBlocked => _wait.IsBlocked;
         public bool IsHeld => _wait.ManualBlock;
