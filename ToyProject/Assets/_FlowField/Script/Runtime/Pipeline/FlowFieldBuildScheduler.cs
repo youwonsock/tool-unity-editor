@@ -20,7 +20,6 @@ namespace Common.FlowField
         private static readonly Stopwatch Timer = new Stopwatch();
         private static readonly Func<double> ElapsedMilliseconds = () => Timer.Elapsed.TotalMilliseconds;
 
-        internal static int Count => Operations.Count;
         // The longest main-thread pass since the last read, for the Player probe.
         internal static double LongestPumpMilliseconds { get; private set; }
 

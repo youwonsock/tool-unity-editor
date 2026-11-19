@@ -22,7 +22,6 @@ namespace Common.FlowField
         internal int ResolvedGoalIndex => _field?.GoalIndex ?? -1;
         internal int Capacity => _field?.Capacity ?? 0;
         internal bool IsValid => _field != null && Grid.IsValid && Surface != null && Surface.IsValid;
-        internal int[] NextCells => _field?.NextCells;
 
         private static unsafe bool CopyRegion(
             int width,
@@ -241,24 +240,6 @@ namespace Common.FlowField
                     ? field.BaseDirections[i]
                     : Vector3.zero;
             }
-        }
-
-        internal bool TrySample(Vector3 worldPosition, out FlowFieldSample sample)
-        {
-            sample = FlowFieldSample.Stopped;
-            if (!IsValid || !FlowFieldGridSpace.IsFinite(worldPosition)
-                || !Grid.ContainsWorldPosition(worldPosition)
-                || !Grid.TryWorldToLocal(worldPosition, out int x, out int z))
-                return false;
-            int index = Grid.ToFlatIndex(x, z);
-            if (!Surface.IsSurfaceValid(index))
-                return true;
-            Vector3 normal = Surface.GetSurfaceNormal(index);
-            Vector3 direction = _field.FinalDirections[index];
-            if (direction.sqrMagnitude > FlowFieldVectorUtility.DIRECTION_EPSILON_SQR)
-                direction = Vector3.ProjectOnPlane(direction, normal).normalized;
-            sample = new FlowFieldSample(direction, _field.FinalSpeeds[index], normal, true, true);
-            return true;
         }
 
         internal void Clear()

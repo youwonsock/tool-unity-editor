@@ -175,7 +175,6 @@ namespace Common.FlowField
         private const float EPSILON = 0.0001f;
         private const int MinSentinel = -3;
 
-        [SerializeField] private FlowFieldSpaceMode _spaceMode = FlowFieldSpaceMode.Surface2D;
         [SerializeField] private Vector3 _gridOriginWorld;
         [SerializeField] private int _width;
         [SerializeField] private int _depth;
@@ -289,8 +288,6 @@ namespace Common.FlowField
             reason = string.Empty;
             if (!HasCurrentFormat)
                 return Fail(out reason, $"FlowField Static Bake format {FormatVersion} is unsupported; ReBake is required.");
-            if (_spaceMode != FlowFieldSpaceMode.Surface2D)
-                return Fail(out reason, "FlowField Static Bake is not a Surface2D snapshot.");
             if (!FlowFieldBakeBoundsUtility.TryValidateCellCount(_width, _depth, out int count)
                 || !FlowFieldGridSpace.IsFinite(_gridOriginWorld)
                 || !FlowFieldGridSpace.IsFinite(_cellSize)
@@ -671,23 +668,6 @@ namespace Common.FlowField
                 Revision);
         }
 
-        internal void CopyToWorkspace(FlowFieldGridSpace grid, FlowFieldSurfaceWorkspace workspace)
-        {
-            if (!Validate(out string reason))
-                throw new InvalidOperationException(reason);
-            if (workspace == null || workspace.Capacity != grid.CellCount)
-                throw new ArgumentException("Static Flow Bake workspace capacity does not match the grid.", nameof(workspace));
-            Array.Copy(_blocked, workspace.StaticBlocked, _blocked.Length);
-            Array.Clear(workspace.DynamicBlocked, 0, workspace.DynamicBlocked.Length);
-            workspace.RebuildCombinedBlocked();
-            Array.Copy(_escapeDirections, workspace.EscapeDirections, _escapeDirections.Length);
-            Array.Copy(_topologyMasks, workspace.TopologyMasks, _topologyMasks.Length);
-            Array.Copy(_goalFlags, workspace.GoalFlags, _goalFlags.Length);
-            Array.Copy(_goalDirections, workspace.GoalDirections, _goalDirections.Length);
-            Array.Copy(_nextCells, workspace.NextCells, _nextCells.Length);
-            workspace.LoadBakedGoal(_hasGoal, _resolvedGoalIndex, _nextCells);
-        }
-
         private void AssignHeader(
             in FlowFieldSurfaceBakeSettings settings,
             LayerMask obstacleLayer,
@@ -699,7 +679,6 @@ namespace Common.FlowField
             float goalInfluenceRadius,
             int resolvedGoalIndex)
         {
-            _spaceMode = FlowFieldSpaceMode.Surface2D;
             _gridOriginWorld = settings.Grid.Origin;
             _width = settings.Grid.Width;
             _depth = settings.Grid.Depth;

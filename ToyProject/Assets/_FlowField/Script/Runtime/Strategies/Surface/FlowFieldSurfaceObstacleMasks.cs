@@ -218,26 +218,6 @@ namespace Common.FlowField
             return changed;
         }
 
-        public bool BuildFullLayerScratch(
-            FlowFieldGridSpace grid,
-            FlowFieldSurfaceData surface,
-            LayerMask obstacleLayer,
-            float checkHeight,
-            float centerOffset,
-            float clearance,
-            bool[] destination,
-            bool syncTransforms)
-            => FlowFieldObstacleMaskBuilder.Build(
-                grid,
-                surface,
-                obstacleLayer,
-                checkHeight,
-                centerOffset,
-                clearance,
-                destination,
-                ref _overlapBuffer,
-                syncTransforms);
-
         public FlowFieldCellRect RebuildDynamicOverlay(
             FlowFieldGridSpace grid,
             FlowFieldSurfaceData surface,

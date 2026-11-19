@@ -71,10 +71,6 @@ namespace Common.FlowField
                     ? _session
                     : null;
 
-        // The session, only when it runs in the given mode.
-        private FlowFieldSession SessionFor(FlowFieldSpaceMode mode)
-            => _session != null && _session.SpaceMode == mode ? _session : null;
-
         private FlowFieldModifierAttachment Modifiers => _modifiers ??= new FlowFieldModifierAttachment(this);
 
         public bool IsInitialized => ActiveSession?.IsInitialized ?? false;

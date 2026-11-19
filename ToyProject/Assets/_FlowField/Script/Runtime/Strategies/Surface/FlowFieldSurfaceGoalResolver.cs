@@ -227,12 +227,5 @@ namespace Common.FlowField
             _lastBuiltRadius = 0f;
             _missingWalkableWarningIssued = false;
         }
-
-        private static bool RequestsEqual(
-            in FlowFieldSurfaceGoalSolveInput left,
-            in FlowFieldSurfaceGoalSolveInput right)
-            => left.HasGoal == right.HasGoal
-                && left.SourceCellIndex == right.SourceCellIndex
-                && System.Math.Abs(left.InfluenceRadius - right.InfluenceRadius) <= VALUE_EPSILON;
     }
 }

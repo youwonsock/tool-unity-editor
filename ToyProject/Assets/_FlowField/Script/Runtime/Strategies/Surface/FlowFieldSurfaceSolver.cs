@@ -102,22 +102,6 @@ namespace Common.FlowField
             return true;
         }
 
-        /// <summary>
-        /// Solves a Goal whose influence and topology PrepareGoal already built
-        /// from the current obstacle state.
-        /// </summary>
-        public static void SolvePreparedGoal(
-            FlowFieldGridSpace grid,
-            FlowFieldSurfaceData surface,
-            FlowFieldSurfaceWorkspace workspace,
-            int goalIndex)
-        {
-            ValidateWorkspace(grid, surface, workspace);
-            FlowFieldSurfaceSolve solve = FlowFieldSurfaceSolve.Create(grid, surface, workspace, goalIndex);
-            try { solve.Job.Run(); }
-            finally { solve.Release(); }
-        }
-
         private static void BuildInfluenceMask(
             FlowFieldGridSpace grid,
             FlowFieldSurfaceData surface,

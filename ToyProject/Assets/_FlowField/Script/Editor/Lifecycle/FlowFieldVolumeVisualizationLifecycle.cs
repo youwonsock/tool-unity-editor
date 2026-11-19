@@ -52,12 +52,12 @@ namespace Common.FlowField.Editor
             => FlowFieldVolumeVisualizationEditor.InvalidateAll();
 
         private static void OnEditorQuitting()
-            => Unregister(true);
+            => Unregister();
 
         private static void OnBeforeAssemblyReload()
-            => Unregister(true);
+            => Unregister();
 
-        private static void Unregister(bool clearState)
+        private static void Unregister()
         {
             if (!_registered)
                 return;
@@ -68,8 +68,7 @@ namespace Common.FlowField.Editor
             EditorApplication.quitting -= OnEditorQuitting;
             AssemblyReloadEvents.beforeAssemblyReload -= OnBeforeAssemblyReload;
             _registered = false;
-            if (clearState)
-                FlowFieldVolumeVisualizationEditor.Clear();
+            FlowFieldVolumeVisualizationEditor.Clear();
         }
     }
 
