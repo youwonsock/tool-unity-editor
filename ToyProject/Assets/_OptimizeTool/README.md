@@ -34,7 +34,7 @@ Unity Editor에서 Mesh 결합·컬링과 물리 움직임 기록을 수행하�
 
 ## 구조
 
-<img src="Docs/Images/optimizetool-structure.png" alt="OptimizeTool 두 시스템의 어셈블리와 주요 타입" width="85%">
+<img src="Docs/Images/optimizetool-structure.png" alt="OptimizeTool 두 시스템과 Dev 벤치마크의 어셈블리와 주요 타입" width="85%">
 
 <sub>PlantUML 원본: [Docs/optimizetool-structure.puml](Docs/optimizetool-structure.puml)</sub>
 

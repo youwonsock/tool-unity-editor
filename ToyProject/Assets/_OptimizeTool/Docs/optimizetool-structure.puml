@@ -15,18 +15,21 @@ set separator none
 title OptimizeTool 구조
 
 package "MeshOptimization (Runtime)" {
-  class "MeshCombiner" as MeshComponents {
-    설정·씬 출력 상태만 보관
+  class "MeshCombiner\nBackfaceCullMeshBaker" as MeshComponents {
+    설정·씬 출력 상태·원본 Mesh 기록
   }
   class MeshBuildSettings {
-    빌드 옵션과 유일한 검증
+    빌드 옵션 검증, 각도·Occlusion 규칙
   }
 }
 
 package "MeshOptimization.Editor" {
   class MeshToolCommands {
-    BuildMeshes · CombineAndSaveMeshes
-    RestoreSources (확장 메서드)
+    BuildMeshes · CombineAndSaveMeshes · RestoreSources
+    BakeBackfaces · RestoreOriginalMeshes (확장 메서드)
+  }
+  class MeshProcessing {
+    공개 메시 연산, 인자 검사 후 위임
   }
   class MeshBuildPipeline {
     입력 검증·컬링·Material별 결합
@@ -35,7 +38,7 @@ package "MeshOptimization.Editor" {
     Renderer 설정 검사·비교·적용
   }
   class MeshGeometry {
-    원본을 바꾸지 않는 기하 연산
+    기하 연산, Backface 판정(카메라·방향)
   }
   class MeshOcclusion {
     Collider Raycast 가림 판정
@@ -43,24 +46,33 @@ package "MeshOptimization.Editor" {
   class MeshSceneOutput {
     결과 오브젝트·원본 Renderer 기록
   }
+  class MeshSceneEdit {
+    Edit Mode Undo · Play Mode 직접 복원
+  }
   class MeshAssetTransaction {
-    GUID 유지 저장·Undo 복원
+    GUID 유지 저장·복원
   }
 }
 
 package "PhysicsRecording (Runtime)" {
   class PhysicsRecorder {
     Start · Stop · Cancel · Result
-    fixed time 기준 캡처
+    표본 간격 · 새 Rigidbody track
   }
   class PhysicsTake {
-    frame-major 관찰값
+    track별 관찰값, 숨김 구간
   }
   interface IPhysicsRecordingExporter {
     검증·리로드 잠금·저장
   }
   class PhysicsRecordingReference {
     축약 전 관찰값 (선택 저장)
+  }
+  class "PhysicsClipFormat\nPhysicsRecordingMetrics" as PhysicsOutputInfo {
+    LegacyPrefab · Generic, Result.Metrics
+  }
+  class PhysicsPlaybackPolicy {
+    재생 오브젝트 규칙·검증
   }
 }
 
@@ -69,10 +81,13 @@ package "PhysicsRecording.Editor" {
     [InitializeOnLoad] 등록
   }
   class PhysicsRecordingAssetWriter {
-    clip·prefab·reference 트랜잭션
+    clip·(Legacy) prefab·reference 트랜잭션
   }
   class PhysicsClipBuilder {
-    보간 오차 기준 키 축약
+    키 축약·Legacy/Generic 클립·Metrics
+  }
+  class PhysicsPlaybackStripper {
+    복제본의 물리·스크립트 제거
   }
 }
 
@@ -82,28 +97,50 @@ package "OptimizeTool.Editor (공용)" {
   }
 }
 
+package "Benchmark · Benchmark.Editor (Dev)" {
+  class "OptimizeToolPerformanceBenchmark\nOptimizeToolScaleWorkload" as Benchmark {
+    Player·Editor 계측, 규모 씬
+  }
+  class "OptimizeToolScaleBuilder\nOptimizeToolBenchmarkEditor" as BenchmarkEditor {
+    규모 씬 생성, 벤치마크 빌드
+  }
+}
+
 MeshToolCommands ..> MeshComponents : 설정 읽기
 MeshComponents ..> MeshBuildSettings : CreateSettings
 MeshToolCommands --> MeshBuildPipeline
+MeshToolCommands --> MeshGeometry : Backface 베이크
+MeshProcessing --> MeshGeometry
+MeshProcessing --> MeshOcclusion
 MeshBuildPipeline ..> MeshBuildSettings
 MeshBuildPipeline --> MeshGeometry
 MeshBuildPipeline --> MeshOcclusion
 MeshBuildPipeline --> MeshRendererSettings : 입력 검사
 MeshSceneOutput --> MeshRendererSettings : ApplyTo
 MeshToolCommands --> MeshSceneOutput
+MeshSceneOutput --> MeshSceneEdit
 MeshToolCommands --> MeshAssetTransaction
 MeshAssetTransaction --> AssetFileTransaction
 
-PhysicsRecorder --> PhysicsTake : 물리 스텝마다 캡처
+PhysicsRecorder --> PhysicsTake : 스텝 캡처
 PhysicsRecorder --> IPhysicsRecordingExporter
+PhysicsRecorder ..> PhysicsOutputInfo
 PhysicsRecordingEditorExporter ..|> IPhysicsRecordingExporter
 PhysicsRecordingEditorExporter --> PhysicsRecordingAssetWriter
 PhysicsRecordingAssetWriter --> PhysicsClipBuilder
+PhysicsRecordingAssetWriter --> PhysicsPlaybackStripper
+PhysicsRecordingAssetWriter --> PhysicsPlaybackPolicy : Validate
+PhysicsPlaybackStripper ..> PhysicsPlaybackPolicy : IsStripped
 PhysicsRecordingAssetWriter ..> PhysicsRecordingReference : 선택 저장
 PhysicsRecordingAssetWriter --> AssetFileTransaction
+
+BenchmarkEditor --> MeshBuildPipeline
+BenchmarkEditor --> MeshAssetTransaction
+BenchmarkEditor ..> Benchmark : 씬 구성·빌드
 
 note bottom of AssetFileTransaction
 Mesh 최적화와 Physics Recorder는 서로 참조하지 않습니다.
 옮길 때는 Script/Shared와 필요한 시스템 폴더만 복사합니다.
+Dev 벤치마크는 OPTIMIZETOOL_BENCHMARK를 정의한 Player에만 들어갑니다.
 end note
 @enduml

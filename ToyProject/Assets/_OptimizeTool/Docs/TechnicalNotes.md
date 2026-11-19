@@ -46,9 +46,13 @@ MeshFilter 수집 → 설정·입력 검증 → Readable·Normal 처리
 flowchart LR
     subgraph Mesh[MeshOptimization]
         Combiner[MeshCombiner 설정] -->|CreateSettings| Settings[MeshBuildSettings]
+        Baker[BackfaceCullMeshBaker 설정·원본 기록]
     end
     subgraph MeshEditor[MeshOptimization.Editor]
         Commands[MeshToolCommands] --> Pipeline[MeshBuildPipeline]
+        Commands -->|BakeBackfaces| Geometry
+        Facade[MeshProcessing] --> Geometry
+        Facade --> Occlusion
         Pipeline --> Geometry[MeshGeometry]
         Pipeline --> Occlusion[MeshOcclusion]
         Pipeline -->|지원·호환 검사| RendererSettings[MeshRendererSettings]
@@ -56,29 +60,39 @@ flowchart LR
         Result -. RendererSettings .-> RendererSettings
         Commands -->|Save| MeshSave[MeshAssetTransaction]
         Result -. Parts .-> MeshSave
-        MeshSave -->|씬 출력 콜백| Scene[MeshSceneOutput / Undo]
+        MeshSave -->|씬 출력 콜백| Scene[MeshSceneOutput]
         Commands -->|RestoreSources| Scene
         Scene -->|ApplyTo| RendererSettings
+        Scene --> Edit[MeshSceneEdit, Undo 또는 Play Mode 복원]
+        Commands -->|Baker 교체·복원| Edit
     end
     subgraph Physics[PhysicsRecording]
-        Recorder[PhysicsRecorder] -->|Capture / Finish| Take[PhysicsTake]
+        Recorder[PhysicsRecorder] -->|Capture / Hold / AddTrack / Finish| Take[PhysicsTake]
         Recorder -->|Validate / Begin / End / Export| Port[IPhysicsRecordingExporter]
-        Policy[PhysicsPlaybackPolicy.Validate]
+        Recorder -. Result .-> Metrics[PhysicsRecordingMetrics / PhysicsClipFormat]
+        Policy[PhysicsPlaybackPolicy]
     end
     subgraph PhysicsEditor[PhysicsRecording.Editor]
         Exporter[PhysicsRecordingEditorExporter] --> Writer[PhysicsRecordingAssetWriter]
         Writer -->|Build| ClipBuilder[PhysicsClipBuilder]
-        Writer -->|Strip| Stripper[PhysicsPlaybackStripper]
+        Writer -->|Strip, Legacy만| Stripper[PhysicsPlaybackStripper]
     end
     subgraph Shared[OptimizeTool.Editor]
         FileTx[AssetFileTransaction]
     end
+    subgraph Dev[Benchmark / Benchmark.Editor]
+        BenchEditor[OptimizeToolScaleBuilder / OptimizeToolBenchmarkEditor] -. 씬 구성·빌드 .-> Bench[OptimizeToolPerformanceBenchmark / OptimizeToolScaleWorkload]
+    end
     Commands -. 설정 읽기 .-> Combiner
+    Commands -. 설정·기록 .-> Baker
     Port -. 구현 .-> Exporter
     Take -. 관찰값 .-> Writer
-    Writer -->|Validate| Policy
+    ClipBuilder -. Metrics .-> Metrics
+    Writer -->|Validate, Legacy만| Policy
+    Stripper -->|IsStripped| Policy
     Writer -->|Execute / CreateOrReplace| FileTx
     MeshSave -->|경로 검증 / 폴더 생성| FileTx
+    BenchEditor -->|Build / Save| Pipeline
 ```
 
 실선은 호출·생성, 점선은 결과 데이터 전달이나 인터페이스 구현입니다.
@@ -98,7 +112,7 @@ flowchart LR
 | MeshOptimization.Editor | `MeshBuildPipeline` | `Build(sources, destinationWorldToLocal, settings)`. 저장 경로와 분리된 입력 검증, 컬링·변환·Material별 결합. 기하 연산은 `MeshGeometry`, 씬 Physics 조회는 `MeshOcclusion` |
 | MeshOptimization.Editor | `MeshBuildResult` | Mesh와 Material 매핑을 항목별로 묶고 임시 Mesh만 소유. `Dispose()`는 원본을 파괴하지 않음 |
 | MeshOptimization.Editor | `MeshRendererSettings` | 입력 Renderer가 지원하지 않는 데이터(PropertyBlock, Lightmap, LOD 등)를 쓰는지 검사하고, 병합 입력끼리 같아야 하는 Renderer 설정을 비교. `ApplyTo`로 결과 Renderer에 Material과 설정을 적용 |
-| MeshOptimization.Editor | `MeshGeometry` | 원본 Mesh와 importer를 바꾸지 않는 기하 연산: Readable 복사, 원시 정점 버퍼를 옮기는 SubMesh 추출, Backface 제거, 변환, 정점 채널을 맞춘 결합, 라이트맵 UV 배치 |
+| MeshOptimization.Editor | `MeshGeometry` | 원본 Mesh와 importer를 바꾸지 않는 기하 연산: Readable 복사, 원시 정점 버퍼를 옮기는 SubMesh 추출, Backface 제거(카메라·관찰 방향 overload, 구현 하나), 변환, 정점 채널을 맞춘 결합, 라이트맵 UV 배치 |
 | MeshOptimization.Editor | `MeshOcclusion` | 카메라에서 표본 점(Vertex와 삼각형 중심)으로 Raycast해 보이는 비율로 가림 판정. 대상 자신과 표본 점을 품은 조상 Collider는 제외 |
 | MeshOptimization.Editor | `MeshProcessing` | 공개 메시 연산 facade. 인자(null, Readable, 삼각형 토폴로지, 유한 값, 각도·Occlusion 범위, 씬 소속)를 검사한 뒤 internal `MeshGeometry`·`MeshOcclusion`에 넘김. `TransformMesh`는 저장된 에셋을 거부하고, `IsOccluded`는 조회 전에 `Physics.SyncTransforms`를 부름 |
 | MeshOptimization.Editor | `MeshAssetTransaction` | 모든 Mesh 출력 경로와 출력 자리를 쓰기 전에 검증하고, GUID를 유지해 저장(Edit Mode에서는 Undo 한 단계). 실패하면 메모리 안 백업으로 기존 Mesh를 되돌리고 새로 만든 에셋을 지움. 콜백이 쓰는 다른 파일은 호출자가 `AssetFileTransaction.Execute`로 감쌈 |
