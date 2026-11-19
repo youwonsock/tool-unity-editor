@@ -160,9 +160,9 @@ PlayerSettings:
   androidMaxAspectRatio: 2.1
   androidMinAspectRatio: 1
   applicationIdentifier:
-    Android: com.UnityTechnologies.com.unity.template.urpblank
-    Standalone: com.Unity-Technologies.com.unity.template.urp-blank
-    iPhone: com.Unity-Technologies.com.unity.template.urp-blank
+    Android: com.DefaultCompany.ToyProject
+    Standalone: com.DefaultCompany.ToyProject
+    iPhone: com.DefaultCompany.ToyProject
   buildNumber:
     Bratwurst: 0
     Standalone: 0
