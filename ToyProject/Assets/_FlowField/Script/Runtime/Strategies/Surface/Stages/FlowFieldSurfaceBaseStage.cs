@@ -229,8 +229,7 @@ namespace Common.FlowField
                     _obstacleMasks.CommitCombinedAndBuildEscape(
                         _state.Grid,
                         _state.Surface,
-                        _state.Workspace,
-                        out _);
+                        _state.Workspace);
                 _state.ExpandObstacleDirty(prepared.ObstacleDirtyRegion);
                 UpdateBlockedWarning(prepared.HasWalkableSurface);
                 pending |= FlowFieldSurfaceDirtyFlags.Goal | FlowFieldSurfaceDirtyFlags.FinalRegion;

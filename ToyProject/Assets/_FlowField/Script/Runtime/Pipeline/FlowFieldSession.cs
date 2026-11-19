@@ -33,7 +33,7 @@ namespace Common.FlowField
     /// solve callbacks. What differs between Surface2D and Volume3D lives in
     /// its <see cref="IFlowFieldSpaceBuilder"/>.
     /// </summary>
-    internal sealed class FlowFieldSession : IDisposable, IFlowFieldBuildOperation
+    internal sealed class FlowFieldSession : IDisposable
     {
         internal readonly FlowFieldExecutionBoundary Boundary;
         private readonly IFlowFieldSpaceBuilder _builder;
@@ -555,10 +555,6 @@ namespace Common.FlowField
         private void ApplySweptChange(bool hasPrevious, Bounds previous, bool hasCurrent, Bounds current)
             => ApplyObstacleChange(new FlowFieldObstacleChange(
                 FlowFieldObstacleChangeKind.RegionDirty, null, hasPrevious, previous, hasCurrent, current));
-
-        bool IFlowFieldBuildOperation.IsWaitingForExternalCompletion => IsWaitingForExternalCompletion;
-        bool IFlowFieldBuildOperation.IsBuilding => IsBuilding;
-        void IFlowFieldBuildOperation.PumpInternal(in FlowFieldBuildBudget budget) => PumpInternal(in budget);
 
         internal void AttachRuntimeScheduler()
         {

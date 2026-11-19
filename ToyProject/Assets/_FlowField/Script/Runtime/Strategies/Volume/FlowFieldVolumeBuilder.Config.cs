@@ -91,8 +91,6 @@ namespace Common.FlowField
             FlowFieldObstacleSettings obstacles = config.Obstacles;
             if (!TryCreateLayout(in config, out Bounds volumeBounds, out FlowFieldGridSpace volumeGrid) || !volumeGrid.IsValid)
                 return FlowFieldManagerConfig.Fail(out reason, "Volume Bounds and Cell Size do not produce a valid grid.");
-            if (volumeGrid.CellCount > FlowFieldLayoutUtility.MaxVolumeCellCount)
-                return FlowFieldManagerConfig.Fail(out reason, "Volume cell count exceeds one million cells.");
             if (!FlowFieldBakeModes.UsesBakeAsset(config.BakeMode))
                 return true;
             FlowFieldVolumeBakeData bakeData = config.BakeAssets.Volume;

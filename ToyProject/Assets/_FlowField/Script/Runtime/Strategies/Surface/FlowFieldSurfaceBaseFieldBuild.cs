@@ -91,8 +91,7 @@ namespace Common.FlowField
                     obstacleMasks.CommitCombinedAndBuildEscape(
                         request.Grid,
                         request.Surface,
-                        workspace,
-                        out _);
+                        workspace);
                 }
                 // The first obstacle preparation can legitimately produce an
                 // all-false mask (there are simply no colliders).  It is still

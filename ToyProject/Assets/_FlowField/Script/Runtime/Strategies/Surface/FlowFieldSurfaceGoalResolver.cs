@@ -38,18 +38,15 @@ namespace Common.FlowField
     {
         internal static FlowFieldSurfaceGoalResolution Resolve(
             FlowFieldGridSpace grid,
-            Transform target,
-            bool hasExplicitGoal,
-            Vector3 explicitGoal,
+            bool hasGoal,
+            Vector3 requestedWorld,
             float influenceRadius)
         {
-            bool hasActiveGoal = target != null || hasExplicitGoal;
             if (!grid.IsValid)
                 throw new System.InvalidOperationException("Goal resolution requires a valid grid.");
-            if (!hasActiveGoal)
-                return new FlowFieldSurfaceGoalResolution(hasActiveGoal, false, 0, 0, -1, 0f, default);
+            if (!hasGoal)
+                return FlowFieldSurfaceGoalResolution.None;
 
-            Vector3 requestedWorld = target != null ? target.position : explicitGoal;
             if (!IsFiniteWorldXZ(requestedWorld))
                 throw new System.ArgumentOutOfRangeException(nameof(requestedWorld));
             if (!FlowFieldGridSpace.IsFinite(influenceRadius) || influenceRadius < 0f)
@@ -110,9 +107,6 @@ namespace Common.FlowField
             return status;
         }
 
-        internal static bool HasActiveGoal(Transform target, bool hasExplicitGoal)
-            => target != null || hasExplicitGoal;
-
         internal static bool IsFiniteWorldXZ(Vector3 value)
             => FlowFieldGridSpace.IsFinite(value.x) && FlowFieldGridSpace.IsFinite(value.z);
 
@@ -159,27 +153,6 @@ namespace Common.FlowField
                 && request.HasGoal == _lastBuiltHadGoal
                 && request.SourceCellIndex == _lastBuiltSourceCellIndex
                 && System.Math.Abs(request.InfluenceRadius - _lastBuiltRadius) <= ValueEpsilon;
-
-        internal bool HasChanged(in FlowFieldSurfaceGoalSolveInput request)
-        {
-            if (!request.HasGoal)
-                return _lastBuiltHadGoal;
-
-            return !_lastBuiltHadGoal
-                || request.SourceCellIndex != _lastBuiltSourceCellIndex
-                || System.Math.Abs(request.InfluenceRadius - _lastBuiltRadius) > ValueEpsilon;
-        }
-
-        internal bool HasChanged(in FlowFieldSurfaceGoalResolution resolution)
-        {
-            FlowFieldSurfaceGoalSolveInput request = resolution.IsValid
-                ? new FlowFieldSurfaceGoalSolveInput(
-                    true,
-                    resolution.SourceCellIndex,
-                    resolution.InfluenceRadius)
-                : FlowFieldSurfaceGoalSolveInput.None;
-            return HasChanged(request);
-        }
 
         internal void Record(in FlowFieldSurfaceGoalSolveInput request, FlowFieldSurfaceGoalBuildStatus status)
         {

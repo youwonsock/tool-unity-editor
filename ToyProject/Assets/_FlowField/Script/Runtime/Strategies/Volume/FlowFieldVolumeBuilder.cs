@@ -1,10 +1,8 @@
 using System;
-using System.Threading;
 using UnityEngine;
 using BuildContext = Common.FlowField.FlowFieldVolumeBuildContext;
 using VolumeFieldData = Common.FlowField.FlowFieldField<Common.FlowField.FlowFieldVolumeRequest>;
 using BuildPhase = Common.FlowField.FlowFieldVolumeBuildPhase;
-using static Common.FlowField.FlowFieldVolumeNavigation;
 
 namespace Common.FlowField
 {
@@ -412,8 +410,6 @@ namespace Common.FlowField
         {
             if (!request.Grid.IsValid || request.Grid.SpaceMode != FlowFieldSpaceMode.Volume3D)
                 throw new ArgumentException("Volume request requires a valid Volume3D grid.", nameof(request));
-            if ((long)request.Grid.CellCount > FlowFieldLayoutUtility.MaxVolumeCellCount)
-                throw new ArgumentOutOfRangeException(nameof(request), "Volume cell count exceeds one million cells.");
             if (request.ObstacleLayer.value == 0)
                 throw new ArgumentException("Volume obstacle layer must contain at least one layer.", nameof(request));
             if (!FlowFieldGridSpace.IsFinite(request.ObstacleClearance) || request.ObstacleClearance < 0f)

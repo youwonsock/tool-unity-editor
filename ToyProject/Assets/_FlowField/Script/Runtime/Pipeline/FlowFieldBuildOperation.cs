@@ -47,12 +47,4 @@ namespace Common.FlowField
 
         internal bool IsExpired => _elapsedMilliseconds() >= _deadlineMilliseconds;
     }
-
-    internal interface IFlowFieldBuildOperation
-    {
-        bool IsWaitingForExternalCompletion { get; }
-        bool IsBuilding { get; }
-
-        void PumpInternal(in FlowFieldBuildBudget budget);
-    }
 }

@@ -375,11 +375,10 @@ namespace Common.FlowField
             return dirty;
         }
 
-        public bool CommitCombinedAndBuildEscape(
+        public void CommitCombinedAndBuildEscape(
             FlowFieldGridSpace grid,
             FlowFieldSurfaceData surface,
-            FlowFieldSurfaceWorkspace workspace,
-            out bool hasWalkable)
+            FlowFieldSurfaceWorkspace workspace)
         {
             if (!grid.IsValid)
                 throw new ArgumentException("Obstacle commit requires a valid grid.", nameof(grid));
@@ -390,8 +389,7 @@ namespace Common.FlowField
             if (workspace.Capacity != grid.CellCount)
                 throw new ArgumentException("Obstacle workspace capacity must match the grid.", nameof(workspace));
             workspace.RebuildCombinedBlocked();
-            hasWalkable = FlowFieldSurfaceSolver.BuildEscapeDirections(grid, surface, workspace);
-            return true;
+            FlowFieldSurfaceSolver.BuildEscapeDirections(grid, surface, workspace);
         }
 
         private static void ValidateRequest(in FlowFieldSurfaceObstacleRequest request)

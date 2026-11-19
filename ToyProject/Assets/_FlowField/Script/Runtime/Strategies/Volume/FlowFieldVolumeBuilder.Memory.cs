@@ -1,11 +1,4 @@
 using System;
-using System.Diagnostics;
-using System.Threading;
-using UnityEngine;
-using BuildContext = Common.FlowField.FlowFieldVolumeBuildContext;
-using VolumeFieldData = Common.FlowField.FlowFieldField<Common.FlowField.FlowFieldVolumeRequest>;
-using BuildPhase = Common.FlowField.FlowFieldVolumeBuildPhase;
-using static Common.FlowField.FlowFieldVolumeNavigation;
 
 namespace Common.FlowField
 {
@@ -51,7 +44,7 @@ namespace Common.FlowField
         {
             if (count <= 0)
                 return 0;
-            // VolumeFieldData owns nine per-cell arrays after commit. Reserve
+            // The published field owns nine per-cell arrays after commit. Reserve
             // the logical element footprint rounded up to 60 bytes per cell.
             return checked(60L * count + 32L * 9L + 32L);
         }

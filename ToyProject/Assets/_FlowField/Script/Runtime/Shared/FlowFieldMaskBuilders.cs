@@ -282,7 +282,7 @@ namespace Common.FlowField
         public const string TriggerRequiredMessage = "Influence Collider must be a trigger.";
         public const string ConvexMeshRequiredMessage = "A trigger MeshCollider must be convex.";
 
-        public static bool Build(
+        public static void Build(
             FlowFieldGridSpace grid,
             FlowFieldSurfaceData surface,
             Collider influenceCollider,
@@ -296,7 +296,7 @@ namespace Common.FlowField
 
             Array.Clear(destination, 0, destination.Length);
             if (!IsUsableTrigger(influenceCollider))
-                return true;
+                return;
 
             if (syncTransformsBeforeQuery)
                 Physics.SyncTransforms();
@@ -308,12 +308,12 @@ namespace Common.FlowField
             if (!FlowFieldGridSpace.IsFinite(centerOffset))
                 throw new ArgumentOutOfRangeException(nameof(centerOffset));
             if (!surface.TryGetHeightRange(out float minSurfaceY, out float maxSurfaceY))
-                return true;
+                return;
 
             float checkMinY = minSurfaceY + centerOffset - halfHeight;
             float checkMaxY = maxSurfaceY + centerOffset + halfHeight;
             if (colliderBounds.max.y < checkMinY || colliderBounds.min.y > checkMaxY)
-                return true;
+                return;
 
             ResolveCandidateRange(
                 grid,
@@ -323,7 +323,7 @@ namespace Common.FlowField
                 out int minZ,
                 out int maxZ);
             if (minX > maxX || minZ > maxZ)
-                return true;
+                return;
 
             float halfXZ = FlowFieldOverlapUtility.CellHalfExtent(grid.CellSize);
             Vector3 halfExtents = new Vector3(halfXZ, halfHeight, halfXZ);
@@ -348,8 +348,6 @@ namespace Common.FlowField
                         ref overlapBuffer);
                 }
             }
-
-            return true;
         }
 
         public static bool IsUsableTrigger(Collider influenceCollider)

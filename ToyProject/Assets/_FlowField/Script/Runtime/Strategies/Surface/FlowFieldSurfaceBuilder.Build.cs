@@ -6,10 +6,10 @@ namespace Common.FlowField
     /// <summary>The stages of one Surface2D rebuild, from a pending request to the published field.</summary>
     internal sealed partial class FlowFieldSurfaceBuilder
     {
-        private bool BuildPending()
+        private void BuildPending()
         {
             if (!_requests.Pending)
-                return true;
+                return;
 
             FlowFieldSurfaceRequest request = _requests.Latest;
             _requests.Pending = false;
@@ -29,7 +29,7 @@ namespace Common.FlowField
             if (request.SourceKind == FlowFieldSurfaceSourceKind.StaticSnapshot)
             {
                 BuildStaticSnapshot(request, pending);
-                return true;
+                return;
             }
 
             // The sweep decides what the masks hold, so starting or stopping
@@ -77,7 +77,10 @@ namespace Common.FlowField
             // (OnBfsCompleted), and a rejected solve restores the published
             // field, so composing before the solve would never be visible.
             if (_state.Workspace.HasActiveGoal && topologyChanged)
-                return StartBfs(request);
+            {
+                StartBfs(request);
+                return;
+            }
 
             if ((pending & (FlowFieldSurfaceDirtyFlags.ModifierValue | FlowFieldSurfaceDirtyFlags.FinalRegion)) != 0)
             {
@@ -88,7 +91,7 @@ namespace Common.FlowField
                         || !_state.BaseComposed,
                     resultChanged: (pending & FlowFieldSurfaceDirtyFlags.FinalRegion) != 0,
                     includeBase: IsBaseDirty(pending) || !_fieldStore.IsValid);
-                return true;
+                return;
             }
 
             QueueCommit(
@@ -96,7 +99,6 @@ namespace Common.FlowField
                 resultChanged: (pending & FlowFieldSurfaceDirtyFlags.FinalRegion) != 0,
                 includeBase: IsBaseDirty(pending) || !_fieldStore.IsValid,
                 finalRegion: _state.LastComposedRegion);
-            return true;
         }
 
         private void BuildStaticSnapshot(in FlowFieldSurfaceRequest request, FlowFieldSurfaceDirtyFlags pending)
@@ -227,14 +229,14 @@ namespace Common.FlowField
             _composeStage.Clear();
         }
 
-        private bool StartBfs(in FlowFieldSurfaceRequest request)
+        private void StartBfs(in FlowFieldSurfaceRequest request)
         {
             // A solve callback can arrive after this lifetime has ended.
             int generation = _session.LifetimeGeneration;
             if (!_state.Workspace.HasActiveGoal)
             {
                 ComposeThenCommit(request, rebuildBase: true, resultChanged: true, includeBase: true);
-                return true;
+                return;
             }
 
             FlowFieldSurfaceBfsRequest bfsRequest = new FlowFieldSurfaceBfsRequest(
@@ -256,7 +258,6 @@ namespace Common.FlowField
             // A synchronous completion has already moved the phase on.
             if (!accepted && IsCurrentBuild(generation))
                 throw new InvalidOperationException("FlowField BFS session could not be started.");
-            return accepted;
         }
 
         // The solve this build waits for. Stop and a fault cancel the build and

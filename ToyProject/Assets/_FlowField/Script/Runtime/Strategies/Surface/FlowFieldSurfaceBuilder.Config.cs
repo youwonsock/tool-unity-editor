@@ -112,7 +112,6 @@ namespace Common.FlowField
             FlowFieldGridSpace grid)
             => FlowFieldSurfaceGoalResolver.Resolve(
                 grid,
-                null,
                 config.HasGoal,
                 config.GoalWorld,
                 config.Flow.GoalInfluenceRadius);

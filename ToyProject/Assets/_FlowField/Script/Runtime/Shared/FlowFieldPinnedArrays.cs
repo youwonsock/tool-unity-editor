@@ -1,8 +1,4 @@
-using System.Threading;
-using Unity.Burst;
 using Unity.Collections.LowLevel.Unsafe;
-using Unity.Jobs;
-using UnityEngine;
 
 namespace Common.FlowField
 {

@@ -215,6 +215,11 @@ namespace Common.FlowField.Editor
                         ? MessageType.Info
                         : MessageType.Warning;
                 EditorGUILayout.HelpBox(volumeStatus.Message, type);
+                if (volumeStatus.Code == FlowFieldVolumeVisualizationStatusCode.Validating)
+                {
+                    Rect bar = GUILayoutUtility.GetRect(18f, 18f, "TextField");
+                    EditorGUI.ProgressBar(bar, volumeStatus.ValidationProgress, $"Validating the bake {volumeStatus.ValidationProgress:P0}");
+                }
                 if (manager.TryGetLayout(out _, out FlowFieldGridSpace displayGrid))
                 {
                     FlowFieldDisplay display = FlowFieldDisplay.Of(manager);

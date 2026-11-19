@@ -11,8 +11,8 @@ namespace Common.FlowField
     /// </summary>
     internal static class FlowFieldBuildScheduler
     {
-        private static readonly List<IFlowFieldBuildOperation> Operations
-            = new List<IFlowFieldBuildOperation>(8);
+        private static readonly List<FlowFieldSession> Sessions
+            = new List<FlowFieldSession>(8);
         private static int _cursor;
         private static bool _pumping;
         // PumpAll is non-reentrant, so one timer and one cached, non-capturing
@@ -38,36 +38,36 @@ namespace Common.FlowField
             LongestPumpMilliseconds = 0d;
         }
 
-        internal static void Register(IFlowFieldBuildOperation operation)
+        internal static void Register(FlowFieldSession session)
         {
-            if (operation == null || Operations.Contains(operation))
+            if (session == null || Sessions.Contains(session))
                 return;
-            Operations.Add(operation);
-            if (_cursor >= Operations.Count)
+            Sessions.Add(session);
+            if (_cursor >= Sessions.Count)
                 _cursor = 0;
         }
 
-        internal static void Unregister(IFlowFieldBuildOperation operation)
+        internal static void Unregister(FlowFieldSession session)
         {
-            if (operation == null)
+            if (session == null)
                 return;
-            int index = Operations.IndexOf(operation);
+            int index = Sessions.IndexOf(session);
             if (index < 0)
                 return;
-            Operations.RemoveAt(index);
-            if (Operations.Count == 0)
+            Sessions.RemoveAt(index);
+            if (Sessions.Count == 0)
             {
                 _cursor = 0;
                 return;
             }
             if (index < _cursor)
                 _cursor--;
-            _cursor %= Operations.Count;
+            _cursor %= Sessions.Count;
         }
 
         internal static void PumpAll(double budgetMilliseconds)
         {
-            if (_pumping || Operations.Count == 0 || budgetMilliseconds <= 0d)
+            if (_pumping || Sessions.Count == 0 || budgetMilliseconds <= 0d)
                 return;
 
             _pumping = true;
@@ -75,18 +75,18 @@ namespace Common.FlowField
             try
             {
                 int visitedWithoutWork = 0;
-                while (Operations.Count > 0
+                while (Sessions.Count > 0
                     && Timer.Elapsed.TotalMilliseconds < budgetMilliseconds)
                 {
-                    if (_cursor >= Operations.Count)
+                    if (_cursor >= Sessions.Count)
                         _cursor = 0;
-                    IFlowFieldBuildOperation operation = Operations[_cursor];
-                    _cursor = (_cursor + 1) % Math.Max(1, Operations.Count);
+                    FlowFieldSession session = Sessions[_cursor];
+                    _cursor = (_cursor + 1) % Math.Max(1, Sessions.Count);
 
-                    if (operation == null)
+                    if (session == null)
                     {
                         visitedWithoutWork++;
-                        if (visitedWithoutWork >= Math.Max(1, Operations.Count))
+                        if (visitedWithoutWork >= Math.Max(1, Sessions.Count))
                             break;
                         continue;
                     }
@@ -94,18 +94,18 @@ namespace Common.FlowField
                     FlowFieldBuildBudget budget = new FlowFieldBuildBudget(
                         budgetMilliseconds,
                         ElapsedMilliseconds);
-                    // A waiting operation only observes its inputs, which is
+                    // A waiting session only observes its inputs, which is
                     // no reason to give it another turn within this budget.
-                    bool wasWaiting = operation.IsWaitingForExternalCompletion;
-                    bool wasBuilding = operation.IsBuilding;
-                    operation.PumpInternal(in budget);
-                    bool isBuilding = operation.IsBuilding;
+                    bool wasWaiting = session.IsWaitingForExternalCompletion;
+                    bool wasBuilding = session.IsBuilding;
+                    session.PumpInternal(in budget);
+                    bool isBuilding = session.IsBuilding;
                     if (wasWaiting || !wasBuilding || !isBuilding)
                         visitedWithoutWork++;
                     else
                         visitedWithoutWork = 0;
 
-                    if (visitedWithoutWork >= Math.Max(1, Operations.Count))
+                    if (visitedWithoutWork >= Math.Max(1, Sessions.Count))
                         break;
                 }
             }

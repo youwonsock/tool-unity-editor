@@ -263,16 +263,6 @@ namespace Common.FlowField
             MarkContentChanged();
         }
 
-        internal float[] SurfaceHeights => _surfaceHeights;
-        internal Vector3[] SurfaceNormals => _surfaceNormals;
-        internal byte[] SurfaceFlags => _surfaceFlags;
-        internal bool[] Blocked => _blocked;
-        internal Vector3[] EscapeDirections => _escapeDirections;
-        internal byte[] TopologyMasks => _topologyMasks;
-        internal FlowFieldGoalFlags[] GoalFlags => _goalFlags;
-        internal Vector3[] GoalDirections => _goalDirections;
-        internal int[] NextCells => _nextCells;
-
         public bool HasValidData
         {
             get
