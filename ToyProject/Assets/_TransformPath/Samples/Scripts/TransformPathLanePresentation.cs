@@ -6,6 +6,9 @@ namespace Common.TransformPath.Samples
     /// <summary>Shows, hides and frames the lanes, which are children of the controller found by name.</summary>
     internal sealed class TransformPathLanePresentation
     {
+        private const int SHAPE_LINE_POINTS = 129;
+        private static readonly Color SHAPE_LINE_COLOR = new Color(0.3f, 0.95f, 0.55f);
+
         private readonly Transform _root;
         private readonly List<LineRenderer> _routeLines = new List<LineRenderer>();
 
@@ -78,6 +81,27 @@ namespace Common.TransformPath.Samples
             }
         }
 
+        /// <summary>Draws the shape lane's shape from its public samples.</summary>
+        public void CreateShapeLine(PathShapeProvider shape)
+        {
+            if (!shape.IsReady)
+                return;
+            Transform parent = _root.Find(GetLaneName(ETransformPathShowcaseLane.Shape));
+            if (parent == null)
+                parent = _root;
+            GameObject lineObject = new GameObject("Shape Line");
+            lineObject.transform.SetParent(parent, false);
+            LineRenderer line = lineObject.AddComponent<LineRenderer>();
+            line.useWorldSpace = true;
+            line.widthMultiplier = 0.08f;
+            line.startColor = SHAPE_LINE_COLOR;
+            line.endColor = SHAPE_LINE_COLOR;
+            line.positionCount = SHAPE_LINE_POINTS;
+            for (int point = 0; point < SHAPE_LINE_POINTS; point++)
+                line.SetPosition(point, shape.Sample(point / (SHAPE_LINE_POINTS - 1f)));
+            _routeLines.Add(line);
+        }
+
         public void DestroyRouteLines()
         {
             for (int i = 0; i < _routeLines.Count; i++)
@@ -96,6 +120,8 @@ namespace Common.TransformPath.Samples
                     return "Multi Path Lane";
                 case ETransformPathShowcaseLane.Queue:
                     return "Queued Path Lane";
+                case ETransformPathShowcaseLane.Shape:
+                    return "Shape Path Lane";
                 default:
                     return "Normal Path Lane";
             }

@@ -22,6 +22,7 @@ namespace Common.TransformPath.Samples
         private static readonly Color NORMAL_COLOR = new Color(0.15f, 0.65f, 1f, 1f);
         private static readonly Color MULTI_COLOR_A = new Color(0.8f, 0.35f, 1f, 1f);
         private static readonly Color QUEUE_COLOR = new Color(1f, 0.65f, 0.1f, 1f);
+        private static readonly Color SHAPE_COLOR = new Color(0.3f, 0.95f, 0.55f, 1f);
         private static readonly Color COMMON_BUTTON_COLOR = new Color(0.16f, 0.28f, 0.43f, 1f);
         private static readonly Color DARK_BUTTON_COLOR = new Color(0.11f, 0.18f, 0.28f, 1f);
 
@@ -40,6 +41,7 @@ namespace Common.TransformPath.Samples
         private GameObject _normalSettings;
         private GameObject _multiSettings;
         private GameObject _queueSettings;
+        private GameObject _shapeSettings;
         private bool _isBuilt;
         private int _lastLane = -1;
         private readonly List<Image> _laneButtonImages = new List<Image>();
@@ -169,10 +171,11 @@ namespace Common.TransformPath.Samples
         private void CreateLaneButtons(Transform parent)
         {
             const float GAP = 5f;
-            float width = (CONTENT_WIDTH - GAP * 2f) / 3f;
+            float width = (CONTENT_WIDTH - GAP * 3f) / 4f;
             CreateLaneButton(parent, "NORMAL", new Vector2(16f, -60f), new Vector2(width, 32f), NORMAL_COLOR, _controller.ShowNormalLane);
             CreateLaneButton(parent, "MULTI", new Vector2(16f + width + GAP, -60f), new Vector2(width, 32f), MULTI_COLOR_A, _controller.ShowMultiPathLane);
             CreateLaneButton(parent, "QUEUE", new Vector2(16f + (width + GAP) * 2f, -60f), new Vector2(width, 32f), QUEUE_COLOR, _controller.ShowQueuedLane);
+            CreateLaneButton(parent, "SHAPE", new Vector2(16f + (width + GAP) * 3f, -60f), new Vector2(width, 32f), SHAPE_COLOR, _controller.ShowShapeLane);
         }
 
         private void CreateLaneButton(Transform parent, string label, Vector2 position, Vector2 size, Color color, Action action)
@@ -217,6 +220,13 @@ namespace Common.TransformPath.Samples
             CreateButton(_queueSettings.transform, "UNBLOCK", new Vector2(143f, -166f), new Vector2(94f, 32f), new Color(0.16f, 0.45f, 0.28f, 1f), _controller.UnblockQueueLeader);
             Button visibilityButton = CreateButton(_queueSettings.transform, "QUEUE ON", new Vector2(242f, -166f), new Vector2(162f, 32f), DARK_BUTTON_COLOR, _controller.ToggleQueueVisibility);
             _queueVisibilityLabel = visibilityButton.GetComponentInChildren<Text>(true);
+            CreateText(_queueSettings.transform, "Queue Hint", "The gap policy widens the spacing right behind the leader", new Vector2(16f, -204f), new Vector2(CONTENT_WIDTH, 32f), 9, new Color(1f, 0.82f, 0.55f, 1f), TextAnchor.MiddleLeft);
+
+            _shapeSettings = CreateSettingsGroup(parent, "Shape Settings");
+            CreateText(_shapeSettings.transform, "Shape Header", "SHAPE PATH SETTINGS", new Vector2(16f, -142f), new Vector2(CONTENT_WIDTH, 18f), 11, SHAPE_COLOR, TextAnchor.MiddleLeft);
+            CreateButton(_shapeSettings.transform, "SEEK -", new Vector2(16f, -166f), new Vector2(92f, 32f), DARK_BUTTON_COLOR, _controller.SeekBackward);
+            CreateButton(_shapeSettings.transform, "SEEK +", new Vector2(114f, -166f), new Vector2(92f, 32f), DARK_BUTTON_COLOR, _controller.SeekForward);
+            CreateText(_shapeSettings.transform, "Shape Hint", "A circle drawn by PathShapeProvider · Play On Start", new Vector2(216f, -166f), new Vector2(188f, 32f), 9, new Color(0.7f, 0.95f, 0.8f, 1f), TextAnchor.MiddleLeft);
         }
 
         private GameObject CreateSettingsGroup(Transform parent, string name)
@@ -238,6 +248,7 @@ namespace Common.TransformPath.Samples
                 _normalSettings.SetActive(lane == (int)ETransformPathShowcaseLane.Normal);
                 _multiSettings.SetActive(lane == (int)ETransformPathShowcaseLane.MultiPath);
                 _queueSettings.SetActive(lane == (int)ETransformPathShowcaseLane.Queue);
+                _shapeSettings.SetActive(lane == (int)ETransformPathShowcaseLane.Shape);
 
                 _activeLaneText.text = GetLaneTitle(_controller.ActiveLane);
                 _activeLaneText.color = GetLaneColor(_controller.ActiveLane);
@@ -265,6 +276,8 @@ namespace Common.TransformPath.Samples
                     return "ACTIVE / MULTI PATH";
                 case ETransformPathShowcaseLane.Queue:
                     return "ACTIVE / QUEUED PATH";
+                case ETransformPathShowcaseLane.Shape:
+                    return "ACTIVE / SHAPE PATH";
                 default:
                     return "ACTIVE / NORMAL PATH";
             }
@@ -278,6 +291,8 @@ namespace Common.TransformPath.Samples
                     return MULTI_COLOR_A;
                 case ETransformPathShowcaseLane.Queue:
                     return QUEUE_COLOR;
+                case ETransformPathShowcaseLane.Shape:
+                    return SHAPE_COLOR;
                 default:
                     return NORMAL_COLOR;
             }

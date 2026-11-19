@@ -33,19 +33,32 @@ namespace Common.TransformPath.Samples
             string leaderText = leader == null
                 ? "none"
                 : leader.IsBlocked ? "BLOCKED" : leader.Follower.IsMoving ? "moving" : "stopped";
-            string ahead = "none";
-            string multiplier = "1.00";
-            if (leader != null && manager.TryGetMemberStatus(leader, out PathQueueStatus state))
+            string multiplier = leader == null ? "1.00" : leader.CurrentSpeedMultiplier.ToString("F2");
+            // The member right behind the leader keeps the gap the spacing policy widened.
+            string behindLeader = "none";
+            if (manager.MemberCount > 1 && manager.TryGetMemberStatus(manager.GetMember(1), out PathQueueStatus second))
             {
-                ahead = state.DistanceToAhead.HasValue ? $"{state.DistanceToAhead.Value:F2}m" : "none";
-                multiplier = leader.CurrentSpeedMultiplier.ToString("F2");
+                string distance = second.DistanceToAhead.HasValue ? $"{second.DistanceToAhead.Value:F2}m" : "none";
+                behindLeader = $"{second.Spacing:F2}m (now {distance})";
             }
-            return $"QUEUE  agents={manager.MemberCount}/{lane.MemberCount}  visible={visible}\n"
-                + $"spacing={manager.DefaultSpacing:F2}m  leader={leaderText}  ahead={ahead}\n"
-                + $"speed x{multiplier}  routeRev={manager.RouteRevision}\n"
-                + $"length={lane.Path.PathLength:F2}m  state={(paused ? "paused" : "running")}  "
+            string policy = manager.SpacingPolicy is TransformPathGapPolicy gap
+                ? $"{gap.name} x{gap.LeaderGapScale:F1}"
+                : manager.SpacingPolicy == null ? "none" : manager.SpacingPolicy.name;
+            return $"QUEUE  agents={manager.MemberCount}/{lane.MemberCount}  visible={visible}  leader={leaderText}\n"
+                + $"spacing={manager.DefaultSpacing:F2}m  policy={policy}  behind leader={behindLeader}\n"
+                + $"speed x{multiplier}  routeRev={manager.RouteRevision}  state={(paused ? "paused" : "running")}\n"
+                + $"length={lane.Path.PathLength:F2}m  "
                 + $"{(leader == null ? "movement=none" : DescribeMovement(leader.Follower))}\n"
                 + $"events={DescribeSequenceEvents(lane.Path)}";
+        }
+
+        public static string Shape(TransformPathCircleShape circle, PathFollower follower)
+        {
+            return $"SHAPE  ready={circle.IsReady}  circle radius={circle.Radius:F2}m\n"
+                + $"length={circle.PathLength:F2}m  progress={follower.Progress:F2}  "
+                + $"{DescribeMovement(follower)}\n"
+                + $"state={follower.State}  loop  started by Play On Start\n"
+                + "events=none (a shape has no events)";
         }
 
         private static string DescribeMovement(PathFollower follower)

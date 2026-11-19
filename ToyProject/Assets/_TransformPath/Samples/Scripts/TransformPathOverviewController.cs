@@ -7,12 +7,14 @@ namespace Common.TransformPath.Samples
         Normal = 0,
         MultiPath = 1,
         Queue = 2,
+        Shape = 3,
     }
 
     /// <summary>
-    /// Sample orchestrator for the three lanes: a single path, a sequence and a
-    /// queue. It owns the lane switching and the UI commands; the queue lane,
-    /// the status text and the rendering live in their own classes.
+    /// Sample orchestrator for the four lanes: a single path, a sequence, a
+    /// queue and a shape. It owns the lane switching and the UI commands; the
+    /// queue lane, the status text and the rendering live in their own classes.
+    /// The shape lane's follower starts itself through its Play On Start setting.
     /// </summary>
     [DefaultExecutionOrder(10)]
     public sealed class TransformPathOverviewController : MonoBehaviour
@@ -32,6 +34,10 @@ namespace Common.TransformPath.Samples
         [SerializeField] private MultiPathData _queuePathData;
         [SerializeField] private PathQueueMember[] _queueFollowers;
 
+        [Header("Shape Path Lane")]
+        [SerializeField] private TransformPathCircleShape _circleShape;
+        [SerializeField] private PathFollower _shapeFollower;
+
         [Header("Presentation")]
         [SerializeField] private TransformPathFreeCamera _freeCamera;
         [SerializeField] private TransformPathOverviewBoard _board;
@@ -43,6 +49,7 @@ namespace Common.TransformPath.Samples
         private bool _queueVisible = true;
         private bool _normalWasMovingWhenHidden;
         private bool _multiWasMovingWhenHidden;
+        private bool _shapeWasMovingWhenHidden;
         private bool _completionEventsSubscribed;
         private ETransformPathShowcaseLane _activeLane = ETransformPathShowcaseLane.Normal;
 
@@ -65,12 +72,14 @@ namespace Common.TransformPath.Samples
             if (_isInitialized)
                 return;
             if (_pathData == null || _pathFollower == null || _multiPathData == null || _multiPathFollower == null
-                || _queueManager == null || _queueFollowers == null || _queueFollowers.Length == 0)
+                || _queueManager == null || _queueFollowers == null || _queueFollowers.Length == 0
+                || _circleShape == null || _shapeFollower == null)
             {
                 Debug.LogError("TransformPath overview is missing a required serialized reference.", this);
                 return;
             }
-            if (!_pathData.IsReady || !_multiPathData.IsReady || _queuePathData == null || !_queuePathData.IsReady)
+            if (!_pathData.IsReady || !_multiPathData.IsReady || _queuePathData == null || !_queuePathData.IsReady
+                || !_circleShape.IsReady)
             {
                 Debug.LogError("TransformPath overview requires all providers to be ready.", this);
                 return;
@@ -81,6 +90,7 @@ namespace Common.TransformPath.Samples
             _presentation = new TransformPathLanePresentation(transform);
             ResolveFreeCamera();
             _presentation.CreateRouteLines(_multiPathData);
+            _presentation.CreateShapeLine(_circleShape);
             SubscribeCompletionEvents();
             _isInitialized = true;
         }
@@ -93,6 +103,7 @@ namespace Common.TransformPath.Samples
             UnsubscribeCompletionEvents();
             _pathFollower?.Stop();
             _multiPathFollower?.Stop();
+            _shapeFollower?.Stop();
             _queue.StopAll();
             _presentation.DestroyRouteLines();
             _isInitialized = false;
@@ -108,6 +119,7 @@ namespace Common.TransformPath.Samples
         {
             if (!_isInitialized)
                 return;
+            // The shape lane is already playing from its follower's Play On Start.
             StartAllLanes();
             FocusActiveLane();
         }
@@ -151,6 +163,7 @@ namespace Common.TransformPath.Samples
         public void ShowNormalLane() => SetActiveLane(ETransformPathShowcaseLane.Normal);
         public void ShowMultiPathLane() => SetActiveLane(ETransformPathShowcaseLane.MultiPath);
         public void ShowQueuedLane() => SetActiveLane(ETransformPathShowcaseLane.Queue);
+        public void ShowShapeLane() => SetActiveLane(ETransformPathShowcaseLane.Shape);
 
         public void FocusActiveLane()
         {
@@ -191,6 +204,7 @@ namespace Common.TransformPath.Samples
             PauseLane(ETransformPathShowcaseLane.Normal);
             PauseLane(ETransformPathShowcaseLane.MultiPath);
             PauseLane(ETransformPathShowcaseLane.Queue);
+            PauseLane(ETransformPathShowcaseLane.Shape);
             _isPaused = true;
         }
 
@@ -202,6 +216,7 @@ namespace Common.TransformPath.Samples
             ResumeActiveLane();
             _normalWasMovingWhenHidden = false;
             _multiWasMovingWhenHidden = false;
+            _shapeWasMovingWhenHidden = false;
             _queue.ForgetRemembered();
         }
 
@@ -213,8 +228,10 @@ namespace Common.TransformPath.Samples
             _isPaused = false;
             _pathFollower?.Stop();
             _multiPathFollower?.Stop();
+            _shapeFollower?.Stop();
             _queue.StopAll();
 
+            StartShapePath();
             StartAllLanes();
             if (wasPaused)
                 PauseAll();
@@ -231,6 +248,8 @@ namespace Common.TransformPath.Samples
                 _pathFollower.Seek(Mathf.Clamp01(_pathFollower.Progress + delta));
             else if (_activeLane == ETransformPathShowcaseLane.MultiPath && _multiPathFollower != null)
                 _multiPathFollower.Seek(Mathf.Clamp01(_multiPathFollower.Progress + delta));
+            else if (_activeLane == ETransformPathShowcaseLane.Shape && _shapeFollower != null)
+                _shapeFollower.Seek(Mathf.Repeat(_shapeFollower.Progress + delta, 1f));
         }
 
         public void BlockQueueLeader() => _queue?.Leader?.Hold();
@@ -261,6 +280,8 @@ namespace Common.TransformPath.Samples
                     return TransformPathLaneStatus.Multi(_multiPathData, _multiPathFollower);
                 case ETransformPathShowcaseLane.Queue:
                     return TransformPathLaneStatus.Queue(_queue, _queueVisible, _isPaused);
+                case ETransformPathShowcaseLane.Shape:
+                    return TransformPathLaneStatus.Shape(_circleShape, _shapeFollower);
                 default:
                     return TransformPathLaneStatus.Normal(_pathData, _pathFollower);
             }
@@ -271,7 +292,7 @@ namespace Common.TransformPath.Samples
 
         #region Private Methods
 
-        // Every lane starts; only the selected one keeps moving.
+        // Every lane but the shape lane starts here; only the selected one keeps moving.
         private void StartAllLanes()
         {
             StartNormalPath();
@@ -291,6 +312,13 @@ namespace Common.TransformPath.Samples
         {
             if (_multiPathFollower != null && !_multiPathFollower.IsMoving)
                 _multiPathFollower.Play(PathPlaybackRequest.Sequence(_multiPathData, loop: false));
+        }
+
+        // Play On Start began the first lap; a reset starts the shape again the same way.
+        private void StartShapePath()
+        {
+            if (_shapeFollower != null && !_shapeFollower.IsMoving)
+                _shapeFollower.Play(PathPlaybackRequest.Shape(_circleShape, loop: true));
         }
 
         private void SubscribeCompletionEvents()
@@ -336,6 +364,8 @@ namespace Common.TransformPath.Samples
                 PauseLane(ETransformPathShowcaseLane.MultiPath);
             if (_activeLane != ETransformPathShowcaseLane.Queue || !_queueVisible)
                 PauseLane(ETransformPathShowcaseLane.Queue);
+            if (_activeLane != ETransformPathShowcaseLane.Shape)
+                PauseLane(ETransformPathShowcaseLane.Shape);
         }
 
         private void PauseLane(ETransformPathShowcaseLane lane)
@@ -353,6 +383,10 @@ namespace Common.TransformPath.Samples
                 case ETransformPathShowcaseLane.Queue:
                     _queue.PauseAndRemember();
                     break;
+                case ETransformPathShowcaseLane.Shape:
+                    _shapeWasMovingWhenHidden = _shapeFollower != null && _shapeFollower.IsMoving;
+                    _shapeFollower?.Pause();
+                    break;
             }
         }
 
@@ -364,6 +398,8 @@ namespace Common.TransformPath.Samples
                 _multiPathFollower.Resume();
             else if (_activeLane == ETransformPathShowcaseLane.Queue && _queueVisible)
                 _queue.ResumeRemembered();
+            else if (_activeLane == ETransformPathShowcaseLane.Shape && _shapeWasMovingWhenHidden)
+                _shapeFollower.Resume();
         }
 
         private void ApplyLanePresentation()
@@ -371,6 +407,7 @@ namespace Common.TransformPath.Samples
             _presentation.SetVisible(ETransformPathShowcaseLane.Normal, _activeLane == ETransformPathShowcaseLane.Normal);
             _presentation.SetVisible(ETransformPathShowcaseLane.MultiPath, _activeLane == ETransformPathShowcaseLane.MultiPath);
             _presentation.SetVisible(ETransformPathShowcaseLane.Queue, _activeLane == ETransformPathShowcaseLane.Queue && _queueVisible);
+            _presentation.SetVisible(ETransformPathShowcaseLane.Shape, _activeLane == ETransformPathShowcaseLane.Shape);
             if (!_isPaused)
                 ResumeActiveLane();
         }
