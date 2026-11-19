@@ -9,6 +9,14 @@ namespace Common.FlowField.Editor
         private static void ClearGoal(MenuCommand command)
             => ((FlowFieldManager)command.context).SetGoal(FlowFieldGoalRequest.None);
 
+        // SetGoal needs a running session that takes runtime Goals.
+        [MenuItem("CONTEXT/FlowFieldManager/Clear Goal", true)]
+        private static bool CanClearGoal(MenuCommand command)
+            => command.context is FlowFieldManager manager
+                && manager.IsInitialized
+                && !manager.IsFaulted
+                && manager.BakeMode != FlowFieldBakeMode.StaticBaked;
+
         [MenuItem("CONTEXT/FlowFieldManager/Refresh Volume3D Visualization")]
         private static void RefreshVolumeVisualization(MenuCommand command)
         {

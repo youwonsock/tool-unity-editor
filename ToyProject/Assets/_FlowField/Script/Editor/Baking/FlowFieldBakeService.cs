@@ -32,7 +32,7 @@ namespace Common.FlowField.Editor
         {
             FlowFieldManagerConfig config = manager.CaptureConfig(manager.BakeMode);
             return FlowFieldSpaceStrategy.For(manager.SpaceMode)
-                .TryValidate(in config, bakeModeLocked: false, includeStaticGoal, out reason);
+                .TryValidate(in config, spaceModeLocked: false, bakeModeLocked: false, includeStaticGoal, out reason);
         }
 
         // ----- Surface2D -----------------------------------------------------

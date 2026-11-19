@@ -20,21 +20,26 @@ namespace Common.FlowField
 
         /// <summary>
         /// False with the reason for the first invalid setting, the check Init
-        /// and the Inspector share. <paramref name="bakeModeLocked"/> says a
-        /// running session accepted a different Bake Mode.
+        /// and the Inspector share. <paramref name="spaceModeLocked"/> and
+        /// <paramref name="bakeModeLocked"/> say a running session accepted a
+        /// different Space Mode or Bake Mode.
         /// </summary>
         internal abstract bool TryValidate(
             in FlowFieldManagerConfig config,
+            bool spaceModeLocked,
             bool bakeModeLocked,
             bool validateStaticGoal,
             out string reason);
 
         /// <summary>Throws the reason <see cref="TryValidate"/> gives.</summary>
-        internal void Validate(in FlowFieldManagerConfig config, bool bakeModeLocked, bool validateStaticGoal)
+        internal void Validate(in FlowFieldManagerConfig config, bool spaceModeLocked, bool bakeModeLocked, bool validateStaticGoal)
         {
-            if (!TryValidate(in config, bakeModeLocked, validateStaticGoal, out string reason))
+            if (!TryValidate(in config, spaceModeLocked, bakeModeLocked, validateStaticGoal, out string reason))
                 throw new InvalidOperationException(reason);
         }
+
+        /// <summary>The most cells the mode's grid may have.</summary>
+        internal abstract int MaxCellCount { get; }
 
         internal abstract bool TryCreateLayout(in FlowFieldManagerConfig config, out Bounds worldBounds, out FlowFieldGridSpace grid);
 
@@ -45,6 +50,8 @@ namespace Common.FlowField
         internal abstract Bounds ObstacleSweepBounds(in FlowFieldManagerConfig config);
         // Bake Bounds keep a whole number of cells around their centre.
         internal abstract Bounds SnapBounds(Bounds localBounds, float cellSize);
+        // A Bounds handle resize keeps the face opposite the dragged one.
+        internal abstract Bounds SnapResized(Bounds previousLocal, Bounds candidateLocal, float cellSize);
 
         private sealed class Surface : FlowFieldSpaceStrategy
         {
@@ -53,10 +60,16 @@ namespace Common.FlowField
 
             internal override bool TryValidate(
                 in FlowFieldManagerConfig config,
+                bool spaceModeLocked,
                 bool bakeModeLocked,
                 bool validateStaticGoal,
                 out string reason)
-                => FlowFieldSurfaceBuilder.TryValidate(in config, bakeModeLocked, validateStaticGoal, out reason);
+                => FlowFieldSurfaceBuilder.TryValidate(in config, spaceModeLocked, bakeModeLocked, validateStaticGoal, out reason);
+
+            internal override int MaxCellCount => FlowFieldLayoutUtility.MaxSurfaceCellCount;
+
+            internal override Bounds SnapResized(Bounds previousLocal, Bounds candidateLocal, float cellSize)
+                => FlowFieldLayoutUtility.SnapResizedKeepingOppositeFace(previousLocal, candidateLocal, cellSize);
 
             internal override bool TryCreateLayout(in FlowFieldManagerConfig config, out Bounds worldBounds, out FlowFieldGridSpace grid)
                 => FlowFieldSurfaceBuilder.TryCreateLayout(in config, out worldBounds, out grid);
@@ -90,10 +103,16 @@ namespace Common.FlowField
 
             internal override bool TryValidate(
                 in FlowFieldManagerConfig config,
+                bool spaceModeLocked,
                 bool bakeModeLocked,
                 bool validateStaticGoal,
                 out string reason)
-                => FlowFieldVolumeBuilder.TryValidate(in config, bakeModeLocked, validateStaticGoal, out reason);
+                => FlowFieldVolumeBuilder.TryValidate(in config, spaceModeLocked, bakeModeLocked, validateStaticGoal, out reason);
+
+            internal override int MaxCellCount => FlowFieldLayoutUtility.MaxVolumeCellCount;
+
+            internal override Bounds SnapResized(Bounds previousLocal, Bounds candidateLocal, float cellSize)
+                => FlowFieldLayoutUtility.SnapVolumeResizedKeepingOppositeFace(previousLocal, candidateLocal, cellSize);
 
             internal override bool TryCreateLayout(in FlowFieldManagerConfig config, out Bounds worldBounds, out FlowFieldGridSpace grid)
                 => FlowFieldVolumeBuilder.TryCreateLayout(in config, out worldBounds, out grid);

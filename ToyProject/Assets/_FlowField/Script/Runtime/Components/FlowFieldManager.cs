@@ -209,7 +209,7 @@ namespace Common.FlowField
         {
             _boundary.ThrowIfInUserCode(nameof(Init));
             if (IsInitialized && _spaceMode != SpaceMode)
-                throw new InvalidOperationException("FlowField Space Mode cannot change during an active Init session. Release and Init again.");
+                throw new InvalidOperationException(FlowFieldManagerConfig.SpaceModeLockedMessage);
             if (IsFaulted)
                 throw FlowFieldFailures.Faulted(ActiveSession.Fault);
             if (IsInitialized)

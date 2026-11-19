@@ -235,7 +235,12 @@ namespace Common.FlowField
             return result;
         }
 
-        internal bool TryGetFieldInfo(out FlowFieldFieldInfo info) => _builder.TryGetFieldInfo(out info);
+        // Only a session that can sample describes its field.
+        internal bool TryGetFieldInfo(out FlowFieldFieldInfo info)
+        {
+            info = default;
+            return IsReady && _builder.TryGetFieldInfo(out info);
+        }
 
         /// <summary>
         /// The published field, for display and bakes. It is valid until the

@@ -9,7 +9,7 @@ namespace Common.FlowField
         public bool TryGetFieldInfo(out FlowFieldFieldInfo info)
         {
             info = default;
-            if (!_session.IsReady || !_fieldStore.Grid.IsValid || _fieldStore.Surface == null || !_fieldStore.Surface.IsValid)
+            if (!_fieldStore.Grid.IsValid || _fieldStore.Surface == null || !_fieldStore.Surface.IsValid)
                 return false;
 
             bool hasRequestedGoal = false;

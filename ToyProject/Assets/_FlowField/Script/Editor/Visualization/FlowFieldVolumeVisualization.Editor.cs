@@ -413,7 +413,7 @@ namespace Common.FlowField.Editor
             // The settings as Init checks them; the asset follows in chunks below.
             FlowFieldManagerConfig settings = manager.CaptureConfig(FlowFieldBakeMode.RuntimeDynamic);
             if (!FlowFieldSpaceStrategy.For(FlowFieldSpaceMode.Volume3D)
-                    .TryValidate(in settings, bakeModeLocked: false, validateStaticGoal: false, out string settingsReason))
+                    .TryValidate(in settings, spaceModeLocked: false, bakeModeLocked: false, validateStaticGoal: false, out string settingsReason))
             {
                 SetUnavailable(state, settingsReason, FlowFieldVolumeVisualizationStatusCode.Invalid);
                 return refreshRequested;

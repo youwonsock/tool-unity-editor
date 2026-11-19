@@ -49,15 +49,7 @@ namespace Common.FlowField
         public bool TryGetFieldInfo(out FlowFieldFieldInfo info)
         {
             info = default;
-            if (_committed == null
-                || _session.State == FlowFieldRuntimeState.Uninitialized
-                || _session.State == FlowFieldRuntimeState.Released
-                || _session.State == FlowFieldRuntimeState.Suspended
-                || _session.State == FlowFieldRuntimeState.Faulted)
-                return false;
-
-            if (_requests.HasLatest
-                && !_committed.Request.HasSameGrid(_requests.Latest))
+            if (_committed == null)
                 return false;
 
             FlowFieldVolumeRequest request = _committed.Request;
