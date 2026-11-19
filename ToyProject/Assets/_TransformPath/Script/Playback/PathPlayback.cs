@@ -208,8 +208,11 @@ namespace Common.TransformPath
         {
             if (!IsMoving || _route == null)
                 return;
-            if (!RefreshRouteIfNeeded())
+            if (!TryRefreshRoute())
+            {
+                Stop();
                 return;
+            }
             if (deltaTime <= 0f)
                 return;
             if (Limit.Blocked)
@@ -244,6 +247,24 @@ namespace Common.TransformPath
             if (remaining > EPSILON && transitions >= PathConstants.MAX_SEGMENT_TRANSITIONS_PER_TICK)
                 _cursor.PendingTime = remaining;
             _positionDirty = true;
+        }
+
+        /// <summary>
+        /// Takes the provider's new revision when only the geometry changed,
+        /// keeping the local progress on the new shape. Returns false when the
+        /// route can no longer play: its provider is not ready or its definition changed.
+        /// </summary>
+        public bool TryRefreshRoute()
+        {
+            IPathProvider provider = _route.Provider;
+            if (!provider.IsReady || provider.DefinitionRevision != _route.DefinitionRevision)
+                return false;
+            if (provider.Revision == _route.Revision)
+                return true;
+            _route = _route.Refresh();
+            _cursor.SyncToProvider(_route);
+            _positionDirty = true;
+            return true;
         }
 
         #endregion
@@ -334,24 +355,6 @@ namespace Common.TransformPath
             EndPlayback();
             SetState(EPathFollowerState.Completed);
             _listeners.Completed.Publish();
-        }
-
-        private bool RefreshRouteIfNeeded()
-        {
-            IPathProvider provider = _route.Provider;
-            if (!provider.IsReady || provider.DefinitionRevision != _route.DefinitionRevision)
-            {
-                Stop();
-                return false;
-            }
-            if (provider.Revision == _route.Revision)
-                return true;
-
-            // Only the geometry changed: keep the local progress on the new shape.
-            _route = _route.Refresh();
-            _cursor.SyncToProvider(_route);
-            _positionDirty = true;
-            return true;
         }
 
         private void HaltMovement()

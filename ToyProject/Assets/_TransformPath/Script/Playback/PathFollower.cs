@@ -51,7 +51,8 @@ namespace Common.TransformPath
 
         internal override ulong TickPlaybackId => Playback.PlaybackId;
         internal int MotionEpoch => Playback.MotionEpoch;
-        internal int RouteRevision => Playback.Route?.Revision ?? -1;
+        /// <summary>The definition revision of the route this follower plays, or -1 without one.</summary>
+        internal int RouteDefinitionRevision => Playback.Route?.DefinitionRevision ?? -1;
 
         public event Action<EPathFollowerState> StateChanged
         {
@@ -237,6 +238,20 @@ namespace Common.TransformPath
 
         /// <summary>The queue writes the limit for the next movement here.</summary>
         internal void SetMotionLimit(PathMotionLimit limit) => Playback.Limit = limit;
+
+        /// <summary>
+        /// Takes the provider's new geometry now, paused or not, when only the
+        /// geometry changed. The queue calls it before it reads the progress.
+        /// </summary>
+        internal void RefreshRouteGeometry()
+        {
+            PathRoute route = Playback.Route;
+            if (Playback.PlaybackId == 0 || route == null || route.Revision == route.Provider.Revision)
+                return;
+            using var operation = PathExecutionBoundary.Enter();
+            if (Playback.TryRefreshRoute())
+                ApplyPositionIfChanged();
+        }
 
         #endregion
 

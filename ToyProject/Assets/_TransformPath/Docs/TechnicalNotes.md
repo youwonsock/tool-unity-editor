@@ -23,7 +23,7 @@
 3. **순수 계산과 Unity 연결을 나눕니다.** `PathPolyline`, `PathRoute`, `PathPlaybackCursor`, `PathPlayback`, `PathEventEffects`, Queue 계산은 MonoBehaviour와 정적 상태(알림 순서 큐 제외)에 기대지 않아 EditMode 테스트로 검증합니다. 컴포넌트는 직렬화, 생명주기, Transform 적용만 맡습니다.
 4. **검증은 경계에서 한 번만 합니다.** 공개 명령의 입력과 Provider 빌드만 검증합니다.
 5. **공통 값과 헬퍼는 한 곳에 둡니다.** 상수는 `PathConstants`, 수치 검증과 곡선 복사는 `PathValueUtility`, 정렬은 `PathSortUtility`, 1회 오류 보고는 `PathConfigurationErrorReporter`입니다.
-6. **인터페이스는 교체할 이유가 있을 때만 둡니다.** 공개 인터페이스는 `IPathEventReceiver` 하나입니다. `IPathProvider`는 내부 계약이며(테스트의 가짜 Provider가 씁니다), 공개 시그니처는 `PathProviderBehaviour`를 받습니다. Route 갱신, Aggregate 구성, Queue의 구간 구성 비교는 Provider 종류를 확인하지 않고 이 계약과 Route의 구간만 봅니다. Aggregate가 실행할 이벤트는 Provider가 `WholeRouteEvents`로 알려 주며, `MultiPathData`에는 없습니다.
+6. **인터페이스는 교체할 이유가 있을 때만 둡니다.** 공개 인터페이스는 `IPathEventReceiver` 하나입니다. `IPathProvider`는 내부 계약이며(테스트의 가짜 Provider가 씁니다), 공개 시그니처는 `PathProviderBehaviour`를 받습니다. Route 갱신과 Aggregate 구성은 Provider 종류를 확인하지 않고 이 계약과 Route의 구간만 봅니다. Aggregate가 실행할 이벤트는 Provider가 `WholeRouteEvents`로 알려 주며, `MultiPathData`에는 없습니다.
 7. **공개 API는 닫혀 있습니다.** 공개 타입은 컴포넌트(`PathFollower`, `PathQueueMember`, `QueuedPathManager`, `PathData`, `MultiPathData`, `PathDataLineRenderer`, `PathWaypointSyncRegistry`), 설정과 요청(`PathPlaybackRequest`, `PathMovementSettings`, `PathEventSettingSO`, `PathEventEntry`, `PathSegmentAuthoring`, `PathWaypointSyncGroup`, `PathQueueStatus`), 수신기와 enum뿐입니다. 기반 클래스 `PathProviderBehaviour`와 `PathRuntimeBehaviour`는 `private protected` 생성자로 외부 상속을 막습니다. 이벤트의 런타임 복사본(`PathEventDefinition` 등)은 내부 타입이며, 바깥에서는 `PathData.GetAuthoringEvent`로 작성 데이터를 읽습니다.
 
 ## 수명 규칙
@@ -67,7 +67,7 @@
 
 ### 경로 변경
 
-이동 중인 다음 Tick에 리비전을 비교하므로 Pause 중에는 Resume까지 미룹니다.
+이동 중인 다음 Tick에 리비전을 비교하므로 Pause 중에는 Resume까지 미룹니다. Queue 멤버는 Queue 단계에서 새 기하를 먼저 받고, 정의가 바뀌면 일시정지 중에도 Queue가 내보내 멈춥니다([Queue](#queue)).
 
 | 변경 | 결과 |
 | --- | --- |
@@ -81,12 +81,12 @@
 
 - **참여:** `PathQueueMember.StartQueuedPlayback`이 Follower를 재생하고 Manager에 참여합니다. 참여 직후와 위치가 이어지지 않고 바뀐 뒤에는 첫 결과와 재출발 지연까지 기다립니다.
 - **불연속(`MotionEpoch`):** 엔진은 Play, 위치를 바꾼 Seek, Loop 이음매에서 `MotionEpoch`를 1 올립니다. 멤버와 Manager는 이 값 하나만 비교합니다. 값이 바뀌면 멤버는 새 출발처럼 첫 결과와 재출발 지연을 기다리고, Manager는 그 프레임 정렬 전에 멤버를 같은 진행률의 줄 뒤로 보냅니다. Queue 안에서 다시 `StartQueuedPlayback`하면 자리는 유지합니다.
-- **계산:** Queue 단계에서 Manager가 재생이 끝났거나 다른 경로를 재생하는 멤버를 빼고, 진행률로 정렬한 뒤 앞 멤버부터 거리, 대기, 속도 배율, 진행 상한을 계산합니다(`PathQueueCoordinator`). 정렬은 할당 없는 삽입 정렬이고, 결과는 참여 순서대로 전달합니다.
-- **완화:** `PathQueueWait.Step`이 수동 대기, 재출발 지연, 추가 간격, 속도 보간을 계산하고, 멤버가 그 결과를 Follower의 이동 제한으로 기록합니다. Follower가 새 경로 리비전을 받기 전 프레임은 막습니다.
+- **계산:** Queue 단계에서 Manager가 재생이 끝났거나 다른 경로나 이전 정의를 재생하는 멤버를 빼고, 남은 멤버가 새 기하를 먼저 받게 한 다음(일시정지 포함) 진행률로 정렬한 뒤 앞 멤버부터 거리, 대기, 속도 배율, 진행 상한을 계산합니다(`PathQueueCoordinator`). 정렬은 할당 없는 삽입 정렬이고, 결과는 참여 순서대로 전달합니다.
+- **완화:** `PathQueueWait.Step`이 수동 대기, 재출발 지연, 추가 간격, 속도 보간을 계산하고, 멤버가 그 결과를 Follower의 이동 제한으로 기록합니다. 기하를 먼저 받으므로 경로가 매 프레임 바뀌어도 멤버가 막히지 않습니다.
 - **Pause와 Hold:** 일시정지한 멤버는 줄에 남아 뒤 멤버를 막고, 재개하면 첫 결과부터 기다립니다. `Hold`는 Queue에 남은 채 대기를 요청하며, Queue 밖에서 부르면 다음 Queue 시작부터 적용됩니다.
 - **최대 진행률:** 그 지점에서 멈추고 완료하지 않습니다. 넘어선 멤버는 그 자리에서 기다립니다.
 - **Loop:** 멤버는 이음매에서 그 프레임의 남은 시간을 버리고 멈춘 뒤, 새 출발처럼 줄 맨 뒤에서 첫 결과와 재출발 지연을 기다립니다(`PathMotionLimit.WaitOnDiscontinuity`). 이음매 너머의 간격은 보지 않습니다.
-- **이탈:** 재생이 끝나거나 멈추면 다음 Queue 단계에서 빠집니다(`Completed`, `Stopped`). `Leave`는 재생을 유지한 채 빠지며 `Resumed`와 `SpeedChanged`가 바로 옵니다. 경로가 준비되지 않거나 Manager가 해제되면 재생을 멈추고 `QueueInvalidated`(`ProviderInvalid`, `ManagerReleased`)를 보냅니다. 구간 구성이 바뀌어도 `ManagerReleased`로 모두 빠집니다.
+- **이탈:** 재생이 끝나거나 멈추면 다음 Queue 단계에서 빠집니다(`Completed`, `Stopped`). `Leave`는 재생을 유지한 채 빠지며 `Resumed`와 `SpeedChanged`가 바로 옵니다. 경로가 준비되지 않거나 Manager가 해제되면 이 경로의 재생을 일시정지 중이어도 멈추고 `QueueInvalidated`(`ProviderInvalid`, `ManagerReleased`)를 보냅니다. 이미 다른 경로를 재생하는 Follower는 `ProviderInvalid`로 빠지지만 멈추지 않습니다. 경로의 정의(이동 설정, 이벤트, 구간 구성)가 바뀌면 Follower가 가진 Route의 정의 리비전이 Provider와 다른 멤버만 `ManagerReleased`로 빠지고 멈춥니다. 새 정의로 다시 시작한 멤버는 남습니다. 재생은 움직이는 동안에만 정의 변경을 보므로, 일시정지 멤버는 Queue가 이 기준으로 내보내야 합니다.
 - **기본값:** 간격 1.5, 감속 시작 거리 3, 최소 속도 배율 0.1, 재출발 지연 0.1초, 추가 간격 0.3, 속도 보간율 5이며 Inspector에서 바꿉니다. `StartQueuedPlayback(request)`는 Inspector에 지정한 Manager로 시작합니다.
 - **대기 알림:** `Blocked`와 `Resumed`는 Queue 단계에서 관찰한 대기 상태의 변화와 짝을 이룹니다. 대기가 한 Tick 안에 끝나면 둘 다 오지 않습니다. `Hold`의 알림은 다음 Tick에 옵니다. 정지와 완료는 `StateChanged`와 `Completed`로만 알립니다.
 

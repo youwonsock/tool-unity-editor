@@ -18,6 +18,7 @@ namespace Common.TransformPath
             public int MotionEpoch;
             public float Progress;
             public PathQueueStatus? Status;
+            public EPathQueueLeaveReason LeaveReason;
         }
 
         [Header("Route")]
@@ -39,7 +40,6 @@ namespace Common.TransformPath
         private readonly List<Entry> _leaving = new List<Entry>(100);
         private readonly List<Entry> _pool = new List<Entry>(100);
         private readonly Dictionary<PathQueueMember, Entry> _entries = new Dictionary<PathQueueMember, Entry>(100);
-        private readonly List<IPathProvider> _routeStructure = new List<IPathProvider>();
 
         private PathProviderBehaviour _routeProvider;
         private bool _isInitialized;
@@ -124,7 +124,6 @@ namespace Common.TransformPath
             LeaveAll(EPathQueueLeaveReason.ManagerReleased);
             _routeProvider = provider;
             _routeRevision = provider.Revision;
-            CaptureRouteStructure();
         }
 
         #region Runtime
@@ -154,7 +153,6 @@ namespace Common.TransformPath
             using var operation = PathExecutionBoundary.Enter();
             LeaveAll(EPathQueueLeaveReason.ManagerReleased);
             _routeProvider = null;
-            _routeStructure.Clear();
             _routeRevision = -1;
             _isInitialized = false;
         }
@@ -180,14 +178,16 @@ namespace Common.TransformPath
                 LeaveAll(EPathQueueLeaveReason.ProviderInvalid);
                 return;
             }
-            if (_routeProvider.Revision != _routeRevision)
-                RefreshRouteRevision();
+            _routeRevision = _routeProvider.Revision;
 
             RemoveEndedMembers();
             for (int i = 0; i < _ordered.Count; i++)
             {
                 Entry entry = _ordered[i];
                 PathFollower follower = entry.Member.Follower;
+                // The member takes a new geometry before its progress is read,
+                // so a path that changes every frame still lets the queue move.
+                follower.RefreshRouteGeometry();
                 entry.Progress = Mathf.Clamp01(follower.Progress);
                 // A jump (Seek, loop seam) joins the back of the line at its new
                 // progress before this frame's order, as a new start would.
@@ -266,36 +266,50 @@ namespace Common.TransformPath
             {
                 PathQueueMember member = _leaving[i].Member;
                 Remove(member);
-                member.OnRemovedByManager(reason);
+                member.OnRemovedByManager(reason, _routeProvider);
             }
             _leaving.Clear();
         }
 
-        // A member whose playback ended or left the route is no longer on it.
+        // A member whose playback ended, left the route or still plays the
+        // route's old definition is no longer on it.
         private void RemoveEndedMembers()
         {
             _leaving.Clear();
             for (int i = 0; i < _joined.Count; i++)
             {
-                PathFollower follower = _joined[i].Member.Follower;
-                if (follower == null
-                    || follower.PlaybackId == 0
-                    || !ReferenceEquals(follower.CurrentProvider, _routeProvider))
-                    _leaving.Add(_joined[i]);
+                Entry entry = _joined[i];
+                if (TryGetLeaveReason(entry.Member.Follower, out entry.LeaveReason))
+                    _leaving.Add(entry);
             }
             for (int i = 0; i < _leaving.Count; i++)
             {
                 PathQueueMember member = _leaving[i].Member;
-                PathFollower follower = member.Follower;
-                EPathQueueLeaveReason reason = follower == null || follower.PlaybackId == 0
-                    ? follower != null && follower.State == EPathFollowerState.Completed
-                        ? EPathQueueLeaveReason.Completed
-                        : EPathQueueLeaveReason.Stopped
-                    : EPathQueueLeaveReason.ProviderInvalid;
+                EPathQueueLeaveReason reason = _leaving[i].LeaveReason;
                 Remove(member);
-                member.OnRemovedByManager(reason);
+                member.OnRemovedByManager(reason, _routeProvider);
             }
             _leaving.Clear();
+        }
+
+        private bool TryGetLeaveReason(PathFollower follower, out EPathQueueLeaveReason reason)
+        {
+            if (follower == null || follower.PlaybackId == 0)
+                reason = follower != null && follower.State == EPathFollowerState.Completed
+                    ? EPathQueueLeaveReason.Completed
+                    : EPathQueueLeaveReason.Stopped;
+            else if (!ReferenceEquals(follower.CurrentProvider, _routeProvider))
+                reason = EPathQueueLeaveReason.ProviderInvalid;
+            // A moving playback would stop at its next move, a paused one only
+            // when it resumes. Either way it no longer plays this route.
+            else if (follower.RouteDefinitionRevision != _routeProvider.DefinitionRevision)
+                reason = EPathQueueLeaveReason.ManagerReleased;
+            else
+            {
+                reason = default(EPathQueueLeaveReason);
+                return false;
+            }
+            return true;
         }
 
         #endregion
@@ -314,50 +328,15 @@ namespace Common.TransformPath
                     ? (float?)null
                     : Mathf.Max(0f, (ahead.Progress - entry.Progress) * routeLength);
                 float spacing = SpacingFor(member);
-                // A follower that has not taken the new geometry yet waits a frame.
-                bool revisionBlocked = member.Follower.RouteRevision != _routeRevision;
-                bool spacingBlocked = distance.HasValue && distance.Value <= spacing;
+                bool blocked = distance.HasValue && distance.Value <= spacing;
                 float multiplier = PathQueueCoordinator.CalculateSpeedMultiplier(
                     _enableGradualSlowdown && member.EnableGradualSlowdown,
                     distance, spacing, _slowdownStartDistance, _minSpeedMultiplier, _slowdownCurve);
                 float maxProgress = PathQueueCoordinator.CalculateMaxProgress(
                     member.EnableOvertakeProtection, ahead?.Progress, spacing, routeLength);
-                entry.Status = new PathQueueStatus(ahead?.Member, distance, revisionBlocked || spacingBlocked,
-                    multiplier, maxProgress);
+                entry.Status = new PathQueueStatus(ahead?.Member, distance, blocked, multiplier, maxProgress);
                 ahead = entry;
             }
-        }
-
-        private void RefreshRouteRevision()
-        {
-            _routeRevision = _routeProvider.Revision;
-            if (IsSameRouteStructure())
-                return;
-            LeaveAll(EPathQueueLeaveReason.ManagerReleased);
-            CaptureRouteStructure();
-        }
-
-        // The geometry may change under the members. Different segments may not.
-        // A segment is known by the provider that draws it.
-        private bool IsSameRouteStructure()
-        {
-            PathRoute route = _routeProvider.GetRoute();
-            if (route.SegmentCount != _routeStructure.Count)
-                return false;
-            for (int i = 0; i < _routeStructure.Count; i++)
-            {
-                if (!ReferenceEquals(route.GetSampler(i), _routeStructure[i]))
-                    return false;
-            }
-            return true;
-        }
-
-        private void CaptureRouteStructure()
-        {
-            _routeStructure.Clear();
-            PathRoute route = _routeProvider.GetRoute();
-            for (int i = 0; i < route.SegmentCount; i++)
-                _routeStructure.Add(route.GetSampler(i));
         }
 
         private bool TryValidateSettings(out string error)

@@ -175,10 +175,7 @@ namespace Common.TransformPath.Tests
             follower.Play(PathPlaybackRequest.Single(path));
             Frames(10);
 
-            // Edit Mode does not call OnDestroy for a component that never woke; Play Mode does.
-            typeof(PathProviderBehaviour)
-                .GetMethod("OnDestroy", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                .Invoke(path, null);
+            DestroyProvider(path);
             Frames(1);
 
             Assert.AreEqual(EPathFollowerState.Ready, follower.State);
@@ -238,6 +235,99 @@ namespace Common.TransformPath.Tests
             CollectionAssert.AreEqual(new[] { EPathQueueLeaveReason.ManagerReleased }, reasons);
             Assert.IsFalse(member.IsInQueue);
         }
+
+        [Test]
+        public void PausedMember_StopsWhenItsRouteGoesAway()
+        {
+            PathData path = Line(30f, 4f);
+            QueuedPathManager manager = CreateManager(path);
+            PathQueueMember member = CreateMember();
+            var reasons = new List<EPathQueueLeaveReason>();
+            member.QueueInvalidated += (_, reason) => reasons.Add(reason);
+            member.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            Frames(10);
+            member.Follower.Pause();
+
+            DestroyProvider(path);
+            Frames(1);
+
+            CollectionAssert.AreEqual(new[] { EPathQueueLeaveReason.ProviderInvalid }, reasons);
+            Assert.AreEqual(EPathFollowerState.Ready, member.Follower.State);
+        }
+
+        [Test]
+        public void FollowerOnAnotherRoute_KeepsPlaying_WhenTheQueueDropsIt()
+        {
+            PathData path = Line(30f, 4f);
+            PathData other = Line(20f, 4f);
+            QueuedPathManager manager = CreateManager(path);
+            PathQueueMember member = CreateMember();
+            var reasons = new List<EPathQueueLeaveReason>();
+            member.QueueInvalidated += (_, reason) => reasons.Add(reason);
+            member.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            Frames(10);
+
+            member.Follower.Play(PathPlaybackRequest.Single(other));
+            Frames(1);
+
+            CollectionAssert.AreEqual(new[] { EPathQueueLeaveReason.ProviderInvalid }, reasons);
+            Assert.IsFalse(member.IsInQueue);
+            Assert.AreEqual(EPathFollowerState.Moving, member.Follower.State);
+            Assert.AreSame(other, member.Follower.CurrentProvider);
+        }
+
+        [Test]
+        public void DefinitionChange_ReleasesOnlyMembersStillOnTheOldDefinition()
+        {
+            PathData path = Line(30f, 4f);
+            QueuedPathManager manager = CreateManager(path);
+            PathQueueMember restarted = CreateMember();
+            PathQueueMember paused = CreateMember();
+            var reasons = new List<string>();
+            restarted.QueueInvalidated += (_, reason) => reasons.Add($"restarted {reason}");
+            paused.QueueInvalidated += (_, reason) => reasons.Add($"paused {reason}");
+            restarted.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            paused.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            restarted.Follower.Seek(0.4f);
+            Frames(10);
+            paused.Follower.Pause();
+
+            path.MovementSettings = PathMovementSettings.Speed(6f);
+            restarted.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            Frames(1);
+
+            CollectionAssert.AreEqual(new[] { "paused ManagerReleased" }, reasons);
+            Assert.IsTrue(restarted.IsInQueue);
+            Assert.AreEqual(EPathFollowerState.Moving, restarted.Follower.State);
+            Assert.IsFalse(paused.IsInQueue);
+            Assert.AreEqual(EPathFollowerState.Ready, paused.Follower.State);
+        }
+
+        [Test]
+        public void GeometryChangingEveryFrame_StillLetsTheQueueMove()
+        {
+            PathData path = Line(30f, 4f);
+            QueuedPathManager manager = CreateManager(path);
+            PathQueueMember member = CreateMember();
+            member.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            Transform end = GetPoints(path)[1];
+
+            for (int i = 1; i <= 60; i++)
+            {
+                end.position = new Vector3(30f + i * 0.01f, 0f, 0f);
+                path.Rebuild();
+                Frames(1);
+            }
+
+            Assert.IsTrue(member.IsInQueue);
+            Assert.Greater(member.Follower.Progress, 0.05f);
+        }
+
+        // Edit Mode does not call OnDestroy for a component that never woke; Play Mode does.
+        private static void DestroyProvider(PathProviderBehaviour provider) =>
+            typeof(PathProviderBehaviour)
+                .GetMethod("OnDestroy", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                .Invoke(provider, null);
 
         private static IReadOnlyList<Transform> GetPoints(PathData path) => path.PathPoints;
     }

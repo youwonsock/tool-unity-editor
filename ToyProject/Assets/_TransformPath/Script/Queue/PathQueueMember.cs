@@ -11,7 +11,10 @@ namespace Common.TransformPath
         Completed,
         /// <summary>The route is not ready, or the follower plays another route.</summary>
         ProviderInvalid,
-        /// <summary>The manager was disabled, changed its route, or its route's segments changed.</summary>
+        /// <summary>
+        /// The manager was disabled or changed its route, or the route's movement,
+        /// events or segments changed under the member's playback.
+        /// </summary>
         ManagerReleased,
     }
 
@@ -120,7 +123,11 @@ namespace Common.TransformPath
             remove => _speedChanged.Remove(value);
         }
 
-        /// <summary>The queue dropped the member because its route or manager went away. The playback stopped.</summary>
+        /// <summary>
+        /// The queue dropped the member because its route or manager went away.
+        /// A playback of that route stopped, paused or not; a follower that
+        /// already plays another route keeps playing.
+        /// </summary>
         public event Action<PathQueueMember, EPathQueueLeaveReason> QueueInvalidated
         {
             add => _invalidated.Add(value);
@@ -251,8 +258,8 @@ namespace Common.TransformPath
             ReportChanges();
         }
 
-        /// <summary>The manager dropped this member.</summary>
-        internal void OnRemovedByManager(EPathQueueLeaveReason reason)
+        /// <summary>The manager dropped this member from the queue of this route.</summary>
+        internal void OnRemovedByManager(EPathQueueLeaveReason reason, PathProviderBehaviour route)
         {
             _activeManager = null;
             bool invalidated = reason == EPathQueueLeaveReason.ProviderInvalid
@@ -260,13 +267,12 @@ namespace Common.TransformPath
             // Waiting ends without a Resumed notification. Stop and Complete speak for themselves.
             ResetWait(reason == EPathQueueLeaveReason.Completed);
             _reportedBlocked = false;
-            if (invalidated)
-            {
-                PathFollower follower = Follower;
-                if (follower != null && follower.State == EPathFollowerState.Moving)
-                    follower.Stop();
-                _invalidated.Publish(this, reason);
-            }
+            if (!invalidated)
+                return;
+            PathFollower follower = Follower;
+            if (follower != null && follower.PlaybackId != 0 && ReferenceEquals(follower.CurrentProvider, route))
+                follower.Stop();
+            _invalidated.Publish(this, reason);
         }
 
         #endregion
