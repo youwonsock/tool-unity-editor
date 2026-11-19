@@ -61,31 +61,40 @@ namespace Common.FlowField
         /// message each. <paramref name="bakeModeLocked"/> says a running
         /// session accepted a different Bake Mode.
         /// </summary>
-        internal void ValidateShared(bool bakeModeLocked)
+        internal bool TryValidateShared(bool bakeModeLocked, out string reason)
         {
             if (!FlowFieldGridSpace.IsFinite(Grid.CellSize) || Grid.CellSize < FlowFieldBakeBoundsUtility.MinCellSize)
-                throw new ArgumentOutOfRangeException("_cellSize", Grid.CellSize, "Cell Size must be finite and positive.");
+                return Fail(out reason, "Cell Size must be finite and positive.");
             Bounds bounds = Grid.BakeBoundsLocal;
             if (!FlowFieldGridSpace.IsFinite(bounds.center)
                 || !FlowFieldGridSpace.IsFinite(bounds.size)
                 || bounds.size.x <= 0f
                 || bounds.size.y <= 0f
                 || bounds.size.z <= 0f)
-                throw new ArgumentOutOfRangeException("_bakeBoundsLocal", "Bake Bounds must be finite and positive.");
+                return Fail(out reason, "Bake Bounds must be finite and positive.");
             if (!HasValidDefaultDirection)
-                throw new ArgumentOutOfRangeException("_defaultFlowDirection", "Default Flow Direction must be finite and non-zero.");
+                return Fail(out reason, "Default Flow Direction must be finite and non-zero.");
             if (!HasSupportedTransform)
-                throw new ArgumentException("FlowField Manager must use an unrotated transform with unit scale.", "transform");
+                return Fail(out reason, "FlowField Manager must use an unrotated transform with unit scale.");
             if (Obstacles.Layer.value == 0)
-                throw new ArgumentException("Obstacle LayerMask must contain at least one layer.", "_obstacleLayer");
+                return Fail(out reason, "Obstacle LayerMask must contain at least one layer.");
             if (!FlowFieldGridSpace.IsFinite(Obstacles.Clearance) || Obstacles.Clearance < 0f)
-                throw new ArgumentOutOfRangeException("_obstacleClearance", "Obstacle Clearance must be finite and not negative.");
+                return Fail(out reason, "Obstacle Clearance must be finite and not negative.");
             if (!FlowFieldGridSpace.IsFinite(Flow.GoalInfluenceRadius) || Flow.GoalInfluenceRadius < 0f)
-                throw new ArgumentOutOfRangeException("_goalInfluenceRadius", "Goal Influence Radius must be finite and not negative.");
+                return Fail(out reason, "Goal Influence Radius must be finite and not negative.");
             if (!Enum.IsDefined(typeof(FlowFieldBakeMode), BakeMode))
-                throw new ArgumentOutOfRangeException("_bakeMode");
+                return Fail(out reason, "Bake Mode must be RuntimeDynamic or StaticBaked.");
             if (bakeModeLocked)
-                throw new InvalidOperationException("FlowField Bake Mode cannot change during an active Init session. Release and Init again.");
+                return Fail(out reason, "FlowField Bake Mode cannot change during an active Init session. Release and Init again.");
+            reason = string.Empty;
+            return true;
+        }
+
+        /// <summary>A failed check: false with its reason.</summary>
+        internal static bool Fail(out string reason, string message)
+        {
+            reason = message;
+            return false;
         }
 
         internal bool HasValidDefaultDirection

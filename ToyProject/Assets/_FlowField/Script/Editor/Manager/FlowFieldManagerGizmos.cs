@@ -11,7 +11,7 @@ namespace Common.FlowField.Editor
         {
             if (!FlowFieldDisplay.Of(manager).ShowField)
                 return;
-            if (manager.CaptureConfig().SpaceMode == FlowFieldSpaceMode.Volume3D)
+            if (manager.SpaceMode == FlowFieldSpaceMode.Volume3D)
             {
                 FlowFieldVolumeVisualizationEditor.Draw(manager);
                 return;
@@ -22,25 +22,21 @@ namespace Common.FlowField.Editor
         [DrawGizmo(GizmoType.Selected | GizmoType.Active)]
         private static void DrawBakeBounds(FlowFieldManager manager, GizmoType gizmoType)
         {
-            bool volume = manager.CaptureConfig().SpaceMode == FlowFieldSpaceMode.Volume3D;
-            Bounds worldBounds;
-            bool validLayout = volume
-                ? manager.TryGetVolumeLayout(out worldBounds, out _)
-                : manager.TryGetBakeLayout(out worldBounds, out _);
-            if (!validLayout)
+            if (!manager.TryGetLayout(out Bounds worldBounds, out _))
                 return;
-            if (volume)
+            if (manager.SpaceMode == FlowFieldSpaceMode.Volume3D)
                 FlowFieldVolumeVisualizationEditor.DrawBounds(manager, worldBounds);
             else
-                FlowFieldGizmoDrawer.DrawBakeBounds(worldBounds, manager.TryValidateSurfaceBake(out _));
+                FlowFieldGizmoDrawer.DrawBakeBounds(worldBounds, manager.TryValidateConfig(out _));
         }
 
         private static void DrawSurfaceField(FlowFieldManager manager)
         {
-            if (!manager.TryGetBakeLayout(out _, out FlowFieldGridSpace grid)
+            // A StaticBaked field draws the Goal it was baked with.
+            if (!manager.TryGetLayout(out _, out FlowFieldGridSpace grid)
                 || !grid.IsValid
                 || !FlowFieldBakeBoundsUtility.TryValidateCellCount(grid.Width, grid.Depth, out _)
-                || !manager.TryValidateSurfaceBake(
+                || !manager.TryValidateConfig(
                     out _,
                     includeStaticGoal: manager.BakeMode != FlowFieldBakeMode.StaticBaked))
                 return;

@@ -1,4 +1,3 @@
-#if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -402,7 +401,7 @@ namespace Common.FlowField.Editor
                 return false;
             }
 
-            if (!manager.TryGetVolumeLayout(out Bounds worldBounds, out FlowFieldGridSpace grid)
+            if (!manager.TryGetLayout(out Bounds worldBounds, out FlowFieldGridSpace grid)
                 || !grid.IsValid)
             {
                 SetUnavailable(state, "Volume Bounds 또는 Cell Size가 유효하지 않습니다.");
@@ -411,6 +410,14 @@ namespace Common.FlowField.Editor
 
             if (Application.isPlaying)
                 return PumpRuntime(manager, state);
+            // The settings as Init checks them; the asset follows in chunks below.
+            FlowFieldManagerConfig settings = manager.CaptureConfig(FlowFieldBakeMode.RuntimeDynamic);
+            if (!FlowFieldSpaceStrategy.For(FlowFieldSpaceMode.Volume3D)
+                    .TryValidate(in settings, bakeModeLocked: false, validateStaticGoal: false, out string settingsReason))
+            {
+                SetUnavailable(state, settingsReason, FlowFieldVolumeVisualizationStatusCode.Invalid);
+                return refreshRequested;
+            }
             if (manager.BakeMode != FlowFieldBakeMode.StaticBaked)
             {
                 SetUnavailable(state, "RuntimeDynamic은 실행 후 Volume3D 벡터를 표시합니다.",
@@ -709,7 +716,7 @@ namespace Common.FlowField.Editor
                 return false;
             FlowFieldVolumeBakeData asset = manager.CaptureConfig().BakeAssets.Volume;
             if (asset == null
-                || !manager.TryGetVolumeLayout(
+                || !manager.TryGetLayout(
                     out Bounds worldBounds,
                     out FlowFieldGridSpace grid)
                 || !asset.TryGetView(
@@ -752,7 +759,7 @@ namespace Common.FlowField.Editor
             out FlowFieldVolumeVisualizationSource source)
         {
             source = default;
-            if (!manager.TryGetVolumeLayout(out Bounds worldBounds, out FlowFieldGridSpace grid))
+            if (!manager.TryGetLayout(out Bounds worldBounds, out FlowFieldGridSpace grid))
                 return false;
             FlowFieldVolumeBakeData asset = manager.BakeMode == FlowFieldBakeMode.StaticBaked
                 ? manager.CaptureConfig().BakeAssets.Volume
@@ -826,4 +833,3 @@ namespace Common.FlowField.Editor
         }
     }
 }
-#endif

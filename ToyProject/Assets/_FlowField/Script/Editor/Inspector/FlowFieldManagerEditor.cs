@@ -67,10 +67,7 @@ namespace Common.FlowField.Editor
                         if (GUILayout.Button("Bake / ReBake Static Flow Field"))
                             FlowFieldBakeEditor.ScheduleBake(manager);
 
-                        bool hasBakeAsset = manager.SpaceMode == FlowFieldSpaceMode.Volume3D
-                            ? manager.CaptureConfig().BakeAssets.Volume != null
-                            : manager.CaptureConfig().BakeAssets.Surface != null;
-                        using (new EditorGUI.DisabledScope(!hasBakeAsset))
+                        using (new EditorGUI.DisabledScope(!FlowFieldBakeEditor.HasBakeAsset(manager)))
                         {
                             if (GUILayout.Button("Clear Bake"))
                                 FlowFieldBakeEditor.ClearReference(manager);
@@ -110,18 +107,13 @@ namespace Common.FlowField.Editor
             var manager = (FlowFieldManager)target;
             if (manager == null)
                 return;
-            Bounds worldBounds;
-            FlowFieldGridSpace unusedGrid;
-            bool validLayout = manager.SpaceMode == FlowFieldSpaceMode.Volume3D
-                ? manager.TryGetVolumeLayout(out worldBounds, out unusedGrid)
-                : manager.TryGetBakeLayout(out worldBounds, out unusedGrid);
-            if (!validLayout)
+            if (!manager.TryGetLayout(out Bounds worldBounds, out _))
                 return;
 
             bool validBounds = manager.SpaceMode == FlowFieldSpaceMode.Volume3D
                 ? FlowFieldVolumeVisualizationEditor.TryGetBoundsValidity(manager, out bool volumeValid)
                     && volumeValid
-                : manager.TryValidateSurfaceBake(out _);
+                : manager.TryValidateConfig(out _);
             Color color = validBounds ? ValidBoundsColor : StaleBoundsColor;
             Color previousHandlesColor = Handles.color;
             Handles.color = color;
@@ -166,9 +158,7 @@ namespace Common.FlowField.Editor
 
         private static bool DrawBakeLayout(FlowFieldManager manager)
         {
-            bool validLayout = manager.SpaceMode == FlowFieldSpaceMode.Volume3D
-                ? manager.TryGetVolumeLayout(out Bounds worldBounds, out FlowFieldGridSpace grid)
-                : manager.TryGetBakeLayout(out worldBounds, out grid);
+            bool validLayout = manager.TryGetLayout(out Bounds worldBounds, out FlowFieldGridSpace grid);
             int maxCells = manager.SpaceMode == FlowFieldSpaceMode.Volume3D
                 ? FlowFieldBakeBoundsUtility.MaxVolumeCellCount
                 : FlowFieldBakeBoundsUtility.MaxSurfaceCellCount;
@@ -218,7 +208,7 @@ namespace Common.FlowField.Editor
                         ? MessageType.Info
                         : MessageType.Warning;
                 EditorGUILayout.HelpBox(volumeStatus.Message, type);
-                if (manager.TryGetVolumeLayout(out _, out FlowFieldGridSpace displayGrid))
+                if (manager.TryGetLayout(out _, out FlowFieldGridSpace displayGrid))
                 {
                     FlowFieldDisplay display = FlowFieldDisplay.Of(manager);
                     string displayMode = display.VolumeGizmoMode == FlowFieldVolumeGizmoMode.FullVolume
@@ -247,29 +237,13 @@ namespace Common.FlowField.Editor
                 }
                 return;
             }
-            if (manager.TryValidateSurfaceBake(out string reason))
-            {
-                bool hasStaticAsset = manager.SpaceMode == FlowFieldSpaceMode.Volume3D
-                    ? manager.CaptureConfig().BakeAssets.Volume != null
-                    : manager.CaptureConfig().BakeAssets.Surface != null;
-                if (manager.BakeMode == FlowFieldBakeMode.StaticBaked && hasStaticAsset)
-                {
-                    EditorGUILayout.HelpBox(
-                        "Static Flow Bake is valid.",
-                        MessageType.Info);
-                }
-                else
-                {
-                    EditorGUILayout.HelpBox(
-                        manager.SpaceMode == FlowFieldSpaceMode.Volume3D
-                            ? "Runtime Dynamic fills the configured Bounds with Volume3D cells."
-                            : "Runtime Dynamic uses a fresh downward raycast Surface bake.",
-                        MessageType.Info);
-                }
-                return;
-            }
-
-            EditorGUILayout.HelpBox(reason, MessageType.Error);
+            // A StaticBaked Manager passes only with a matching asset.
+            if (!manager.TryValidateConfig(out string reason))
+                EditorGUILayout.HelpBox(reason, MessageType.Error);
+            else if (manager.BakeMode == FlowFieldBakeMode.StaticBaked)
+                EditorGUILayout.HelpBox("Static Flow Bake is valid.", MessageType.Info);
+            else
+                EditorGUILayout.HelpBox("Runtime Dynamic uses a fresh downward raycast Surface bake.", MessageType.Info);
         }
 
         // Display options live on their own component, which the Scene View reads.

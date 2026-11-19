@@ -15,13 +15,27 @@ namespace Common.FlowField.Editor
     /// </summary>
     internal static class FlowFieldBakeService
     {
-        // ----- Surface2D -----------------------------------------------------
+        // ----- Both modes ----------------------------------------------------
 
-        internal static bool TryGetBakeLayout(this FlowFieldManager manager, out Bounds worldBounds, out FlowFieldGridSpace grid)
+        /// <summary>The grid the settings lay out, as the space mode's strategy computes it.</summary>
+        internal static bool TryGetLayout(this FlowFieldManager manager, out Bounds worldBounds, out FlowFieldGridSpace grid)
         {
             FlowFieldManagerConfig config = manager.CaptureConfig();
-            return FlowFieldSurfaceBuilder.TryCreateLayout(in config, out worldBounds, out grid);
+            return FlowFieldSpaceStrategy.For(manager.SpaceMode).TryCreateLayout(in config, out worldBounds, out grid);
         }
+
+        /// <summary>
+        /// The check Init makes, with its reason, for the Bake Mode the session
+        /// accepted. Without a session that is the serialized Bake Mode.
+        /// </summary>
+        internal static bool TryValidateConfig(this FlowFieldManager manager, out string reason, bool includeStaticGoal = true)
+        {
+            FlowFieldManagerConfig config = manager.CaptureConfig(manager.BakeMode);
+            return FlowFieldSpaceStrategy.For(manager.SpaceMode)
+                .TryValidate(in config, bakeModeLocked: false, includeStaticGoal, out reason);
+        }
+
+        // ----- Surface2D -----------------------------------------------------
 
         internal static FlowFieldSurfaceBakeSettings CreateSurfaceBakeSettings(this FlowFieldManager manager)
         {
@@ -33,45 +47,6 @@ namespace Common.FlowField.Editor
         {
             FlowFieldManagerConfig config = manager.CaptureConfig();
             return FlowFieldSurfaceBuilder.ResolveGoal(in config, grid);
-        }
-
-        internal static bool TryValidateSurfaceBake(this FlowFieldManager manager, out string reason)
-            => manager.TryValidateSurfaceBake(out reason, includeStaticGoal: true);
-
-        // A Volume3D Manager answers with its Volume bake check. Surface2D
-        // checks with the Bake Mode its session accepted.
-        internal static bool TryValidateSurfaceBake(this FlowFieldManager manager, out string reason, bool includeStaticGoal)
-        {
-            FlowFieldManagerConfig config = manager.CaptureConfig(manager.BakeMode);
-            if (config.SpaceMode == FlowFieldSpaceMode.Volume3D)
-                return FlowFieldVolumeBuilder.TryValidateBake(manager.CaptureConfig(), out reason);
-            return FlowFieldSurfaceBuilder.TryValidateBake(in config, includeStaticGoal, out reason);
-        }
-
-        // ----- Volume3D ------------------------------------------------------
-
-        internal static bool TryGetVolumeLayout(this FlowFieldManager manager, out Bounds worldBounds, out FlowFieldGridSpace grid)
-        {
-            FlowFieldManagerConfig config = manager.CaptureConfig();
-            return FlowFieldVolumeBuilder.TryCreateLayout(in config, out worldBounds, out grid);
-        }
-
-        internal static FlowFieldVolumeRequest CreateVolumeRequest(
-            this FlowFieldManager manager,
-            FlowFieldGridSpace grid,
-            Bounds worldBounds,
-            FlowFieldBakeMode bakeMode,
-            FlowFieldVolumeBakeData bakeData,
-            int bakeInputGeneration = 0)
-        {
-            FlowFieldManagerConfig config = manager.CaptureConfig();
-            return FlowFieldVolumeBuilder.CreateRequest(
-                in config,
-                grid,
-                worldBounds,
-                bakeMode,
-                bakeData,
-                bakeInputGeneration);
         }
 
         // ----- Edits -----------------------------------------------------------
@@ -94,14 +69,8 @@ namespace Common.FlowField.Editor
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 
-        // A bake assigns or clears its asset without an Undo step.
-        internal static void AssignStaticBakeData(this FlowFieldManager manager, FlowFieldStaticBakeData bakeData)
-            => AssignWithoutUndo(manager, FlowFieldManager.PropertyNames.SurfaceBakeData, bakeData);
-
-        internal static void AssignVolumeBakeData(this FlowFieldManager manager, FlowFieldVolumeBakeData bakeData)
-            => AssignWithoutUndo(manager, FlowFieldManager.PropertyNames.VolumeBakeData, bakeData);
-
-        private static void AssignWithoutUndo(FlowFieldManager manager, string propertyPath, UnityEngine.Object asset)
+        // A bake assigns or clears its asset at the property path without an Undo step.
+        internal static void AssignBakeAsset(this FlowFieldManager manager, string propertyPath, UnityEngine.Object asset)
         {
             var serialized = new SerializedObject(manager);
             SerializedProperty property = serialized.FindProperty(propertyPath);
@@ -172,22 +141,20 @@ namespace Common.FlowField.Editor
         /// Creates an isolated Volume3D bake session. The caller owns and must
         /// dispose it, and pumps it from the Editor update loop.
         /// </summary>
-        internal static FlowFieldSession CreateVolumeBakeSession(
-            FlowFieldManager manager,
-            out FlowFieldVolumeRequest request)
+        internal static FlowFieldSession CreateVolumeBakeSession(FlowFieldManager manager)
         {
-            request = default;
-            if (manager.CaptureConfig().SpaceMode != FlowFieldSpaceMode.Volume3D)
+            FlowFieldManagerConfig config = manager.CaptureConfig();
+            if (config.SpaceMode != FlowFieldSpaceMode.Volume3D)
                 throw new InvalidOperationException("Volume bake requires Volume3D mode.");
-            if (!manager.TryGetVolumeLayout(out Bounds worldBounds, out FlowFieldGridSpace grid))
+            if (!FlowFieldVolumeBuilder.TryCreateLayout(in config, out Bounds worldBounds, out FlowFieldGridSpace grid))
                 throw new InvalidOperationException("Volume Bounds and Cell Size do not produce a valid grid.");
 
-            request = manager.CreateVolumeRequest(
+            FlowFieldVolumeRequest request = FlowFieldVolumeBuilder.CreateRequest(
+                in config,
                 grid,
                 worldBounds,
                 FlowFieldBakeMode.RuntimeDynamic,
-                null,
-                CaptureInputGeneration(manager));
+                null);
 
             var session = FlowFieldSession.CreateVolume();
             try

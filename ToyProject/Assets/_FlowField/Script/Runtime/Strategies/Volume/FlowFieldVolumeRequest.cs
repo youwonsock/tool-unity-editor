@@ -16,7 +16,6 @@ namespace Common.FlowField
         internal FlowFieldVolumeBakeData StaticBakeData { get; }
         internal int StaticBakeRevision { get; }
         internal int StaticBakeContentGeneration { get; }
-        internal int BakeInputGeneration { get; }
 
         internal FlowFieldVolumeRequest(
             FlowFieldGridSpace grid,
@@ -28,8 +27,7 @@ namespace Common.FlowField
             Vector3 goalWorld,
             float goalInfluenceRadius,
             Vector3 defaultDirection,
-            FlowFieldVolumeBakeData staticBakeData,
-            int bakeInputGeneration = 0)
+            FlowFieldVolumeBakeData staticBakeData)
         {
             Grid = grid;
             WorldBounds = worldBounds;
@@ -45,7 +43,6 @@ namespace Common.FlowField
             StaticBakeContentGeneration = staticBakeData != null
                 ? staticBakeData.ContentGeneration
                 : -1;
-            BakeInputGeneration = bakeInputGeneration;
         }
 
         internal bool HasSameGrid(in FlowFieldVolumeRequest other)

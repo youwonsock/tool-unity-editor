@@ -644,10 +644,15 @@ namespace Common.FlowField
             return true;
         }
 
-        internal bool MatchesGoal(bool hasGoal, Vector3 requestedGoalWorld, float influenceRadius)
-            => hasGoal == _hasGoal && (!hasGoal
-                || (requestedGoalWorld - _requestedGoalWorld).sqrMagnitude <= EPSILON * EPSILON
-                    && Mathf.Abs(influenceRadius - _goalInfluenceRadius) <= EPSILON);
+        internal bool MatchesGoal(bool hasGoal, Vector3 requestedGoalWorld, float influenceRadius, out string reason)
+        {
+            reason = string.Empty;
+            if (hasGoal == _hasGoal && (!hasGoal
+                    || (requestedGoalWorld - _requestedGoalWorld).sqrMagnitude <= EPSILON * EPSILON
+                        && Mathf.Abs(influenceRadius - _goalInfluenceRadius) <= EPSILON))
+                return true;
+            return Fail(out reason, "Static Flow Bake Goal differs from the Manager settings. ReBake is required.");
+        }
 
         internal FlowFieldSurfaceData CreateSurfaceData(in FlowFieldSurfaceBakeSettings settings)
         {

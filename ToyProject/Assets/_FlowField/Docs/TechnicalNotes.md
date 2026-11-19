@@ -27,11 +27,13 @@
   - 게시 필드와 격자(`PublishedField`·`TryGetFieldInfo`, `LatestGrid` = 마지막 요청의 Grid로 `ClampPositionToGrid`가 씀), 게시 필드보다 새 셀 정보(`LatestCells`: Surface는 진행 중인 빌드의 기본 단계 결과, Volume은 없음)
   - 입력 반영(`ApplyObstacleChange`·`ApplyModifierChange`·`CreateModifierArea`)
   - 수명 훅(`CancelWork`·`DropComputedState`·`ReleaseResources`)
-- Manager는 모드별 정적 묘사 `FlowFieldSpaceStrategy.For(mode)`로 세션 생성, 검증, 격자, Bounds 스냅을 고릅니다. Builder는 `FlowFieldManagerConfig` 스냅샷으로 검증(`Validate`), 격자(`TryCreateLayout`), 요청을 스스로 만듭니다. 공통 검사는 `FlowFieldManagerConfig.ValidateShared`가 같은 순서와 메시지로 합니다.
+- Manager와 Editor는 모드별 정적 묘사 `FlowFieldSpaceStrategy.For(mode)`로 세션 생성, 검증, 격자, Bounds 스냅을 고릅니다. Builder는 `FlowFieldManagerConfig` 스냅샷으로 검증, 격자(`TryCreateLayout`), 요청을 스스로 만듭니다.
+  - 검증은 한 경로입니다. `TryValidate`가 처음 잘못된 설정의 이유를 돌려주고, Init의 `Validate`는 그 이유로 `InvalidOperationException`을 던집니다. Inspector, Scene View, Volume 표시도 같은 `TryValidate`를 써서 Init과 같은 문구를 보여 줍니다.
+  - 공통 검사는 `FlowFieldManagerConfig.TryValidateShared`가 같은 순서와 메시지로 합니다.
 - 공통 부품: 게시 필드 `FlowFieldField`, 조회 `FlowFieldSampler`, 요청 보관 `FlowFieldRequestInbox`, 셀 합성 규칙 `FlowFieldVectorUtility.ApplyModifier`, 이벤트 경계 `FlowFieldExecutionBoundary`, 예산 `FlowFieldBuildScheduler`.
 - Modifier가 닿는 셀을 찾는 방식만 모드별입니다. Surface는 셀 마스크(`FlowFieldSurfaceModifierArea`)를 보관해 바뀐 영역만 다시 합성하고, Volume은 빌드마다 64셀씩 후보를 조회합니다.
 - **Editor 경계:** Runtime Manager가 Editor에 내놓는 것은 `CaptureConfig()`와 `TryGetPublishedField`뿐입니다.
-  - 레이아웃, Bake 검증, 요청, Goal 해석, Bake 입력 해시는 `FlowFieldBakeService`가 Builder 정적 함수로 만듭니다.
+  - `FlowFieldBakeService`가 레이아웃(`TryGetLayout`)과 설정 검사(`TryValidateConfig`)는 strategy로, 요청·Goal 해석·Bake 입력 해시는 Builder 정적 함수로 만듭니다.
   - 쓰기는 `SerializedObject`로 합니다. Bounds 핸들은 Undo를 남기고, Bake Asset 지정은 Undo 없이 씁니다. 실행 중인 세션에는 `OnValidate`로 통지됩니다.
   - Bake 내보내기는 각 Builder의 `TryExportBakeData` 하나입니다.
 
