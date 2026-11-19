@@ -10,7 +10,7 @@ Transform 제어점으로 경로를 만들고 단일 경로, 연결 경로, Queu
 | 이동 방식 | `TimeBased`: Duration과 TimeCurve · `SpeedBased`: 거리와 속도 |
 | 예제 | `Samples/Scenes/TransformPathSample.unity`, `Samples/Prefabs/TransformPathShowcase.prefab` |
 
-구현 세부는 [TechnicalNotes.md](Docs/TechnicalNotes.md)에 있습니다.
+구현 세부는 [TechnicalNotes.md](Docs/TechnicalNotes.md)에 있습니다. 코드의 메시지(예외, 로그, Inspector 문구와 Tooltip, 주석)는 모두 영어입니다.
 
 ## 다른 프로젝트로 옮기기
 

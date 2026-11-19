@@ -23,7 +23,7 @@
 3. **순수 계산과 Unity 연결을 나눕니다.** `PathPolyline`, `PathRoute`, `PathPlaybackCursor`, `PathPlayback`, `PathEventEffects`, Queue 계산은 MonoBehaviour와 정적 상태(알림 순서 큐 제외)에 기대지 않아 EditMode 테스트로 검증합니다. 컴포넌트는 직렬화, 생명주기, Transform 적용만 맡습니다.
 4. **검증은 경계에서 한 번만 합니다.** 공개 명령의 입력과 Provider 빌드만 검증합니다.
 5. **공통 값과 헬퍼는 한 곳에 둡니다.** 상수는 `PathConstants`, 수치 검증과 곡선 복사는 `PathValueUtility`, 정렬은 `PathSortUtility`, 1회 오류 보고는 `PathConfigurationErrorReporter`입니다.
-6. **인터페이스는 교체할 이유가 있을 때만 둡니다.** 공개 인터페이스는 `IPathEventReceiver` 하나입니다. `IPathProvider`는 내부 계약이며(테스트의 가짜 Provider가 씁니다), 공개 시그니처는 `PathProviderBehaviour`를 받습니다. Route 갱신과 Queue의 구간 구성 비교는 Provider 종류를 확인하지 않고 이 계약과 Route의 구간만 봅니다. 런타임에서 종류를 확인하는 곳은 `PathRoute.Aggregate`의 "Aggregate는 `PathData`의 이벤트만 실행한다"는 규칙 한 곳입니다.
+6. **인터페이스는 교체할 이유가 있을 때만 둡니다.** 공개 인터페이스는 `IPathEventReceiver` 하나입니다. `IPathProvider`는 내부 계약이며(테스트의 가짜 Provider가 씁니다), 공개 시그니처는 `PathProviderBehaviour`를 받습니다. Route 갱신, Aggregate 구성, Queue의 구간 구성 비교는 Provider 종류를 확인하지 않고 이 계약과 Route의 구간만 봅니다. Aggregate가 실행할 이벤트는 Provider가 `WholeRouteEvents`로 알려 주며, `MultiPathData`에는 없습니다.
 7. **공개 API는 닫혀 있습니다.** 공개 타입은 컴포넌트(`PathFollower`, `PathQueueMember`, `QueuedPathManager`, `PathData`, `MultiPathData`, `PathDataLineRenderer`, `PathWaypointSyncRegistry`), 설정과 요청(`PathPlaybackRequest`, `PathMovementSettings`, `PathEventSettingSO`, `PathEventEntry`, `PathSegmentAuthoring`, `PathWaypointSyncGroup`, `PathQueueStatus`), 수신기와 enum뿐입니다. 기반 클래스 `PathProviderBehaviour`와 `PathRuntimeBehaviour`는 `private protected` 생성자로 외부 상속을 막습니다. 이벤트의 런타임 복사본(`PathEventDefinition` 등)은 내부 타입이며, 바깥에서는 `PathData.GetAuthoringEvent`로 작성 데이터를 읽습니다.
 
 ## 수명 규칙
@@ -38,7 +38,7 @@
 
 ## 경로와 재생
 
-- `PathData`는 Transform 제어점을 곡선별로 샘플링한 `PathPolyline`을 발행합니다. 위치는 누적 거리로 보간하므로 진행률이 일정하면 샘플 사이에서 속도가 일정합니다. 스플라인은 매개변수로 샘플링하므로 샘플 수가 적으면 구간마다 속도가 달라집니다(테스트 기준 500샘플에서 최대 편차 0.05% 이하).
+- `PathData`는 Transform 제어점을 곡선별로 샘플링한 `PathPolyline`을 발행합니다. 위치는 누적 거리로 보간하므로 진행률이 일정하면 샘플 사이에서 속도가 일정합니다. 스플라인은 매개변수로 샘플링하므로 샘플 수가 적으면 구간마다 속도가 달라집니다(테스트는 500샘플에서 편차가 1% 미만인지 확인합니다).
 - `MultiPathData`는 `PathData`만 구간으로 받습니다. 자식의 `PathChanged`를 구독해 자식이 바뀌면 다시 빌드하므로 자식을 폴링하지 않습니다. 빌드할 때 아직 빌드되지 않은 자식을 먼저 빌드해, Awake 순서에 기대지 않습니다.
 - Provider는 빌드에 실패하거나 파괴되면 준비 상태를 잃고 `PathChanged`로 알립니다. 이 경로를 쓰는 Follower는 다음 이동 Tick에서 멈추고, Queue는 멤버를 내보내며, MultiPathData는 오류를 다시 기록하지 않고 사용 불가가 됩니다. 실패 전과 같은 내용으로 복구되어도 알리므로 MultiPathData가 함께 돌아옵니다.
 - `PathData.MovementSettings`는 빌드 뒤에는 게시된 값을 돌려줍니다. 값을 대입하면 즉시 다시 빌드합니다.
@@ -95,7 +95,7 @@
 - 작성 위치는 `0..0.995`이고 같은 위치는 작성 순서를 따릅니다. 위치 0의 이벤트도 재생 시작 후 첫 이동에서 실행됩니다.
 - `PathEventDefinition`은 `PathEventSettingSO`의 불변 복사본이며, 만들 때 한 번 검증합니다(목표값 `0.001..9999`, 보간 시간과 지연 0 이상, 보간에는 곡선 필요, 지연 체인 순환 금지). 잘못된 이벤트가 있으면 경로 빌드가 실패합니다.
 - 한 이벤트의 처리 순서는 이름 알림 예약 → Lifecycle(Pause 또는 Resume) → 현재 이동 방식의 값 변경 → 지연 이벤트 예약입니다. Pause 이벤트는 값을 바꾸지 않습니다. 알림은 경계 뒤에 전달되므로 수신기는 효과가 적용된 상태를 봅니다. 수신기가 `EventReached`보다 먼저 호출됩니다.
-- 지연 이벤트는 게임 시간을 쓰고, 다음 경로 이벤트가 실행되면 남은 지연이 취소됩니다. 지연 0은 바로 실행하며, 그 이벤트가 상태나 값을 바꾸면 같은 목록의 나머지 항목은 실행도 예약도 하지 않습니다(main과 같은 동작). 상태나 값을 바꾼 지연 이벤트가 있으면 같은 프레임의 나머지 지연 이벤트는 다음 프레임으로 미룹니다.
+- 지연 이벤트는 게임 시간을 쓰고, 다음 경로 이벤트가 실행되면 남은 지연이 취소됩니다. 지연 0은 바로 실행하며, 그 이벤트가 상태나 값을 바꾸면 같은 목록의 나머지 항목은 실행도 예약도 하지 않습니다. 상태나 값을 바꾼 지연 이벤트가 있으면 같은 프레임의 나머지 지연 이벤트는 다음 프레임으로 미룹니다.
 - 값 보간은 시작한 구간의 이동 방식까지만 이어집니다. 이동 방식이 다른 구간에 들어가거나 Pause하면 취소합니다.
 - `TriggerEvent(setting)`은 전달한 에셋의 현재 값을 바로 실행하며, 경로에 등록된 복사본에는 다음 빌드 전까지 반영되지 않습니다.
 - 재생이 끝나면 지연 이벤트와 값 보간을 함께 정리합니다. 재생이 없을 때(완료 뒤) `TriggerEvent`로 실행한 값 변경은 보간 없이 목표값을 바로 적용하고, 지연 이벤트는 예약하지 않습니다. 움직이지 않는 재생에서는 보간의 최종값만 의미가 있고, 지연을 진행할 재생도 없기 때문입니다.
@@ -103,9 +103,9 @@
 
 ## Editor
 
-- `PathEditorChangeMonitor`가 Hierarchy, 속성, Undo/Redo, 리로드 변경을 모으고, `PathTrackedTargets`가 Linker별 대상 목록을 그 변경에서만 다시 찾습니다. `MultiPathAutoLinker`(연결점)와 `PathWaypointSyncLinker`(그룹 동기화)는 동기화 규칙만 가집니다. Transform 이동만으로는 대상 캐시를 지우지 않아 이전 위치와 비교할 수 있습니다.
+- `PathEditorChangeMonitor`가 Hierarchy, 속성, Undo/Redo, 리로드 변경을 모으고, `PathTrackedTargets`가 Linker별 대상 목록을 그 변경에서만 다시 찾습니다. `MultiPathAutoLinker`(연결점)와 `PathWaypointSyncLinker`(그룹 동기화)는 동기화 규칙만 가집니다. 연결점 순회는 `PathLinkEditorUtility.SyncJoints` 하나이며, 자동 연결(움직인 쪽을 따라감)과 **Force Sync All Path Points**(뒤 구간 시작을 앞 구간 끝에 맞춤)가 함께 씁니다. Transform 이동만으로는 대상 캐시를 지우지 않아 이전 위치와 비교할 수 있습니다.
 - `PathDataScenePreviewCache`는 런타임의 `PathPolyline`을 만들어 살아 있는 경로의 미리보기를 재사용하고, 삭제된 경로의 항목을 지웁니다. PlayMode 전환과 리로드에서 비웁니다.
-- Inspector 클래스는 배치만 맡습니다. `PathDataEditor`는 `PathDataGizmoDrawer`(Scene View 미리보기)와 `PathPointTools`(지면 스냅, 점 생성, 자손에서 갱신)를, `MultiPathDataEditor`는 `PathSegmentListDrawer`(구간 목록), `PathSegmentMovementPanel`(선택 구간 이동, 일괄 이동 설정), `PathDrawingTools`(미리보기 크기, 구별 색)를 씁니다.
+- Inspector 클래스는 배치만 맡습니다. `PathDataEditor`는 `PathDataGizmoDrawer`(Scene View 미리보기)와 `PathPointTools`(지면 스냅, 점 생성, 자손에서 갱신)를, `MultiPathDataEditor`는 `PathSegmentListDrawer`(구간 목록: PathData, 이동 출처, 속도 보존), `PathSegmentMovementPanel`(선택 구간 이동, 일괄 이동 설정), `PathDrawingTools`(미리보기 크기, 구별 색)를 씁니다.
 - 연결점과 웨이포인트 그룹은 같은 규칙(`PathPointSync`)을 씁니다. 스냅샷보다 가장 많이 움직인 점을 기준으로 나머지를 옮기고, 동률이면 앞 멤버를 따릅니다. 연결점은 [다음 경로 시작점, 이전 경로 끝점] 두 멤버 그룹이라 동률이면 시작점을 따릅니다. 이미 같은 위치면 옮기지 않습니다.
 - 미리보기 설정 필드는 Player에서도 직렬화합니다. Editor와 Player의 데이터 레이아웃이 같아야 하기 때문이며, Player에서는 읽지 않습니다.
 - 이동 설정 UI와 Rebuild·이벤트 정렬 도구는 `PathInspectorGUI`에 있습니다. `MultiPathData`의 미리보기 크기 적용과 구별 색 지정은 버튼으로만 실행합니다.
@@ -122,7 +122,6 @@
 - Player 측정: `Tools/run-transformpath-probe.sh`
 - IL2CPP 빌드: `Tools/run-il2cpp-build.sh`
 - 측정을 비교할 커밋은 해시로 넘깁니다(`UNITY_TREE=$(git rev-parse HEAD)`). `HEAD`라고 쓰면 스냅샷 worktree 자신의 HEAD로 해석되어 다른 커밋을 빌드합니다.
-- 2차 리팩터링 측정(Mac Mono Player, 5회, main 7db7dda 대비 중앙값): Queue 1000명 Steady 2.52→2.11ms(Speed), 3.69→3.32ms(Time), queueDrain.300 0.54→0.39ms, 시작 할당 감소(queue.time.1000 792→224KB). 일시정지한 Queue는 0.66→0.83ms로 느려졌습니다. 멈춘 멤버도 장애물로 계산에 남기 때문입니다. Loop 이음매 겹침 프레임과 나머지 Free 시나리오는 main 범위 안입니다. 5회 중 1회는 모든 시나리오가 함께 느려 범위 상단이 넓습니다.
 
 ## UML 갱신
 
