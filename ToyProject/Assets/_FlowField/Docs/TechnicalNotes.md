@@ -110,11 +110,11 @@
 ## StaticBaked
 
 - Surface2D는 `FlowFieldSurfaceBakeData`, Volume3D는 `FlowFieldVolumeBakeData`이며 v6만 허용합니다. 둘 다 `FlowFieldBakeAsset`을 상속해 포맷 버전, Revision, 내용 세대(Inspector 편집과 다시 읽기를 알림)를 같은 방식으로 관리합니다.
-- Editor Bake는 두 모드가 같은 실행 코드(`BakeRun`)와 저장 코드(`SaveBakeAsset`)를 씁니다. 입력이 바뀌면 그 프레임에 멈추고 기존 Asset을 유지하며, 저장은 Undo 한 묶음입니다.
+- Editor Bake는 두 모드가 같은 실행 코드(`BakeRun`), 입력 검사, 저장 코드(`SaveBakeAsset`)를 쓰고, 모드마다 다른 이름·파일 접미사·참조 속성은 `BakeTarget`에 둡니다. Bake 입력 해시가 시작 때와 달라지면 그 프레임에 멈추고 기존 Asset을 유지하며, 저장은 Undo 한 묶음입니다.
 - Volume은 방향·속도·탈출 벡터를 저장하지 않고 NextCell과 면 인덱스(`_escapeFaces`)에서 재구성합니다. Surface는 배열을 `FlowFieldBakeBlob`으로 `byte[]`에 비트 그대로 저장합니다.
 - 저장에 실패하면 기존 Asset의 내용, Revision, GUID를 유지합니다.
 - 런타임은 Asset에 구운 Goal을 그대로 씁니다. Init은 Goal Transform 위치가 구운 Goal과 같은지 검사합니다.
-- Bake는 연결된 Asset이 있으면 그 경로에 씁니다. 참조가 빈 Manager의 Bake 대상은 씬 옆, 씬 이름의 폴더에 씬 GUID와 Manager ID로 만든 고정 경로(`<씬 폴더>/<씬 이름>/<씬GUID>_<ManagerID>_<이름>_<StaticBake|VolumeBake>.asset`)이며, 그 경로의 같은 형식 Asset은 이 Manager의 것으로 보고 덮어씁니다. Asset을 새로 만든 Bake가 실패하면 그때 만든 Asset과 폴더를 지웁니다. 고정 경로는 씬의 위치·이름과 Manager 이름을 따르므로, 씬을 옮기거나 이름을 바꾼 뒤 참조가 빈 채로 Bake하면 새 Asset을 만들고 예전 Asset은 그대로 둡니다.
+- Bake는 연결된 Asset이 있으면 그 경로에 씁니다. 참조가 빈 Manager의 Bake 대상은 씬 옆, 씬 이름의 폴더에 씬 GUID와 Manager ID로 만든 고정 경로(`<씬 폴더>/<씬 이름>/<씬GUID>_<ManagerID>_<이름>_<SurfaceBake|VolumeBake>.asset`)이며, 그 경로의 같은 형식 Asset은 이 Manager의 것으로 보고 덮어씁니다. Asset을 새로 만든 Bake가 실패하면 그때 만든 Asset과 폴더를 지웁니다. 고정 경로는 씬의 위치·이름과 Manager 이름을 따르므로, 씬을 옮기거나 이름을 바꾼 뒤 참조가 빈 채로 Bake하면 새 Asset을 만들고 예전 Asset은 그대로 둡니다.
 
 ## Editor 표시
 
@@ -127,10 +127,10 @@
 
 ## UML 갱신
 
-원본은 `Docs/*.puml`이고, 렌더링한 PNG를 `Docs/Images`에 저장해 문서에 넣습니다. Graphviz 없이 PlantUML 1.2024.6으로 렌더링합니다. Docs 폴더에서 실행합니다.
+원본은 `Docs/*.puml`이고, 렌더링한 PNG를 `Docs/Images`에 저장해 문서에 넣습니다. Graphviz 없이 PlantUML 1.2024.3으로 렌더링합니다. Docs 폴더에서 실행합니다.
 
 ```sh
-java -Djava.awt.headless=true -Djava.io.tmpdir="$TMPDIR" -jar plantuml-1.2024.6.jar \
+java -Djava.awt.headless=true -Djava.io.tmpdir="$TMPDIR" -jar plantuml.jar \
   -tpng -charset UTF-8 -o Images \
   flowfield-uml.puml flowfield-structure.puml flowfield-pipeline.puml
 ```

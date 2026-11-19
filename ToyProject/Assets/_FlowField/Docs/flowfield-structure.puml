@@ -19,11 +19,12 @@ class FlowFieldManager {
   직렬화 설정·공개 API
 }
 class FlowFieldSpaceStrategy {
-  모드별 Session 생성·검증·Bounds 맞춤
+  모드별 Session 생성·검증·격자·Bounds 맞춤
 }
 class "FlowFieldSession\n(공통 파이프라인)" as Session {
   수명·상태·이벤트·빌드 루프
   장애물·Modifier 등록부
+  {field} 불확실 영역(FlowFieldSafety)
   샘플 안전 규칙
 }
 interface IFlowFieldSpaceBuilder {
@@ -57,5 +58,6 @@ FlowFieldVolumeBuilder ..|> IFlowFieldSpaceBuilder
 FlowFieldBuildScheduler --> Session : Pump(예산)
 Session --> FlowFieldExecutionBoundary
 Editor ..> FlowFieldManager : CaptureConfig
+Editor ..> FlowFieldSpaceStrategy : 검증·격자
 Editor ..> Session : 직접 Pump
 @enduml
