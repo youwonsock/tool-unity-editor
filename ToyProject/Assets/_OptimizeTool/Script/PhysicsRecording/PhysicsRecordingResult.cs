@@ -17,7 +17,7 @@ namespace Common.OptimizeTool.PhysicsRecording
         public Exception Error { get; }
         public bool Succeeded => Error == null;
 
-        internal PhysicsRecordingResult(float duration, PhysicsRecordingStopReason reason, AnimationClip clip,
+        private PhysicsRecordingResult(float duration, PhysicsRecordingStopReason reason, AnimationClip clip,
             GameObject prefab, PhysicsRecordingReference reference, Exception error = null)
         {
             Duration = duration;

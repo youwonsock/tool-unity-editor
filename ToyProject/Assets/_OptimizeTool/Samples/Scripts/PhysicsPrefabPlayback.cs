@@ -18,7 +18,8 @@ namespace Common.OptimizeTool.Samples
             _animation = animation;
         }
 
-        public static PhysicsPrefabPlayback Create(GameObject prefab, Transform anchor, Rigidbody[] source)
+        /// <summary>The caller checks that the instance has the recorded hierarchy, through the recording reference.</summary>
+        public static PhysicsPrefabPlayback Create(GameObject prefab, Transform anchor)
         {
             var staging = new GameObject("Playback validation");
             staging.SetActive(false);
@@ -34,12 +35,6 @@ namespace Common.OptimizeTool.Samples
                 animation.Stop();
                 animation.playAutomatically = false;
                 animation.clip.SampleAnimation(instance, 0f);
-                for (int i = 0; i < source.Length; i++)
-                {
-                    // The sample's rigidbodies are direct children with unique names.
-                    if (source[i] == null || instance.transform.Find(source[i].name) == null)
-                        throw new InvalidOperationException("The recording hierarchy differs from this demo; record a new take.");
-                }
                 instance.transform.SetParent(anchor, false);
                 instance.SetActive(true);
                 return new PhysicsPrefabPlayback(instance, animation);

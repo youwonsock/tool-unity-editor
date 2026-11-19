@@ -305,7 +305,7 @@ namespace Common.OptimizeTool.Samples
             RegisterReloadCleanup();
 #endif
             DestroyPlayback();
-            _playback = PhysicsPrefabPlayback.Create(_savedPrefab, _replayAnchor, _bodies);
+            _playback = PhysicsPrefabPlayback.Create(_savedPrefab, _replayAnchor);
             try
             {
                 LoadRecordingReference();

@@ -121,7 +121,6 @@ namespace Common.OptimizeTool.PhysicsRecording
             if (!IsRecording)
                 throw new InvalidOperationException("PhysicsRecorder is not recording.");
             End();
-            Result = null;
         }
 
         private void OnDisable()
@@ -209,7 +208,7 @@ namespace Common.OptimizeTool.PhysicsRecording
         }
 
         /// <summary>The Animation binding path of tf below root, such as "Arm/Hand"; empty for the root itself.</summary>
-        internal static string AnimationPath(Transform tf, Transform root)
+        private static string AnimationPath(Transform tf, Transform root)
         {
             if (tf == root) return string.Empty;
             var names = new List<string>();

@@ -32,15 +32,15 @@ namespace Common.OptimizeTool.PhysicsRecording
                 * (180d / System.Math.PI));
         }
 
-        public static bool IsFinite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);
+        public static bool IsFinite(float value) => float.IsFinite(value);
 
         /// <summary>Finite position and a finite, non-zero rotation.</summary>
         public static bool IsValid(Pose pose)
         {
             Vector3 p = pose.position;
             Quaternion r = pose.rotation;
-            return IsFinite(p.x) && IsFinite(p.y) && IsFinite(p.z)
-                && IsFinite(r.x) && IsFinite(r.y) && IsFinite(r.z) && IsFinite(r.w)
+            return float.IsFinite(p.x) && float.IsFinite(p.y) && float.IsFinite(p.z)
+                && float.IsFinite(r.x) && float.IsFinite(r.y) && float.IsFinite(r.z) && float.IsFinite(r.w)
                 && (double)r.x * r.x + (double)r.y * r.y + (double)r.z * r.z + (double)r.w * r.w > 0d;
         }
     }
