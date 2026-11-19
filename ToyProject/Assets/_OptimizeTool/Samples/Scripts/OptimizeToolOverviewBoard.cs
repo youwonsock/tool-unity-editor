@@ -5,7 +5,7 @@ using UnityEngine.UI;
 namespace Common.OptimizeTool.Samples
 {
     /// <summary>
-    /// OptimizeTool 쇼케이스의 결과 그룹별 통계를 표시합니다.
+    /// Shows the statistics of each OptimizeTool showcase result group.
     /// </summary>
     [DefaultExecutionOrder(100)]
     public sealed class OptimizeToolOverviewBoard : MonoBehaviour

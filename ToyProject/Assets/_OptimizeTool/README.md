@@ -53,6 +53,7 @@ _OptimizeTool/
 - **Mesh 최적화**의 컴포넌트는 설정만 갖고, 결합·베이크는 Editor 어셈블리의 `MeshToolCommands`가 수행합니다.
 - **Physics Recorder**는 Play Mode 캡처를 Runtime 어셈블리에서 합니다. 저장은 Editor 어셈블리가 `[InitializeOnLoad]`로 등록하는 Exporter가 맡습니다.
 - 두 시스템이 함께 쓰는 것은 `AssetFileTransaction`(경로 규칙, GUID를 유지하는 덮어쓰기, 실패 시 복원) 하나입니다.
+- 코드 메시지는 모두 영어입니다. 예외, 로그, Inspector 문구·Tooltip·Header·HelpBox, XML·코드 주석, 샘플 화면 문구가 여기에 들어갑니다. README와 TechnicalNotes 본문은 한국어이고, 인용하는 UI·로그 문구는 영어 원문 그대로 적습니다.
 
 ## Mesh 도구
 

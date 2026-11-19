@@ -5,7 +5,7 @@ using System.Text;
 namespace Common.OptimizeTool.Samples
 {
     /// <summary>
-    /// Play Mode에서 사전 생성된 OptimizeTool 결과 그룹을 비교합니다.
+    /// Compares the pre-built OptimizeTool result groups in Play Mode.
     /// </summary>
     [DefaultExecutionOrder(10)]
     public sealed class OptimizeToolOverviewController : MonoBehaviour

@@ -8,7 +8,7 @@ using UnityEngine.UI;
 namespace Common.OptimizeTool.Samples
 {
     /// <summary>
-    /// OptimizeTool 샘플의 결과 선택과 자유카메라 조작법을 표시하는 런타임 UGUI 패널입니다.
+    /// Runtime UGUI panel that selects the OptimizeTool sample results and shows the free camera controls.
     /// </summary>
     [DefaultExecutionOrder(110)]
     public sealed class OptimizeToolShowcaseUI : MonoBehaviour
