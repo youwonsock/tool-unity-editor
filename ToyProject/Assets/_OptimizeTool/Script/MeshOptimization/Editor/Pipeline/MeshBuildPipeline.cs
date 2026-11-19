@@ -62,7 +62,7 @@ namespace Common.OptimizeTool.MeshOptimization
 
         /// <summary>
         /// Checks every input before any mesh is copied and returns the renderer settings they share. Warnings are
-        /// collected in input order.
+        /// collected in input order; <see cref="MeshBuildResult"/> keeps one of each.
         /// </summary>
         private static MeshRendererSettings ValidateSources(IReadOnlyList<MeshFilter> sources, List<string> warnings)
         {
@@ -86,9 +86,9 @@ namespace Common.OptimizeTool.MeshOptimization
                     if (material == null) throw new ArgumentException($"'{filter.name}' has a null material.");
                 foreach (Material material in materials)
                     if (material.renderQueue > 2500 || material.HasProperty("_Cull") && material.GetInt("_Cull") == 0)
-                        AddOnce(warnings, TransparentWarning);
+                        warnings.Add(TransparentWarning);
                 if (renderer.probeAnchor == null && renderer.lightProbeUsage != LightProbeUsage.Off)
-                    AddOnce(warnings, ProbeWarning);
+                    warnings.Add(ProbeWarning);
             }
             return rendererSettings;
         }
@@ -150,11 +150,6 @@ namespace Common.OptimizeTool.MeshOptimization
             foreach (MeshBuildPart part in result.Parts) combines.Add(new CombineInstance { mesh = part.Mesh, transform = Matrix4x4.identity });
             Mesh single = MeshGeometry.Combine(combines, false, settings.OptimizeMesh);
             result.ReplaceWithSingle(single, work.MaterialOrder.ToArray());
-        }
-
-        private static void AddOnce(List<string> list, string value)
-        {
-            if (!list.Contains(value)) list.Add(value);
         }
 
         /// <summary>

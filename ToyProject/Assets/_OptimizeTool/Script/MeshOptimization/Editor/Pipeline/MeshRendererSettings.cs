@@ -71,7 +71,6 @@ namespace Common.OptimizeTool.MeshOptimization
 
         internal void ValidateCompatible(MeshRenderer source)
         {
-            ValidateSupported(source);
             var other = new MeshRendererSettings(source);
             if (_layer != other._layer || _sortingLayer != other._sortingLayer || _sortingOrder != other._sortingOrder
                 || _renderingLayers != other._renderingLayers || _shadows != other._shadows
