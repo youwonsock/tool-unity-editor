@@ -91,7 +91,8 @@ flowchart LR
 | 어셈블리 | 클래스 | 역할 |
 | --- | --- | --- |
 | MeshOptimization | `MeshCombiner` / `MeshBuildSettings` / `MeshSourceRendererState` | Inspector 설정, 그 설정에서 만든 빌드 옵션(직렬화하지 않음), 결합 씬 출력과 원본 Renderer 상태 |
-| MeshOptimization.Editor | `MeshToolCommands` | `BuildMeshes`·`CombineAndSaveMeshes`·`RestoreSources` 확장 메서드. 입력 수집, 출력 경로 생성(`_meshName.asset` 또는 `_meshName_0.asset`부터), 남은 이전 출력 경고 |
+| MeshOptimization | `BackfaceCullMeshBaker` / `BakedMeshOriginal` | 제자리 Backface 베이크 설정, MeshFilter별 원본·출력 Mesh 기록(`_originalMeshes`)과 이 Baker가 저장한 Mesh 목록(`_bakedMeshes`) |
+| MeshOptimization.Editor | `MeshToolCommands` | `BuildMeshes`·`CombineAndSaveMeshes`·`RestoreSources`·`BakeBackfaces`·`RestoreOriginalMeshes` 확장 메서드. 입력 수집, 출력 경로 생성(`_meshName.asset` 또는 `_meshName_0.asset`부터), 남은 이전 출력 경고 |
 | MeshOptimization.Editor | `MeshBuildPipeline` | `Build(sources, destinationWorldToLocal, settings)`. 저장 경로와 분리된 입력 검증, 컬링·변환·Material별 결합. 기하 연산은 `MeshGeometry`, 씬 Physics 조회는 `MeshOcclusion` |
 | MeshOptimization.Editor | `MeshBuildResult` | Mesh와 Material 매핑을 항목별로 묶고 임시 Mesh만 소유. `Dispose()`는 원본을 파괴하지 않음 |
 | MeshOptimization.Editor | `MeshRendererSettings` | 입력 Renderer가 지원하지 않는 데이터(PropertyBlock, Lightmap, LOD 등)를 쓰는지 검사하고, 병합 입력끼리 같아야 하는 Renderer 설정을 비교. `ApplyTo`로 결과 Renderer에 Material과 설정을 적용 |
@@ -137,8 +138,10 @@ flowchart LR
 
 - **Occlusion:** 입력이 속한 PhysicsScene에서 `_cullingLayerMask`의 Collider로 Raycast합니다. 대상 자신과 자식의 Collider, Trigger는 제외하고, 결과 버퍼가 가득 차면 확장합니다. 조상의 Box·Sphere·Capsule·볼록 Mesh Collider는 표본 점을 안에 품을 때만 제외합니다(자식 비주얼을 감싼 부모 Collider처럼 대상 자신의 프록시로 봄). 표면 위의 점도 안으로 보므로 지오메트리를 남기는 쪽으로 기웁니다. 오목한 Mesh Collider나 Terrain인 조상, 그리고 대상 밖에서 앞을 막는 조상 Collider는 가림물로 남습니다. Orthographic 카메라는 평행 광선을 씁니다.
 - 표본 후보는 모든 Vertex와 퇴화하지 않은 삼각형의 중심점입니다. 그래서 Vertex가 적은 큰 면도 안쪽을 검사합니다. 후보 수가 `_occlusionSampleCount` 이하이면 모두를, 더 많으면 균등 간격 표본을 검사합니다(결정적). 보이는 비율이 `_visibilityThreshold`보다 작으면 MeshFilter 전체를 뺍니다. Camera, 양수 샘플 수, `0..1` 임계값, 유효한 LayerMask가 필요합니다.
-- **Backface:** `MeshCombiner`는 결합 중 `_enableBackfaceCulling`과 `_backfaceCullingAngle`로 삼각형마다 World-space Normal과 관찰 방향의 각도를 판정합니다.
-- Perspective는 삼각형 중심에서 카메라로 향하는 방향, Orthographic은 `-camera.forward`를 씁니다. 비균일·음수 Scale은 법선 역전치 변환과 winding 보정으로 처리합니다.
+- **Backface:** 판정은 `MeshGeometry.CullBackfaces` 하나가 합니다. 삼각형마다 World-space Normal과 관찰자 쪽 방향의 각도를 보고, 각도 이내인 삼각형만 원시 정점 레이아웃 그대로 남깁니다. `MeshBuildPipeline`은 결합 중 `_enableBackfaceCulling`과 `_backfaceCullingAngle`로, `BackfaceCullMeshBaker`는 MeshFilter마다, `MeshProcessing.CullBackfaces`는 호출자가 준 값으로 이 판정을 부릅니다.
+- 관찰자 쪽 방향은 카메라 overload에서 Perspective면 삼각형 중심에서 카메라 위치로, Orthographic이면 `-camera.forward`입니다. 방향 overload는 `-viewDirection.normalized`를 모든 삼각형에 씁니다. 방향은 유한하고 0이 아니어야 합니다. 비균일·음수 Scale은 법선 역전치 변환과 winding 보정으로 처리합니다.
+- **제자리 베이크:** `BakeBackfaces`는 폴더, 각도, 카메라 또는 방향을 먼저 검증하고, 모든 MeshFilter의 결과를 계산한 뒤 한 번에 저장·교체합니다. 원본은 MeshFilter가 아직 이 Baker의 출력을 쓰고 있을 때만 기록(`_originalMeshes`)에서 가져오고, 아니면 지금 Mesh를 새 원본으로 씁니다. 그래서 다시 베이크해도 이미 깎은 Mesh를 또 깎지 않습니다. 모든 삼각형이 제거되는 입력, 겹치는 출력 이름, 이 Baker가 쓰지 않은 기존 출력(덮어쓰기 꺼짐)은 바꾸기 전에 거부합니다. Mesh 교체와 기록은 Undo와 Prefab 인스턴스 오버라이드로 남습니다.
+- `RestoreOriginalMeshes`는 출력을 아직 쓰는 MeshFilter에만 원본을 돌려주고 기록을 비우며, Undo 한 단계입니다. 손으로 바꾼 Mesh는 그대로 둡니다. 저장한 출력은 `_bakedMeshes`에 남아 다음 베이크가 덮어쓰기 설정 없이 다시 씁니다.
 - Target Camera가 비어 있고 컬링이 켜져 있으면 `MeshToolCommands`가 Combiner의 씬에서 대체 카메라를 고릅니다. 켜진 `MainCamera` 태그 카메라가 먼저이고, 없으면 루트부터 깊이 우선으로 훑어 처음 만난 켜진 카메라입니다. `FindObjectsByType`는 순서를 보장하지 않으므로 쓰지 않습니다. 고른 카메라 이름은 `LastBuildWarnings`에 남습니다. `MeshBuildPipeline.Build`와 `MeshBuildSettings`는 대체하지 않고 카메라를 요구합니다.
 
 ## PhysicsRecorder

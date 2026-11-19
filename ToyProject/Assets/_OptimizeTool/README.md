@@ -6,7 +6,7 @@ Unity Editor에서 Mesh 결합·컬링과 물리 움직임 기록을 수행하�
 | --- | --- |
 | 개발 | 유원석 (You Won Sock) · [GitHub](https://github.com/youwonsock) · qazwsx233434@gmail.com |
 | 환경 | Unity 2023.2.20f1, C#, URP 16.0.6 (샘플만 URP 사용) |
-| 도구 | `MeshCombiner`: Material별 Mesh 결합, Occlusion·Backface 컬링 · `PhysicsRecorder`: 물리 움직임을 AnimationClip과 Prefab으로 기록 |
+| 도구 | `MeshCombiner`: Material별 Mesh 결합, Occlusion·Backface 컬링 · `BackfaceCullMeshBaker`: MeshFilter의 Mesh를 보이는 삼각형만 남긴 사본으로 제자리 교체 · `PhysicsRecorder`: 물리 움직임을 AnimationClip과 Prefab으로 기록 |
 | 예제 | `Samples/Scenes/OptimizeToolSample.unity` |
 
 구현 세부는 [TechnicalNotes.md](Docs/TechnicalNotes.md)에 있습니다.
@@ -64,6 +64,8 @@ Edit Mode에서 Inspector 버튼이나 아래 API로 실행합니다. 별도 초
 | `MeshCombiner.BuildMeshes()` | 임시 결과만 만듭니다. 반환값은 호출자가 `Dispose()`합니다 |
 | `MeshCombiner.CombineAndSaveMeshes()` | 결합 결과를 Mesh 에셋으로 저장하고 씬 출력을 적용합니다 |
 | `MeshCombiner.RestoreSources()` | 씬 출력을 지우고 이 컴포넌트가 끈 원본 Renderer를 원래 상태로 되돌립니다. 저장한 Mesh 에셋은 남깁니다. Inspector의 **Restore Sources** 버튼과 같습니다 |
+| `BackfaceCullMeshBaker.BakeBackfaces()` | MeshFilter마다 보이는 삼각형만 남긴 사본을 `<MeshFilter 이름>_BackfaceCulled.asset`으로 저장하고 그 MeshFilter의 Mesh를 바꿉니다. 이 Baker의 출력을 아직 쓰는 MeshFilter는 기록해 둔 원본에서 다시 베이크하므로 두 번 깎이지 않고, 그 사이 손으로 바꾼 Mesh는 새 원본이 됩니다. Inspector의 **Bake and Save Backfaces** 버튼과 같습니다 |
+| `BackfaceCullMeshBaker.RestoreOriginalMeshes()` | 이 Baker의 출력을 아직 쓰는 MeshFilter에 기록한 원본 Mesh를 돌려주고 기록을 비웁니다. 저장한 Mesh 에셋은 남깁니다. Inspector의 **Restore Original Meshes** 버튼과 같습니다 |
 | `MeshBuildPipeline.Build(sources, destinationWorldToLocal, settings)` | 컴포넌트 없이 MeshFilter 목록과 `MeshBuildSettings`로 임시 결과를 만듭니다. 저장은 `MeshAssetTransaction.Save`로 하고, 저장 콜백이 Prefab·씬 같은 다른 에셋도 쓰면 그 호출을 `AssetFileTransaction.Execute`로 감쌉니다. 샘플 빌더가 이 방식을 씁니다 |
 | `MeshProcessing.ReadableCopy` · `SelectTriangles` · `CullBackfaces` · `TransformMesh` · `Combine` · `IsOccluded` | 파이프라인이 쓰는 메시 연산을 직접 부릅니다. 인자를 먼저 검사하고 원본 Mesh와 importer를 바꾸지 않으며, 돌려준 Mesh는 호출자가 저장하거나 파괴합니다. `CullBackfaces`는 카메라 또는 관찰 방향을 받습니다. 유한 값과 각도 범위 검사는 각 메서드가 안에서 하므로 따로 열지 않습니다 |
 
@@ -89,6 +91,7 @@ public static class MeshBuildExample
 - **입력:** 대상을 직접 지정하거나 자식 계층에서 수집합니다(동시 사용 불가). 병합 입력은 Layer·그림자·Probe·정렬 등 Renderer 설정이 같아야 하며, PropertyBlock·할당된 Lightmap·LODGroup 같은 입력은 저장 전에 거부합니다. Lightmap Static 입력은 결합 결과의 라이트맵이 겹치지 않게 소스마다 라이트맵 UV를 따로 배치합니다.
 - **Occlusion:** 카메라에서 표본 점(Vertex와 삼각형 중심)으로 Raycast해 보이는 비율이 임계값보다 낮은 MeshFilter를 결합에서 뺍니다. Collider 기반 근사이며 픽셀 단위 판정이 아닙니다.
 - **Backface:** 결합하면서 삼각형 법선과 카메라 방향의 각도로 보이지 않는 면을 지웁니다. 카메라나 Transform이 바뀌면 다시 베이크합니다.
+- **Backface 제자리 베이크:** `BackfaceCullMeshBaker`는 결합하지 않고 MeshFilter마다 Mesh를 바꿉니다. Target Camera 대신 `_useCustomVector`로 고정한 관찰 방향(`_customCameraVector`, 카메라가 바라보는 방향)을 쓸 수 있습니다. 출력 이름이 겹치면 저장 전에 거부하고, 이 Baker가 쓴 출력은 덮어쓰기 설정 없이 다시 쓰며, 다른 기존 파일은 `_overwriteExistingAssets`를 켜야 덮어씁니다.
 - **카메라:** 컬링을 켰는데 `_targetCamera`가 비어 있으면 Combiner와 같은 씬에서 켜진 `MainCamera` 태그 카메라를, 없으면 Hierarchy 순서로 첫 번째 켜진 카메라를 쓰고 `No Target Camera; using '<name>'.` 경고를 남깁니다. 씬에 켜진 카메라가 없으면 빌드가 실패합니다.
 - **출력:** `Assets/` 하위에 저장하며 덮어쓰기는 명시적으로 허용해야 합니다. 실패하면 에셋과 Undo에 등록한 씬 변경을 복원합니다.
 

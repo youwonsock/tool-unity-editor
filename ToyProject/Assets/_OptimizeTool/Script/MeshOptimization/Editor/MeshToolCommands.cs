@@ -3,14 +3,17 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
 using Common.OptimizeTool.Editor;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using Object = UnityEngine.Object;
 
 namespace Common.OptimizeTool.MeshOptimization.Editor
 {
     /// <summary>
-    /// The editor operations of <see cref="MeshCombiner"/>. They are extension methods, so editor code keeps calling
-    /// <c>combiner.BuildMeshes()</c> while the component itself holds only settings.
+    /// The editor operations of <see cref="MeshCombiner"/> and <see cref="BackfaceCullMeshBaker"/>. They are extension
+    /// methods, so editor code keeps calling <c>combiner.BuildMeshes()</c> while the components hold only settings and
+    /// the scene state they own.
     /// </summary>
     public static class MeshToolCommands
     {
@@ -119,6 +122,139 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
         }
 
         /// <summary>
+        /// Saves, for each target MeshFilter, a copy of its mesh that keeps only the triangles facing the view, as
+        /// <c>&lt;MeshFilter name&gt;_BackfaceCulled.asset</c>, and assigns it to that MeshFilter. A MeshFilter that
+        /// still shows this baker's output is baked from its recorded original, so baking again does not cut twice; a
+        /// mesh assigned by hand since then is the new original. Every result is computed before any asset or
+        /// MeshFilter changes, and a failed save restores both.
+        /// </summary>
+        public static Mesh[] BakeBackfaces(this BackfaceCullMeshBaker baker)
+        {
+            AssetFileTransaction.RequireEditMode();
+            string folder = AssetFileTransaction.ValidateFolder(baker.SavePath);
+            float angle = baker.BackfaceCullingAngle;
+            MeshBuildSettings.ValidateBackfaceAngle(angle, "Backface Culling Angle");
+            Camera camera = null;
+            if (baker.UseCustomVector) MeshProcessing.ValidateViewDirection(baker.CustomCameraVector);
+            else
+            {
+                camera = baker.TargetCamera;
+                if (camera == null)
+                {
+                    camera = FallbackCamera(baker.gameObject.scene);
+                    if (camera == null) throw new ArgumentException("Assign a Target Camera or use a custom view direction.");
+                    Debug.LogWarning(FallbackCameraWarning(camera), baker);
+                }
+            }
+            MeshFilter[] filters = BakeTargets(baker);
+            var originals = new Mesh[filters.Length];
+            var paths = new string[filters.Length];
+            for (int i = 0; i < filters.Length; i++)
+            {
+                originals[i] = BakeSource(baker, filters[i]);
+                paths[i] = $"{folder}/{filters[i].name}_BackfaceCulled.asset";
+            }
+            foreach (string path in AssetFileTransaction.ValidateAssetPaths(paths))
+            {
+                // This baker's own outputs are replaced without the overwrite setting.
+                if (!(AssetDatabase.LoadMainAssetAtPath(path) is Mesh existing && IsOwnOutput(baker, existing)))
+                    AssetFileTransaction.ValidateOutputTarget(path, typeof(Mesh), baker.OverwriteExistingAssets);
+            }
+            var staged = new List<Mesh>();
+            try
+            {
+                for (int i = 0; i < filters.Length; i++)
+                {
+                    Mesh readable = MeshGeometry.ReadableCopy(originals[i], baker.AllowReadableCopy, baker.AllowNormalRecalculation);
+                    try
+                    {
+                        Mesh culled = camera != null
+                            ? MeshGeometry.CullBackfaces(readable, filters[i].transform, camera, angle)
+                            : MeshGeometry.CullBackfaces(readable, filters[i].transform, baker.CustomCameraVector, angle);
+                        if (culled == null) throw new InvalidOperationException($"Every triangle of '{filters[i].name}' faces away from the view.");
+                        staged.Add(culled);
+                    }
+                    finally { Object.DestroyImmediate(readable); }
+                }
+                return MeshAssetTransaction.Save(staged, paths, true, "Bake backfaces",
+                    baked => AssignBaked(baker, filters, originals, baked));
+            }
+            finally { foreach (Mesh mesh in staged) Object.DestroyImmediate(mesh); }
+        }
+
+        /// <summary>
+        /// Gives every MeshFilter that still shows this baker's output its recorded original mesh and clears the record,
+        /// as one Undo step. A mesh assigned by hand since the bake is kept, and saved baked assets are kept; a later
+        /// bake still replaces them without the overwrite setting.
+        /// </summary>
+        public static void RestoreOriginalMeshes(this BackfaceCullMeshBaker baker)
+        {
+            AssetFileTransaction.RequireEditMode();
+            Undo.IncrementCurrentGroup();
+            int group = Undo.GetCurrentGroup();
+            Undo.SetCurrentGroupName("Restore original meshes");
+            Undo.RegisterCompleteObjectUndo(baker, "Restore original meshes");
+            foreach (BakedMeshOriginal record in baker.OriginalMeshes)
+                if (record.Filter != null && record.Original != null && record.Baked != null && record.Filter.sharedMesh == record.Baked)
+                {
+                    Undo.RegisterCompleteObjectUndo(record.Filter, "Restore original mesh");
+                    record.Filter.sharedMesh = record.Original;
+                    PrefabUtility.RecordPrefabInstancePropertyModifications(record.Filter);
+                }
+            baker.OriginalMeshes = new List<BakedMeshOriginal>();
+            PrefabUtility.RecordPrefabInstancePropertyModifications(baker);
+            Undo.CollapseUndoOperations(group);
+        }
+
+        private static MeshFilter[] BakeTargets(BackfaceCullMeshBaker baker)
+        {
+            MeshFilter[] direct = baker.TargetMeshFilters;
+            RequireOneSelection(baker.CollectChildMeshes, direct);
+            MeshFilter[] filters = baker.CollectChildMeshes ? baker.GetComponentsInChildren<MeshFilter>() : direct;
+            if (filters.Length == 0) throw new ArgumentException("No MeshFilters were found under this object.");
+            var seen = new HashSet<MeshFilter>();
+            foreach (MeshFilter filter in filters)
+                if (filter == null || !seen.Add(filter)) throw new ArgumentException("Target MeshFilters must be present and unique.");
+            return filters;
+        }
+
+        /// <summary>The recorded original while the MeshFilter still shows this baker's output; otherwise its current mesh.</summary>
+        private static Mesh BakeSource(BackfaceCullMeshBaker baker, MeshFilter filter)
+        {
+            Mesh current = filter.sharedMesh;
+            if (current == null) throw new ArgumentException($"'{filter.name}' has no mesh.");
+            foreach (BakedMeshOriginal record in baker.OriginalMeshes)
+                if (record.Filter == filter && record.Baked == current && record.Original != null) return record.Original;
+            return current;
+        }
+
+        private static bool IsOwnOutput(BackfaceCullMeshBaker baker, Mesh mesh) => baker.BakedMeshes.Contains(mesh);
+
+        private static void AssignBaked(BackfaceCullMeshBaker baker, MeshFilter[] filters, Mesh[] originals, Mesh[] baked)
+        {
+            Undo.RegisterCompleteObjectUndo(baker, "Record original meshes");
+            // Build the new record on the side, like the combiner's ledger, and assign it after the scene changes.
+            var records = new List<BakedMeshOriginal>();
+            var targets = new HashSet<MeshFilter>(filters);
+            foreach (BakedMeshOriginal record in baker.OriginalMeshes)
+                if (record.Filter != null && !targets.Contains(record.Filter)) records.Add(record);
+            for (int i = 0; i < filters.Length; i++)
+            {
+                Undo.RegisterCompleteObjectUndo(filters[i], "Assign baked mesh");
+                filters[i].sharedMesh = baked[i];
+                PrefabUtility.RecordPrefabInstancePropertyModifications(filters[i]);
+                records.Add(new BakedMeshOriginal { Filter = filters[i], Original = originals[i], Baked = baked[i] });
+            }
+            var outputs = new List<Mesh>();
+            foreach (Mesh mesh in baker.BakedMeshes)
+                if (mesh != null && Array.IndexOf(baked, mesh) < 0) outputs.Add(mesh);
+            outputs.AddRange(baked);
+            baker.OriginalMeshes = records;
+            baker.BakedMeshes = outputs;
+            PrefabUtility.RecordPrefabInstancePropertyModifications(baker);
+        }
+
+        /// <summary>
         /// With Combine All Into Single Mesh the output is <c>name.asset</c>; otherwise each material output is
         /// <c>name_0.asset</c>, <c>name_1.asset</c>, ..., even when there is only one.
         /// </summary>
@@ -135,11 +271,7 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
             skippedDisabledChild = false;
             AssetFileTransaction.RequireEditMode();
             MeshFilter[] direct = combiner.TargetMeshFilters;
-            bool hasDirect = direct != null && direct.Length > 0;
-            if (combiner.CollectChildMeshes && hasDirect)
-                throw new ArgumentException("Choose direct MeshFilters or child collection, not both.");
-            if (!combiner.CollectChildMeshes && !hasDirect)
-                throw new ArgumentException("Assign target MeshFilters or enable child collection.");
+            RequireOneSelection(combiner.CollectChildMeshes, direct);
             MeshFilter[] filters = combiner.CollectChildMeshes
                 ? combiner.GetComponentsInChildren<MeshFilter>(combiner.IncludeInactive) : direct;
             GameObject generatedRoot = combiner.GeneratedRoot;
@@ -155,6 +287,16 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
                 inputs.Add(filter);
             }
             return inputs.ToArray();
+        }
+
+        /// <summary>A component takes its inputs from exactly one of the assigned list and child collection.</summary>
+        private static void RequireOneSelection(bool collectChildMeshes, MeshFilter[] direct)
+        {
+            bool hasDirect = direct != null && direct.Length > 0;
+            if (collectChildMeshes && hasDirect)
+                throw new ArgumentException("Choose direct MeshFilters or child collection, not both.");
+            if (!collectChildMeshes && !hasDirect)
+                throw new ArgumentException("Assign target MeshFilters or enable child collection.");
         }
     }
 }
