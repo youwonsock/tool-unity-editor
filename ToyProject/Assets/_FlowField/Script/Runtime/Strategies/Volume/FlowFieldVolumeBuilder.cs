@@ -22,7 +22,8 @@ namespace Common.FlowField
         private readonly int[] _obstacleCells = new int[CellsPerStep];
         private readonly FlowFieldVolumeCellQuery _cellQuery = new FlowFieldVolumeCellQuery();
         private readonly FlowFieldSpareArrays _spares = new FlowFieldSpareArrays();
-        // The uncertain regions; the session owns them, as in Surface2D.
+        // The uncertain regions, which the session owns and updates. The
+        // builder only reads them to limit its obstacle queries.
         private FlowFieldSafety _safety => _session.Safety;
 
         private VolumeFieldData _committed;
@@ -108,7 +109,11 @@ namespace Common.FlowField
             _committedReservationBytes = 0;
         }
 
-        internal bool Submit(in FlowFieldVolumeRequest request, bool requeryObstacles = false)
+        /// <summary>
+        /// Accepts a request. Returns the Bounds when new obstacle settings
+        /// make every published cell uncertain.
+        /// </summary>
+        internal Bounds? Submit(in FlowFieldVolumeRequest request, bool requeryObstacles = false)
         {
             ThrowIfDisposed();
             if (!_session.IsInitialized)
@@ -127,15 +132,15 @@ namespace Common.FlowField
             if (_build != null
                 && (!_build.Request.HasSameGrid(request) || _build.Request.HasGoal && !request.HasGoal))
                 DiscardBuild();
-            if (_committed != null
+            Bounds? invalidated = _committed != null
                 && _committed.Request.HasSameGrid(request)
                 && (_committed.Request.ObstacleLayer.value != request.ObstacleLayer.value
-                    || Mathf.Abs(_committed.Request.ObstacleClearance - request.ObstacleClearance) > 0.0001f))
-                _safety.InvalidateRegion(request.WorldBounds);
-            if (goalMovedWithinCell)
-                return true;
-            _requests.Pending = true;
-            return true;
+                    || Mathf.Abs(_committed.Request.ObstacleClearance - request.ObstacleClearance) > 0.0001f)
+                    ? request.WorldBounds
+                    : (Bounds?)null;
+            if (!goalMovedWithinCell)
+                _requests.Pending = true;
+            return invalidated;
         }
 
         /// <summary>
@@ -157,7 +162,13 @@ namespace Common.FlowField
 
         public bool HasActiveBuild => _build != null;
 
-        public bool TryBeginBuild(bool scheduled) => TryBeginPendingBuild();
+        // Every build but a Modifier recompose queries the obstacles.
+        public bool TryBeginBuild(out FlowFieldBuildStart start)
+        {
+            bool started = TryBeginPendingBuild();
+            start = new FlowFieldBuildStart(started && !_build.IsModifierRecompose, null);
+            return started;
+        }
 
         public FlowFieldBuildStep StepBuild(in FlowFieldBuildBudget budget, bool waitForWorker)
         {
@@ -213,7 +224,6 @@ namespace Common.FlowField
                 bool reuseObstacles = CanReuseObstacleQueries(request);
                 bool requeryChangedCells = !reuseObstacles && CanRequeryChangedCells(request);
                 _obstacleQueryRequired = false;
-                _safety.BeginBuild();
                 _build = new BuildContext(request, modifierSnapshots);
                 if (reuseObstacles)
                 {
@@ -224,7 +234,7 @@ namespace Common.FlowField
                 }
                 else if (requeryChangedCells)
                 {
-                    _build.QueryOnlyChangedRegions(_committed.Blocked, _safety.ObservedRegions());
+                    _build.QueryOnlyChangedRegions(_committed.Blocked);
                 }
             }
             _buildReservationBytes = reservation;

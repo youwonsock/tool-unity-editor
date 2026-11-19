@@ -31,6 +31,23 @@ namespace Common.FlowField
         }
     }
 
+    /// <summary>What a build that begins tells the session about the uncertain regions.</summary>
+    internal readonly struct FlowFieldBuildStart
+    {
+        // The build queries the obstacles of every uncertain region, so its
+        // publication resolves them.
+        internal readonly bool ResolvesUncertainRegions;
+        // New obstacle settings the build took before it began made this
+        // region uncertain.
+        internal readonly Bounds? InvalidatedRegion;
+
+        internal FlowFieldBuildStart(bool resolvesUncertainRegions, Bounds? invalidatedRegion)
+        {
+            ResolvesUncertainRegions = resolvesUncertainRegions;
+            InvalidatedRegion = invalidatedRegion;
+        }
+    }
+
     /// <summary>
     /// What one space mode does inside the common <see cref="FlowFieldSession"/>:
     /// how it builds a field, reads it, and takes obstacle and Modifier input.
@@ -49,7 +66,8 @@ namespace Common.FlowField
         // reports each step's result, and a failure as an exception, and the
         // session does the rest the same way in both modes.
         bool HasActiveBuild { get; }
-        bool TryBeginBuild(bool scheduled);
+        // False when nothing is owed; start is filled either way.
+        bool TryBeginBuild(out FlowFieldBuildStart start);
         FlowFieldBuildStep StepBuild(in FlowFieldBuildBudget budget, bool waitForWorker);
         // Publishes the completed build; true when the field now reads differently.
         bool PublishBuild();
@@ -74,17 +92,18 @@ namespace Common.FlowField
         // ----- Configuration -------------------------------------------------
         // The builder turns the Manager's settings into its own request; every
         // change arrives as a notification, never by polling the scene.
-        // Initialize prepares a builder that has no request yet.
+        // Initialize prepares a builder that has no request yet. SubmitConfig
+        // returns the region new obstacle settings made uncertain, if any.
         void Initialize(FlowFieldBakeMode bakeMode);
-        void SubmitConfig(in FlowFieldManagerConfig config, FlowFieldConfigChange change);
+        Bounds? SubmitConfig(in FlowFieldManagerConfig config, FlowFieldConfigChange change);
 
         // ----- Input ----------------------------------------------------------
         // The session keeps the Modifiers; the builder keeps what each touches
         // (Surface2D cell masks) and composes again after a change.
         IFlowFieldModifierArea CreateModifierArea();
         void ApplyModifierChange(in FlowFieldModifierUpdate update);
-        // The session keeps the registered obstacles and marks the regions a
-        // change touched as uncertain; the builder only rebuilds them.
+        // The session keeps the registered obstacles and the uncertain regions
+        // a change touched; the builder only rebuilds them.
         void ApplyObstacleChange(in FlowFieldObstacleChange change);
 
         // ----- Lifecycle -----------------------------------------------------

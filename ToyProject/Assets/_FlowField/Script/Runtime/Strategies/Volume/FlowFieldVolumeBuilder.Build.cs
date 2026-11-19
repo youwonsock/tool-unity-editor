@@ -157,6 +157,10 @@ namespace Common.FlowField
             if (!build.ObstaclesSynced)
             {
                 Physics.SyncTransforms();
+                // The session observed the uncertain regions after this build
+                // began, so they are read here, before the first query.
+                if (build.PublishedBlocked != null)
+                    build.LimitToRegions(_safety.ObservedRegions());
                 build.ObstaclesSynced = true;
             }
             int count = build.NextObstacleCells(_obstacleCells);
@@ -323,9 +327,6 @@ namespace Common.FlowField
             _committedReservationBytes = EstimateCommittedBytes(build.Count);
             if (!build.IsModifierRecompose)
             {
-                // Changes recorded after this build started stay uncertain; a
-                // continuously moving obstacle must not keep older regions unsafe.
-                _safety.ClearObservedRegions();
                 // The published field holds none of these.
                 _spares.Costs = build.Costs ?? _spares.Costs;
                 _spares.Queue = build.Queue ?? _spares.Queue;

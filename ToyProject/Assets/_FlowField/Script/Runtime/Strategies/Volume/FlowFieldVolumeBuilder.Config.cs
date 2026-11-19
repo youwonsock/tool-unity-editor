@@ -17,35 +17,31 @@ namespace Common.FlowField
                 out worldBounds,
                 out grid);
 
-        public void SubmitConfig(in FlowFieldManagerConfig config, FlowFieldConfigChange change)
+        public Bounds? SubmitConfig(in FlowFieldManagerConfig config, FlowFieldConfigChange change)
         {
             switch (change)
             {
                 case FlowFieldConfigChange.Rebuild:
-                    SubmitConfigRequest(in config, force: true, requeryObstacles: true);
-                    break;
+                    return SubmitConfigRequest(in config, force: true, requeryObstacles: true);
                 // A Goal change keeps the obstacle result unless an obstacle changed.
                 case FlowFieldConfigChange.Goal:
-                    SubmitConfigRequest(in config, force: true, requeryObstacles: false);
-                    break;
+                    return SubmitConfigRequest(in config, force: true, requeryObstacles: false);
                 case FlowFieldConfigChange.Cells:
-                    SubmitConfigRequest(in config, force: true, requeryObstacles: true);
-                    break;
+                    return SubmitConfigRequest(in config, force: true, requeryObstacles: true);
                 // A changed request rebuilds; a new grid hides the old result at once.
                 default:
-                    SubmitConfigRequest(in config, force: false, requeryObstacles: false);
-                    break;
+                    return SubmitConfigRequest(in config, force: false, requeryObstacles: false);
             }
         }
 
-        private void SubmitConfigRequest(in FlowFieldManagerConfig config, bool force, bool requeryObstacles)
+        private Bounds? SubmitConfigRequest(in FlowFieldManagerConfig config, bool force, bool requeryObstacles)
         {
             FlowFieldVolumeRequest request = CreateRequest(in config);
             if (!force
                 && TryGetLatestRequestedInput(out FlowFieldVolumeRequest latest)
                 && latest.HasSameInputs(request))
-                return;
-            Submit(request, requeryObstacles);
+                return null;
+            return Submit(request, requeryObstacles);
         }
 
         /// <summary>The request for the configured grid, Bake Mode and asset.</summary>

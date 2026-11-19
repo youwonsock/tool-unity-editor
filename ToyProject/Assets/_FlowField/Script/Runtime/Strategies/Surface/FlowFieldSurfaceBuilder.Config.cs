@@ -6,12 +6,12 @@ namespace Common.FlowField
     /// <summary>How Surface2D reads a Manager configuration: its grid, checks and requests.</summary>
     internal sealed partial class FlowFieldSurfaceBuilder
     {
-        public void SubmitConfig(in FlowFieldManagerConfig config, FlowFieldConfigChange change)
+        public Bounds? SubmitConfig(in FlowFieldManagerConfig config, FlowFieldConfigChange change)
         {
             switch (change)
             {
                 case FlowFieldConfigChange.Rebuild:
-                    Submit(CreateRequest(
+                    Bounds? invalidated = Submit(CreateRequest(
                         in config,
                         _session.BakeMode,
                         CreateBakeSettings(in config),
@@ -19,21 +19,19 @@ namespace Common.FlowField
                         _state.DirtyFinalRegion,
                         _state.DirtyObstacleRegion));
                     _configOwed = false;
-                    break;
+                    return invalidated;
                 case FlowFieldConfigChange.Goal:
                     _goalTracker.ResetWarning();
                     MarkDirty(FlowFieldSurfaceDirtyFlags.Goal, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
                     if (!config.HasGoal)
                         ObserveGoalRemoved();
                     // The request holds the Goal.
-                    SubmitOrOwe(in config, immediately: false);
-                    break;
+                    return SubmitOrOwe(in config, immediately: false);
                 case FlowFieldConfigChange.Cells:
                     MarkDirty(FlowFieldSurfaceDirtyFlags.Grid, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
-                    break;
+                    return null;
                 default:
-                    SubmitSettings(in config);
-                    break;
+                    return SubmitSettings(in config);
             }
         }
 
@@ -42,11 +40,11 @@ namespace Common.FlowField
         // field and a Goal or obstacle edit reuses the Surface. StaticBaked
         // requests hold no runtime Goal or dynamic obstacle input, so those
         // edits change nothing.
-        private void SubmitSettings(in FlowFieldManagerConfig config)
+        private Bounds? SubmitSettings(in FlowFieldManagerConfig config)
         {
             FlowFieldSurfaceRequest current = CreateCurrentRequest(in config);
             if (HasSubmittedRequest && HasSameBaseInputs(current) && HasSameFinalInputs(current))
-                return;
+                return null;
 
             // Visible to a solve callback even before the next Submit.
             ObserveDefaultDirection(current.DefaultDirection);
@@ -60,21 +58,21 @@ namespace Common.FlowField
                 flags |= FlowFieldSurfaceDirtyFlags.DefaultDirection | FlowFieldSurfaceDirtyFlags.FinalRegion;
             MarkDirty(flags, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
             // A new grid hides the published field at once.
-            SubmitOrOwe(in config, immediately: gridChanged);
+            return SubmitOrOwe(in config, immediately: gridChanged);
         }
 
         // A running build keeps the request it started with; the next build
         // submits the newer configuration before it begins.
-        private void SubmitOrOwe(in FlowFieldManagerConfig config, bool immediately)
+        private Bounds? SubmitOrOwe(in FlowFieldManagerConfig config, bool immediately)
         {
             if (immediately || !HasActiveBuild)
             {
                 _configOwed = false;
-                Submit(CreateCurrentRequest(in config));
-                return;
+                return Submit(CreateCurrentRequest(in config));
             }
             _owedConfig = config;
             _configOwed = true;
+            return null;
         }
 
         private FlowFieldSurfaceRequest CreateCurrentRequest(in FlowFieldManagerConfig config)

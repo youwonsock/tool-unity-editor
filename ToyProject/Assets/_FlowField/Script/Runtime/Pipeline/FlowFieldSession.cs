@@ -84,7 +84,9 @@ namespace Common.FlowField
                 return false;
             _config = config;
             _hasConfig = true;
-            _builder.SubmitConfig(in config, change);
+            Bounds? invalidated = _builder.SubmitConfig(in config, change);
+            if (invalidated.HasValue)
+                Safety.InvalidateRegion(invalidated.Value);
             EnterBuildingIfOwed();
             // A new Grid can hide the published field without a lifecycle change.
             PublishRuntimeState();
@@ -408,27 +410,28 @@ namespace Common.FlowField
 
         // ----- The build pipeline both space modes run -----------------------
         // A build begins, takes steps until it is published or rejected, and
-        // the session moves between Building and Ready around it. The builder
-        // only supplies the steps.
+        // the session moves between Building and Ready around it and records
+        // which uncertain regions it resolves. The builder only supplies the
+        // steps and says what each build queries.
 
         internal void PumpInternal(in FlowFieldBuildBudget budget)
-            => RunPipeline(in budget, scheduled: true, waitForWorker: false);
+            => RunPipeline(in budget, waitForWorker: false);
 
         /// <summary>
         /// A direct owner (a bake, the Editor preview) runs its own session and
         /// waits for the worker thread; the scheduler pumps with a frame budget
         /// and never waits. With no budget the pending build runs to its end.
         /// </summary>
-        internal void Pump() => RunPipeline(FlowFieldBuildBudget.Unlimited, scheduled: false, waitForWorker: true);
+        internal void Pump() => RunPipeline(FlowFieldBuildBudget.Unlimited, waitForWorker: true);
 
         internal void Pump(double budgetMilliseconds)
         {
             System.Diagnostics.Stopwatch timer = System.Diagnostics.Stopwatch.StartNew();
             var budget = new FlowFieldBuildBudget(budgetMilliseconds, () => timer.Elapsed.TotalMilliseconds);
-            RunPipeline(in budget, scheduled: false, waitForWorker: true);
+            RunPipeline(in budget, waitForWorker: true);
         }
 
-        internal void RunPipeline(in FlowFieldBuildBudget budget, bool scheduled, bool waitForWorker)
+        private void RunPipeline(in FlowFieldBuildBudget budget, bool waitForWorker)
         {
             if (!CanPump)
                 return;
@@ -444,11 +447,16 @@ namespace Common.FlowField
                         if (begun >= policy.MaxBuildsBegunPerPump
                             || !policy.BeginsAfterBudget && budget.IsExpired)
                             return;
-                        if (!_builder.TryBeginBuild(scheduled))
+                        bool started = _builder.TryBeginBuild(out FlowFieldBuildStart start);
+                        if (start.InvalidatedRegion.HasValue)
+                            Safety.InvalidateRegion(start.InvalidatedRegion.Value);
+                        if (!started)
                         {
                             LeaveBuildingIfIdle();
                             return;
                         }
+                        if (start.ResolvesUncertainRegions)
+                            Safety.BeginBuild();
                         begun++;
                     }
 
@@ -459,7 +467,9 @@ namespace Common.FlowField
                     {
                         case FlowFieldBuildStep.Completed:
                             // Only a field that reads differently is a new Revision.
-                            if (_builder.PublishBuild())
+                            bool changed = _builder.PublishBuild();
+                            Safety.BuildPublished();
+                            if (changed)
                             {
                                 unchecked { Revision++; }
                                 NotifyFieldCommitted();
@@ -602,6 +612,7 @@ namespace Common.FlowField
         {
             unchecked { LifetimeGeneration++; }
             _builder.CancelWork();
+            Safety.BuildAbandoned();
         }
 
         private void ReleaseState()

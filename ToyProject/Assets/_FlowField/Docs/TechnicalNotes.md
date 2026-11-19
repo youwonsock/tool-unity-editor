@@ -17,7 +17,7 @@
 
 - `FlowFieldSession`은 두 모드가 같이 쓰는 파이프라인입니다. 모드와 무관한 규칙은 모두 여기 있습니다.
   - 수명 전이(`Initialize`·`Stop`·`Restart`·`Release`·Fault·`Dispose`), 세대 번호, 이벤트
-  - 빌드 루프(`RunPipeline`, 직접 소유자의 `Pump`). 빌드 중 상태 전이, Revision, `FieldChanged`, Fault도 여기서만 합니다. Builder는 단계 결과(계속·대기·버림·완료)와 "게시한 필드가 달라졌는지"만 돌려주고, 실패는 예외로 알립니다. 버린 결과 뒤에 남은 입력이 있으면 Ready로 돌아가지 않고 Building을 유지합니다.
+  - 빌드 루프(`RunPipeline`, 직접 소유자의 `Pump`). 빌드 중 상태 전이, Revision, `FieldChanged`, Fault, 불확실 영역 갱신도 여기서만 합니다. Builder는 빌드를 시작할 때 그 빌드가 장애물을 조회하는지와 새 장애물 설정이 불확실하게 만든 영역(`FlowFieldBuildStart`)을, 단계마다 결과(계속·대기·버림·완료)와 "게시한 필드가 달라졌는지"만 돌려주고, 실패는 예외로 알립니다. 버린 결과 뒤에 남은 입력이 있으면 Ready로 돌아가지 않고 Building을 유지합니다.
   - Surface 풀이 완료 콜백은 세대 번호와 빌드 단계(`WaitingSolve`)로 유효성을 판단합니다. 콜백은 `StartBfs`나 `Poll` 안, 곧 `StepBuild` 안에서만 옵니다.
   - 조회(`TrySample`·`ClampPositionToGrid`·`IsReady`)와 조회 실패를 예외로 바꾸는 일(`FlowFieldFailures`)
   - 장애물 등록(`FlowFieldObstacleRegistry`), Modifier 등록(`FlowFieldModifierRegistry`), 통지 영역을 불확실 영역으로 표시하는 일(`FlowFieldSafety`, 여백 = 셀 크기 + Obstacle Clearance)
@@ -59,7 +59,7 @@
 ## 입력 변경
 
 - **통지 방식:** FlowField는 씬을 폴링하지 않습니다. 변경은 공개 API와 FlowField 컴포넌트의 통지로만 들어옵니다. `FlowFieldDynamicObstacle`, `FlowFieldGoalTarget`, Modifier Volume은 자기 Transform이나 Collider Bounds를 프레임당 한 번 확인합니다(컴포넌트당 O(1)).
-- **불확실 영역:** 장애물 등록·해제·이동·영역 dirty 통지를 받은 그 프레임에 영역을 표시하고, 그 영역을 조회한 빌드가 게시될 때까지 그 셀과 그 셀로 가는 경로는 속도 0입니다. 빌드 시작 때 목록을 옮기고 그 빌드를 게시할 때 지우며, 시작 후 기록된 영역은 다음 빌드까지 남습니다. 목록이 64개를 넘으면 합쳐서 더 넓게 정지합니다(`FlowFieldSafety`; Surface는 XZ, Volume은 3D로 비교). 장애물 설정이 바뀌면 필드 전체가 불확실해집니다.
+- **불확실 영역:** 장애물 등록·해제·이동·영역 dirty 통지를 받은 그 프레임에 영역을 표시하고, 그 영역을 조회한 빌드가 게시될 때까지 그 셀과 그 셀로 가는 경로는 속도 0입니다. 목록은 Session만 바꿉니다(`FlowFieldSafety`). 장애물을 조회하는 빌드가 시작되면 목록을 옮기고, 다음 게시 때 지웁니다. 시작 후 기록된 영역은 다음 빌드까지 남습니다. 게시하지 못하고 끝난 빌드가 옮긴 영역도 남았다가 뒤따르는 빌드의 게시 때 지웁니다. Surface에서 거부된 빌드의 조회 결과는 staging에 남고 대체 빌드는 항상 Goal 플래그를 가지며, Volume에서 버린 빌드 뒤에는 항상 전체 빌드가 오기 때문입니다. 목록이 64개를 넘으면 합쳐서 더 넓게 정지합니다(Surface는 XZ, Volume은 3D로 비교). 장애물 설정이 바뀌면 필드 전체가 불확실해집니다.
 - `SetGoal()`은 장애물 결과를 재사용합니다. 같이 `RequestRebuild()`를 부르면 이 이점을 잃습니다.
 - Surface의 `RequestRebuild()`는 바닥 Raycast를 다시 한다고 보장하지 않습니다. 바닥 형상이 바뀌면 `NotifyCellsDirty()`를 씁니다. Volume의 `NotifyCellsDirty()`는 새 전체 작업을 예약합니다.
 - 풀이 중에 바뀐 Goal과 설정은 Builder가 보관했다가 다음 빌드를 시작할 때 제출합니다.

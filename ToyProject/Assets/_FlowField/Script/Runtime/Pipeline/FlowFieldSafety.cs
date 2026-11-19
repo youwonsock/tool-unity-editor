@@ -17,8 +17,10 @@ namespace Common.FlowField
         private readonly bool _planar;
         // Changes no running build has observed yet.
         private readonly List<Bounds> _uncertainBounds = new List<Bounds>(8);
-        // Changes the running build observes, still unsafe until it is published.
+        // Changes a build has observed, still unsafe until a build publishes.
         private readonly List<Bounds> _observingBounds = new List<Bounds>(8);
+        // A build observed the regions and no build has published since.
+        private bool _awaitingPublish;
 
         internal FlowFieldSafety(bool planar) => _planar = planar;
 
@@ -28,26 +30,49 @@ namespace Common.FlowField
         {
             _uncertainBounds.Clear();
             _observingBounds.Clear();
+            _awaitingPublish = false;
         }
 
         /// <summary>
-        /// Every build queries the obstacles in these regions after it starts, so
-        /// it resolves the regions recorded so far. A discarded build keeps them
-        /// here until its replacement publishes.
+        /// The session calls this when a build begins that queries the
+        /// obstacles of every region recorded so far. A build that ends
+        /// without publishing leaves them observed, because what follows it
+        /// publishes those queries too: in Surface2D a rejected build keeps
+        /// its query results in staging and its replacement always carries
+        /// the Goal flag, and in Volume3D a discarded build is always followed
+        /// by a complete build.
         /// </summary>
         internal void BeginBuild()
         {
             for (int index = 0; index < _uncertainBounds.Count; index++)
                 AddBounds(_observingBounds, _uncertainBounds[index]);
             _uncertainBounds.Clear();
+            _awaitingPublish = true;
         }
 
-        internal void ClearObservedRegions() => _observingBounds.Clear();
+        /// <summary>
+        /// A build was published. The regions observed since the last
+        /// publication are resolved; changes notified after the build began
+        /// stay uncertain.
+        /// </summary>
+        internal void BuildPublished()
+        {
+            if (!_awaitingPublish)
+                return;
+            _observingBounds.Clear();
+            _awaitingPublish = false;
+        }
+
+        /// <summary>
+        /// The session dropped its work (Stop, Restart, a fault). The observed
+        /// regions stay uncertain until the next complete build publishes.
+        /// </summary>
+        internal void BuildAbandoned() => _awaitingPublish = false;
 
         internal Bounds[] ObservedRegions() => _observingBounds.ToArray();
 
-        // An obstacle mask/clearance change invalidates the complete field.
-        // Preserve its distinct policy: no dirty-region expansion.
+        // New obstacle settings make the whole region uncertain as given,
+        // without the cell and clearance margin MarkDirty adds.
         internal void InvalidateRegion(Bounds bounds) => AddBounds(_uncertainBounds, bounds);
 
         /// <summary>A changed obstacle region, grown by the cells and clearance it can reach.</summary>

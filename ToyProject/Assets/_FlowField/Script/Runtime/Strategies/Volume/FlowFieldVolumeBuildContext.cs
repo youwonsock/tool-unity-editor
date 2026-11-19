@@ -145,11 +145,10 @@ namespace Common.FlowField
             Phase = FlowFieldVolumeBuildPhase.Modifiers;
         }
 
-        internal void QueryOnlyChangedRegions(bool[] publishedBlocked, Bounds[] regions)
-        {
-            PublishedBlocked = publishedBlocked;
-            _changedCells = new FlowFieldVolumeCellCursor(regions);
-        }
+        // The obstacle stage then queries only the regions LimitToRegions names.
+        internal void QueryOnlyChangedRegions(bool[] publishedBlocked) => PublishedBlocked = publishedBlocked;
+
+        internal void LimitToRegions(Bounds[] regions) => _changedCells = new FlowFieldVolumeCellCursor(regions);
 
         /// <summary>
         /// Writes the next cells the obstacle stage must query and returns how many.

@@ -231,22 +231,15 @@ namespace Common.FlowField.Editor
             FlowFieldSession session = FlowFieldSession.CreateSurface(surfaceSource: new FlowFieldFixedSurfaceSource(surface));
             run.Attach(session);
             session.Initialize(FlowFieldBakeMode.RuntimeDynamic);
-            FlowFieldSurfaceGoalResolution goalSnapshot = manager.ResolveConfiguredGoal(settings.Grid);
-            bool accepted = session.Surface.Submit(FlowFieldSurfaceRequest.ForSceneBuild(
-                settings,
-                input.ObstacleLayer,
-                input.CheckHeight,
-                input.CheckCenterOffset,
-                input.Clearance,
-                goalSnapshot,
-                manager.CaptureConfig().Flow.DefaultDirection,
+            // The inputs are those the bake started with: a change stops it first.
+            FlowFieldManagerConfig config = manager.CaptureConfig();
+            session.Surface.Submit(FlowFieldSurfaceBuilder.CreateRequest(
+                in config,
+                FlowFieldBakeMode.RuntimeDynamic,
+                in settings,
                 FlowFieldSurfaceDirtyFlags.All,
                 FlowFieldCellRect.Full(settings.Grid),
                 FlowFieldCellRect.Full(settings.Grid)));
-            if (!accepted && !session.IsFaulted)
-                throw new InvalidOperationException("Static Flow Bake session could not be started.");
-            if (session.IsFaulted)
-                throw session.Fault ?? new InvalidOperationException("Static Flow Bake failed.");
             session.Pump();
             return true;
         }
