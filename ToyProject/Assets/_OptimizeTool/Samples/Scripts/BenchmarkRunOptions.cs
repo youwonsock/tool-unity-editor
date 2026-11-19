@@ -5,6 +5,9 @@ namespace Common.OptimizeTool.Samples
 {
     internal sealed class BenchmarkRunOptions
     {
+        private const string RoundsFlag = "--optimize-benchmark-rounds";
+        private const int MaxRounds = 32;
+
         public bool Offscreen { get; }
         public bool DrainGpu { get; }
         public bool Screenshots { get; }
@@ -13,8 +16,10 @@ namespace Common.OptimizeTool.Samples
         public int OrderOffset { get; }
         public int? FrameRate { get; }
         public int? CubeCount { get; }
+        public int Rounds { get; }
 
-        public BenchmarkRunOptions(string[] args, bool editor, bool batchMode)
+        /// <param name="rounds">Rounds an Editor run asked for; null reads <c>--optimize-benchmark-rounds</c>.</param>
+        public BenchmarkRunOptions(string[] args, bool editor, bool batchMode, int? rounds = null)
         {
             Offscreen = Array.IndexOf(args, "--optimize-benchmark-offscreen") >= 0;
             DrainGpu = Array.IndexOf(args, "--optimize-benchmark-drain-gpu") >= 0;
@@ -27,6 +32,15 @@ namespace Common.OptimizeTool.Samples
             OrderOffset = Integer(args, "--optimize-benchmark-order-offset", 0, OptimizeToolSampleModes.MeshCount * 2 - 1) ?? 0;
             FrameRate = Integer(args, "--optimize-benchmark-fps", 1, 1000);
             CubeCount = Integer(args, "--optimize-benchmark-cubes", 1, int.MaxValue);
+            Rounds = rounds.HasValue ? ValidateRounds(rounds.Value)
+                : Integer(args, RoundsFlag, 1, MaxRounds) ?? OptimizeToolPerformanceBenchmark.DefaultRounds;
+        }
+
+        /// <summary>Rounds must be between 1 and 32, whether they come from the command line or an Editor run.</summary>
+        public static int ValidateRounds(int rounds)
+        {
+            if (rounds < 1 || rounds > MaxRounds) throw new ArgumentException($"{RoundsFlag} requires an integer between 1 and {MaxRounds}.");
+            return rounds;
         }
 
         private static int? Integer(string[] args, string flag, int minimum, int maximum)

@@ -80,6 +80,7 @@ namespace Common.OptimizeTool.Samples
         private BenchmarkCaptureOutput _capture;
         private BenchmarkWorkloadScope _workload;
         private int _rounds;
+        private int? _editorRounds;
         private bool _settingsCaptured, _finished;
         private BenchmarkEnvironmentScope _environment;
         private ulong _lastTimestamp;
@@ -105,20 +106,17 @@ namespace Common.OptimizeTool.Samples
             var go = new GameObject("OptimizeTool Performance Benchmark");
             var benchmark = go.AddComponent<OptimizeToolPerformanceBenchmark>();
             benchmark._output = capture.DirectoryPath; benchmark._capture = capture;
-            benchmark._rounds = DefaultRounds;
-            int roundsFlag = Array.IndexOf(args, "--optimize-benchmark-rounds");
-            if (roundsFlag >= 0 && roundsFlag + 1 < args.Length && int.TryParse(args[roundsFlag + 1], out int rounds))
-                benchmark._rounds = Mathf.Clamp(rounds, 1, 32);
         }
 
         public static OptimizeToolPerformanceBenchmark StartEditorRun(string outputDirectory, int rounds = DefaultRounds)
         {
             if (!Application.isEditor || !Application.isPlaying) throw new InvalidOperationException("Start an Editor benchmark during Play Mode.");
             if (FindFirstObjectByType<OptimizeToolPerformanceBenchmark>() != null) throw new InvalidOperationException("A benchmark is already running.");
+            BenchmarkRunOptions.ValidateRounds(rounds);
             var capture = new BenchmarkCaptureOutput(outputDirectory);
             var benchmark = new GameObject("OptimizeTool Performance Benchmark").AddComponent<OptimizeToolPerformanceBenchmark>();
             benchmark._output = capture.DirectoryPath; benchmark._capture = capture;
-            benchmark._rounds = Mathf.Clamp(rounds, 1, 32);
+            benchmark._editorRounds = rounds;
             return benchmark;
         }
 
@@ -155,8 +153,9 @@ namespace Common.OptimizeTool.Samples
         private IEnumerator Run()
         {
             Directory.CreateDirectory(_output);
-            var options = new BenchmarkRunOptions(Environment.GetCommandLineArgs(), Application.isEditor, Application.isBatchMode);
+            var options = new BenchmarkRunOptions(Environment.GetCommandLineArgs(), Application.isEditor, Application.isBatchMode, _editorRounds);
             bool offscreen = options.Offscreen;
+            _rounds = options.Rounds;
             _warmupSeconds = options.WarmupSeconds; _preconditionSeconds = options.PreconditionSeconds;
             _orderOffset = options.OrderOffset;
             if (options.FrameRate.HasValue) Application.targetFrameRate = options.FrameRate.Value;
