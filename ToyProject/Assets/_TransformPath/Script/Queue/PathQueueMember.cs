@@ -168,6 +168,7 @@ namespace Common.TransformPath
         {
             if (manager == null || !manager.isActiveAndEnabled || !manager.IsInitialized)
                 throw new InvalidOperationException("QueuedPathManager must be initialized before starting a queued move.");
+            ThrowIfQueueCalculating(manager);
             PathValueUtility.ThrowIfNotFinite(maxProgress, nameof(maxProgress));
             PathFollower follower = RequireFollower();
             using var operation = PathExecutionBoundary.Enter();
@@ -191,6 +192,7 @@ namespace Common.TransformPath
         /// <summary>Leaves the queue and plays the request on its own.</summary>
         public bool StartFreePlayback(PathPlaybackRequest request)
         {
+            ThrowIfQueueCalculating(null);
             PathFollower follower = RequireFollower();
             using var operation = PathExecutionBoundary.Enter();
             // Validate before leaving, so an invalid request changes nothing.
@@ -202,6 +204,7 @@ namespace Common.TransformPath
         /// <summary>Leaves the queue and keeps playing. Listeners hear the wait end.</summary>
         public void Leave()
         {
+            ThrowIfQueueCalculating(null);
             using var operation = PathExecutionBoundary.Enter();
             RemoveFromManager();
             _requestedMaxProgress = 1f;
@@ -254,7 +257,7 @@ namespace Common.TransformPath
             if (follower.MotionEpoch != _motionEpoch || _showingPause)
                 AwaitFirstResult();
 
-            _wait.Step(deltaTime, hasStatus, status, _activeManager.SpacingFor(this),
+            _wait.Step(deltaTime, hasStatus, status, status.Spacing,
                 _resumeMovementDelay, _unblockHysteresis, _speedSmoothRate);
             ApplyLimit();
             ReportChanges();
@@ -287,6 +290,15 @@ namespace Common.TransformPath
             if (follower == null)
                 throw new InvalidOperationException("PathQueueMember requires a PathFollower.");
             return follower;
+        }
+
+        // A spacing policy may not change the line it is asked about.
+        private void ThrowIfQueueCalculating(QueuedPathManager manager)
+        {
+            if (_activeManager != null)
+                _activeManager.ThrowIfCalculating();
+            if (manager != null)
+                manager.ThrowIfCalculating();
         }
 
         private void RemoveFromManager()

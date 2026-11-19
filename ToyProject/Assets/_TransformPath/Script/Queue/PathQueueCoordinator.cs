@@ -8,15 +8,18 @@ namespace Common.TransformPath
         /// <summary>The member ahead on the route, or null for the leader.</summary>
         public PathQueueMember Ahead { get; }
         public float? DistanceToAhead { get; }
+        /// <summary>The gap this member keeps behind the one ahead, after the manager's spacing policy.</summary>
+        public float Spacing { get; }
         public bool IsBlocked { get; }
         public float SpeedMultiplier { get; }
         public float MaxProgress { get; }
 
-        internal PathQueueStatus(PathQueueMember ahead, float? distanceToAhead, bool isBlocked,
+        internal PathQueueStatus(PathQueueMember ahead, float? distanceToAhead, float spacing, bool isBlocked,
             float speedMultiplier, float maxProgress)
         {
             Ahead = ahead;
             DistanceToAhead = distanceToAhead;
+            Spacing = spacing;
             IsBlocked = isBlocked;
             SpeedMultiplier = speedMultiplier;
             MaxProgress = maxProgress;

@@ -6,7 +6,7 @@ namespace Common.TransformPath.Tests
     public sealed class PathQueueTests : PathBoundaryIsolatedTest
     {
         private static PathQueueStatus Status(bool blocked, float multiplier, float? distance) =>
-            new PathQueueStatus(null, distance, blocked, multiplier, 1f);
+            new PathQueueStatus(null, distance, 1.5f, blocked, multiplier, 1f);
 
         [Test]
         public void SpeedMultiplier_SlowsBetweenSpacingAndSlowdownDistance()

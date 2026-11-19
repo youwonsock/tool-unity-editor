@@ -26,6 +26,8 @@ namespace Common.TransformPath
 
         [Header("Spacing")]
         [SerializeField, Min(0f)] private float _defaultSpacing = PathConstants.DEFAULT_QUEUE_SPACING;
+        [Tooltip("Optional. Decides each member's gap from the default or the member's own spacing. Several managers may share one.")]
+        [SerializeField] private PathQueueSpacingPolicy _spacingPolicy;
 
         [Header("Slowdown")]
         [SerializeField] private bool _enableGradualSlowdown = true;
@@ -45,6 +47,7 @@ namespace Common.TransformPath
         private bool _isInitialized;
         private int _routeRevision = -1;
         private int _nextSequence;
+        private bool _calculating;
         private PathConfigurationErrorReporter _errors;
 
         private static readonly Comparison<Entry> CompareOrder = (left, right) =>
@@ -68,6 +71,13 @@ namespace Common.TransformPath
                 PathValueUtility.ThrowIfNegative(value, nameof(value));
                 _defaultSpacing = value;
             }
+        }
+
+        /// <summary>Decides each member's gap every frame, or null for the resolved spacing.</summary>
+        public PathQueueSpacingPolicy SpacingPolicy
+        {
+            get => _spacingPolicy;
+            set => _spacingPolicy = value;
         }
 
         public bool EnableGradualSlowdown
@@ -116,6 +126,7 @@ namespace Common.TransformPath
         /// <summary>Sets the route every member must play. Changing it removes the current members.</summary>
         public void ConfigureRoute(PathProviderBehaviour provider)
         {
+            ThrowIfCalculating();
             if (provider != null)
                 provider.EnsureBuilt();
             PathProviderUtility.ThrowIfNotReady(provider, nameof(provider));
@@ -216,6 +227,7 @@ namespace Common.TransformPath
 
         internal void Join(PathQueueMember member)
         {
+            ThrowIfCalculating();
             if (!_isInitialized)
                 throw new InvalidOperationException("QueuedPathManager is not initialized.");
             if (_routeProvider == null || !ReferenceEquals(member.Follower.CurrentProvider, _routeProvider))
@@ -244,6 +256,7 @@ namespace Common.TransformPath
         /// <summary>Removes a member without telling it. The member calls this when it leaves.</summary>
         internal void Remove(PathQueueMember member)
         {
+            ThrowIfCalculating();
             if (member == null || !_entries.TryGetValue(member, out Entry entry))
                 return;
             _entries.Remove(member);
@@ -256,11 +269,17 @@ namespace Common.TransformPath
 
         internal bool Contains(PathQueueMember member) => member != null && _entries.ContainsKey(member);
 
-        /// <summary>The gap a member keeps behind the member ahead.</summary>
-        internal float SpacingFor(PathQueueMember member) => member.UseManagerSpacing ? _defaultSpacing : member.ActorSpacing;
+        /// <summary>A spacing policy runs while the line is walked, so nothing may change the line then.</summary>
+        internal void ThrowIfCalculating()
+        {
+            if (_calculating)
+                throw new InvalidOperationException(
+                    $"QueuedPathManager '{name}' cannot change its members while its spacing policy runs.");
+        }
 
         private void LeaveAll(EPathQueueLeaveReason reason)
         {
+            ThrowIfCalculating();
             _leaving.Clear();
             _leaving.AddRange(_joined);
             for (int i = 0; i < _leaving.Count; i++)
@@ -320,24 +339,50 @@ namespace Common.TransformPath
         private void CalculateStatuses()
         {
             float routeLength = Mathf.Max(_routeProvider.PathLength, PathConstants.MIN_MOVE_VALUE);
-            Entry ahead = null;
-            for (int i = 0; i < _ordered.Count; i++)
+            // Read once a frame: a Unity null check is not free.
+            PathQueueSpacingPolicy policy = _spacingPolicy;
+            bool hasPolicy = policy != null;
+            _calculating = true;
+            try
             {
-                Entry entry = _ordered[i];
-                PathQueueMember member = entry.Member;
-                float? distance = ahead == null
-                    ? (float?)null
-                    : Mathf.Max(0f, (ahead.Progress - entry.Progress) * routeLength);
-                float spacing = SpacingFor(member);
-                bool blocked = distance.HasValue && distance.Value <= spacing;
-                float multiplier = PathQueueCoordinator.CalculateSpeedMultiplier(
-                    _enableGradualSlowdown && member.EnableGradualSlowdown,
-                    distance, spacing, _slowdownStartDistance, _minSpeedMultiplier, _slowdownCurve);
-                float maxProgress = PathQueueCoordinator.CalculateMaxProgress(
-                    member.EnableOvertakeProtection, ahead?.Progress, spacing, routeLength);
-                entry.Status = new PathQueueStatus(ahead?.Member, distance, blocked, multiplier, maxProgress);
-                ahead = entry;
+                Entry ahead = null;
+                for (int i = 0; i < _ordered.Count; i++)
+                {
+                    Entry entry = _ordered[i];
+                    PathQueueMember member = entry.Member;
+                    float? distance = ahead == null
+                        ? (float?)null
+                        : Mathf.Max(0f, (ahead.Progress - entry.Progress) * routeLength);
+                    float spacing = SpacingFor(member);
+                    if (hasPolicy)
+                        spacing = AskPolicy(policy, member, ahead?.Member, spacing);
+                    bool blocked = distance.HasValue && distance.Value <= spacing;
+                    float multiplier = PathQueueCoordinator.CalculateSpeedMultiplier(
+                        _enableGradualSlowdown && member.EnableGradualSlowdown,
+                        distance, spacing, _slowdownStartDistance, _minSpeedMultiplier, _slowdownCurve);
+                    float maxProgress = PathQueueCoordinator.CalculateMaxProgress(
+                        member.EnableOvertakeProtection, ahead?.Progress, spacing, routeLength);
+                    entry.Status = new PathQueueStatus(ahead?.Member, distance, spacing, blocked, multiplier, maxProgress);
+                    ahead = entry;
+                }
             }
+            finally
+            {
+                _calculating = false;
+            }
+        }
+
+        // The manager's spacing, or the member's own when it does not use the manager's.
+        private float SpacingFor(PathQueueMember member) => member.UseManagerSpacing ? _defaultSpacing : member.ActorSpacing;
+
+        private static float AskPolicy(PathQueueSpacingPolicy policy, PathQueueMember member, PathQueueMember ahead,
+            float resolvedSpacing)
+        {
+            float spacing = policy.GetSpacing(member, ahead, resolvedSpacing);
+            if (!PathValueUtility.IsNonNegativeFinite(spacing))
+                throw new InvalidOperationException(
+                    $"Spacing policy '{policy.name}' returned {spacing} for '{member.name}'. Spacing must be finite and non-negative.");
+            return spacing;
         }
 
         private bool TryValidateSettings(out string error)

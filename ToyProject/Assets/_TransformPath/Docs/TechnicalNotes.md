@@ -82,6 +82,7 @@
 - **참여:** `PathQueueMember.StartQueuedPlayback`이 Follower를 재생하고 Manager에 참여합니다. 참여 직후와 위치가 이어지지 않고 바뀐 뒤에는 첫 결과와 재출발 지연까지 기다립니다.
 - **불연속(`MotionEpoch`):** 엔진은 Play, 위치를 바꾼 Seek, Loop 이음매에서 `MotionEpoch`를 1 올립니다. 멤버와 Manager는 이 값 하나만 비교합니다. 값이 바뀌면 멤버는 새 출발처럼 첫 결과와 재출발 지연을 기다리고, Manager는 그 프레임 정렬 전에 멤버를 같은 진행률의 줄 뒤로 보냅니다. Queue 안에서 다시 `StartQueuedPlayback`하면 자리는 유지합니다.
 - **계산:** Queue 단계에서 Manager가 재생이 끝났거나 다른 경로나 이전 정의를 재생하는 멤버를 빼고, 남은 멤버가 새 기하를 먼저 받게 한 다음(일시정지 포함) 진행률로 정렬한 뒤 앞 멤버부터 거리, 대기, 속도 배율, 진행 상한을 계산합니다(`PathQueueCoordinator`). 정렬은 할당 없는 삽입 정렬이고, 결과는 참여 순서대로 전달합니다.
+- **간격 정책:** Manager는 정책 참조를 프레임마다 한 번 읽고, 멤버마다 한 번 `GetSpacing`을 불러 결과를 `PathQueueStatus.Spacing`에 담습니다. 감속, 대기, 진행 상한, 멤버의 추가 간격이 모두 이 값을 씁니다. 정책이 도는 동안 Manager는 줄을 순회하고 있으므로 `Join`, `Remove`, `ConfigureRoute`는 `InvalidOperationException`을 던지고, 멤버의 `StartQueuedPlayback`, `StartFreePlayback`, `Leave`는 아무것도 바꾸기 전에 던집니다. 잘못된 값은 Tick 예외가 되어 실패 격리 규칙대로 Manager가 멤버를 `ManagerReleased`로 내보냅니다.
 - **완화:** `PathQueueWait.Step`이 수동 대기, 재출발 지연, 추가 간격, 속도 보간을 계산하고, 멤버가 그 결과를 Follower의 이동 제한으로 기록합니다. 기하를 먼저 받으므로 경로가 매 프레임 바뀌어도 멤버가 막히지 않습니다.
 - **Pause와 Hold:** 일시정지한 멤버는 줄에 남아 뒤 멤버를 막고, 재개하면 첫 결과부터 기다립니다. `Hold`는 Queue에 남은 채 대기를 요청하며, Queue 밖에서 부르면 다음 Queue 시작부터 적용됩니다.
 - **최대 진행률:** 그 지점에서 멈추고 완료하지 않습니다. 넘어선 멤버는 그 자리에서 기다립니다.

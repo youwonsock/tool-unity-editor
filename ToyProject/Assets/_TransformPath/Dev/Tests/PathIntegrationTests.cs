@@ -11,6 +11,7 @@ namespace Common.TransformPath.Tests
     {
         private PathTestScene _scene;
         private readonly List<GameObject> _objects = new List<GameObject>();
+        private readonly List<Object> _assets = new List<Object>();
         private readonly List<PathFollower> _followers = new List<PathFollower>();
         private QueuedPathManager _manager;
         private int _frame;
@@ -31,6 +32,10 @@ namespace Common.TransformPath.Tests
                 if (_objects[i] != null)
                     Object.DestroyImmediate(_objects[i]);
             _objects.Clear();
+            for (int i = _assets.Count - 1; i >= 0; i--)
+                if (_assets[i] != null)
+                    Object.DestroyImmediate(_assets[i]);
+            _assets.Clear();
             _scene.Dispose();
         }
 
@@ -321,6 +326,87 @@ namespace Common.TransformPath.Tests
 
             Assert.IsTrue(member.IsInQueue);
             Assert.Greater(member.Follower.Progress, 0.05f);
+        }
+
+        [Test]
+        public void SpacingPolicy_DecidesTheGap_FromTheMembersOwnSpacing()
+        {
+            PathData path = Line(30f, 4f);
+            QueuedPathManager manager = CreateManager(path);
+            PathQueueMember leader = CreateMember();
+            PathQueueMember follower = CreateMember();
+            follower.UseManagerSpacing = false;
+            follower.ActorSpacing = 1f;
+            float resolvedForFollower = -1f;
+            manager.SpacingPolicy = CreatePolicy("Double Gap", (member, ahead, resolved) =>
+            {
+                if (member == follower)
+                    resolvedForFollower = resolved;
+                return ahead == leader ? resolved * 2f : resolved;
+            });
+            leader.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            follower.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            leader.Follower.Seek(0.3f);
+            follower.Follower.Seek(0.1f);
+            Frames(30);
+
+            leader.Follower.Pause();
+            Frames(300);
+
+            Assert.AreEqual(1f, resolvedForFollower);
+            Assert.IsTrue(manager.TryGetMemberStatus(follower, out PathQueueStatus status));
+            Assert.AreEqual(2f, status.Spacing);
+            float gap = (leader.Follower.Progress - follower.Follower.Progress) * 30f;
+            Assert.AreEqual(2f, gap, 0.05f);
+        }
+
+        [Test]
+        public void SpacingPolicy_InvalidSpacing_StopsTheManagerFrameWithThePolicyName()
+        {
+            PathData path = Line(30f, 4f);
+            QueuedPathManager manager = CreateManager(path);
+            PathQueueMember member = CreateMember();
+            manager.SpacingPolicy = CreatePolicy("Broken Gap", (_, __, ___) => float.NaN);
+            member.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+
+            var error = Assert.Throws<System.InvalidOperationException>(
+                () => manager.Tick(EPathTickPhase.Queue, 1f / 60f, ++_frame));
+
+            StringAssert.Contains("Broken Gap", error.Message);
+        }
+
+        [Test]
+        public void SpacingPolicy_CannotChangeTheLineItIsAskedAbout()
+        {
+            PathData path = Line(30f, 4f);
+            QueuedPathManager manager = CreateManager(path);
+            PathQueueMember member = CreateMember();
+            manager.SpacingPolicy = CreatePolicy("Leaving Gap", (asked, _, resolved) =>
+            {
+                asked.Leave();
+                return resolved;
+            });
+            member.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+
+            var error = Assert.Throws<System.InvalidOperationException>(
+                () => manager.Tick(EPathTickPhase.Queue, 1f / 60f, ++_frame));
+
+            StringAssert.Contains("spacing policy runs", error.Message);
+            Assert.IsTrue(member.IsInQueue);
+            Assert.AreEqual(1, manager.MemberCount);
+            manager.SpacingPolicy = null;
+            Frames(30);
+            Assert.Greater(member.Follower.Progress, 0f);
+        }
+
+        private TestSpacingPolicy CreatePolicy(string name,
+            System.Func<PathQueueMember, PathQueueMember, float, float> rule)
+        {
+            var policy = ScriptableObject.CreateInstance<TestSpacingPolicy>();
+            policy.name = name;
+            policy.Rule = rule;
+            _assets.Add(policy);
+            return policy;
         }
 
         // Edit Mode does not call OnDestroy for a component that never woke; Play Mode does.
