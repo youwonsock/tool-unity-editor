@@ -28,8 +28,7 @@ namespace Common.FlowField.Editor
             DrawSettings(FlowFieldManager.PropertyNames.Flow, "Flow");
             EditorGUILayout.PropertyField(serializedObject.FindProperty(FlowFieldManager.PropertyNames.GoalTransform));
 
-            EditorGUILayout.Space();
-            EditorGUILayout.LabelField("Mode", EditorStyles.boldLabel);
+            // The Mode header comes from the field's [Header] attribute.
             using (new EditorGUI.DisabledScope(Application.isPlaying && manager.IsInitialized))
                 EditorGUILayout.PropertyField(spaceMode);
             SerializedProperty mode = serializedObject.FindProperty(FlowFieldManager.PropertyNames.BakeMode);
