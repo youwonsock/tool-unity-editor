@@ -3,7 +3,8 @@ using UnityEngine;
 
 namespace Common.OptimizeTool.Samples
 {
-    internal readonly struct MeshSampleMetrics
+    /// <summary>Renderer, vertex and triangle counts of a sample result, the same numbers the overview board shows.</summary>
+    public readonly struct MeshSampleMetrics
     {
         public int Renderers { get; }
         public int Vertices { get; }
@@ -22,8 +23,16 @@ namespace Common.OptimizeTool.Samples
             {
                 if (mesh == null) throw new ArgumentException("A sample renderer has no mesh.");
                 vertices = checked(vertices + mesh.vertexCount);
-                for (int submesh = 0; submesh < mesh.subMeshCount; submesh++) triangles += (long)mesh.GetIndexCount(submesh) / 3;
+                triangles += TriangleCount(mesh);
             }
+        }
+
+        /// <summary>Triangles of every submesh of <paramref name="mesh"/>.</summary>
+        public static long TriangleCount(Mesh mesh)
+        {
+            long triangles = 0;
+            for (int submesh = 0; submesh < mesh.subMeshCount; submesh++) triangles += (long)mesh.GetIndexCount(submesh) / 3;
+            return triangles;
         }
     }
 }

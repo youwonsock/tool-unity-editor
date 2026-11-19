@@ -128,12 +128,10 @@ namespace Common.OptimizeTool.Samples.Editor
                     foreach (Collider collider in data.modes[0].GetComponentsInChildren<Collider>()) Object.DestroyImmediate(collider);
                     for (int m = 0; m < 4; m++)
                     {
-                        data.rendererCounts[m] = data.modes[m].GetComponentsInChildren<MeshRenderer>(true).Length;
-                        foreach (MeshFilter filter in data.modes[m].GetComponentsInChildren<MeshFilter>(true))
-                        {
-                            data.vertexCounts[m] += filter.sharedMesh.vertexCount;
-                            for (int s = 0; s < filter.sharedMesh.subMeshCount; s++) data.triangleCounts[m] += (long)filter.sharedMesh.GetIndexCount(s) / 3;
-                        }
+                        MeshSampleMetrics metrics = MeshSampleMetrics.Capture(data.modes[m]);
+                        data.rendererCounts[m] = metrics.Renderers;
+                        data.vertexCounts[m] = metrics.Vertices;
+                        data.triangleCounts[m] = metrics.Triangles;
                     }
                     cases[c] = data; foreach (GameObject mode in data.modes) mode.SetActive(false);
                 }

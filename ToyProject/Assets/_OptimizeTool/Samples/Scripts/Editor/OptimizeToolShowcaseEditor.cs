@@ -64,7 +64,7 @@ namespace Common.OptimizeTool.Samples.Editor
                         Camera = camera, AllowReadableCopy = true, CombineAllIntoSingleMesh = true,
                         BackfaceCulling = mode == 1, OcclusionCulling = mode == 2,
                     }));
-                if (TriangleCount(results[1].Parts[0].Mesh) >= TriangleCount(results[0].Parts[0].Mesh)
+                if (MeshSampleMetrics.TriangleCount(results[1].Parts[0].Mesh) >= MeshSampleMetrics.TriangleCount(results[0].Parts[0].Mesh)
                     || results[2].RemovedSources.Count != 6)
                     throw new InvalidOperationException("The showcase must remove backfaces and six occluded cubes.");
                 var meshes = new List<Mesh>();
@@ -111,8 +111,8 @@ namespace Common.OptimizeTool.Samples.Editor
                     if (PrefabUtility.SaveAsPrefabAsset(root, prefabPath) == null)
                         throw new InvalidOperationException("Could not save the showcase prefab.");
                 }));
-                Debug.Log($"OptimizeTool showcase rebuilt with MeshBuildPipeline: combined {TriangleCount(meshes[0])} triangles, "
-                    + $"backface {TriangleCount(meshes[1])}, occlusion {TriangleCount(meshes[2])} (6 objects removed).");
+                Debug.Log($"OptimizeTool showcase rebuilt with MeshBuildPipeline: combined {MeshSampleMetrics.TriangleCount(meshes[0])} triangles, "
+                    + $"backface {MeshSampleMetrics.TriangleCount(meshes[1])}, occlusion {MeshSampleMetrics.TriangleCount(meshes[2])} (6 objects removed).");
             }
             finally
             {
@@ -120,13 +120,6 @@ namespace Common.OptimizeTool.Samples.Editor
                 if (cameraObject != null) UnityEngine.Object.DestroyImmediate(cameraObject);
                 PrefabUtility.UnloadPrefabContents(root);
             }
-        }
-
-        private static ulong TriangleCount(Mesh mesh)
-        {
-            ulong indices = 0;
-            for (int i = 0; i < mesh.subMeshCount; i++) indices += mesh.GetIndexCount(i);
-            return indices / 3;
         }
     }
 }
