@@ -1,6 +1,6 @@
 # TransformPath
 
-Transform 제어점으로 경로를 만들고 단일 경로, 연결 경로, Queue 이동을 재생하는 시스템입니다. 네임스페이스는 `Common.TransformPath`입니다.
+Transform 제어점이나 코드로 그린 모양(`PathShapeProvider`)으로 경로를 만들고 단일 경로, 연결 경로, Queue 이동을 재생하는 시스템입니다. 네임스페이스는 `Common.TransformPath`입니다.
 
 | 항목 | 내용 |
 | --- | --- |
@@ -53,7 +53,7 @@ public sealed class TransformPathReadmeExample : MonoBehaviour
 
 <img src="Docs/Images/transformpath-structure.png" alt="TransformPath 주요 타입의 구조" width="100%">
 
-- **Provider** (`PathData`, `MultiPathData`)는 검증한 기하와 이벤트를 한 번에 발행합니다. 무엇이든 바뀌면 `Revision`을 올리고, 이동 설정·이벤트·구간 구성이 바뀌면 내부 정의 리비전도 올립니다. 재생은 기하 변경에는 이어지고 정의 변경에는 멈춥니다.
+- **Provider** (`PathData`, `MultiPathData`, `PathShapeProvider`)는 검증한 기하와 이벤트를 한 번에 발행합니다. 무엇이든 바뀌면 `Revision`을 올리고, 이동 설정·이벤트·구간 구성이 바뀌면 내부 정의 리비전도 올립니다. 재생은 기하 변경에는 이어지고 정의 변경에는 멈춥니다.
 - **PathFollower**는 Transform에 위치를 적용하고, 재생은 내부의 `PathPlayback`, 이벤트 효과는 `PathEventEffects`가 맡습니다. Single, Sequence, Aggregate 재생은 모두 구간 배열 하나(`PathRoute`)로 표현됩니다.
 - **QueuedPathManager**가 매 프레임 멤버를 정렬해 간격을 계산하고, **PathQueueMember**가 그 결과를 완화해 Follower의 이동을 제한합니다.
 - **PathRuntimeDriver**가 효과 → Queue → 이동 순서로 한 프레임을 실행하고, **PathExecutionBoundary**가 콜백 시점을 정합니다.
@@ -64,7 +64,8 @@ public sealed class TransformPathReadmeExample : MonoBehaviour
 | --- | --- |
 | `PathPlaybackRequest.Single(pathData, loop)` | 경로의 설정 |
 | `PathPlaybackRequest.Sequence(multiPathData, loop)` | 구간별 설정 |
-| `PathPlaybackRequest.Aggregate(provider, settings, loop)` | 지정한 설정으로 `PathData`나 `MultiPathData` 전체를 한 경로처럼. `PathData`의 이벤트는 실행하고 `MultiPathData`는 이벤트 없이 |
+| `PathPlaybackRequest.Shape(shape, loop)` | 모양의 설정 |
+| `PathPlaybackRequest.Aggregate(provider, settings, loop)` | 지정한 설정으로 Provider 전체를 한 경로처럼. `PathData`의 이벤트는 실행하고 `MultiPathData`와 모양은 이벤트 없이 |
 
 | 명령 | 조건 |
 | --- | --- |
@@ -82,9 +83,19 @@ public sealed class TransformPathReadmeExample : MonoBehaviour
 | `PathData` | `CurveType`, `SegmentCount`, `MovementSettings`, `SetPathPoints`, `CopyControlPoints`, `SamplePointCount`, `GetSamplePoint`, `AuthoringEventCount`, `GetAuthoringEvent`, `SortPathEventsByNormalizedTime`, `MaxEventNormalizedTime`, `ClampPathEventNormalizedTime` |
 | `MultiPathData` | `SegmentCount`, `GetSegmentPath`, `GetSegmentMovement`, `GetSegmentStartDistance`, `GetSegmentLength`, `SetSegments`, `AuthoringSegmentCount`, `GetAuthoringSegment` |
 | `PathDataLineRenderer` | `Init`, `Release`, `IsInitialized`, `Refresh`, `SetVisible`. `PathData`가 발행한 샘플을 LineRenderer로 그리고, 경로가 바뀌면 다시 그림 |
-| 공통 (`PathData`, `MultiPathData`) | `IsReady`, `PathLength`, `Revision`, `PathChanged`, `Rebuild()`, `Sample(progress)` |
+| `PathShapeProvider` | `MovementSettings`. 하위 클래스가 `TryPrepare`, `Evaluate`를 구현 |
+| 공통 (`PathData`, `MultiPathData`, `PathShapeProvider`) | `IsReady`, `PathLength`, `Revision`, `PathChanged`, `Rebuild()`, `Sample(progress)` |
 - 런타임에 제어점이나 `PathEventSettingSO`를 바꾸면 `path.Rebuild()`를 호출합니다. `MovementSettings`, `CurveType`, `SegmentCount` 속성은 바꾸는 즉시 다시 빌드합니다. 기하만 바뀌면 재생이 이어지고, 이동 설정·이벤트·구간 구성이 바뀌면 멈춥니다.
 - 콜백(`StateChanged`, `SegmentChanged`, `Completed`, `EventReached`, Queue 알림, 이벤트 수신기)은 그것을 일으킨 작업이 끝난 뒤 순서대로 호출됩니다. 콜백 안에서 모든 명령을 쓸 수 있고, 예외는 Console에 기록만 됩니다.
+
+## 사용자 정의 경로
+
+`PathShapeProvider`를 상속하면 제어점 대신 코드로 경로를 그립니다. 이동 설정(Mode, Speed·Duration, Time Curve)은 Inspector에서 정하고, 하위 클래스는 두 메서드만 구현합니다.
+
+- `TryPrepare(out length, out shapeChanged, out error)`: 현재 설정으로 모양을 계산해 `Evaluate`가 쓸 값을 보관하고, 길이(유한한 양수)와 이전 빌드에서 모양이 바뀌었는지 알립니다.
+- `Evaluate(distance)`: 0..길이의 arc-length 위치. `TryPrepare`가 보관한 값만 읽습니다.
+
+Play Mode에서는 Awake에서 스스로 빌드하고, 모양이 읽는 값을 바꾼 뒤에는 `Rebuild()`를 호출합니다. `Evaluate(0)`이나 `Evaluate(length)`가 던지거나 유한하지 않은 값을 주면 빌드가 실패합니다. 재생 중에 던지면 Follower가 멈춥니다(Ready). 거리가 arc length가 아니면 속도가 고르지 않습니다. `Awake`나 `OnDestroy`를 선언할 때는 override해서 base를 불러야 합니다.
 
 ## Queue
 

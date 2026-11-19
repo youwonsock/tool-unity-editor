@@ -3,6 +3,7 @@
     "rootNamespace": "Common.TransformPath.Tests",
     "references": [
         "Common.TransformPath",
+        "Common.TransformPath.Tests.Fixtures",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

@@ -18,7 +18,7 @@ namespace Common.TransformPath.Editor
                 PathInspectorGUI.MOVE_VALUE,
                 PathInspectorGUI.TIME_CURVE);
             bool inspectorChanged = EditorGUI.EndChangeCheck();
-            inspectorChanged |= DrawMovementSettings();
+            inspectorChanged |= PathInspectorGUI.DrawMovementSection(serializedObject);
             inspectorChanged |= serializedObject.ApplyModifiedProperties();
             if (inspectorChanged)
                 PathEditorUndoUtility.RepaintScene();
@@ -50,16 +50,6 @@ namespace Common.TransformPath.Editor
             if (GUILayout.Button("Sort Path Events"))
                 PathInspectorGUI.SortEvents(paths, "Sort Path Events");
             EditorGUI.EndDisabledGroup();
-        }
-
-        private bool DrawMovementSettings()
-        {
-            EditorGUILayout.Space();
-            EditorGUILayout.LabelField("Movement", EditorStyles.boldLabel);
-            return PathInspectorGUI.DrawMovement(
-                serializedObject.FindProperty(PathInspectorGUI.MOVE_TYPE),
-                serializedObject.FindProperty(PathInspectorGUI.MOVE_VALUE),
-                serializedObject.FindProperty(PathInspectorGUI.TIME_CURVE));
         }
     }
 }

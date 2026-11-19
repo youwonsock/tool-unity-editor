@@ -10,6 +10,7 @@
 | `Common.TransformPath.Editor` | `Script/Editor/` | Inspector, 연결점과 그룹 동기화, Scene View 미리보기 |
 | `Common.TransformPath.Samples` | `Samples/Scripts/` | 샘플 씬의 컨트롤러·UI·카메라·수신기(UGUI 참조) |
 | `Common.TransformPath.Tests` | `Dev/Tests/` | EditMode 테스트 |
+| `Common.TransformPath.Tests.Fixtures` | `Dev/Tests/Fixtures/` | 테스트가 붙이는 컴포넌트(시험용 원 모양). Unity는 Editor 어셈블리의 컴포넌트를 붙이지 않으므로 런타임 어셈블리이며, `UNITY_INCLUDE_TESTS`일 때만 컴파일합니다 |
 | `Common.TransformPath.PlayerProbe`, `.PlayerProbe.Editor` | `Dev/` | 이 저장소의 성능 측정 Player(`Tools/run-transformpath-probe.sh`)와 빌드 메뉴 |
 
 시스템과 에디터는 `Script/` 폴더 하나입니다. 샘플, 테스트, 측정 도구는 시스템을 참조만 하고, 시스템은 이들을 모릅니다. 샘플에는 내부 접근을 주지 않으므로 샘플은 공개 API만으로 만들어집니다. 측정 어셈블리는 Editor와 `TRANSFORMPATH_PLAYER_PROBE`를 정의한 측정 빌드에서만 컴파일합니다.
@@ -23,8 +24,8 @@
 3. **순수 계산과 Unity 연결을 나눕니다.** `PathPolyline`, `PathRoute`, `PathPlaybackCursor`, `PathPlayback`, `PathEventEffects`, Queue 계산은 MonoBehaviour와 정적 상태(알림 순서 큐 제외)에 기대지 않아 EditMode 테스트로 검증합니다. 컴포넌트는 직렬화, 생명주기, Transform 적용만 맡습니다.
 4. **검증은 경계에서 한 번만 합니다.** 공개 명령의 입력과 Provider 빌드만 검증합니다.
 5. **공통 값과 헬퍼는 한 곳에 둡니다.** 상수는 `PathConstants`, 수치 검증과 곡선 복사는 `PathValueUtility`, 정렬은 `PathSortUtility`, 1회 오류 보고는 `PathConfigurationErrorReporter`입니다.
-6. **인터페이스는 교체할 이유가 있을 때만 둡니다.** 공개 인터페이스는 `IPathEventReceiver` 하나입니다. `IPathProvider`는 내부 계약이며(테스트의 가짜 Provider가 씁니다), 공개 시그니처는 `PathProviderBehaviour`를 받습니다. Route 갱신과 Aggregate 구성은 Provider 종류를 확인하지 않고 이 계약과 Route의 구간만 봅니다. Aggregate가 실행할 이벤트는 Provider가 `WholeRouteEvents`로 알려 주며, `MultiPathData`에는 없습니다.
-7. **공개 API는 닫혀 있습니다.** 공개 타입은 컴포넌트(`PathFollower`, `PathQueueMember`, `QueuedPathManager`, `PathData`, `MultiPathData`, `PathDataLineRenderer`, `PathWaypointSyncRegistry`), 설정과 요청(`PathPlaybackRequest`, `PathMovementSettings`, `PathEventSettingSO`, `PathEventEntry`, `PathSegmentAuthoring`, `PathWaypointSyncGroup`, `PathQueueStatus`), 수신기와 enum뿐입니다. 기반 클래스 `PathProviderBehaviour`와 `PathRuntimeBehaviour`는 `private protected` 생성자로 외부 상속을 막습니다. 이벤트의 런타임 복사본(`PathEventDefinition` 등)은 내부 타입이며, 바깥에서는 `PathData.GetAuthoringEvent`로 작성 데이터를 읽습니다.
+6. **인터페이스는 교체할 이유가 있을 때만 둡니다.** 공개 인터페이스는 `IPathEventReceiver` 하나입니다. `IPathProvider`는 내부 계약이며(테스트의 가짜 Provider가 씁니다), 공개 시그니처는 `PathProviderBehaviour`를 받습니다. 밖에서 경로를 더하는 지점은 추상 클래스 `PathShapeProvider` 하나이고, 내부 계약은 이 클래스가 봉인한 구현으로 채웁니다. Route 갱신과 Aggregate 구성은 Provider 종류를 확인하지 않고 이 계약과 Route의 구간만 봅니다. Aggregate가 실행할 이벤트는 Provider가 `WholeRouteEvents`로 알려 주며, `MultiPathData`와 모양에는 없습니다.
+7. **확장 지점은 정해 둔 두 곳뿐입니다.** 사용자 정의 경로는 `PathShapeProvider`, Queue 간격은 `PathQueueSpacingPolicy`를 상속합니다. 그 밖의 공개 타입은 컴포넌트(`PathFollower`, `PathQueueMember`, `QueuedPathManager`, `PathData`, `MultiPathData`, `PathDataLineRenderer`, `PathWaypointSyncRegistry`), 설정과 요청(`PathPlaybackRequest`, `PathMovementSettings`, `PathEventSettingSO`, `PathEventEntry`, `PathSegmentAuthoring`, `PathWaypointSyncGroup`, `PathQueueStatus`), 수신기와 enum입니다. 기반 클래스 `PathProviderBehaviour`와 `PathRuntimeBehaviour`는 `private protected` 생성자로 다른 상속을 막고, `PathShapeProvider`만 `protected` 생성자로 상속을 엽니다. 이벤트의 런타임 복사본(`PathEventDefinition` 등)은 내부 타입이며, 바깥에서는 `PathData.GetAuthoringEvent`로 작성 데이터를 읽습니다.
 
 ## 수명 규칙
 
@@ -41,6 +42,7 @@
 - `PathData`는 Transform 제어점을 곡선별로 샘플링한 `PathPolyline`을 발행합니다. 위치는 누적 거리로 보간하므로 진행률이 일정하면 샘플 사이에서 속도가 일정합니다. 스플라인은 매개변수로 샘플링하므로 샘플 수가 적으면 구간마다 속도가 달라집니다(테스트는 500샘플에서 편차가 1% 미만인지 확인합니다).
 - `MultiPathData`는 `PathData`만 구간으로 받습니다. 자식의 `PathChanged`를 구독해 자식이 바뀌면 다시 빌드하므로 자식을 폴링하지 않습니다. 빌드할 때 아직 빌드되지 않은 자식을 먼저 빌드해, Awake 순서에 기대지 않습니다.
 - Provider는 빌드에 실패하거나 파괴되면 준비 상태를 잃고 `PathChanged`로 알립니다. 이 경로를 쓰는 Follower는 다음 이동 Tick에서 멈추고, Queue는 멤버를 내보내며, MultiPathData는 오류를 다시 기록하지 않고 사용 불가가 됩니다. 실패 전과 같은 내용으로 복구되어도 알리므로 MultiPathData가 함께 돌아옵니다.
+- `PathShapeProvider`는 코드로 그린 모양입니다. `TryBuild`를 봉인해 ① `TryPrepare`(길이, 모양 변경 여부) ② 길이가 유한한 양수인지 ③ `Evaluate(0)`과 `Evaluate(length)`를 미리 불러 예외와 유한하지 않은 값을 빌드 실패로 바꾸기 ④ 이동 설정 검증 순서로 빌드합니다. Play, Seek, 회전 정렬은 Tick 밖에서 샘플하므로, 그때 던지면 명령이 반쯤 끝난 상태가 되기 때문에 ③을 둡니다. 기하 리비전은 첫 빌드, `shapeChanged`, 길이 변화, 그리고 실패한 빌드 다음의 첫 성공에서 오릅니다(실패한 빌드가 `TryPrepare`의 보관 값을 이미 바꿨을 수 있습니다). 정의 리비전은 첫 빌드와 이동 설정 변경에서 오릅니다. arc-length 균일성은 base가 강제할 수 없고, `Evaluate`는 `TryPrepare`가 보관한 값만 읽어야 빌드 하나가 한 덩어리로 발행됩니다. Tick 중의 예외는 Follower를 멈추며(Ready) 따로 fault 상태는 없습니다. base가 쓰는 Unity 메시지(`Awake`, `OnDestroy`)는 `protected virtual`이라, 하위 클래스가 같은 이름을 선언하면 CS0114 경고가 나고 override해서 base를 불러야 합니다.
 - `PathData.MovementSettings`는 빌드 뒤에는 게시된 값을 돌려줍니다. 값을 대입하면 즉시 다시 빌드합니다.
 - `PathRoute`는 구간 배열(샘플러, 시작 거리, 길이, 이동 설정, 속도 보존, 이벤트)입니다. Single과 Sequence는 Provider가 리비전별로 하나를 캐시해 Follower들이 함께 쓰고, Aggregate는 Provider 전체를 한 구간으로 만듭니다.
 - `PathPlaybackCursor`는 위치, 잔여 시간, Speed, Duration을 소유합니다. 완료 판정은 이벤트 처리 뒤의 현재 Duration을 씁니다.
@@ -111,6 +113,7 @@
 - 미리보기 설정 필드는 Player에서도 직렬화합니다. Editor와 Player의 데이터 레이아웃이 같아야 하기 때문이며, Player에서는 읽지 않습니다.
 - 이동 설정 UI와 Rebuild·이벤트 정렬 도구는 `PathInspectorGUI`에 있습니다. `MultiPathData`의 미리보기 크기 적용과 구별 색 지정은 버튼으로만 실행합니다.
 - Scene View는 이벤트 위치와 이름을 표시만 합니다. 이벤트 진행률은 Inspector에서 편집합니다.
+- `PathShapeProviderEditor`는 모든 모양의 Inspector로, 모양의 필드 다음에 `PathData`와 같은 이동 설정 UI(`PathInspectorGUI.DrawMovementSection`)와 **Rebuild Runtime Path**를 둡니다. `PathShapeGizmoDrawer`는 모양을 128점으로 샘플한 선과 시작점을 그립니다. Edit Mode에서는 그릴 때마다 `Rebuild`해 현재 설정을 보여 주고, Play Mode에서는 발행된 모양만 그립니다.
 
 <p align="center">
   <img src="Images/editor-ui-multipath-inspector.png" alt="MultiPathData Inspector" width="48%">

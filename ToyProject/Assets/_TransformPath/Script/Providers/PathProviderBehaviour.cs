@@ -8,7 +8,9 @@ namespace Common.TransformPath
     /// temporary result, publishes it whole, and raises <see cref="PathChanged"/>
     /// once. Deciding what changed happens here and nowhere else: consumers only
     /// compare <see cref="Revision"/> and the definition revision.
-    /// Only <see cref="PathData"/> and <see cref="MultiPathData"/> derive from it.
+    /// <see cref="PathData"/>, <see cref="MultiPathData"/> and
+    /// <see cref="PathShapeProvider"/> derive from it; a custom path derives
+    /// from <see cref="PathShapeProvider"/>.
     /// </summary>
     public abstract class PathProviderBehaviour : MonoBehaviour, IPathProvider
     {
@@ -105,8 +107,11 @@ namespace Common.TransformPath
                 throw new InvalidOperationException($"{GetType().Name} '{name}' is not built and ready.");
         }
 
-        /// <summary>A destroyed provider stops every playback and queue that uses it.</summary>
-        private protected virtual void OnDestroy()
+        /// <summary>
+        /// A destroyed provider stops every playback and queue that uses it.
+        /// An override calls this base method.
+        /// </summary>
+        protected virtual void OnDestroy()
         {
             _destroyed = true;
             MarkUnavailable();

@@ -51,7 +51,7 @@ namespace Common.TransformPath
                 Rebuild();
         }
 
-        private protected override void OnDestroy()
+        protected override void OnDestroy()
         {
             Unsubscribe();
             base.OnDestroy();

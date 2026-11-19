@@ -4,12 +4,26 @@ using UnityEngine;
 
 namespace Common.TransformPath.Editor
 {
-    /// <summary>Inspector controls and actions shared by the PathData and MultiPathData editors.</summary>
+    /// <summary>Inspector controls and actions shared by the provider editors.</summary>
     internal static class PathInspectorGUI
     {
         public const string MOVE_TYPE = "_moveType";
         public const string MOVE_VALUE = "_moveValue";
         public const string TIME_CURVE = "_timeCurve";
+
+        /// <summary>
+        /// The Movement section of a provider that keeps its movement in the
+        /// three serialized fields. Returns whether anything changed.
+        /// </summary>
+        public static bool DrawMovementSection(SerializedObject serializedObject)
+        {
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Movement", EditorStyles.boldLabel);
+            return DrawMovement(
+                serializedObject.FindProperty(MOVE_TYPE),
+                serializedObject.FindProperty(MOVE_VALUE),
+                serializedObject.FindProperty(TIME_CURVE));
+        }
 
         /// <summary>Mode, Speed or Duration, and a time curve when TimeBased. Returns whether anything changed.</summary>
         public static bool DrawMovement(SerializedProperty moveType, SerializedProperty moveValue, SerializedProperty timeCurve)
