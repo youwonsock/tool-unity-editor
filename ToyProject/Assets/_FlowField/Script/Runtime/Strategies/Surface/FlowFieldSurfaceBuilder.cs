@@ -178,11 +178,11 @@ namespace Common.FlowField
 
 
         /// <summary>
-        /// Records a final-only scalar as soon as the Unity façade observes
-        /// it. This closes the small window in which an inspector change can
-        /// arrive after a solve starts but before its callback: the callback
-        /// must compose the freshly solved base with the newest default, even
-        /// when no replacement request has been submitted yet.
+        /// Records the Default Direction, which only the final field uses, as
+        /// soon as the settings report it. An Inspector change can arrive after
+        /// a solve starts but before its callback, and the callback must compose
+        /// the freshly solved base with the newest default even before a
+        /// replacement request is submitted.
         /// </summary>
         internal void ObserveDefaultDirection(Vector3 direction)
         {

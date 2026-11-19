@@ -250,9 +250,10 @@ namespace Common.FlowField
     }
 
     /// <summary>
-    /// Resumable Surface2D authoring job. Runtime callers can still use the
-    /// synchronous FlowFieldSurfaceBaker facade, while Editor callers advance
-    /// this job from update so raycast rows do not monopolize one callback.
+    /// The Surface2D ground scan in resumable steps. Runtime builds use the
+    /// synchronous <see cref="FlowFieldSurfaceBaker"/>; the Editor bake
+    /// advances this job from its update, so the raycast rows do not hold one
+    /// callback.
     /// </summary>
     internal sealed class FlowFieldSurfaceBakeJob : IDisposable
     {

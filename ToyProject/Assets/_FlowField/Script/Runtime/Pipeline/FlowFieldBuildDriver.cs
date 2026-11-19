@@ -3,8 +3,8 @@ using UnityEngine;
 namespace Common.FlowField
 {
     /// <summary>
-    /// Runtime-only PlayerLoop entry point for the Core cooperative
-    /// scheduler. Core never creates this component itself.
+    /// Pumps the runtime scheduler once per frame in Play Mode. It creates
+    /// itself after the first scene loads, hidden and kept across scenes.
     /// </summary>
     [DefaultExecutionOrder(30000)]
     internal sealed class FlowFieldBuildDriver : MonoBehaviour

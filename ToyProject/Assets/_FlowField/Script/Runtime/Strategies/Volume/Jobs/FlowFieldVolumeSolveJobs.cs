@@ -197,7 +197,7 @@ namespace Common.FlowField
             {
                 if (Data.Blocked[index])
                 {
-                    // A blocked cell keeps its previous Topology value, as before.
+                    // A blocked cell is never traversed, so its Topology is not written.
                     Data.Next[index] = -2;
                     Data.GoalFlags[index] = FlowFieldGoalFlags.None;
                     Data.Directions[index] = Vector3.zero;

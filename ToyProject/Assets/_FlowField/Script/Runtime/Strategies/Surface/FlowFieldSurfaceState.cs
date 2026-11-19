@@ -4,10 +4,8 @@ using UnityEngine;
 namespace Common.FlowField
 {
     /// <summary>
-    /// Mutable build state owned by a FlowFieldSurfaceSession.  This type deliberately
-    /// contains no Unity lifecycle or callback policy; it is the data plane
-    /// shared by the common runtime/editor session and the existing stage
-    /// implementations.
+    /// The mutable build state of a <see cref="FlowFieldSurfaceBuilder"/>,
+    /// which its stages share. It holds no lifecycle or callback policy.
     /// </summary>
     internal sealed class FlowFieldSurfaceState
     {

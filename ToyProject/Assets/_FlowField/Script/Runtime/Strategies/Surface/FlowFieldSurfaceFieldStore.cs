@@ -211,12 +211,10 @@ namespace Common.FlowField
         }
 
         /// <summary>
-        /// Restores the committed Goal/final view while leaving the caller's
-        /// currently prepared obstacle layers and escape directions intact.
-        /// This is used when a Goal-only request supersedes an in-flight BFS;
-        /// the pending Goal will be prepared again without throwing away a
-        /// valid obstacle query that was already performed for the active
-        /// request.
+        /// Copies the published Goal and field into staging and leaves the
+        /// staged obstacle masks and escape directions as they are. A rejected
+        /// build uses it, so its replacement prepares the Goal again on the
+        /// obstacle query the rejected build already made.
         /// </summary>
         internal void CopyGoalAndFieldToWorkspace(FlowFieldSurfaceWorkspace workspace)
         {

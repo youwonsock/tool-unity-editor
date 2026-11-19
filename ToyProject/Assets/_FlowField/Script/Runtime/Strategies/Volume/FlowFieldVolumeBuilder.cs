@@ -320,7 +320,7 @@ namespace Common.FlowField
             if (!_requests.Pending && _committed == null && _build == null)
                 return;
             // Modifiers only affect the final composition. Unobserved colliders
-            // wait for the next full build, as Surface2D already does.
+            // wait for the next full build, as in Surface2D.
             if (!_requests.Pending
                 && _committed != null
                 && _requests.HasLatest

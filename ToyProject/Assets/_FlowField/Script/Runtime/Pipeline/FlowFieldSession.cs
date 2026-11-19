@@ -32,7 +32,8 @@ namespace Common.FlowField
         // margin uses their Obstacle Clearance.
         private FlowFieldManagerConfig _config;
         private bool _hasConfig;
-        private bool _baseDisposed;
+        // Set once Dispose published its last event; nothing publishes after it.
+        private bool _publishingClosed;
         private bool _runtimeScheduled;
         private FlowFieldRuntimeState _publishedState = FlowFieldRuntimeState.Uninitialized;
 
@@ -599,7 +600,7 @@ namespace Common.FlowField
             ReleaseState();
             SetLifecycle(FlowFieldSessionLifecycle.Released);
             _builder.Dispose();
-            MarkBaseDisposed();
+            ClosePublishing();
         }
 
         // Work begun before this point must not publish, and its queued
@@ -650,7 +651,7 @@ namespace Common.FlowField
             FlowFieldRuntimeState state = default,
             Exception exception = null)
         {
-            if (!_baseDisposed)
+            if (!_publishingClosed)
                 Boundary.Publish(new FlowFieldExecutionBoundary.QueuedEvent(
                     this,
                     kind,
@@ -659,12 +660,12 @@ namespace Common.FlowField
                     exception));
         }
 
-        private void MarkBaseDisposed()
+        private void ClosePublishing()
         {
-            if (_baseDisposed)
+            if (_publishingClosed)
                 return;
             Publish(FlowFieldExecutionBoundary.EventKind.Disposed);
-            _baseDisposed = true;
+            _publishingClosed = true;
         }
 
         // A handler sees an event only while the session is still in the lifetime

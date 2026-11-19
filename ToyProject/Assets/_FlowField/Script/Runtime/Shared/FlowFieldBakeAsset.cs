@@ -11,7 +11,7 @@ namespace Common.FlowField
     /// </summary>
     public abstract class FlowFieldBakeAsset : ScriptableObject
     {
-        // Every existing asset stores these two under the same names.
+        // Both bake assets store these two here.
         [SerializeField] private int _formatVersion;
         [SerializeField] private int _revision;
         [NonSerialized] private int _contentGeneration;
