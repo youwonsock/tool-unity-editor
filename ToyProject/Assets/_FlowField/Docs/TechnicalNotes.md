@@ -9,9 +9,9 @@
 | `Common.FlowField` | `Script/` | 계약, 격자, Session, 계산 단계, 결과 저장소, Bake 데이터, `FlowFieldManager`와 Modifier 컴포넌트 |
 | `Common.FlowField.Editor` | `Script/Editor/` | Inspector, Bake, Scene View 표시 |
 | `Common.FlowField.Samples` | `Samples/Scripts/` | 샘플 씬의 에이전트·컨트롤러·UI(UGUI 참조) |
-| `Common.FlowField.PlayerProbe`, `.PlayerProbe.Editor` | `Dev/` | 이 저장소의 성능·회귀 측정 Player와 빌드 메뉴 |
+| `Common.FlowField.PlayerProbe`, `.PlayerProbe.Editor` | `Dev/` | 이 저장소의 성능·회귀 측정 Player와 `-executeMethod` 빌드 진입점 |
 
-시스템과 에디터는 `Script/` 폴더 하나입니다. 샘플과 측정 도구는 시스템을 참조만 하고, 시스템은 둘을 모릅니다. 측정 어셈블리는 Editor와 `FLOWFIELD_PLAYER_PROBE`를 정의한 측정 빌드(`Tools/run-player-probe.sh`)에서만 컴파일합니다.
+시스템과 에디터는 `Script/` 폴더 하나입니다. 샘플과 측정 도구는 시스템을 참조하고, 시스템은 샘플을 모릅니다. 측정 도구에는 `FlowFieldAssemblyInfo`의 `InternalsVisibleTo`로 내부를 열고, Scheduler의 `LongestPumpMilliseconds`처럼 측정이 읽는 값을 둡니다. `Dev/`가 없어도 시스템은 그대로 컴파일됩니다. 측정 어셈블리는 Editor와 `FLOWFIELD_PLAYER_PROBE`를 정의한 측정 빌드(`Tools/run-player-probe.sh`)에서만 컴파일합니다.
 
 ## 파이프라인과 전략
 
@@ -19,7 +19,7 @@
   - 수명 전이(`Initialize`·`Stop`·`Restart`·`Release`·Fault·`Dispose`), 세대 번호, 이벤트
   - 빌드 루프(`RunPipeline`, 직접 소유자의 `Pump`). 빌드 중 상태 전이, Revision, `FieldChanged`, Fault, 불확실 영역 갱신도 여기서만 합니다. Builder는 빌드를 시작할 때 그 빌드가 장애물을 조회하는지와 새 장애물 설정이 불확실하게 만든 영역(`FlowFieldBuildStart`)을, 단계마다 결과(계속·대기·버림·완료)와 "게시한 필드가 달라졌는지"만 돌려주고, 실패는 예외로 알립니다. 버린 결과 뒤에 남은 입력이 있으면 Ready로 돌아가지 않고 Building을 유지합니다.
   - Surface 풀이 완료 콜백은 세대 번호와 빌드 단계(`WaitingSolve`)로 유효성을 판단합니다. 콜백은 `StartBfs`나 `Poll` 안, 곧 `StepBuild` 안에서만 옵니다.
-  - 조회(`TrySample`·`ClampPositionToGrid`·`IsReady`)와 조회 실패를 예외로 바꾸는 일(`FlowFieldFailures`). `TrySample`과 `TryClampPositionToGrid`는 예외 없이 상태를 돌려주는 같은 함수(`TrySampleStatus`·`TryClampStatus`)를 쓰고, 예외를 던지는 쪽은 그 상태를 예외로 바꿉니다.
+  - 조회(`TrySample`·`ClampPositionToGrid`·`IsReady`·`TryGetFieldInfo`의 준비 판정)와 조회 실패를 예외로 바꾸는 일(`FlowFieldFailures`). `TrySample`과 `TryClampPositionToGrid`는 예외 없이 상태를 돌려주는 같은 함수(`TrySampleStatus`·`TryClampStatus`)를 쓰고, 예외를 던지는 쪽은 그 상태를 예외로 바꿉니다.
   - 장애물 등록(`FlowFieldObstacleRegistry`), Modifier 등록(`FlowFieldModifierRegistry`), 통지 영역을 불확실 영역으로 표시하는 일(`FlowFieldSafety`, 여백 = 셀 크기 + Obstacle Clearance)
 - 모드마다 다른 일은 `IFlowFieldSpaceBuilder`(`FlowFieldSurfaceBuilder`, `FlowFieldVolumeBuilder`)가 맡습니다. 자기 멤버 21개와 상속한 `Dispose`입니다.
   - 요청 만들기(`Initialize`, `SubmitConfig`)
@@ -27,15 +27,18 @@
   - 게시 필드와 격자(`PublishedField`·`TryGetFieldInfo`, `LatestGrid` = 마지막 요청의 Grid로 `ClampPositionToGrid`가 씀), 게시 필드보다 새 셀 정보(`LatestCells`: Surface는 진행 중인 빌드의 기본 단계 결과, Volume은 없음)
   - 입력 반영(`ApplyObstacleChange`·`ApplyModifierChange`·`CreateModifierArea`)
   - 수명 훅(`CancelWork`·`DropComputedState`·`ReleaseResources`)
-- Manager와 Editor는 모드별 정적 묘사 `FlowFieldSpaceStrategy.For(mode)`로 세션 생성, 검증, 격자, Bounds 스냅을 고릅니다. Builder는 `FlowFieldManagerConfig` 스냅샷으로 검증, 격자(`TryCreateLayout`), 요청을 스스로 만듭니다.
-  - 검증은 한 경로입니다. `TryValidate`가 처음 잘못된 설정의 이유를 돌려주고, Init의 `Validate`는 그 이유로 `InvalidOperationException`을 던집니다. Inspector, Scene View, Volume 표시도 같은 `TryValidate`를 써서 Init과 같은 문구를 보여 줍니다.
+- Manager, Session, Editor는 모드별 정적 묘사 `FlowFieldSpaceStrategy.For(mode)`로 모드에 따라 달라지는 것을 고르고, 모드를 직접 나누지 않습니다: 세션 생성, 검증(`TryValidate`), 격자(`TryCreateLayout`), 최대 셀 수(`MaxCellCount`), Bounds 스냅(`SnapBounds`, 핸들 크기 조정은 `SnapResized`), sweep 조회 범위(`ObstacleSweepBounds`). 각 묘사는 Builder의 정적 함수로 넘기고, Builder는 `FlowFieldManagerConfig` 스냅샷으로 요청을 스스로 만듭니다.
+  - 검증은 한 경로입니다. `TryValidate`가 처음 잘못된 설정의 이유를 돌려주고, Init의 `Validate`는 그 이유로 `InvalidOperationException`을 던집니다. 실행 중 세션과 다른 Space Mode·Bake Mode(`spaceModeLocked`·`bakeModeLocked`)도 여기서 거부합니다. Inspector, Scene View, Volume 표시도 같은 `TryValidate`를 써서 Init과 같은 문구를 보여 줍니다.
   - 공통 검사는 `FlowFieldManagerConfig.TryValidateShared`가 같은 순서와 메시지로 합니다.
 - 공통 부품: 게시 필드 `FlowFieldField`, 조회 `FlowFieldSampler`, 요청 보관 `FlowFieldRequestInbox`, 셀 합성 규칙 `FlowFieldVectorUtility.ApplyModifier`, 이벤트 경계 `FlowFieldExecutionBoundary`, 예산 `FlowFieldBuildScheduler`.
 - Modifier가 닿는 셀을 찾는 방식만 모드별입니다. Surface는 셀 마스크(`FlowFieldSurfaceModifierArea`)를 보관해 바뀐 영역만 다시 합성하고, Volume은 빌드마다 64셀씩 후보를 조회합니다.
-- **Editor 경계:** Runtime Manager가 Editor에 내놓는 것은 `CaptureConfig()`와 `TryGetPublishedField`뿐입니다.
-  - `FlowFieldBakeService`가 레이아웃(`TryGetLayout`)과 설정 검사(`TryValidateConfig`)는 strategy로, 요청·Goal 해석·Bake 입력 해시는 Builder 정적 함수로 만듭니다.
-  - 쓰기는 `SerializedObject`로 합니다. Bounds 핸들은 Undo를 남기고, Bake Asset 지정은 Undo 없이 씁니다. 실행 중인 세션에는 `OnValidate`로 통지됩니다.
-  - Bake 내보내기는 각 Builder의 `TryExportBakeData` 하나입니다.
+- **Editor 경계:** Runtime Manager가 공개 API 밖으로 Editor에 내놓는 것은 설정 스냅샷 `CaptureConfig()`, 게시 필드 `TryGetPublishedField`, 직렬화 경로 `PropertyNames`입니다. 그 밖에 Editor가 쓰는 시스템 내부는 다음과 같습니다.
+  - 모드별 묘사 `FlowFieldSpaceStrategy`(레이아웃, 검증, 스냅, 최대 셀 수)
+  - Bake와 미리보기의 독립 세션(`FlowFieldSession`)과 Builder 정적 함수(요청, Goal 해석), 내보내기 `TryExportBakeData`(Builder마다 하나)
+  - Bake Asset의 검증과 쓰기(`Apply`), Volume 표시의 검증기 `FlowFieldVolumeBakeValidator`
+  - Modifier 규칙(`FlowFieldModifierRegistry.DuplicatePriorityMessage`, `FlowFieldModifierMaskBuilder.TryValidateInfluenceCollider`)
+  - `FlowFieldBakeService`가 레이아웃(`TryGetLayout`)과 설정 검사(`TryValidateConfig`)는 strategy로, 요청과 Goal 해석은 Builder 정적 함수로 만듭니다. Bake 입력 해시(`ComputeBakeInputHash`)는 BakeService가 설정 스냅샷으로 계산하고, Bake는 프레임마다 시작 때와 비교합니다.
+  - 쓰기는 `SerializedObject`로 합니다. Bounds 핸들은 Undo를 남기고, Bake Asset 지정은 Bake 저장과 같은 Undo 묶음에, Clear Bake의 해제는 자기 Undo 단계에 기록합니다. 실행 중인 세션에는 `OnValidate`로 통지됩니다.
 
 ## 수명과 게시 규칙
 
@@ -120,6 +123,7 @@
 - **BakedBase가 모르는 것:** Bake 뒤 아무도 지켜보지 않을 때 옮긴 장면 장애물(등록 전이나 알리지 않은 이동)은 Bake 때 자리가 막힌 채, 새 자리는 열린 채 남습니다. 등록 장애물은 등록할 때 지금 자리를 조회하므로 새 자리는 막히고, 등록 전에 옮겼다면 Bake 때 자리만 남습니다.
 - Editor Bake는 두 모드가 같은 실행 코드(`BakeRun`), 입력 검사, 저장 코드(`SaveBakeAsset`)를 쓰고, 모드마다 다른 이름·파일 접미사·참조 속성은 `BakeTarget`에 둡니다. Bake 입력 해시가 시작 때와 달라지면 그 프레임에 멈추고 기존 Asset을 유지하며, 저장은 Undo 한 묶음입니다.
 - Volume은 방향·속도·탈출 벡터를 저장하지 않고 NextCell과 면 인덱스(`_escapeFaces`)에서 재구성합니다. Surface는 배열을 `FlowFieldBakeBlob`으로 `byte[]`에 비트 그대로 저장합니다.
+- Surface 런타임은 Asset을 검증한 뒤 만든 변하지 않는 사본(`FlowFieldSurfaceBakeSnapshot`, Revision마다 한 번)을 읽습니다. request가 들고 있는 Asset 참조는 Revision·내용 세대와 함께 같은 Bake인지 비교하는 데만 씁니다.
 - 저장에 실패하면 기존 Asset의 내용, Revision, GUID를 유지합니다.
 - `StaticBaked` 런타임은 Asset에 구운 Goal을 그대로 씁니다. Init은 Goal Transform 위치가 구운 Goal과 같은지 검사합니다. `BakedBase`는 구운 Goal을 쓰지 않으므로 검사하지 않습니다.
 - Bake는 연결된 Asset이 있으면 그 경로에 씁니다. 참조가 빈 Manager의 Bake 대상은 씬 옆, 씬 이름의 폴더에 씬 GUID와 Manager ID로 만든 고정 경로(`<씬 폴더>/<씬 이름>/<씬GUID>_<ManagerID>_<이름>_<SurfaceBake|VolumeBake>.asset`)이며, 그 경로의 같은 형식 Asset은 이 Manager의 것으로 보고 덮어씁니다. Asset을 새로 만든 Bake가 실패하면 그때 만든 Asset과 폴더를 지웁니다. 고정 경로는 씬의 위치·이름과 Manager 이름을 따르므로, 씬을 옮기거나 이름을 바꾼 뒤 참조가 빈 채로 Bake하면 새 Asset을 만들고 예전 Asset은 그대로 둡니다.

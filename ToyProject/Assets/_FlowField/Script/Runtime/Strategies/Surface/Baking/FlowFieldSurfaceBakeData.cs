@@ -4,10 +4,10 @@ using UnityEngine;
 namespace Common.FlowField
 {
     /// <summary>
-    /// Immutable in-memory view of a validated Static Bake asset.  Runtime
-    /// sessions consume this value rather than retaining a ScriptableObject
-    /// reference, so Unity serialization and AssetDatabase access stay at the
-    /// Manager/editor boundary.
+    /// An immutable copy of a validated Surface bake asset, made once per
+    /// Revision. Builds read the bake through it; a request keeps the asset
+    /// reference only to tell, with its Revision and content generation,
+    /// whether two requests use the same bake.
     /// </summary>
     internal sealed class FlowFieldSurfaceBakeSnapshot
     {
@@ -173,9 +173,10 @@ namespace Common.FlowField
     }
 
     /// <summary>
-    /// The single persistent snapshot used by StaticBaked managers.  It stores
-    /// only immutable base navigation data; default direction and modifiers
-    /// remain runtime inputs and are composed after loading the snapshot.
+    /// The Surface2D bake StaticBaked and BakedBase Managers load. It stores
+    /// the surface and the base navigation; Default Direction and Modifiers
+    /// stay runtime inputs and are composed after loading, and BakedBase
+    /// solves its own Goal on the baked surface and obstacles.
     /// </summary>
     public sealed class FlowFieldSurfaceBakeData : FlowFieldBakeAsset, ISerializationCallbackReceiver
     {
