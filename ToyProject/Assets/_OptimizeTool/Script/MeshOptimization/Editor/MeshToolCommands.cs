@@ -83,7 +83,10 @@ namespace Common.OptimizeTool.MeshOptimization
             MeshSceneOutput.Restore(combiner);
         }
 
-        /// <summary>A single-mesh build is saved as <c>name.asset</c>; otherwise <c>name_0.asset</c>, <c>name_1.asset</c>, ...</summary>
+        /// <summary>
+        /// With Combine All Into Single Mesh the output is <c>name.asset</c>; otherwise each material output is
+        /// <c>name_0.asset</c>, <c>name_1.asset</c>, ..., even when there is only one.
+        /// </summary>
         private static List<string> OutputPaths(string folder, string name, int count, bool singleMesh)
         {
             if (singleMesh && count != 1) throw new ArgumentException("Single-mesh output requires exactly one result.");

@@ -74,8 +74,8 @@ namespace Common.OptimizeTool.Samples.Editor
                 { meshes.Add(results[i].Parts[0].Mesh); paths.Add(outputFolder + "/" + MeshNames[i] + ".asset"); }
                 // Update all three real outputs on every build, preserving their existing GUIDs. The physics demo assets
                 // and the prefab are restored after the meshes if the build fails.
-                var companions = new List<string>(OptimizeToolPhysicsDemoBuilder.OutputAssetPaths) { prefabPath };
-                AssetFileTransaction.Execute(companions, () => MeshAssetTransaction.Save(meshes, paths, true, "Build OptimizeTool showcase", saved =>
+                var otherAssets = new List<string>(OptimizeToolPhysicsDemoBuilder.OutputAssetPaths) { prefabPath };
+                AssetFileTransaction.Execute(otherAssets, () => MeshAssetTransaction.Save(meshes, paths, true, "Build OptimizeTool showcase", saved =>
                 {
                     var groups = new GameObject[OptimizeToolSampleModes.Count];
                     groups[OptimizeToolSampleModes.Original] = original.gameObject;

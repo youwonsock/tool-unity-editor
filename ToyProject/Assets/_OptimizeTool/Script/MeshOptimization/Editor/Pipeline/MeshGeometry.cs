@@ -10,8 +10,7 @@ namespace Common.OptimizeTool.MeshOptimization
     /// <summary>
     /// Static-mesh geometry operations of the build pipeline. They never mutate source meshes or importer settings.
     /// Copies and triangle selection move raw vertex buffers, so every attribute and format survives; transforms and
-    /// backface tests read the managed arrays instead. Both styles are kept on purpose: switching one of them would
-    /// change the bytes of every output.
+    /// backface tests read the managed arrays instead.
     /// </summary>
     internal static class MeshGeometry
     {

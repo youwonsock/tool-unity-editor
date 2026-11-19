@@ -13,7 +13,7 @@ namespace Common.OptimizeTool.MeshOptimization
     {
         [Tooltip("Folder under Assets/ where the combined meshes are saved.")]
         [SerializeField] private string _savePath;
-        [Tooltip("Asset name: name.asset for a single mesh, otherwise name_0.asset, name_1.asset, ...")]
+        [Tooltip("Asset name: name.asset with Combine All Into Single Mesh, otherwise one name_0.asset, name_1.asset, ... per material.")]
         [SerializeField] private string _meshName;
         [Tooltip("Reorder vertices and indices for the GPU cache. This is not a polygon reduction.")]
         [SerializeField] private bool _optimizeMesh = true;
