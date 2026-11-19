@@ -1,10 +1,11 @@
-"""Validate current v2 capture identity, payload hashes and complete mode blocks."""
+"""Validate capture identity, payload hashes and complete mode blocks."""
 import csv
-import gzip
 import hashlib
 import io
 import json
 import math
+
+SCHEMA_VERSION = 2
 
 
 def load_capture(folder):
@@ -13,21 +14,16 @@ def load_capture(folder):
     metadata_bytes = (folder / 'metadata.json').read_bytes()
     metadata = json.loads(metadata_bytes)
     completion = json.loads((folder / 'complete.json').read_text())
-    plain, compressed = folder / 'frames.csv', folder / 'frames.csv.gz'
-    if plain.exists() == compressed.exists():
-        raise ValueError('Expected exactly one frame payload')
-    payload = plain.read_bytes() if plain.exists() else gzip.decompress(compressed.read_bytes())
+    payload = (folder / 'frames.csv').read_bytes()
     rows = list(csv.DictReader(io.StringIO(payload.decode('utf-8-sig'))))
     if completion.get('status') != 'complete' or completion.get('samples') != len(rows):
         raise ValueError('Incomplete capture')
     rounds, block_size = metadata['rounds'], metadata['samplesPerBlock']
     if not (1 <= rounds <= 32 and block_size > 0) or len(rows) != rounds * 4 * block_size:
         raise ValueError('Unexpected sample count')
-    if not (metadata.get('schemaVersion') == completion.get('schemaVersion') == 2):
-        raise ValueError('Capture schema mismatch: only v2 is supported')
     claim = json.loads((folder / 'capture.json').read_text())
-    if claim.get('schemaVersion') != 2:
-        raise ValueError('Capture schema mismatch: only v2 is supported')
+    if not (metadata.get('schemaVersion') == completion.get('schemaVersion') == claim.get('schemaVersion') == SCHEMA_VERSION):
+        raise ValueError('Capture schema mismatch')
     if not metadata.get('captureId') or not (claim.get('captureId') == metadata['captureId'] == completion.get('captureId')):
         raise ValueError('Capture identity mismatch')
     if completion.get('framesSha256') != hashlib.sha256(payload).hexdigest():

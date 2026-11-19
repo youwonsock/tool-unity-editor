@@ -174,7 +174,7 @@ flowchart LR
 ## 계측 결과 형식
 
 - 출력 폴더는 기존 결과가 없을 때 한 번만 씁니다. Player 로그만 있는 폴더는 허용하고, `capture.json`의 실행 ID로 중복 실행을 막습니다. CLI와 `StartEditorRun`이 같은 수집기를 씁니다.
-- 결과 형식 v2는 실행 ID와 CSV·메타데이터의 SHA-256을 완료 파일에 기록합니다. 두 파일을 저장한 뒤 완료 파일을 원자적으로 게시하며, 실패와 중단은 완료 표시를 무효화합니다. 분석과 재개는 v2 결과만 받습니다.
+- 완료 파일에는 실행 ID와 CSV·메타데이터의 SHA-256이 들어갑니다. 두 파일을 저장한 뒤 완료 파일을 원자적으로 게시하며, 실패와 중단은 완료 표시를 무효화합니다. 분석과 재개는 `schemaVersion`이 현재 형식과 같고 해시가 맞는 결과만 받습니다.
 - 출력에는 실행 매니페스트와 `cubes-<수>/run-*`별 `capture.json`·`frames.csv`·`metadata.json`·`complete.json`이 생깁니다.
 - 취소, 비활성화, 파괴, 출력 실패 시 모드·규모·카메라와 계측용 전역 설정·Behaviour 활성 상태를 복원합니다(`BenchmarkEnvironmentScope`, Editor Game View는 `GameViewCaptureScope`). 종료 콜백은 한 번만 전달합니다.
 - CSV의 `observed_frame`, `timing_timestamp`, `metal_frame_id`는 각각 관측 프레임, 지연된 CPU 타이밍, 별도 GPU 완료 기록의 식별자입니다. 같은 행을 같은 프레임의 CPU/GPU 쌍으로 해석하지 않습니다. 비교 통계는 워밍업 이후의 모드별 블록을 기준으로 합니다.
