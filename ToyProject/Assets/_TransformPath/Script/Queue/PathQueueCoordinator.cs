@@ -71,12 +71,11 @@ namespace Common.TransformPath
 
         public static PathQueueWait Free => new PathQueueWait { SpeedMultiplier = 1f };
 
-        public void Step(float deltaTime, bool hasStatus, PathQueueStatus status,
+        public void Step(float deltaTime, PathQueueStatus status,
             float spacing, float resumeDelay, float hysteresis, float smoothRate)
         {
-            bool managerBlocked = !hasStatus || status.IsBlocked;
-            float target = hasStatus ? Mathf.Clamp01(status.SpeedMultiplier) : 0f;
-            if (ManualBlock || managerBlocked)
+            float target = Mathf.Clamp01(status.SpeedMultiplier);
+            if (ManualBlock || status.IsBlocked)
             {
                 ResumeDelayRemaining = resumeDelay;
                 IsBlocked = true;

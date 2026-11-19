@@ -1,4 +1,3 @@
-using System;
 using UnityEngine;
 
 namespace Common.TransformPath
@@ -57,10 +56,10 @@ namespace Common.TransformPath
         void IPathRuntimeTickable.Tick(EPathTickPhase phase, float deltaTime, int frameId) =>
             Tick(phase, deltaTime, frameId);
 
-        void IPathRuntimeTickable.OnTickFault(Exception exception) => OnTickFault(exception);
+        void IPathRuntimeTickable.OnTickFault() => OnTickFault();
 
         internal abstract void Tick(EPathTickPhase phase, float deltaTime, int frameId);
 
-        internal abstract void OnTickFault(Exception exception);
+        internal abstract void OnTickFault();
     }
 }

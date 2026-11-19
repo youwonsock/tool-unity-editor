@@ -23,7 +23,7 @@ namespace Common.TransformPath
 
         public PathPlayback(PathPlaybackListeners listeners)
         {
-            _listeners = listeners ?? new PathPlaybackListeners();
+            _listeners = listeners;
             _effects = new PathEventEffects(this);
         }
 

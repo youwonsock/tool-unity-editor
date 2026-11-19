@@ -284,7 +284,7 @@ namespace Common.TransformPath
             AfterPlaybackWork();
         }
 
-        internal override void OnTickFault(Exception exception)
+        internal override void OnTickFault()
         {
             using var operation = PathExecutionBoundary.Enter();
             Playback.Stop();

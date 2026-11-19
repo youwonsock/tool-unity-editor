@@ -32,32 +32,29 @@ namespace Common.TransformPath.Tests
         public void Wait_RestartsOnlyAfterTheDelayAndExtraDistance()
         {
             PathQueueWait wait = PathQueueWait.Free;
-            wait.Step(0.1f, true, Status(true, 0f, 1f), 1.5f, 0.2f, 0.3f, 0f);
+            wait.Step(0.1f, Status(true, 0f, 1f), 1.5f, 0.2f, 0.3f, 0f);
             Assert.IsTrue(wait.IsBlocked);
 
             // Free again, but too close for the hysteresis.
-            wait.Step(0.25f, true, Status(false, 1f, 1.6f), 1.5f, 0.2f, 0.3f, 0f);
+            wait.Step(0.25f, Status(false, 1f, 1.6f), 1.5f, 0.2f, 0.3f, 0f);
             Assert.IsTrue(wait.IsBlocked);
             Assert.AreEqual(0f, wait.SpeedMultiplier);
 
-            wait.Step(0.1f, true, Status(false, 1f, 2f), 1.5f, 0.2f, 0.3f, 0f);
+            wait.Step(0.1f, Status(false, 1f, 2f), 1.5f, 0.2f, 0.3f, 0f);
             Assert.IsFalse(wait.IsBlocked);
             Assert.AreEqual(1f, wait.SpeedMultiplier);
         }
 
         [Test]
-        public void Wait_HoldsWhileManuallyBlocked_AndWithoutAResult()
+        public void Wait_HoldsWhileManuallyBlocked()
         {
             PathQueueWait wait = PathQueueWait.Free;
             wait.ManualBlock = true;
-            wait.Step(1f, true, Status(false, 1f, null), 1.5f, 0f, 0f, 0f);
+            wait.Step(1f, Status(false, 1f, null), 1.5f, 0f, 0f, 0f);
             Assert.IsTrue(wait.IsBlocked);
 
             wait.ManualBlock = false;
-            wait.Step(1f, false, default(PathQueueStatus), 1.5f, 0f, 0f, 0f);
-            Assert.IsTrue(wait.IsBlocked);
-
-            wait.Step(1f, true, Status(false, 1f, null), 1.5f, 0f, 0f, 0f);
+            wait.Step(1f, Status(false, 1f, null), 1.5f, 0f, 0f, 0f);
             Assert.IsFalse(wait.IsBlocked);
         }
 
@@ -67,7 +64,7 @@ namespace Common.TransformPath.Tests
             PathQueueWait wait = PathQueueWait.Free;
             wait.SpeedMultiplier = 0f;
 
-            wait.Step(0.1f, true, Status(false, 1f, null), 1.5f, 0f, 0f, 5f);
+            wait.Step(0.1f, Status(false, 1f, null), 1.5f, 0f, 0f, 5f);
 
             Assert.AreEqual(0.5f, wait.SpeedMultiplier, 1e-5f);
         }

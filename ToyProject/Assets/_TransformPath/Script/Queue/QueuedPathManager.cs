@@ -211,11 +211,12 @@ namespace Common.TransformPath
             }
             PathSortUtility.StableInsertionSort(_ordered, CompareOrder);
             CalculateStatuses();
+            // Every member in line has this frame's status now.
             for (int i = 0; i < _joined.Count; i++)
-                _joined[i].Member.ApplyQueueStatus(_joined[i].Status.GetValueOrDefault(), _joined[i].Status.HasValue, deltaTime);
+                _joined[i].Member.ApplyQueueStatus(_joined[i].Status.GetValueOrDefault(), deltaTime);
         }
 
-        internal override void OnTickFault(Exception exception)
+        internal override void OnTickFault()
         {
             using var operation = PathExecutionBoundary.Enter();
             LeaveAll(EPathQueueLeaveReason.ManagerReleased);

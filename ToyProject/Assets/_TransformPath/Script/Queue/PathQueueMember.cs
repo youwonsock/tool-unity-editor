@@ -236,7 +236,7 @@ namespace Common.TransformPath
         #region Manager
 
         /// <summary>The manager's result for this frame. Runs before the follower moves.</summary>
-        internal void ApplyQueueStatus(PathQueueStatus status, bool hasStatus, float deltaTime)
+        internal void ApplyQueueStatus(PathQueueStatus status, float deltaTime)
         {
             PathFollower follower = Follower;
 
@@ -257,7 +257,7 @@ namespace Common.TransformPath
             if (follower.MotionEpoch != _motionEpoch || _showingPause)
                 AwaitFirstResult();
 
-            _wait.Step(deltaTime, hasStatus, status, status.Spacing,
+            _wait.Step(deltaTime, status, status.Spacing,
                 _resumeMovementDelay, _unblockHysteresis, _speedSmoothRate);
             ApplyLimit();
             ReportChanges();

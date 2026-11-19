@@ -31,8 +31,8 @@ namespace Common.TransformPath
         /// <summary>The playback this object runs, or 0. A new playback waits for the next frame.</summary>
         ulong PlaybackId { get; }
         void Tick(EPathTickPhase phase, float deltaTime, int frameId);
-        /// <summary>Called after Tick threw. Cleanup is best-effort.</summary>
-        void OnTickFault(Exception exception);
+        /// <summary>Called after Tick threw. Cleanup is best-effort; the driver keeps the exception.</summary>
+        void OnTickFault();
     }
 
     /// <summary>
@@ -131,7 +131,7 @@ namespace Common.TransformPath
                         Faults.Add(exception);
                         try
                         {
-                            item.OnTickFault(exception);
+                            item.OnTickFault();
                         }
                         catch (Exception)
                         {

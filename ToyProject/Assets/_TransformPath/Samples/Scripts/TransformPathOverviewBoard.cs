@@ -18,13 +18,6 @@ namespace Common.TransformPath.Samples
         #endregion
 
 
-        #region Properties
-
-        public bool IsInitialized => _isInitialized;
-
-        #endregion
-
-
         #region Unity Events
 
         public void Init()

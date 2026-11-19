@@ -33,7 +33,6 @@ namespace Common.TransformPath.Samples
         private TransformPathOverviewController _controller;
         private TransformPathOverviewBoard _board;
         private Transform _panelRoot;
-        private Text _statusText;
         private Text _activeLaneText;
         private Text _pauseButtonLabel;
         private Text _queueVisibilityLabel;
@@ -77,8 +76,8 @@ namespace Common.TransformPath.Samples
 
             _board.TryGetComponent(out Canvas canvas);
             _board.TryGetComponent(out RectTransform boardRect);
-            _statusText = _board.GetComponentInChildren<Text>(true);
-            if (canvas == null || boardRect == null || _statusText == null)
+            Text statusText = _board.GetComponentInChildren<Text>(true);
+            if (canvas == null || boardRect == null || statusText == null)
                 throw new InvalidOperationException("TransformPath overview board requires Canvas, RectTransform, and Text.");
 
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
@@ -113,11 +112,11 @@ namespace Common.TransformPath.Samples
             panelImage.color = PANEL_COLOR;
             panelImage.raycastTarget = true;
 
-            // Move the serialized board text into the compact child panel so the
-            // board component can still own its status Text reference.
-            _statusText.transform.SetParent(_panelRoot, false);
-            _font = _statusText.font;
-            ConfigureText(_statusText, new Vector2(16f, -246f), new Vector2(CONTENT_WIDTH, 64f), 10, Color.white);
+            // Move the serialized board text into the compact child panel. The
+            // board keeps owning it: the controller renders the status through the board.
+            statusText.transform.SetParent(_panelRoot, false);
+            _font = statusText.font;
+            ConfigureText(statusText, new Vector2(16f, -246f), new Vector2(CONTENT_WIDTH, 64f), 10, Color.white);
 
             CreateText(
                 _panelRoot,
@@ -244,7 +243,6 @@ namespace Common.TransformPath.Samples
                 _activeLaneText.color = GetLaneColor(_controller.ActiveLane);
             }
 
-            _statusText.text = _controller.GetActiveStatusText();
             if (_pauseButtonLabel != null)
                 _pauseButtonLabel.text = _controller.IsPaused ? "RESUME" : "PAUSE";
             if (_queueVisibilityLabel != null)

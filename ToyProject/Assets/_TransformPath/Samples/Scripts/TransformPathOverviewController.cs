@@ -51,7 +51,6 @@ namespace Common.TransformPath.Samples
 
         #region Properties
 
-        public bool IsInitialized => _isInitialized;
         public bool IsPaused => _isPaused;
         public bool QueueVisible => _queueVisible;
         public ETransformPathShowcaseLane ActiveLane => _activeLane;

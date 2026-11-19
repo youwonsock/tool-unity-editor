@@ -33,6 +33,8 @@ namespace Common.TransformPath
     /// </summary>
     internal sealed class PathEventEffects
     {
+        // The playback clears its effects whenever a playback ends or another
+        // starts, so a blend or a delayed event always belongs to the current one.
         private struct Blend
         {
             public EPathEffectChannel Channel;
@@ -40,13 +42,11 @@ namespace Common.TransformPath
             public PathValueChange Change;
             public float Elapsed;
             public int StartFrame;
-            public ulong PlaybackId;
         }
 
         private struct DelayedEvent
         {
             public PathEventDefinition Definition;
-            public ulong PlaybackId;
             public float RemainingTime;
             public int StartFrame;
             public ulong Order;
@@ -64,8 +64,7 @@ namespace Common.TransformPath
         }
 
         /// <summary>Whether a blend or a delayed event waits for the effects tick.</summary>
-        public bool HasPending =>
-            _target.PlaybackId != 0 && (_blend.Channel != EPathEffectChannel.None || _delayed.Count > 0);
+        public bool HasPending => _blend.Channel != EPathEffectChannel.None || _delayed.Count > 0;
 
         /// <summary>Runs an event the follower reached or that was triggered. It cancels what earlier events left waiting.</summary>
         public void Run(PathEventDefinition definition)
@@ -96,8 +95,6 @@ namespace Common.TransformPath
             // A delayed event that changed something ends this frame's delayed events.
             while (TryTakeDueEvent(frame, out DelayedEvent due))
             {
-                if (due.PlaybackId != _target.PlaybackId)
-                    continue;
                 if (Process(due.Definition))
                     break;
             }
@@ -134,7 +131,8 @@ namespace Common.TransformPath
                     changed |= StartBlend(_target.MoveType == EPathMoveType.SpeedBased ? EPathEffectChannel.Speed : EPathEffectChannel.Duration, change);
             }
 
-            ulong playbackId = _target.PlaybackId;
+            // Pause, Resume and value changes keep the playback, so this holds for the whole chain.
+            bool hasPlayback = _target.PlaybackId != 0;
             IReadOnlyList<PathDelayedEventDefinition> delayed = definition.DelayedEvents;
             for (int i = 0; i < delayed.Count; i++)
             {
@@ -144,17 +142,14 @@ namespace Common.TransformPath
                     // A change ends this chain, as it ends a frame's delayed events.
                     if (Process(entry.Definition))
                         return true;
-                    if (_target.PlaybackId != playbackId)
-                        return changed;
                     continue;
                 }
                 // Without a playback nothing would ever tick the delay.
-                if (playbackId == 0)
+                if (!hasPlayback)
                     continue;
                 _delayed.Add(new DelayedEvent
                 {
                     Definition = entry.Definition,
-                    PlaybackId = playbackId,
                     RemainingTime = entry.Delay,
                     StartFrame = CurrentEffectsFrame(),
                     Order = ++_delayedOrder,
@@ -201,7 +196,6 @@ namespace Common.TransformPath
                 Change = change,
                 Elapsed = 0f,
                 StartFrame = CurrentEffectsFrame(),
-                PlaybackId = _target.PlaybackId,
             };
             return false;
         }
@@ -210,11 +204,6 @@ namespace Common.TransformPath
         {
             if (_blend.Channel == EPathEffectChannel.None || _blend.StartFrame >= frame || deltaTime <= 0f)
                 return;
-            if (_blend.PlaybackId != _target.PlaybackId)
-            {
-                CancelBlend();
-                return;
-            }
             _blend.Elapsed += deltaTime;
             float weight = _blend.Change.Evaluate(_blend.Elapsed);
             _target.ApplyValue(_blend.Channel, Mathf.Lerp(_blend.StartValue, _blend.Change.Target, weight));
