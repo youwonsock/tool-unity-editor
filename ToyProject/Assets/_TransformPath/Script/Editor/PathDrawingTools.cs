@@ -59,7 +59,7 @@ namespace Common.TransformPath
             }
 
             if (slots.Count != paths.Count)
-                Debug.LogWarning("MultiPathData: 동일한 PathData가 여러 슬롯에 있어 첫 번째 슬롯의 색을 공유합니다.", multiPathData);
+                Debug.LogWarning("MultiPathData: the same PathData is in several slots, so they share the first slot's color.", multiPathData);
         }
     }
 }

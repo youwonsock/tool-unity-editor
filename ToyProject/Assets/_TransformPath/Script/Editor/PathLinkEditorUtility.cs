@@ -1,14 +1,11 @@
-using System;
 using System.Collections.Generic;
 using UnityEngine;
 
 namespace Common.TransformPath
 {
-    internal enum EPathLinkSyncMode
-    {
-        FollowMovement = 0,
-        AlignStartToEnd = 1,
-    }
+    /// <summary>Syncs one joint: the end of <paramref name="previous"/> and the start of <paramref name="current"/>.</summary>
+    internal delegate bool PathJointSync(int index, PathData previous, PathData current,
+        Transform previousEnd, Transform currentStart);
 
     /// <summary>Shared edit-mode joint sync helpers for MultiPath path linking.</summary>
     internal static class PathLinkEditorUtility
@@ -41,12 +38,9 @@ namespace Common.TransformPath
         {
             previousEnd = null;
             currentStart = null;
-            if (previous == null || current == null)
-                return false;
-
-            List<Transform> previousPoints = PathEditorSerializationUtility.GetPathPoints(previous);
-            List<Transform> currentPoints = PathEditorSerializationUtility.GetPathPoints(current);
-            if (previousPoints.Count == 0 || currentPoints.Count == 0)
+            IReadOnlyList<Transform> previousPoints = previous == null ? null : previous.PathPoints;
+            IReadOnlyList<Transform> currentPoints = current == null ? null : current.PathPoints;
+            if (previousPoints == null || currentPoints == null || previousPoints.Count == 0 || currentPoints.Count == 0)
                 return false;
 
             previousEnd = previousPoints[previousPoints.Count - 1];
@@ -98,19 +92,12 @@ namespace Common.TransformPath
             return true;
         }
 
-        public static int SyncAllJoints(
-            MultiPathData multiPathData,
-            EPathLinkSyncMode mode,
-            float epsilonSqr,
-            Func<int, int, Vector3> getSnapshotPosition = null)
+        /// <summary>
+        /// Runs <paramref name="sync"/> on every joint between two different PathData in a row and returns
+        /// how many it changed. A PathData repeated in a row has no joint; it is skipped with one warning.
+        /// </summary>
+        public static int SyncJoints(MultiPathData owner, IReadOnlyList<PathData> pathDatas, PathJointSync sync)
         {
-            if (multiPathData == null)
-                return 0;
-
-            List<PathData> pathDatas = PathEditorSerializationUtility.GetPathDatas(multiPathData);
-            if (pathDatas.Count < 2)
-                return 0;
-
             int syncCount = 0;
             for (int i = 1; i < pathDatas.Count; i++)
             {
@@ -120,49 +107,30 @@ namespace Common.TransformPath
                     continue;
                 if (previous == current)
                 {
-                    WarnDuplicateLink(multiPathData, i);
+                    WarnDuplicateLink(owner, i);
                     continue;
                 }
-
-                if (!TryGetJointTransforms(previous, current, out Transform previousEnd, out Transform currentStart))
-                    continue;
-
-                bool synced = false;
-                if (mode == EPathLinkSyncMode.FollowMovement)
-                {
-                    if (getSnapshotPosition == null)
-                        continue;
-
-                    List<Transform> previousPoints = PathEditorSerializationUtility.GetPathPoints(previous);
-                    synced = TrySyncJointByMovement(
-                        previous,
-                        current,
-                        previousEnd,
-                        currentStart,
-                        getSnapshotPosition(i - 1, previousPoints.Count - 1),
-                        getSnapshotPosition(i, 0),
-                        epsilonSqr);
-                }
-                else if (mode == EPathLinkSyncMode.AlignStartToEnd)
-                {
-                    synced = TryAlignStartToEnd(
-                        previous,
-                        current,
-                        previousEnd,
-                        currentStart,
-                        epsilonSqr);
-                }
-
-                if (synced)
+                if (TryGetJointTransforms(previous, current, out Transform previousEnd, out Transform currentStart)
+                    && sync(i, previous, current, previousEnd, currentStart))
                     syncCount++;
             }
-
             return syncCount;
         }
 
-        public static void WarnDuplicateLink(
-            MultiPathData multiPathData,
-            int segmentIndex)
+        /// <summary>Moves every segment start onto the end of the segment before it.</summary>
+        public static int AlignAllJoints(MultiPathData multiPathData)
+        {
+            return multiPathData == null
+                ? 0
+                : SyncJoints(multiPathData, PathEditorSerializationUtility.GetPathDatas(multiPathData), AlignJoint);
+        }
+
+        public static bool AlignJoint(int index, PathData previous, PathData current, Transform previousEnd, Transform currentStart)
+        {
+            return TryAlignStartToEnd(previous, current, previousEnd, currentStart, POSITION_SYNC_EPSILON_SQR);
+        }
+
+        private static void WarnDuplicateLink(MultiPathData multiPathData, int segmentIndex)
         {
             if (multiPathData == null)
                 return;
@@ -172,7 +140,7 @@ namespace Common.TransformPath
                 return;
 
             Debug.LogWarning(
-                $"MultiPathData: segment {segmentIndex - 1}와 {segmentIndex}가 동일한 PathData를 참조해 자동 연결을 건너뜁니다.",
+                $"MultiPathData: segments {segmentIndex - 1} and {segmentIndex} use the same PathData, so their joint is not linked.",
                 multiPathData);
         }
 

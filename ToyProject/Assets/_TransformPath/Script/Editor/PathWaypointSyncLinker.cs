@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEditor;
-using UnityEditor.SceneManagement;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 namespace Common.TransformPath
 {
@@ -38,8 +36,6 @@ namespace Common.TransformPath
                 Target = target;
                 Id = target.GetInstanceID();
             }
-
-            public string CachedStructureSignature => _structureSignature;
 
             public void RefreshReferences()
             {

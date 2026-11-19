@@ -34,7 +34,7 @@ namespace Common.TransformPath
                 PathPointTools.CreateDefaultPoints(paths);
             if (GUILayout.Button(new GUIContent(
                     "Refresh Path Points from Children",
-                    "자손 중 PathPoint로 시작하는 Transform을 hierarchy 순서로 _pathPoints에 반영합니다.")))
+                    "Sets _pathPoints to the descendants whose names start with PathPoint, in hierarchy order.")))
                 PathPointTools.RefreshFromChildren(paths);
             EditorGUI.EndDisabledGroup();
 

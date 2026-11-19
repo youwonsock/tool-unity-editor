@@ -21,7 +21,7 @@ namespace Common.TransformPath
                 List<Transform> pathPoints = PathEditorSerializationUtility.GetPathPoints(pathData);
                 if (pathPoints.Count == 0)
                 {
-                    Debug.LogWarning("PathData: 스냅할 경로 포인트가 없습니다.", pathData);
+                    Debug.LogWarning("PathData: there are no path points to snap.", pathData);
                     continue;
                 }
 
@@ -53,12 +53,12 @@ namespace Common.TransformPath
                 {
                     PathEditorUndoUtility.MarkDirty(pathData);
                     Debug.Log(
-                        $"PathData: {snappedCount}개의 포인트를 지면에 스냅했습니다. (실패: {failedCount}개)",
+                        $"PathData: snapped {snappedCount} point(s) to the ground ({failedCount} failed).",
                         pathData);
                 }
                 else
                     Debug.LogWarning(
-                        $"PathData: 스냅된 포인트가 없습니다. (실패: {failedCount}개)",
+                        $"PathData: no point was snapped ({failedCount} failed).",
                         pathData);
             }
             PathEditorUndoUtility.RepaintScene();
@@ -92,7 +92,7 @@ namespace Common.TransformPath
                 PathEditorUndoUtility.MarkDirty(pathData);
                 Undo.CollapseUndoOperations(undoGroup);
                 Debug.Log(
-                    "PathData: PathPointStart, PathPoint, PathPointEnd 생성 완료",
+                    "PathData: created PathPointStart, PathPoint and PathPointEnd.",
                     pathData);
             }
             PathEditorUndoUtility.RepaintScene();
@@ -115,11 +115,11 @@ namespace Common.TransformPath
                 SetPathPoints(pathData, collected);
                 if (collected.Count < 2)
                     Debug.LogWarning(
-                        $"PathData: '{PATH_POINT_NAME_PREFIX}'로 시작하는 자손이 {collected.Count}개입니다. 유효 경로는 최소 2개가 필요합니다.",
+                        $"PathData: {collected.Count} descendant(s) start with '{PATH_POINT_NAME_PREFIX}'; a path needs at least 2.",
                         pathData);
                 else
                     Debug.Log(
-                        $"PathData: _pathPoints를 자손에서 {collected.Count}개 갱신했습니다.",
+                        $"PathData: set _pathPoints to {collected.Count} descendant(s).",
                         pathData);
             }
             PathEditorUndoUtility.RepaintScene();

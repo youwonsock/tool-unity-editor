@@ -87,7 +87,7 @@ namespace Common.TransformPath
         private static void DrawSamplingPreview(
             PathDataScenePreview preview,
             PathData pathData,
-            int samplingType,
+            PathData.EPreviewSamplingType samplingType,
             int sampleCount,
             Color color,
             float size)
@@ -103,7 +103,7 @@ namespace Common.TransformPath
             for (int i = 0; i < sampleCount; i++)
             {
                 float normalizedTime;
-                if (samplingType == 1)
+                if (samplingType == PathData.EPreviewSamplingType.DeterministicRandom)
                 {
                     state = unchecked(state * 747796405u + 2891336453u);
                     normalizedTime = (state & 0x00ffffffu) / 16777215f;

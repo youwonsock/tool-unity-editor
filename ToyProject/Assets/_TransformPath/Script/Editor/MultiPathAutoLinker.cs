@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEditor;
-using UnityEditor.SceneManagement;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 namespace Common.TransformPath
 {
@@ -34,6 +32,7 @@ namespace Common.TransformPath
             private bool _autoLinkEnabled;
             private bool _wasAutoLinkEnabled;
             private bool _needsInitialSync;
+            private readonly PathJointSync _followMovement;
 
             public MultiPathData Target { get; }
             public int Id { get; }
@@ -45,6 +44,7 @@ namespace Common.TransformPath
             {
                 Target = target;
                 Id = target.GetInstanceID();
+                _followMovement = FollowMovement;
             }
 
             public void RequestInitialSync()
@@ -99,72 +99,28 @@ namespace Common.TransformPath
                 if (!_autoLinkEnabled || _pathDatas.Count < 2)
                     return false;
 
-                bool syncedAny = false;
-                for (int i = 1; i < _pathDatas.Count; i++)
-                {
-                    PathData previous = _pathDatas[i - 1];
-                    PathData current = _pathDatas[i];
-                    if (previous == null || current == null)
-                        continue;
-                    if (previous == current)
-                    {
-                        PathLinkEditorUtility.WarnDuplicateLink(Target, i);
-                        continue;
-                    }
-
-                    List<Transform> previousPoints = _pathPoints[i - 1];
-                    List<Transform> currentPoints = _pathPoints[i];
-                    if (previousPoints.Count == 0 || currentPoints.Count == 0)
-                        continue;
-
-                    Transform previousEnd = previousPoints[previousPoints.Count - 1];
-                    Transform currentStart = currentPoints[0];
-                    if (previousEnd == null || currentStart == null)
-                        continue;
-
-                    if (PathLinkEditorUtility.TrySyncJointByMovement(
-                            previous,
-                            current,
-                            previousEnd,
-                            currentStart,
-                            _snapshot.GetPosition(i - 1, previousPoints.Count - 1),
-                            _snapshot.GetPosition(i, 0),
-                            POSITION_SYNC_EPSILON_SQR))
-                        syncedAny = true;
-                }
-
+                bool syncedAny = PathLinkEditorUtility.SyncJoints(Target, _pathDatas, _followMovement) > 0;
                 if (_needsInitialSync)
                 {
-                    for (int i = 1; i < _pathDatas.Count; i++)
-                    {
-                        PathData previous = _pathDatas[i - 1];
-                        PathData current = _pathDatas[i];
-                        if (previous == null || current == null)
-                            continue;
-                        if (previous == current)
-                            continue;
-
-                        if (!PathLinkEditorUtility.TryGetJointTransforms(
-                                previous,
-                                current,
-                                out Transform previousEnd,
-                                out Transform currentStart))
-                            continue;
-
-                        if (PathLinkEditorUtility.TryAlignStartToEnd(
-                                previous,
-                                current,
-                                previousEnd,
-                                currentStart,
-                                POSITION_SYNC_EPSILON_SQR))
-                            syncedAny = true;
-                    }
-
+                    syncedAny |= PathLinkEditorUtility.SyncJoints(Target, _pathDatas, PathLinkEditorUtility.AlignJoint) > 0;
                     _needsInitialSync = false;
                 }
 
                 _snapshot.Capture(_pathPoints);
                 return syncedAny;
+            }
+
+            // After a drag, the joint's other point follows the one that moved since the last poll.
+            private bool FollowMovement(int index, PathData previous, PathData current, Transform previousEnd, Transform currentStart)
+            {
+                return PathLinkEditorUtility.TrySyncJointByMovement(
+                    previous,
+                    current,
+                    previousEnd,
+                    currentStart,
+                    _snapshot.GetPosition(index - 1, _pathPoints[index - 1].Count - 1),
+                    _snapshot.GetPosition(index, 0),
+                    POSITION_SYNC_EPSILON_SQR);
             }
         }
 

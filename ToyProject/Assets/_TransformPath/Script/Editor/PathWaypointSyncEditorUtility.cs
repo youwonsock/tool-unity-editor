@@ -157,6 +157,50 @@ namespace Common.TransformPath
             return alignCount;
         }
 
+        /// <summary>Logs empty and repeated members of the registry's groups.</summary>
+        public static void LogValidation(PathWaypointSyncRegistry registry)
+        {
+            IReadOnlyList<PathWaypointSyncGroup> groups = registry.Groups;
+            int nullMemberCount = 0;
+            int duplicateWarningCount = 0;
+            HashSet<Transform> seen = new HashSet<Transform>();
+
+            for (int groupIndex = 0; groupIndex < groups.Count; groupIndex++)
+            {
+                PathWaypointSyncGroup group = groups[groupIndex];
+                if (group == null)
+                    continue;
+
+                Transform[] members = group.Members;
+                if (members == null)
+                    continue;
+
+                for (int memberIndex = 0; memberIndex < members.Length; memberIndex++)
+                {
+                    Transform member = members[memberIndex];
+                    if (member == null)
+                    {
+                        nullMemberCount++;
+                        continue;
+                    }
+
+                    if (!seen.Add(member))
+                        duplicateWarningCount++;
+                }
+            }
+
+            if (nullMemberCount == 0 && duplicateWarningCount == 0)
+            {
+                Debug.Log("PathWaypointSyncRegistry: validation passed.", registry);
+                return;
+            }
+
+            Debug.LogWarning(
+                $"PathWaypointSyncRegistry: null members={nullMemberCount}, "
+                + $"duplicate references={duplicateWarningCount}.",
+                registry);
+        }
+
         #endregion
 
 

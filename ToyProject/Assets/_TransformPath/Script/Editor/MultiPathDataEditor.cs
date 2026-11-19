@@ -86,12 +86,11 @@ namespace Common.TransformPath
                 MultiPathData sequence = sequences[i];
                 if (PathEditorSerializationUtility.GetPathDatas(sequence).Count < 2)
                 {
-                    Debug.LogWarning("MultiPathData: 연결할 PathData가 충분하지 않습니다.", sequence);
+                    Debug.LogWarning("MultiPathData: at least two PathData are needed to link joints.", sequence);
                     continue;
                 }
-                int syncCount = PathLinkEditorUtility.SyncAllJoints(
-                    sequence, EPathLinkSyncMode.AlignStartToEnd, PathLinkEditorUtility.POSITION_SYNC_EPSILON_SQR);
-                Debug.Log($"MultiPathData: {syncCount}개의 경로 연결점을 동기화했습니다.", sequence);
+                int syncCount = PathLinkEditorUtility.AlignAllJoints(sequence);
+                Debug.Log($"MultiPathData: synced {syncCount} path joint(s).", sequence);
             }
             PathEditorUndoUtility.RepaintScene();
         }

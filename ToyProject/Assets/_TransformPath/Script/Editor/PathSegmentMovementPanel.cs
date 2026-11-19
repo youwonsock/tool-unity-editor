@@ -28,7 +28,7 @@ namespace Common.TransformPath
             bool changed = movementSource != null
                 && movementSource.enumValueIndex == (int)EPathSegmentMovementSource.Override
                     ? DrawOverride(serializedObject, element)
-                    : DrawProviderMovement(PathEditorSerializationUtility.GetPathData(segments, index));
+                    : DrawPathMovement(PathEditorSerializationUtility.GetPathData(segments, index));
             EditorGUILayout.EndVertical();
             return changed;
         }
@@ -68,11 +68,11 @@ namespace Common.TransformPath
             return changed;
         }
 
-        private static bool DrawProviderMovement(PathData pathData)
+        private static bool DrawPathMovement(PathData pathData)
         {
             if (pathData == null)
             {
-                EditorGUILayout.HelpBox("Assign a provider or choose an override movement source.", MessageType.Info);
+                EditorGUILayout.HelpBox("Assign a PathData or choose the Override movement source.", MessageType.Info);
                 return false;
             }
 
