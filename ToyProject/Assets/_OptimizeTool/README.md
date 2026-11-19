@@ -23,11 +23,11 @@ Unity Editor에서 Mesh 결합·컬링과 물리 움직임 기록을 수행하�
 
 | 옮길 시스템 | 복사할 폴더 | 패키지·모듈 |
 | --- | --- | --- |
-| Mesh 최적화 | `Script/Shared` + `Script/MeshOptimization` | Collections(1.4.0), Physics 모듈(Occlusion Raycast) |
+| Mesh 최적화 | `Script/Shared` + `Script/MeshOptimization` | Physics 모듈(Occlusion Raycast) |
 | Physics Recorder | `Script/Shared` + `Script/PhysicsRecording` | Physics, Physics 2D, Cloth, Particle System, Animation 모듈 |
 | 둘 다 | `Script/` | 위 둘의 합 |
 
-- 세 경우 모두 Unity 2023.2.20f1 빈 프로젝트에 위 패키지만 넣고 해당 폴더만 복사해 확인했습니다. 어셈블리가 오류 없이 컴파일되고 컴포넌트를 붙일 수 있습니다. 괄호는 이 프로젝트가 쓰는 버전입니다.
+- 세 경우 모두 Unity 2023.2.20f1 빈 프로젝트에 위 패키지만 넣고 해당 폴더만 복사해 확인했습니다. 어셈블리가 오류 없이 컴파일되고 컴포넌트를 붙일 수 있습니다.
 - Runtime 어셈블리(`Common.OptimizeTool.MeshOptimization`, `Common.OptimizeTool.PhysicsRecording`)는 패키지를 참조하지 않고 `UnityEditor` 코드도 없어 Player에 그대로 들어갑니다. 결합·베이크·녹화 저장은 각 시스템의 Editor 어셈블리에서만 동작합니다.
 - 공용 Editor 어셈블리 이름은 `Common.OptimizeTool.Editor`입니다. 옮길 프로젝트에 같은 이름의 어셈블리가 없어야 합니다.
 - `Samples/`(샘플·벤치마크 스크립트, 씬, Prefab, 설정. UGUI와 URP 필요)는 옮기지 않아도 됩니다. 문서가 필요하면 이 README와 `Docs/`를 함께 옮깁니다.

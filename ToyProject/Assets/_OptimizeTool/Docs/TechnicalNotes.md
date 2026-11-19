@@ -27,7 +27,7 @@ MeshFilter 수집 → 설정·입력 검증 → Readable·Normal 처리
 | --- | --- | --- | --- |
 | `Common.OptimizeTool.Editor` | `Script/Shared/Editor` | Editor | 없음 |
 | `Common.OptimizeTool.MeshOptimization` | `Script/MeshOptimization` | 모두 | 없음 |
-| `Common.OptimizeTool.MeshOptimization.Editor` | `Script/MeshOptimization/Editor` | Editor | MeshOptimization, OptimizeTool.Editor, Unity.Collections |
+| `Common.OptimizeTool.MeshOptimization.Editor` | `Script/MeshOptimization/Editor` | Editor | MeshOptimization, OptimizeTool.Editor |
 | `Common.OptimizeTool.PhysicsRecording` | `Script/PhysicsRecording` | 모두 | 없음 |
 | `Common.OptimizeTool.PhysicsRecording.Editor` | `Script/PhysicsRecording/Editor` | Editor | PhysicsRecording, OptimizeTool.Editor |
 | `Common.OptimizeTool.Samples` / `.Samples.Editor` | `Samples/Scripts`, `Samples/Scripts/Editor` | 모두 / Editor | 위 시스템과 UGUI·URP |

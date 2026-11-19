@@ -3,8 +3,7 @@
     "rootNamespace": "Common.OptimizeTool.MeshOptimization",
     "references": [
         "Common.OptimizeTool.MeshOptimization",
-        "Common.OptimizeTool.Editor",
-        "Unity.Collections"
+        "Common.OptimizeTool.Editor"
     ],
     "includePlatforms": [
         "Editor"
