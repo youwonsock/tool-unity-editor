@@ -49,11 +49,14 @@ flowchart LR
         Commands[MeshToolCommands] --> Pipeline[MeshBuildPipeline]
         Pipeline --> Geometry[MeshGeometry]
         Pipeline --> Occlusion[MeshOcclusion]
+        Pipeline -->|지원·호환 검사| RendererSettings[MeshRendererSettings]
         Pipeline --> Result[MeshBuildResult / Parts]
+        Result -. RendererSettings .-> RendererSettings
         Commands -->|Save| MeshSave[MeshAssetTransaction]
         Result -. Parts .-> MeshSave
         MeshSave -->|씬 출력 콜백| Scene[MeshSceneOutput / Undo]
         Commands -->|RestoreSources| Scene
+        Scene -->|ApplyTo| RendererSettings
     end
     subgraph Physics[PhysicsRecording]
         Recorder[PhysicsRecorder] -->|Capture / Finish| Take[PhysicsTake]
@@ -91,6 +94,9 @@ flowchart LR
 | MeshOptimization.Editor | `MeshToolCommands` | `BuildMeshes`·`CombineAndSaveMeshes`·`RestoreSources` 확장 메서드. 입력 수집, 출력 경로 생성(`_meshName.asset` 또는 `_meshName_0.asset`부터), 남은 이전 출력 경고 |
 | MeshOptimization.Editor | `MeshBuildPipeline` | `Build(sources, destinationWorldToLocal, settings)`. 저장 경로와 분리된 입력 검증, 컬링·변환·Material별 결합. 기하 연산은 `MeshGeometry`, 씬 Physics 조회는 `MeshOcclusion` |
 | MeshOptimization.Editor | `MeshBuildResult` | Mesh와 Material 매핑을 항목별로 묶고 임시 Mesh만 소유. `Dispose()`는 원본을 파괴하지 않음 |
+| MeshOptimization.Editor | `MeshRendererSettings` | 입력 Renderer가 지원하지 않는 데이터(PropertyBlock, Lightmap, LOD 등)를 쓰는지 검사하고, 병합 입력끼리 같아야 하는 Renderer 설정을 비교. `ApplyTo`로 결과 Renderer에 Material과 설정을 적용 |
+| MeshOptimization.Editor | `MeshGeometry` | 원본 Mesh와 importer를 바꾸지 않는 기하 연산: Readable 복사, 원시 정점 버퍼를 옮기는 SubMesh 추출, Backface 제거, 변환, 정점 채널을 맞춘 결합, 라이트맵 UV 배치 |
+| MeshOptimization.Editor | `MeshOcclusion` | 카메라에서 표본 점(Vertex와 삼각형 중심)으로 Raycast해 보이는 비율로 가림 판정. 대상 자신과 표본 점을 품은 조상 Collider는 제외 |
 | MeshOptimization.Editor | `MeshAssetTransaction` | 모든 Mesh 출력 경로와 출력 자리를 쓰기 전에 검증하고, Undo와 함께 GUID를 유지해 저장. 실패하면 메모리 안 백업으로 기존 Mesh를 되돌리고 새로 만든 에셋을 지움. 콜백이 쓰는 다른 파일은 호출자가 `AssetFileTransaction.Execute`로 감쌈 |
 | MeshOptimization.Editor | `MeshSceneOutput` | Undo에 등록하며 결과 Renderer를 만들고 원본 Renderer를 비활성화. 끈 원본의 기록과 `Restore`, Prefab 인스턴스 안의 결과 거부 |
 | OptimizeTool.Editor | `AssetFileTransaction` | 공용 출력 규칙: Edit Mode 확인, `Assets/` 아래 경로·이름 검증(`ValidateAssetPath`, 같은 에셋을 두 번 적은 목록을 거부하는 `ValidateAssetPaths`), 출력 자리 검사(`ValidateOutputTarget`), 폴더 생성, GUID를 유지하는 `CreateOrReplace`, 선언한 파일의 백업과 실패 시 복원(`Execute`) |
