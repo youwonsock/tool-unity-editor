@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using Common.OptimizeTool.Editor;
 using Common.OptimizeTool.MeshOptimization;
+using Common.OptimizeTool.MeshOptimization.Editor;
 using UnityEditor;
 using UnityEngine;
 

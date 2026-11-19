@@ -31,7 +31,7 @@ if [ -z "$skip_build" ]; then
     rm -rf "$app"
     echo "== Build"
     run_limited "$build_timeout" "$unity" -batchmode -quit -projectPath "$worktree/ToyProject" -buildTarget StandaloneOSX \
-        -executeMethod Common.TransformPath.PlayerProbe.TransformPathPlayerProbeBuild.Build \
+        -executeMethod Common.TransformPath.PlayerProbe.Editor.TransformPathPlayerProbeBuild.Build \
         -transformPathProbeApp "$app" -logFile "$results/transformpath-build.log" || {
             code=$?
             echo "Build failed. See $results/transformpath-build.log"

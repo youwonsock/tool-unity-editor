@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace Common.TransformPath
+namespace Common.TransformPath.Editor
 {
     internal static class PathWaypointSyncEditorUtility
     {

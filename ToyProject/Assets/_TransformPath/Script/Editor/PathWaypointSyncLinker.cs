@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-namespace Common.TransformPath
+namespace Common.TransformPath.Editor
 {
     [InitializeOnLoad]
     internal static class PathWaypointSyncLinker

@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Common.OptimizeTool.Editor;
 using Common.OptimizeTool.MeshOptimization;
+using Common.OptimizeTool.MeshOptimization.Editor;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;

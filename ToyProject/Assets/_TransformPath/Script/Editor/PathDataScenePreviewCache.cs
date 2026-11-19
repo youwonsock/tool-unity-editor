@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-namespace Common.TransformPath
+namespace Common.TransformPath.Editor
 {
     /// <summary>Editor-only cache that reuses the runtime geometry builder.</summary>
     internal static class PathDataScenePreviewCache

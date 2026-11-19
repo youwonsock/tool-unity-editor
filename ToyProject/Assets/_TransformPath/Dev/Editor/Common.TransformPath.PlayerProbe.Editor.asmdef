@@ -1,6 +1,6 @@
 {
     "name": "Common.TransformPath.PlayerProbe.Editor",
-    "rootNamespace": "Common.TransformPath.PlayerProbe",
+    "rootNamespace": "Common.TransformPath.PlayerProbe.Editor",
     "references": [
         "Common.TransformPath",
         "Common.TransformPath.PlayerProbe"

@@ -1,7 +1,8 @@
+using Common.OptimizeTool.Editor;
 using UnityEditor;
 using UnityEngine;
 
-namespace Common.OptimizeTool.PhysicsRecording
+namespace Common.OptimizeTool.PhysicsRecording.Editor
 {
     /// <summary>Registers the editor's asset exporter with <see cref="PhysicsRecorder"/> on every script load.</summary>
     [InitializeOnLoad]

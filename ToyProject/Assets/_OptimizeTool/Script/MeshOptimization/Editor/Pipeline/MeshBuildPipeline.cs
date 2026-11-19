@@ -1,10 +1,11 @@
 using System;
 using System.Collections.Generic;
+using Common.OptimizeTool.Editor;
 using UnityEngine;
 using UnityEngine.Rendering;
 using Object = UnityEngine.Object;
 
-namespace Common.OptimizeTool.MeshOptimization
+namespace Common.OptimizeTool.MeshOptimization.Editor
 {
     public static class MeshBuildPipeline
     {

@@ -1,7 +1,7 @@
 using UnityEditor;
 using UnityEngine;
 
-namespace Common.TransformPath
+namespace Common.TransformPath.Editor
 {
     /// <summary>Editor-only Undo, dirty, and prefab override operations.</summary>
     internal static class PathEditorUndoUtility

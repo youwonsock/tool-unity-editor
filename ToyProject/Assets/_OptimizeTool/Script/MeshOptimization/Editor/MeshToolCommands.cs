@@ -2,9 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
+using Common.OptimizeTool.Editor;
 using UnityEngine;
 
-namespace Common.OptimizeTool.MeshOptimization
+namespace Common.OptimizeTool.MeshOptimization.Editor
 {
     /// <summary>
     /// The editor operations of <see cref="MeshCombiner"/>. They are extension methods, so editor code keeps calling

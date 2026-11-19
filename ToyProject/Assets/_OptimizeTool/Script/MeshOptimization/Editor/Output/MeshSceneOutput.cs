@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-namespace Common.OptimizeTool.MeshOptimization
+namespace Common.OptimizeTool.MeshOptimization.Editor
 {
     /// <summary>
     /// The scene side of a combine: the generated result objects and the source Renderers the combiner disabled.

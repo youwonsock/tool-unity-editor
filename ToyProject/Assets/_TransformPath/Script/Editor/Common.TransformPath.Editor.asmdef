@@ -1,6 +1,6 @@
 {
     "name": "Common.TransformPath.Editor",
-    "rootNamespace": "Common.TransformPath",
+    "rootNamespace": "Common.TransformPath.Editor",
     "references": [
         "Common.TransformPath"
     ],

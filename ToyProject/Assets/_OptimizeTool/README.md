@@ -57,7 +57,7 @@ _OptimizeTool/
 
 ## Mesh 도구
 
-Edit Mode에서 Inspector 버튼이나 아래 API로 실행합니다. 별도 초기화 없이 호출하고, 설정을 고친 뒤 같은 API로 재시도합니다. 컴포넌트는 설정만 갖고, 아래 API는 `MeshOptimization.Editor` 어셈블리의 확장 메서드(`MeshToolCommands`)입니다. 그래서 Editor 어셈블리의 코드에서만 호출할 수 있습니다.
+Edit Mode에서 Inspector 버튼이나 아래 API로 실행합니다. 별도 초기화 없이 호출하고, 설정을 고친 뒤 같은 API로 재시도합니다. 컴포넌트는 설정만 갖고, 아래 API는 `MeshOptimization.Editor` 어셈블리의 확장 메서드(`MeshToolCommands`, namespace `Common.OptimizeTool.MeshOptimization.Editor`)입니다. 그래서 Editor 어셈블리의 코드에서만 호출할 수 있습니다.
 
 | API | 동작 |
 | --- | --- |
@@ -67,8 +67,9 @@ Edit Mode에서 Inspector 버튼이나 아래 API로 실행합니다. 별도 초
 | `MeshBuildPipeline.Build(sources, destinationWorldToLocal, settings)` | 컴포넌트 없이 MeshFilter 목록과 `MeshBuildSettings`로 임시 결과를 만듭니다. 저장은 `MeshAssetTransaction.Save`로 하고, 저장 콜백이 Prefab·씬 같은 다른 에셋도 쓰면 그 호출을 `AssetFileTransaction.Execute`로 감쌉니다. 샘플 빌더가 이 방식을 씁니다 |
 
 ```csharp
-// Editor 폴더 또는 Common.OptimizeTool.MeshOptimization.Editor를 참조하는 Editor 어셈블리
+// Editor code: an Editor folder, or an Editor assembly that references Common.OptimizeTool.MeshOptimization.Editor
 using Common.OptimizeTool.MeshOptimization;
+using Common.OptimizeTool.MeshOptimization.Editor;
 using UnityEngine;
 
 public static class MeshBuildExample

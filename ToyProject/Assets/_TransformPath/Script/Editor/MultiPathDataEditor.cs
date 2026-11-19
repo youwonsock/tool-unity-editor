@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-namespace Common.TransformPath
+namespace Common.TransformPath.Editor
 {
     /// <summary>
     /// MultiPathData Inspector. It only lays the sections out: the segment list
@@ -11,7 +11,7 @@ namespace Common.TransformPath
     /// </summary>
     [CustomEditor(typeof(MultiPathData))]
     [CanEditMultipleObjects]
-    internal sealed class MultiPathDataEditor : Editor
+    internal sealed class MultiPathDataEditor : UnityEditor.Editor
     {
         private PathSegmentListDrawer _segments;
         private readonly PathSegmentMovementPanel _movement = new PathSegmentMovementPanel();

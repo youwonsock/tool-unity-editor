@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace Common.TransformPath
+namespace Common.TransformPath.Editor
 {
     /// <summary>Syncs one joint: the end of <paramref name="previous"/> and the start of <paramref name="current"/>.</summary>
     internal delegate bool PathJointSync(int index, PathData previous, PathData current,

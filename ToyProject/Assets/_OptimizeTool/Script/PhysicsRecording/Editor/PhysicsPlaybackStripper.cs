@@ -4,7 +4,7 @@ using UnityEditor;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
-namespace Common.OptimizeTool.PhysicsRecording
+namespace Common.OptimizeTool.PhysicsRecording.Editor
 {
     /// <summary>Removes what <see cref="PhysicsPlaybackPolicy"/> does not allow from a copy being saved as playback.</summary>
     internal static class PhysicsPlaybackStripper

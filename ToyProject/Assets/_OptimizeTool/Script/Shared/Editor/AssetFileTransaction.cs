@@ -4,7 +4,7 @@ using System.IO;
 using UnityEditor;
 using Object = UnityEngine.Object;
 
-namespace Common.OptimizeTool
+namespace Common.OptimizeTool.Editor
 {
     /// <summary>
     /// Shared editor asset output rules: path validation, folder creation, in-place replacement

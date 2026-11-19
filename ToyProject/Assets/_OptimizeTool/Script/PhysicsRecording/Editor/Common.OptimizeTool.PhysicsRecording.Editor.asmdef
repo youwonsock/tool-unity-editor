@@ -1,6 +1,6 @@
 {
     "name": "Common.OptimizeTool.PhysicsRecording.Editor",
-    "rootNamespace": "Common.OptimizeTool.PhysicsRecording",
+    "rootNamespace": "Common.OptimizeTool.PhysicsRecording.Editor",
     "references": [
         "Common.OptimizeTool.PhysicsRecording",
         "Common.OptimizeTool.Editor"

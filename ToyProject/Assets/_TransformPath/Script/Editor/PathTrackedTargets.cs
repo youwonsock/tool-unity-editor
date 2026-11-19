@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
-namespace Common.TransformPath
+namespace Common.TransformPath.Editor
 {
     /// <summary>One scene object an Editor linker keeps in sync.</summary>
     internal interface IPathTrackedTarget

@@ -1,13 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using Common.OptimizeTool.Editor;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using Object = UnityEngine.Object;
 
-namespace Common.OptimizeTool.PhysicsRecording
+namespace Common.OptimizeTool.PhysicsRecording.Editor
 {
     /// <summary>
     /// Saves a take as its clip, playback prefab and, when enabled, reference. Either every output is saved

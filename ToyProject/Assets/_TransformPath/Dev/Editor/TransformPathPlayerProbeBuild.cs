@@ -7,7 +7,7 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace Common.TransformPath.PlayerProbe
+namespace Common.TransformPath.PlayerProbe.Editor
 {
     /// <summary>
     /// Builds the measurement Player for Tools/run-transformpath-probe.sh. The

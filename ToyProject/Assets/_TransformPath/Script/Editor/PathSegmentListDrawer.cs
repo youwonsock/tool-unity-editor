@@ -2,7 +2,7 @@ using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
 
-namespace Common.TransformPath
+namespace Common.TransformPath.Editor
 {
     /// <summary>
     /// The MultiPathData segment list: a reorderable list for one target, a plain field for several.

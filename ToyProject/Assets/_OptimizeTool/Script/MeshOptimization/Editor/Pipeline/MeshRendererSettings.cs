@@ -5,7 +5,7 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using Object = UnityEngine.Object;
 
-namespace Common.OptimizeTool.MeshOptimization
+namespace Common.OptimizeTool.MeshOptimization.Editor
 {
     /// <summary>Renderer state supported by a combined output. Unsupported per-source state is rejected.</summary>
     public sealed class MeshRendererSettings

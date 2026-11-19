@@ -2,7 +2,7 @@ using System;
 using UnityEditor;
 using UnityEngine;
 
-namespace Common.OptimizeTool.MeshOptimization
+namespace Common.OptimizeTool.MeshOptimization.Editor
 {
     [CustomEditor(typeof(MeshCombiner))]
     public sealed class MeshCombinerEditor : UnityEditor.Editor

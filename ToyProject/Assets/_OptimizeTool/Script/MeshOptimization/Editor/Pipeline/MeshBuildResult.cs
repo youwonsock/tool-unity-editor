@@ -4,7 +4,7 @@ using System.Collections.ObjectModel;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
-namespace Common.OptimizeTool.MeshOptimization
+namespace Common.OptimizeTool.MeshOptimization.Editor
 {
     /// <summary>One output mesh and the materials of its submeshes, in submesh order.</summary>
     public sealed class MeshBuildPart

@@ -2,11 +2,11 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-namespace Common.TransformPath
+namespace Common.TransformPath.Editor
 {
     /// <summary>PathData Inspector. Drawing is <see cref="PathDataGizmoDrawer"/>, point tools <see cref="PathPointTools"/>.</summary>
     [CustomEditor(typeof(PathData))]
-    internal sealed class PathDataEditor : Editor
+    internal sealed class PathDataEditor : UnityEditor.Editor
     {
         public override void OnInspectorGUI()
         {

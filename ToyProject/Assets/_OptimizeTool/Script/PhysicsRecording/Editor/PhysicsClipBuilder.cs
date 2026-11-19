@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace Common.OptimizeTool.PhysicsRecording
+namespace Common.OptimizeTool.PhysicsRecording.Editor
 {
     /// <summary>Turns a take into a Legacy clip whose linear keys stay within the tolerances at every observation.</summary>
     internal static class PhysicsClipBuilder

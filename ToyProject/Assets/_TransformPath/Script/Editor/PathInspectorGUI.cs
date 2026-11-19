@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-namespace Common.TransformPath
+namespace Common.TransformPath.Editor
 {
     /// <summary>Inspector controls and actions shared by the PathData and MultiPathData editors.</summary>
     internal static class PathInspectorGUI

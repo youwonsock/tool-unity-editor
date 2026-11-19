@@ -1,11 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using Common.OptimizeTool.Editor;
 using UnityEditor;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
-namespace Common.OptimizeTool.MeshOptimization
+namespace Common.OptimizeTool.MeshOptimization.Editor
 {
     /// <summary>Saves mesh assets and rolls back the meshes and the Undo-recorded scene changes of a failed save.</summary>
     public static class MeshAssetTransaction

@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-namespace Common.TransformPath
+namespace Common.TransformPath.Editor
 {
     /// <summary>The MultiPathData drawing tools: shared preview sizes and distinct colors for its PathData.</summary>
     internal static class PathDrawingTools

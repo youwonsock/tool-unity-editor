@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-namespace Common.TransformPath
+namespace Common.TransformPath.Editor
 {
     /// <summary>Scene View preview of a PathData: control points, the sampled line, sample points and events.</summary>
     internal static class PathDataGizmoDrawer

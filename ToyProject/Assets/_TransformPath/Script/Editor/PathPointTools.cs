@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-namespace Common.TransformPath
+namespace Common.TransformPath.Editor
 {
     /// <summary>The PathData Inspector's point authoring tools, each with Undo.</summary>
     internal static class PathPointTools

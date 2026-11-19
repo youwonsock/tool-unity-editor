@@ -4,7 +4,7 @@ using System.Text;
 using UnityEditor;
 using UnityEngine;
 
-namespace Common.TransformPath
+namespace Common.TransformPath.Editor
 {
     /// <summary>Shared SerializedProperty lookups used by TransformPath editors.</summary>
     internal static class PathEditorSerializationUtility

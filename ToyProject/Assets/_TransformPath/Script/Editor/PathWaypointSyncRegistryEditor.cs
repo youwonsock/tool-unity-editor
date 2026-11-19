@@ -1,10 +1,10 @@
 using UnityEditor;
 using UnityEngine;
 
-namespace Common.TransformPath
+namespace Common.TransformPath.Editor
 {
     [CustomEditor(typeof(PathWaypointSyncRegistry))]
-    internal sealed class PathWaypointSyncRegistryEditor : Editor
+    internal sealed class PathWaypointSyncRegistryEditor : UnityEditor.Editor
     {
         #region Constants
 

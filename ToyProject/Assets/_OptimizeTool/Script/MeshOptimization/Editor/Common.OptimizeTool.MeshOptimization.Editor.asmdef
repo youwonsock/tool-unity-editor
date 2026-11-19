@@ -1,6 +1,6 @@
 {
     "name": "Common.OptimizeTool.MeshOptimization.Editor",
-    "rootNamespace": "Common.OptimizeTool.MeshOptimization",
+    "rootNamespace": "Common.OptimizeTool.MeshOptimization.Editor",
     "references": [
         "Common.OptimizeTool.MeshOptimization",
         "Common.OptimizeTool.Editor"
