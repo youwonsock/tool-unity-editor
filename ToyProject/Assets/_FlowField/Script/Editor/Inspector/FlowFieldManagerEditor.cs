@@ -35,7 +35,7 @@ namespace Common.FlowField.Editor
             SerializedProperty mode = serializedObject.FindProperty(FlowFieldManager.PropertyNames.BakeMode);
             using (new EditorGUI.DisabledScope(Application.isPlaying))
                 EditorGUILayout.PropertyField(mode);
-            if (mode != null && mode.enumValueIndex == (int)FlowFieldBakeMode.StaticBaked)
+            if (mode != null && FlowFieldBakeModes.UsesBakeAsset((FlowFieldBakeMode)mode.enumValueIndex))
             {
                 EditorGUILayout.PropertyField(serializedObject.FindProperty(isVolume
                     ? FlowFieldManager.PropertyNames.VolumeBakeData
@@ -49,8 +49,14 @@ namespace Common.FlowField.Editor
             bool exceedsCellLimit = DrawBakeLayout(manager);
             DrawBakeStatus(manager);
             bool disableBakeActions = FlowFieldBakeEditor.IsBaking || exceedsCellLimit;
-            if (manager.BakeMode == FlowFieldBakeMode.StaticBaked)
+            if (FlowFieldBakeModes.UsesBakeAsset(manager.BakeMode))
             {
+                if (manager.BakeMode == FlowFieldBakeMode.BakedBase)
+                    EditorGUILayout.HelpBox(
+                        "BakedBase: the bake supplies the Surface and obstacles, and the session solves the Goal "
+                        + "and the obstacle changes it is told about at runtime. A scene obstacle moved while no one "
+                        + "observes it keeps its baked cells blocked, so bake again after moving it in the Editor.",
+                        MessageType.Info);
                 if (FlowFieldBakeEditor.IsBaking)
                 {
                     EditorGUILayout.HelpBox(
@@ -238,10 +244,10 @@ namespace Common.FlowField.Editor
                 }
                 return;
             }
-            // A StaticBaked Manager passes only with a matching asset.
+            // A Manager that loads a bake passes only with a matching asset.
             if (!manager.TryValidateConfig(out string reason))
                 EditorGUILayout.HelpBox(reason, MessageType.Error);
-            else if (manager.BakeMode == FlowFieldBakeMode.StaticBaked)
+            else if (FlowFieldBakeModes.UsesBakeAsset(manager.BakeMode))
                 EditorGUILayout.HelpBox("Static Flow Bake is valid.", MessageType.Info);
             else
                 EditorGUILayout.HelpBox("Runtime Dynamic uses a fresh downward raycast Surface bake.", MessageType.Info);

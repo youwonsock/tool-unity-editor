@@ -418,7 +418,7 @@ namespace Common.FlowField.Editor
                 SetUnavailable(state, settingsReason, FlowFieldVolumeVisualizationStatusCode.Invalid);
                 return refreshRequested;
             }
-            if (manager.BakeMode != FlowFieldBakeMode.StaticBaked)
+            if (!FlowFieldBakeModes.UsesBakeAsset(manager.BakeMode))
             {
                 SetUnavailable(state, "RuntimeDynamic shows Volume3D vectors once it runs.",
                     FlowFieldVolumeVisualizationStatusCode.RuntimeOnly);
@@ -428,24 +428,26 @@ namespace Common.FlowField.Editor
             FlowFieldVolumeBakeData asset = manager.CaptureConfig().BakeAssets.Volume;
             if (asset == null)
             {
-                SetUnavailable(state, "StaticBaked Volume3D requires a Bake Asset.");
+                SetUnavailable(state, $"{manager.BakeMode} Volume3D requires a Bake Asset.");
                 return false;
             }
 
             FlowFieldManagerConfig config = manager.CaptureConfig();
             string metadataReason;
-            string goalReason;
+            string goalReason = string.Empty;
             bool metadataMatches = asset.MatchesMetadata(
                 grid,
                 worldBounds,
                 config.Obstacles.Layer,
                 config.Obstacles.Clearance,
                 out metadataReason);
-            bool goalMatches = asset.MatchesGoal(
-                config.HasGoal,
-                config.GoalWorld,
-                config.Flow.GoalInfluenceRadius,
-                out goalReason);
+            // Only StaticBaked keeps the baked Goal; BakedBase solves its own.
+            bool goalMatches = manager.BakeMode != FlowFieldBakeMode.StaticBaked
+                || asset.MatchesGoal(
+                    config.HasGoal,
+                    config.GoalWorld,
+                    config.Flow.GoalInfluenceRadius,
+                    out goalReason);
             if (!metadataMatches || !goalMatches)
             {
                 SetUnavailable(
@@ -491,6 +493,15 @@ namespace Common.FlowField.Editor
                 return validationFinished || refreshRequested;
             }
 
+            // The baked vectors follow the baked Goal, which BakedBase replaces.
+            if (manager.BakeMode == FlowFieldBakeMode.BakedBase)
+            {
+                SetUnavailable(state, "The bake is valid. BakedBase solves the Goal at runtime and shows Volume3D vectors once it runs.",
+                    FlowFieldVolumeVisualizationStatusCode.RuntimeOnly);
+                state.ValidationProgress = 1f;
+                return validationFinished || refreshRequested;
+            }
+
             if (!asset.TryGetView(grid, out bool[] blocked, out Vector3[] directions, out float[] speeds))
             {
                 SetUnavailable(state, "Cannot read the Static Volume3D Bake view.",
@@ -504,6 +515,7 @@ namespace Common.FlowField.Editor
             FlowFieldReadView view = FlowFieldReadView.CreateStaticVolume(
                 grid,
                 worldBounds,
+                manager.BakeMode,
                 asset,
                 resultId,
                 blocked,
@@ -732,6 +744,7 @@ namespace Common.FlowField.Editor
             view = FlowFieldReadView.CreateStaticVolume(
                 grid,
                 worldBounds,
+                manager.BakeMode,
                 asset,
                 resultId,
                 blocked,
@@ -761,7 +774,7 @@ namespace Common.FlowField.Editor
             source = default;
             if (!manager.TryGetLayout(out Bounds worldBounds, out FlowFieldGridSpace grid))
                 return false;
-            FlowFieldVolumeBakeData asset = manager.BakeMode == FlowFieldBakeMode.StaticBaked
+            FlowFieldVolumeBakeData asset = FlowFieldBakeModes.UsesBakeAsset(manager.BakeMode)
                 ? manager.CaptureConfig().BakeAssets.Volume
                 : null;
             source = new FlowFieldVolumeVisualizationSource(

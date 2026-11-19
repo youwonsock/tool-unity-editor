@@ -39,6 +39,10 @@ namespace Common.FlowField
         private bool _waitForSolve;
         private long _buildReservationBytes;
         private long _committedReservationBytes;
+        // BakedBase: every region an obstacle change reached since Initialize.
+        // A reloaded bake queries it again, because the bake still holds what
+        // was there before the changes.
+        private Bounds? _bakedBaseTouched;
 
         // The session that runs this builder. Lifecycle, events and the build
         // loop live there.
@@ -103,6 +107,7 @@ namespace Common.FlowField
             _obstacleQueryRequired = false;
             _buildReservationBytes = 0;
             _committedReservationBytes = 0;
+            _bakedBaseTouched = null;
         }
 
         /// <summary>
@@ -232,6 +237,15 @@ namespace Common.FlowField
                 {
                     _build.QueryOnlyChangedRegions(_committed.Blocked);
                 }
+                else if (request.BakeMode == FlowFieldBakeMode.BakedBase)
+                {
+                    // BakedBase starts again from the bake. With nothing that
+                    // changed since, its obstacle results stand as baked.
+                    _build.LoadsBakedObstacles = true;
+                    _build.ReusesObstacleQueries = _safety.UncertainRegionCount == 0
+                        && _session.Obstacles.Count == 0
+                        && !_bakedBaseTouched.HasValue;
+                }
             }
             _buildReservationBytes = reservation;
             return true;
@@ -240,12 +254,13 @@ namespace Common.FlowField
         /// <summary>
         /// Tracked obstacle changes report their regions, so the rest of the published
         /// mask stays correct. An explicit rebuild or a resubmitted request still
-        /// queries every cell, which picks up a collider that moved without being tracked.
+        /// queries every cell, which picks up a collider that moved without being tracked;
+        /// in BakedBase it starts again from the bake.
         /// </summary>
         private bool CanRequeryChangedCells(in FlowFieldVolumeRequest request)
             => !_obstacleQueryRequired
                 && _committed != null
-                && request.StaticBakeData == null
+                && request.BakeMode != FlowFieldBakeMode.StaticBaked
                 && _safety.UncertainRegionCount > 0
                 && _committed.Request.HasSameObstacleInputs(request);
 
@@ -253,10 +268,36 @@ namespace Common.FlowField
         private bool CanReuseObstacleQueries(in FlowFieldVolumeRequest request)
             => !_obstacleQueryRequired
                 && _committed != null
-                && request.StaticBakeData == null
+                && request.BakeMode != FlowFieldBakeMode.StaticBaked
                 && _safety.UncertainRegionCount == 0
                 && _committed.Request.HasSameObstacleInputs(request)
                 && !_committed.Request.HasSameGoal(request);
+
+        // A BakedBase build that starts again from the bake queries what the
+        // bake cannot know: the uncertain regions, every region a change
+        // reached since Initialize, and the registered obstacles.
+        private Bounds[] BakedBaseRegions(BuildContext build)
+        {
+            var regions = new System.Collections.Generic.List<Bounds>(_safety.ObservedRegions());
+            if (_bakedBaseTouched.HasValue)
+                regions.Add(_bakedBaseTouched.Value);
+            float margin = build.Request.Grid.CellSize + build.Request.ObstacleClearance;
+            FlowFieldObstacleRegistry registry = _session.Obstacles;
+            for (int i = 0; i < registry.Count; i++)
+            {
+                regions.Add(Reach(registry.GetBounds(i), margin));
+                Collider collider = registry.GetCollider(i);
+                if (collider != null)
+                    regions.Add(Reach(collider.bounds, margin));
+            }
+            return regions.ToArray();
+        }
+
+        private static Bounds Reach(Bounds bounds, float margin)
+        {
+            bounds.Expand(Vector3.one * (margin * 2f));
+            return bounds;
+        }
 
         private void DiscardBuild()
         {
@@ -275,11 +316,27 @@ namespace Common.FlowField
         }
 
         // The session marked the uncertain regions; the next build queries them.
+        // BakedBase also keeps every region a change reached for a reloaded bake.
         public void ApplyObstacleChange(in FlowFieldObstacleChange change)
         {
+            if (_session.BakeMode == FlowFieldBakeMode.BakedBase && _requests.HasLatest)
+            {
+                float margin = _requests.Latest.Grid.CellSize + _requests.Latest.ObstacleClearance;
+                if (change.HasPrevious)
+                    TouchBakedBase(Reach(change.Previous, margin));
+                if (change.HasCurrent)
+                    TouchBakedBase(Reach(change.Current, margin));
+            }
             if (_requests.Pending)
                 return;
             _requests.Pending = _requests.HasLatest && _requests.Latest.Grid.IsValid;
+        }
+
+        private void TouchBakedBase(Bounds reach)
+        {
+            Bounds touched = _bakedBaseTouched ?? reach;
+            touched.Encapsulate(reach);
+            _bakedBaseTouched = touched;
         }
 
         // Volume3D finds a Modifier's cells per build, so it keeps no area data.
@@ -307,6 +364,7 @@ namespace Common.FlowField
             _committed = null;
             _committedReservationBytes = 0;
             _requests.Clear();
+            _bakedBaseTouched = null;
             _registeredObstacleOverlapBuffer = null;
             _cellQuery.Clear();
             _spares.Clear();
@@ -368,12 +426,13 @@ namespace Common.FlowField
             if (!FlowFieldGridSpace.IsFinite(request.GoalInfluenceRadius) || request.GoalInfluenceRadius < 0f)
                 throw new ArgumentOutOfRangeException(nameof(request.GoalInfluenceRadius));
 
-            if (request.BakeMode == FlowFieldBakeMode.StaticBaked && request.StaticBakeData == null)
+            bool usesBake = FlowFieldBakeModes.UsesBakeAsset(request.BakeMode);
+            if (usesBake && request.BakeData == null)
                 throw new InvalidOperationException(
-                    "StaticBaked Volume3D requests require a FlowFieldVolumeBakeData asset.");
-            if (request.BakeMode != FlowFieldBakeMode.StaticBaked && request.StaticBakeData != null)
+                    $"{request.BakeMode} Volume3D requests require a FlowFieldVolumeBakeData asset.");
+            if (!usesBake && request.BakeData != null)
                 throw new InvalidOperationException(
-                    "RuntimeDynamic Volume3D requests cannot carry a static bake asset.");
+                    $"{request.BakeMode} Volume3D requests cannot carry a bake asset.");
 
             long buildReservation = EstimateBuildBytes(request.Grid.CellCount, _session.Modifiers.Count);
             long estimate = EstimateRequiredBytes(request, buildReservation);
@@ -381,8 +440,8 @@ namespace Common.FlowField
                 throw new InvalidOperationException(
                     $"FlowField Volume3D tracked memory {estimate / (1024d * 1024d):0.0} MiB "
                     + "exceeds the 512 MiB manager budget.");
-            if (request.StaticBakeData != null
-                && !request.StaticBakeData.Matches(
+            if (request.BakeData != null
+                && !request.BakeData.Matches(
                     request.Grid,
                     request.WorldBounds,
                     request.ObstacleLayer,

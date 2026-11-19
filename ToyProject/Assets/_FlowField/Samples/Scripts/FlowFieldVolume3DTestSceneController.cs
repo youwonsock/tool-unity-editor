@@ -44,8 +44,8 @@ namespace Common.FlowField.Samples
 
             if (!_sceneValidated)
             {
-                if (_manager.IsFaulted && _manager.BakeMode == FlowFieldBakeMode.StaticBaked)
-                    _lastAction = "The StaticBaked asset does not match the settings. ReBake it in the Editor.";
+                if (_manager.IsFaulted && _manager.BakeMode != FlowFieldBakeMode.RuntimeDynamic)
+                    _lastAction = $"The {_manager.BakeMode} asset does not match the settings. ReBake it in the Editor.";
                 if (_manager.IsReady && _sampleController.IsInitialized)
                     TryValidateSceneConfiguration();
                 if (!_sceneValidated)
@@ -288,7 +288,7 @@ namespace Common.FlowField.Samples
 
             try
             {
-                if (_manager.BakeMode == FlowFieldBakeMode.RuntimeDynamic && !_manager.IsFaulted)
+                if (_manager.BakeMode != FlowFieldBakeMode.StaticBaked && !_manager.IsFaulted)
                     _manager.UnregisterDynamicObstacle(_dynamicGate);
             }
             catch (Exception exception)

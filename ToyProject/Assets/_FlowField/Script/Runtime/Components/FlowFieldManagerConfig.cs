@@ -83,7 +83,7 @@ namespace Common.FlowField
             if (!FlowFieldGridSpace.IsFinite(Flow.GoalInfluenceRadius) || Flow.GoalInfluenceRadius < 0f)
                 return Fail(out reason, "Goal Influence Radius must be finite and not negative.");
             if (!Enum.IsDefined(typeof(FlowFieldBakeMode), BakeMode))
-                return Fail(out reason, "Bake Mode must be RuntimeDynamic or StaticBaked.");
+                return Fail(out reason, "Bake Mode must be RuntimeDynamic, StaticBaked or BakedBase.");
             if (bakeModeLocked)
                 return Fail(out reason, "FlowField Bake Mode cannot change during an active Init session. Release and Init again.");
             reason = string.Empty;

@@ -9,7 +9,11 @@ namespace Common.FlowField
         private const int InitialOverlapCapacity = 32;
         private const int MaxOverlapHits = 4096;
 
-        public static bool Build(
+        /// <summary>
+        /// Writes every obstacle Collider of the layer into the cells of
+        /// <paramref name="region"/>; the other cells keep their values.
+        /// </summary>
+        public static void Build(
             FlowFieldGridSpace grid,
             FlowFieldSurfaceData surface,
             LayerMask obstacleLayer,
@@ -17,11 +21,12 @@ namespace Common.FlowField
             float centerOffset,
             float clearance,
             bool[] destination,
+            FlowFieldCellRect region,
             ref Collider[] overlapBuffer,
             bool syncTransformsBeforeQuery = false)
         {
             var policy = new AnyObstaclePolicy();
-            return Scan(
+            Scan(
                 grid,
                 surface,
                 obstacleLayer,
@@ -29,12 +34,18 @@ namespace Common.FlowField
                 centerOffset,
                 clearance,
                 destination,
+                region,
                 ref overlapBuffer,
                 syncTransformsBeforeQuery,
                 ref policy);
         }
 
-        public static bool BuildStatic(
+        /// <summary>
+        /// Writes the static obstacles, Colliders without a Rigidbody that are
+        /// not registered, into the cells of <paramref name="region"/>; the
+        /// other cells keep their values.
+        /// </summary>
+        public static void BuildStatic(
             FlowFieldGridSpace grid,
             FlowFieldSurfaceData surface,
             LayerMask obstacleLayer,
@@ -42,6 +53,7 @@ namespace Common.FlowField
             float centerOffset,
             float clearance,
             bool[] destination,
+            FlowFieldCellRect region,
             HashSet<Collider> registeredObstacles,
             ref Collider[] overlapBuffer,
             ref Collider[] targetOverlapBuffer,
@@ -52,7 +64,7 @@ namespace Common.FlowField
                 TargetBuffer = targetOverlapBuffer,
                 Registered = registeredObstacles,
             };
-            bool built = Scan(
+            Scan(
                 grid,
                 surface,
                 obstacleLayer,
@@ -60,15 +72,15 @@ namespace Common.FlowField
                 centerOffset,
                 clearance,
                 destination,
+                region,
                 ref overlapBuffer,
                 syncTransformsBeforeQuery,
                 ref policy);
             targetOverlapBuffer = policy.TargetBuffer;
-            return built;
         }
 
         // A struct constraint keeps the per-cell query free of delegate calls.
-        private static bool Scan<TPolicy>(
+        private static void Scan<TPolicy>(
             FlowFieldGridSpace grid,
             FlowFieldSurfaceData surface,
             LayerMask obstacleLayer,
@@ -76,29 +88,35 @@ namespace Common.FlowField
             float centerOffset,
             float clearance,
             bool[] destination,
+            FlowFieldCellRect region,
             ref Collider[] overlapBuffer,
             bool syncTransformsBeforeQuery,
             ref TPolicy policy)
             where TPolicy : struct, IObstaclePolicy
         {
             FlowFieldMaskArguments.ValidateTarget(grid, surface, destination);
+            region = FlowFieldCellRect.Intersect(region, FlowFieldCellRect.Full(grid));
+            if (!region.IsValid)
+                return;
 
             if (syncTransformsBeforeQuery)
                 Physics.SyncTransforms();
 
-            Array.Clear(destination, 0, destination.Length);
+            for (int z = region.MinZ; z <= region.MaxZ; z++)
+                Array.Clear(destination, grid.ToFlatIndex(region.MinX, z), region.MaxX - region.MinX + 1);
             if (obstacleLayer.value == 0)
-                return true;
+                return;
 
             FlowFieldMaskArguments.ValidateObstacleBox(checkHeight, centerOffset, clearance);
             float halfHeight = checkHeight * 0.5f;
             float halfXZ = FlowFieldOverlapUtility.CellHalfExtent(grid.CellSize, clearance);
             Vector3 cellHalfExtents = new Vector3(halfXZ, halfHeight, halfXZ);
             if (!surface.TryGetHeightRange(out float minSurfaceY, out float maxSurfaceY))
-                return true;
+                return;
 
             int hitCount = QueryOverlappingObstacles(
                 grid,
+                region,
                 obstacleLayer,
                 minSurfaceY + centerOffset,
                 maxSurfaceY + centerOffset,
@@ -106,7 +124,7 @@ namespace Common.FlowField
                 clearance,
                 ref overlapBuffer);
             if (hitCount <= 0)
-                return true;
+                return;
 
             Vector3 boundsExpand = new Vector3(halfXZ * 2f, 0f, halfXZ * 2f);
             for (int hitIndex = 0; hitIndex < hitCount; hitIndex++)
@@ -124,6 +142,10 @@ namespace Common.FlowField
                         out int minZ,
                         out int maxZ))
                     continue;
+                minX = Math.Max(minX, region.MinX);
+                maxX = Math.Min(maxX, region.MaxX);
+                minZ = Math.Max(minZ, region.MinZ);
+                maxZ = Math.Min(maxZ, region.MaxZ);
 
                 for (int z = minZ; z <= maxZ; z++)
                 {
@@ -139,8 +161,6 @@ namespace Common.FlowField
                     }
                 }
             }
-
-            return true;
         }
 
         private interface IObstaclePolicy
@@ -203,8 +223,10 @@ namespace Common.FlowField
             return true;
         }
 
+        // Every Collider whose query box can reach a cell of the region.
         private static int QueryOverlappingObstacles(
             FlowFieldGridSpace grid,
+            FlowFieldCellRect region,
             LayerMask obstacleLayer,
             float minCenterY,
             float maxCenterY,
@@ -214,12 +236,19 @@ namespace Common.FlowField
         {
             FlowFieldOverlapUtility.EnsureCapacity(
                 ref overlapBuffer, InitialOverlapCapacity, InitialOverlapCapacity, MaxOverlapHits);
-            Vector3 center = grid.Origin + new Vector3(grid.WorldSizeX * 0.5f, 0f, grid.WorldSizeZ * 0.5f);
+            // The same arithmetic as the grid's world size, so the whole grid
+            // queries exactly its own box.
+            float sizeX = (float)((double)(region.MaxX - region.MinX + 1) * grid.CellSize);
+            float sizeZ = (float)((double)(region.MaxZ - region.MinZ + 1) * grid.CellSize);
+            Vector3 center = grid.Origin + new Vector3(
+                (float)((double)region.MinX * grid.CellSize) + sizeX * 0.5f,
+                0f,
+                (float)((double)region.MinZ * grid.CellSize) + sizeZ * 0.5f);
             center.y = (minCenterY + maxCenterY) * 0.5f;
             Vector3 halfExtents = new Vector3(
-                grid.WorldSizeX * 0.5f + clearance,
+                sizeX * 0.5f + clearance,
                 (maxCenterY - minCenterY) * 0.5f + halfHeight,
-                grid.WorldSizeZ * 0.5f + clearance);
+                sizeZ * 0.5f + clearance);
 
             while (true)
             {

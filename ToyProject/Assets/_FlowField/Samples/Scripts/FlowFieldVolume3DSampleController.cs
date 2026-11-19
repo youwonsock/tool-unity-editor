@@ -143,7 +143,7 @@ namespace Common.FlowField.Samples
                 else
                 {
                     ApplyInitialRuntimeGoal(fieldInfo);
-                    LastStatus = "RuntimeDynamic field is ready.";
+                    LastStatus = $"{_manager.BakeMode} field is ready.";
                 }
                 _initialized = true;
             }

@@ -61,7 +61,7 @@ namespace Common.FlowField
             if (collider == null)
                 throw new InvalidOperationException("Cannot register a destroyed Collider.");
             if (BakeMode == FlowFieldBakeMode.StaticBaked)
-                throw FlowFieldFailures.NotInStaticBaked("Dynamic obstacle registration");
+                throw FlowFieldFailures.NotAllowedIn("Dynamic obstacle registration", FlowFieldBakeMode.StaticBaked);
             return ActiveSession.RegisterObstacleCommand(collider);
         }
 
@@ -90,7 +90,7 @@ namespace Common.FlowField
             if (ReferenceEquals(collider, null))
                 throw new ArgumentNullException(nameof(collider));
             if (BakeMode == FlowFieldBakeMode.StaticBaked)
-                throw FlowFieldFailures.NotInStaticBaked("Obstacle changes");
+                throw FlowFieldFailures.NotAllowedIn("Obstacle changes", FlowFieldBakeMode.StaticBaked);
             return ActiveSession.NotifyObstacleMovedCommand(collider);
         }
 
@@ -102,7 +102,7 @@ namespace Common.FlowField
                 || !FlowFieldGridSpace.IsFinite(worldBounds.size))
                 throw new ArgumentOutOfRangeException(nameof(worldBounds));
             if (BakeMode == FlowFieldBakeMode.StaticBaked)
-                throw FlowFieldFailures.NotInStaticBaked("Obstacle changes");
+                throw FlowFieldFailures.NotAllowedIn("Obstacle changes", FlowFieldBakeMode.StaticBaked);
             ActiveSession.NotifyObstacleRegionDirtyCommand(worldBounds);
         }
 
@@ -111,7 +111,7 @@ namespace Common.FlowField
             _boundary.ThrowIfInUserCode(nameof(SetGoal));
             ThrowIfLifecycleUnavailable();
             if (BakeMode == FlowFieldBakeMode.StaticBaked)
-                throw FlowFieldFailures.NotInStaticBaked("Runtime Goal changes");
+                throw FlowFieldFailures.NotAllowedIn("Runtime Goal changes", FlowFieldBakeMode.StaticBaked);
 
             if (!request.HasGoal)
             {
@@ -141,8 +141,9 @@ namespace Common.FlowField
         {
             _boundary.ThrowIfInUserCode(nameof(NotifyCellsDirty));
             ThrowIfLifecycleUnavailable();
-            if (BakeMode == FlowFieldBakeMode.StaticBaked)
-                throw FlowFieldFailures.NotInStaticBaked("Cell regeneration");
+            // Both modes that load a bake keep its cells.
+            if (FlowFieldBakeModes.UsesBakeAsset(BakeMode))
+                throw FlowFieldFailures.NotAllowedIn("Cell regeneration", BakeMode);
             SubmitConfig(FlowFieldConfigChange.Cells);
         }
 

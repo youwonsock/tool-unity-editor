@@ -13,7 +13,12 @@ namespace Common.FlowField
         public float CheckHeight { get; }
         public float CenterOffset { get; }
         public float Clearance { get; }
+        // The cells whose obstacles changed; one that covers the grid rebuilds every mask.
         public FlowFieldCellRect DirtyRegion { get; }
+        // BakedBase: the bake whose obstacle mask the static mask starts from. Null otherwise.
+        public FlowFieldSurfaceBakeSnapshot BakedBase { get; }
+        // BakedBase: every region obstacle changes reached since Initialize.
+        public Bounds? Touched { get; }
 
         public FlowFieldSurfaceObstacleRequest(
             FlowFieldGridSpace grid,
@@ -23,7 +28,9 @@ namespace Common.FlowField
             float checkHeight,
             float centerOffset,
             float clearance,
-            FlowFieldCellRect dirtyRegion)
+            FlowFieldCellRect dirtyRegion,
+            FlowFieldSurfaceBakeSnapshot bakedBase = null,
+            Bounds? touched = null)
         {
             Grid = grid;
             Surface = surface;
@@ -33,6 +40,8 @@ namespace Common.FlowField
             CenterOffset = centerOffset;
             Clearance = clearance;
             DirtyRegion = dirtyRegion;
+            BakedBase = bakedBase;
+            Touched = touched;
         }
     }
 
@@ -74,19 +83,7 @@ namespace Common.FlowField
             bool dynamicChanged = false;
             FlowFieldCellRect dynamicDirty = FlowFieldCellRect.Invalid;
             if (rebuildStatic)
-            {
-                staticChanged = BuildStaticScratch(
-                    request.Grid,
-                    request.Surface,
-                    request.Workspace,
-                    request.ObstacleLayer,
-                    request.CheckHeight,
-                    request.CenterOffset,
-                    request.Clearance,
-                    _registry.Set,
-                    ref _overlapBuffer,
-                    ref _targetOverlapBuffer);
-            }
+                staticChanged = BuildStaticScratch(in request);
 
             if (!rebuildDynamic)
             {
@@ -176,46 +173,79 @@ namespace Common.FlowField
             return effectiveChanged;
         }
 
-        private static bool BuildStaticScratch(
-            FlowFieldGridSpace grid,
-            FlowFieldSurfaceData surface,
-            FlowFieldSurfaceWorkspace workspace,
-            LayerMask obstacleLayer,
-            float checkHeight,
-            float centerOffset,
-            float clearance,
-            HashSet<Collider> registeredObstacles,
-            ref Collider[] overlapBuffer,
-            ref Collider[] targetOverlapBuffer)
+        /// <summary>
+        /// The world box whose cells an obstacle with these bounds can block:
+        /// a cell's query box reaches half a cell and the clearance beyond it.
+        /// </summary>
+        internal static Bounds Reach(Bounds bounds, float cellSize, float clearance)
         {
-            if (!grid.IsValid)
-                throw new ArgumentException("Static obstacle composition requires a valid grid.", nameof(grid));
-            if (workspace == null)
-                throw new ArgumentNullException(nameof(workspace));
-            if (workspace.Capacity != grid.CellCount)
-                throw new ArgumentException("Static obstacle workspace capacity must match the grid.", nameof(workspace));
+            bounds.Expand(2f * (cellSize + clearance));
+            return bounds;
+        }
 
-            if (!FlowFieldObstacleMaskBuilder.BuildStatic(
-                    grid,
-                    surface,
-                    obstacleLayer,
-                    checkHeight,
-                    centerOffset,
-                    clearance,
-                    workspace.ObstacleScratch,
-                    registeredObstacles,
-                    ref overlapBuffer,
-                    ref targetOverlapBuffer,
-                    syncTransformsBeforeQuery: true))
+        // A dirty region rescans only its cells on top of the current mask.
+        // Otherwise the mask starts again: from a full scan, or in BakedBase
+        // from the bake, with every region a change reached scanned again.
+        private bool BuildStaticScratch(in FlowFieldSurfaceObstacleRequest request)
+        {
+            FlowFieldGridSpace grid = request.Grid;
+            FlowFieldSurfaceWorkspace workspace = request.Workspace;
+            bool[] scratch = workspace.ObstacleScratch;
+            FlowFieldCellRect region = request.DirtyRegion;
+            bool partial = region.IsValid && !region.Covers(grid);
+            if (partial)
             {
-                throw new InvalidOperationException("Building the static obstacle mask failed.");
+                Array.Copy(workspace.StaticBlocked, scratch, workspace.Capacity);
             }
-            bool changed = !FlowFieldObstacleMaskBuilder.AreEqual(
-                workspace.ObstacleScratch,
-                workspace.StaticBlocked);
+            else if (request.BakedBase != null)
+            {
+                request.BakedBase.CopyBlockedTo(scratch);
+                region = ReloadRegion(in request);
+            }
+            else
+            {
+                region = FlowFieldCellRect.Full(grid);
+            }
+
+            if (region.IsValid)
+                FlowFieldObstacleMaskBuilder.BuildStatic(
+                    grid,
+                    request.Surface,
+                    request.ObstacleLayer,
+                    request.CheckHeight,
+                    request.CenterOffset,
+                    request.Clearance,
+                    scratch,
+                    region,
+                    _registry.Set,
+                    ref _overlapBuffer,
+                    ref _targetOverlapBuffer,
+                    syncTransformsBeforeQuery: true);
+            bool changed = !FlowFieldObstacleMaskBuilder.AreEqual(scratch, workspace.StaticBlocked);
             if (changed)
-                Array.Copy(workspace.ObstacleScratch, workspace.StaticBlocked, workspace.Capacity);
+                Array.Copy(scratch, workspace.StaticBlocked, workspace.Capacity);
             return changed;
+        }
+
+        // A reloaded bake holds every obstacle where it was baked. The regions
+        // changes reached and the registered obstacles, which the static mask
+        // leaves to the dynamic mask, are scanned again.
+        private FlowFieldCellRect ReloadRegion(in FlowFieldSurfaceObstacleRequest request)
+        {
+            FlowFieldGridSpace grid = request.Grid;
+            FlowFieldCellRect region = request.Touched.HasValue
+                ? FlowFieldCellRect.FromBounds(grid, request.Touched.Value)
+                : FlowFieldCellRect.Invalid;
+            for (int i = 0; i < _registry.Count; i++)
+            {
+                region = FlowFieldCellRect.Union(region, FlowFieldCellRect.FromBounds(
+                    grid, Reach(_registry.GetBounds(i), grid.CellSize, request.Clearance)));
+                Collider collider = _registry.GetCollider(i);
+                if (collider != null)
+                    region = FlowFieldCellRect.Union(region, FlowFieldCellRect.FromBounds(
+                        grid, Reach(collider.bounds, grid.CellSize, request.Clearance)));
+            }
+            return region;
         }
 
         public FlowFieldCellRect RebuildDynamicOverlay(

@@ -898,6 +898,29 @@ namespace Common.FlowField
             };
         }
 
+        public static FlowFieldCellRect Intersect(FlowFieldCellRect left, FlowFieldCellRect right)
+        {
+            if (!left.IsValid || !right.IsValid)
+                return Invalid;
+            var rect = new FlowFieldCellRect
+            {
+                MinX = Math.Max(left.MinX, right.MinX),
+                MaxX = Math.Min(left.MaxX, right.MaxX),
+                MinY = Math.Max(left.MinY, right.MinY),
+                MaxY = Math.Min(left.MaxY, right.MaxY),
+                MinZ = Math.Max(left.MinZ, right.MinZ),
+                MaxZ = Math.Min(left.MaxZ, right.MaxZ),
+            };
+            return rect.IsValid ? rect : Invalid;
+        }
+
+        /// <summary>Whether the rect covers every cell of the grid.</summary>
+        public bool Covers(FlowFieldGridSpace grid)
+            => IsValid
+                && MinX <= 0 && MaxX >= grid.Width - 1
+                && MinY <= 0 && MaxY >= grid.Height - 1
+                && MinZ <= 0 && MaxZ >= grid.Depth - 1;
+
         public static FlowFieldCellRect FromBounds(
             FlowFieldGridSpace grid,
             Bounds worldBounds,

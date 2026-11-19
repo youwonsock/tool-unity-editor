@@ -6,17 +6,22 @@ namespace Common.FlowField
 {
     internal enum FlowFieldSurfaceSourceKind
     {
+        // The surface and obstacles come from the scene (RuntimeDynamic).
         SceneBuild,
+        // The whole field comes from a bake (StaticBaked).
         StaticSnapshot,
+        // The surface and obstacles start from a bake; the Goal and obstacle
+        // changes are runtime input (BakedBase).
+        BakedBase,
     }
 
     internal readonly struct FlowFieldSurfaceRequest
     {
         internal FlowFieldSurfaceSourceKind SourceKind { get; }
         internal FlowFieldSurfaceBakeSettings SurfaceSettings { get; }
-        internal FlowFieldSurfaceBakeData StaticBakeSource { get; }
-        internal FlowFieldSurfaceBakeSnapshot StaticBakeSnapshot { get; }
-        private readonly int _staticBakeContentGeneration;
+        internal FlowFieldSurfaceBakeData BakeSource { get; }
+        internal FlowFieldSurfaceBakeSnapshot BakeSnapshot { get; }
+        private readonly int _bakeContentGeneration;
         internal LayerMask ObstacleLayer { get; }
         internal float ObstacleCheckHeight { get; }
         internal float ObstacleCheckCenterOffset { get; }
@@ -30,8 +35,8 @@ namespace Common.FlowField
         private FlowFieldSurfaceRequest(
             FlowFieldSurfaceSourceKind sourceKind,
             in FlowFieldSurfaceBakeSettings surfaceSettings,
-            FlowFieldSurfaceBakeData staticBakeSource,
-            FlowFieldSurfaceBakeSnapshot staticBakeSnapshot,
+            FlowFieldSurfaceBakeData bakeSource,
+            FlowFieldSurfaceBakeSnapshot bakeSnapshot,
             LayerMask obstacleLayer,
             float obstacleCheckHeight,
             float obstacleCheckCenterOffset,
@@ -44,9 +49,9 @@ namespace Common.FlowField
         {
             SourceKind = sourceKind;
             SurfaceSettings = surfaceSettings;
-            StaticBakeSource = staticBakeSource;
-            StaticBakeSnapshot = staticBakeSnapshot;
-            _staticBakeContentGeneration = staticBakeSource != null ? staticBakeSource.ContentGeneration : -1;
+            BakeSource = bakeSource;
+            BakeSnapshot = bakeSnapshot;
+            _bakeContentGeneration = bakeSource != null ? bakeSource.ContentGeneration : -1;
             ObstacleLayer = obstacleLayer;
             ObstacleCheckHeight = obstacleCheckHeight;
             ObstacleCheckCenterOffset = obstacleCheckCenterOffset;
@@ -84,10 +89,38 @@ namespace Common.FlowField
                 dirtyFinalRegion,
                 dirtyObstacleRegion);
 
+        internal static FlowFieldSurfaceRequest ForBakedBase(
+            in FlowFieldSurfaceBakeSettings settings,
+            FlowFieldSurfaceBakeData bakeSource,
+            FlowFieldSurfaceBakeSnapshot bakeSnapshot,
+            LayerMask obstacleLayer,
+            float obstacleCheckHeight,
+            float obstacleCheckCenterOffset,
+            float obstacleClearance,
+            in FlowFieldSurfaceGoalResolution goal,
+            Vector3 defaultDirection,
+            FlowFieldSurfaceDirtyFlags dirtyFlags,
+            FlowFieldCellRect dirtyFinalRegion,
+            FlowFieldCellRect dirtyObstacleRegion)
+            => new FlowFieldSurfaceRequest(
+                FlowFieldSurfaceSourceKind.BakedBase,
+                settings,
+                bakeSource,
+                bakeSnapshot,
+                obstacleLayer,
+                obstacleCheckHeight,
+                obstacleCheckCenterOffset,
+                obstacleClearance,
+                goal,
+                defaultDirection,
+                dirtyFlags,
+                dirtyFinalRegion,
+                dirtyObstacleRegion);
+
         internal static FlowFieldSurfaceRequest ForStaticSnapshot(
             in FlowFieldSurfaceBakeSettings settings,
-            FlowFieldSurfaceBakeData staticBakeSource,
-            FlowFieldSurfaceBakeSnapshot staticBakeSnapshot,
+            FlowFieldSurfaceBakeData bakeSource,
+            FlowFieldSurfaceBakeSnapshot bakeSnapshot,
             LayerMask obstacleLayer,
             float obstacleCheckHeight,
             float obstacleCheckCenterOffset,
@@ -97,8 +130,8 @@ namespace Common.FlowField
             => new FlowFieldSurfaceRequest(
                 FlowFieldSurfaceSourceKind.StaticSnapshot,
                 settings,
-                staticBakeSource,
-                staticBakeSnapshot,
+                bakeSource,
+                bakeSnapshot,
                 obstacleLayer,
                 obstacleCheckHeight,
                 obstacleCheckCenterOffset,
@@ -122,12 +155,12 @@ namespace Common.FlowField
         internal bool HasSameSource(in FlowFieldSurfaceRequest other)
             => SourceKind == other.SourceKind
                 && SurfaceSettingsMatch(SurfaceSettings, other.SurfaceSettings)
-                && HasSameStaticBake(other);
+                && HasSameBake(other);
 
         internal bool HasSameBaseInputs(in FlowFieldSurfaceRequest other)
             => SourceKind == other.SourceKind
                 && SurfaceSettingsMatch(SurfaceSettings, other.SurfaceSettings)
-                && HasSameStaticBake(other)
+                && HasSameBake(other)
                 && ObstacleLayer.value == other.ObstacleLayer.value
                 && FlowFieldLayoutUtility.Approximately(ObstacleCheckHeight, other.ObstacleCheckHeight)
                 && FlowFieldLayoutUtility.Approximately(ObstacleCheckCenterOffset, other.ObstacleCheckCenterOffset)
@@ -141,7 +174,7 @@ namespace Common.FlowField
         {
             FlowFieldSurfaceDirtyFlags flags = FlowFieldSurfaceDirtyFlags.None;
             bool surfaceChanged = !SurfaceSettingsMatch(SurfaceSettings, other.SurfaceSettings)
-                || !HasSameStaticBake(other)
+                || !HasSameBake(other)
                 || SourceKind != other.SourceKind;
             if (surfaceChanged)
             {
@@ -164,11 +197,11 @@ namespace Common.FlowField
             return flags;
         }
 
-        private bool HasSameStaticBake(in FlowFieldSurfaceRequest other)
-            => ReferenceEquals(StaticBakeSource, other.StaticBakeSource)
-                && (ReferenceEquals(StaticBakeSource, null)
-                    || (StaticBakeSnapshot?.Revision ?? -1) == (other.StaticBakeSnapshot?.Revision ?? -1)
-                    && _staticBakeContentGeneration == other._staticBakeContentGeneration);
+        private bool HasSameBake(in FlowFieldSurfaceRequest other)
+            => ReferenceEquals(BakeSource, other.BakeSource)
+                && (ReferenceEquals(BakeSource, null)
+                    || (BakeSnapshot?.Revision ?? -1) == (other.BakeSnapshot?.Revision ?? -1)
+                    && _bakeContentGeneration == other._bakeContentGeneration);
 
         private static bool SurfaceSettingsMatch(
             in FlowFieldSurfaceBakeSettings left,

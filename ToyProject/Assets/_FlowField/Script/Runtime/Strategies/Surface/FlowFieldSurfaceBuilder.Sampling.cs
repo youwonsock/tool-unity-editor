@@ -19,7 +19,7 @@ namespace Common.FlowField
             {
                 if (_requests.Latest.SourceKind == FlowFieldSurfaceSourceKind.StaticSnapshot)
                 {
-                    FlowFieldSurfaceBakeSnapshot snapshot = _requests.Latest.StaticBakeSnapshot;
+                    FlowFieldSurfaceBakeSnapshot snapshot = _requests.Latest.BakeSnapshot;
                     hasRequestedGoal = snapshot != null && snapshot.HasGoal;
                     requestedGoal = snapshot != null ? snapshot.RequestedGoalWorld : default;
                     influenceRadius = snapshot != null ? snapshot.GoalInfluenceRadius : 0f;

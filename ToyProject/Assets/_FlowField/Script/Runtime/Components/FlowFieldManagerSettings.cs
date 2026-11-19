@@ -62,13 +62,13 @@ namespace Common.FlowField
         };
     }
 
-    /// <summary>The baked fields StaticBaked mode loads, one per space mode.</summary>
+    /// <summary>The baked fields StaticBaked and BakedBase modes load, one per space mode.</summary>
     [Serializable]
     internal struct FlowFieldBakeAssets
     {
-        [Tooltip("The Flow Field snapshot a StaticBaked Surface2D Manager uses.")]
+        [Tooltip("The Flow Field snapshot a StaticBaked or BakedBase Surface2D Manager uses.")]
         [SerializeField] internal FlowFieldSurfaceBakeData Surface;
-        [Tooltip("The v6 Flow Field snapshot a StaticBaked Volume3D Manager uses.")]
+        [Tooltip("The Flow Field snapshot a StaticBaked or BakedBase Volume3D Manager uses.")]
         [SerializeField] internal FlowFieldVolumeBakeData Volume;
     }
 }

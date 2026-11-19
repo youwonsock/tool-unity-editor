@@ -153,6 +153,14 @@ namespace Common.FlowField
             workspace.LoadBakedGoal(HasGoal, ResolvedGoalIndex, _nextCells);
         }
 
+        /// <summary>The baked obstacle mask, which a BakedBase static mask starts from.</summary>
+        internal void CopyBlockedTo(bool[] destination)
+        {
+            if (destination == null || destination.Length != _blocked.Length)
+                throw new ArgumentException("The destination does not match the baked grid.", nameof(destination));
+            Array.Copy(_blocked, destination, _blocked.Length);
+        }
+
         private static bool MatchesLength<T>(T[] values, int count)
             => values != null && values.Length == count;
 

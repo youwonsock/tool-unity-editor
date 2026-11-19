@@ -54,7 +54,7 @@ namespace Common.FlowField
                 grid,
                 worldBounds,
                 config.BakeMode,
-                config.BakeMode == FlowFieldBakeMode.StaticBaked ? config.BakeAssets.Volume : null);
+                FlowFieldBakeModes.UsesBakeAsset(config.BakeMode) ? config.BakeAssets.Volume : null);
         }
 
         internal static FlowFieldVolumeRequest CreateRequest(
@@ -93,14 +93,16 @@ namespace Common.FlowField
                 return FlowFieldManagerConfig.Fail(out reason, "Volume Bounds and Cell Size do not produce a valid grid.");
             if (volumeGrid.CellCount > FlowFieldLayoutUtility.MaxVolumeCellCount)
                 return FlowFieldManagerConfig.Fail(out reason, "Volume cell count exceeds one million cells.");
-            if (config.BakeMode != FlowFieldBakeMode.StaticBaked)
+            if (!FlowFieldBakeModes.UsesBakeAsset(config.BakeMode))
                 return true;
             FlowFieldVolumeBakeData bakeData = config.BakeAssets.Volume;
             if (bakeData == null)
-                return FlowFieldManagerConfig.Fail(out reason, "Volume3D StaticBaked mode requires a FlowFieldVolumeBakeData asset.");
+                return FlowFieldManagerConfig.Fail(out reason, $"Volume3D {config.BakeMode} mode requires a FlowFieldVolumeBakeData asset.");
             if (!bakeData.Matches(volumeGrid, volumeBounds, obstacles.Layer, obstacles.Clearance, out reason))
                 return false;
-            return !validateStaticGoal
+            // Only StaticBaked keeps the baked Goal; BakedBase solves its own.
+            return config.BakeMode != FlowFieldBakeMode.StaticBaked
+                || !validateStaticGoal
                 || bakeData.MatchesGoal(config.HasGoal, config.GoalWorld, config.Flow.GoalInfluenceRadius, out reason);
         }
     }

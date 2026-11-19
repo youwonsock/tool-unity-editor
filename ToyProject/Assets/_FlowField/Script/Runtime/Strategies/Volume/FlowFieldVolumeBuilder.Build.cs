@@ -22,11 +22,13 @@ namespace Common.FlowField
                         if (StepAllocate(build))
                         {
                             build.Cursor = 0;
-                            build.Phase = build.Request.StaticBakeData != null
+                            build.Phase = build.Request.BakeMode == FlowFieldBakeMode.StaticBaked
                                 ? BuildPhase.StaticData
-                                : build.ReusesObstacleQueries
-                                    ? BuildPhase.Solve
-                                    : BuildPhase.Obstacles;
+                                : build.LoadsBakedObstacles
+                                    ? BuildPhase.BakedObstacles
+                                    : build.ReusesObstacleQueries
+                                        ? BuildPhase.Solve
+                                        : BuildPhase.Obstacles;
                         }
                         break;
                     case BuildPhase.StaticData:
@@ -34,6 +36,13 @@ namespace Common.FlowField
                         {
                             build.Cursor = 0;
                             build.Phase = BuildPhase.Modifiers;
+                        }
+                        break;
+                    case BuildPhase.BakedObstacles:
+                        if (StepBakedObstacles(build))
+                        {
+                            build.Cursor = 0;
+                            build.Phase = build.ReusesObstacleQueries ? BuildPhase.Solve : BuildPhase.Obstacles;
                         }
                         break;
                     case BuildPhase.Obstacles:
@@ -83,7 +92,7 @@ namespace Common.FlowField
         private bool StepStaticData(BuildContext build)
         {
             AssertSolveIdle(build, nameof(StepStaticData));
-            FlowFieldVolumeBakeData data = build.Request.StaticBakeData;
+            FlowFieldVolumeBakeData data = build.Request.BakeData;
             int end = Math.Min(build.Cursor + ArrayElementsPerStep, build.Count);
             Vector3 defaultDirection = FlowFieldVectorUtility.NormalizeDefaultDirection(build.Request.DefaultDirection);
             for (; build.Cursor < end; build.Cursor++)
@@ -111,6 +120,20 @@ namespace Common.FlowField
             return true;
         }
 
+        private bool StepBakedObstacles(BuildContext build)
+        {
+            AssertSolveIdle(build, nameof(StepBakedObstacles));
+            int count = Math.Min(ArrayElementsPerStep, build.Count - build.Cursor);
+            build.Request.BakeData.CopyObstaclesToBuild(
+                build.Cursor,
+                count,
+                build.Blocked,
+                build.Topology,
+                build.EscapeDirections);
+            build.Cursor += count;
+            return build.Cursor >= build.Count;
+        }
+
         private bool StepAllocate(BuildContext build)
         {
             AssertSolveIdle(build, nameof(StepAllocate));
@@ -132,17 +155,17 @@ namespace Common.FlowField
                 case 6: build.FinalDirections = FlowFieldSpareArrays.Rent(ref _spares.FinalDirections, build.Count); break;
                 case 7: build.FinalSpeeds = FlowFieldSpareArrays.Rent(ref _spares.FinalSpeeds, build.Count); break;
                 case 8: build.EscapeDirections ??= FlowFieldSpareArrays.Rent(ref _spares.EscapeDirections, build.Count); break;
-                // A static bake loads its navigation and never searches.
+                // A StaticBaked build loads its navigation and never searches.
                 case 9:
-                    if (build.Request.StaticBakeData == null)
+                    if (build.Request.BakeMode != FlowFieldBakeMode.StaticBaked)
                         build.Costs = FlowFieldSpareArrays.Rent(ref _spares.Costs, build.Count);
                     break;
                 case 10:
-                    if (build.Request.StaticBakeData == null)
+                    if (build.Request.BakeMode != FlowFieldBakeMode.StaticBaked)
                         build.Queue = FlowFieldSpareArrays.Rent(ref _spares.Queue, build.Count);
                     break;
                 case 11:
-                    if (build.Request.StaticBakeData == null)
+                    if (build.Request.BakeMode != FlowFieldBakeMode.StaticBaked)
                         build.Influence = FlowFieldSpareArrays.Rent(ref _spares.Influence, build.Count);
                     break;
             }
@@ -161,6 +184,8 @@ namespace Common.FlowField
                 // began, so they are read here, before the first query.
                 if (build.PublishedBlocked != null)
                     build.LimitToRegions(_safety.ObservedRegions());
+                else if (build.LoadsBakedObstacles)
+                    build.LimitToRegions(BakedBaseRegions(build));
                 build.ObstaclesSynced = true;
             }
             int count = build.NextObstacleCells(_obstacleCells);

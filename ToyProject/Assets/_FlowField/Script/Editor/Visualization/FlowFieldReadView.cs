@@ -14,25 +14,25 @@ namespace Common.FlowField.Editor
         internal readonly FlowFieldGridSpace Grid;
         internal readonly Bounds WorldBounds;
         internal readonly FlowFieldBakeMode BakeMode;
-        internal readonly FlowFieldVolumeBakeData StaticBakeData;
-        internal readonly int StaticBakeRevision;
-        internal readonly int StaticBakeContentGeneration;
+        internal readonly FlowFieldVolumeBakeData BakeData;
+        internal readonly int BakeRevision;
+        internal readonly int BakeContentGeneration;
         internal readonly long ResultId;
 
         internal FlowFieldVolumeVisualizationSource(
             FlowFieldGridSpace grid,
             Bounds worldBounds,
             FlowFieldBakeMode bakeMode,
-            FlowFieldVolumeBakeData staticBakeData,
-            int staticBakeRevision,
+            FlowFieldVolumeBakeData bakeData,
+            int bakeRevision,
             long resultId)
             : this(
                 grid,
                 worldBounds,
                 bakeMode,
-                staticBakeData,
-                staticBakeRevision,
-                staticBakeData != null ? staticBakeData.ContentGeneration : -1,
+                bakeData,
+                bakeRevision,
+                bakeData != null ? bakeData.ContentGeneration : -1,
                 resultId)
         {
         }
@@ -41,17 +41,17 @@ namespace Common.FlowField.Editor
             FlowFieldGridSpace grid,
             Bounds worldBounds,
             FlowFieldBakeMode bakeMode,
-            FlowFieldVolumeBakeData staticBakeData,
-            int staticBakeRevision,
-            int staticBakeContentGeneration,
+            FlowFieldVolumeBakeData bakeData,
+            int bakeRevision,
+            int bakeContentGeneration,
             long resultId)
         {
             Grid = grid;
             WorldBounds = worldBounds;
             BakeMode = bakeMode;
-            StaticBakeData = staticBakeData;
-            StaticBakeRevision = staticBakeRevision;
-            StaticBakeContentGeneration = staticBakeContentGeneration;
+            BakeData = bakeData;
+            BakeRevision = bakeRevision;
+            BakeContentGeneration = bakeContentGeneration;
             ResultId = resultId;
         }
 
@@ -67,9 +67,9 @@ namespace Common.FlowField.Editor
             => Grid.MatchesBounds(other.Grid)
                 && Approximately(WorldBounds, other.WorldBounds)
                 && BakeMode == other.BakeMode
-                && ReferenceEquals(StaticBakeData, other.StaticBakeData)
-                && StaticBakeRevision == other.StaticBakeRevision
-                && StaticBakeContentGeneration == other.StaticBakeContentGeneration;
+                && ReferenceEquals(BakeData, other.BakeData)
+                && BakeRevision == other.BakeRevision
+                && BakeContentGeneration == other.BakeContentGeneration;
 
         private static bool Approximately(Bounds left, Bounds right)
             => FlowFieldGridSpace.Approximately(left.center, right.center, 0.00000001d)
@@ -228,8 +228,8 @@ namespace Common.FlowField.Editor
                     field.Grid,
                     field.Request.WorldBounds,
                     field.Request.BakeMode,
-                    field.Request.StaticBakeData,
-                    field.Request.StaticBakeRevision,
+                    field.Request.BakeData,
+                    field.Request.BakeRevision,
                     resultId),
                 field.Blocked,
                 field.FinalDirections,
@@ -254,6 +254,7 @@ namespace Common.FlowField.Editor
         internal static FlowFieldReadView CreateStaticVolume(
             FlowFieldGridSpace grid,
             Bounds worldBounds,
+            FlowFieldBakeMode bakeMode,
             FlowFieldVolumeBakeData bakeData,
             long resultId,
             bool[] blocked,
@@ -264,7 +265,7 @@ namespace Common.FlowField.Editor
                 new FlowFieldVolumeVisualizationSource(
                     grid,
                     worldBounds,
-                    FlowFieldBakeMode.StaticBaked,
+                    bakeMode,
                     bakeData,
                     bakeData != null ? bakeData.Revision : -1,
                     bakeData != null ? bakeData.ContentGeneration : -1,

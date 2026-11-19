@@ -13,9 +13,9 @@ namespace Common.FlowField
         internal Vector3 GoalWorld { get; }
         internal float GoalInfluenceRadius { get; }
         internal Vector3 DefaultDirection { get; }
-        internal FlowFieldVolumeBakeData StaticBakeData { get; }
-        internal int StaticBakeRevision { get; }
-        internal int StaticBakeContentGeneration { get; }
+        internal FlowFieldVolumeBakeData BakeData { get; }
+        internal int BakeRevision { get; }
+        internal int BakeContentGeneration { get; }
 
         internal FlowFieldVolumeRequest(
             FlowFieldGridSpace grid,
@@ -27,7 +27,7 @@ namespace Common.FlowField
             Vector3 goalWorld,
             float goalInfluenceRadius,
             Vector3 defaultDirection,
-            FlowFieldVolumeBakeData staticBakeData)
+            FlowFieldVolumeBakeData bakeData)
         {
             Grid = grid;
             WorldBounds = worldBounds;
@@ -38,10 +38,10 @@ namespace Common.FlowField
             GoalWorld = goalWorld;
             GoalInfluenceRadius = goalInfluenceRadius;
             DefaultDirection = defaultDirection;
-            StaticBakeData = staticBakeData;
-            StaticBakeRevision = staticBakeData != null ? staticBakeData.Revision : -1;
-            StaticBakeContentGeneration = staticBakeData != null
-                ? staticBakeData.ContentGeneration
+            BakeData = bakeData;
+            BakeRevision = bakeData != null ? bakeData.Revision : -1;
+            BakeContentGeneration = bakeData != null
+                ? bakeData.ContentGeneration
                 : -1;
         }
 
@@ -49,9 +49,9 @@ namespace Common.FlowField
             => Grid.MatchesBounds(other.Grid)
                 && FlowFieldLayoutUtility.Approximately(WorldBounds, other.WorldBounds)
                 && BakeMode == other.BakeMode
-                && ReferenceEquals(StaticBakeData, other.StaticBakeData)
-                && StaticBakeRevision == other.StaticBakeRevision
-                && StaticBakeContentGeneration == other.StaticBakeContentGeneration;
+                && ReferenceEquals(BakeData, other.BakeData)
+                && BakeRevision == other.BakeRevision
+                && BakeContentGeneration == other.BakeContentGeneration;
 
         internal bool HasSameObstacleInputs(in FlowFieldVolumeRequest other)
             => HasSameGrid(other)

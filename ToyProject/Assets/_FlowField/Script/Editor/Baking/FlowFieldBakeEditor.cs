@@ -81,7 +81,7 @@ namespace Common.FlowField.Editor
                 if (manager != null && !EditorUtility.IsPersistent(manager)
                     && manager.gameObject.scene.IsValid()
                     && !string.IsNullOrEmpty(manager.gameObject.scene.path)
-                    && manager.BakeMode == FlowFieldBakeMode.StaticBaked)
+                    && FlowFieldBakeModes.UsesBakeAsset(manager.BakeMode))
                     _queue.Enqueue(manager.GetInstanceID());
             }
             _isBaking = true;
@@ -92,7 +92,7 @@ namespace Common.FlowField.Editor
         {
             if (manager == null)
                 throw new ArgumentNullException(nameof(manager));
-            if (manager.BakeMode != FlowFieldBakeMode.StaticBaked)
+            if (!FlowFieldBakeModes.UsesBakeAsset(manager.BakeMode))
             {
                 Debug.Log("RuntimeDynamic saves no bake asset. The runtime session builds the Surface again.", manager);
                 return;
@@ -172,7 +172,7 @@ namespace Common.FlowField.Editor
                 throw new ArgumentNullException(nameof(manager));
             if (Application.isPlaying)
                 throw new InvalidOperationException("Static Flow Bake is unavailable while the Editor is in Play mode.");
-            if (manager.BakeMode != FlowFieldBakeMode.StaticBaked)
+            if (!FlowFieldBakeModes.UsesBakeAsset(manager.BakeMode))
                 return;
 
             if (manager.SpaceMode == FlowFieldSpaceMode.Volume3D)

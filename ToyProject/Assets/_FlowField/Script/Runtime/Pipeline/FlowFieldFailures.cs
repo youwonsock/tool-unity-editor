@@ -26,9 +26,9 @@ namespace Common.FlowField
         internal static ArgumentOutOfRangeException OutsideGrid(string paramName)
             => new ArgumentOutOfRangeException(paramName, "Position is outside the FlowField grid.");
 
-        /// <summary><paramref name="change"/> names what StaticBaked mode does not accept.</summary>
-        internal static InvalidOperationException NotInStaticBaked(string change)
-            => new InvalidOperationException($"{change} is not allowed in StaticBaked mode.");
+        /// <summary><paramref name="change"/> names what the Bake Mode <paramref name="mode"/> does not accept.</summary>
+        internal static InvalidOperationException NotAllowedIn(string change, FlowFieldBakeMode mode)
+            => new InvalidOperationException($"{change} is not allowed in {mode} mode.");
 
         /// <summary>The exception Sample throws for a read that produced no sample.</summary>
         internal static Exception ForSample(FlowFieldSampleStatus status, string paramName)

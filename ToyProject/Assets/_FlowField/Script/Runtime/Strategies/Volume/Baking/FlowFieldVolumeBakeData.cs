@@ -223,6 +223,22 @@ namespace Common.FlowField
             escapeDirections[index] = _escapeDirections[index];
         }
 
+        /// <summary>
+        /// Copies the baked obstacle results of cells [start, start + count),
+        /// which follow from the obstacles alone, for a BakedBase build.
+        /// </summary>
+        internal void CopyObstaclesToBuild(
+            int start,
+            int count,
+            bool[] blocked,
+            uint[] topology,
+            Vector3[] escapeDirections)
+        {
+            Array.Copy(_blocked, start, blocked, start, count);
+            Array.Copy(_topologyMasks, start, topology, start, count);
+            Array.Copy(_escapeDirections, start, escapeDirections, start, count);
+        }
+
         internal bool TryGetView(
             FlowFieldGridSpace grid,
             out bool[] blocked,

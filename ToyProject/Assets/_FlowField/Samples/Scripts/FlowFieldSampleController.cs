@@ -351,7 +351,7 @@ namespace Common.FlowField.Samples
                 _simulationReady = Agents.Count == _agentCount && _manager.IsReady;
                 LastStatus = _manager.BakeMode == FlowFieldBakeMode.StaticBaked
                     ? "StaticBaked field loaded; runtime Goal input is disabled."
-                    : "RuntimeDynamic field is ready.";
+                    : $"{_manager.BakeMode} field is ready.";
             }
             catch
             {
@@ -398,7 +398,7 @@ namespace Common.FlowField.Samples
                 && _manager != null
                 && _manager.IsInitialized
                 && !_manager.IsFaulted
-                && _manager.BakeMode == FlowFieldBakeMode.RuntimeDynamic;
+                && _manager.BakeMode != FlowFieldBakeMode.StaticBaked;
 
         private void OnValidate()
         {

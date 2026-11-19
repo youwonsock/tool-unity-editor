@@ -115,8 +115,8 @@ namespace Common.FlowField.Samples
             {
                 if (_manager == null || _manager.IsFaulted)
                 {
-                    if (_manager != null && _manager.BakeMode == FlowFieldBakeMode.StaticBaked)
-                        _lastAction = "The StaticBaked asset does not match the settings. ReBake it in the Editor.";
+                    if (_manager != null && _manager.BakeMode != FlowFieldBakeMode.RuntimeDynamic)
+                        _lastAction = $"The {_manager.BakeMode} asset does not match the settings. ReBake it in the Editor.";
                     else
                         _lastAction = _manager != null && !string.IsNullOrEmpty(_manager.LastError)
                             ? $"Manager error: {_manager.LastError}"
@@ -161,7 +161,7 @@ namespace Common.FlowField.Samples
                     _manager.RequestRebuild,
                     _manager.BakeMode == FlowFieldBakeMode.StaticBaked
                         ? "Reloaded and recomposed the baked Surface2D field."
-                        : "Requested an explicit RuntimeDynamic rebuild.");
+                        : $"Requested an explicit {_manager.BakeMode} rebuild.");
             if (Input.GetKeyDown(KeyCode.F))
                 FocusCamera();
 

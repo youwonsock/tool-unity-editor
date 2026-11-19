@@ -223,9 +223,13 @@ namespace Common.FlowField
         // The session set the bake mode and cleared the uncertain regions.
         public void Initialize(FlowFieldBakeMode bakeMode)
         {
-            _sourceKind = bakeMode == FlowFieldBakeMode.StaticBaked
-                ? FlowFieldSurfaceSourceKind.StaticSnapshot
-                : FlowFieldSurfaceSourceKind.SceneBuild;
+            _sourceKind = bakeMode switch
+            {
+                FlowFieldBakeMode.StaticBaked => FlowFieldSurfaceSourceKind.StaticSnapshot,
+                FlowFieldBakeMode.BakedBase => FlowFieldSurfaceSourceKind.BakedBase,
+                _ => FlowFieldSurfaceSourceKind.SceneBuild,
+            };
+            _state.BakedBaseTouched = null;
             _modifierComposition ??= new FlowFieldSurfaceModifierComposition(_session.Modifiers);
             _solveStage.Prepare(_sourceKind);
             MarkDirty(FlowFieldSurfaceDirtyFlags.All, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
@@ -252,8 +256,11 @@ namespace Common.FlowField
             _state.DirtyFlags |= flags;
             if (finalRegion.IsValid)
                 _state.ExpandFinalDirty(finalRegion);
+            // Obstacle work without a region rescans every cell.
             if (obstacleRegion.IsValid)
                 _state.ExpandObstacleDirty(obstacleRegion);
+            else if ((flags & FlowFieldSurfaceDirtyFlags.Obstacles) != 0)
+                _state.ExpandObstacleDirty(FlowFieldCellRect.Full(LatestGrid));
             // Dirty observations reuse the latest accepted request. Initial
             // setup has no request yet and must wait for its first Submit.
             if (_requests.HasLatest)
@@ -297,6 +304,9 @@ namespace Common.FlowField
             }
             if (request.DirtyObstacleRegion.IsValid)
                 _state.ExpandObstacleDirty(request.DirtyObstacleRegion);
+            // New obstacle settings rescan every cell.
+            if ((inputFlags & FlowFieldSurfaceDirtyFlags.Obstacles) != 0)
+                _state.ExpandObstacleDirty(FlowFieldCellRect.Full(request.SurfaceSettings.Grid));
 
             _requests.Accept(request);
             _state.GoalRemoved = !request.Goal.IsValid;
@@ -413,6 +423,7 @@ namespace Common.FlowField
             _requests.Clear();
             _configOwed = false;
             _state.GoalRemoved = false;
+            _state.BakedBaseTouched = null;
             _latestDefaultDirection = null;
         }
 

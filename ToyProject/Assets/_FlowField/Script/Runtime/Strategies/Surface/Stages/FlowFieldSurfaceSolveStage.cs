@@ -11,9 +11,10 @@ namespace Common.FlowField
         private FlowFieldSurfaceBaseFieldBuild _backend;
 
         // A direct owner that needs the result at once waits for it through Poll.
+        // Only a StaticBaked field never solves.
         internal void Prepare(FlowFieldSurfaceSourceKind sourceKind)
         {
-            if (_backend == null && sourceKind == FlowFieldSurfaceSourceKind.SceneBuild)
+            if (_backend == null && sourceKind != FlowFieldSurfaceSourceKind.StaticSnapshot)
                 _backend = new FlowFieldSurfaceBaseFieldBuild();
         }
 

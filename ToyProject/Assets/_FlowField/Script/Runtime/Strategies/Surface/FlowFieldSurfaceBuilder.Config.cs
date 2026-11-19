@@ -39,7 +39,7 @@ namespace Common.FlowField
         // submitted one so a Default Direction edit rebuilds only the final
         // field and a Goal or obstacle edit reuses the Surface. StaticBaked
         // requests hold no runtime Goal or dynamic obstacle input, so those
-        // edits change nothing.
+        // edits change nothing there.
         private Bounds? SubmitSettings(in FlowFieldManagerConfig config)
         {
             FlowFieldSurfaceRequest current = CreateCurrentRequest(in config);
@@ -117,13 +117,13 @@ namespace Common.FlowField
                 config.GoalWorld,
                 config.Flow.GoalInfluenceRadius);
 
-        internal static FlowFieldSurfaceBakeSnapshot CreateStaticSnapshot(
+        internal static FlowFieldSurfaceBakeSnapshot CreateBakeSnapshot(
             in FlowFieldManagerConfig config,
             in FlowFieldSurfaceBakeSettings settings)
         {
             FlowFieldSurfaceBakeData bakeData = config.BakeAssets.Surface;
             if (bakeData == null)
-                throw new InvalidOperationException("StaticBaked mode requires a FlowFieldSurfaceBakeData asset.");
+                throw new InvalidOperationException("StaticBaked and BakedBase modes require a FlowFieldSurfaceBakeData asset.");
             return bakeData.CreateSnapshot(
                 settings,
                 config.Obstacles.Layer,
@@ -144,12 +144,29 @@ namespace Common.FlowField
             FlowFieldCellRect dirtyFinalRegion,
             FlowFieldCellRect dirtyObstacleRegion)
         {
+            if (bakeMode == FlowFieldBakeMode.BakedBase)
+            {
+                return FlowFieldSurfaceRequest.ForBakedBase(
+                    settings,
+                    config.BakeAssets.Surface,
+                    CreateBakeSnapshot(in config, in settings),
+                    config.Obstacles.Layer,
+                    config.Surface.ObstacleCheckHeight,
+                    config.Surface.ObstacleCheckCenterOffset,
+                    config.Obstacles.Clearance,
+                    ResolveGoal(in config, settings.Grid),
+                    config.Flow.DefaultDirection,
+                    dirtyFlags,
+                    dirtyFinalRegion,
+                    dirtyObstacleRegion);
+            }
+
             if (bakeMode == FlowFieldBakeMode.StaticBaked)
             {
                 return FlowFieldSurfaceRequest.ForStaticSnapshot(
                     settings,
                     config.BakeAssets.Surface,
-                    CreateStaticSnapshot(in config, in settings),
+                    CreateBakeSnapshot(in config, in settings),
                     config.Obstacles.Layer,
                     config.Surface.ObstacleCheckHeight,
                     config.Surface.ObstacleCheckCenterOffset,
@@ -200,11 +217,11 @@ namespace Common.FlowField
             if (!TryCreateLayout(in config, out _, out FlowFieldGridSpace layout) || !layout.IsValid)
                 return FlowFieldManagerConfig.Fail(out reason, "Bake Bounds and Cell Size do not produce a valid grid.");
 
-            if (config.BakeMode != FlowFieldBakeMode.StaticBaked)
+            if (!FlowFieldBakeModes.UsesBakeAsset(config.BakeMode))
                 return true;
             FlowFieldSurfaceBakeData bakeData = config.BakeAssets.Surface;
             if (bakeData == null)
-                return FlowFieldManagerConfig.Fail(out reason, "StaticBaked mode requires a FlowFieldSurfaceBakeData asset.");
+                return FlowFieldManagerConfig.Fail(out reason, $"{config.BakeMode} mode requires a FlowFieldSurfaceBakeData asset.");
             if (!bakeData.MatchesSurface(CreateBakeSettings(in config), out reason)
                 || !bakeData.MatchesObstacles(
                     obstacles.Layer,
@@ -213,7 +230,9 @@ namespace Common.FlowField
                     obstacles.Clearance,
                     out reason))
                 return false;
-            return !validateStaticGoal
+            // Only StaticBaked keeps the baked Goal; BakedBase solves its own.
+            return config.BakeMode != FlowFieldBakeMode.StaticBaked
+                || !validateStaticGoal
                 || bakeData.MatchesGoal(config.HasGoal, config.GoalWorld, config.Flow.GoalInfluenceRadius, out reason);
         }
     }

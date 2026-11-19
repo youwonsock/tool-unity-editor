@@ -71,11 +71,11 @@ namespace Common.FlowField
 
             bool boundsChanged = !_state.Grid.MatchesBounds(request.SurfaceSettings.Grid);
             FlowFieldSurfaceData previousSurface = _state.Surface;
-            bool staticSnapshotChanged = request.SourceKind == FlowFieldSurfaceSourceKind.StaticSnapshot
-                && !ReferenceEquals(LoadedSnapshot, request.StaticBakeSnapshot);
+            bool snapshotChanged = request.SourceKind != FlowFieldSurfaceSourceKind.SceneBuild
+                && !ReferenceEquals(LoadedSnapshot, request.BakeSnapshot);
             bool surfaceChanged = boundsChanged
                 || !_state.SurfaceReady
-                || staticSnapshotChanged
+                || snapshotChanged
                 || !ReferenceEquals(previousSurface, surface)
                     && !previousSurface.ContentEquals(surface);
 
@@ -88,6 +88,10 @@ namespace Common.FlowField
 
             _state.Grid = request.SurfaceSettings.Grid;
             _observedGrid = _state.Grid;
+            // A StaticBaked build records its snapshot once it loads the whole
+            // field; a BakedBase build has loaded what it uses from it here.
+            if (request.SourceKind == FlowFieldSurfaceSourceKind.BakedBase)
+                LoadedSnapshot = request.BakeSnapshot;
             _state.Workspace.Resize(_state.Grid.CellCount);
             _state.BaseComposed = false;
             _state.LastComposedRegion = FlowFieldCellRect.Invalid;
@@ -110,18 +114,18 @@ namespace Common.FlowField
 
         private FlowFieldSurfaceData ResolveSurface(in FlowFieldSurfaceRequest request)
         {
-            if (request.SourceKind != FlowFieldSurfaceSourceKind.StaticSnapshot)
+            if (request.SourceKind == FlowFieldSurfaceSourceKind.SceneBuild)
             {
                 return _surfaceSource.Build(request.SurfaceSettings)
                     ?? throw new InvalidOperationException("FlowField surface source returned no surface data.");
             }
 
-            if (request.StaticBakeSnapshot == null || !request.StaticBakeSnapshot.HasValidData)
+            if (request.BakeSnapshot == null || !request.BakeSnapshot.HasValidData)
                 throw new InvalidOperationException("Static Flow Bake Asset is missing or invalid.");
-            bool surfaceMatches = request.StaticBakeSnapshot.MatchesSurface(
+            bool surfaceMatches = request.BakeSnapshot.MatchesSurface(
                 request.SurfaceSettings,
                 out string surfaceMismatch);
-            bool obstaclesMatch = request.StaticBakeSnapshot.MatchesObstacles(
+            bool obstaclesMatch = request.BakeSnapshot.MatchesObstacles(
                 request.ObstacleLayer,
                 request.ObstacleCheckHeight,
                 request.ObstacleCheckCenterOffset,
@@ -132,7 +136,7 @@ namespace Common.FlowField
                 throw new InvalidOperationException(
                     string.IsNullOrEmpty(surfaceMismatch) ? obstacleMismatch : surfaceMismatch);
             }
-            return request.StaticBakeSnapshot.Surface;
+            return request.BakeSnapshot.Surface;
         }
 
         internal void BuildSceneBase(
@@ -173,7 +177,9 @@ namespace Common.FlowField
                         request.ObstacleCheckHeight,
                         request.ObstacleCheckCenterOffset,
                         request.ObstacleClearance,
-                        _state.DirtyObstacleRegion),
+                        _state.DirtyObstacleRegion,
+                        request.SourceKind == FlowFieldSurfaceSourceKind.BakedBase ? request.BakeSnapshot : null,
+                        _state.BakedBaseTouched),
                     goal,
                     surfaceChanged),
                 _obstacleMasks,

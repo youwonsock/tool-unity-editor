@@ -19,7 +19,7 @@ namespace Common.FlowField.PlayerProbe.Editor
     internal static class FlowFieldPlayerProbeBuild
     {
         private const string ScenePath = "Assets/FlowFieldPlayerProbe.unity";
-        private const string VariantPrefix = "OtherBakeMode_";
+        private const string VariantPrefix = "BakeMode_";
         private const string OutputArgument = "-flowFieldProbeApp";
         private const int SurfaceSize = 316;
         private const int VolumeSize = 100;
@@ -32,7 +32,7 @@ namespace Common.FlowField.PlayerProbe.Editor
                 .Where(scene => scene.enabled)
                 .Select(scene => scene.path)
                 .ToArray();
-            sampleScenes = sampleScenes.Concat(sampleScenes.SelectMany(CreateModeVariant)).ToArray();
+            sampleScenes = sampleScenes.Concat(sampleScenes.SelectMany(CreateModeVariants)).ToArray();
             GenerateScene(sampleScenes);
 
             EditorUserBuildSettings.SetPlatformSettings("Standalone", "OSXUniversal", "Architecture", "ARM64");
@@ -72,9 +72,10 @@ namespace Common.FlowField.PlayerProbe.Editor
                 throw new InvalidOperationException($"IL2CPP build {report.summary.result}: {report.summary.totalErrors} errors");
         }
 
-        // Saves a copy of a FlowField sample in its other bake mode, so the
-        // Player starts that mode through the normal scene startup.
-        private static string[] CreateModeVariant(string scenePath)
+        // Saves a copy of a FlowField sample in each of its other bake modes,
+        // so the Player starts every mode through the normal scene startup.
+        // The modes that load a bake use the sample's bake asset.
+        private static string[] CreateModeVariants(string scenePath)
         {
             Scene scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
             FlowFieldManager manager = UnityEngine.Object.FindAnyObjectByType<FlowFieldManager>(FindObjectsInactive.Include);
@@ -83,15 +84,20 @@ namespace Common.FlowField.PlayerProbe.Editor
 
             using var settings = new SerializedObject(manager);
             SerializedProperty bakeMode = settings.FindProperty(FlowFieldManager.PropertyNames.BakeMode);
-            bakeMode.enumValueIndex = bakeMode.enumValueIndex == (int)FlowFieldBakeMode.StaticBaked
-                ? (int)FlowFieldBakeMode.RuntimeDynamic
-                : (int)FlowFieldBakeMode.StaticBaked;
-            settings.ApplyModifiedPropertiesWithoutUndo();
-
-            string path = $"Assets/{VariantPrefix}{scene.name}.unity";
-            if (!EditorSceneManager.SaveScene(scene, path, saveAsCopy: true))
-                throw new InvalidOperationException($"Could not save {path}.");
-            return new[] { path };
+            int sceneMode = bakeMode.enumValueIndex;
+            var paths = new System.Collections.Generic.List<string>(2);
+            foreach (FlowFieldBakeMode mode in Enum.GetValues(typeof(FlowFieldBakeMode)))
+            {
+                if ((int)mode == sceneMode)
+                    continue;
+                bakeMode.enumValueIndex = (int)mode;
+                settings.ApplyModifiedPropertiesWithoutUndo();
+                string path = $"Assets/{VariantPrefix}{mode}_{scene.name}.unity";
+                if (!EditorSceneManager.SaveScene(scene, path, saveAsCopy: true))
+                    throw new InvalidOperationException($"Could not save {path}.");
+                paths.Add(path);
+            }
+            return paths.ToArray();
         }
 
         private static void GenerateScene(string[] sampleScenes)

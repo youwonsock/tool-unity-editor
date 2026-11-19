@@ -27,7 +27,7 @@ namespace Common.FlowField
         [Header("Mode")]
         [SerializeField, Tooltip("Surface2D raycasts down onto the ground; Volume3D fills the whole Bounds with cubic cells. Changing it after Init requires Release.")]
         private FlowFieldSpaceMode _spaceMode = FlowFieldSpaceMode.Surface2D;
-        [SerializeField, Tooltip("RuntimeDynamic computes the Surface and obstacles at runtime; StaticBaked uses the base field saved in the Editor.")]
+        [SerializeField, Tooltip("RuntimeDynamic computes the Surface, obstacles and Goal at runtime; StaticBaked loads the whole field baked in the Editor; BakedBase loads the baked Surface and obstacles and changes the Goal and obstacles at runtime.")]
         private FlowFieldBakeMode _bakeMode = FlowFieldBakeMode.RuntimeDynamic;
         [SerializeField] private FlowFieldBakeAssets _bakeAssets;
 

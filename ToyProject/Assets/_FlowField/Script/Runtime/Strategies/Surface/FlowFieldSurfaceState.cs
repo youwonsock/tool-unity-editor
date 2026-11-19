@@ -19,6 +19,10 @@ namespace Common.FlowField
         internal Vector3 ResolvedDefaultDirection = Vector3.zero;
         internal bool SurfaceReady => Surface != null && Surface.IsValid;
         internal bool HasObstacleMask;
+        // BakedBase: every region an obstacle change reached since Initialize.
+        // A reloaded bake scans these again, because the bake still holds
+        // what was there before the changes.
+        internal Bounds? BakedBaseTouched;
         internal bool BaseComposed;
         internal bool GoalRemoved;
 

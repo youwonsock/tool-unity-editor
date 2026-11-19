@@ -14,11 +14,14 @@ start
 :공개 API·컴포넌트 통지\n(씬 폴링 없음);
 :Session이 입력을 받고 Building;
 :Scheduler가 프레임 예산(기본 2ms) 안에서 빌드;
-if (Bake 모드) then (RuntimeDynamic)
+switch (Bake 모드)
+case (RuntimeDynamic)
   :장애물·Goal·BFS 계산\n(BFS는 워커 스레드);
-else (StaticBaked)
+case (BakedBase)
+  :Bake한 바닥·막힘 로드,\n바뀐 장애물 영역만 다시 조회,\nGoal·BFS 계산;
+case (StaticBaked)
   :Bake Asset 로드;
-endif
+endswitch
 :Modifier 합성, 완성된 결과만 게시;
 :TrySample = 게시 값 + 공통 안전 규칙;
 stop

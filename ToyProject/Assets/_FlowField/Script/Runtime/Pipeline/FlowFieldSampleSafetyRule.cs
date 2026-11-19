@@ -17,7 +17,7 @@ namespace Common.FlowField
     }
 
     /// <summary>
-    /// The read-time safety rule both space modes and both bake modes share.
+    /// The read-time safety rule both space modes and every bake mode share.
     /// A published field can lag behind notified obstacle changes and the
     /// latest build: a sample that would take a mover into such a change
     /// stops, and a mover inside a cell that is now blocked is sent out.

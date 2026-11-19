@@ -7,7 +7,10 @@ namespace Common.FlowField
     internal enum FlowFieldVolumeBuildPhase
     {
         Allocate,
+        // StaticBaked: the whole baked field.
         StaticData,
+        // BakedBase: the baked obstacle results the build starts from.
+        BakedObstacles,
         Obstacles,
         Solve,
         Modifiers,
@@ -108,6 +111,9 @@ namespace Common.FlowField
         internal bool ReusesObstacleQueries;
         // Obstacle queries cover only these regions; other cells keep this published mask.
         internal bool[] PublishedBlocked;
+        // BakedBase: the build copies the baked obstacle results, and its
+        // queries cover only the regions the bake cannot know.
+        internal bool LoadsBakedObstacles;
         private FlowFieldVolumeCellCursor _changedCells;
         internal FlowFieldVolumeCellCursor ModifierCells;
 

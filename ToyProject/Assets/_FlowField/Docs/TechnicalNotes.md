@@ -45,7 +45,7 @@
 
 - **입력:** Builder는 최신 요청 한 벌과 대기 표시만 보관합니다(`FlowFieldRequestInbox`). Volume은 빌드 시작 때 요청을 BuildContext에 고정하고, Surface는 풀이가 끝나면 최신 요청으로 합성합니다. 빌드 중 온 입력은 다음 빌드로 넘기고, 그동안 두 모드 모두 Building을 유지합니다. Ready에서 받은 입력(설정, Goal, 장애물, Modifier)은 Session이 그 자리에서 Building으로 바꿉니다. 그래서 명령 직후 `State`와 `IsRebuilding`이 두 모드에서 같고, 다음 Pump를 기다리지 않습니다. 할 일이 없어진 Building은 게시된 필드가 있으면 Ready로 돌아갑니다.
 - **게시:** 완성된 결과만 게시하고, 일반 조회는 게시 값을 읽은 뒤 아래 샘플 안전 규칙을 적용합니다.
-- **샘플 안전 규칙(`FlowFieldSampleSafetyRule`, 두 모드·두 Bake 모드 공통):** 게시 값을 읽은 뒤 아래 순서로 덮어씁니다. "위험한 칸"은 불확실 영역에 있거나, 최신 정보에서 막혔거나, 걸을 수 없는(Surface 지면 없음) 칸입니다.
+- **샘플 안전 규칙(`FlowFieldSampleSafetyRule`, 두 모드·모든 Bake 모드 공통):** 게시 값을 읽은 뒤 아래 순서로 덮어씁니다. "위험한 칸"은 불확실 영역에 있거나, 최신 정보에서 막혔거나, 걸을 수 없는(Surface 지면 없음) 칸입니다.
   1. 지금 칸이 불확실 영역이거나 걸을 수 없으면 정지합니다.
   2. 지금 칸이 막혔으면 탈출 방향으로 내보냅니다. 탈출 방향이 없거나, 그 방향 이웃이 격자 밖이거나 불확실 영역이거나 걸을 수 없으면 정지합니다. 이웃이 막힌 것은 괜찮습니다(장애물 깊은 곳에서는 여러 칸을 지나 빠져나갑니다).
   3. 다음 칸이 있으면 지금 칸과 다음 칸을 감싸는 칸 중 하나라도 위험하거나 그 방향 연결이 끊겼으면 정지합니다.
@@ -65,7 +65,8 @@
 - `SetGoal()`은 장애물 결과를 재사용합니다. 같이 `RequestRebuild()`를 부르면 이 이점을 잃습니다.
 - Surface의 `RequestRebuild()`는 바닥 Raycast를 다시 한다고 보장하지 않습니다. 바닥 형상이 바뀌면 `NotifyCellsDirty()`를 씁니다. Volume의 `NotifyCellsDirty()`는 새 전체 작업을 예약합니다.
 - 풀이 중에 바뀐 Goal과 설정은 Builder가 보관했다가 다음 빌드를 시작할 때 제출합니다.
-- Surface2D의 정적 장애물은 Obstacle Layer에서 Rigidbody가 없고 등록하지 않은 Collider입니다. `StaticBaked`는 동적 장애물 등록을 거부하고, 형식이 다른 Bake Asset도 거부하므로 다시 Bake해야 합니다.
+- Surface2D의 정적 장애물은 Obstacle Layer에서 Rigidbody가 없고 등록하지 않은 Collider입니다. 장애물 변화는 그 변화가 닿는 셀(Bounds + 셀 크기 + Clearance)만 정적 마스크를 다시 scan합니다. 대상은 Rigidbody 없는 Collider의 등록·해제와 `NotifyObstacleRegionDirty`이고, `BakedBase`에서는 모든 장애물 변화입니다. 영역 없이 들어온 장애물 작업(첫 빌드, 장애물 설정 변경)은 전체를 scan합니다.
+- `StaticBaked`는 동적 장애물 등록을 거부하고, 형식이 다른 Bake Asset도 거부하므로 다시 Bake해야 합니다.
 
 ## Surface2D
 
@@ -107,13 +108,17 @@
 | Modifier·동적 장애물 등록과 해제, `NotifyModifierChanged` | 작업이 끝난 뒤 실행. 그 사이 Session이 멈추면 버려지고 등록은 경고를 남김 |
 | `Init`, `RequestRebuild`, `Release`, `SetSpaceMode`, `SetGoal`, `NotifyCellsDirty`, `NotifyObstacleRegionDirty`, `NotifyDynamicObstacleMoved` | `InvalidOperationException` |
 
-## StaticBaked
+## StaticBaked와 BakedBase
 
-- Surface2D는 `FlowFieldSurfaceBakeData`, Volume3D는 `FlowFieldVolumeBakeData`이며 v6만 허용합니다. 둘 다 `FlowFieldBakeAsset`을 상속해 포맷 버전, Revision, 내용 세대(Inspector 편집과 다시 읽기를 알림)를 같은 방식으로 관리합니다.
+- Surface2D는 `FlowFieldSurfaceBakeData`, Volume3D는 `FlowFieldVolumeBakeData`이며 v6만 허용합니다. 둘 다 `FlowFieldBakeAsset`을 상속해 포맷 버전, Revision, 내용 세대(Inspector 편집과 다시 읽기를 알림)를 같은 방식으로 관리합니다. 두 Bake 모드는 같은 Asset을 씁니다.
+- 모드별 규칙: Asset이 필요한지는 `FlowFieldBakeModes.UsesBakeAsset`(두 모드), 필드가 고정인지는 `BakeMode == StaticBaked`로 판단합니다. Init의 Goal 일치 검사와 Goal·장애물 입력 거부는 `StaticBaked`만, `NotifyCellsDirty` 거부(`FlowFieldFailures.NotAllowedIn`)는 두 모드 모두입니다.
+- **BakedBase(Surface2D):** request의 source는 `BakedBase`(`ForBakedBase`)이고, Surface는 Bake의 Surface, 정적 마스크는 Bake의 막힘(`_blocked`)에서 시작합니다. escape, topology, Goal, BFS는 Scene 빌드와 같은 단계(`BuildSceneBase`)가 다시 계산합니다. Bake 세션은 등록 장애물이 없으므로, 문처럼 런타임에 등록할 장애물도 Bake 막힘에 들어 있습니다. 그래서 장애물 변화(등록·해제·이동·영역 알림)마다 이전과 현재 영역을 등록 Collider를 뺀 정적 규칙으로 다시 scan합니다. Bake를 다시 읽는 빌드(첫 빌드, 재시작, `RequestRebuild` 뒤 전체 빌드)는 Bake 막힘에서 다시 시작해, Init 뒤 변화가 닿은 영역(`BakedBaseTouched`)과 등록 장애물 영역을 다시 scan합니다.
+- **BakedBase(Volume3D):** 첫 빌드와 Bake를 다시 읽는 빌드는 Allocate 다음 `BakedObstacles` 단계에서 막힘·topology·탈출 방향을 예산 단위(4,096셀)로 복사하고(`CopyObstaclesToBuild`), 불확실 영역·Init 뒤 변화가 닿은 영역·등록 장애물 영역만 다시 조회합니다. 셋 다 없으면 obstacle 결과를 Bake 그대로 쓰고 BFS만 합니다. 게시된 필드가 있으면 `RuntimeDynamic`처럼 Goal 변경은 obstacle 결과를 재사용하고, 장애물 변화는 바뀐 영역만 다시 조회합니다. topology와 탈출 방향은 막힘에만 기대므로 Goal이 다른 Bake에서도 복사할 수 있습니다.
+- **BakedBase가 모르는 것:** Bake 뒤 아무도 지켜보지 않을 때 옮긴 장면 장애물(등록 전이나 알리지 않은 이동)은 Bake 때 자리가 막힌 채, 새 자리는 열린 채 남습니다. 등록 장애물은 등록할 때 지금 자리를 조회하므로 새 자리는 막히고, 등록 전에 옮겼다면 Bake 때 자리만 남습니다.
 - Editor Bake는 두 모드가 같은 실행 코드(`BakeRun`), 입력 검사, 저장 코드(`SaveBakeAsset`)를 쓰고, 모드마다 다른 이름·파일 접미사·참조 속성은 `BakeTarget`에 둡니다. Bake 입력 해시가 시작 때와 달라지면 그 프레임에 멈추고 기존 Asset을 유지하며, 저장은 Undo 한 묶음입니다.
 - Volume은 방향·속도·탈출 벡터를 저장하지 않고 NextCell과 면 인덱스(`_escapeFaces`)에서 재구성합니다. Surface는 배열을 `FlowFieldBakeBlob`으로 `byte[]`에 비트 그대로 저장합니다.
 - 저장에 실패하면 기존 Asset의 내용, Revision, GUID를 유지합니다.
-- 런타임은 Asset에 구운 Goal을 그대로 씁니다. Init은 Goal Transform 위치가 구운 Goal과 같은지 검사합니다.
+- `StaticBaked` 런타임은 Asset에 구운 Goal을 그대로 씁니다. Init은 Goal Transform 위치가 구운 Goal과 같은지 검사합니다. `BakedBase`는 구운 Goal을 쓰지 않으므로 검사하지 않습니다.
 - Bake는 연결된 Asset이 있으면 그 경로에 씁니다. 참조가 빈 Manager의 Bake 대상은 씬 옆, 씬 이름의 폴더에 씬 GUID와 Manager ID로 만든 고정 경로(`<씬 폴더>/<씬 이름>/<씬GUID>_<ManagerID>_<이름>_<SurfaceBake|VolumeBake>.asset`)이며, 그 경로의 같은 형식 Asset은 이 Manager의 것으로 보고 덮어씁니다. Asset을 새로 만든 Bake가 실패하면 그때 만든 Asset과 폴더를 지웁니다. 고정 경로는 씬의 위치·이름과 Manager 이름을 따르므로, 씬을 옮기거나 이름을 바꾼 뒤 참조가 빈 채로 Bake하면 새 Asset을 만들고 예전 Asset은 그대로 둡니다.
 
 ## Editor 표시
