@@ -39,5 +39,14 @@ namespace Common.FlowField
                 FlowFieldSampleStatus.OutOfGrid => OutsideGrid(paramName),
                 _ => new InvalidOperationException("FlowField sampling data is inconsistent."),
             };
+
+        /// <summary>The exception ClampPositionToGrid throws for a clamp that produced no position.</summary>
+        internal static Exception ForClamp(FlowFieldClampStatus status, string paramName)
+            => status switch
+            {
+                FlowFieldClampStatus.NotInitialized => NotInitialized(),
+                FlowFieldClampStatus.NonFinite => NotFinite(paramName),
+                _ => NotReady(),
+            };
     }
 }

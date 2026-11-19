@@ -37,6 +37,12 @@ namespace Common.FlowField
             return ActiveSession.ClampPositionToGrid(worldPosition);
         }
 
+        public bool TryClampPositionToGrid(Vector3 worldPosition, out FlowFieldClampResult result)
+        {
+            result = default;
+            return ActiveSession?.TryClampPositionToGrid(worldPosition, out result) ?? false;
+        }
+
         public void SetSpaceMode(FlowFieldSpaceMode mode)
         {
             _boundary.ThrowIfInUserCode(nameof(SetSpaceMode));

@@ -83,29 +83,32 @@ public sealed class FlowFieldReadmeMover : MonoBehaviour
 | 움직이는 장애물 | `RegisterDynamicObstacle(collider)` → 이동할 때마다 `NotifyDynamicObstacleMoved(collider)` → `UnregisterDynamicObstacle(collider)`. `FlowFieldDynamicObstacle`이 이 셋을 대신합니다 |
 | 모드 변경 | `Release()` → `SetSpaceMode()` → `Init()` 뒤 동적 장애물 재등록 |
 | 결과 변화 알림 | `FieldChanged`, `StateChanged` 이벤트. 핸들러 안에서 모든 명령을 쓸 수 있습니다 |
+| 격자 안 위치 | `ClampPositionToGrid()`. 예외 없이 쓰려면 `TryClampPositionToGrid()` |
 
 - **통지 방식:** FlowField는 씬을 폴링하지 않습니다. 변경은 위 API와 FlowField 컴포넌트(`FlowFieldDynamicObstacle`, `FlowFieldGoalTarget`, Modifier)의 통지로만 들어옵니다. 알리지 않은 이동은 반영되지 않습니다. 통지를 받은 그 프레임부터 영향 영역은 새 결과가 게시될 때까지 속도 0입니다. 장애물 조회는 Trigger를 무시합니다.
 - **Goal Transform:** Manager의 Goal Transform은 Init과 Bake 때 한 번 읽는 초기 Goal입니다. 이후 이동은 `SetGoal()`이나 `FlowFieldGoalTarget`으로 알립니다.
 - **설정 변경:** Play 중 Inspector에서 설정을 바꾸면 바로 다시 빌드합니다. 값이 잘못되면 두 모드 모두 Fault가 됩니다.
 - **설정 검사:** Init과 Inspector·Scene View는 같은 검사를 같은 문구로 합니다. 잘못된 설정이면 `Init()`은 처음 걸린 이유를 메시지로 담은 `InvalidOperationException`을 던지고, Inspector는 그 문구를 그대로 보여 줍니다.
 - **Modifier:** 영향 영역 Collider(Trigger, MeshCollider는 Convex)에 `FlowFieldSpeedModifier`나 `FlowFieldNoiseModifier`를 두고 Manager를 지정합니다. 같은 Manager 안에서는 Priority를 서로 다르게 두며, 낮은 값부터 합성합니다.
+- **계약 interface:** `IFlowFieldProvider`(조회)와 `IFlowFieldController`(입력)는 Manager가 구현하는 계약입니다. 직접 구현하는 타입은 계약의 모든 멤버를 구현해야 합니다.
 - **Fault 복구:** 원인을 고친 뒤 `RequestRebuild()`를 부릅니다. Modifier 자체의 Fault는 Modifier를 껐다가 `Release()` → 값 수정 → `Init()` 순서로 풉니다. 직접 구현한 Modifier 안에서 쓸 수 있는 호출은 TechnicalNotes에 있습니다.
 
 ### 실패 규칙
 
 두 공간 모드가 같은 규칙을 따릅니다.
 
-| 상황 | `TrySample` | `Sample` / `ClampPositionToGrid` | 명령 API |
-| --- | --- | --- | --- |
-| 초기화 전, `Release()` 뒤 | false | `InvalidOperationException` (not initialized) | `InvalidOperationException` |
-| Faulted | false | `InvalidOperationException` (InnerException = 원인) | `InvalidOperationException`. 해제(`Unregister*`)는 받고 bool을 돌려줍니다 |
-| 결과 없음 (첫 빌드, 비활성화 뒤, Grid 변경 뒤) | false | `Sample`: `InvalidOperationException` (not ready) · `Clamp`: 최신 Grid로 동작 | 받습니다 |
-| 좌표 NaN·무한대, 격자 밖 | false | `ArgumentOutOfRangeException` | — |
-| `StaticBaked` | 정상 | 정상 | `SetGoal`, `NotifyCellsDirty`, `NotifyObstacleRegionDirty`, `RegisterDynamicObstacle`, `NotifyDynamicObstacleMoved`는 `InvalidOperationException`, `UnregisterDynamicObstacle`은 false |
+| 상황 | `TrySample` | `Sample` | `TryClampPositionToGrid` | `ClampPositionToGrid` | 명령 API |
+| --- | --- | --- | --- | --- | --- |
+| 초기화 전, `Release()` 뒤 | false | `InvalidOperationException` (not initialized) | false | `InvalidOperationException` (not initialized) | `InvalidOperationException` |
+| Faulted | false | `InvalidOperationException` (InnerException = 원인) | false | `InvalidOperationException` (InnerException = 원인) | `InvalidOperationException`. 해제(`Unregister*`)는 받고 bool을 돌려줍니다 |
+| 결과 없음 (첫 빌드, 비활성화 뒤, Grid 변경 뒤) | false | `InvalidOperationException` (not ready) | true, 최신 Grid로 맞춤 | 최신 Grid로 맞춤 | 받습니다 |
+| 좌표 NaN·무한대 | false | `ArgumentOutOfRangeException` | false | `ArgumentOutOfRangeException` | — |
+| 격자 밖 | false | `ArgumentOutOfRangeException` | true, 가장 가까운 격자 안 위치 | 가장 가까운 격자 안 위치 | — |
+| `StaticBaked` | 정상 | 정상 | 정상 | 정상 | `SetGoal`, `NotifyCellsDirty`, `NotifyObstacleRegionDirty`, `RegisterDynamicObstacle`, `NotifyDynamicObstacleMoved`는 `InvalidOperationException`, `UnregisterDynamicObstacle`은 false |
 
-- `TrySample()`은 어떤 상태에서도 예외를 던지지 않습니다. `IsReady`가 true면 격자 안 좌표의 `TrySample()`이 성공할 수 있습니다.
+- `TrySample()`과 `TryClampPositionToGrid()`는 어떤 상태에서도 예외를 던지지 않습니다. `IsReady`가 true면 격자 안 좌표의 `TrySample()`이 성공할 수 있습니다.
 - `Revision`과 `FieldChanged`는 두 모드 모두 게시 내용이 실제로 바뀔 때만 바뀝니다.
-- Surface2D의 `ClampPositionToGrid()`는 X·Z만 맞춥니다.
+- Surface2D의 `ClampPositionToGrid()`·`TryClampPositionToGrid()`는 X·Z만 맞춥니다.
 - 좌표가 NaN·무한대이면 `Sample()`과 `ClampPositionToGrid()` 모두 같은 메시지(`Position must be finite.`)의 `ArgumentOutOfRangeException`입니다.
 - 비활성 상태에서 `Init()`하면 빌드는 활성화될 때 시작하지만 요청은 바로 제출합니다. 그래서 두 모드 모두 그 사이에도 최신 Grid로 `ClampPositionToGrid()`하고 장애물 통지를 받습니다.
 - Faulted 상태에서도 `UnregisterDynamicObstacle()`은 Modifier 해제처럼 받고 bool을 돌려줍니다. `FlowFieldDynamicObstacle`을 그동안 끄면 재시도한 결과에 그 장애물이 남지 않습니다. Modifier 코드 안에서 미룬 해제는 그 작업이 Fault로 끝나도 실행됩니다.

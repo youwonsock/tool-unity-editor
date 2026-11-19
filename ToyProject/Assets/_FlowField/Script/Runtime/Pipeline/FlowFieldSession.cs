@@ -3,6 +3,16 @@ using UnityEngine;
 
 namespace Common.FlowField
 {
+    /// <summary>Why a clamp produced a position or not.</summary>
+    internal enum FlowFieldClampStatus
+    {
+        Clamped,
+        NotInitialized,
+        NonFinite,
+        // No request has laid out a grid yet.
+        NoGrid,
+    }
+
     /// <summary>What one step of a build left it doing.</summary>
     internal enum FlowFieldBuildStep
     {
@@ -175,27 +185,40 @@ namespace Common.FlowField
             return sample;
         }
 
-        /// <summary>
-        /// The nearest point inside the latest grid. Surface2D grids clamp X
-        /// and Z; Volume3D grids clamp all three axes.
-        /// </summary>
-        internal FlowFieldClampResult ClampPositionToGrid(Vector3 worldPosition)
+        // The clamp both modes share; it never throws. It uses the latest
+        // grid: Surface2D grids clamp X and Z, Volume3D grids all three axes.
+        private FlowFieldClampStatus TryClampStatus(Vector3 worldPosition, out FlowFieldClampResult result)
         {
+            result = default;
             if (!IsInitialized)
-                throw FlowFieldFailures.NotInitialized();
+                return FlowFieldClampStatus.NotInitialized;
             if (!FlowFieldGridSpace.IsFinite(worldPosition))
-                throw FlowFieldFailures.NotFinite(nameof(worldPosition));
+                return FlowFieldClampStatus.NonFinite;
             FlowFieldGridSpace grid = _builder.LatestGrid;
             if (!grid.IsValid)
-                throw FlowFieldFailures.NotReady();
+                return FlowFieldClampStatus.NoGrid;
             bool volume = grid.SpaceMode == FlowFieldSpaceMode.Volume3D;
             Vector3 clamped = volume ? grid.ClampWorldXYZ(worldPosition) : grid.ClampWorldXZ(worldPosition);
-            return new FlowFieldClampResult(
+            result = new FlowFieldClampResult(
                 clamped,
                 !Mathf.Approximately(worldPosition.x, clamped.x),
                 volume && !Mathf.Approximately(worldPosition.y, clamped.y),
                 !Mathf.Approximately(worldPosition.z, clamped.z));
+            return FlowFieldClampStatus.Clamped;
         }
+
+        internal bool TryClampPositionToGrid(Vector3 worldPosition, out FlowFieldClampResult result)
+            => TryClampStatus(worldPosition, out result) == FlowFieldClampStatus.Clamped;
+
+        /// <summary>The nearest point inside the latest grid.</summary>
+        internal FlowFieldClampResult ClampPositionToGrid(Vector3 worldPosition)
+        {
+            FlowFieldClampStatus status = TryClampStatus(worldPosition, out FlowFieldClampResult result);
+            if (status != FlowFieldClampStatus.Clamped)
+                throw FlowFieldFailures.ForClamp(status, nameof(worldPosition));
+            return result;
+        }
+
         internal bool TryGetFieldInfo(out FlowFieldFieldInfo info) => _builder.TryGetFieldInfo(out info);
 
         /// <summary>

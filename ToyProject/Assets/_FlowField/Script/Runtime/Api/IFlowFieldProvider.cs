@@ -25,6 +25,8 @@ namespace Common.FlowField
         FlowFieldSample Sample(Vector3 worldPosition);
 
         FlowFieldClampResult ClampPositionToGrid(Vector3 worldPosition);
+        // False where ClampPositionToGrid throws, faulted included; it never throws.
+        bool TryClampPositionToGrid(Vector3 worldPosition, out FlowFieldClampResult result);
         bool TryGetFieldInfo(out FlowFieldFieldInfo info);
     }
 
