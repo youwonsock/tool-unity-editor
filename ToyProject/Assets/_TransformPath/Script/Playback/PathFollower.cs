@@ -50,6 +50,8 @@ namespace Common.TransformPath
         public EPathMoveType MoveType => Playback.MoveType;
         public float Speed => Playback.Speed;
         public float Duration => Playback.Duration;
+        /// <summary>Whether a value blend or a delayed event that path events started is still waiting.</summary>
+        public bool HasPendingEventEffects => Playback.HasPendingEffects;
 
         public bool RotateToPathDirection
         {
@@ -161,6 +163,17 @@ namespace Common.TransformPath
             using var operation = PathExecutionBoundary.Enter();
             Playback.TriggerEvent(definition);
             AfterPlaybackWork();
+        }
+
+        /// <summary>
+        /// Cancels the value blend and the delayed events that path events left
+        /// waiting. Speed or Duration keeps its current value, and neither the
+        /// state nor any listener hears of it. Returns whether anything was pending.
+        /// </summary>
+        public bool CancelEventEffects()
+        {
+            using var operation = PathExecutionBoundary.Enter();
+            return Playback.CancelEffects();
         }
 
         /// <summary>

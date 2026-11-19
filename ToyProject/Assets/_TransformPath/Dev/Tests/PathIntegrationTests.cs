@@ -400,6 +400,40 @@ namespace Common.TransformPath.Tests
         }
 
         [Test]
+        public void CancelEventEffects_DropsTheBlendAndDelayedEvents_AndKeepsTheState()
+        {
+            PathData path = Line(30f, 2f);
+            PathEventSettingSO faster = _scene.CreateEvent("faster");
+            faster.UseSpeedChange = true;
+            faster.SpeedTarget = 4f;
+            faster.SpeedBlendTime = 1f;
+            faster.SpeedBlendCurve = AnimationCurve.Linear(0f, 0f, 1f, 1f);
+            faster.DelayedEvents.Add(new PathEventSettingSO.DelayedEventEntry { Delay = 0.5f, EventSetting = _scene.CreateEvent("late") });
+            PathFollower follower = CreateFollower();
+            var heard = new List<string>();
+            follower.EventReached += eventName => heard.Add(eventName);
+            follower.Play(PathPlaybackRequest.Single(path));
+            Frames(1);
+            follower.TriggerEvent(faster);
+            Frames(15);
+            Assert.IsTrue(follower.HasPendingEventEffects);
+            float speed = follower.Speed;
+            var states = new List<EPathFollowerState>();
+            follower.StateChanged += state => states.Add(state);
+
+            Assert.IsTrue(follower.CancelEventEffects());
+            Assert.IsFalse(follower.HasPendingEventEffects);
+            Assert.IsFalse(follower.CancelEventEffects());
+            Frames(60);
+
+            Assert.Greater(speed, 2f);
+            Assert.AreEqual(speed, follower.Speed);
+            Assert.AreEqual(EPathFollowerState.Moving, follower.State);
+            CollectionAssert.IsEmpty(states);
+            CollectionAssert.AreEqual(new[] { "faster" }, heard);
+        }
+
+        [Test]
         public void PlayOnStart_PlaysItsProvider_ButNotForAQueueMemberWithAManager()
         {
             PathData path = Line(10f, 2f);

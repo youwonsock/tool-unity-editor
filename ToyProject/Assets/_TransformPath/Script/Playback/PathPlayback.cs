@@ -187,6 +187,15 @@ namespace Common.TransformPath
             return _cursor.TrySetValue(EPathEffectChannel.Duration, duration);
         }
 
+        /// <summary>Drops the running blend and the delayed events. Returns whether any was pending.</summary>
+        public bool CancelEffects()
+        {
+            if (!_effects.HasPending)
+                return false;
+            _effects.Clear();
+            return true;
+        }
+
         /// <summary>Runs an event now, as if the follower reached it. Pending delayed events are dropped.</summary>
         public void TriggerEvent(PathEventDefinition definition)
         {

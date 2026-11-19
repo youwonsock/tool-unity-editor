@@ -73,13 +73,14 @@ public sealed class TransformPathReadmeExample : MonoBehaviour
 | `Seek(0..1)`, `SeekSegment(index, local)` | `SeekSegment`는 Sequence 전용. 건너뛴 이벤트는 실행하지 않음 |
 | `SetSpeed(value)`, `SetDuration(value)` | 현재 구간의 이동 방식과 맞을 때, `0.001..9999` |
 | `TriggerEvent(setting)` | 이벤트 에셋을 지금 실행 |
+| `CancelEventEffects()` | 이벤트가 남긴 값 보간과 지연 이벤트를 취소. 현재 Speed·Duration과 상태는 그대로이고 알림도 없음 |
 
 - 명령은 상태가 바뀌었는지를 `bool`로 반환합니다. 조건을 어기면 `InvalidOperationException`, 값이 범위 밖이면 `ArgumentOutOfRangeException`이며, 예외가 나면 아무것도 바뀌지 않습니다.
 - 상태는 `State`, `Progress`(전체), `SegmentProgress`, `SegmentIndex`, `PlaybackId`로 읽습니다.
 
 | 조회와 설정 | 내용 |
 | --- | --- |
-| `PathFollower` | `IsMoving`, `CurrentProvider`, `MoveType`, `Speed`, `Duration`, `RotateToPathDirection`(지속 회전), `AlignRotationToPathDirection(axes)`(일회 정렬) |
+| `PathFollower` | `IsMoving`, `CurrentProvider`, `MoveType`, `Speed`, `Duration`, `HasPendingEventEffects`(값 보간이나 지연 이벤트가 남았는지), `RotateToPathDirection`(지속 회전), `AlignRotationToPathDirection(axes)`(일회 정렬) |
 | `PathData` | `CurveType`, `SegmentCount`, `MovementSettings`, `SetPathPoints`, `SetControlPoints`, `CopyControlPoints`, `SamplePointCount`, `GetSamplePoint`, `AuthoringEventCount`, `GetAuthoringEvent`, `SortPathEventsByNormalizedTime`, `MaxEventNormalizedTime`, `ClampPathEventNormalizedTime` |
 | `MultiPathData` | `SegmentCount`, `GetSegmentPath`, `GetSegmentMovement`, `GetSegmentStartDistance`, `GetSegmentLength`, `SetSegments`, `AuthoringSegmentCount`, `GetAuthoringSegment` |
 | `PathDataLineRenderer` | `Init`, `Release`, `IsInitialized`, `Refresh`, `SetVisible`. `PathData`가 발행한 샘플을 LineRenderer로 그리고, 경로가 바뀌면 다시 그림 |
