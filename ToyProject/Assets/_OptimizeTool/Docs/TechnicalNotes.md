@@ -193,6 +193,7 @@ flowchart LR
 - 출력 폴더는 기존 결과가 없을 때 한 번만 씁니다. Player 로그만 있는 폴더는 허용하고, `capture.json`의 실행 ID로 중복 실행을 막습니다. CLI와 `StartEditorRun`이 같은 수집기를 씁니다.
 - 완료 파일에는 실행 ID와 CSV·메타데이터의 SHA-256이 들어갑니다. 두 파일을 저장한 뒤 완료 파일을 원자적으로 게시하며, 실패와 중단은 완료 표시를 무효화합니다. 분석과 재개는 `schemaVersion`이 현재 형식과 같고 해시가 맞는 결과만 받습니다.
 - 출력에는 실행 매니페스트와 `cubes-<수>/run-*`별 `capture.json`·`frames.csv`·`metadata.json`·`complete.json`이 생깁니다.
+- Python 쪽 검사는 `capture_validation.load_capture` 한 곳에 있습니다. 형식 버전(`SCHEMA_VERSION`, C#의 `BenchmarkCaptureOutput.SchemaVersion`과 같음), 모드 수(`MODE_COUNT`), 순서 수(`ORDER_COUNT`)는 그 모듈의 상수이고, 구간당 표본 수는 metadata의 `samplesPerBlock`에서 읽습니다. 순서 오프셋은 Player를 띄우기 전에 정하므로 metadata에서 읽을 수 없어 상수로 둡니다. 실행 스크립트는 실행 조건(아키텍처, 해상도, 오프스크린 여부 등)만 더 검사합니다.
 - 취소, 비활성화, 파괴, 출력 실패 시 모드·규모·카메라와 계측용 전역 설정·Behaviour 활성 상태를 복원합니다(`BenchmarkEnvironmentScope`, Editor Game View는 `GameViewCaptureScope`). 종료 콜백은 한 번만 전달합니다.
 - CSV의 `observed_frame`, `timing_timestamp`, `metal_frame_id`는 각각 관측 프레임, 지연된 CPU 타이밍, 별도 GPU 완료 기록의 식별자입니다. 같은 행을 같은 프레임의 CPU/GPU 쌍으로 해석하지 않습니다. 비교 통계는 워밍업 이후의 모드별 블록을 기준으로 합니다.
 - 내부 책임은 옵션 해석(`BenchmarkRunOptions`), 결과 게시(`BenchmarkCaptureOutput`), CSV 출력(`BenchmarkCsvWriter`), 작업·카메라 복원(`BenchmarkWorkloadScope`)으로 나뉩니다. 렌더 설정은 URP 16 API에서 직접 읽습니다.

@@ -15,14 +15,13 @@ import statistics
 import sys
 import subprocess
 import time
-from capture_validation import load_capture
+from capture_validation import MODE_COUNT, ORDER_COUNT, load_capture
 
 
 def validate(folder, cubes, rounds, fps, offscreen=False):
-    meta, rows, complete = load_capture(folder)
-    assert complete['samples'] == rounds * 4 * 240 and complete['status'] == 'complete'
-    assert len(rows) == complete['samples']
-    if not offscreen: assert len({row['timing_timestamp'] for row in rows}) == len(rows)
+    """Checks that a capture is a valid Player run of this launch; load_capture checks the capture itself."""
+    meta, rows, _ = load_capture(folder)
+    assert meta.get('offscreen', False) == offscreen, 'Capture mode differs from the launch'
     assert meta['editor'] is False and meta['developmentBuild'] is True
     assert meta['processArchitecture'].lower() == 'arm64', 'Player must run natively on Apple Silicon'
     assert meta['splashFinishedBeforeCapture'] is True and meta['startupSettleSeconds'] >= 3
@@ -32,21 +31,17 @@ def validate(folder, cubes, rounds, fps, offscreen=False):
     assert (meta['cameraWidth'], meta['cameraHeight']) == (1920, 1080)
     assert meta['graphicsApi'] == 'Metal'
     assert meta['materialInstancing'] is False and meta['dynamicBatching'] is False
-    if not offscreen: assert all(float(row['cpu_frame_ms']) > 0 for row in rows)
     gpu_key = 'metal_gpu_ms' if offscreen else 'gpu_frame_ms'
     assert all(float(row[gpu_key]) > 0 for row in rows), 'Invalid GPU timing'
     if offscreen:
-        assert len({row['metal_frame_id'] for row in rows}) == len(rows)
         assert all(abs((float(row['metal_gpu_end_seconds']) - float(row['metal_gpu_start_seconds'])) * 1000 - float(row['metal_gpu_ms'])) < 0.00001 for row in rows)
-    if offscreen:
-        assert meta.get('offscreen') is True and meta.get('batchMode') is True
+        assert meta.get('batchMode') is True
     else:
         assert all(row['focused'] == '1' for row in rows), 'Player lost focus'
     if not offscreen: assert all(float(row['width_scale']) == 1 and float(row['height_scale']) == 1 for row in rows)
     modes = {}
-    for mode in range(4):
+    for mode in range(MODE_COUNT):
         data = [row for row in rows if int(row['mode']) == mode]
-        assert len(data) == rounds * 240
         modes[str(mode)] = {key: statistics.median(float(row[key]) for row in data)
                             for key in ('draw_calls', 'cpu_frame_ms', gpu_key, 'wall_delta_ms')}
     return {'samples': len(rows), 'modes': modes, 'buildGuid': meta['buildGuid'],
@@ -133,7 +128,7 @@ def main():
             if args.screenshots: command.append('--optimize-benchmark-screenshots')
             if args.fps != -1: command += ['--optimize-benchmark-fps', str(args.fps)]
             command += ['--optimize-benchmark-warmup-seconds', str(args.warmup_seconds), '--optimize-benchmark-precondition-seconds', str(args.precondition_seconds)]
-            if args.rotate_orders: command += ['--optimize-benchmark-order-offset', str(repeat % 8)]
+            if args.rotate_orders: command += ['--optimize-benchmark-order-offset', str(repeat % ORDER_COUNT)]
             print(f'Start: {cubes} cubes, repeat {repeat + 1}', flush=True)
             before = telemetry()
             started = time.time()
@@ -152,7 +147,7 @@ def main():
                         assert all(row['gpu_drain_complete'] == '1' for row in csv.DictReader(stream)), 'GPU drain missed a measured frame'
                 assert meta['minimumWarmupSeconds'] == args.warmup_seconds
                 assert meta['preconditionSeconds'] == args.precondition_seconds
-                assert meta['orderOffset'] == (repeat % 8 if args.rotate_orders else 0)
+                assert meta['orderOffset'] == (repeat % ORDER_COUNT if args.rotate_orders else 0)
             except BaseException:
                 # Match only the executable and unique output path belonging to this launch.
                 pattern = re.escape(str(executable)) + '.*' + re.escape(str(folder))

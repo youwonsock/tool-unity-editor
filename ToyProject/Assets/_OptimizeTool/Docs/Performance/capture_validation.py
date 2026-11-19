@@ -6,9 +6,18 @@ import json
 import math
 
 SCHEMA_VERSION = 2
+# OptimizeToolSampleModes.MeshCount. The Player rotates through 2 * MODE_COUNT mode orders; a launcher picks the
+# order offset before the Player runs, so it cannot read this from the metadata.
+MODE_COUNT = 4
+ORDER_COUNT = 2 * MODE_COUNT
 
 
 def load_capture(folder):
+    """The metadata, rows and completion of one capture, after every check that does not depend on how it was launched.
+
+    Frame identities are unique and timings positive: Metal frames and GPU time for an offscreen capture, CPU timestamps
+    and CPU time otherwise. Every round has one block of metadata['samplesPerBlock'] rows per mode.
+    """
     if (folder / 'error.txt').exists():
         raise ValueError(f'Failed capture: {folder}')
     metadata_bytes = (folder / 'metadata.json').read_bytes()
@@ -19,7 +28,7 @@ def load_capture(folder):
     if completion.get('status') != 'complete' or completion.get('samples') != len(rows):
         raise ValueError('Incomplete capture')
     rounds, block_size = metadata['rounds'], metadata['samplesPerBlock']
-    if not (1 <= rounds <= 32 and block_size > 0) or len(rows) != rounds * 4 * block_size:
+    if not (1 <= rounds <= 32 and block_size > 0) or len(rows) != rounds * MODE_COUNT * block_size:
         raise ValueError('Unexpected sample count')
     claim = json.loads((folder / 'capture.json').read_text())
     if not (metadata.get('schemaVersion') == completion.get('schemaVersion') == claim.get('schemaVersion') == SCHEMA_VERSION):
@@ -36,7 +45,7 @@ def load_capture(folder):
         if not all(math.isfinite(float(value)) for value in row.values()):
             raise ValueError('Non-finite or malformed sample')
         round_, mode = int(row['round']), int(row['mode'])
-        if float(row['round']) != round_ or float(row['mode']) != mode or not (0 <= round_ < rounds and 0 <= mode < 4):
+        if float(row['round']) != round_ or float(row['mode']) != mode or not (0 <= round_ < rounds and 0 <= mode < MODE_COUNT):
             raise ValueError('Invalid sample block')
         blocks[round_, mode] = blocks.get((round_, mode), 0) + 1
         identity = row['metal_frame_id'] if offscreen else row['timing_timestamp']
@@ -44,6 +53,6 @@ def load_capture(folder):
         if float(identity) <= 0 or identity in identities or float(row[metric]) <= 0:
             raise ValueError('Invalid or repeated frame timing')
         identities.add(identity)
-    if len(blocks) != rounds * 4 or any(count != block_size for count in blocks.values()):
+    if len(blocks) != rounds * MODE_COUNT or any(count != block_size for count in blocks.values()):
         raise ValueError('Incomplete mode block')
     return metadata, rows, completion

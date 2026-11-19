@@ -38,9 +38,6 @@ namespace Common.OptimizeTool.Samples
         public bool IsInitialized => _isInitialized;
         public bool IsFaulted => _fault != null;
         public int ActiveIndex => _activeIndex;
-        public int ActiveRendererCount => _metrics[_activeIndex].Renderers;
-        public int ActiveVertexCount => _metrics[_activeIndex].Vertices;
-        public long ActiveTriangleCount => _metrics[_activeIndex].Triangles;
         public int FeatureCount => _featureGroups?.Length ?? 0;
         public OptimizeToolPhysicsDemo PhysicsDemo => _physicsDemo;
 

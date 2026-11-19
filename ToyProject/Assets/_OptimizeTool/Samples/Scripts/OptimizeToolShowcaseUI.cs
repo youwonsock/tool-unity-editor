@@ -16,6 +16,9 @@ namespace Common.OptimizeTool.Samples
         private const float PANEL_WIDTH = 420f;
         private const float PANEL_HEIGHT = 340f;
         private const float CONTENT_WIDTH = 388f;
+        private const string MESH_KEYBOARD_HELP = "1-5 select · Space cycle · R original · F view";
+        private const string PHYSICS_KEYBOARD_HELP = "C record · P compare · X reset · 1-5 modes · F view";
+        private const string CAMERA_HELP = "RMB look/move · WASD · Q/E vertical · wheel speed · Shift boost";
 
         private static readonly Color PANEL_COLOR = new Color(0.025f, 0.04f, 0.07f, 0.9f);
         private static readonly Color ACTIVE_COLOR = new Color(0.15f, 0.65f, 1f, 1f);
@@ -216,7 +219,7 @@ namespace Common.OptimizeTool.Samples
             _keyboardHelp = CreateText(
                 _panelRoot,
                 "Keyboard Help",
-                "1-5 select · Space cycle · R original · F view",
+                MESH_KEYBOARD_HELP,
                 new Vector2(16f, -306f),
                 new Vector2(CONTENT_WIDTH, 14f),
                 9,
@@ -225,7 +228,7 @@ namespace Common.OptimizeTool.Samples
             CreateText(
                 _panelRoot,
                 "Camera Help",
-                "RMB look/move · WASD · Q/E vertical · wheel speed · Shift boost",
+                CAMERA_HELP,
                 new Vector2(16f, -322f),
                 new Vector2(CONTENT_WIDTH, 14f),
                 9,
@@ -276,8 +279,7 @@ namespace Common.OptimizeTool.Samples
             _statusText.rectTransform.sizeDelta = new Vector2(CONTENT_WIDTH, physics ? 216f : 156f);
             _statusText.fontSize = physics ? 12 : 10;
             _keyboardHelp.rectTransform.anchoredPosition = new Vector2(16f, physics ? -414f : -306f);
-            _keyboardHelp.text = physics ? "C record · P compare · X reset · 1-5 modes · F view"
-                : "1-5 select · Space cycle · R original · F view";
+            _keyboardHelp.text = physics ? PHYSICS_KEYBOARD_HELP : MESH_KEYBOARD_HELP;
             _panelRoot.Find("Camera Help").GetComponent<RectTransform>().anchoredPosition
                 = new Vector2(16f, physics ? -430f : -322f);
             for (int i = 0; i < _featureButtonImages.Count; i++)

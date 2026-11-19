@@ -8,10 +8,13 @@ namespace Common.OptimizeTool.Benchmark
     /// <summary>Claims one output directory and publishes completion only after both payloads are durable.</summary>
     internal sealed class BenchmarkCaptureOutput
     {
+        /// <summary>The capture format the Python validation accepts (capture_validation.SCHEMA_VERSION).</summary>
+        private const int SchemaVersion = 2;
+
         [Serializable]
         private sealed class Manifest
         {
-            public int schemaVersion = 2;
+            public int schemaVersion = SchemaVersion;
             public string captureId, status, framesSha256, metadataSha256;
             public int samples;
         }
@@ -42,7 +45,7 @@ namespace Common.OptimizeTool.Benchmark
 
         public void WriteMetadata(OptimizeToolPerformanceBenchmark.Metadata metadata)
         {
-            metadata.schemaVersion = 2; metadata.captureId = CaptureId;
+            metadata.schemaVersion = SchemaVersion; metadata.captureId = CaptureId;
             WriteAtomic("metadata.json", JsonUtility.ToJson(metadata, true));
         }
 

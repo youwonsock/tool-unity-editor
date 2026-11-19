@@ -91,7 +91,9 @@ namespace Common.OptimizeTool.Benchmark
         private BenchmarkGpuDrain _gpuDrain;
         private BenchmarkRenderTargetScope _renderTarget;
         private BenchmarkMetalGpuTimer _metalTimer;
+        /// <summary>Raised once when the run ends: exit code 0 after a complete capture, 1 after an error, 2 after a cancel or interruption.</summary>
         public event Action<int> Completed;
+        /// <summary>True once every block is captured and the complete capture is published.</summary>
         public bool IsCompleted { get; private set; }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -346,7 +348,7 @@ namespace Common.OptimizeTool.Benchmark
                 processId = System.Diagnostics.Process.GetCurrentProcess().Id,
                 sourceCubeCount = _scale == null ? 9 : _scale.Current.cubeCount,
                 scaleCaseIndex = _scale == null ? -1 : _scale.ActiveCase,
-                faceSubdivisions = _scale == null ? 1 : Mathf.Max(1, _scale.Current.faceSubdivisions), orderOffset = _orderOffset,
+                faceSubdivisions = _scale == null ? 1 : _scale.Current.faceSubdivisions, orderOffset = _orderOffset,
                 rendererCounts = _scale == null ? null : _scale.Current.rendererCounts,
                 vertexCounts = _scale == null ? null : _scale.Current.vertexCounts,
                 triangleCounts = _scale == null ? null : _scale.Current.triangleCounts,
@@ -378,6 +380,10 @@ namespace Common.OptimizeTool.Benchmark
             };
         }
 
+        /// <summary>
+        /// Stops a running capture: writes error.txt so the partial data is rejected, restores the scene and settings,
+        /// and raises <see cref="Completed"/> with exit code 2. Does nothing after the run has ended.
+        /// </summary>
         public void Cancel()
         {
             if (_finished) return;

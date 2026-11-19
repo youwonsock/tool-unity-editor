@@ -55,7 +55,7 @@ _OptimizeTool/
 
 - **Mesh 최적화**의 컴포넌트는 설정만 갖고, 결합·베이크는 Editor 어셈블리의 `MeshToolCommands`가 수행합니다.
 - **Physics Recorder**는 Play Mode 캡처를 Runtime 어셈블리에서 합니다. 저장은 Editor 어셈블리가 `[InitializeOnLoad]`로 등록하는 Exporter가 맡습니다.
-- 두 시스템이 함께 쓰는 것은 `AssetFileTransaction`(경로 규칙, GUID를 유지하는 덮어쓰기, 실패 시 복원) 하나입니다.
+- 두 시스템이 함께 쓰는 것은 공용 Editor 어셈블리의 `AssetFileTransaction` 하나입니다. Mesh 최적화는 그중 경로·이름·출력 자리 검증, 폴더 생성, Play Mode 전환 검사만 쓰고, Mesh 저장과 복원은 `MeshAssetTransaction`이 직접 합니다. Physics Recorder는 GUID를 유지하는 `CreateOrReplace`와 실패 시 파일 복원 `Execute`까지 씁니다.
 - 코드 메시지는 모두 영어입니다. 예외, 로그, Inspector 문구·Tooltip·Header·HelpBox, XML·코드 주석, 샘플 화면 문구가 여기에 들어갑니다. README와 TechnicalNotes 본문은 한국어이고, 인용하는 UI·로그 문구는 영어 원문 그대로 적습니다.
 
 ## Mesh 도구
@@ -66,6 +66,7 @@ Inspector 버튼이나 아래 API로 실행합니다. Edit Mode와 Editor Play M
 | --- | --- |
 | `MeshCombiner.BuildMeshes()` | 임시 결과만 만듭니다. 반환값은 호출자가 `Dispose()`합니다 |
 | `MeshCombiner.CombineAndSaveMeshes()` | 결합 결과를 Mesh 에셋으로 저장하고 씬 출력을 적용합니다 |
+| `MeshCombiner.LastBuildWarnings` | 마지막 `BuildMeshes`·`CombineAndSaveMeshes`의 경고 목록입니다. 대체 카메라, 뷰 의존 베이크, 투명 재질, Probe, 라이트맵 UV, 빼낸 자식, 남은 이전 출력 같은 한계를 알리며 Inspector가 HelpBox로 보여 줍니다 |
 | `MeshCombiner.RestoreSources()` | 씬 출력을 지우고 이 컴포넌트가 끈 원본 Renderer를 원래 상태로 되돌립니다. 저장한 Mesh 에셋은 남깁니다. Inspector의 **Restore Sources** 버튼과 같습니다 |
 | `BackfaceCullMeshBaker.BakeBackfaces()` | MeshFilter마다 보이는 삼각형만 남긴 사본을 `<MeshFilter 이름>_BackfaceCulled.asset`으로 저장하고 그 MeshFilter의 Mesh를 바꿉니다. 이 Baker의 출력을 아직 쓰는 MeshFilter는 기록해 둔 원본에서 다시 베이크하므로 두 번 깎이지 않고, 그 사이 손으로 바꾼 Mesh는 새 원본이 됩니다. Inspector의 **Bake and Save Backfaces** 버튼과 같습니다 |
 | `BackfaceCullMeshBaker.RestoreOriginalMeshes()` | 이 Baker의 출력을 아직 쓰는 MeshFilter에 기록한 원본 Mesh를 돌려주고 기록을 비웁니다. 저장한 Mesh 에셋은 남깁니다. Inspector의 **Restore Original Meshes** 버튼과 같습니다 |
@@ -148,7 +149,7 @@ Rigidbody가 있는 계층의 로컬 Transform을 물리 스텝마다 기록해,
 `Dev/Benchmark/Scenes/OptimizeToolScaleBenchmark.unity`는 225·900·3,600개 Renderer에 대한 Combined / Backface / Occlusion 결과를 제공합니다. `1–4`로 결과를, `Q/E`로 규모를 바꿉니다.
 
 1. `Tools > OptimizeTool > Benchmark > Build Scale Benchmark Scene`, 이어서 `Build macOS Development Player`를 실행합니다. 활성 빌드 타깃은 macOS여야 하며, Apple Silicon ARM64·Metal·1920×1080이 필요합니다.
-2. Console에 나온 앱 경로로 저장소 루트에서 측정하고 요약합니다.
+2. Console에 나온 빌드 폴더의 `OptimizeToolBenchmark.app`을 `--app`으로 넘겨 저장소 루트에서 측정하고 요약합니다.
 
 ```sh
 benchmark_app="/absolute/build/folder/OptimizeToolBenchmark.app"
@@ -163,3 +164,10 @@ python3 ToyProject/Assets/_OptimizeTool/Docs/Performance/summarize_player_benchm
 ```
 
 GPU 부하 측정은 `Build GPU Benchmark Scene`과 `Build macOS GPU Benchmark Player`로 빌드한 뒤 `Docs/Performance/run_gpu_benchmark_suite.py`로 수집합니다. 측정 조건과 결과 형식은 TechnicalNotes에 있습니다.
+
+| API | 동작 |
+| --- | --- |
+| `OptimizeToolBenchmarkEditor.BuildBatch()` | `-executeMethod Common.OptimizeTool.Benchmark.Editor.OptimizeToolBenchmarkEditor.BuildBatch --optimize-build-output <폴더> [--optimize-gpu] [--optimize-arm64]`로 쓰는 batch 빌드 진입점입니다. 결과는 그 폴더의 `build-status.json`에 남습니다. `--optimize-arm64`는 Standalone 아키텍처 설정을 Apple Silicon으로 바꾸므로 따로 복제한 batch 프로젝트에서만 씁니다 |
+| `OptimizeToolPerformanceBenchmark.StartEditorRun(folder, rounds)` | Editor Play Mode에서 수집을 시작하고 벤치마크 컴포넌트를 돌려줍니다. `Tools > OptimizeTool > Benchmark > Capture Editor Play Mode`가 이것을 부릅니다 |
+| `Cancel()` | 진행 중인 수집을 멈춥니다. `error.txt`를 써서 부분 결과를 무효로 하고, 씬과 설정을 되돌린 뒤 `Completed`를 종료 코드 2로 알립니다. 이미 끝났으면 아무것도 하지 않습니다 |
+| `IsCompleted` / `Completed` | 모든 구간을 수집해 완료 파일을 게시했는지와, 끝날 때 한 번 오는 종료 코드(0 완료, 1 오류, 2 취소·중단)입니다 |

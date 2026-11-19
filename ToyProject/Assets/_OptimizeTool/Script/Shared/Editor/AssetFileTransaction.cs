@@ -177,7 +177,6 @@ namespace Common.OptimizeTool.Editor
                 {
                     if (File.Exists(_path) && !AssetDatabase.DeleteAsset(_path))
                         throw new IOException($"Unable to remove incomplete asset: {_path}");
-                    if (File.Exists(_path + ".meta")) File.Delete(_path + ".meta");
                 }
                 else File.WriteAllBytes(_path, _contents);
                 if (_meta != null) File.WriteAllBytes(_path + ".meta", _meta);

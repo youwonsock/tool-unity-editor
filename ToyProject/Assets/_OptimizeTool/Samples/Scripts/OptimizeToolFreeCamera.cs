@@ -35,9 +35,6 @@ namespace Common.OptimizeTool.Samples
         private float _yaw;
         private float _pitch;
 
-        public bool IsLookMode => _isLookMode;
-        public float MoveSpeed => _moveSpeed;
-
         private void Awake()
         {
             TryGetComponent(out _camera);

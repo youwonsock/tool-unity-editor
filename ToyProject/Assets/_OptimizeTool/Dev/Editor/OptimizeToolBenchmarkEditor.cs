@@ -7,7 +7,12 @@ using UnityEngine;
 
 namespace Common.OptimizeTool.Benchmark.Editor
 {
-    /// <summary>Builds only the sample scene without changing the project's build or Player settings.</summary>
+    /// <summary>
+    /// Builds the scale benchmark scene, or the GPU benchmark scene with the Metal timer plugin, as a macOS development
+    /// Player without touching the project's build scene list. Player settings are left alone, except that
+    /// <see cref="BuildBatch"/> with <c>--optimize-arm64</c> sets the Standalone architecture to Apple silicon, so that
+    /// flag belongs in an isolated batch project. Also starts the Editor Play Mode capture.
+    /// </summary>
     public static class OptimizeToolBenchmarkEditor
     {
         [MenuItem("Tools/OptimizeTool/Benchmark/Build macOS Development Player")]
@@ -65,8 +70,12 @@ namespace Common.OptimizeTool.Benchmark.Editor
             }
         }
 
-        // Unity -batchmode -executeMethod Common.OptimizeTool.Benchmark.Editor.OptimizeToolBenchmarkEditor.BuildBatch
-        //       --optimize-build-output /absolute/output/folder -quit
+        /// <summary>
+        /// The <c>-executeMethod</c> entry point of a batch build:
+        /// <c>Unity -batchmode -executeMethod Common.OptimizeTool.Benchmark.Editor.OptimizeToolBenchmarkEditor.BuildBatch
+        /// --optimize-build-output /absolute/output/folder [--optimize-gpu] [--optimize-arm64] -quit</c>.
+        /// The result is written to build-status.json in the output folder.
+        /// </summary>
         public static void BuildBatch()
         {
             string[] args = Environment.GetCommandLineArgs();

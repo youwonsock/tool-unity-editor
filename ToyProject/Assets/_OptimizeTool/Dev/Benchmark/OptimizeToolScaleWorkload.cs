@@ -35,10 +35,15 @@ namespace Common.OptimizeTool.Benchmark
             SelectCase(0);
         }
 
+        private const string KeyboardHelp = "1-4: mode   Q/E: scale   UI is disabled during benchmark capture";
+
         private void Awake()
         {
             if (_camera == null || _material == null || CaseCount == 0)
                 throw new InvalidOperationException("Rebuild the scale benchmark scene.");
+            foreach (ScaleCase scaleCase in _cases)
+                if (scaleCase.faceSubdivisions < 1)
+                    throw new InvalidOperationException("Every scale case needs at least one face subdivision; rebuild the scale benchmark scene.");
             SelectCase(0);
         }
 
@@ -81,9 +86,9 @@ namespace Common.OptimizeTool.Benchmark
         private void OnGUI()
         {
             GUI.Box(new Rect(16, 16, 540, 100), "OptimizeTool Scale Benchmark");
-            GUI.Label(new Rect(30, 42, 510, 24), $"{Current.cubeCount:N0} cubes | grid {Mathf.Max(1, Current.faceSubdivisions)} | {OptimizeToolSampleModes.All[ActiveMode].Name}");
+            GUI.Label(new Rect(30, 42, 510, 24), $"{Current.cubeCount:N0} cubes | grid {Current.faceSubdivisions} | {OptimizeToolSampleModes.All[ActiveMode].Name}");
             GUI.Label(new Rect(30, 66, 510, 24), $"Renderers {Current.rendererCounts[ActiveMode]:N0} | Triangles {Current.triangleCounts[ActiveMode]:N0}");
-            GUI.Label(new Rect(30, 90, 510, 24), "1-4: mode   Q/E: scale   UI is disabled during benchmark capture");
+            GUI.Label(new Rect(30, 90, 510, 24), KeyboardHelp);
         }
     }
 }
