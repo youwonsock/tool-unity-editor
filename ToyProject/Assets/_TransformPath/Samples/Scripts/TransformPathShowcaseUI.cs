@@ -15,7 +15,7 @@ namespace Common.TransformPath.Samples
         #region Constants
 
         private const float BOARD_WIDTH = 420f;
-        private const float BOARD_HEIGHT = 346f;
+        private const float BOARD_HEIGHT = 376f;
         private const float CONTENT_WIDTH = 388f;
 
         private static readonly Color PANEL_COLOR = new Color(0.025f, 0.04f, 0.07f, 0.9f);
@@ -118,7 +118,7 @@ namespace Common.TransformPath.Samples
             // board keeps owning it: the controller renders the status through the board.
             statusText.transform.SetParent(_panelRoot, false);
             _font = statusText.font;
-            ConfigureText(statusText, new Vector2(16f, -246f), new Vector2(CONTENT_WIDTH, 64f), 10, Color.white);
+            ConfigureText(statusText, new Vector2(16f, -246f), new Vector2(CONTENT_WIDTH, 94f), 10, Color.white);
 
             CreateText(
                 _panelRoot,
@@ -147,7 +147,7 @@ namespace Common.TransformPath.Samples
                 _panelRoot,
                 "Keyboard Help",
                 "1/2/3 curve preset · Space pause · R reset · ←/→ seek · Q queue",
-                new Vector2(16f, -316f),
+                new Vector2(16f, -346f),
                 new Vector2(CONTENT_WIDTH, 14f),
                 9,
                 new Color(0.58f, 0.67f, 0.78f, 1f),
@@ -156,7 +156,7 @@ namespace Common.TransformPath.Samples
                 _panelRoot,
                 "Camera Help",
                 "RMB look/move · WASD · Q/E vertical · wheel speed · Shift boost",
-                new Vector2(16f, -331f),
+                new Vector2(16f, -361f),
                 new Vector2(CONTENT_WIDTH, 14f),
                 9,
                 new Color(0.58f, 0.67f, 0.78f, 1f),

@@ -44,9 +44,10 @@ namespace Common.TransformPath.Samples
             string policy = manager.SpacingPolicy is TransformPathGapPolicy gap
                 ? $"{gap.name} x{gap.LeaderGapScale:F1}"
                 : manager.SpacingPolicy == null ? "none" : manager.SpacingPolicy.name;
-            return $"QUEUE  agents={manager.MemberCount}/{lane.MemberCount}  visible={visible}  leader={leaderText}\n"
-                + $"spacing={manager.DefaultSpacing:F2}m  policy={policy}  behind leader={behindLeader}\n"
-                + $"speed x{multiplier}  routeRev={manager.RouteRevision}  state={(paused ? "paused" : "running")}\n"
+            return $"QUEUE  agents={manager.MemberCount}/{lane.MemberCount}  visible={visible}  "
+                + $"leader={leaderText}  state={(paused ? "paused" : "running")}\n"
+                + $"spacing={manager.DefaultSpacing:F2}m  policy={policy}\n"
+                + $"behind leader={behindLeader}  speed x{multiplier}  routeRev={manager.RouteRevision}\n"
                 + $"length={lane.Path.PathLength:F2}m  "
                 + $"{(leader == null ? "movement=none" : DescribeMovement(leader.Follower))}\n"
                 + $"events={DescribeSequenceEvents(lane.Path)}";
