@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using Common.OptimizeTool.MeshOptimization;
 using Common.OptimizeTool.PhysicsRecording;
 using UnityEditor;
 using UnityEngine;
@@ -92,7 +91,7 @@ namespace Common.OptimizeTool.Samples.Editor
             var recorderSettings = new SerializedObject(recorder);
             recorderSettings.FindProperty("_root").objectReferenceValue = source.transform;
             recorderSettings.FindProperty("_savePath").stringValue = OptimizeToolPhysicsDemo.RecordingFolder;
-            recorderSettings.FindProperty("_animationFileName").stringValue = OptimizeToolPhysicsDemo.RecordingName;
+            recorderSettings.FindProperty("_clipName").stringValue = OptimizeToolPhysicsDemo.RecordingName;
             recorderSettings.FindProperty("_positionTolerance").floatValue = 0.005f;
             recorderSettings.FindProperty("_rotationTolerance").floatValue = 0.5f;
             recorderSettings.FindProperty("_overwriteExistingAssets").boolValue = true;

@@ -40,19 +40,18 @@ namespace Common.OptimizeTool.Samples
         public int ComparisonSampleCount { get; private set; }
         public Transform View => _view;
         public GameObject SavedPrefab => _savedPrefab;
-        public GameObject Playback => _playback?.Instance;
         internal int SourceBodyCount => _bodies.Length;
-        public Transform SourceRoot => _sourceRoot;
         public string LastError { get; private set; }
         internal bool FailedDuringRecording { get; private set; }
-#if UNITY_EDITOR
-        public PhysicsRecorder Recorder => _recorder;
-#endif
 
         private Rigidbody[] _bodies;
         private Vector3[] _initialPositions;
         private Quaternion[] _initialRotations;
         private PhysicsPrefabPlayback _playback;
+#if UNITY_EDITOR
+        // Whether StartRecording succeeded for the current RECORD, so its result belongs to this attempt.
+        private bool _takeStarted;
+#endif
         private Transform[] _referenceSource, _referencePlayback;
         private Pose[] _referencePoses;
         private Coroutine _routine;
@@ -126,6 +125,7 @@ namespace Common.OptimizeTool.Samples
             MaxPositionError = 0f;
             MaxRotationError = 0f;
             ComparisonSampleCount = 0;
+            _takeStarted = false;
             SetState(DemoState.Recording);
             _routine = StartCoroutine(RecordPhysics());
 #endif
@@ -138,6 +138,7 @@ namespace Common.OptimizeTool.Samples
             try
             {
                 _recorder.StartRecording(_duration);
+                _takeStarted = true;
                 StartClock();
             }
             catch (Exception exception) { Fail(exception, true); yield break; }
@@ -416,12 +417,10 @@ namespace Common.OptimizeTool.Samples
             if (State == DemoState.Comparing) SetState(DemoState.Ready);
             if (State != DemoState.Recording) return;
 #if UNITY_EDITOR
-            // Also finish when only this component is disabled. The recorder's
-            // OnDisable may already have saved if the whole hierarchy was disabled.
-            AcceptRecordingResult(_recorder.IsRecording ? _recorder.StopRecording() : _recorder.Result);
-#endif
-#if !UNITY_EDITOR
-            SetState(DemoState.Ready);
+            // Also finish when only this component is disabled. The recorder's OnDisable may already
+            // have saved if the whole hierarchy was disabled; before the take started there is no result.
+            AcceptRecordingResult(_recorder.IsRecording ? _recorder.StopRecording()
+                : _takeStarted ? _recorder.Result : null);
 #endif
         }
 

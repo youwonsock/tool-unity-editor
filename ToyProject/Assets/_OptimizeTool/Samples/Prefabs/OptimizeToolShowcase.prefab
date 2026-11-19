@@ -462,7 +462,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _root: {fileID: 4734283094610793970}
   _savePath: Assets/_OptimizeTool/Samples/Settings/Generated/PhysicsRecordings
-  _animationFileName: OptimizeToolPhysicsTake
+  _clipName: OptimizeToolPhysicsTake
   _overwriteExistingAssets: 1
   _saveReference: 1
   _positionTolerance: 0.005

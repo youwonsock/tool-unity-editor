@@ -28,11 +28,8 @@ namespace Common.OptimizeTool.Samples
             {
                 instance = UnityEngine.Object.Instantiate(prefab, staging.transform, false);
                 instance.name = "Recorded Prefab Playback";
-                Animation animation = instance.GetComponent<Animation>();
-                if (animation == null || animation.clip == null || !animation.clip.legacy
-                    || float.IsNaN(animation.clip.length) || float.IsInfinity(animation.clip.length))
-                    throw new InvalidOperationException("The saved recording must have a Legacy clip and no physics components.");
                 PhysicsPlaybackPolicy.Validate(instance);
+                Animation animation = instance.GetComponent<Animation>();
                 instance.SetActive(false);
                 animation.Stop();
                 animation.playAutomatically = false;

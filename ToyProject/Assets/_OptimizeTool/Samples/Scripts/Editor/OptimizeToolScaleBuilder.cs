@@ -28,7 +28,7 @@ namespace Common.OptimizeTool.Samples.Editor
         public static void BuildAt(string scenePath, string folder, int[] sides, int faceSubdivisions = 1)
         {
             AssetFileTransaction.RequireEditMode();
-            AssetFileTransaction.ValidateFolder(folder);
+            folder = AssetFileTransaction.ValidateFolder(folder);
             if (SceneManager.GetSceneByPath(scenePath).isLoaded)
                 throw new InvalidOperationException("Close the scale benchmark scene before rebuilding it.");
             if (faceSubdivisions < 1 || faceSubdivisions > 128) throw new ArgumentOutOfRangeException(nameof(faceSubdivisions));
