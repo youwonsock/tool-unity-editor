@@ -13,8 +13,7 @@ MonoBehaviour:
   m_Name: 2d61c3aeada20074ba232f6398c7c342_1569603542928883877_FlowFieldManager_SurfaceBake
   m_EditorClassIdentifier: 
   _formatVersion: 6
-  _revision: 7
-  _spaceMode: 0
+  _revision: 9
   _gridOriginWorld: {x: -50, y: 2, z: -50}
   _width: 100
   _depth: 100
