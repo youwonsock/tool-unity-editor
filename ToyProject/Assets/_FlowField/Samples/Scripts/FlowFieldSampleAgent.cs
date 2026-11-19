@@ -5,8 +5,8 @@ using static Common.FlowField.Samples.FlowFieldSampleMath;
 namespace Common.FlowField.Samples
 {
     /// <summary>
-    /// FlowField 방향을 Rigidbody 물리 조향으로 적용하는 샘플 Agent입니다.
-    /// 군중 샘플에서는 FlowFieldSampleController가 FixedUpdate에서 일괄 호출합니다.
+    /// A sample agent that steers its Rigidbody along the FlowField direction.
+    /// In the crowd sample, FlowFieldSampleController steps every agent from its FixedUpdate.
     /// </summary>
     [RequireComponent(typeof(Rigidbody), typeof(CapsuleCollider))]
     public sealed class FlowFieldSampleAgent : MonoBehaviour

@@ -251,7 +251,7 @@ namespace Common.FlowField
             });
 
         private bool DeferRegisterObstacle(Collider collider)
-            => Defer(() => RegisterObstacleNow(collider), "장애물");
+            => Defer(() => RegisterObstacleNow(collider), "obstacle");
 
         private bool DeferUnregisterObstacle(Collider collider)
             => Defer(() => UnregisterObstacleNow(collider), removal: true);
@@ -271,7 +271,7 @@ namespace Common.FlowField
             if (IsInitialized || removal && IsFaulted)
                 command();
             else if (registration != null)
-                Debug.LogWarning($"[FlowField] 세션이 멈춰 대기 중이던 {registration} 등록을 처리하지 못했습니다.");
+                Debug.LogWarning($"[FlowField] The session stopped, so a deferred {registration} registration was dropped.");
         }
 
         internal void NotifyObstacleRegionDirtyCommand(Bounds worldBounds)

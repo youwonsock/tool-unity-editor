@@ -14,14 +14,14 @@ namespace Common.FlowField.Editor
             var modifier = (FlowFieldVectorModifierVolume)target;
             if (modifier.FlowFieldManager == null)
             {
-                DrawWarning("FlowField Manager를 지정해야 Modifier가 등록됩니다.", MessageType.Error);
+                DrawWarning("Assign a FlowField Manager to register the Modifier.", MessageType.Error);
                 return;
             }
 
             Collider influenceCollider = modifier.InfluenceCollider;
             if (influenceCollider == null)
             {
-                DrawWarning("Influence Collider를 지정해야 합니다.", MessageType.Error);
+                DrawWarning("Assign an Influence Collider.", MessageType.Error);
                 return;
             }
 

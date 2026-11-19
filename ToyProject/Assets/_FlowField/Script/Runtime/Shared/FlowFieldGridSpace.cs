@@ -121,10 +121,10 @@ namespace Common.FlowField
         }
 
         /// <summary>
-        /// 월드 좌표를 Grid의 로컬 셀 좌표로 변환합니다. Grid 밖 좌표는
-        /// 예외가 아닌 정상적인 조회 실패로 false를 반환합니다.
+        /// Converts a world position to local cell coordinates. A position outside
+        /// the grid is an ordinary miss and returns false, not an exception.
         /// </summary>
-        /// <returns>좌표가 Grid 안이면 true, 밖이면 false입니다.</returns>
+        /// <returns>True inside the grid, false outside.</returns>
         public bool TryWorldToLocal(Vector3 world, out int localX, out int localZ)
         {
             ThrowIfVolumeForSurfaceApi();
@@ -159,10 +159,10 @@ namespace Common.FlowField
         }
 
         /// <summary>
-        /// 월드 좌표를 가장 가까운 Grid 셀로 명시적으로 Clamp해 변환합니다.
-        /// 유한하지 않은 좌표나 초기화되지 않은 Grid는 false라는 정상 결과입니다.
+        /// Converts a world position to the nearest grid cell, clamping it.
+        /// A non-finite position or an uninitialized grid returns false.
         /// </summary>
-        /// <returns>Clamp 가능한 Grid면 true, 아니면 false입니다.</returns>
+        /// <returns>True when the grid can clamp, otherwise false.</returns>
         public bool TryWorldToLocalClamped(Vector3 world, out int localX, out int localZ)
         {
             ThrowIfVolumeForSurfaceApi();
@@ -344,10 +344,10 @@ namespace Common.FlowField
         }
 
         /// <summary>
-        /// Bounds와 겹치는 셀 범위를 계산합니다. Grid와 겹치지 않는 Bounds는
-        /// 결과 없음으로 false를 반환합니다.
+        /// Computes the cell range the Bounds overlap. Bounds that miss the grid
+        /// have no range and return false.
         /// </summary>
-        /// <returns>겹치는 셀이 있으면 true, 없으면 false입니다.</returns>
+        /// <returns>True when some cells overlap, otherwise false.</returns>
         public bool TryGetOverlappingCells(
             Bounds worldBounds,
             out int minX,
@@ -582,10 +582,10 @@ namespace Common.FlowField
         }
 
         /// <summary>
-        /// Bake Bounds에서 월드 Grid 레이아웃을 계산합니다. 입력이 아직 유효한지
-        /// 확인하는 저수준 검사이며, 표현할 수 없는 레이아웃이면 false를 반환합니다.
+        /// Computes the world grid layout of the Bake Bounds. It is the low-level
+        /// check of the inputs and returns false for a layout it cannot represent.
         /// </summary>
-        /// <returns>레이아웃이 유효하면 true, 입력이 유효하지 않으면 false입니다.</returns>
+        /// <returns>True for a valid layout, false for invalid inputs.</returns>
         public static bool TryCreateWorldLayout(
             Vector3 managerWorldPosition,
             Bounds localBounds,
@@ -674,10 +674,10 @@ namespace Common.FlowField
         }
 
         /// <summary>
-        /// Grid 셀 수가 양수이고 지원 상한 안에 있는지 확인합니다. 범위를 벗어난
-        /// 설정을 편집기에서 진단할 수 있도록 false를 정상적인 검증 결과로 반환합니다.
+        /// Checks that the cell count is positive and within the supported limit.
+        /// It returns false instead of throwing, so the Editor can report the setting.
         /// </summary>
-        /// <returns>셀 수가 지원 범위면 true, 아니면 false입니다.</returns>
+        /// <returns>True within the supported range, otherwise false.</returns>
         public static bool TryValidateCellCount(
             int width,
             int depth,

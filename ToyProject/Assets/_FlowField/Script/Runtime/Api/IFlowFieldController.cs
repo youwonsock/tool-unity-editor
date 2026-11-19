@@ -4,7 +4,7 @@ using UnityEngine;
 namespace Common.FlowField
 {
     /// <summary>
-    /// 외부 시스템이 FlowField 계산 입력을 변경하는 계약입니다.
+    /// The contract other systems use to change the FlowField inputs.
     /// </summary>
     public interface IFlowFieldController : IFlowFieldProvider
     {

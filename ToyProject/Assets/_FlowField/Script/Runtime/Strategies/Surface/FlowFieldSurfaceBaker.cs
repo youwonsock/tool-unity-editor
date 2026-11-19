@@ -281,7 +281,7 @@ namespace Common.FlowField
         {
             if (!settings.IsValid)
                 throw new ArgumentException(
-                    "Grid, Ground Layer 또는 Bake Bounds 설정이 유효하지 않습니다.",
+                    "Grid, Ground Layer or Bake Bounds settings are invalid.",
                     nameof(settings));
             if (!FlowFieldLayoutUtility.TryValidateCellCount(
                     settings.Grid.Width,
@@ -289,9 +289,9 @@ namespace Common.FlowField
                     out _cellCount))
                 throw new ArgumentOutOfRangeException(
                     nameof(settings),
-                    $"Cell Count가 상한({FlowFieldLayoutUtility.MaxSurfaceCellCount:N0})을 초과합니다. "
-                    + $"현재 {settings.Grid.Width} × {settings.Grid.Depth} cells입니다. "
-                    + "Bake Bounds 또는 Cell Size를 줄이세요.");
+                    $"The cell count exceeds the limit ({FlowFieldLayoutUtility.MaxSurfaceCellCount:N0}). "
+                    + $"The grid is {settings.Grid.Width} × {settings.Grid.Depth} cells. "
+                    + "Shrink Bake Bounds or increase Cell Size.");
 
             _settings = settings;
             _progress = progress;
@@ -358,7 +358,7 @@ namespace Common.FlowField
                         {
                             if (_result.ValidCellCount <= 0)
                             {
-                                Fail("Bake Bounds 범위에서 이동 가능한 Ground Collider를 찾지 못했습니다.");
+                                Fail("No walkable ground collider was found within Bake Bounds.");
                                 return;
                             }
                             _cursor = 0;

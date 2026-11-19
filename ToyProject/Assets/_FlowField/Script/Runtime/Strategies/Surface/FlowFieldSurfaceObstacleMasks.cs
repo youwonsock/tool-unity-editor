@@ -208,7 +208,7 @@ namespace Common.FlowField
                     ref targetOverlapBuffer,
                     syncTransformsBeforeQuery: true))
             {
-                throw new InvalidOperationException("Static obstacle mask 생성에 실패했습니다.");
+                throw new InvalidOperationException("Building the static obstacle mask failed.");
             }
             bool changed = !FlowFieldObstacleMaskBuilder.AreEqual(
                 workspace.ObstacleScratch,

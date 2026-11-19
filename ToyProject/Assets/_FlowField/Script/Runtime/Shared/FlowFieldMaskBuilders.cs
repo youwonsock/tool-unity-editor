@@ -250,8 +250,8 @@ namespace Common.FlowField
 
     internal static class FlowFieldModifierMaskBuilder
     {
-        public const string TriggerRequiredMessage = "Influence Collider는 Trigger여야 합니다.";
-        public const string ConvexMeshRequiredMessage = "Trigger MeshCollider는 Convex여야 합니다.";
+        public const string TriggerRequiredMessage = "Influence Collider must be a trigger.";
+        public const string ConvexMeshRequiredMessage = "A trigger MeshCollider must be convex.";
 
         public static bool Build(
             FlowFieldGridSpace grid,
@@ -372,8 +372,8 @@ namespace Common.FlowField
     }
 
     /// <summary>
-    /// 특정 Collider 대상 Overlap 검증 NonAlloc 쿼리 헬퍼.
-    /// 버퍼가 가득 차면 MAX_HITS까지 확장하며, 상한을 초과하면 계약 위반으로 예외를 던집니다.
+    /// Non-allocating overlap queries against one target collider.
+    /// A full buffer grows up to MaxOverlapHits; more hits than that throw, because a partial result would miss colliders.
     /// </summary>
     internal static class FlowFieldOverlapUtility
     {

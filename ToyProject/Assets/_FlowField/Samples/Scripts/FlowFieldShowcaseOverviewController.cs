@@ -5,7 +5,7 @@ using static Common.FlowField.Samples.FlowFieldSampleMath;
 namespace Common.FlowField.Samples
 {
     /// <summary>
-    /// FlowField 공개 기능을 한 씬에서 수동으로 전환해 확인하는 샘플 전용 컨트롤러입니다.
+    /// A sample controller that switches by hand through the public FlowField features in one scene.
     /// </summary>
     [DefaultExecutionOrder(10)]
     public sealed class FlowFieldShowcaseOverviewController : MonoBehaviour
@@ -116,7 +116,7 @@ namespace Common.FlowField.Samples
                 if (_manager == null || _manager.IsFaulted)
                 {
                     if (_manager != null && _manager.BakeMode == FlowFieldBakeMode.StaticBaked)
-                        _lastAction = "StaticBaked Asset 설정 불일치. Editor에서 ReBake가 필요합니다.";
+                        _lastAction = "The StaticBaked asset does not match the settings. ReBake it in the Editor.";
                     else
                         _lastAction = _manager != null && !string.IsNullOrEmpty(_manager.LastError)
                             ? $"Manager error: {_manager.LastError}"
@@ -440,7 +440,7 @@ namespace Common.FlowField.Samples
             {
                 _fault = exception;
                 _lastAction = _manager != null && _manager.BakeMode == FlowFieldBakeMode.StaticBaked
-                    ? $"StaticBaked Asset을 다시 Bake해야 합니다. {exception.Message}"
+                    ? $"The StaticBaked asset needs a ReBake. {exception.Message}"
                     : exception.Message;
                 Debug.LogException(exception, this);
             }

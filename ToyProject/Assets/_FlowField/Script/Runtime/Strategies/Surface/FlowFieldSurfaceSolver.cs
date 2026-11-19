@@ -156,7 +156,7 @@ namespace Common.FlowField
     }
 
     /// <summary>
-    /// Solver들이 공유하는 그래프 탐색 헬퍼 모음.
+    /// Graph traversal helpers the solvers share.
     /// </summary>
     internal static class FlowFieldSurfaceGraphTraversal
     {

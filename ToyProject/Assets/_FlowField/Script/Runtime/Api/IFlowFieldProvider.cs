@@ -4,8 +4,8 @@ using UnityEngine;
 namespace Common.FlowField
 {
     /// <summary>
-    /// 외부 이동 시스템이 현재 FlowField를 읽는 계약입니다.
-    /// 구현체는 샘플을 Push하지 않으며 호출자가 자신의 FixedUpdate에서 Pull합니다.
+    /// The contract movement systems use to read the current FlowField.
+    /// It never pushes samples; callers pull them in their own FixedUpdate.
     /// </summary>
     public interface IFlowFieldProvider
     {

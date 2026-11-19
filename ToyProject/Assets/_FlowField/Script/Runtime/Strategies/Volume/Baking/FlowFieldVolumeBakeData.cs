@@ -98,11 +98,11 @@ namespace Common.FlowField
                 || !FlowFieldGridSpace.Approximately(_bakeBoundsSizeWorld, bounds.size, 0.000001d)
                 || _obstacleLayerMask != obstacleLayer.value
                 || Mathf.Abs(_obstacleClearance - obstacleClearance) > 0.0001f)
-                return Fail(out reason, "Static Volume3D Bake 설정이 현재 Manager 설정과 다릅니다.");
+                return Fail(out reason, "Static Volume3D Bake settings differ from the Manager settings.");
             if (!FlowFieldGridSpace.IsFinite(_requestedGoalWorld)
                 || !FlowFieldGridSpace.IsFinite(_goalInfluenceRadius)
                 || _goalInfluenceRadius < 0f)
-                return Fail(out reason, "Static Volume3D Bake Goal 데이터가 유효하지 않습니다.");
+                return Fail(out reason, "Static Volume3D Bake Goal data is invalid.");
             if (!_hasGoal && _resolvedGoalIndex != -1
                 || _hasGoal && (_resolvedGoalIndex < 0 || _resolvedGoalIndex >= grid.CellCount))
                 return Fail(out reason, "Static Volume3D Bake Goal index is invalid.");
@@ -191,12 +191,12 @@ namespace Common.FlowField
         {
             reason = string.Empty;
             if (_hasGoal != hasGoal)
-                return Fail(out reason, "Static Volume3D Bake Goal 활성 상태가 현재 Manager 설정과 다릅니다.");
+                return Fail(out reason, "Whether the Static Volume3D Bake has a Goal differs from the Manager settings.");
             if (!_hasGoal)
                 return true;
             if (!FlowFieldGridSpace.Approximately(requestedGoalWorld, _requestedGoalWorld, 0.00000001d)
                 || Mathf.Abs(influenceRadius - _goalInfluenceRadius) > 0.0001f)
-                return Fail(out reason, "Static Volume3D Bake Goal이 현재 Manager 설정과 다릅니다. ReBake가 필요합니다.");
+                return Fail(out reason, "Static Volume3D Bake Goal differs from the Manager settings. ReBake is required.");
             return true;
         }
 

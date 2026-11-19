@@ -78,7 +78,7 @@ namespace Common.FlowField.Editor
             else
             {
                 EditorGUILayout.HelpBox(
-                    "RuntimeDynamic: Surface와 장애물은 실행 중 공통 Session이 계산합니다. Static Bake Asset은 사용하지 않습니다.",
+                    "RuntimeDynamic: the session computes the Surface and obstacles at runtime. No Static Bake Asset is used.",
                     MessageType.Info);
             }
 
@@ -166,7 +166,7 @@ namespace Common.FlowField.Editor
             {
                 // The layout also fails above the cell limit.
                 EditorGUILayout.HelpBox(
-                    $"Bake Bounds 또는 Cell Size가 유효하지 않거나 Cell Count가 상한({maxCells:N0})을 초과합니다.",
+                    $"Bake Bounds or Cell Size is invalid, or the cell count exceeds the limit ({maxCells:N0}).",
                     MessageType.Error);
                 return true;
             }
@@ -230,8 +230,8 @@ namespace Common.FlowField.Editor
                             : FlowFieldVolumeDisplaySelection.DefaultSliceLimit;
                         if (volumeStatus.SelectedCellCount < displayGrid.CellCount)
                             EditorGUILayout.HelpBox(
-                                $"표시 상한 {limit:N0}에 맞춰 격자 셀을 균등 추출합니다. "
-                                + "실제 계산 해상도는 변경되지 않습니다.",
+                                $"The display samples grid cells evenly to stay within {limit:N0}. "
+                                + "The computed resolution does not change.",
                                 MessageType.None);
                     }
                 }
@@ -252,7 +252,7 @@ namespace Common.FlowField.Editor
             if (manager.GetComponent<FlowFieldDisplaySettings>() != null)
                 return;
             EditorGUILayout.HelpBox(
-                "Scene View 표시 설정이 없어 방향장을 그리지 않습니다.",
+                "Without Display Settings the Scene View draws no field.",
                 MessageType.None);
             if (GUILayout.Button("Add Display Settings"))
                 Undo.AddComponent<FlowFieldDisplaySettings>(manager.gameObject);
@@ -268,8 +268,8 @@ namespace Common.FlowField.Editor
 
             EditorGUILayout.Space();
             EditorGUILayout.HelpBox(
-                "FlowField Grid는 회전 없는 월드 XZ 정렬과 Scale 1만 지원합니다. "
-                + "Manager 또는 부모 Transform의 회전/스케일을 확인하세요.",
+                "The FlowField grid supports only an unrotated, world-aligned Manager with scale 1. "
+                + "Check the rotation and scale of the Manager and its parents.",
                 MessageType.Warning);
         }
     }

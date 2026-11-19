@@ -24,7 +24,7 @@ namespace Common.FlowField.Editor
         internal static string ResolveAssetPath(FlowFieldManager manager, UnityEngine.Object assigned, string suffix)
         {
             if (!manager.gameObject.scene.IsValid() || string.IsNullOrEmpty(manager.gameObject.scene.path))
-                throw new InvalidOperationException("Scene을 먼저 저장해야 합니다.");
+                throw new InvalidOperationException("Save the scene before baking.");
             string assignedPath = assigned != null ? AssetDatabase.GetAssetPath(assigned) : null;
             return string.IsNullOrEmpty(assignedPath) ? ResolveStablePath(manager, suffix) : assignedPath;
         }
@@ -39,7 +39,7 @@ namespace Common.FlowField.Editor
             string scenePath = manager.gameObject.scene.path;
             string sceneGuid = AssetDatabase.AssetPathToGUID(scenePath);
             if (string.IsNullOrEmpty(sceneGuid))
-                throw new InvalidOperationException("씬 GUID를 확인할 수 없습니다. 씬을 저장한 뒤 다시 시도하세요.");
+                throw new InvalidOperationException("The scene has no GUID. Save the scene and try again.");
             // Next to the scene, in a folder named after it, as Unity keeps lightmaps.
             string sceneFolder = Path.GetDirectoryName(scenePath)?.Replace('\\', '/');
             string bakeFolder = $"{sceneFolder}/{Path.GetFileNameWithoutExtension(scenePath)}";

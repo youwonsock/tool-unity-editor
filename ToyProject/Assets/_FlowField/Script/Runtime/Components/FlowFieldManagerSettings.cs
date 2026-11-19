@@ -7,7 +7,7 @@ namespace Common.FlowField
     [Serializable]
     internal struct FlowFieldGridSettings
     {
-        [Tooltip("Manager 위치 기준 월드 축 정렬 Bake 영역입니다. Surface2D는 XZ가 Grid, Y가 Ground Ray 범위이고, Volume3D는 전체가 셀로 채워집니다.")]
+        [Tooltip("The world-aligned bake region around the Manager. In Surface2D, XZ is the grid and Y the ground ray range; Volume3D fills all of it with cells.")]
         [SerializeField] internal Bounds BakeBoundsLocal;
         [SerializeField] internal float CellSize;
 
@@ -25,7 +25,7 @@ namespace Common.FlowField
         [SerializeField] internal LayerMask GroundLayer;
         [SerializeField] internal float MaxSlope;
         [SerializeField] internal float MaxStepHeight;
-        [Tooltip("셀 위로 장애물을 찾는 높이입니다.")]
+        [Tooltip("How high above a cell obstacles are searched.")]
         [SerializeField] internal float ObstacleCheckHeight;
         [SerializeField] internal float ObstacleCheckCenterOffset;
 
@@ -44,7 +44,7 @@ namespace Common.FlowField
     internal struct FlowFieldObstacleSettings
     {
         [SerializeField] internal LayerMask Layer;
-        [Tooltip("셀 영역 밖으로 장애물 판정을 확장하는 거리입니다.")]
+        [Tooltip("How far obstacle detection extends beyond a cell.")]
         [SerializeField] internal float Clearance;
     }
 
@@ -53,7 +53,7 @@ namespace Common.FlowField
     internal struct FlowFieldFlowSettings
     {
         [SerializeField] internal Vector3 DefaultDirection;
-        [Tooltip("0은 Global hybrid Goal, 양수는 XYZ 구 형태의 Ranged Goal입니다.")]
+        [Tooltip("0 is a global hybrid Goal; a positive value is a ranged Goal within an XYZ sphere.")]
         [SerializeField] internal float GoalInfluenceRadius;
 
         internal static FlowFieldFlowSettings Default => new FlowFieldFlowSettings
@@ -66,9 +66,9 @@ namespace Common.FlowField
     [Serializable]
     internal struct FlowFieldBakeAssets
     {
-        [Tooltip("Surface2D 정적 모드에서 사용할 Flow Field Snapshot입니다.")]
+        [Tooltip("The Flow Field snapshot a StaticBaked Surface2D Manager uses.")]
         [SerializeField] internal FlowFieldSurfaceBakeData Surface;
-        [Tooltip("Volume3D 정적 모드에서 사용할 v6 Flow Field Snapshot입니다.")]
+        [Tooltip("The v6 Flow Field snapshot a StaticBaked Volume3D Manager uses.")]
         [SerializeField] internal FlowFieldVolumeBakeData Volume;
     }
 }

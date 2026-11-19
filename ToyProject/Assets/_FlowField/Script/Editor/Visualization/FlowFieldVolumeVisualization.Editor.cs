@@ -138,7 +138,7 @@ namespace Common.FlowField.Editor
                     Manager = manager,
                     RefreshRequested = true,
                     Code = FlowFieldVolumeVisualizationStatusCode.Unavailable,
-                    Message = "Volume3D 표시 상태를 준비하는 중입니다.",
+                    Message = "Preparing the Volume3D display.",
                     CountedResultId = long.MinValue,
                     CountedSelectionHash = int.MinValue,
                 });
@@ -397,14 +397,14 @@ namespace Common.FlowField.Editor
 
             if (manager.SpaceMode != FlowFieldSpaceMode.Volume3D)
             {
-                SetUnavailable(state, "Surface2D Manager입니다.");
+                SetUnavailable(state, "This is a Surface2D Manager.");
                 return false;
             }
 
             if (!manager.TryGetLayout(out Bounds worldBounds, out FlowFieldGridSpace grid)
                 || !grid.IsValid)
             {
-                SetUnavailable(state, "Volume Bounds 또는 Cell Size가 유효하지 않습니다.");
+                SetUnavailable(state, "Volume Bounds or Cell Size is invalid.");
                 return false;
             }
 
@@ -420,7 +420,7 @@ namespace Common.FlowField.Editor
             }
             if (manager.BakeMode != FlowFieldBakeMode.StaticBaked)
             {
-                SetUnavailable(state, "RuntimeDynamic은 실행 후 Volume3D 벡터를 표시합니다.",
+                SetUnavailable(state, "RuntimeDynamic shows Volume3D vectors once it runs.",
                     FlowFieldVolumeVisualizationStatusCode.RuntimeOnly);
                 return refreshRequested;
             }
@@ -428,7 +428,7 @@ namespace Common.FlowField.Editor
             FlowFieldVolumeBakeData asset = manager.CaptureConfig().BakeAssets.Volume;
             if (asset == null)
             {
-                SetUnavailable(state, "StaticBaked Volume3D에는 Bake Asset이 필요합니다.");
+                SetUnavailable(state, "StaticBaked Volume3D requires a Bake Asset.");
                 return false;
             }
 
@@ -464,7 +464,7 @@ namespace Common.FlowField.Editor
             if (!assetState.ValidationComplete && !assetState.Validator.IsComplete)
             {
                 state.Code = FlowFieldVolumeVisualizationStatusCode.Validating;
-                state.Message = $"Volume3D Bake 구조 검증 중... {assetState.Validator.Progress:P0}";
+                state.Message = $"Validating the Volume3D bake... {assetState.Validator.Progress:P0}";
                 state.ValidationProgress = assetState.Validator.Progress;
                 assetState.Validator.Step(CellValidationBudget, GraphValidationBudget);
                 state.RefreshRequested = false;
@@ -493,7 +493,7 @@ namespace Common.FlowField.Editor
 
             if (!asset.TryGetView(grid, out bool[] blocked, out Vector3[] directions, out float[] speeds))
             {
-                SetUnavailable(state, "Static Volume3D Bake View를 읽을 수 없습니다.",
+                SetUnavailable(state, "Cannot read the Static Volume3D Bake view.",
                     FlowFieldVolumeVisualizationStatusCode.Invalid);
                 return false;
             }
@@ -509,7 +509,7 @@ namespace Common.FlowField.Editor
                 blocked,
                 directions,
                 speeds);
-            SetView(state, manager, view, "베이크 기본 필드가 표시 중입니다.",
+            SetView(state, manager, view, "Showing the baked base field.",
                 FlowFieldVolumeVisualizationStatusCode.Valid);
             return validationFinished || refreshRequested;
         }
@@ -532,8 +532,8 @@ namespace Common.FlowField.Editor
                     manager,
                     view,
                     manager.IsRebuilding
-                        ? "같은 소스의 새 결과를 계산 중이며 이전 게시 필드를 표시합니다."
-                        : "런타임 최종 필드가 표시 중입니다.",
+                        ? "Computing a new result for the same source; showing the published field."
+                        : "Showing the runtime final field.",
                     manager.IsRebuilding
                         ? FlowFieldVolumeVisualizationStatusCode.Rebuilding
                         : FlowFieldVolumeVisualizationStatusCode.Valid);
@@ -545,8 +545,8 @@ namespace Common.FlowField.Editor
                 ? FlowFieldVolumeVisualizationStatusCode.Rebuilding
                 : FlowFieldVolumeVisualizationStatusCode.Unavailable;
             state.Message = hasRequestedSource && hasView
-                ? "새 Volume3D 격자를 준비 중이므로 이전 벡터를 숨겼습니다."
-                : "게시된 Volume3D 결과가 없습니다.";
+                ? "A new Volume3D grid is being prepared, so the previous vectors are hidden."
+                : "No Volume3D result is published.";
             state.ValidationProgress = 0f;
             state.RefreshRequested = false;
             return refreshRequested || state.Code != previousCode;
@@ -561,7 +561,7 @@ namespace Common.FlowField.Editor
         {
             if (!view.IsValid)
             {
-                SetUnavailable(state, "Volume3D 표시 View의 배열 길이가 격자와 다릅니다.",
+                SetUnavailable(state, "The Volume3D view arrays do not match the grid.",
                     FlowFieldVolumeVisualizationStatusCode.Invalid);
                 return;
             }
@@ -688,7 +688,7 @@ namespace Common.FlowField.Editor
         {
             state.Code = code;
             state.Message = string.IsNullOrEmpty(message)
-                ? "Volume3D 필드를 표시할 수 없습니다."
+                ? "The Volume3D field cannot be shown."
                 : message;
             state.HasSelection = false;
             state.SelectedCellCount = 0;

@@ -15,7 +15,7 @@ namespace Common.FlowField
     public sealed class FlowFieldGoalTarget : MonoBehaviour
     {
         [SerializeField] private FlowFieldManager _manager;
-        [SerializeField, Min(0f), Tooltip("0은 Global hybrid Goal, 양수는 XYZ 구 형태의 Ranged Goal입니다.")]
+        [SerializeField, Min(0f), Tooltip("0 is a global hybrid Goal; a positive value is a ranged Goal within an XYZ sphere.")]
         private float _influenceRadius;
 
         [NonSerialized] private bool _reported;

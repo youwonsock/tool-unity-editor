@@ -21,13 +21,13 @@ namespace Common.FlowField
         [SerializeField] private FlowFieldSurfaceSettings _surface = FlowFieldSurfaceSettings.Default;
         [SerializeField] private FlowFieldObstacleSettings _obstacles;
         [SerializeField] private FlowFieldFlowSettings _flow = FlowFieldFlowSettings.Default;
-        [SerializeField, Tooltip("Init과 Bake 때 한 번 읽는 Goal 위치입니다. 이후 Goal 이동은 SetGoal 또는 FlowFieldGoalTarget으로 알립니다.")]
+        [SerializeField, Tooltip("The Goal position Init and Bake read once. Report later Goal moves with SetGoal or FlowFieldGoalTarget.")]
         private Transform _goalTransform;
 
         [Header("Mode")]
-        [SerializeField, Tooltip("Surface2D는 기존 바닥 Raycast, Volume3D는 전체 Bounds를 정육면체 셀로 채웁니다. Init 이후 변경하려면 Release가 필요합니다.")]
+        [SerializeField, Tooltip("Surface2D raycasts down onto the ground; Volume3D fills the whole Bounds with cubic cells. Changing it after Init requires Release.")]
         private FlowFieldSpaceMode _spaceMode = FlowFieldSpaceMode.Surface2D;
-        [SerializeField, Tooltip("RuntimeDynamic은 런타임 Surface/장애물을 다시 계산하고, StaticBaked는 Editor에서 저장한 base field를 사용합니다.")]
+        [SerializeField, Tooltip("RuntimeDynamic computes the Surface and obstacles at runtime; StaticBaked uses the base field saved in the Editor.")]
         private FlowFieldBakeMode _bakeMode = FlowFieldBakeMode.RuntimeDynamic;
         [SerializeField] private FlowFieldBakeAssets _bakeAssets;
 
@@ -336,7 +336,7 @@ namespace Common.FlowField
         private void OnSessionStateChanged(FlowFieldRuntimeState state)
         {
             if (state == FlowFieldRuntimeState.Faulted && !string.IsNullOrEmpty(LastError))
-                Debug.LogError($"[{nameof(FlowFieldManager)}] FlowField 빌드에 실패했습니다: {LastError}", this);
+                Debug.LogError($"[{nameof(FlowFieldManager)}] FlowField build failed: {LastError}", this);
             StateChanged?.Invoke(state);
         }
 

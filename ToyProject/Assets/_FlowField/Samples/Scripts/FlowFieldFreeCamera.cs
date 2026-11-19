@@ -4,8 +4,8 @@ using UnityEngine.EventSystems;
 namespace Common.FlowField.Samples
 {
     /// <summary>
-    /// FlowField sample용 독립 Perspective fly camera입니다.
-    /// 우클릭 중에만 마우스와 이동 입력을 소비합니다.
+    /// A standalone perspective fly camera for the FlowField samples.
+    /// It takes mouse and movement input only while the right button is held.
     /// </summary>
     [RequireComponent(typeof(Camera))]
     public sealed class FlowFieldFreeCamera : MonoBehaviour

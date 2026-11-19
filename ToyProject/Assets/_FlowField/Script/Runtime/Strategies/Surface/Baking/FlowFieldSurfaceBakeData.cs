@@ -108,7 +108,7 @@ namespace Common.FlowField
                 || Mathf.Abs(_surfaceSettings.MaxSurfaceSlope - settings.MaxSurfaceSlope) > Epsilon
                 || Mathf.Abs(_surfaceSettings.MaxStepHeight - settings.MaxStepHeight) > Epsilon)
             {
-                reason = "Static Flow Bake Surface 설정이 현재 설정과 다릅니다.";
+                reason = "Static Flow Bake Surface settings differ from the Manager settings.";
                 return false;
             }
             return HasValidData;
@@ -127,7 +127,7 @@ namespace Common.FlowField
                 || Mathf.Abs(_obstacleCheckCenterOffset - centerOffset) > Epsilon
                 || Mathf.Abs(_obstacleClearance - clearance) > Epsilon)
             {
-                reason = "Static Flow Bake 장애물 설정이 현재 설정과 다릅니다.";
+                reason = "Static Flow Bake obstacle settings differ from the Manager settings.";
                 return false;
             }
             return HasValidData;
@@ -620,7 +620,7 @@ namespace Common.FlowField
                 || Mathf.Abs(_maxSurfaceSlope - settings.MaxSurfaceSlope) > Epsilon
                 || Mathf.Abs(_maxStepHeight - settings.MaxStepHeight) > Epsilon)
             {
-                reason = "Static Flow Bake Surface 설정이 현재 설정과 다릅니다.";
+                reason = "Static Flow Bake Surface settings differ from the Manager settings.";
                 return false;
             }
             return true;
@@ -635,7 +635,7 @@ namespace Common.FlowField
                 || Mathf.Abs(_obstacleCheckCenterOffset - centerOffset) > Epsilon
                 || Mathf.Abs(_obstacleClearance - clearance) > Epsilon)
             {
-                reason = "Static Flow Bake 장애물 설정이 현재 설정과 다릅니다.";
+                reason = "Static Flow Bake obstacle settings differ from the Manager settings.";
                 return false;
             }
             return true;

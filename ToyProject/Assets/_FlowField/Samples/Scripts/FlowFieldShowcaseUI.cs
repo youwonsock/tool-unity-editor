@@ -6,7 +6,7 @@ using static Common.FlowField.Samples.FlowFieldSampleMath;
 namespace Common.FlowField.Samples
 {
     /// <summary>
-    /// FlowField 쇼케이스의 상태와 두 가지 핵심 조작만 좌측 하단에 표시합니다.
+    /// Shows the FlowField showcase status and its two main controls in the lower left.
     /// </summary>
     [DefaultExecutionOrder(110)]
     public sealed class FlowFieldShowcaseUI : MonoBehaviour

@@ -231,7 +231,7 @@ namespace Common.FlowField
             if (prepared.GoalStatus == FlowFieldSurfaceGoalBuildStatus.NoWalkableSurface
                 && _goalTracker.TryConsumeMissingWalkableWarning())
             {
-                Debug.LogWarning("[FlowField] Goal 범위에 이동 가능한 표면 셀이 없습니다.");
+                Debug.LogWarning("[FlowField] The Goal range has no walkable surface cell.");
             }
             if (rebuildGoal && prepared.GoalStatus == FlowFieldSurfaceGoalBuildStatus.Unchanged)
             {
@@ -261,7 +261,7 @@ namespace Common.FlowField
             if (!hasWalkableCell && !_obstacleMasks.AllBlockedWarningIssued)
             {
                 _obstacleMasks.AllBlockedWarningIssued = true;
-                Debug.LogWarning("[FlowField] 모든 유효한 Surface 셀이 장애물로 막혔습니다.");
+                Debug.LogWarning("[FlowField] Obstacles block every valid Surface cell.");
             }
             else if (hasWalkableCell)
             {

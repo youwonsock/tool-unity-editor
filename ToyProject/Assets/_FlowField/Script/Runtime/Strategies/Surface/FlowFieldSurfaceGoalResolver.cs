@@ -192,10 +192,10 @@ namespace Common.FlowField
         }
 
         /// <summary>
-        /// 동일한 No-Walkable 경고를 한 번만 소비합니다. 이미 소비한 경고는
-        /// 추가로 표시할 결과가 없으므로 false를 정상적으로 반환합니다.
+        /// Takes the no-walkable-surface warning once. A warning already taken
+        /// has nothing more to show, so this returns false.
         /// </summary>
-        /// <returns>이번 호출에서 경고를 소비했으면 true, 이미 소비했으면 false입니다.</returns>
+        /// <returns>True when this call took the warning, false when it was already taken.</returns>
         internal bool TryConsumeMissingWalkableWarning()
         {
             if (_missingWalkableWarningIssued)

@@ -5,7 +5,7 @@ using UnityEngine.UI;
 namespace Common.FlowField.Samples
 {
     /// <summary>
-    /// FlowField 쇼케이스의 상태 텍스트를 UGUI로 표시합니다.
+    /// Shows the FlowField showcase status text with UGUI.
     /// </summary>
     [DefaultExecutionOrder(100)]
     public sealed class FlowFieldOverviewBoard : MonoBehaviour

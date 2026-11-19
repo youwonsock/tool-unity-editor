@@ -87,8 +87,8 @@ namespace Common.FlowField
                     if (_deferredCommands.Count + _events.Count > 0 && ++done > MaxWorkPerDrain)
                     {
                         int dropped = DropRunawayWork();
-                        Debug.LogError($"[FlowField] 핸들러가 명령과 이벤트를 연달아 {MaxWorkPerDrain}개 넘게 만들었습니다. "
-                            + $"{dropped}개를 버렸고, Released와 해제 이벤트는 전달했습니다.");
+                        Debug.LogError($"[FlowField] Handlers produced more than {MaxWorkPerDrain} commands and events in a row. "
+                            + $"{dropped} were dropped; Released and the disposal events were delivered.");
                         return;
                     }
                     if (_deferredCommands.Count > 0)

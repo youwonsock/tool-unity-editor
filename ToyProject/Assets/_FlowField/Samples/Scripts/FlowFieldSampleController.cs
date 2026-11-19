@@ -5,7 +5,7 @@ using static Common.FlowField.Samples.FlowFieldSampleMath;
 namespace Common.FlowField.Samples
 {
     /// <summary>
-    /// 1,000개 물리 Agent를 생성하고 사전 정의된 Goal을 순서대로 변경하는 샘플 컨트롤러입니다.
+    /// A sample controller that spawns 1,000 physics agents and moves through predefined Goals in order.
     /// </summary>
     [DefaultExecutionOrder(0)]
     public sealed class FlowFieldSampleController : FlowFieldSampleControllerBase
@@ -248,7 +248,7 @@ namespace Common.FlowField.Samples
         }
 
         /// <summary>
-        /// 활성 Goal을 명시적으로 제거해 Goal 없는 Field 결과를 확인합니다.
+        /// Removes the active Goal to show the field without a Goal.
         /// </summary>
         public bool ClearGoal()
         {

@@ -45,7 +45,7 @@ namespace Common.FlowField.Samples
             if (!_sceneValidated)
             {
                 if (_manager.IsFaulted && _manager.BakeMode == FlowFieldBakeMode.StaticBaked)
-                    _lastAction = "StaticBaked Asset 설정 불일치. Editor에서 ReBake가 필요합니다.";
+                    _lastAction = "The StaticBaked asset does not match the settings. ReBake it in the Editor.";
                 if (_manager.IsReady && _sampleController.IsInitialized)
                     TryValidateSceneConfiguration();
                 if (!_sceneValidated)
