@@ -22,6 +22,8 @@ namespace Common.TransformPath.Tests
         public PathRoute GetRoute() => PathRoute.FromProvider(this,
             new[] { new PathRoute.Segment(this, 0f, PathLength, PathMovementSettings.Speed(1f), false, null) }, false);
 
+        public PathRuntimeEvent[] WholeRouteEvents => Array.Empty<PathRuntimeEvent>();
+
         public void Raise() => PathChanged?.Invoke();
     }
 
@@ -63,10 +65,7 @@ namespace Common.TransformPath.Tests
             var entries = new List<PathEventEntry>();
             foreach (var (at, setting) in events)
                 entries.Add(new PathEventEntry { NormalizedTime = at, EventSetting = setting });
-            typeof(PathData).GetField("_pathEvents", System.Reflection.BindingFlags.NonPublic
-                    | System.Reflection.BindingFlags.Instance)
-                .SetValue(path, entries);
-            path.Rebuild();
+            path.SetPathEvents(entries);
         }
 
         public void Dispose()

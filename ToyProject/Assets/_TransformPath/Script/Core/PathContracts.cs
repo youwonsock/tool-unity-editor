@@ -60,6 +60,9 @@ namespace Common.TransformPath
 
         /// <summary>The playback route of the current revision, with the provider's own segments and movement.</summary>
         PathRoute GetRoute();
+
+        /// <summary>The events of the whole path played as one segment. A sequence has none.</summary>
+        PathRuntimeEvent[] WholeRouteEvents { get; }
     }
 
     /// <summary>Hears the name of every event a follower reaches, after the event's effects applied.</summary>

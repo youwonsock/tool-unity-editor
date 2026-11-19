@@ -18,26 +18,26 @@ namespace Common.TransformPath
             public PathEventSettingSO EventSetting = null;
         }
 
-        [Header("이벤트 이름")]
+        [Header("Event Name")]
         public string EventName;
 
-        [Header("재생 상태")]
-        [Tooltip("Pause는 재생을 멈추고 값을 바꾸지 않습니다. Resume은 일시정지한 재생을 재개합니다.")]
+        [Header("Playback State")]
+        [Tooltip("Pause stops the playback without changing values. Resume continues a paused playback.")]
         public EPathEventLifecycle Lifecycle;
 
-        [Header("속도 변경 (SpeedBased 구간에서만 적용)")]
+        [Header("Speed Change (SpeedBased segments only)")]
         public bool UseSpeedChange;
         public float SpeedTarget = 1.0f;
         public float SpeedBlendTime;
         public AnimationCurve SpeedBlendCurve = AnimationCurve.EaseInOut(0, 0, 1, 1);
 
-        [Header("Duration 변경 (TimeBased 구간에서만 적용)")]
+        [Header("Duration Change (TimeBased segments only)")]
         public bool UseDurationChange;
         public float DurationTarget = 5.0f;
         public float DurationBlendTime;
         public AnimationCurve DurationBlendCurve = AnimationCurve.EaseInOut(0, 0, 1, 1);
 
-        [Header("지연 이벤트 (게임 시간, 다음 경로 이벤트가 실행되면 취소)")]
+        [Header("Delayed Events (game time, canceled when the next path event runs)")]
         public List<DelayedEventEntry> DelayedEvents = new List<DelayedEventEntry>();
     }
 }

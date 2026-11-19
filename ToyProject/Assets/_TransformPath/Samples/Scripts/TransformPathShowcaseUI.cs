@@ -7,7 +7,7 @@ using UnityEngine.UI;
 namespace Common.TransformPath.Samples
 {
     /// <summary>
-    /// 선택된 TransformPath lane의 설정과 상태만 표시하는 컴팩트 uGUI 패널입니다.
+    /// Compact uGUI panel that shows only the settings and state of the selected TransformPath lane.
     /// </summary>
     [DefaultExecutionOrder(110)]
     public sealed class TransformPathShowcaseUI : MonoBehaviour

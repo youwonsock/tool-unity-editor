@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: babedb40862ee744ba3592fe80a96e84, type: 3}
   m_Name: PathEvent_QueueSlowDown
   m_EditorClassIdentifier: 
-  EventName: Acceleration
+  EventName: SlowDown
   Lifecycle: 0
   UseSpeedChange: 1
   SpeedTarget: 1

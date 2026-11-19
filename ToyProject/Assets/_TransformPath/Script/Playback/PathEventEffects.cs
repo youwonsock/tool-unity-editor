@@ -225,7 +225,7 @@ namespace Common.TransformPath
             }
         }
 
-        // Effects started now begin counting on the next effects tick.
-        private int CurrentEffectsFrame() => _effectsFrame > 0 ? _effectsFrame : Time.frameCount;
+        // Effects started now carry the last tick's frame, so they begin counting on the next effects tick.
+        private int CurrentEffectsFrame() => _effectsFrame;
     }
 }

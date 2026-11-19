@@ -14,11 +14,8 @@ namespace Common.TransformPath
 
         [SerializeField] private List<PathSegmentAuthoring> _segments = new List<PathSegmentAuthoring>();
 
-        [NonSerialized] private PathData[] _paths;
-        [NonSerialized] private PathMovementSettings[] _movements;
-        [NonSerialized] private bool[] _preserve;
-        [NonSerialized] private float[] _starts;
-        [NonSerialized] private float[] _lengths;
+        // The built segments; each one's sampler is the PathData it plays.
+        [NonSerialized] private PathRoute.Segment[] _built;
         [NonSerialized] private int[] _childRevisions;
         [NonSerialized] private int[] _childDefinitionRevisions;
         [NonSerialized] private float _pathLength;
@@ -26,7 +23,7 @@ namespace Common.TransformPath
         [NonSerialized] private bool _building;
         [NonSerialized] private readonly List<PathData> _subscribed = new List<PathData>();
 
-        public override bool IsReady => _paths != null && !_failed;
+        public override bool IsReady => _built != null && !_failed;
 
         public override float PathLength
         {
@@ -42,7 +39,7 @@ namespace Common.TransformPath
             get
             {
                 ThrowIfNotReady();
-                return _paths.Length;
+                return _built.Length;
             }
         }
 
@@ -54,7 +51,7 @@ namespace Common.TransformPath
                 Rebuild();
         }
 
-        protected override void OnDestroy()
+        private protected override void OnDestroy()
         {
             Unsubscribe();
             base.OnDestroy();
@@ -76,28 +73,18 @@ namespace Common.TransformPath
             return _segments[index];
         }
 
-        public PathData GetSegmentPath(int index)
-        {
-            ThrowIfNotReady();
-            return _paths[index];
-        }
+        public PathData GetSegmentPath(int index) => (PathData)GetBuiltSegment(index).Sampler;
 
-        public PathMovementSettings GetSegmentMovement(int index)
-        {
-            ThrowIfNotReady();
-            return _movements[index];
-        }
+        public PathMovementSettings GetSegmentMovement(int index) => GetBuiltSegment(index).Movement;
 
-        public float GetSegmentStartDistance(int index)
-        {
-            ThrowIfNotReady();
-            return _starts[index];
-        }
+        public float GetSegmentStartDistance(int index) => GetBuiltSegment(index).Start;
 
-        public float GetSegmentLength(int index)
+        public float GetSegmentLength(int index) => GetBuiltSegment(index).Length;
+
+        private PathRoute.Segment GetBuiltSegment(int index)
         {
             ThrowIfNotReady();
-            return _lengths[index];
+            return _built[index];
         }
 
         public override Vector3 Sample(float progress)
@@ -106,7 +93,7 @@ namespace Common.TransformPath
             return GetRoute().Sample(progress);
         }
 
-        protected override bool TryBuild(out bool geometryChanged, out bool definitionChanged, out string error)
+        private protected override bool TryBuild(out bool geometryChanged, out bool definitionChanged, out string error)
         {
             _building = true;
             try
@@ -133,11 +120,7 @@ namespace Common.TransformPath
                 return false;
             }
 
-            var paths = new PathData[count];
-            var movements = new PathMovementSettings[count];
-            var preserve = new bool[count];
-            var starts = new float[count];
-            var lengths = new float[count];
+            var built = new PathRoute.Segment[count];
             var revisions = new int[count];
             var definitionRevisions = new int[count];
             float total = 0f;
@@ -147,7 +130,7 @@ namespace Common.TransformPath
                 PathData path = segment.Path;
                 if (path == null)
                 {
-                    error = $"Segment {i} provider must be a PathData.";
+                    error = $"Segment {i} has no PathData assigned.";
                     return false;
                 }
                 path.EnsureBuilt();
@@ -156,18 +139,17 @@ namespace Common.TransformPath
                     error = $"Segment {i} path is not ready.";
                     return false;
                 }
-                if (!segment.TryResolveMovement(out movements[i], out error))
+                if (!segment.TryResolveMovement(out PathMovementSettings movement, out error))
                 {
                     error = $"Segment {i} movement settings are invalid: {error}";
                     return false;
                 }
-                paths[i] = path;
-                preserve[i] = segment.PreservePreviousSpeed;
-                starts[i] = total;
-                lengths[i] = path.PathLength;
+                float length = path.PathLength;
+                built[i] = new PathRoute.Segment(path, total, length, movement, segment.PreservePreviousSpeed,
+                    path.RuntimeEvents);
                 revisions[i] = path.Revision;
                 definitionRevisions[i] = path.DefinitionRevision;
-                total += lengths[i];
+                total += length;
             }
             if (!PathValueUtility.IsFinite(total) || total <= 0f)
             {
@@ -176,14 +158,10 @@ namespace Common.TransformPath
             }
 
             geometryChanged = !HasSame(_childRevisions, revisions) || !Mathf.Approximately(_pathLength, total);
-            definitionChanged = _paths == null
-                || !HasSameStructure(paths, movements, preserve)
+            definitionChanged = _built == null
+                || !HasSameStructure(built)
                 || !HasSame(_childDefinitionRevisions, definitionRevisions);
-            _paths = paths;
-            _movements = movements;
-            _preserve = preserve;
-            _starts = starts;
-            _lengths = lengths;
+            _built = built;
             _childRevisions = revisions;
             _childDefinitionRevisions = definitionRevisions;
             _pathLength = total;
@@ -192,26 +170,23 @@ namespace Common.TransformPath
             return true;
         }
 
-        protected override void MarkFailed() => _failed = true;
+        private protected override void MarkFailed() => _failed = true;
 
-        private protected override PathRoute CreateRoute()
-        {
-            var segments = new PathRoute.Segment[_paths.Length];
-            for (int i = 0; i < segments.Length; i++)
-                segments[i] = new PathRoute.Segment(_paths[i], _starts[i], _lengths[i], _movements[i], _preserve[i],
-                    _paths[i].RuntimeEvents);
-            return PathRoute.FromProvider(this, segments, true);
-        }
+        // A sequence plays its paths' events per segment; as one whole route it has none.
+        private protected override PathRuntimeEvent[] WholeRouteEvents => Array.Empty<PathRuntimeEvent>();
 
-        private bool HasSameStructure(PathData[] paths, PathMovementSettings[] movements, bool[] preserve)
+        // The route never changes the array, and each build makes a new one.
+        private protected override PathRoute CreateRoute() => PathRoute.FromProvider(this, _built, true);
+
+        private bool HasSameStructure(PathRoute.Segment[] built)
         {
-            if (_paths.Length != paths.Length)
+            if (_built.Length != built.Length)
                 return false;
-            for (int i = 0; i < paths.Length; i++)
+            for (int i = 0; i < built.Length; i++)
             {
-                if (!ReferenceEquals(_paths[i], paths[i])
-                    || _preserve[i] != preserve[i]
-                    || !_movements[i].IsSameAs(movements[i]))
+                if (!ReferenceEquals(_built[i].Sampler, built[i].Sampler)
+                    || _built[i].PreservePreviousSpeed != built[i].PreservePreviousSpeed
+                    || !_built[i].Movement.IsSameAs(built[i].Movement))
                     return false;
             }
             return true;

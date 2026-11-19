@@ -5,8 +5,6 @@ namespace Common.TransformPath
 {
     public enum EPathQueueLeaveReason
     {
-        /// <summary>The member left the queue itself and kept playing.</summary>
-        Explicit,
         /// <summary>The follower's playback was stopped.</summary>
         Stopped,
         /// <summary>The follower reached the end of the route.</summary>
@@ -41,8 +39,6 @@ namespace Common.TransformPath
 
         private QueuedPathManager _activeManager;
         private PathQueueWait _wait = PathQueueWait.Free;
-        private PathQueueStatus _status;
-        private bool _hasStatus;
         private float _requestedMaxProgress = 1f;
         private int _motionEpoch;
         private bool _showingPause;
@@ -179,7 +175,7 @@ namespace Common.TransformPath
             _activeManager = manager;
             _requestedMaxProgress = Mathf.Clamp01(maxProgress);
             manager.Join(this);
-            AwaitFirstResult(false);
+            AwaitFirstResult();
             return changed;
         }
 
@@ -231,8 +227,6 @@ namespace Common.TransformPath
         internal void ApplyQueueStatus(PathQueueStatus status, bool hasStatus, float deltaTime)
         {
             PathFollower follower = Follower;
-            _status = status;
-            _hasStatus = hasStatus;
 
             // A paused member stays in line for those behind it but does not
             // count down its own wait. It waits for a first result after it resumes.
@@ -249,9 +243,10 @@ namespace Common.TransformPath
             }
             // A jump (new playback, Seek, loop seam) or a resume waits as a new start would.
             if (follower.MotionEpoch != _motionEpoch || _showingPause)
-                AwaitFirstResult(true);
+                AwaitFirstResult();
 
-            _wait.Step(deltaTime, _hasStatus, _status, GetSpacing(), _resumeMovementDelay, _unblockHysteresis, _speedSmoothRate);
+            _wait.Step(deltaTime, hasStatus, status, _activeManager.SpacingFor(this),
+                _resumeMovementDelay, _unblockHysteresis, _speedSmoothRate);
             ApplyLimit();
             ReportChanges();
         }
@@ -260,7 +255,6 @@ namespace Common.TransformPath
         internal void OnRemovedByManager(EPathQueueLeaveReason reason)
         {
             _activeManager = null;
-            _hasStatus = false;
             bool invalidated = reason == EPathQueueLeaveReason.ProviderInvalid
                 || reason == EPathQueueLeaveReason.ManagerReleased;
             // Waiting ends without a Resumed notification. Stop and Complete speak for themselves.
@@ -292,17 +286,13 @@ namespace Common.TransformPath
             if (_activeManager != null)
                 _activeManager.Remove(this);
             _activeManager = null;
-            _hasStatus = false;
         }
 
-        // A new start waits for the manager and the restart delay.
-        // A result that arrived this frame is already fresh and stays.
-        private void AwaitFirstResult(bool keepStatus)
+        // A new start waits for the manager's next result and the restart delay.
+        private void AwaitFirstResult()
         {
             _motionEpoch = Follower.MotionEpoch;
             _showingPause = false;
-            if (!keepStatus)
-                _hasStatus = false;
             _wait.IsBlocked = true;
             _wait.ResumeDelayRemaining = _resumeMovementDelay;
             _wait.SpeedMultiplier = 0f;
@@ -322,8 +312,8 @@ namespace Common.TransformPath
         {
             if (!IsInQueue)
                 return;
-            float maxProgress = _hasStatus
-                ? Mathf.Min(_requestedMaxProgress, _status.MaxProgress)
+            float maxProgress = _activeManager.TryGetMemberStatus(this, out PathQueueStatus status)
+                ? Mathf.Min(_requestedMaxProgress, status.MaxProgress)
                 : _requestedMaxProgress;
             Follower.SetMotionLimit(new PathMotionLimit(_wait.IsBlocked, _wait.SpeedMultiplier, maxProgress, true));
         }
@@ -340,13 +330,6 @@ namespace Common.TransformPath
                 _reportedSpeedMultiplier = _wait.SpeedMultiplier;
                 _speedChanged.Publish(this, _wait.SpeedMultiplier);
             }
-        }
-
-        private float GetSpacing()
-        {
-            if (_useManagerSpacing && _activeManager != null)
-                return Mathf.Max(0f, _activeManager.DefaultSpacing);
-            return Mathf.Max(0f, _actorSpacing);
         }
 
         #endregion

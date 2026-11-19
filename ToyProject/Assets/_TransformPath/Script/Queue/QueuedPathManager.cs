@@ -53,7 +53,7 @@ namespace Common.TransformPath
             return progress != 0 ? progress : left.Sequence.CompareTo(right.Sequence);
         };
 
-        public bool IsInitialized => _isInitialized;
+        internal bool IsInitialized => _isInitialized;
         public PathProviderBehaviour RouteProvider => _routeProvider;
         /// <summary>The route revision the last results were computed for.</summary>
         public int RouteRevision => _routeRevision;
@@ -221,8 +221,10 @@ namespace Common.TransformPath
                 throw new InvalidOperationException("Queue member and manager must use the same route provider instance.");
             if (_entries.TryGetValue(member, out Entry joined))
             {
-                // Restarting in place keeps the member's place among equals.
+                // Restarting in place keeps the member's place among equals and waits
+                // for this frame's result, as a new start does.
                 joined.MotionEpoch = member.Follower.MotionEpoch;
+                joined.Status = null;
                 return;
             }
             Entry entry = _pool.Count > 0 ? _pool[_pool.Count - 1] : new Entry();
@@ -252,6 +254,9 @@ namespace Common.TransformPath
         }
 
         internal bool Contains(PathQueueMember member) => member != null && _entries.ContainsKey(member);
+
+        /// <summary>The gap a member keeps behind the member ahead.</summary>
+        internal float SpacingFor(PathQueueMember member) => member.UseManagerSpacing ? _defaultSpacing : member.ActorSpacing;
 
         private void LeaveAll(EPathQueueLeaveReason reason)
         {
@@ -308,7 +313,7 @@ namespace Common.TransformPath
                 float? distance = ahead == null
                     ? (float?)null
                     : Mathf.Max(0f, (ahead.Progress - entry.Progress) * routeLength);
-                float spacing = member.UseManagerSpacing ? _defaultSpacing : member.ActorSpacing;
+                float spacing = SpacingFor(member);
                 // A follower that has not taken the new geometry yet waits a frame.
                 bool revisionBlocked = member.Follower.RouteRevision != _routeRevision;
                 bool spacingBlocked = distance.HasValue && distance.Value <= spacing;

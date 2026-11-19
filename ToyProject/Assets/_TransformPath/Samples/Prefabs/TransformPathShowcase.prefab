@@ -1353,7 +1353,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _segments:
-  - _providerObject: {fileID: 830505861753064085}
+  - _path: {fileID: 830505861753064085}
     _movementSource: 0
     _moveType: 0
     _moveValue: 0
@@ -1364,7 +1364,7 @@ MonoBehaviour:
       m_PostInfinity: 2
       m_RotationOrder: 4
     _preservePreviousSpeed: 0
-  - _providerObject: {fileID: 3101732148213765793}
+  - _path: {fileID: 3101732148213765793}
     _movementSource: 0
     _moveType: 0
     _moveValue: 0
@@ -2308,7 +2308,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _segments:
-  - _providerObject: {fileID: 5616179923128869812}
+  - _path: {fileID: 5616179923128869812}
     _movementSource: 0
     _moveType: 0
     _moveValue: 0
@@ -2859,7 +2859,7 @@ MonoBehaviour:
     m_PostInfinity: 2
     m_RotationOrder: 4
   _showPathInEditor: 1
-  _previewSamplingType: 2
+  _previewSamplingType: 0
   _previewSampleCount: 12
   _pointColor: {r: 1, g: 0, b: 0, a: 1}
   _pathColor: {r: 0, g: 0, b: 1, a: 1}

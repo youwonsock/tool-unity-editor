@@ -4,7 +4,7 @@ using UnityEngine.UI;
 namespace Common.TransformPath.Samples
 {
     /// <summary>
-    /// TransformPath 쇼케이스의 경로·Follower·Queue·이벤트 상태를 표시합니다.
+    /// Shows the path, follower, queue and event state of the TransformPath showcase.
     /// </summary>
     [DefaultExecutionOrder(100)]
     public sealed class TransformPathOverviewBoard : MonoBehaviour

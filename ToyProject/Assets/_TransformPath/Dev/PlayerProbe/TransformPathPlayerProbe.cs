@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-using System.Reflection;
 using System.Text;
 using UnityEngine;
 using UnityEngine.Profiling;
@@ -15,7 +14,7 @@ using Object = UnityEngine.Object;
 namespace Common.TransformPath.PlayerProbe
 {
     /// <summary>
-    /// Measures real Player frames through the public TransformPath API: many
+    /// Measures real Player frames through the TransformPath components: many
     /// followers, long queues, Seek, path changes, Pause/Resume and Loop. It also
     /// records whether a queue keeps its spacing and finishes. Only the build made
     /// by Tools/run-transformpath-probe.sh contains it.
@@ -377,8 +376,7 @@ namespace Common.TransformPath.PlayerProbe
                 setting.EventName = "event" + i;
                 entries.Add(new PathEventEntry { NormalizedTime = (i + 1f) / (count + 1f), EventSetting = setting });
             }
-            typeof(PathData).GetField("_pathEvents", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(path, entries);
-            path.Rebuild();
+            path.SetPathEvents(entries);
         }
 
         private static MultiPathData CreateSequence(GameObject root, List<PathData> paths)

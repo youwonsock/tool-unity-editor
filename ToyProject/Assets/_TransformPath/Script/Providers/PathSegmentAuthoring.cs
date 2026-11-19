@@ -6,7 +6,7 @@ namespace Common.TransformPath
     public enum EPathSegmentMovementSource
     {
         /// <summary>The segment moves with its PathData's own settings.</summary>
-        Provider = 0,
+        Path = 0,
         /// <summary>The segment moves with the settings stored here.</summary>
         Override = 1,
     }
@@ -15,8 +15,7 @@ namespace Common.TransformPath
     [Serializable]
     public struct PathSegmentAuthoring
     {
-        // The name stays from when any provider was allowed, so scenes and prefabs keep their references.
-        [SerializeField] private PathData _providerObject;
+        [SerializeField] private PathData _path;
         [SerializeField] private EPathSegmentMovementSource _movementSource;
         [SerializeField] private EPathMoveType _moveType;
         [SerializeField] private float _moveValue;
@@ -25,8 +24,8 @@ namespace Common.TransformPath
 
         public PathSegmentAuthoring(PathData path, bool preservePreviousSpeed = false)
         {
-            _providerObject = path;
-            _movementSource = EPathSegmentMovementSource.Provider;
+            _path = path;
+            _movementSource = EPathSegmentMovementSource.Path;
             _moveType = EPathMoveType.TimeBased;
             _moveValue = 0f;
             _timeCurve = null;
@@ -35,7 +34,7 @@ namespace Common.TransformPath
 
         public PathSegmentAuthoring(PathData path, PathMovementSettings movement, bool preservePreviousSpeed = false)
         {
-            _providerObject = path;
+            _path = path;
             _movementSource = EPathSegmentMovementSource.Override;
             _moveType = movement.MoveType;
             _moveValue = movement.Value;
@@ -43,7 +42,7 @@ namespace Common.TransformPath
             _preservePreviousSpeed = preservePreviousSpeed;
         }
 
-        public PathData Path => _providerObject;
+        public PathData Path => _path;
         public EPathSegmentMovementSource MovementSource => _movementSource;
         public bool PreservePreviousSpeed => _preservePreviousSpeed;
 
@@ -56,7 +55,7 @@ namespace Common.TransformPath
                 error = "A PathData is required.";
                 return false;
             }
-            settings = _movementSource == EPathSegmentMovementSource.Provider
+            settings = _movementSource == EPathSegmentMovementSource.Path
                 ? path.MovementSettings
                 : new PathMovementSettings(_moveType, _moveValue, _timeCurve);
             return settings.TryValidate(out error);

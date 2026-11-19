@@ -4,8 +4,8 @@ using UnityEngine.EventSystems;
 namespace Common.TransformPath.Samples
 {
     /// <summary>
-    /// TransformPath showcase용 Perspective fly camera입니다.
-    /// 우클릭 중에만 마우스 포인터를 캡처하고 이동 입력을 소비합니다.
+    /// Perspective fly camera for the TransformPath showcase.
+    /// It captures the mouse pointer and consumes movement input only while the right button is held.
     /// </summary>
     [RequireComponent(typeof(Camera))]
     public sealed class TransformPathFreeCamera : MonoBehaviour

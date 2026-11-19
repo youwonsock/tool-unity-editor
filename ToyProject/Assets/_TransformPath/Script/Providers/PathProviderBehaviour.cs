@@ -72,6 +72,8 @@ namespace Common.TransformPath
 
         PathRoute IPathProvider.GetRoute() => GetRoute();
 
+        PathRuntimeEvent[] IPathProvider.WholeRouteEvents => WholeRouteEvents;
+
         /// <summary>Builds once if nothing asked for a build yet, such as a sequence waking first.</summary>
         internal void EnsureBuilt()
         {
@@ -80,28 +82,31 @@ namespace Common.TransformPath
         }
 
         /// <summary>Builds into fields of the subclass only when every check passed.</summary>
-        protected abstract bool TryBuild(out bool geometryChanged, out bool definitionChanged, out string error);
+        private protected abstract bool TryBuild(out bool geometryChanged, out bool definitionChanged, out string error);
 
         /// <summary>Makes the last publication unavailable for playback until the next good build.</summary>
-        protected abstract void MarkFailed();
+        private protected abstract void MarkFailed();
 
         private protected abstract PathRoute CreateRoute();
 
+        /// <summary>The events of the whole path played as one segment.</summary>
+        private protected abstract PathRuntimeEvent[] WholeRouteEvents { get; }
+
         /// <summary>Rebuilds after a setting changed, unless the provider was never asked to build.</summary>
-        protected void RebuildIfRequested()
+        private protected void RebuildIfRequested()
         {
             if (_buildRequested)
                 Rebuild();
         }
 
-        protected void ThrowIfNotReady()
+        private protected void ThrowIfNotReady()
         {
             if (!IsReady)
                 throw new InvalidOperationException($"{GetType().Name} '{name}' is not built and ready.");
         }
 
         /// <summary>A destroyed provider stops every playback and queue that uses it.</summary>
-        protected virtual void OnDestroy()
+        private protected virtual void OnDestroy()
         {
             _destroyed = true;
             MarkUnavailable();
@@ -111,7 +116,7 @@ namespace Common.TransformPath
         /// Takes the publication out of use without logging, because a provider
         /// this one depends on already reported why.
         /// </summary>
-        protected void MarkUnavailable()
+        private protected void MarkUnavailable()
         {
             MarkFailed();
             NotifyUnavailable();

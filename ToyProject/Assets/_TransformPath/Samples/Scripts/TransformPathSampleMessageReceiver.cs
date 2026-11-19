@@ -5,7 +5,7 @@ using UnityEngine;
 namespace Common.TransformPath.Samples
 {
     /// <summary>
-    /// TransformPath가 전달한 이벤트 메시지를 수신하는 샘플 Receiver입니다.
+    /// Sample receiver for the event messages TransformPath delivers.
     /// </summary>
     public sealed class TransformPathSampleMessageReceiver : MonoBehaviour, IPathEventReceiver
     {

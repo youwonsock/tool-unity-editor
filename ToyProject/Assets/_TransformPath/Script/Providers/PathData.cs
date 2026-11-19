@@ -116,6 +116,15 @@ namespace Common.TransformPath
         }
 
         /// <summary>Replaces the control points and rebuilds.</summary>
+        /// <summary>Replaces the authored events and rebuilds. For the test and measurement tools.</summary>
+        internal void SetPathEvents(IReadOnlyList<PathEventEntry> entries)
+        {
+            if (entries == null)
+                throw new ArgumentNullException(nameof(entries));
+            _pathEvents = new List<PathEventEntry>(entries);
+            Rebuild();
+        }
+
         public void SetPathPoints(IReadOnlyList<Transform> points)
         {
             if (points == null)
@@ -183,7 +192,7 @@ namespace Common.TransformPath
             return changed;
         }
 
-        public static float ClampPathEventNormalizedTime(float normalizedTime)
+        internal static float ClampPathEventNormalizedTime(float normalizedTime)
         {
             return Mathf.Clamp(normalizedTime, 0f, PathConstants.MAX_EVENT_POSITION);
         }
@@ -191,7 +200,7 @@ namespace Common.TransformPath
         private static readonly Comparison<PathEventEntry> CompareEntries =
             (left, right) => left.NormalizedTime.CompareTo(right.NormalizedTime);
 
-        protected override bool TryBuild(out bool geometryChanged, out bool definitionChanged, out string error)
+        private protected override bool TryBuild(out bool geometryChanged, out bool definitionChanged, out string error)
         {
             geometryChanged = false;
             definitionChanged = false;
@@ -225,7 +234,9 @@ namespace Common.TransformPath
             return true;
         }
 
-        protected override void MarkFailed() => _failed = true;
+        private protected override void MarkFailed() => _failed = true;
+
+        private protected override PathRuntimeEvent[] WholeRouteEvents => _events;
 
         private protected override PathRoute CreateRoute()
         {
@@ -281,11 +292,12 @@ namespace Common.TransformPath
 
         // Scene View preview settings. They are serialized in every build so the
         // Editor and the Player share one data layout; only the Editor reads them.
-        private enum EPreviewSamplingType
+        internal enum EPreviewSamplingType
         {
+            /// <summary>Evenly spaced along the path's length.</summary>
             Uniform,
+            /// <summary>Random positions from a seed of this component's instance.</summary>
             DeterministicRandom,
-            DistanceBased,
         }
 
         [Header("Editor Preview Only")]
@@ -302,7 +314,7 @@ namespace Common.TransformPath
         [SerializeField, Range(0f, 1f)] private float _eventPointSize = 0.15f;
 
         internal bool ShowPathInEditor => _showPathInEditor;
-        internal int PreviewSamplingType => (int)_previewSamplingType;
+        internal EPreviewSamplingType PreviewSamplingType => _previewSamplingType;
         internal int PreviewSampleCount => _previewSampleCount;
         internal Color PointColor => _pointColor;
         internal Color PathColor => _pathColor;

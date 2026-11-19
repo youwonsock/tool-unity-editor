@@ -76,10 +76,9 @@ namespace Common.TransformPath
         /// <summary>The whole provider as one segment moving with the given settings.</summary>
         public static PathRoute Aggregate(IPathProvider provider, PathMovementSettings movement)
         {
-            PathRuntimeEvent[] events = provider is PathData path ? path.RuntimeEvents : null;
             return new PathRoute(
                 provider,
-                new[] { new Segment(provider, 0f, provider.PathLength, movement, false, events) },
+                new[] { new Segment(provider, 0f, provider.PathLength, movement, false, provider.WholeRouteEvents) },
                 ESource.Aggregate,
                 false);
         }

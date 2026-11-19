@@ -14,7 +14,6 @@ namespace Common.TransformPath
         #region Constants
 
         private const float DEFAULT_LINE_WIDTH = 0.05f;
-        private const int MIN_PATH_POINT_COUNT = 2;
 
         #endregion
 
@@ -26,7 +25,7 @@ namespace Common.TransformPath
 
         [Header("Line Settings")]
         [SerializeField] private float _lineWidth = DEFAULT_LINE_WIDTH;
-        [Tooltip("URP 라인용 Unlit/Particle 머티리얼을 할당하세요. 비우면 색만 적용됩니다.")]
+        [Tooltip("An Unlit or Particle material for URP lines. Leave empty to apply only the color.")]
         [SerializeField] private Material _lineMaterial = null;
         [SerializeField] private Color _lineColor = Color.cyan;
 
@@ -37,13 +36,6 @@ namespace Common.TransformPath
         private bool _visible = true;
         private bool _hasValidPath = false;
         private bool _isInitialized;
-
-        #endregion
-
-
-        #region Properties
-
-        public bool IsInitialized => _isInitialized;
 
         #endregion
 
@@ -84,7 +76,6 @@ namespace Common.TransformPath
             TryGetComponent(out _lineRenderer);
             if (!Application.isPlaying)
                 return;
-            ConfigureLineRenderer();
             Init();
             Refresh();
         }
@@ -131,7 +122,7 @@ namespace Common.TransformPath
             }
 
             int samplePointCount = _pathData.SamplePointCount;
-            if (samplePointCount < MIN_PATH_POINT_COUNT)
+            if (samplePointCount < PathConstants.MIN_PATH_POINTS)
             {
                 _hasValidPath = false;
                 ApplyVisibility();
