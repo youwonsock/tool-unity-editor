@@ -8,6 +8,11 @@
 # with exit code 124 after TRANSFORMPATH_TEST_TIMEOUT seconds (default 900).
 set -euo pipefail
 
+if [ $# -gt 0 ]; then
+    echo "Unknown option: $1" >&2
+    exit 64
+fi
+
 source "$(dirname "$0")/snapshot-worktree.sh"
 
 output=$results/transformpath-tests.xml

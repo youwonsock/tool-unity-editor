@@ -6,7 +6,7 @@
 # UNITY_PATH           Unity executable (default: the Hub install of the project version)
 # UNITY_WORKTREE       Reused worktree (default: under TMPDIR, keeps its Library)
 # UNITY_RESULTS        Folder for results and logs (default: <worktree>-results)
-# UNITY_TREE           Commit to build instead of the working tree
+# UNITY_TREE           Commit (hash, branch or HEAD of this checkout) to build instead of the working tree
 # UNITY_BUILD_TIMEOUT  Seconds a Player build may take (default 3600)
 
 root=$(git rev-parse --show-toplevel)
@@ -55,7 +55,9 @@ run_limited() {
 [ -e "$worktree/.git" ] || git -C "$root" worktree add -q --detach "$worktree" HEAD
 
 if [ -n "${UNITY_TREE:-}" ]; then
-    tree=$UNITY_TREE
+    # Resolved in this repository, so HEAD or a branch name means the same
+    # commit here as in the caller's checkout, not the snapshot's own HEAD.
+    tree=$(git -C "$root" rev-parse --verify "$UNITY_TREE^{tree}")
 else
     # A temporary index captures tracked edits and new files without touching
     # the real index, the stash or any branch.

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds a Mono Mac Player from a snapshot of the working tree and runs
 # FlowFieldPlayerProbe: frame measurements of Surface and Volume rebuilds, then
-# every sample scene in both bake modes. The Player opens a window, because the
+# every FlowField sample scene in both bake modes. The Player opens a window, because the
 # measurements need real frames.
 #
 #   Tools/run-player-probe.sh

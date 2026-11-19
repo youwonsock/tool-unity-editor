@@ -52,6 +52,10 @@ namespace Common.FlowField.PlayerProbe.Editor
                 throw new InvalidOperationException($"Probe Player build {report.summary.result}: {report.summary.totalErrors} errors");
         }
 
+        /// <summary>
+        /// The IL2CPP check for Tools/run-il2cpp-build.sh. It lives here, but it
+        /// builds every enabled scene in the build settings, from all three tools.
+        /// </summary>
         internal static void BuildIl2cppCheck()
         {
             PlayerSettings.SetScriptingBackend(NamedBuildTarget.Android, ScriptingImplementation.IL2CPP);

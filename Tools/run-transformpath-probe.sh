@@ -16,7 +16,12 @@ runs=5
 skip_build=
 while [ $# -gt 0 ]; do
     case "$1" in
-        --runs) runs=$2; shift 2 ;;
+        --runs)
+            if [ $# -lt 2 ] || ! [[ $2 =~ ^[1-9][0-9]*$ ]]; then
+                echo "--runs needs a positive integer" >&2
+                exit 64
+            fi
+            runs=$2; shift 2 ;;
         --skip-build) skip_build=1; shift ;;
         *) echo "Unknown option: $1" >&2; exit 64 ;;
     esac

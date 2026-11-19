@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Builds the sample scenes for Android with IL2CPP from a snapshot of the working
 # tree. This proves the code survives IL2CPP translation, stripping and the native
-# compile, not that it runs: nothing here starts the result on a device.
+# compile, not that it runs: nothing here starts the result on a device. The
+# entry point lives in FlowField's Dev/Editor assembly
+# (FlowFieldPlayerProbeBuild.BuildIl2cppCheck), but the build covers every
+# enabled scene in the build settings, from all three tools.
 #
 #   Tools/run-il2cpp-build.sh
 #
@@ -10,6 +13,11 @@
 # disk, and leaves the snapshot worktree on Android until the next Player build
 # switches it back.
 set -euo pipefail
+
+if [ $# -gt 0 ]; then
+    echo "Unknown option: $1" >&2
+    exit 64
+fi
 
 source "$(dirname "$0")/snapshot-worktree.sh"
 
