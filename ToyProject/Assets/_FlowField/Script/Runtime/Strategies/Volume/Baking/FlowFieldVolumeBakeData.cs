@@ -5,7 +5,11 @@ namespace Common.FlowField
 {
     public sealed class FlowFieldVolumeBakeData : FlowFieldBakeAsset, ISerializationCallbackReceiver
     {
-        internal const int SupportedFormatVersion = 6;
+        /// <summary>
+        /// The Volume3D bake format this FlowField reads and writes. An asset with
+        /// another <see cref="FlowFieldBakeAsset.FormatVersion"/> must be baked again.
+        /// </summary>
+        public static int SupportedFormatVersion => 6;
 
         [SerializeField] private Vector3 _gridOriginWorld;
         [SerializeField] private int _width;

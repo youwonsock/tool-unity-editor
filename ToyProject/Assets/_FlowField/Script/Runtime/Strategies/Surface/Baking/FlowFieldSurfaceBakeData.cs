@@ -171,7 +171,11 @@ namespace Common.FlowField
     /// </summary>
     public sealed class FlowFieldSurfaceBakeData : FlowFieldBakeAsset, ISerializationCallbackReceiver
     {
-        internal const int SupportedFormatVersion = 6;
+        /// <summary>
+        /// The Surface2D bake format this FlowField reads and writes. An asset with
+        /// another <see cref="FlowFieldBakeAsset.FormatVersion"/> must be baked again.
+        /// </summary>
+        public static int SupportedFormatVersion => 6;
         private const float Epsilon = 0.0001f;
         private const int MinSentinel = -3;
 

@@ -84,6 +84,7 @@ public sealed class FlowFieldReadmeMover : MonoBehaviour
 | 모드 변경 | `Release()` → `SetSpaceMode()` → `Init()` 뒤 동적 장애물 재등록 |
 | 결과 변화 알림 | `FieldChanged`, `StateChanged` 이벤트. 핸들러 안에서 모든 명령을 쓸 수 있습니다 |
 | 격자 안 위치 | `ClampPositionToGrid()`. 예외 없이 쓰려면 `TryClampPositionToGrid()` |
+| Bake Asset 형식 확인 | `asset.HasCurrentFormat`(false면 다시 Bake). 지원 형식은 `FlowFieldSurfaceBakeData.SupportedFormatVersion`, `FlowFieldVolumeBakeData.SupportedFormatVersion` |
 
 - **통지 방식:** FlowField는 씬을 폴링하지 않습니다. 변경은 위 API와 FlowField 컴포넌트(`FlowFieldDynamicObstacle`, `FlowFieldGoalTarget`, Modifier)의 통지로만 들어옵니다. 알리지 않은 이동은 반영되지 않습니다. 통지를 받은 그 프레임부터 영향 영역은 새 결과가 게시될 때까지 속도 0입니다. 장애물 조회는 Trigger를 무시합니다.
 - **Goal Transform:** Manager의 Goal Transform은 Init과 Bake 때 한 번 읽는 초기 Goal입니다. 이후 이동은 `SetGoal()`이나 `FlowFieldGoalTarget`으로 알립니다.

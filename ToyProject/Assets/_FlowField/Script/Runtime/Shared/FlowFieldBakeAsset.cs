@@ -26,7 +26,11 @@ namespace Common.FlowField
 
         private protected abstract int CurrentFormatVersion { get; }
 
-        private protected bool HasCurrentFormat => _formatVersion == CurrentFormatVersion;
+        /// <summary>
+        /// Whether the asset was baked in the format this FlowField reads, the
+        /// derived type's SupportedFormatVersion. False means bake it again.
+        /// </summary>
+        public bool HasCurrentFormat => _formatVersion == CurrentFormatVersion;
 
         /// <summary>Drops what a derived asset cached from its arrays.</summary>
         private protected virtual void OnContentChanged()
