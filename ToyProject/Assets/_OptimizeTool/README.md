@@ -63,6 +63,7 @@ Edit Mode에서 Inspector 버튼이나 아래 API로 실행합니다. 별도 초
 | `MeshCombiner.BuildMeshes()` | 임시 결과만 만듭니다. 반환값은 호출자가 `Dispose()`합니다 |
 | `MeshCombiner.CombineAndSaveMeshes()` | 결합 결과를 Mesh 에셋으로 저장하고 씬 출력을 적용합니다 |
 | `MeshCombiner.RestoreSources()` | 씬 출력을 지우고 이 컴포넌트가 끈 원본 Renderer를 원래 상태로 되돌립니다. 저장한 Mesh 에셋은 남깁니다. Inspector의 **Restore Sources** 버튼과 같습니다 |
+| `MeshBuildPipeline.Build(sources, destinationWorldToLocal, settings)` | 컴포넌트 없이 MeshFilter 목록과 `MeshBuildSettings`로 임시 결과를 만듭니다. 저장은 `MeshAssetTransaction.Save`로 합니다. 샘플 빌더가 이 방식을 씁니다 |
 
 ```csharp
 // Editor 폴더 또는 Common.OptimizeTool.MeshOptimization.Editor를 참조하는 Editor 어셈블리

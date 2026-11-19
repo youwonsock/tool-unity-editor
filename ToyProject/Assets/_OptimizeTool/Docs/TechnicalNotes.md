@@ -43,15 +43,17 @@ MeshFilter 수집 → 설정·입력 검증 → Readable·Normal 처리
 ```mermaid
 flowchart LR
     subgraph Mesh[MeshOptimization]
-        Combiner[MeshCombiner 설정]
+        Combiner[MeshCombiner 설정] -->|CreateSettings| Settings[MeshBuildSettings]
     end
     subgraph MeshEditor[MeshOptimization.Editor]
         Commands[MeshToolCommands] --> Pipeline[MeshBuildPipeline]
+        Pipeline --> Geometry[MeshGeometry]
+        Pipeline --> Occlusion[MeshOcclusion]
         Pipeline --> Result[MeshBuildResult / Parts]
         Commands -->|Save| MeshSave[MeshAssetTransaction]
         Result -. Parts .-> MeshSave
         MeshSave -->|씬 출력 콜백| Scene[MeshSceneOutput / Undo]
-        Commands --> Geometry[MeshGeometry]
+        Commands -->|RestoreSources| Scene
     end
     subgraph Physics[PhysicsRecording]
         Recorder[PhysicsRecorder] -->|Capture / Finish| Take[PhysicsTake]
@@ -85,12 +87,12 @@ flowchart LR
 | 어셈블리 | 클래스 | 역할 |
 | --- | --- | --- |
 | MeshOptimization | `MeshCombiner` / `MeshBuildSettings` / `MeshSourceRendererState` | Inspector 설정, 그 설정에서 만든 빌드 옵션(직렬화하지 않음), 결합 씬 출력과 원본 Renderer 상태 |
-| MeshOptimization.Editor | `MeshToolCommands` | 설정을 빌드 요청으로 만들고 빌드·저장·씬 적용·베이크를 호출하는 확장 메서드 |
+| MeshOptimization.Editor | `MeshToolCommands` | `BuildMeshes`·`CombineAndSaveMeshes`·`RestoreSources` 확장 메서드. 입력 수집, 출력 경로 생성, 남은 이전 출력 경고 |
 | MeshOptimization.Editor | `MeshBuildPipeline` | `Build(sources, destinationWorldToLocal, settings)`. 저장 경로와 분리된 입력 검증, 컬링·변환·Material별 결합. 기하 연산은 `MeshGeometry`, 씬 Physics 조회는 `MeshOcclusion` |
 | MeshOptimization.Editor | `MeshBuildResult` | Mesh와 Material 매핑을 항목별로 묶고 임시 Mesh만 소유. `Dispose()`는 원본을 파괴하지 않음 |
 | MeshOptimization.Editor | `MeshAssetTransaction` | 모든 출력 경로를 쓰기 전에 검증하고(`_meshName.asset` 또는 `_meshName_0.asset` 경로는 `MeshToolCommands`가 만듦), 쓰기와 복원을 단계별로 나눠 처리. Mesh 출력 충돌 사전 검증, Undo와 함께 GUID 유지 저장. 콜백이 쓰는 Prefab·부속 에셋 경로도 먼저 선언해야 복구 대상에 포함 |
-| MeshOptimization.Editor | `MeshSceneOutput` | Undo에 등록하며 결과 Renderer를 만들고 원본 Renderer를 비활성화 |
-| OptimizeTool.Editor | `AssetFileTransaction` | 공용 출력 규칙: `Assets/` 아래 경로·이름 검증, 폴더 생성, GUID를 유지하는 `CreateOrReplace`, 선언한 파일의 백업과 실패 시 복원 |
+| MeshOptimization.Editor | `MeshSceneOutput` | Undo에 등록하며 결과 Renderer를 만들고 원본 Renderer를 비활성화. 끈 원본의 기록과 `Restore`, Prefab 인스턴스 안의 결과 거부 |
+| OptimizeTool.Editor | `AssetFileTransaction` | 공용 출력 규칙: Edit Mode 확인, `Assets/` 아래 경로·이름 검증, 출력 자리 검사(`ValidateOutputTarget`), 폴더 생성, GUID를 유지하는 `CreateOrReplace`, 선언한 파일의 백업과 실패 시 복원 |
 | PhysicsRecording | `PhysicsRecorder` / `PhysicsTakeSettings` / `PhysicsRecordingResult` | take 시작·종료·취소, 설정 스냅샷과 경로, fixed time 기준, 저장 직전 계층 검증, 결과 게시 |
 | PhysicsRecording | `PhysicsTake` | 물리 스텝마다 쌓는 frame-major 원본 관찰값, 회전 부호 연속성, 요청한 종료 시각의 보간 |
 | PhysicsRecording | `IPhysicsRecordingExporter` | Runtime 녹화가 Editor 저장을 부르는 경계: 검증, 리로드 잠금, 저장 |
@@ -114,7 +116,8 @@ flowchart LR
 - 같은 Material의 SubMesh를 `CombineInstance`로 묶고, `_combineAllIntoSingleMesh`가 켜지면 하나의 Mesh로 다시 결합합니다. `_optimizeMesh`는 정점·인덱스 재정렬이며 폴리곤 단순화가 아닙니다.
 - 병합 입력은 Layer·그림자·Probe·정렬·Rendering Layer·Motion Vector·Static Flag·Receive GI·Ray Tracing Mode·Renderer Priority·Static Shadow Caster·Stitch Seams·Lightmap Parameters·Scale In Lightmap 설정이 같아야 하며, 지원하는 설정은 출력 Renderer에 복사합니다. PropertyBlock, Additional Vertex Streams, 할당된 Lightmap, LODGroup, forceRenderingOff는 저장 전에 거부합니다.
 - `_createSceneOutput`은 결과 MeshFilter·MeshRenderer와 Material 배열을 만들고, `_disableSourceRenderers`는 원본 Renderer만 끕니다(Collider 유지). 재실행 시 도구가 만든 결과는 자식 수집에서 제외합니다.
-- 재빌드에서는 다음 입력에도 남는 원본 Renderer를 계속 끄고, 제거된 원본만 기록해 둔 활성 상태로 복원합니다. `RestoreSources()`(Inspector의 **Restore Sources**)는 결과 오브젝트를 지우고 기록한 모든 원본을 원래 활성 상태로 되돌린 뒤 기록을 비웁니다. 이 작업은 Undo 한 단계이며 저장한 Mesh 에셋은 지우지 않습니다. 결과 오브젝트가 Prefab 인스턴스의 일부(추가 오버라이드가 아닌 것)이면 다시 굽기와 복원 모두 아무것도 바꾸기 전에 거부합니다. 이 정보는 컴포넌트에 직렬화되어 Undo/Redo와 Prefab 인스턴스에도 유지됩니다.
+- 재빌드에서는 다음 입력에도 남는 원본 Renderer를 계속 끄고, 제거된 원본만 기록해 둔 활성 상태로 복원합니다. 이 기록은 컴포넌트에 직렬화되어 Undo/Redo와 Prefab 인스턴스에도 유지됩니다.
+- `RestoreSources()`(Inspector의 **Restore Sources**)는 결과 오브젝트를 지우고 기록한 모든 원본을 원래 활성 상태로 되돌린 뒤 기록을 비웁니다. 이 작업은 Undo 한 단계이며 저장한 Mesh 에셋은 지우지 않습니다. 결과 오브젝트가 Prefab 인스턴스의 일부(추가 오버라이드가 아닌 것)이면 다시 굽기와 복원 모두 아무것도 바꾸기 전에 거부합니다.
 - 출력 좌표는 Combiner의 로컬 공간입니다. 조명은 결합한 결과 Renderer를 대상으로 베이크합니다.
 - 입력이 Lightmap Static(Contribute GI)이고 Receive GI가 Lightmaps이면, `_packLightmapUVs`(기본 켬)가 소스마다 라이트맵 UV(UV2, 없으면 UV0)를 [0,1] 안의 같은 크기 칸으로 옮겨 결합 결과의 라이트맵이 겹치지 않게 합니다. 정점 수는 그대로이고 결과는 결정적입니다. 칸 크기가 같아서 소스 크기가 다르면 라이트맵 해상도가 고르지 않습니다. UV2가 없는 소스는 UV0이 자기 자신과 겹칠 수 있어 경고합니다. 끄면 UV를 그대로 두고 겹침을 경고합니다.
 - 저장한 Mesh는 기본으로 Read/Write를 끄므로 Player에서 CPU 사본이 해제됩니다. 실행 중 Mesh를 읽는 스크립트나 Collider가 있으면 `_keepReadable`을 켭니다.
@@ -125,7 +128,7 @@ flowchart LR
 ## Occlusion과 Backface
 
 - **Occlusion:** 입력이 속한 PhysicsScene에서 `_cullingLayerMask`의 Collider로 Raycast합니다. 대상 자신과 자식의 Collider, Trigger는 제외하고, 결과 버퍼가 가득 차면 확장합니다. 조상의 Box·Sphere·Capsule·볼록 Mesh Collider는 표본 점을 안에 품을 때만 제외합니다(자식 비주얼을 감싼 부모 Collider처럼 대상 자신의 프록시로 봄). 표면 위의 점도 안으로 보므로 지오메트리를 남기는 쪽으로 기웁니다. 오목한 Mesh Collider나 Terrain인 조상, 그리고 대상 밖에서 앞을 막는 조상 Collider는 가림물로 남습니다. Orthographic 카메라는 평행 광선을 씁니다.
-- 표본 후보는 모든 Vertex와 퇴화하지 않은 삼각형의 중심점입니다. 그래서 Vertex가 적은 큰 면도 안쪽을 검사합니다. 후보 수가 `_vertexSamplingCount` 이하이면 모두를, 더 많으면 균등 간격 표본을 검사합니다(결정적). 보이는 비율이 `_visibilityThreshold`보다 작으면 MeshFilter 전체를 뺍니다. Camera, 양수 샘플 수, `0..1` 임계값, 유효한 LayerMask가 필요합니다.
+- 표본 후보는 모든 Vertex와 퇴화하지 않은 삼각형의 중심점입니다. 그래서 Vertex가 적은 큰 면도 안쪽을 검사합니다. 후보 수가 `_occlusionSampleCount` 이하이면 모두를, 더 많으면 균등 간격 표본을 검사합니다(결정적). 보이는 비율이 `_visibilityThreshold`보다 작으면 MeshFilter 전체를 뺍니다. Camera, 양수 샘플 수, `0..1` 임계값, 유효한 LayerMask가 필요합니다.
 - **Backface:** `MeshCombiner`는 결합 중 `_enableBackfaceCulling`과 `_backfaceCullingAngle`로 삼각형마다 World-space Normal과 관찰 방향의 각도를 판정합니다.
 - Perspective는 삼각형 중심에서 카메라로 향하는 방향, Orthographic은 `-camera.forward`를 씁니다. 비균일·음수 Scale은 법선 역전치 변환과 winding 보정으로 처리합니다.
 
