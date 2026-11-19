@@ -53,7 +53,8 @@ namespace Common.OptimizeTool.MeshOptimization
         [Tooltip("Merge the per-material meshes into one mesh with one submesh per material.")]
         [SerializeField] private bool _combineAllIntoSingleMesh;
         [Tooltip("For lightmap static sources, pack each source's lightmap UVs into its own tile so baked lightmaps do not overlap.")]
-        [SerializeField] private bool _packLightmapUVs = true;
+        [FormerlySerializedAs("_packLightmapUVs")]
+        [SerializeField] private bool _packLightmapUvs = true;
         [Tooltip("Create renderers for the saved meshes under this object.")]
         [SerializeField] private bool _createSceneOutput = true;
         [Tooltip("Disable the source Renderers after creating the scene output. Restore Sources turns them back on.")]
@@ -72,7 +73,7 @@ namespace Common.OptimizeTool.MeshOptimization
             AllowNormalRecalculation = _allowNormalRecalculation,
             OptimizeMesh = _optimizeMesh,
             CombineIntoSingleMesh = _combineAllIntoSingleMesh,
-            PackLightmapUVs = _packLightmapUVs,
+            PackLightmapUVs = _packLightmapUvs,
             BackfaceCulling = _enableBackfaceCulling,
             BackfaceAngle = _backfaceCullingAngle,
             OcclusionCulling = _enableOcclusionCulling,

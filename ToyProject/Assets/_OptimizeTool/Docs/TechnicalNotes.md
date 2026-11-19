@@ -119,7 +119,7 @@ flowchart LR
 - 재빌드에서는 다음 입력에도 남는 원본 Renderer를 계속 끄고, 제거된 원본만 기록해 둔 활성 상태로 복원합니다. 이 기록은 컴포넌트에 직렬화되어 Undo/Redo와 Prefab 인스턴스에도 유지됩니다.
 - `RestoreSources()`(Inspector의 **Restore Sources**)는 결과 오브젝트를 지우고 기록한 모든 원본을 원래 활성 상태로 되돌린 뒤 기록을 비웁니다. 이 작업은 Undo 한 단계이며 저장한 Mesh 에셋은 지우지 않습니다. 결과 오브젝트가 Prefab 인스턴스의 일부(추가 오버라이드가 아닌 것)이면 다시 굽기와 복원 모두 아무것도 바꾸기 전에 거부합니다.
 - 출력 좌표는 Combiner의 로컬 공간입니다. 조명은 결합한 결과 Renderer를 대상으로 베이크합니다.
-- 입력이 Lightmap Static(Contribute GI)이고 Receive GI가 Lightmaps이면, `_packLightmapUVs`(기본 켬)가 소스마다 라이트맵 UV(UV2, 없으면 UV0)를 [0,1] 안의 같은 크기 칸으로 옮겨 결합 결과의 라이트맵이 겹치지 않게 합니다. 정점 수는 그대로이고 결과는 결정적입니다. 칸 크기가 같아서 소스 크기가 다르면 라이트맵 해상도가 고르지 않습니다. UV2가 없는 소스는 UV0이 자기 자신과 겹칠 수 있어 경고합니다. 끄면 UV를 그대로 두고 겹침을 경고합니다.
+- 입력이 Lightmap Static(Contribute GI)이고 Receive GI가 Lightmaps이면, `_packLightmapUvs`(기본 켬)가 소스마다 라이트맵 UV(UV2, 없으면 UV0)를 [0,1] 안의 같은 크기 칸으로 옮겨 결합 결과의 라이트맵이 겹치지 않게 합니다. 정점 수는 그대로이고 결과는 결정적입니다. 칸 크기가 같아서 소스 크기가 다르면 라이트맵 해상도가 고르지 않습니다. UV2가 없는 소스는 UV0이 자기 자신과 겹칠 수 있어 경고합니다. 끄면 UV를 그대로 두고 겹침을 경고합니다.
 - 저장한 Mesh는 기본으로 Read/Write를 끄므로 Player에서 CPU 사본이 해제됩니다. 실행 중 Mesh를 읽는 스크립트나 Collider가 있으면 `_keepReadable`을 켭니다.
 - 결과 이름은 단일 출력에서 `_meshName.asset`, 여러 출력에서 `_meshName_0.asset` 형식입니다. 기존 에셋은 `_overwriteExistingAssets`가 켜진 경우에만 GUID를 유지해 갱신합니다. 이번 저장이 쓰지 않은 같은 이름의 이전 출력(예: 결과가 3개에서 2개로 줄어 남은 `_meshName_2.asset`)이 폴더에 있으면 지우지 않고 경고로 알립니다.
 - 저장에 실패하면 Mesh 에셋·선언한 부속 에셋·Undo에 등록한 씬 변경을 복원하고, 복구 오류가 나도 나머지 복구를 계속한 뒤 원래 오류와 함께 보고합니다. Undo 시 새로 만든 에셋 파일은 남습니다.

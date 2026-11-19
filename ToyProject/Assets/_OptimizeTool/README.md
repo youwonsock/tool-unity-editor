@@ -91,8 +91,7 @@ public static class MeshBuildExample
 컬링 결과는 베이크 시점에 종속되므로 움직이는 카메라용 일반 Mesh를 대체하지 않습니다. 결합은 개별 Renderer 컬링 단위를 줄이므로 가까운 정적 오브젝트끼리 묶습니다.
 
 <p align="center">
-  <img src="Docs/Images/feature-occlusion-settings.png" alt="MeshCombiner 입력·출력·Occlusion 설정 Inspector" width="48%">
-  <img src="Docs/Images/feature-backface-settings.png" alt="MeshCombiner Backface Culling 설정 Inspector" width="48%">
+  <img src="Docs/Images/feature-meshcombiner-settings.png" alt="MeshCombiner Inspector: 입력·출력, Occlusion·Backface 컬링, 결합 옵션과 Combine and Save Meshes·Restore Sources 버튼" width="60%">
 </p>
 
 샘플의 9개 큐브(앞줄 3개가 뒷줄 6개를 가림)에서 얻은 Geometry 수량입니다. GPU 메모리나 프레임 시간이 아닙니다.
