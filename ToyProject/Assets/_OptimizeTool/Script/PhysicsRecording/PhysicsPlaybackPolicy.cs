@@ -24,9 +24,16 @@ namespace Common.OptimizeTool.PhysicsRecording
             return false;
         }
 
-        /// <summary>Accepts only a stripped hierarchy with a single root Animation and no particle physics.</summary>
+        /// <summary>
+        /// Accepts only a stripped hierarchy whose root, and only the root, has an Animation playing a finite
+        /// Legacy clip, with no particle physics.
+        /// </summary>
         public static void Validate(GameObject root)
         {
+            Animation animation = root.GetComponent<Animation>();
+            if (animation == null || animation.clip == null || !animation.clip.legacy
+                || !PhysicsPoseMath.IsFinite(animation.clip.length))
+                throw new InvalidOperationException("The saved recording must play a Legacy clip from an Animation on its root.");
             foreach (Component component in root.GetComponentsInChildren<Component>(true))
             {
                 if (component == null)

@@ -12,10 +12,14 @@ namespace Common.OptimizeTool.PhysicsRecording
     public sealed class PhysicsRecorder : MonoBehaviour
     {
         [Header("Target")]
+        [Tooltip("Top of the recorded hierarchy. Every Transform below it is recorded; at least one needs a Rigidbody.")]
         [SerializeField] private Transform _root;
         [Header("Output")]
+        [Tooltip("Folder under Assets/ for the clip, the playback prefab and the reference.")]
         [SerializeField] private string _savePath;
-        [SerializeField] private string _animationFileName;
+        [Tooltip("Name of the saved clip, prefab and reference, used when StartRecording gets no name.")]
+        [SerializeField] private string _clipName;
+        [Tooltip("Replace existing outputs with the same names, keeping their GUIDs.")]
         [SerializeField] private bool _overwriteExistingAssets;
         [Tooltip("Also save every recorded physics step as a reference asset next to the clip, to audit the clip later.")]
         [SerializeField] private bool _saveReference;
@@ -58,7 +62,7 @@ namespace Common.OptimizeTool.PhysicsRecording
         public PhysicsRecordingResult Result { get; private set; }
 
         /// <summary>Starts a take at the latest physics step. Throws for invalid calls or settings.</summary>
-        public void StartRecording(float duration, string animName = null)
+        public void StartRecording(float duration, string clipName = null)
         {
             if (IsRecording)
                 throw new InvalidOperationException("PhysicsRecorder is already recording.");
@@ -74,9 +78,9 @@ namespace Common.OptimizeTool.PhysicsRecording
                 throw new InvalidOperationException("PhysicsRecorder requires a Root reference.");
             if (_root.GetComponentInChildren<Rigidbody>(true) == null)
                 throw new InvalidOperationException("PhysicsRecorder requires at least one Rigidbody under Root.");
-            var settings = new PhysicsTakeSettings(_savePath, string.IsNullOrWhiteSpace(animName) ? _animationFileName : animName,
-                _overwriteExistingAssets, _saveReference, _positionTolerance, _rotationTolerance);
-            exporter.Validate(settings);
+            PhysicsTakeSettings settings = exporter.Validate(new PhysicsTakeSettings(_savePath,
+                string.IsNullOrWhiteSpace(clipName) ? _clipName : clipName,
+                _overwriteExistingAssets, _saveReference, _positionTolerance, _rotationTolerance));
 
             // Include parents without a Rigidbody too, so their motion is preserved in local space.
             Transform[] tracks = _root.GetComponentsInChildren<Transform>(true);
@@ -159,24 +163,30 @@ namespace Common.OptimizeTool.PhysicsRecording
             TrackSnapshot[] snapshots = _snapshots;
             PhysicsTakeSettings settings = _settings;
             IPhysicsRecordingExporter exporter = _exporter;
-            End();
+            // Reloads stay held until the take is saved.
+            End(releaseReloads: false);
             try
             {
                 take.Finish(_duration, Time.fixedDeltaTime * 0.01f);
                 ValidateHierarchy(tracks, snapshots);
-                Result = PhysicsRecordingResult.Saved(take.Duration, reason, exporter.Export(_root, take, settings));
+                // tracks[0] is the root captured at the start; a Root changed during the take is ignored.
+                Result = PhysicsRecordingResult.Saved(take.Duration, reason, exporter.Export(tracks[0], take, settings));
             }
             catch (Exception exception)
             {
                 Result = PhysicsRecordingResult.Failed(take.Duration, reason, exception);
                 Debug.LogException(exception, this);
             }
+            finally
+            {
+                exporter.EndTake();
+            }
             return Result;
         }
 
-        private void End()
+        private void End(bool releaseReloads = true)
         {
-            if (_take != null) _exporter.EndTake();
+            if (_take != null && releaseReloads) _exporter.EndTake();
             if (_routine != null) StopCoroutine(_routine);
             _routine = null;
             _exporter = null;
@@ -186,11 +196,12 @@ namespace Common.OptimizeTool.PhysicsRecording
         }
 
         /// <summary>The clip only animates local poses, so the hierarchy, names and scales must be unchanged.</summary>
-        private void ValidateHierarchy(Transform[] tracks, TrackSnapshot[] snapshots)
+        private static void ValidateHierarchy(Transform[] tracks, TrackSnapshot[] snapshots)
         {
-            if (_root == null)
+            Transform root = tracks[0];
+            if (root == null)
                 throw new InvalidOperationException("The recording Root was destroyed.");
-            if (_root.GetComponentsInChildren<Transform>(true).Length != tracks.Length)
+            if (root.GetComponentsInChildren<Transform>(true).Length != tracks.Length)
                 throw new InvalidOperationException("Transforms were added or removed under Root during the take; record again.");
             for (int i = 0; i < tracks.Length; i++)
                 if (!snapshots[i].Matches(tracks[i]))

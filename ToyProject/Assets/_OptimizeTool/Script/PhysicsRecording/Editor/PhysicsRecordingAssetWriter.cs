@@ -34,9 +34,9 @@ namespace Common.OptimizeTool.PhysicsRecording
             try
             {
                 // Build everything in memory first; a failure here leaves the disk untouched.
-                clip = PhysicsClipBuilder.Build(take, settings.Name, settings.PositionTolerance, settings.RotationTolerance);
+                clip = PhysicsClipBuilder.Build(take, settings.ClipName, settings.PositionTolerance, settings.RotationTolerance);
                 previewScene = EditorSceneManager.NewPreviewScene();
-                GameObject playback = CreatePlaybackCopy(root, previewScene, settings.Name);
+                GameObject playback = CreatePlaybackCopy(root, previewScene, settings.ClipName);
                 clip.SampleAnimation(playback, 0f);
                 if (settings.SaveReference)
                 {
@@ -45,13 +45,16 @@ namespace Common.OptimizeTool.PhysicsRecording
                 }
 
                 GameObject prefab = null;
-                string name = settings.Name;
+                string name = settings.ClipName;
                 string clipPath = settings.ClipPath, prefabPath = settings.PrefabPath, referencePath = settings.ReferencePath;
+                bool deleteStaleReference = reference == null && HasStaleReference(settings);
                 var outputs = new List<string> { clipPath, prefabPath };
-                if (reference != null) outputs.Add(referencePath);
+                if (reference != null || deleteStaleReference) outputs.Add(referencePath);
                 AssetFileTransaction.EnsureFolder(settings.Folder);
                 AssetFileTransaction.Execute(outputs, () =>
                 {
+                    if (deleteStaleReference && !AssetDatabase.DeleteAsset(referencePath))
+                        throw new IOException($"Unable to delete the earlier recording reference: {referencePath}");
                     clip = AssetFileTransaction.CreateOrReplace(clip, clipPath);
                     if (reference != null)
                     {
@@ -80,6 +83,19 @@ namespace Common.OptimizeTool.PhysicsRecording
                 if (reference != null && !EditorUtility.IsPersistent(reference))
                     Object.DestroyImmediate(reference);
             }
+        }
+
+        /// <summary>
+        /// A reference an earlier take saved for the clip this overwrite replaces. The clip keeps its GUID, so the
+        /// old reference would still match it and audit the new clip against the old take; it is deleted with the save.
+        /// </summary>
+        private static bool HasStaleReference(in PhysicsTakeSettings settings)
+        {
+            if (settings.SaveReference || !settings.Overwrite)
+                return false;
+            var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(settings.ClipPath);
+            var reference = AssetDatabase.LoadAssetAtPath<PhysicsRecordingReference>(settings.ReferencePath);
+            return clip != null && reference != null && reference.Clip == clip;
         }
 
         private static GameObject CreatePlaybackCopy(Transform root, Scene previewScene, string name)

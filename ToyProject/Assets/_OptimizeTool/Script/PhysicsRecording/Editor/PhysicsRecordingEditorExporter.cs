@@ -9,11 +9,12 @@ namespace Common.OptimizeTool.PhysicsRecording
     {
         static PhysicsRecordingEditorExporter() => PhysicsRecorder.Exporter = new PhysicsRecordingEditorExporter();
 
-        public void Validate(in PhysicsTakeSettings settings)
+        public PhysicsTakeSettings Validate(in PhysicsTakeSettings settings)
         {
-            AssetFileTransaction.ValidateFolder(settings.Folder);
-            AssetFileTransaction.ValidateFileName(settings.Name);
-            PhysicsRecordingAssetWriter.ValidateTargets(settings);
+            PhysicsTakeSettings validated = settings.WithFolder(AssetFileTransaction.ValidateFolder(settings.Folder));
+            AssetFileTransaction.ValidateFileName(validated.ClipName);
+            PhysicsRecordingAssetWriter.ValidateTargets(validated);
+            return validated;
         }
 
         public void BeginTake() => EditorApplication.LockReloadAssemblies();

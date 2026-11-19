@@ -48,7 +48,8 @@ namespace Common.OptimizeTool.PhysicsRecording
         {
             int last = FrameCount - 1;
             if (last == 0 || _times[last] <= duration) return;
-            if (duration - _times[last - 1] <= snapTolerance)
+            // The first frame stays at time zero, so only a later frame is snapped.
+            if (last > 1 && duration - _times[last - 1] <= snapTolerance)
             {
                 _times.RemoveAt(last);
                 _poses.RemoveRange(last * TrackCount, TrackCount);

@@ -8,8 +8,11 @@ namespace Common.OptimizeTool.PhysicsRecording
     /// </summary>
     internal interface IPhysicsRecordingExporter
     {
-        /// <summary>Throws when the output folder, name or an existing output cannot be used.</summary>
-        void Validate(in PhysicsTakeSettings settings);
+        /// <summary>
+        /// Returns the settings with the normalized output folder. Throws when the folder, the clip name or an
+        /// existing output cannot be used.
+        /// </summary>
+        PhysicsTakeSettings Validate(in PhysicsTakeSettings settings);
 
         /// <summary>Called when a take starts; prefabs cannot be saved during a script reload, so reloads wait.</summary>
         void BeginTake();
