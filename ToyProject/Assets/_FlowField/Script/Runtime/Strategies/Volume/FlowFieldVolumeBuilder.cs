@@ -34,15 +34,11 @@ namespace Common.FlowField
         private bool _hasPendingModifierRecompose;
         // An explicit rebuild re-queries obstacles even when only the Goal changed.
         private bool _obstacleQueryRequired;
-        // Initialization uses Suspended as a staging state, but the first
-        // accepted request must still be able to start a build. This flag
-        // distinguishes that state from an explicit lifecycle suspension.
-        // Whoever pumps directly (a bake, a test) waits for the worker thread.
-        // The scheduler polls it, so no frame blocks on a solve.
+        // Whoever pumps directly (a bake, the Editor preview) waits for the
+        // worker thread. The scheduler polls it, so no frame blocks on a solve.
         private bool _waitForSolve;
         private long _buildReservationBytes;
         private long _committedReservationBytes;
-
 
         // The session that runs this builder. Lifecycle, events and the build
         // loop live there.

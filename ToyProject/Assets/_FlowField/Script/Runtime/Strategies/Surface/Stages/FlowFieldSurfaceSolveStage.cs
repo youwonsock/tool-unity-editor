@@ -3,34 +3,18 @@ using System;
 namespace Common.FlowField
 {
     /// <summary>
-    /// Runs the Surface2D solve through the backend, which keeps it off the
-    /// frame that asked for it.
+    /// Runs the Surface2D solve on a worker thread, off the frame that asked
+    /// for it.
     /// </summary>
     internal sealed class FlowFieldSurfaceSolveStage
     {
-        private readonly IFlowFieldSurfaceSolveBackend _injected;
-        private readonly Func<IFlowFieldSurfaceSolveBackend> _factory;
-        private IFlowFieldSurfaceSolveBackend _backend;
+        private FlowFieldSurfaceBaseFieldBuild _backend;
 
-        internal FlowFieldSurfaceSolveStage(IFlowFieldSurfaceSolveBackend injected, Func<IFlowFieldSurfaceSolveBackend> factory)
-        {
-            if (injected != null && factory != null)
-                throw new ArgumentException("Specify either a solve backend or a backend factory, not both.");
-            _injected = injected;
-            _factory = factory;
-        }
-
-        // Every solve runs on a worker thread. A direct owner that needs the
-        // result at once waits for it through Poll.
+        // A direct owner that needs the result at once waits for it through Poll.
         internal void Prepare(FlowFieldSurfaceSourceKind sourceKind)
         {
-            if (_backend != null || sourceKind != FlowFieldSurfaceSourceKind.SceneBuild)
-                return;
-            _backend = _factory != null
-                ? _factory()
-                : _injected ?? new FlowFieldSurfaceBaseFieldBuild();
-            if (_backend == null)
-                throw new InvalidOperationException("The FlowField solve backend factory returned null.");
+            if (_backend == null && sourceKind == FlowFieldSurfaceSourceKind.SceneBuild)
+                _backend = new FlowFieldSurfaceBaseFieldBuild();
         }
 
         internal bool Start(in FlowFieldSurfaceBfsRequest request, Action<FlowFieldSurfaceBfsRequest> completed)
@@ -40,14 +24,10 @@ namespace Common.FlowField
 
         internal void Cancel() => _backend?.Cancel();
 
-        // A directly injected backend stays reusable for Release → Initialize.
         internal void DetachBackend()
         {
-            if (!ReferenceEquals(_backend, _injected))
-                _backend?.Dispose();
+            _backend?.Dispose();
             _backend = null;
         }
-
-        internal void DisposeInjected() => _injected?.Dispose();
     }
 }

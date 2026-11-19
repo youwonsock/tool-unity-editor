@@ -18,7 +18,7 @@ namespace Common.FlowField
         private readonly FlowFieldRequestInbox<FlowFieldSurfaceRequest> _requests
             = new FlowFieldRequestInbox<FlowFieldSurfaceRequest>();
         private readonly FlowFieldSurfaceBaseStage _baseStage;
-        private readonly FlowFieldSurfaceSolveStage _solveStage;
+        private readonly FlowFieldSurfaceSolveStage _solveStage = new FlowFieldSurfaceSolveStage();
         private readonly FlowFieldSurfaceComposeStage _composeStage = new FlowFieldSurfaceComposeStage();
         private FlowFieldSurfaceModifierComposition _modifierComposition;
         private FlowFieldSurfaceRequest? _committedRequest;
@@ -209,15 +209,10 @@ namespace Common.FlowField
         // loop live there.
         private readonly FlowFieldSession _session;
 
-        internal FlowFieldSurfaceBuilder(
-            FlowFieldSession session,
-            IFlowFieldSurfaceSource surfaceSource = null,
-            IFlowFieldSurfaceSolveBackend solveBackend = null,
-            Func<IFlowFieldSurfaceSolveBackend> solveBackendFactory = null)
+        internal FlowFieldSurfaceBuilder(FlowFieldSession session, IFlowFieldSurfaceSource surfaceSource = null)
         {
             _session = session ?? throw new ArgumentNullException(nameof(session));
             _obstacleMasks = new FlowFieldSurfaceObstacleMasks(session.Obstacles);
-            _solveStage = new FlowFieldSurfaceSolveStage(solveBackend, solveBackendFactory);
             _baseStage = new FlowFieldSurfaceBaseStage(
                 _state,
                 _obstacleMasks,
@@ -421,10 +416,10 @@ namespace Common.FlowField
             _latestDefaultDirection = null;
         }
 
-        // A directly injected backend is deliberately kept alive across
-        // Release so the same session can be initialized again. Disposal is
-        // the ownership boundary where it is finally freed.
-        public void Dispose() => _solveStage.DisposeInjected();
+        // Release already freed everything a Surface2D builder holds.
+        public void Dispose()
+        {
+        }
 
         private const FlowFieldSurfaceDirtyFlags BaseDirtyMask = FlowFieldSurfaceDirtyFlags.Grid
             | FlowFieldSurfaceDirtyFlags.StaticObstacles

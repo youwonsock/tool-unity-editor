@@ -152,9 +152,9 @@ namespace Common.FlowField
             bool rebuildGoal = (pending & FlowFieldSurfaceDirtyFlags.Goal) != 0;
             if (!_state.HasObstacleMask)
             {
-                // A direct Goal request is allowed before the first obstacle
-                // preparation (notably in injected/test sessions). Ensure the
-                // solver never consumes the zero-initialized mask.
+                // A Goal can be requested before the first obstacle
+                // preparation; the solver must never read the zero-initialized
+                // mask.
                 rebuildStatic = true;
                 rebuildDynamic = true;
             }

@@ -296,7 +296,12 @@ namespace Common.FlowField
         internal void Release() => _pins.Release();
     }
 
-    internal sealed partial class FlowFieldSurfaceBaseFieldBuild : IFlowFieldSurfaceSolveBackend
+    /// <summary>
+    /// The Surface2D solve on a worker thread. It owns the running work; the
+    /// session owns the request lifetime and decides how a completed result
+    /// is committed.
+    /// </summary>
+    internal sealed partial class FlowFieldSurfaceBaseFieldBuild : IDisposable
     {
         private FlowFieldSurfaceSolve _solve;
         private JobHandle _handle;
@@ -304,7 +309,9 @@ namespace Common.FlowField
         private Action<FlowFieldSurfaceBfsRequest> _completed;
         private bool _disposed;
 
-        public bool StartBfs(in FlowFieldSurfaceBfsRequest request, Action<FlowFieldSurfaceBfsRequest> completed)
+        // completed is called only from StartBfs (a solve finished at once) or
+        // Poll, both inside the builder's StepBuild.
+        internal bool StartBfs(in FlowFieldSurfaceBfsRequest request, Action<FlowFieldSurfaceBfsRequest> completed)
         {
             if (_disposed || completed == null)
                 return false;
@@ -330,7 +337,8 @@ namespace Common.FlowField
             return true;
         }
 
-        public void Poll(bool wait)
+        /// <summary>Reports a finished solve. With wait set, it first waits for one to finish.</summary>
+        internal void Poll(bool wait)
         {
             if (_solve == null || !wait && !_handle.IsCompleted)
                 return;
@@ -345,7 +353,8 @@ namespace Common.FlowField
             completed(request);
         }
 
-        public void Cancel()
+        /// <summary>Stops a running solve before its workspace is used again.</summary>
+        internal void Cancel()
         {
             if (_solve == null)
                 return;

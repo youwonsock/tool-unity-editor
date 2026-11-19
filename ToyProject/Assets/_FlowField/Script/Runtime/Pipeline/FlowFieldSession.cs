@@ -45,15 +45,11 @@ namespace Common.FlowField
                 ?? throw new ArgumentNullException(nameof(createBuilder));
         }
 
-        /// <summary>A Surface2D session. The arguments replace parts of the build for a test or a bake.</summary>
+        /// <summary>A Surface2D session. A bake passes the surface it scanned as <paramref name="surfaceSource"/>.</summary>
         internal static FlowFieldSession CreateSurface(
             FlowFieldExecutionBoundary boundary = null,
-            IFlowFieldSurfaceSource surfaceSource = null,
-            IFlowFieldSurfaceSolveBackend solveBackend = null,
-            Func<IFlowFieldSurfaceSolveBackend> solveBackendFactory = null)
-            => new FlowFieldSession(
-                boundary,
-                session => new FlowFieldSurfaceBuilder(session, surfaceSource, solveBackend, solveBackendFactory));
+            IFlowFieldSurfaceSource surfaceSource = null)
+            => new FlowFieldSession(boundary, session => new FlowFieldSurfaceBuilder(session, surfaceSource));
 
         internal static FlowFieldSession CreateVolume(FlowFieldExecutionBoundary boundary = null)
             => new FlowFieldSession(boundary, session => new FlowFieldVolumeBuilder(session));
