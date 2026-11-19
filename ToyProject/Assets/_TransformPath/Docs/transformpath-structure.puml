@@ -14,6 +14,9 @@ title TransformPath 구조
 interface IPathProvider <<internal>>
 class PathProviderBehaviour <<abstract>>
 class "PathData\nMultiPathData" as Providers
+class PathShapeProvider <<abstract>> {
+  TryPrepare, Evaluate
+}
 class PathPolyline
 class PathRoute
 class PathRuntimeDriver
@@ -33,10 +36,12 @@ class PathEventDefinition
 class QueuedPathManager
 class PathQueueMember
 class PathQueueCoordinator <<static>>
+class PathQueueSpacingPolicy <<abstract>>
 class PathExecutionBoundary <<static>>
 
 PathProviderBehaviour .up.|> IPathProvider
 Providers -up-|> PathProviderBehaviour
+PathShapeProvider -up-|> PathProviderBehaviour
 Providers --> PathPolyline : PathData
 PathProviderBehaviour --> PathRoute : 리비전별 캐시
 PathRoute --> PathEventDefinition
@@ -50,6 +55,7 @@ PathEventEffects --> IPathEffectTarget
 PathQueueMember --> PathFollower : 제한 기록
 QueuedPathManager --> PathQueueMember : 결과 전달
 QueuedPathManager --> PathQueueCoordinator
+QueuedPathManager --> PathQueueSpacingPolicy : 멤버별 간격
 PathRuntimeDriver --> PathRuntimeBehaviour : 단계별 목록\n효과 → Queue → 이동
 PathPlayback --> PathSignal : 알림
 PathQueueMember --> PathSignal : 알림

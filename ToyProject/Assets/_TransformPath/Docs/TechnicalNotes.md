@@ -11,9 +11,9 @@
 | `Common.TransformPath.Samples` | `Samples/Scripts/` | 샘플 씬의 컨트롤러·UI·카메라·수신기(UGUI 참조) |
 | `Common.TransformPath.Tests` | `Dev/Tests/` | EditMode 테스트 |
 | `Common.TransformPath.Tests.Fixtures` | `Dev/Tests/Fixtures/` | 테스트가 붙이는 컴포넌트(시험용 원 모양). Unity는 Editor 어셈블리의 컴포넌트를 붙이지 않으므로 런타임 어셈블리이며, `UNITY_INCLUDE_TESTS`일 때만 컴파일합니다 |
-| `Common.TransformPath.PlayerProbe`, `.PlayerProbe.Editor` | `Dev/` | 이 저장소의 성능 측정 Player(`Tools/run-transformpath-probe.sh`)와 빌드 메뉴 |
+| `Common.TransformPath.PlayerProbe`, `.PlayerProbe.Editor` | `Dev/` | 이 저장소의 성능 측정 Player(`Tools/run-transformpath-probe.sh`)와 `-executeMethod` 빌드 진입점 |
 
-시스템과 에디터는 `Script/` 폴더 하나입니다. 샘플, 테스트, 측정 도구는 시스템을 참조만 하고, 시스템은 이들을 모릅니다. 샘플에는 내부 접근을 주지 않으므로 샘플은 공개 API만으로 만들어집니다. 측정 어셈블리는 Editor와 `TRANSFORMPATH_PLAYER_PROBE`를 정의한 측정 빌드에서만 컴파일합니다.
+시스템과 에디터는 `Script/` 폴더 하나입니다. 샘플, 테스트, 측정 도구는 시스템을 참조만 하고, 시스템은 이들을 모릅니다. 샘플과 테스트 고정 어셈블리에는 내부 접근을 주지 않으므로 공개 API만으로 만들어집니다. 테스트 고정 어셈블리의 원은 이렇게 `PathShapeProvider`를 다른 어셈블리에서 상속할 수 있음을 컴파일로 보입니다. 측정 어셈블리는 Editor와 `TRANSFORMPATH_PLAYER_PROBE`를 정의한 측정 빌드에서만 컴파일합니다.
 
 `Script/` 아래 시스템 코드는 역할로 나눕니다: `Core`(계약, 상수, 이벤트 정의), `Geometry`, `Providers`, `Playback`, `Queue`, `Execution`(Driver, Boundary), `Components`, `Sync`, `Utilities`.
 
@@ -56,7 +56,7 @@
 
 - 콜백이 실행될 때는 이벤트 효과와 위치가 이미 반영되어 있습니다. 앞선 콜백이 상태를 바꿨을 수 있으니 인자보다 현재 상태를 읽습니다.
 - 대기 중에 구독을 해제한 리스너는 호출되지 않고, 발행 뒤에 구독한 리스너는 그 알림을 듣지 않습니다.
-- `PathData`와 `MultiPathData`의 `PathChanged`만 예외로 변경 작업 안에서 바로 호출됩니다. 이 콜백의 예외도 기록만 됩니다.
+- Provider(`PathData`, `MultiPathData`, `PathShapeProvider`)의 `PathChanged`만 예외로 변경 작업 안에서 바로 호출됩니다. 이 콜백의 예외도 기록만 됩니다.
 
 ### Seek
 

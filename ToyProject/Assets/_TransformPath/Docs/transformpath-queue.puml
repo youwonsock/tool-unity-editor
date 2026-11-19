@@ -21,7 +21,9 @@ Member -> Follower : SetMotionLimit(대기)
 note right of Follower : 첫 결과와 재출발 지연까지 대기
 
 == 매 프레임 (Queue 단계) ==
-Manager -> Manager : 끝난 멤버 제거, MotionEpoch가 바뀐 멤버는 줄 뒤로\n진행률 정렬, 앞 멤버부터 간격 계산
+Manager -> Manager : 끝났거나 이전 정의를 재생하는 멤버 제거
+Manager -> Follower : RefreshRouteGeometry (새 기하를 먼저 받음)
+Manager -> Manager : MotionEpoch가 바뀐 멤버는 줄 뒤로, 진행률 정렬\n앞 멤버부터 간격 계산 (간격 정책)
 Manager -> Member : ApplyQueueStatus
 Member -> Member : MotionEpoch가 바뀌었으면\n새 출발처럼 대기 (Play, Seek, Loop 이음매)
 Member -> Member : 대기, 재출발 지연, 속도 완화
@@ -31,4 +33,6 @@ note right of Follower : 이동 단계에서 제한 안으로 이동
 == 끝 ==
 Manager -> Manager : 재생이 끝난 멤버 제거\n(Completed, Stopped)
 Member -> Manager : Leave 또는 Manager 해제
+Manager -> Member : 경로 무효, 정의 변경, Manager 해제\n(ProviderInvalid, ManagerReleased)
+Member -> Follower : 이 경로의 재생이면 Stop (일시정지 포함)
 @enduml

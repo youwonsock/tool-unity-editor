@@ -38,7 +38,7 @@ public sealed class TransformPathReadmeExample : MonoBehaviour
     {
         if (!_path.IsReady)
         {
-            Debug.LogError("PathData의 제어점과 이동 설정을 확인하세요.", _path);
+            Debug.LogError("Check the PathData control points and movement settings.", _path);
             return;
         }
 
@@ -75,7 +75,7 @@ public sealed class TransformPathReadmeExample : MonoBehaviour
 | `TriggerEvent(setting)` | 이벤트 에셋을 지금 실행 |
 | `CancelEventEffects()` | 이벤트가 남긴 값 보간과 지연 이벤트를 취소. 현재 Speed·Duration과 상태는 그대로이고 알림도 없음 |
 
-- 명령은 상태가 바뀌었는지를 `bool`로 반환합니다. 조건을 어기면 `InvalidOperationException`, 값이 범위 밖이면 `ArgumentOutOfRangeException`이며, 예외가 나면 아무것도 바뀌지 않습니다.
+- `TriggerEvent`(반환값 없음)를 뺀 명령은 상태나 값이 바뀌었는지를 `bool`로 반환합니다. 조건을 어기면 `InvalidOperationException`, `SetSpeed`·`SetDuration`의 값이나 `SeekSegment`의 구간 번호가 범위 밖이면 `ArgumentOutOfRangeException`이며, 예외가 나면 아무것도 바뀌지 않습니다. `Seek`·`SeekSegment`의 진행률과 `StartQueuedPlayback`의 최대 진행률은 `0..1`로 고정하고, 유한하지 않을 때만 `ArgumentOutOfRangeException`입니다.
 - 상태는 `State`, `Progress`(전체), `SegmentProgress`, `SegmentIndex`, `PlaybackId`로 읽습니다.
 
 | 조회와 설정 | 내용 |
