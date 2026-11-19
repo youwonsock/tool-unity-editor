@@ -38,7 +38,7 @@ namespace Common.FlowField
         private void ValidateConfiguration(bool validateStaticGoal = true)
         {
             if (!Enum.IsDefined(typeof(FlowFieldSpaceMode), _spaceMode))
-                throw new ArgumentOutOfRangeException(nameof(_spaceMode));
+                throw new InvalidOperationException("Space Mode must be Surface2D or Volume3D.");
             if (IsInitialized && SpaceMode != _spaceMode)
                 throw new InvalidOperationException("FlowField Space Mode cannot change during an active Init session. Release and Init again.");
             FlowFieldManagerConfig config = CaptureConfig();
