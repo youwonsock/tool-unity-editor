@@ -38,13 +38,24 @@ namespace Common.OptimizeTool.MeshOptimization
         /// <summary>The only validation of these settings; the build steps rely on it.</summary>
         public void Validate()
         {
-            if (float.IsNaN(BackfaceCullingAngle) || float.IsInfinity(BackfaceCullingAngle) || BackfaceCullingAngle < 0 || BackfaceCullingAngle > 180)
-                throw new ArgumentOutOfRangeException(nameof(BackfaceCullingAngle));
+            ValidateBackfaceAngle(BackfaceCullingAngle, nameof(BackfaceCullingAngle));
             if ((BackfaceCulling || OcclusionCulling) && Camera == null)
                 throw new ArgumentException("Culling requires a target camera.");
-            if (OcclusionCulling && (OcclusionSampleCount <= 0 || double.IsNaN(VisibilityThreshold)
-                || double.IsInfinity(VisibilityThreshold) || VisibilityThreshold < 0 || VisibilityThreshold > 1
-                || CullingLayerMask == 0))
+            if (OcclusionCulling) ValidateOcclusionSampling(OcclusionSampleCount, VisibilityThreshold, CullingLayerMask);
+        }
+
+        /// <summary>The backface rule of every bake: a finite angle from 0 to 180 degrees.</summary>
+        internal static void ValidateBackfaceAngle(float angle, string paramName)
+        {
+            if (float.IsNaN(angle) || float.IsInfinity(angle) || angle < 0 || angle > 180)
+                throw new ArgumentOutOfRangeException(paramName, angle, "The backface angle must be from 0 to 180 degrees.");
+        }
+
+        /// <summary>The occlusion rule of every bake: positive samples, a threshold from 0 to 1 and a non-empty mask.</summary>
+        internal static void ValidateOcclusionSampling(int sampleCount, double visibilityThreshold, int layerMask)
+        {
+            if (sampleCount <= 0 || double.IsNaN(visibilityThreshold) || double.IsInfinity(visibilityThreshold)
+                || visibilityThreshold < 0 || visibilityThreshold > 1 || layerMask == 0)
                 throw new ArgumentException("Occlusion sampling settings are invalid.");
         }
     }

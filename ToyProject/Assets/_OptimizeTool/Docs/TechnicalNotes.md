@@ -97,6 +97,7 @@ flowchart LR
 | MeshOptimization.Editor | `MeshRendererSettings` | 입력 Renderer가 지원하지 않는 데이터(PropertyBlock, Lightmap, LOD 등)를 쓰는지 검사하고, 병합 입력끼리 같아야 하는 Renderer 설정을 비교. `ApplyTo`로 결과 Renderer에 Material과 설정을 적용 |
 | MeshOptimization.Editor | `MeshGeometry` | 원본 Mesh와 importer를 바꾸지 않는 기하 연산: Readable 복사, 원시 정점 버퍼를 옮기는 SubMesh 추출, Backface 제거, 변환, 정점 채널을 맞춘 결합, 라이트맵 UV 배치 |
 | MeshOptimization.Editor | `MeshOcclusion` | 카메라에서 표본 점(Vertex와 삼각형 중심)으로 Raycast해 보이는 비율로 가림 판정. 대상 자신과 표본 점을 품은 조상 Collider는 제외 |
+| MeshOptimization.Editor | `MeshProcessing` | 공개 메시 연산 facade. 인자(null, Readable, 삼각형 토폴로지, 유한 값, 각도·Occlusion 범위, 씬 소속)를 검사한 뒤 internal `MeshGeometry`·`MeshOcclusion`에 넘김. `TransformMesh`는 저장된 에셋을 거부하고, `IsOccluded`는 조회 전에 `Physics.SyncTransforms`를 부름 |
 | MeshOptimization.Editor | `MeshAssetTransaction` | 모든 Mesh 출력 경로와 출력 자리를 쓰기 전에 검증하고, Undo와 함께 GUID를 유지해 저장. 실패하면 메모리 안 백업으로 기존 Mesh를 되돌리고 새로 만든 에셋을 지움. 콜백이 쓰는 다른 파일은 호출자가 `AssetFileTransaction.Execute`로 감쌈 |
 | MeshOptimization.Editor | `MeshSceneOutput` | Undo에 등록하며 결과 Renderer를 만들고 원본 Renderer를 비활성화. 끈 원본의 기록과 `Restore`, Prefab 인스턴스 안의 결과 거부 |
 | OptimizeTool.Editor | `AssetFileTransaction` | 공용 출력 규칙: Edit Mode 확인, `Assets/` 아래 경로·이름 검증(`ValidateAssetPath`, 같은 에셋을 두 번 적은 목록을 거부하는 `ValidateAssetPaths`), 출력 자리 검사(`ValidateOutputTarget`), 폴더 생성, GUID를 유지하는 `CreateOrReplace`, 선언한 파일의 백업과 실패 시 복원(`Execute`) |
@@ -117,7 +118,7 @@ flowchart LR
 ## Mesh 결합
 
 - `_targetMeshFilterArray`로 대상을 직접 지정하거나 `_collectChildMeshes`로 자식 계층을 수집합니다. 둘 중 정확히 하나를 써야 하며, 둘 다 쓰거나 둘 다 비우면 서로 다른 오류로 알립니다. 직접 지정한 MeshFilter는 Renderer 활성 여부와 관계없이 입력이고, 자식 수집은 사용자가 끈 Renderer를 경고와 함께 제외하되 이전 베이크가 끈 원본은 포함합니다.
-- 빌드 옵션(각도, 카메라, Occlusion 표본 설정)은 `MeshBuildSettings.Validate()` 한 곳에서만 검증합니다. 입력 MeshFilter, MeshRenderer, Material, SubMesh, Triangle 인덱스는 처리 전에 검증합니다. Normal 데이터가 불완전하면 `_allowNormalRecalculation`이 켜진 경우에만 재계산합니다.
+- 빌드 옵션(각도, 카메라, Occlusion 표본 설정)은 `MeshBuildSettings.Validate()`가 검증합니다. 각도와 Occlusion 표본 규칙은 `MeshBuildSettings`의 internal 검사 하나를 `Validate`와 `MeshProcessing`이 함께 씁니다. 입력 MeshFilter, MeshRenderer, Material, SubMesh, Triangle 인덱스는 처리 전에 검증합니다. Normal 데이터가 불완전하면 `_allowNormalRecalculation`이 켜진 경우에만 재계산합니다.
 - Read/Write가 꺼진 입력은 `_allowReadableCopy`가 켜진 경우 `UnityEditor.MeshUtility.AcquireReadOnlyMeshData`로 복사합니다. 원본 importer와 Mesh는 바꾸지 않습니다.
 - SubMesh 추출과 Backface 제거는 원시 정점 레이아웃을 복사해 Tangent·Color·UV0~UV7을 보존합니다. 정점 65,535개를 넘으면 UInt32 인덱스를 씁니다. Skinned/BlendShape 메시와 삼각형 이외 토폴로지는 거부합니다.
 - 같은 Material의 SubMesh를 `CombineInstance`로 묶고, `_combineAllIntoSingleMesh`가 켜지면 하나의 Mesh로 다시 결합합니다. `_optimizeMesh`는 정점·인덱스 재정렬이며 폴리곤 단순화가 아닙니다.

@@ -65,6 +65,7 @@ Edit Mode에서 Inspector 버튼이나 아래 API로 실행합니다. 별도 초
 | `MeshCombiner.CombineAndSaveMeshes()` | 결합 결과를 Mesh 에셋으로 저장하고 씬 출력을 적용합니다 |
 | `MeshCombiner.RestoreSources()` | 씬 출력을 지우고 이 컴포넌트가 끈 원본 Renderer를 원래 상태로 되돌립니다. 저장한 Mesh 에셋은 남깁니다. Inspector의 **Restore Sources** 버튼과 같습니다 |
 | `MeshBuildPipeline.Build(sources, destinationWorldToLocal, settings)` | 컴포넌트 없이 MeshFilter 목록과 `MeshBuildSettings`로 임시 결과를 만듭니다. 저장은 `MeshAssetTransaction.Save`로 하고, 저장 콜백이 Prefab·씬 같은 다른 에셋도 쓰면 그 호출을 `AssetFileTransaction.Execute`로 감쌉니다. 샘플 빌더가 이 방식을 씁니다 |
+| `MeshProcessing.ReadableCopy` · `SelectTriangles` · `CullBackfaces` · `TransformMesh` · `Combine` · `IsOccluded` | 파이프라인이 쓰는 메시 연산을 직접 부릅니다. 인자를 먼저 검사하고 원본 Mesh와 importer를 바꾸지 않으며, 돌려준 Mesh는 호출자가 저장하거나 파괴합니다. `CullBackfaces`는 카메라 또는 관찰 방향을 받습니다. 유한 값과 각도 범위 검사는 각 메서드가 안에서 하므로 따로 열지 않습니다 |
 
 ```csharp
 // Editor code: an Editor folder, or an Editor assembly that references Common.OptimizeTool.MeshOptimization.Editor

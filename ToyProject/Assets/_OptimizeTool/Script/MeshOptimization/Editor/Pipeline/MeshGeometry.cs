@@ -128,7 +128,18 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
             catch { Object.DestroyImmediate(output); throw; }
         }
 
-        public static Mesh CullBackfaces(Mesh mesh, Transform source, Camera camera, float angle)
+        /// <summary>Keeps the triangles that face <paramref name="camera"/>: toward its position, or against its forward when orthographic.</summary>
+        public static Mesh CullBackfaces(Mesh mesh, Transform source, Camera camera, float angle) => camera.orthographic
+            ? CullBackfaces(mesh, source, -camera.transform.forward, null, angle)
+            : CullBackfaces(mesh, source, Vector3.zero, camera.transform.position, angle);
+
+        /// <summary>Keeps the triangles that face a viewer looking along <paramref name="viewDirection"/>.</summary>
+        public static Mesh CullBackfaces(Mesh mesh, Transform source, Vector3 viewDirection, float angle)
+            => CullBackfaces(mesh, source, -viewDirection.normalized, null, angle);
+
+        /// <param name="toViewer">The world direction to the viewer when it is the same for every triangle.</param>
+        /// <param name="viewerPosition">A perspective viewer; the direction then runs from each triangle center to it.</param>
+        private static Mesh CullBackfaces(Mesh mesh, Transform source, Vector3 toViewer, Vector3? viewerPosition, float angle)
         {
             Matrix4x4 matrix = source.localToWorldMatrix;
             if (matrix.determinant == 0f || !IsFinite(matrix.determinant)) throw new ArgumentException("Zero-scale meshes cannot be baked.");
@@ -147,9 +158,9 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
                     if (IsDegenerate(b - a, c - a, cross)) continue;
                     Vector3 normal = Direction(normalMatrix.MultiplyVector(cross));
                     if (normal.sqrMagnitude < 0.000001f) continue;
-                    Vector3 toCamera = camera.orthographic ? -camera.transform.forward
-                        : (camera.transform.position - matrix.MultiplyPoint3x4((a + b + c) / 3f)).normalized;
-                    if (Vector3.Dot(normal, toCamera) + 0.000001f < minimumDot) continue;
+                    Vector3 direction = viewerPosition.HasValue
+                        ? (viewerPosition.Value - matrix.MultiplyPoint3x4((a + b + c) / 3f)).normalized : toViewer;
+                    if (Vector3.Dot(normal, direction) + 0.000001f < minimumDot) continue;
                     kept.Add(triangles[i]); kept.Add(triangles[i + 1]); kept.Add(triangles[i + 2]);
                 }
                 submeshes.Add(kept.ToArray());
