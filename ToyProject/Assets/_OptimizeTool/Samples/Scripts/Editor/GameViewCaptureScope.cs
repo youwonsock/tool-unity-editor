@@ -1,4 +1,3 @@
-#if UNITY_EDITOR
 using System;
 using System.Reflection;
 using UnityEditor;
@@ -76,4 +75,3 @@ namespace Common.OptimizeTool.Samples.Editor
         }
     }
 }
-#endif

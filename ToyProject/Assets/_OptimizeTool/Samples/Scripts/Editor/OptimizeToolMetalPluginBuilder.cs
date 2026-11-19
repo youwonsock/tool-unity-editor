@@ -1,4 +1,3 @@
-#if UNITY_EDITOR
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -28,4 +27,3 @@ namespace Common.OptimizeTool.Samples.Editor
         }
     }
 }
-#endif

@@ -1,4 +1,3 @@
-#if UNITY_EDITOR
 using System;
 using System.IO;
 using UnityEditor;
@@ -81,18 +80,6 @@ namespace Common.OptimizeTool.Samples.Editor
             BuildNow(PrepareDirectory(args[flag + 1]), Array.IndexOf(args, "--optimize-gpu") >= 0);
         }
 
-        public static void BuildScaledBatch()
-        {
-            OptimizeToolScaleBuilder.Build();
-            BuildBatch();
-        }
-
-        public static void BuildGpuBatch()
-        {
-            OptimizeToolScaleBuilder.BuildGpu();
-            BuildBatch();
-        }
-
         private static string PrepareDirectory(string directory)
         {
             if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.StandaloneOSX)
@@ -137,4 +124,3 @@ namespace Common.OptimizeTool.Samples.Editor
         }
     }
 }
-#endif

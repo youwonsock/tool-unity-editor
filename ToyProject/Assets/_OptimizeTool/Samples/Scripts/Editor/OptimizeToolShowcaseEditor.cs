@@ -1,4 +1,3 @@
-#if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
 using Common.OptimizeTool.MeshOptimization;
@@ -131,4 +130,3 @@ namespace Common.OptimizeTool.Samples.Editor
         }
     }
 }
-#endif
