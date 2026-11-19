@@ -215,9 +215,13 @@ namespace Common.FlowField
             for (int i = 0; i < _entries.Count; i++)
             {
                 if (!ReferenceEquals(_entries[i].Modifier, modifier) && _entries[i].Priority == priority)
-                    throw new InvalidOperationException($"Vector modifier priority {priority} is duplicated.");
+                    throw new InvalidOperationException(DuplicatePriorityMessage(priority));
             }
         }
+
+        /// <summary>Why a Modifier cannot register: the Editor warns with the same words.</summary>
+        internal static string DuplicatePriorityMessage(int priority)
+            => $"Vector modifier priority {priority} is duplicated.";
 
         private static void Release(FlowFieldModifierEntry entry) => entry.Area?.Release();
 

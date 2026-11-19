@@ -31,6 +31,17 @@ namespace Common.FlowField.Editor
             if (influenceCollider is MeshCollider meshCollider && !meshCollider.convex)
                 DrawWarning(FlowFieldModifierMaskBuilder.ConvexMeshRequiredMessage, MessageType.Error);
 
+            DrawDuplicatePriority(modifier);
+        }
+
+        // Registration rejects a second Modifier with the same Priority.
+        private static void DrawDuplicatePriority(FlowFieldVectorModifierVolume modifier)
+        {
+            foreach (var group in FlowFieldModifierPriorities.FindDuplicatePriorities(modifier.FlowFieldManager))
+            {
+                if (group.Value.Contains(modifier))
+                    DrawWarning(FlowFieldModifierPriorities.Describe(group.Key, group.Value), MessageType.Warning);
+            }
         }
 
         private static void DrawWarning(string message, MessageType messageType)

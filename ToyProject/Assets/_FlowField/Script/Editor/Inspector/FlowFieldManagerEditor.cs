@@ -43,6 +43,7 @@ namespace Common.FlowField.Editor
             }
             serializedObject.ApplyModifiedProperties();
             DrawDisplaySettingsNotice(manager);
+            DrawDuplicatePriorities(manager);
 
             EditorGUILayout.Space();
             bool exceedsCellLimit = DrawBakeLayout(manager);
@@ -244,6 +245,13 @@ namespace Common.FlowField.Editor
                 EditorGUILayout.HelpBox("Static Flow Bake is valid.", MessageType.Info);
             else
                 EditorGUILayout.HelpBox("Runtime Dynamic uses a fresh downward raycast Surface bake.", MessageType.Info);
+        }
+
+        // Registration rejects a second Modifier with the same Priority.
+        private static void DrawDuplicatePriorities(FlowFieldManager manager)
+        {
+            foreach (var group in FlowFieldModifierPriorities.FindDuplicatePriorities(manager))
+                EditorGUILayout.HelpBox(FlowFieldModifierPriorities.Describe(group.Key, group.Value), MessageType.Warning);
         }
 
         // Display options live on their own component, which the Scene View reads.
