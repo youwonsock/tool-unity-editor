@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Serialization;
 
 namespace Common.TransformPath
 {
@@ -27,16 +26,16 @@ namespace Common.TransformPath
         public EPathEventLifecycle Lifecycle;
 
         [Header("속도 변경 (SpeedBased 구간에서만 적용)")]
-        [FormerlySerializedAs("UseModifyPathMoveSpeed")] public bool UseSpeedChange;
-        [FormerlySerializedAs("MoveSpeedTargetValue")] public float SpeedTarget = 1.0f;
-        [FormerlySerializedAs("MoveSpeedAdjustDuration")] public float SpeedBlendTime;
-        [FormerlySerializedAs("MoveSpeedAdjustCurve")] public AnimationCurve SpeedBlendCurve = AnimationCurve.EaseInOut(0, 0, 1, 1);
+        public bool UseSpeedChange;
+        public float SpeedTarget = 1.0f;
+        public float SpeedBlendTime;
+        public AnimationCurve SpeedBlendCurve = AnimationCurve.EaseInOut(0, 0, 1, 1);
 
         [Header("Duration 변경 (TimeBased 구간에서만 적용)")]
-        [FormerlySerializedAs("UseModifyPathMoveDuration")] public bool UseDurationChange;
-        [FormerlySerializedAs("MoveDurationTargetValue")] public float DurationTarget = 5.0f;
-        [FormerlySerializedAs("MoveDurationAdjustDuration")] public float DurationBlendTime;
-        [FormerlySerializedAs("MoveDurationAdjustCurve")] public AnimationCurve DurationBlendCurve = AnimationCurve.EaseInOut(0, 0, 1, 1);
+        public bool UseDurationChange;
+        public float DurationTarget = 5.0f;
+        public float DurationBlendTime;
+        public AnimationCurve DurationBlendCurve = AnimationCurve.EaseInOut(0, 0, 1, 1);
 
         [Header("지연 이벤트 (게임 시간, 다음 경로 이벤트가 실행되면 취소)")]
         public List<DelayedEventEntry> DelayedEvents = new List<DelayedEventEntry>();
