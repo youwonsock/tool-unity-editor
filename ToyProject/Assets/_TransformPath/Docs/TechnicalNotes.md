@@ -48,6 +48,7 @@
 - `PathPlaybackCursor`는 위치, 잔여 시간, Speed, Duration을 소유합니다. 완료 판정은 이벤트 처리 뒤의 현재 Duration을 씁니다.
 - `PathMovementSettings`는 생성할 때 시간 곡선을 한 번 복사해 밖으로 내주지 않습니다. 그래서 여러 Follower가 방어 복사 없이 공유합니다. TimeBased의 빈 곡선은 선형으로 해석합니다.
 - 재생 세션은 첫 `Play`부터 컴포넌트가 파괴될 때까지 남습니다. 재생이 끝난 뒤의 `Seek`는 위치만 옮기고, `SetSpeed`와 `SetDuration`은 값만 바꾸며, 어느 쪽도 재생을 다시 시작하지 않습니다.
+- **Play On Start:** `PathFollower.Start`가 지정한 Provider를 자체 이동 설정으로 재생합니다(`PathPlaybackRequest.Own`). 같은 오브젝트의 `PathQueueMember`에 Manager가 있으면 Queue 밖에서 재생하지 않도록 경고하고 건너뛰며, Provider가 준비되지 않으면 Follower를 context로 오류를 기록하고 돌아갑니다.
 - CharacterController는 재생 중 꺼 두고 끝나면 복원하며, Inspector에서 끌 수 있습니다.
 - `RotateToPathDirection`은 지속 회전을, `AlignRotationToPathDirection`은 선택한 축의 일회 정렬을 제어합니다.
 

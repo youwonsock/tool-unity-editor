@@ -23,7 +23,7 @@ Transform 제어점, Vector3 좌표, 코드로 그린 모양(`PathShapeProvider`
 1. 샘플 씬을 실행해 Normal, Multi, Queue 레인을 확인합니다. macOS 입력 소스가 한글이면 샘플의 글자 키가 동작하지 않습니다.
 2. GameObject에 `PathData`를 추가하고 Inspector의 **Create Path Points**로 제어점을 2개 이상 만듭니다.
 3. Movement에서 Duration이나 Speed(`0.001..9999`)를 지정합니다. Play Mode에서 `PathData`는 Awake에서 스스로 빌드합니다.
-4. 이동할 GameObject에 `PathFollower`를 추가하고 재생을 시작합니다.
+4. 이동할 GameObject에 `PathFollower`를 추가하고 재생을 시작합니다. 코드 없이 시작하려면 Inspector의 **Play On Start**를 켜고 Provider(`PathData`, `MultiPathData`, `PathShapeProvider`)를 지정합니다. Start에서 Provider 자체의 이동 설정으로 재생하며, 같은 오브젝트의 `PathQueueMember`에 Manager가 지정되어 있으면 경고를 남기고 건너뜁니다(`StartQueuedPlayback`으로 시작합니다).
 
 ```csharp
 using Common.TransformPath;

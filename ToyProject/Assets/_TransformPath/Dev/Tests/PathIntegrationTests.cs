@@ -399,6 +399,43 @@ namespace Common.TransformPath.Tests
             Assert.Greater(member.Follower.Progress, 0f);
         }
 
+        [Test]
+        public void PlayOnStart_PlaysItsProvider_ButNotForAQueueMemberWithAManager()
+        {
+            PathData path = Line(10f, 2f);
+            PathFollower solo = CreateFollower();
+            SetPlayOnStart(solo, path);
+            Assert.IsTrue(solo.TryPlayOnStart());
+            Assert.AreEqual(EPathFollowerState.Moving, solo.State);
+            Assert.AreSame(path, solo.CurrentProvider);
+
+            QueuedPathManager manager = CreateManager(path);
+            PathQueueMember member = CreateMember();
+            member.Manager = manager;
+            SetPlayOnStart(member.Follower, path);
+            LogAssert.Expect(LogType.Warning, new Regex("skips Play On Start"));
+            Assert.IsFalse(member.Follower.TryPlayOnStart());
+            Assert.AreEqual(EPathFollowerState.Ready, member.Follower.State);
+
+            var brokenHost = new GameObject("Broken Path");
+            _objects.Add(brokenHost);
+            PathData broken = brokenHost.AddComponent<PathData>();
+            PathFollower waiting = CreateFollower();
+            SetPlayOnStart(waiting, broken);
+            LogAssert.Expect(LogType.Error, new Regex("could not build"));
+            LogAssert.Expect(LogType.Error, new Regex("cannot play on start"));
+            Assert.IsFalse(waiting.TryPlayOnStart());
+            Assert.AreEqual(EPathFollowerState.Ready, waiting.State);
+        }
+
+        private static void SetPlayOnStart(PathFollower follower, PathProviderBehaviour provider)
+        {
+            var serialized = new UnityEditor.SerializedObject(follower);
+            serialized.FindProperty("_playOnStart").boolValue = true;
+            serialized.FindProperty("_playOnStartProvider").objectReferenceValue = provider;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+        }
+
         private TestSpacingPolicy CreatePolicy(string name,
             System.Func<PathQueueMember, PathQueueMember, float, float> rule)
         {

@@ -11,6 +11,14 @@ namespace Common.TransformPath
     /// </summary>
     public sealed class PathFollower : PathRuntimeBehaviour
     {
+        [Header("Play On Start")]
+        [Tooltip("Plays the provider below with its own movement when this component starts. "
+            + "Skipped when a PathQueueMember on this object has a manager.")]
+        [SerializeField] private bool _playOnStart;
+        [Tooltip("A PathData, MultiPathData or PathShapeProvider.")]
+        [SerializeField] private PathProviderBehaviour _playOnStartProvider;
+        [SerializeField] private bool _playOnStartLoop;
+
         [Header("Events")]
         [Tooltip("An IPathEventReceiver that hears the name of every event this follower reaches.")]
         [SerializeField] private MonoBehaviour _eventReceiver;
@@ -183,6 +191,40 @@ namespace Common.TransformPath
         #endregion
 
         #region Runtime
+
+        private void Start() => TryPlayOnStart();
+
+        /// <summary>
+        /// Plays the Inspector's provider when Play On Start is set. A queue
+        /// member with a manager starts through its queue instead, and a
+        /// provider that cannot build is logged. Returns whether it played.
+        /// </summary>
+        internal bool TryPlayOnStart()
+        {
+            if (!_playOnStart)
+                return false;
+            if (_playOnStartProvider == null)
+            {
+                Debug.LogError($"PathFollower '{name}' has Play On Start set but no provider.", this);
+                return false;
+            }
+            if (TryGetComponent(out PathQueueMember member) && member.Manager != null)
+            {
+                Debug.LogWarning(
+                    $"PathFollower '{name}' skips Play On Start because its PathQueueMember has a manager. "
+                    + "Start it with PathQueueMember.StartQueuedPlayback.", this);
+                return false;
+            }
+            _playOnStartProvider.EnsureBuilt();
+            if (!_playOnStartProvider.IsReady)
+            {
+                Debug.LogError(
+                    $"PathFollower '{name}' cannot play on start: {_playOnStartProvider.GetType().Name} "
+                    + $"'{_playOnStartProvider.name}' is not ready.", this);
+                return false;
+            }
+            return Play(PathPlaybackRequest.Own(_playOnStartProvider, _playOnStartLoop));
+        }
 
         internal override void Initialize()
         {
