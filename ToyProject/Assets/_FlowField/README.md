@@ -17,7 +17,7 @@
 1. `Samples/Scenes/FlowFieldSample.unity` 또는 `FlowFieldVolume3DTest.unity`를 실행합니다. macOS 입력 소스가 한글이면 샘플의 글자 키가 동작하지 않습니다.
 2. 새 씬에서는 `FlowFieldManager`에 Bounds, CellSize, 공간 모드, Layer를 지정합니다. Manager는 회전 없이 단위 Scale로 둡니다.
 3. `StaticBaked`는 Editor에서 Bake한 Asset을 연결합니다. Goal이나 장애물이 바뀌면 다시 Bake합니다. `BakedBase`도 같은 Asset을 연결하고, Goal과 알린 장애물 변화는 런타임에 반영합니다.
-4. 움직이는 장애물에는 `FlowFieldDynamicObstacle`, 움직이는 Goal에는 `FlowFieldGoalTarget`을 붙입니다. FlowField는 씬을 폴링하지 않으므로 알리지 않은 변화는 반영되지 않습니다.
+4. 움직이는 장애물에는 `FlowFieldDynamicObstacle`, 움직이는 Goal에는 `FlowFieldGoalTarget`을 붙입니다. 기본으로 FlowField는 씬을 폴링하지 않으므로 알리지 않은 변화는 반영되지 않습니다. 등록하지 않은 장애물까지 따라가려면 Obstacle 설정의 `Sweep Unregistered`를 켭니다.
 5. 이동 주체에서 `TrySample()`을 호출합니다.
 
 ## 다른 프로젝트로 옮기기
@@ -86,7 +86,8 @@ public sealed class FlowFieldReadmeMover : MonoBehaviour
 | 격자 안 위치 | `ClampPositionToGrid()`. 예외 없이 쓰려면 `TryClampPositionToGrid()` |
 | Bake Asset 형식 확인 | `asset.HasCurrentFormat`(false면 다시 Bake). 지원 형식은 `FlowFieldSurfaceBakeData.SupportedFormatVersion`, `FlowFieldVolumeBakeData.SupportedFormatVersion` |
 
-- **통지 방식:** FlowField는 씬을 폴링하지 않습니다. 변경은 위 API와 FlowField 컴포넌트(`FlowFieldDynamicObstacle`, `FlowFieldGoalTarget`, Modifier)의 통지로만 들어옵니다. 알리지 않은 이동은 반영되지 않습니다. 통지를 받은 그 프레임부터 영향 영역은 새 결과가 게시될 때까지 속도 0입니다. 장애물 조회는 Trigger를 무시합니다.
+- **통지 방식:** 기본으로 FlowField는 씬을 폴링하지 않습니다. 변경은 위 API와 FlowField 컴포넌트(`FlowFieldDynamicObstacle`, `FlowFieldGoalTarget`, Modifier)의 통지로만 들어옵니다. 알리지 않은 이동은 반영되지 않습니다. 통지를 받은 그 프레임부터 영향 영역은 새 결과가 게시될 때까지 속도 0입니다. 장애물 조회는 Trigger를 무시합니다.
+- **미등록 장애물 sweep:** Obstacle 설정의 `Sweep Unregistered`를 켜면 Session이 `Sweep Interval`(unscaled 초, 0은 프레임마다 한 번)마다 Obstacle Layer를 조회해, 등록하지 않은 Collider가 생기거나 움직이거나 사라진 영역을 `NotifyObstacleRegionDirty`처럼 다시 빌드합니다. 간격마다 Bounds 전체의 `OverlapBox`와 `Physics.SyncTransforms`가 들고, 켜는 순간 Surface2D는 장애물 전체를 다시 scan합니다. 첫 조회는 기록만 합니다. Collider가 65,536개에 이르면 그 세션의 sweep을 끄고 경고를 한 번 남깁니다. `StaticBaked`에서는 켤 수 없고(Init이 거부), Bake와 Edit Mode 미리보기는 sweep을 돌리지 않으므로 지금처럼 정적 장애물을 담습니다.
 - **Goal Transform:** Manager의 Goal Transform은 Init과 Bake 때 한 번 읽는 초기 Goal입니다. 이후 이동은 `SetGoal()`이나 `FlowFieldGoalTarget`으로 알립니다.
 - **설정 변경:** Play 중 Inspector에서 설정을 바꾸면 바로 다시 빌드합니다. 값이 잘못되면 두 모드 모두 Fault가 됩니다.
 - **설정 검사:** Init과 Inspector·Scene View는 같은 검사를 같은 문구로 합니다. 잘못된 설정이면 `Init()`은 처음 걸린 이유를 메시지로 담은 `InvalidOperationException`을 던지고, Inspector는 그 문구를 그대로 보여 줍니다.

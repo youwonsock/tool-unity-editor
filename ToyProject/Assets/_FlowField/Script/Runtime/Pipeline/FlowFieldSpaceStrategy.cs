@@ -37,6 +37,12 @@ namespace Common.FlowField
         }
 
         internal abstract bool TryCreateLayout(in FlowFieldManagerConfig config, out Bounds worldBounds, out FlowFieldGridSpace grid);
+
+        /// <summary>
+        /// The box the unregistered obstacle sweep queries: every Collider that
+        /// a cell's obstacle query can reach overlaps it.
+        /// </summary>
+        internal abstract Bounds ObstacleSweepBounds(in FlowFieldManagerConfig config);
         // Bake Bounds keep a whole number of cells around their centre.
         internal abstract Bounds SnapBounds(Bounds localBounds, float cellSize);
 
@@ -57,6 +63,24 @@ namespace Common.FlowField
 
             internal override Bounds SnapBounds(Bounds localBounds, float cellSize)
                 => FlowFieldLayoutUtility.SnapCenterAnchored(localBounds, cellSize);
+
+            // The grid in XZ with the Clearance, and in Y every surface height
+            // the bake range allows with the obstacle check box above it.
+            internal override Bounds ObstacleSweepBounds(in FlowFieldManagerConfig config)
+            {
+                FlowFieldSurfaceBuilder.TryCreateLayout(in config, out Bounds world, out FlowFieldGridSpace grid);
+                float halfHeight = config.Surface.ObstacleCheckHeight * 0.5f;
+                float offset = config.Surface.ObstacleCheckCenterOffset;
+                float clearance = config.Obstacles.Clearance;
+                var bounds = new Bounds();
+                bounds.SetMinMax(
+                    new Vector3(grid.Origin.x - clearance, world.min.y + offset - halfHeight, grid.Origin.z - clearance),
+                    new Vector3(
+                        grid.Origin.x + grid.WorldSizeX + clearance,
+                        world.max.y + offset + halfHeight,
+                        grid.Origin.z + grid.WorldSizeZ + clearance));
+                return bounds;
+            }
         }
 
         private sealed class Volume : FlowFieldSpaceStrategy
@@ -76,6 +100,14 @@ namespace Common.FlowField
 
             internal override Bounds SnapBounds(Bounds localBounds, float cellSize)
                 => FlowFieldLayoutUtility.SnapVolumeCenterAnchored(localBounds, cellSize);
+
+            // The Bounds with a cell and the Clearance on every side.
+            internal override Bounds ObstacleSweepBounds(in FlowFieldManagerConfig config)
+            {
+                FlowFieldVolumeBuilder.TryCreateLayout(in config, out Bounds world, out FlowFieldGridSpace grid);
+                world.Expand(2f * (grid.CellSize + config.Obstacles.Clearance));
+                return world;
+            }
         }
     }
 }

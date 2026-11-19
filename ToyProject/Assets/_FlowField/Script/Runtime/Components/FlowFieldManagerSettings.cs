@@ -46,6 +46,15 @@ namespace Common.FlowField
         [SerializeField] internal LayerMask Layer;
         [Tooltip("How far obstacle detection extends beyond a cell.")]
         [SerializeField] internal float Clearance;
+        [Tooltip("Watch the Obstacle Layer for Colliders that are not registered, and rebuild where one appears, moves or disappears. Each sweep queries the whole Bounds. Not available in StaticBaked.")]
+        [SerializeField] internal bool SweepUnregistered;
+        [Tooltip("Unscaled seconds between sweeps; 0 sweeps once a frame.")]
+        [SerializeField, Min(0f)] internal float SweepInterval;
+
+        internal static FlowFieldObstacleSettings Default => new FlowFieldObstacleSettings
+        {
+            SweepInterval = 0.2f,
+        };
     }
 
     /// <summary>The direction used where no Goal applies, and the Goal reach.</summary>

@@ -28,6 +28,8 @@ namespace Common.FlowField
         // submits it before it begins.
         private FlowFieldManagerConfig _owedConfig;
         private bool _configOwed;
+        // Whether the staged masks were built with the obstacle sweep.
+        private bool _masksSweep;
 
         public FlowFieldSpaceMode SpaceMode => FlowFieldSpaceMode.Surface2D;
         public FlowFieldField PublishedField
@@ -424,6 +426,7 @@ namespace Common.FlowField
             _configOwed = false;
             _state.GoalRemoved = false;
             _state.BakedBaseTouched = null;
+            _masksSweep = false;
             _latestDefaultDirection = null;
         }
 

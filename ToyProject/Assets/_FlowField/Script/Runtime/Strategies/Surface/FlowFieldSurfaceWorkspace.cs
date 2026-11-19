@@ -14,6 +14,8 @@ namespace Common.FlowField
         public bool[] ObstacleScratch { get; private set; }
         public bool[] StaticBlocked { get; private set; }
         public bool[] DynamicBlocked { get; private set; }
+        // Every obstacle Collider the sweep made the session watch; part of DynamicBlocked.
+        public bool[] SweptBlocked { get; private set; }
         public Vector3[] EscapeDirections { get; private set; }
         public Vector3[] GoalDirections { get; private set; }
         public FlowFieldGoalFlags[] GoalFlags { get; private set; }
@@ -63,6 +65,7 @@ namespace Common.FlowField
             ObstacleScratch = new bool[cellCount];
             StaticBlocked = new bool[cellCount];
             DynamicBlocked = new bool[cellCount];
+            SweptBlocked = new bool[cellCount];
             EscapeDirections = new Vector3[cellCount];
             GoalDirections = new Vector3[cellCount];
             GoalFlags = new FlowFieldGoalFlags[cellCount];
@@ -90,6 +93,7 @@ namespace Common.FlowField
             ObstacleScratch = null;
             StaticBlocked = null;
             DynamicBlocked = null;
+            SweptBlocked = null;
             EscapeDirections = null;
             GoalDirections = null;
             GoalFlags = null;
@@ -192,6 +196,7 @@ namespace Common.FlowField
             Array.Clear(ObstacleScratch, 0, Capacity);
             Array.Clear(StaticBlocked, 0, Capacity);
             Array.Clear(DynamicBlocked, 0, Capacity);
+            Array.Clear(SweptBlocked, 0, Capacity);
             HasBlockedCells = false;
             Array.Clear(EscapeDirections, 0, Capacity);
             ClearGoal();

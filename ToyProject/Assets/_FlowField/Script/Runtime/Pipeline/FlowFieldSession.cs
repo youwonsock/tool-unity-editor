@@ -46,6 +46,7 @@ namespace Common.FlowField
         private bool _publishingClosed;
         private bool _runtimeScheduled;
         private FlowFieldRuntimeState _publishedState = FlowFieldRuntimeState.Uninitialized;
+        private readonly FlowFieldObstacleSweep _sweep;
 
         internal FlowFieldSession(
             FlowFieldExecutionBoundary boundary,
@@ -54,6 +55,7 @@ namespace Common.FlowField
             Boundary = boundary ?? new FlowFieldExecutionBoundary();
             _builder = createBuilder?.Invoke(this)
                 ?? throw new ArgumentNullException(nameof(createBuilder));
+            _sweep = new FlowFieldObstacleSweep(ApplySweptChange);
         }
 
         /// <summary>A Surface2D session. A bake passes the surface it scanned as <paramref name="surfaceSource"/>.</summary>
@@ -77,6 +79,14 @@ namespace Common.FlowField
         /// <summary>The registered dynamic obstacles, the same in both modes.</summary>
         internal FlowFieldObstacleRegistry Obstacles { get; } = new FlowFieldObstacleRegistry();
 
+        /// <summary>
+        /// Whether the unregistered obstacle sweep runs in this session: the
+        /// settings enable it, the runtime scheduler pumps the session and too
+        /// many Colliders have not stopped it. A bake and the Editor preview
+        /// pump their sessions themselves, so they never sweep.
+        /// </summary>
+        internal bool SweepsObstacles => _runtimeScheduled && _sweep.IsRunning;
+
         /// <summary>Regions an obstacle change made uncertain. Surface2D compares them in XZ.</summary>
         internal FlowFieldSafety Safety
             => _safety ??= new FlowFieldSafety(planar: _builder.SpaceMode == FlowFieldSpaceMode.Surface2D);
@@ -91,6 +101,12 @@ namespace Common.FlowField
                 return false;
             _config = config;
             _hasConfig = true;
+            // SetGoal submits too; only new sweep settings forget what it saw.
+            _sweep.Configure(
+                config.Obstacles.SweepUnregistered && BakeMode != FlowFieldBakeMode.StaticBaked,
+                FlowFieldSpaceStrategy.For(SpaceMode).ObstacleSweepBounds(in config),
+                config.Obstacles.Layer,
+                config.Obstacles.SweepInterval);
             Bounds? invalidated = _builder.SubmitConfig(in config, change);
             if (invalidated.HasValue)
                 Safety.InvalidateRegion(invalidated.Value);
@@ -435,29 +451,32 @@ namespace Common.FlowField
         // steps and says what each build queries.
 
         internal void PumpInternal(in FlowFieldBuildBudget budget)
-            => RunPipeline(in budget, waitForWorker: false);
+            => RunPipeline(in budget, waitForWorker: false, sweep: true);
 
         /// <summary>
         /// A direct owner (a bake, the Editor preview) runs its own session and
         /// waits for the worker thread; the scheduler pumps with a frame budget
         /// and never waits. With no budget the pending build runs to its end.
         /// </summary>
-        internal void Pump() => RunPipeline(FlowFieldBuildBudget.Unlimited, waitForWorker: true);
+        internal void Pump() => RunPipeline(FlowFieldBuildBudget.Unlimited, waitForWorker: true, sweep: false);
 
         internal void Pump(double budgetMilliseconds)
         {
             System.Diagnostics.Stopwatch timer = System.Diagnostics.Stopwatch.StartNew();
             var budget = new FlowFieldBuildBudget(budgetMilliseconds, () => timer.Elapsed.TotalMilliseconds);
-            RunPipeline(in budget, waitForWorker: true);
+            RunPipeline(in budget, waitForWorker: true, sweep: false);
         }
 
-        private void RunPipeline(in FlowFieldBuildBudget budget, bool waitForWorker)
+        private void RunPipeline(in FlowFieldBuildBudget budget, bool waitForWorker, bool sweep)
         {
             if (!CanPump)
                 return;
             using FlowFieldExecutionBoundary.OperationScope operation = Boundary.EnterOperation();
             try
             {
+                // Inside the try, so a failing sweep faults this session only.
+                if (sweep)
+                    RunObstacleSweep();
                 int begun = 0;
                 while (CanPump)
                 {
@@ -518,6 +537,25 @@ namespace Common.FlowField
             }
         }
 
+        // One sweep step a frame; the scheduler may pump a session more than once.
+        private void RunObstacleSweep()
+        {
+            if (!SweepsObstacles)
+                return;
+            if (!_sweep.Step(Time.frameCount, Time.unscaledTimeAsDouble, Obstacles))
+            {
+                // A stopped sweep no longer watches the bounds, so the masks
+                // built with it are rebuilt without it.
+                ApplyObstacleChange(new FlowFieldObstacleChange(
+                    FlowFieldObstacleChangeKind.RegionDirty, null, false, default, true, _sweep.SweepBounds));
+            }
+        }
+
+        // An unregistered Collider appeared, moved or disappeared.
+        private void ApplySweptChange(bool hasPrevious, Bounds previous, bool hasCurrent, Bounds current)
+            => ApplyObstacleChange(new FlowFieldObstacleChange(
+                FlowFieldObstacleChangeKind.RegionDirty, null, hasPrevious, previous, hasCurrent, current));
+
         bool IFlowFieldBuildOperation.IsWaitingForExternalCompletion => IsWaitingForExternalCompletion;
         bool IFlowFieldBuildOperation.IsBuilding => IsBuilding;
         void IFlowFieldBuildOperation.PumpInternal(in FlowFieldBuildBudget budget) => PumpInternal(in budget);
@@ -568,6 +606,8 @@ namespace Common.FlowField
                 return;
             AbandonWork();
             _builder.DropComputedState();
+            // The restart builds everything again, so the sweep starts over too.
+            _sweep.Clear();
             SetLifecycle(FlowFieldSessionLifecycle.Suspended);
         }
 
@@ -643,6 +683,7 @@ namespace Common.FlowField
             _modifiers?.Clear();
             _builder.ReleaseResources();
             Safety.ClearRegions();
+            _sweep.Reset();
             Fault = null;
         }
 

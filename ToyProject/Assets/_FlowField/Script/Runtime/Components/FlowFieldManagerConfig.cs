@@ -80,10 +80,14 @@ namespace Common.FlowField
                 return Fail(out reason, "Obstacle LayerMask must contain at least one layer.");
             if (!FlowFieldGridSpace.IsFinite(Obstacles.Clearance) || Obstacles.Clearance < 0f)
                 return Fail(out reason, "Obstacle Clearance must be finite and not negative.");
+            if (!FlowFieldGridSpace.IsFinite(Obstacles.SweepInterval) || Obstacles.SweepInterval < 0f)
+                return Fail(out reason, "Sweep Interval must be finite and not negative.");
             if (!FlowFieldGridSpace.IsFinite(Flow.GoalInfluenceRadius) || Flow.GoalInfluenceRadius < 0f)
                 return Fail(out reason, "Goal Influence Radius must be finite and not negative.");
             if (!Enum.IsDefined(typeof(FlowFieldBakeMode), BakeMode))
                 return Fail(out reason, "Bake Mode must be RuntimeDynamic, StaticBaked or BakedBase.");
+            if (Obstacles.SweepUnregistered && BakeMode == FlowFieldBakeMode.StaticBaked)
+                return Fail(out reason, "Sweep Unregistered is not allowed in StaticBaked mode, whose obstacles stay as baked.");
             if (bakeModeLocked)
                 return Fail(out reason, "FlowField Bake Mode cannot change during an active Init session. Release and Init again.");
             reason = string.Empty;

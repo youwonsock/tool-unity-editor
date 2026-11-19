@@ -32,7 +32,19 @@ namespace Common.FlowField
                 return true;
             }
 
-            _baseStage.BuildSceneBase(request, ref pending, surfaceChanged);
+            // The sweep decides what the masks hold, so starting or stopping
+            // it rebuilds every obstacle.
+            bool sweepsObstacles = _session.SweepsObstacles;
+            if (sweepsObstacles != _masksSweep)
+            {
+                _masksSweep = sweepsObstacles;
+                pending |= FlowFieldSurfaceDirtyFlags.StaticObstacles
+                    | FlowFieldSurfaceDirtyFlags.DynamicObstacles
+                    | FlowFieldSurfaceDirtyFlags.Escape
+                    | FlowFieldSurfaceDirtyFlags.FinalRegion;
+                _state.ExpandObstacleDirty(FlowFieldCellRect.Full(_state.Grid));
+            }
+            _baseStage.BuildSceneBase(request, ref pending, surfaceChanged, sweepsObstacles);
             if ((pending & FlowFieldSurfaceDirtyFlags.ModifierArea) != 0)
             {
                 FlowFieldCellRect modifierRegion = RebuildModifierAreaData(request);

@@ -19,6 +19,10 @@ namespace Common.FlowField
         public FlowFieldSurfaceBakeSnapshot BakedBase { get; }
         // BakedBase: every region obstacle changes reached since Initialize.
         public Bounds? Touched { get; }
+        // The session sweeps for unregistered obstacles: the dynamic mask
+        // holds every obstacle Collider of the layer, and without a bake the
+        // static mask stays empty, so a static Collider that moved leaves nothing behind.
+        public bool SweepsObstacles { get; }
 
         public FlowFieldSurfaceObstacleRequest(
             FlowFieldGridSpace grid,
@@ -30,7 +34,8 @@ namespace Common.FlowField
             float clearance,
             FlowFieldCellRect dirtyRegion,
             FlowFieldSurfaceBakeSnapshot bakedBase = null,
-            Bounds? touched = null)
+            Bounds? touched = null,
+            bool sweepsObstacles = false)
         {
             Grid = grid;
             Surface = surface;
@@ -42,6 +47,7 @@ namespace Common.FlowField
             DirtyRegion = dirtyRegion;
             BakedBase = bakedBase;
             Touched = touched;
+            SweepsObstacles = sweepsObstacles;
         }
     }
 
@@ -108,6 +114,7 @@ namespace Common.FlowField
                     request.Clearance,
                     request.Workspace.ObstacleScratch,
                     request.DirtyRegion);
+                AddSweptObstacles(in request);
                 dynamicChanged = CommitDynamicScratch(request.Workspace);
             }
 
@@ -121,6 +128,33 @@ namespace Common.FlowField
             return new FlowFieldSurfaceObstacleResult(
                 effectiveMaskChanged,
                 effectiveMaskDirty);
+        }
+
+        // The swept mask scans the dirty cells again with every obstacle
+        // Collider of the layer, and joins the registered overlay.
+        private void AddSweptObstacles(in FlowFieldSurfaceObstacleRequest request)
+        {
+            FlowFieldSurfaceWorkspace workspace = request.Workspace;
+            if (!request.SweepsObstacles)
+            {
+                Array.Clear(workspace.SweptBlocked, 0, workspace.Capacity);
+                return;
+            }
+            FlowFieldObstacleMaskBuilder.Build(
+                request.Grid,
+                request.Surface,
+                request.ObstacleLayer,
+                request.CheckHeight,
+                request.CenterOffset,
+                request.Clearance,
+                workspace.SweptBlocked,
+                request.DirtyRegion.IsValid ? request.DirtyRegion : FlowFieldCellRect.Full(request.Grid),
+                ref _overlapBuffer,
+                syncTransformsBeforeQuery: true);
+            bool[] overlay = workspace.ObstacleScratch;
+            bool[] swept = workspace.SweptBlocked;
+            for (int i = 0; i < workspace.Capacity; i++)
+                overlay[i] |= swept[i];
         }
 
         private static bool CommitDynamicScratch(FlowFieldSurfaceWorkspace workspace)
@@ -193,7 +227,12 @@ namespace Common.FlowField
             bool[] scratch = workspace.ObstacleScratch;
             FlowFieldCellRect region = request.DirtyRegion;
             bool partial = region.IsValid && !region.Covers(grid);
-            if (partial)
+            if (request.SweepsObstacles && request.BakedBase == null)
+            {
+                Array.Clear(scratch, 0, workspace.Capacity);
+                region = FlowFieldCellRect.Invalid;
+            }
+            else if (partial)
             {
                 Array.Copy(workspace.StaticBlocked, scratch, workspace.Capacity);
             }

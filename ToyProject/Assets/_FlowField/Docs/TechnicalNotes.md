@@ -60,7 +60,10 @@
 
 ## 입력 변경
 
-- **통지 방식:** FlowField는 씬을 폴링하지 않습니다. 변경은 공개 API와 FlowField 컴포넌트의 통지로만 들어옵니다. `FlowFieldDynamicObstacle`, `FlowFieldGoalTarget`, Modifier Volume은 자기 Transform이나 Collider Bounds를 프레임당 한 번 확인합니다(컴포넌트당 O(1)).
+- **통지 방식:** 기본으로 FlowField는 씬을 폴링하지 않습니다. 변경은 공개 API와 FlowField 컴포넌트의 통지로만 들어옵니다. `FlowFieldDynamicObstacle`, `FlowFieldGoalTarget`, Modifier Volume은 자기 Transform이나 Collider Bounds를 프레임당 한 번 확인합니다(컴포넌트당 O(1)).
+- **미등록 장애물 sweep(`FlowFieldObstacleSweep`):** Session이 소유하고, runtime scheduler가 부르는 빌드 루프(`RunPipeline`의 try 안)에서만 프레임당 한 번 돕니다. 그래서 Bake와 Edit Mode 미리보기, 직접 `Pump()`하는 세션은 sweep하지 않습니다(`SweepsObstacles`). 한 pass는 sweep Bounds(`FlowFieldSpaceStrategy.ObstacleSweepBounds`: Surface2D는 장애물 조회 상자가 닿는 높이와 Clearance까지, Volume3D는 셀 하나와 Clearance만큼 넓힌 Bounds)를 한 번 조회하고, 등록하지 않은 Collider를 1,024개씩 이전 pass의 Bounds와 비교합니다. 사라짐은 pass 끝에서 판정합니다. 바뀐 Collider는 이전·현재 Bounds를 `RegionDirty` 장애물 변화로 보내 기존 경로(불확실 영역, 다시 조회)를 탑니다. 첫 pass는 기록만 하고, 설정(켜기, Bounds, Layer)이 바뀌거나 Stop·Release 때 기록을 비웁니다. 65,536개에 이르면 그 세션에서 멈추고, 멈춘 Bounds 전체를 다시 빌드합니다.
+  - Surface2D 동적 마스크 = 등록 overlay ∪ swept 마스크(모든 obstacle Collider, dirty 영역만 다시 scan)입니다. `RuntimeDynamic`에서 sweep이 이 세션에서 돌면 정적 마스크는 비웁니다. 옮긴 정적 Collider의 잔상을 남기지 않기 위해서입니다. `BakedBase`의 정적 마스크는 Bake에서 시작하므로 그대로 두고, sweep이 알린 영역을 정적 규칙으로도 다시 scan해 옮긴 Collider의 Bake 자리를 풉니다. sweep이 시작되거나 멈추면 모든 장애물 마스크를 다시 만듭니다.
+  - Volume3D는 다시 조회할 때 이미 레이어의 모든 Collider를 읽으므로 영역 알림만으로 충분합니다. Bake 때 Rigidbody Collider가 있던 자리도 sweep이 그 영역을 알리면 풀립니다.
 - **불확실 영역:** 장애물 등록·해제·이동·영역 dirty 통지를 받은 그 프레임에 영역을 표시하고, 그 영역을 조회한 빌드가 게시될 때까지 그 셀과 그 셀로 가는 경로는 속도 0입니다. 목록은 Session만 바꿉니다(`FlowFieldSafety`). 장애물을 조회하는 빌드가 시작되면 목록을 옮기고, 다음 게시 때 지웁니다. 시작 후 기록된 영역은 다음 빌드까지 남습니다. 게시하지 못하고 끝난 빌드가 옮긴 영역도 남았다가 뒤따르는 빌드의 게시 때 지웁니다. Surface에서 거부된 빌드의 조회 결과는 staging에 남고 대체 빌드는 항상 Goal 플래그를 가지며, Volume에서 버린 빌드 뒤에는 항상 전체 빌드가 오기 때문입니다. 목록이 64개를 넘으면 합쳐서 더 넓게 정지합니다(Surface는 XZ, Volume은 3D로 비교). 장애물 설정이 바뀌면 필드 전체가 불확실해집니다.
 - `SetGoal()`은 장애물 결과를 재사용합니다. 같이 `RequestRebuild()`를 부르면 이 이점을 잃습니다.
 - Surface의 `RequestRebuild()`는 바닥 Raycast를 다시 한다고 보장하지 않습니다. 바닥 형상이 바뀌면 `NotifyCellsDirty()`를 씁니다. Volume의 `NotifyCellsDirty()`는 새 전체 작업을 예약합니다.
@@ -83,7 +86,7 @@
 - 셀은 `x + Width × (z + Depth × y)` 순서로 저장합니다. 두 축·세 축 대각선은 중간 셀이 모두 통과 가능할 때만 연결합니다.
 - 장애물·Modifier 단계는 64셀씩 진행합니다. 스텝마다 `OverlapBox`로 후보를 모아 후보가 닿는 셀만 정확히 검사합니다(`FlowFieldVolumeCellQuery`).
 - **부분 재계산:** Modifier만 바뀌면 게시된 내비게이션에 다시 합성하고, Goal만 바뀌면 장애물 결과와 Topology를 재사용합니다. Goal이 같은 셀 안에서 움직이면 빌드하지 않습니다. Goal을 지우면 진행 중인 빌드를 버립니다.
-- **등록하지 않은 Collider:** `RequestRebuild()`나 `NotifyCellsDirty()`의 전체 조회에서 반영됩니다.
+- **등록하지 않은 Collider:** `RequestRebuild()`나 `NotifyCellsDirty()`의 전체 조회, 또는 `NotifyObstacleRegionDirty()`와 sweep이 알린 영역의 조회에서 반영됩니다.
 - **배열 재사용:** 교체된 게시 배열을 다음 빌드에 씁니다(`FlowFieldSpareArrays`).
 
 ## Modifier

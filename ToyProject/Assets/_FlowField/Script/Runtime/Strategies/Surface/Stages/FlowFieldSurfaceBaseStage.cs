@@ -142,7 +142,8 @@ namespace Common.FlowField
         internal void BuildSceneBase(
             in FlowFieldSurfaceRequest request,
             ref FlowFieldSurfaceDirtyFlags pending,
-            bool surfaceChanged)
+            bool surfaceChanged,
+            bool sweepsObstacles)
         {
             if ((pending & FlowFieldSurfaceDirtyFlags.DefaultDirection) != 0)
             {
@@ -179,7 +180,8 @@ namespace Common.FlowField
                         request.ObstacleClearance,
                         _state.DirtyObstacleRegion,
                         request.SourceKind == FlowFieldSurfaceSourceKind.BakedBase ? request.BakeSnapshot : null,
-                        _state.BakedBaseTouched),
+                        _state.BakedBaseTouched,
+                        sweepsObstacles),
                     goal,
                     surfaceChanged),
                 _obstacleMasks,

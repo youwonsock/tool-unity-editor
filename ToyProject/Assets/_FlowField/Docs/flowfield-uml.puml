@@ -11,7 +11,7 @@ title FlowField 핵심 흐름
 
 start
 :Init이 설정 검사\n(Inspector와 같은 TryValidate·문구);
-:공개 API·컴포넌트 통지\n(씬 폴링 없음);
+:공개 API·컴포넌트 통지\n(선택: 미등록 장애물 sweep);
 :Session이 입력을 받고 Building;
 :Scheduler가 프레임 예산(기본 2ms) 안에서 빌드;
 switch (Bake 모드)

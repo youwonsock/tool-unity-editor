@@ -9,7 +9,8 @@ namespace Common.FlowField
     /// to one <see cref="FlowFieldSession"/>, which owns all calculation state.
     /// Files: this one (settings, lifecycle, events), .Api (public calls) and
     /// .Config (the settings snapshot the builders check and build from).
-    /// Nothing here polls the scene: every change arrives as a call.
+    /// Nothing here polls the scene: every change arrives as a call, and only
+    /// the obstacle sweep the settings can enable looks for unregistered ones.
     /// </summary>
     [DefaultExecutionOrder(-300)]
     public partial class FlowFieldManager : MonoBehaviour, IFlowFieldController
@@ -19,7 +20,7 @@ namespace Common.FlowField
         // defaults and PropertyNames below the paths Editor code uses.
         [SerializeField] private FlowFieldGridSettings _grid = FlowFieldGridSettings.Default;
         [SerializeField] private FlowFieldSurfaceSettings _surface = FlowFieldSurfaceSettings.Default;
-        [SerializeField] private FlowFieldObstacleSettings _obstacles;
+        [SerializeField] private FlowFieldObstacleSettings _obstacles = FlowFieldObstacleSettings.Default;
         [SerializeField] private FlowFieldFlowSettings _flow = FlowFieldFlowSettings.Default;
         [SerializeField, Tooltip("The Goal position Init and Bake read once. Report later Goal moves with SetGoal or FlowFieldGoalTarget.")]
         private Transform _goalTransform;
