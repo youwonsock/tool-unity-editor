@@ -117,11 +117,9 @@ namespace Common.TransformPath
                 _target.PublishEvent(definition.EventName);
 
             bool changed = false;
+            // Pause cancels the blend itself, moving or not.
             if (definition.Lifecycle == EPathEventLifecycle.Pause)
-            {
-                CancelBlend();
                 changed = _target.Pause();
-            }
             else
             {
                 if (definition.Lifecycle == EPathEventLifecycle.Resume)

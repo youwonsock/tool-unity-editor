@@ -42,13 +42,9 @@ namespace Common.TransformPath.Editor
             if (speedBased)
                 return changed;
 
-            if (timeCurve.animationCurveValue == null || timeCurve.animationCurveValue.length == 0)
-            {
-                timeCurve.animationCurveValue = AnimationCurve.Linear(0f, 0f, 1f, 1f);
-                changed = true;
-            }
+            // Drawing only: an empty curve plays linearly, so nothing is written to it here.
             EditorGUI.BeginChangeCheck();
-            EditorGUILayout.PropertyField(timeCurve, new GUIContent("Time Curve"));
+            EditorGUILayout.PropertyField(timeCurve, new GUIContent("Time Curve", "An empty curve plays linearly."));
             return EditorGUI.EndChangeCheck() || changed;
         }
 

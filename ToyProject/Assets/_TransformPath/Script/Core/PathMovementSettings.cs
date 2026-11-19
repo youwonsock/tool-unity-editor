@@ -77,8 +77,21 @@ namespace Common.TransformPath
                 || PathValueUtility.AreSameCurve(_timeCurve, other._timeCurve);
         }
 
-        internal bool TryValidate(out string error)
+        internal bool TryValidate(out string error) => TryValidate(out error, out _);
+
+        /// <summary>Throws ArgumentOutOfRangeException for the mode or the value, ArgumentException for the curve.</summary>
+        internal void Validate(string parameterName)
         {
+            if (TryValidate(out string error, out bool outOfRange))
+                return;
+            if (outOfRange)
+                throw new ArgumentOutOfRangeException(parameterName, error);
+            throw new ArgumentException(error, parameterName);
+        }
+
+        private bool TryValidate(out string error, out bool outOfRange)
+        {
+            outOfRange = true;
             if (!Enum.IsDefined(typeof(EPathMoveType), MoveType))
             {
                 error = "MoveType is invalid.";
@@ -89,20 +102,11 @@ namespace Common.TransformPath
                 error = $"Movement value must be finite and within {PathConstants.MIN_MOVE_VALUE}..{PathConstants.MAX_MOVE_VALUE}.";
                 return false;
             }
+            outOfRange = false;
             if (MoveType == EPathMoveType.TimeBased)
                 return TryValidateTimeCurve(_timeCurve, out error);
             error = null;
             return true;
-        }
-
-        internal void Validate(string parameterName)
-        {
-            if (TryValidate(out string error))
-                return;
-            if (!Enum.IsDefined(typeof(EPathMoveType), MoveType)
-                || !PathValueUtility.IsInRange(Value, PathConstants.MIN_MOVE_VALUE, PathConstants.MAX_MOVE_VALUE))
-                throw new ArgumentOutOfRangeException(parameterName, error);
-            throw new ArgumentException(error, parameterName);
         }
 
         /// <summary>A time curve must run from 0 to 1 without going back.</summary>

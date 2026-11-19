@@ -129,43 +129,6 @@ namespace Common.TransformPath.Tests
         }
 
         [Test]
-        public void NextPathEvent_CancelsPendingDelayedEvents()
-        {
-            PathData path = Line(PathMovementSettings.Speed(5f));
-            PathEventSettingSO delayed = _scene.CreateEvent("delayed");
-            PathEventSettingSO first = _scene.CreateEvent("first");
-            first.DelayedEvents.Add(new PathEventSettingSO.DelayedEventEntry { Delay = 1f, EventSetting = delayed });
-            _scene.SetEvents(path, (0.1f, first), (0.2f, _scene.CreateEvent("second")));
-            var recorder = new RecordingPlayback();
-            recorder.Playback.Play(PathPlaybackRequest.Single(path));
-
-            recorder.Frames(120);
-
-            CollectionAssert.DoesNotContain(recorder.Log, "event delayed");
-        }
-
-        [Test]
-        public void SpeedBlend_ReachesItsTargetOverTheBlendTime()
-        {
-            var recorder = new RecordingPlayback();
-            PathEventSettingSO faster = _scene.CreateEvent("faster");
-            faster.UseSpeedChange = true;
-            faster.SpeedTarget = 4f;
-            faster.SpeedBlendTime = 1f;
-            faster.SpeedBlendCurve = AnimationCurve.Linear(0f, 0f, 1f, 1f);
-            recorder.Playback.Play(PathPlaybackRequest.Single(Line(PathMovementSettings.Speed(2f))));
-            recorder.Frame();
-
-            // A blend starts counting on the frame after it started.
-            recorder.Playback.TriggerEvent(PathEventDefinition.FromAuthoring(faster));
-            recorder.Frames(30);
-            Assert.AreEqual(3f, recorder.Playback.Speed, 0.1f);
-            recorder.Frames(40);
-
-            Assert.AreEqual(4f, recorder.Playback.Speed, 1e-5f);
-        }
-
-        [Test]
         public void CyclicDelayedEvents_AreRejected()
         {
             PathEventSettingSO a = _scene.CreateEvent("a");

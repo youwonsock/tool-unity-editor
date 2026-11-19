@@ -112,13 +112,14 @@ namespace Common.TransformPath
             return true;
         }
 
+        /// <summary>Cancels a value blend even when not moving, then pauses a moving playback.</summary>
         public bool Pause()
         {
+            _effects.CancelBlend();
             if (!IsMoving)
                 return false;
             IsMoving = false;
             _cursor.PendingTime = 0f;
-            _effects.CancelBlend();
             SetState(EPathFollowerState.Paused);
             return true;
         }
