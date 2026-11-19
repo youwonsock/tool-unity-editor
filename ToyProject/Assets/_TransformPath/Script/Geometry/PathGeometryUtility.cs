@@ -24,6 +24,11 @@ namespace Common.TransformPath
     {
         #region Public Methods
 
+        /// <summary>
+        /// Samples a curve through the control points. The caller passes at
+        /// least two finite points: PathData.CopyControlPoints and
+        /// SetControlPoints check them before anything reaches here.
+        /// </summary>
         public static bool TryBuild(
             IReadOnlyList<Vector3> controlPoints,
             EPathCurveType curveType,
@@ -33,31 +38,10 @@ namespace Common.TransformPath
             out string error)
         {
             result = null;
-            if (controlPoints == null || controlPoints.Count < PathConstants.MIN_PATH_POINTS)
-            {
-                error = "At least two control points are required.";
-                return false;
-            }
-
             if (segmentCount < PathConstants.MIN_PATH_POINTS)
             {
                 error = "Segment count must be at least two.";
                 return false;
-            }
-
-            if (buffer == null)
-            {
-                error = "A geometry build buffer is required.";
-                return false;
-            }
-
-            for (int i = 0; i < controlPoints.Count; i++)
-            {
-                if (!PathValueUtility.IsFinite(controlPoints[i]))
-                {
-                    error = $"Control point {i} is not finite.";
-                    return false;
-                }
             }
 
             buffer.ControlPoints.Clear();

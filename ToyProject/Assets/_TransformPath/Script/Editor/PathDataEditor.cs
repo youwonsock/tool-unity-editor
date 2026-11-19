@@ -18,6 +18,10 @@ namespace Common.TransformPath.Editor
                 PathInspectorGUI.MOVE_VALUE,
                 PathInspectorGUI.TIME_CURVE);
             bool inspectorChanged = EditorGUI.EndChangeCheck();
+            if (HasRuntimeControlPoints())
+                EditorGUILayout.HelpBox(
+                    "Runtime control points from SetControlPoints replace the Path Points list until SetPathPoints is called.",
+                    MessageType.Info);
             inspectorChanged |= PathInspectorGUI.DrawMovementSection(serializedObject);
             inspectorChanged |= serializedObject.ApplyModifiedProperties();
             if (inspectorChanged)
@@ -50,6 +54,16 @@ namespace Common.TransformPath.Editor
             if (GUILayout.Button("Sort Path Events"))
                 PathInspectorGUI.SortEvents(paths, "Sort Path Events");
             EditorGUI.EndDisabledGroup();
+        }
+
+        private bool HasRuntimeControlPoints()
+        {
+            for (int i = 0; i < targets.Length; i++)
+            {
+                if (targets[i] is PathData path && path.RuntimeControlPoints != null)
+                    return true;
+            }
+            return false;
         }
     }
 }

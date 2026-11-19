@@ -1,6 +1,6 @@
 # TransformPath
 
-Transform 제어점이나 코드로 그린 모양(`PathShapeProvider`)으로 경로를 만들고 단일 경로, 연결 경로, Queue 이동을 재생하는 시스템입니다. 네임스페이스는 `Common.TransformPath`입니다.
+Transform 제어점, Vector3 좌표, 코드로 그린 모양(`PathShapeProvider`)으로 경로를 만들고 단일 경로, 연결 경로, Queue 이동을 재생하는 시스템입니다. 네임스페이스는 `Common.TransformPath`입니다.
 
 | 항목 | 내용 |
 | --- | --- |
@@ -80,11 +80,12 @@ public sealed class TransformPathReadmeExample : MonoBehaviour
 | 조회와 설정 | 내용 |
 | --- | --- |
 | `PathFollower` | `IsMoving`, `CurrentProvider`, `MoveType`, `Speed`, `Duration`, `RotateToPathDirection`(지속 회전), `AlignRotationToPathDirection(axes)`(일회 정렬) |
-| `PathData` | `CurveType`, `SegmentCount`, `MovementSettings`, `SetPathPoints`, `CopyControlPoints`, `SamplePointCount`, `GetSamplePoint`, `AuthoringEventCount`, `GetAuthoringEvent`, `SortPathEventsByNormalizedTime`, `MaxEventNormalizedTime`, `ClampPathEventNormalizedTime` |
+| `PathData` | `CurveType`, `SegmentCount`, `MovementSettings`, `SetPathPoints`, `SetControlPoints`, `CopyControlPoints`, `SamplePointCount`, `GetSamplePoint`, `AuthoringEventCount`, `GetAuthoringEvent`, `SortPathEventsByNormalizedTime`, `MaxEventNormalizedTime`, `ClampPathEventNormalizedTime` |
 | `MultiPathData` | `SegmentCount`, `GetSegmentPath`, `GetSegmentMovement`, `GetSegmentStartDistance`, `GetSegmentLength`, `SetSegments`, `AuthoringSegmentCount`, `GetAuthoringSegment` |
 | `PathDataLineRenderer` | `Init`, `Release`, `IsInitialized`, `Refresh`, `SetVisible`. `PathData`가 발행한 샘플을 LineRenderer로 그리고, 경로가 바뀌면 다시 그림 |
 | `PathShapeProvider` | `MovementSettings`. 하위 클래스가 `TryPrepare`, `Evaluate`를 구현 |
 | 공통 (`PathData`, `MultiPathData`, `PathShapeProvider`) | `IsReady`, `PathLength`, `Revision`, `PathChanged`, `Rebuild()`, `Sample(progress)` |
+- `SetControlPoints(positions)`는 Transform 목록 대신 월드 좌표로 경로를 만듭니다. 점이 2개 미만이거나 유한하지 않으면 아무것도 바꾸기 전에 예외를 던지고, 좌표는 직렬화하지 않으며, `SetPathPoints`를 부르면 Transform 목록으로 돌아갑니다. `CopyControlPoints`는 이 좌표를 먼저 돌려줍니다.
 - 런타임에 제어점이나 `PathEventSettingSO`를 바꾸면 `path.Rebuild()`를 호출합니다. `MovementSettings`, `CurveType`, `SegmentCount` 속성은 바꾸는 즉시 다시 빌드합니다. 기하만 바뀌면 재생이 이어지고, 이동 설정·이벤트·구간 구성이 바뀌면 멈춥니다.
 - 콜백(`StateChanged`, `SegmentChanged`, `Completed`, `EventReached`, Queue 알림, 이벤트 수신기)은 그것을 일으킨 작업이 끝난 뒤 순서대로 호출됩니다. 콜백 안에서 모든 명령을 쓸 수 있고, 예외는 Console에 기록만 됩니다.
 

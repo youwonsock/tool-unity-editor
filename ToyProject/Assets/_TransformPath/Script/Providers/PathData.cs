@@ -13,10 +13,10 @@ namespace Common.TransformPath
     }
 
     /// <summary>
-    /// A path through Transform control points, sampled by distance. Changing a
-    /// setting rebuilds it at once; moving a control point needs
-    /// <see cref="PathProviderBehaviour.Rebuild"/>. Events are copied at build
-    /// time, so playback never reads the authoring assets.
+    /// A path through Transform control points, or through positions given at
+    /// runtime, sampled by distance. Changing a setting rebuilds it at once;
+    /// moving a control point needs <see cref="PathProviderBehaviour.Rebuild"/>.
+    /// Events are copied at build time, so playback never reads the authoring assets.
     /// </summary>
     public sealed class PathData : PathProviderBehaviour
     {
@@ -35,6 +35,8 @@ namespace Common.TransformPath
         [NonSerialized] private PathMovementSettings _movement;
         [NonSerialized] private PathRuntimeEvent[] _events = Array.Empty<PathRuntimeEvent>();
         [NonSerialized] private bool _failed;
+        // Positions from SetControlPoints take the place of _pathPoints until SetPathPoints.
+        [NonSerialized] private List<Vector3> _runtimePoints;
 
         private readonly List<Vector3> _pointScratch = new List<Vector3>();
         private readonly PathGeometryBuildBuffer _buildBuffer = new PathGeometryBuildBuffer();
@@ -108,6 +110,8 @@ namespace Common.TransformPath
         internal PathRuntimeEvent[] RuntimeEvents => _events;
         /// <summary>The authored control points, for the Editor. Never modify the list.</summary>
         internal IReadOnlyList<Transform> PathPoints => _pathPoints;
+        /// <summary>The positions from <see cref="SetControlPoints"/>, or null while the Transforms are used.</summary>
+        internal IReadOnlyList<Vector3> RuntimeControlPoints => _runtimePoints;
 
         private void Awake()
         {
@@ -115,7 +119,6 @@ namespace Common.TransformPath
                 Rebuild();
         }
 
-        /// <summary>Replaces the control points and rebuilds.</summary>
         /// <summary>Replaces the authored events and rebuilds. For the test and measurement tools.</summary>
         internal void SetPathEvents(IReadOnlyList<PathEventEntry> entries)
         {
@@ -125,20 +128,55 @@ namespace Common.TransformPath
             Rebuild();
         }
 
+        /// <summary>
+        /// Replaces the control points with Transforms and rebuilds. Positions
+        /// set by <see cref="SetControlPoints"/> are dropped.
+        /// </summary>
         public void SetPathPoints(IReadOnlyList<Transform> points)
         {
             if (points == null)
                 throw new ArgumentNullException(nameof(points));
             _pathPoints = new List<Transform>(points);
+            _runtimePoints = null;
             Rebuild();
         }
 
-        /// <summary>Copies the control point positions. Returns false when one is missing.</summary>
+        /// <summary>
+        /// Builds the path through world positions instead of the Transform
+        /// list until <see cref="SetPathPoints"/> is called. The positions are
+        /// not serialized. Throws before anything changes when there are fewer
+        /// than two points or one is not finite.
+        /// </summary>
+        public void SetControlPoints(IReadOnlyList<Vector3> points)
+        {
+            if (points == null)
+                throw new ArgumentNullException(nameof(points));
+            if (points.Count < PathConstants.MIN_PATH_POINTS)
+                throw new ArgumentException("At least two control points are required.", nameof(points));
+            for (int i = 0; i < points.Count; i++)
+            {
+                if (!PathValueUtility.IsFinite(points[i]))
+                    throw new ArgumentOutOfRangeException(nameof(points), $"Control point {i} is not finite.");
+            }
+            _runtimePoints = new List<Vector3>(points);
+            Rebuild();
+        }
+
+        /// <summary>
+        /// Copies the control point positions: the ones from
+        /// <see cref="SetControlPoints"/>, else the Transforms'. Returns false
+        /// when a Transform is missing or fewer than two points remain.
+        /// </summary>
         public bool CopyControlPoints(List<Vector3> destination)
         {
             if (destination == null)
                 throw new ArgumentNullException(nameof(destination));
             destination.Clear();
+            if (_runtimePoints != null)
+            {
+                destination.AddRange(_runtimePoints);
+                return true;
+            }
             if (_pathPoints == null)
                 return false;
             for (int i = 0; i < _pathPoints.Count; i++)

@@ -11,6 +11,7 @@ namespace Common.TransformPath.Editor
         private const float EVENT_LABEL_OFFSET = 0.7f;
         private const float SAMPLE_LABEL_OFFSET = 0.5f;
 
+        private static readonly List<Vector3> CONTROL_POINTS = new List<Vector3>();
         private static GUIStyle _pointLabelStyle;
         private static GUIStyle _sampleLabelStyle;
         private static GUIStyle _eventLabelStyle;
@@ -25,15 +26,23 @@ namespace Common.TransformPath.Editor
 
             if (!pathData.ShowPathInEditor)
                 return;
+            // Positions from SetControlPoints replace the Transforms while they are set.
+            IReadOnlyList<Vector3> runtimePoints = pathData.RuntimeControlPoints;
             IReadOnlyList<Transform> pathPoints = pathData.PathPoints;
-            if (pathPoints == null || pathPoints.Count == 0)
+            if (runtimePoints == null && (pathPoints == null || pathPoints.Count == 0))
                 return;
 
             PathPreviewStyle style = pathData.PreviewStyle;
-            DrawControlPoints(pathPoints, pathData.PointColor, style.PointSize);
+            CONTROL_POINTS.Clear();
+            if (runtimePoints != null)
+                CONTROL_POINTS.AddRange(runtimePoints);
+            else
+                CollectTransformPositions(pathPoints, CONTROL_POINTS);
+            DrawControlPoints(CONTROL_POINTS, pathData.PointColor, style.PointSize);
             if (!PathDataScenePreviewCache.TryGet(pathData, out PathDataScenePreview preview))
             {
-                DrawFallbackPath(pathPoints, pathData.PathColor, style.LineWidth);
+                if (runtimePoints == null)
+                    DrawFallbackPath(pathPoints, pathData.PathColor, style.LineWidth);
                 return;
             }
 
@@ -44,7 +53,14 @@ namespace Common.TransformPath.Editor
             DrawPathEvents(preview, pathData, pathData.EventPointColor, style.EventPointSize);
         }
 
-        private static void DrawControlPoints(IReadOnlyList<Transform> points, Color pointColor, float pointSize)
+        // A missing Transform keeps its index so the labels match the list.
+        private static void CollectTransformPositions(IReadOnlyList<Transform> points, List<Vector3> positions)
+        {
+            for (int i = 0; i < points.Count; i++)
+                positions.Add(points[i] == null ? new Vector3(float.NaN, float.NaN, float.NaN) : points[i].position);
+        }
+
+        private static void DrawControlPoints(List<Vector3> points, Color pointColor, float pointSize)
         {
             if (pointSize <= 0f)
                 return;
@@ -52,10 +68,10 @@ namespace Common.TransformPath.Editor
             GUIStyle labelStyle = GetPointLabelStyle(pointSize);
             for (int i = 0; i < points.Count; i++)
             {
-                if (points[i] == null)
+                if (!PathValueUtility.IsFinite(points[i]))
                     continue;
-                Gizmos.DrawSphere(points[i].position, pointSize);
-                Handles.Label(points[i].position + Vector3.up * 0.3f, $"P{i}", labelStyle);
+                Gizmos.DrawSphere(points[i], pointSize);
+                Handles.Label(points[i] + Vector3.up * 0.3f, $"P{i}", labelStyle);
             }
         }
 

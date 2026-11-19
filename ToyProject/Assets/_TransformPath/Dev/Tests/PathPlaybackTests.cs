@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -191,6 +192,34 @@ namespace Common.TransformPath.Tests
             path.MovementSettings = PathMovementSettings.Speed(3f);
             recorder.Frame();
             Assert.AreEqual(EPathFollowerState.Ready, recorder.Playback.State);
+        }
+
+        [Test]
+        public void SetControlPoints_ValidatesFirst_ThenReplacesTheTransforms()
+        {
+            PathData path = Line(PathMovementSettings.Speed(2f));
+            int revision = path.Revision;
+
+            Assert.Throws<ArgumentException>(() => path.SetControlPoints(new[] { Vector3.zero }));
+            Assert.Throws<ArgumentOutOfRangeException>(
+                () => path.SetControlPoints(new[] { Vector3.zero, new Vector3(float.NaN, 0f, 0f) }));
+            Assert.AreEqual(revision, path.Revision);
+            Assert.AreEqual(10f, path.PathLength, 1e-4f);
+
+            Vector3[] points = { Vector3.zero, new Vector3(0f, 0f, 4f) };
+            path.SetControlPoints(points);
+            Assert.AreEqual(revision + 1, path.Revision);
+            Assert.AreEqual(4f, path.PathLength, 1e-4f);
+            var copied = new List<Vector3>();
+            Assert.IsTrue(path.CopyControlPoints(copied));
+            CollectionAssert.AreEqual(points, copied);
+            // The Transforms no longer drive the path.
+            path.transform.GetChild(1).position = new Vector3(20f, 0f, 0f);
+            path.Rebuild();
+            Assert.AreEqual(4f, path.PathLength, 1e-4f);
+
+            path.SetPathPoints(new[] { path.transform.GetChild(0), path.transform.GetChild(1) });
+            Assert.AreEqual(20f, path.PathLength, 1e-4f);
         }
 
         [Test]
