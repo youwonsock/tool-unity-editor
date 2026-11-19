@@ -6,6 +6,7 @@ namespace Common.TransformPath.Editor
 {
     /// <summary>PathData Inspector. Drawing is <see cref="PathDataGizmoDrawer"/>, point tools <see cref="PathPointTools"/>.</summary>
     [CustomEditor(typeof(PathData))]
+    [CanEditMultipleObjects]
     internal sealed class PathDataEditor : UnityEditor.Editor
     {
         public override void OnInspectorGUI()

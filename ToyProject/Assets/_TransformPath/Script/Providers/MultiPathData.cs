@@ -84,6 +84,8 @@ namespace Common.TransformPath
         private PathRoute.Segment GetBuiltSegment(int index)
         {
             ThrowIfNotReady();
+            if (index < 0 || index >= _built.Length)
+                throw new ArgumentOutOfRangeException(nameof(index));
             return _built[index];
         }
 

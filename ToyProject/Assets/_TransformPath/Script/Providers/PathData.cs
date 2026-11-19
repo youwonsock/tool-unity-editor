@@ -26,7 +26,7 @@ namespace Common.TransformPath
         [SerializeField, Min(2)] private int _segmentCount = PathConstants.DEFAULT_SEGMENT_COUNT;
         [SerializeField] private EPathCurveType _curveType = EPathCurveType.Linear;
 
-        [Header("Movement")]
+        // The Inspector draws these three under its own Movement section.
         [SerializeField] private EPathMoveType _moveType = EPathMoveType.TimeBased;
         [SerializeField, Min(0.001f)] private float _moveValue = 5f;
         [SerializeField] private AnimationCurve _timeCurve = null;

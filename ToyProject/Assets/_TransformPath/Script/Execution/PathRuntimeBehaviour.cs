@@ -17,19 +17,19 @@ namespace Common.TransformPath
         internal abstract EPathTickPhases TickPhases { get; }
         EPathTickPhases IPathRuntimeTickable.Phases => TickPhases;
 
-        protected virtual void Awake()
+        private protected virtual void Awake()
         {
             if (Application.isPlaying)
                 Initialize();
         }
 
-        protected virtual void OnEnable()
+        private protected virtual void OnEnable()
         {
             if (Application.isPlaying)
                 PathRuntimeDriverBehaviour.Instance.Register(this);
         }
 
-        protected virtual void OnDisable()
+        private protected virtual void OnDisable()
         {
             if (!Application.isPlaying)
                 return;
@@ -38,7 +38,7 @@ namespace Common.TransformPath
             OnDisabled();
         }
 
-        protected virtual void OnDestroy()
+        private protected virtual void OnDestroy()
         {
             if (PathRuntimeDriverBehaviour.HasInstance)
                 PathRuntimeDriverBehaviour.Instance.Unregister(this);
@@ -51,7 +51,7 @@ namespace Common.TransformPath
         /// <summary>Stops what the component runs. OnDestroy calls it.</summary>
         internal abstract void Release();
 
-        protected abstract void OnDisabled();
+        private protected abstract void OnDisabled();
 
         void IPathRuntimeTickable.Tick(EPathTickPhase phase, float deltaTime, int frameId) =>
             Tick(phase, deltaTime, frameId);

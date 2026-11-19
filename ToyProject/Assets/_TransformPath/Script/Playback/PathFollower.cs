@@ -258,7 +258,7 @@ namespace Common.TransformPath
             TryRestoreCharacterController();
         }
 
-        protected override void OnDisabled()
+        private protected override void OnDisabled()
         {
             Stop();
             TryRestoreCharacterController();

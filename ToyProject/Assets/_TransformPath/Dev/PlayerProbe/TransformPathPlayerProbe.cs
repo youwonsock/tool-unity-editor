@@ -364,7 +364,7 @@ namespace Common.TransformPath.PlayerProbe
             return point;
         }
 
-        // PathData has no runtime API for events. They are authored in the Inspector.
+        // Events have no public setter; the internal SetPathEvents exists for these tools.
         private void AddEvents(PathData path, int count)
         {
             if (count == 0)
