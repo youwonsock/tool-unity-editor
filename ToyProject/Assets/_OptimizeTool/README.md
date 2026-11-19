@@ -111,19 +111,20 @@ public static class MeshBuildExample
 
 ## PhysicsRecorder
 
-Rigidbody가 있는 계층의 로컬 Transform을 물리 스텝마다 기록해, 물리 계산 없이 재생할 수 있는 에셋으로 저장합니다. Play Mode 코드에서 `using Common.OptimizeTool.PhysicsRecording;`으로 호출합니다. 컴포넌트와 API는 Runtime 어셈블리에 있지만 저장은 Editor가 맡으므로, Player에서 `StartRecording`을 부르면 "Editor 전용" 예외가 납니다.
+Rigidbody가 있는 계층의 로컬 Transform을 물리 스텝마다 기록해, 물리 계산 없이 재생할 수 있는 에셋으로 저장합니다. Play Mode 코드에서 `using Common.OptimizeTool.PhysicsRecording;`으로 호출합니다. 컴포넌트와 API는 Runtime 어셈블리에 있지만 저장은 Editor가 맡으므로, Player에서 `StartRecording`을 부르면 "PhysicsRecorder saves takes only in the Unity Editor." 예외가 납니다.
 
 | API | 동작 |
 | --- | --- |
-| `StartRecording(duration, animName)` | 설정을 고정하고 마지막 물리 스텝부터 기록 시작. 잘못된 호출·설정은 예외 |
+| `StartRecording(duration, clipName)` | 설정을 고정하고 마지막 물리 스텝부터 기록 시작. `clipName`을 비우면 `_clipName`을 씀. 잘못된 호출·설정은 예외 |
 | `StopRecording()` | 마지막 물리 스텝까지를 `.anim`·`.prefab`으로 저장하고 결과 반환. `_saveReference`를 켜면 `.reference.asset`도 저장 |
 | `CancelRecording()` | 에셋을 쓰지 않고 기록을 버림 |
 | `IsRecording` / `Result` | 기록 여부와 마지막 결과(`Succeeded`, `Error`, `Clip`, `Prefab`, `Reference`, `StopReason`, `Duration`) |
 
+- `_root` 아래 모든 Transform을 기록하며, 하나 이상에 Rigidbody가 있어야 합니다. 출력은 `_savePath`(Assets/ 아래 폴더)에 `_clipName` 이름의 `.anim`·`.prefab`(·`.reference.asset`)으로 저장하고, `_overwriteExistingAssets`를 켜야 같은 이름의 기존 출력을 GUID를 유지한 채 덮어씁니다.
 - 키는 `_positionTolerance`(기본 0.005m)·`_rotationTolerance`(기본 0.5°) 이내로 줄입니다. 저장된 클립을 선형 재생했을 때 모든 물리 스텝에서 오차가 이 값 이하이고, 0이면 모든 스텝을 키로 남깁니다.
 - 움직이지 않은 루트에는 커브를 쓰지 않으므로 저장한 Prefab을 어디에 두어도 그 자리에서 재생됩니다.
 - Prefab에서는 Rigidbody·Collider·게임 스크립트 등을 제거합니다. 원본 계층은 바꾸지 않습니다.
-- `_saveReference`(기본 꺼짐)를 켜면 축약 전 원본 관찰값을 `.reference.asset`으로 함께 저장합니다. 클립 정확도를 나중에 확인할 때 쓰며, 샘플 비교가 이 파일을 읽습니다. 끈 채로 다시 녹화해도 이전 Reference 파일은 지우지 않습니다.
+- `_saveReference`(기본 꺼짐)를 켜면 축약 전 원본 관찰값을 `.reference.asset`으로 함께 저장합니다. 클립 정확도를 나중에 확인할 때 쓰며, 샘플 비교가 이 파일을 읽습니다. 끈 채로 같은 클립을 덮어쓰면, 그 클립을 가리키던 이전 Reference는 새 클립과 맞지 않으므로 같은 저장에서 지웁니다(실패하면 함께 복원).
 - 저장할 에셋 중 하나라도 실패하면 이전 파일을 복원하고, 실패는 예외가 아니라 `Result.Error`로 알립니다. 기록 중 비활성화되면 그때까지를 저장하고, 재컴파일은 저장이 끝날 때까지 미룹니다.
 
 샘플의 PHYSICS 모드에서 **RECORD**(`C`)를 누르면 6개 Rigidbody의 낙하 3.2초를 기록합니다. 저장이 끝나면 왼쪽은 녹화 당시의 원본 자세를, 오른쪽은 저장된 Prefab의 Animation을 같은 시간축으로 재생하고 최대 위치·회전 차이를 표시합니다. Play 진입이나 모드 전환만으로는 에셋을 저장하지 않습니다.
