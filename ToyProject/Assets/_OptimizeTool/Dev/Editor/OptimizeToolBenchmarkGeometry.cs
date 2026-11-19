@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-namespace Common.OptimizeTool.Samples
+namespace Common.OptimizeTool.Benchmark.Editor
 {
     /// <summary>Flat-faced cube with real, shared-edge triangle grids; density changes vertex workload without changing its surface.</summary>
     public static class OptimizeToolBenchmarkGeometry

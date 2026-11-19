@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace Common.OptimizeTool.Samples
+namespace Common.OptimizeTool.Benchmark
 {
     internal sealed class BenchmarkRenderTargetScope : IDisposable
     {

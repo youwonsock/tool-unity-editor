@@ -30,7 +30,7 @@ Unity Editor에서 Mesh 결합·컬링과 물리 움직임 기록을 수행하�
 - 세 경우 모두 Unity 2023.2.20f1 빈 프로젝트에 위 패키지만 넣고 해당 폴더만 복사해 확인했습니다. 어셈블리가 오류 없이 컴파일되고 컴포넌트를 붙일 수 있습니다.
 - Runtime 어셈블리(`Common.OptimizeTool.MeshOptimization`, `Common.OptimizeTool.PhysicsRecording`)는 패키지를 참조하지 않고 `UnityEditor` 코드도 없어 Player에 그대로 들어갑니다. 결합·베이크·녹화 저장은 각 시스템의 Editor 어셈블리에서만 동작합니다.
 - 공용 Editor 어셈블리 이름은 `Common.OptimizeTool.Editor`입니다. 옮길 프로젝트에 같은 이름의 어셈블리가 없어야 합니다.
-- `Samples/`(샘플·벤치마크 스크립트, 씬, Prefab, 설정. UGUI와 URP 필요)는 옮기지 않아도 됩니다. 문서가 필요하면 이 README와 `Docs/`를 함께 옮깁니다.
+- `Samples/`(샘플 스크립트, 씬, Prefab, 설정. UGUI와 URP 필요)와 `Dev/`(벤치마크 코드와 규모 씬. URP 필요)는 옮기지 않아도 됩니다. 문서가 필요하면 이 README와 `Docs/`를 함께 옮깁니다.
 
 ## 구조
 
@@ -47,7 +47,10 @@ _OptimizeTool/
     PhysicsRecording/     Common.OptimizeTool.PhysicsRecording          녹화, 원본 관찰값, 재생 규칙
       Editor/             Common.OptimizeTool.PhysicsRecording.Editor   클립·Prefab 저장
   Samples/                Scripts, Scenes, Prefabs, Settings
-  Docs/
+  Dev/
+    Benchmark/            Common.OptimizeTool.Benchmark                 성능 측정 Player 코드, 규모 씬과 생성 결과
+    Editor/               Common.OptimizeTool.Benchmark.Editor          규모 씬 생성, GPU 타이머 플러그인, 벤치마크 빌드
+  Docs/                   문서, 측정 Python 스크립트(Docs/Performance)
 ```
 
 - **Mesh 최적화**의 컴포넌트는 설정만 갖고, 결합·베이크는 Editor 어셈블리의 `MeshToolCommands`가 수행합니다.
@@ -142,7 +145,7 @@ Rigidbody가 있는 계층의 로컬 Transform을 물리 스텝마다 기록해,
 
 ## 벤치마크
 
-`Samples/Scenes/OptimizeToolScaleBenchmark.unity`는 225·900·3,600개 Renderer에 대한 Combined / Backface / Occlusion 결과를 제공합니다. `1–4`로 결과를, `Q/E`로 규모를 바꿉니다.
+`Dev/Benchmark/Scenes/OptimizeToolScaleBenchmark.unity`는 225·900·3,600개 Renderer에 대한 Combined / Backface / Occlusion 결과를 제공합니다. `1–4`로 결과를, `Q/E`로 규모를 바꿉니다.
 
 1. `Tools > OptimizeTool > Benchmark > Build Scale Benchmark Scene`, 이어서 `Build macOS Development Player`를 실행합니다. 활성 빌드 타깃은 macOS여야 하며, Apple Silicon ARM64·Metal·1920×1080이 필요합니다.
 2. Console에 나온 앱 경로로 저장소 루트에서 측정하고 요약합니다.

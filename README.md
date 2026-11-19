@@ -12,7 +12,7 @@ Unity 프로젝트에서 쓰던 기능을 독립 모듈로 분리하고, `ToyPro
 
 - Unity 2023.2.20f1 / URP로 `ToyProject`를 엽니다.
 - 샘플 씬은 `FlowFieldSample`, `FlowFieldVolume3DTest`, `TransformPathSample`, `OptimizeToolSample`이며, 화면의 Overview Board가 상태와 조작법을 보여 줍니다.
-- FlowField, TransformPath, OptimizeTool은 다른 프로젝트로 옮기기 쉽게 시스템·에디터 어셈블리만 `Script/`에 두고, 샘플(씬·프리팹·설정 포함)은 `Samples/`에 둡니다. FlowField와 TransformPath의 테스트·측정 도구는 `Dev/`에 있고, OptimizeTool은 Mesh 최적화와 Physics Recorder를 `Script/` 안에서 따로 옮길 수 있습니다.
+- FlowField, TransformPath, OptimizeTool은 다른 프로젝트로 옮기기 쉽게 시스템·에디터 어셈블리만 `Script/`에 두고, 샘플(씬·프리팹·설정 포함)은 `Samples/`에 둡니다. FlowField와 TransformPath의 테스트·측정 도구와 OptimizeTool의 벤치마크는 `Dev/`에 있고, OptimizeTool은 Mesh 최적화와 Physics Recorder를 `Script/` 안에서 따로 옮길 수 있습니다.
 
 ## 빌드 확인
 

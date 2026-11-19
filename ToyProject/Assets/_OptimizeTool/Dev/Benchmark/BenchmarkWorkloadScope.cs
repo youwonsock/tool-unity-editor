@@ -1,7 +1,8 @@
 using System;
+using Common.OptimizeTool.Samples;
 using UnityEngine;
 
-namespace Common.OptimizeTool.Samples
+namespace Common.OptimizeTool.Benchmark
 {
     /// <summary>Restores workload selection and the exact camera pose after success, cancellation or disable.</summary>
     internal sealed class BenchmarkWorkloadScope : IDisposable

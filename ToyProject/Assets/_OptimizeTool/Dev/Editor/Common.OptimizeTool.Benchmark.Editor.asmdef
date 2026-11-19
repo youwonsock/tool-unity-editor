@@ -1,0 +1,22 @@
+{
+    "name": "Common.OptimizeTool.Benchmark.Editor",
+    "rootNamespace": "Common.OptimizeTool.Benchmark.Editor",
+    "references": [
+        "Common.OptimizeTool.Benchmark",
+        "Common.OptimizeTool.Samples",
+        "Common.OptimizeTool.MeshOptimization",
+        "Common.OptimizeTool.MeshOptimization.Editor",
+        "Common.OptimizeTool.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

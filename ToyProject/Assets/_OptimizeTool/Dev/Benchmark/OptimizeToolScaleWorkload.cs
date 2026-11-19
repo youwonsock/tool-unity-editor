@@ -1,7 +1,8 @@
 using System;
+using Common.OptimizeTool.Samples;
 using UnityEngine;
 
-namespace Common.OptimizeTool.Samples
+namespace Common.OptimizeTool.Benchmark
 {
     /// <summary>Prebaked scale cases. No geometry generation or physics runs during measurement.</summary>
     public sealed class OptimizeToolScaleWorkload : MonoBehaviour

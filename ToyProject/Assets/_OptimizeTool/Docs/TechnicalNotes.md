@@ -30,7 +30,9 @@ MeshFilter 수집 → 설정·입력 검증 → Readable·Normal 처리
 | `Common.OptimizeTool.MeshOptimization.Editor` | `Script/MeshOptimization/Editor` | Editor | MeshOptimization, OptimizeTool.Editor |
 | `Common.OptimizeTool.PhysicsRecording` | `Script/PhysicsRecording` | 모두 | 없음 |
 | `Common.OptimizeTool.PhysicsRecording.Editor` | `Script/PhysicsRecording/Editor` | Editor | PhysicsRecording, OptimizeTool.Editor |
-| `Common.OptimizeTool.Samples` / `.Samples.Editor` | `Samples/Scripts`, `Samples/Scripts/Editor` | 모두 / Editor | 위 시스템과 UGUI·URP |
+| `Common.OptimizeTool.Samples` / `.Samples.Editor` | `Samples/Scripts`, `Samples/Scripts/Editor` | 모두 / Editor | 위 시스템과 UGUI |
+| `Common.OptimizeTool.Benchmark` | `Dev/Benchmark` | Editor, 또는 `OPTIMIZETOOL_BENCHMARK`를 정의한 Player | Samples, URP |
+| `Common.OptimizeTool.Benchmark.Editor` | `Dev/Editor` | Editor | Benchmark, Samples, MeshOptimization, MeshOptimization.Editor, OptimizeTool.Editor |
 
 - Mesh 최적화와 Physics Recorder는 서로 참조하지 않습니다. 둘이 함께 쓰는 것은 Editor 전용 저장 규칙 `AssetFileTransaction` 하나입니다.
 - Runtime 어셈블리는 `UnityEditor`를 쓰지 않으므로 `#if UNITY_EDITOR`가 없습니다. 직렬화 필드도 Editor와 Player에서 같습니다.
@@ -180,6 +182,7 @@ flowchart LR
 - 규모 샘플은 같은 Material의 정적 큐브를 직교 카메라 앞 3개 깊이 층으로 배치합니다. 규모마다 카메라와 화면 점유율을 고정하고 그림자·Light/Reflection Probe·GPU Instancing·Dynamic Batching을 끕니다. Collider는 베이크 후 제거합니다. Renderer 제출 비용과 기하 감소를 비교하는 조건이며 일반 게임 씬을 대표하지 않습니다.
 - Player 인자는 `--optimize-benchmark /absolute/output --optimize-benchmark-cubes 3600 --optimize-benchmark-rounds 8`이고, `--optimize-benchmark-fps 240`으로 일정한 프레임 속도에서 대조할 수 있습니다. 기본은 `targetFrameRate=-1`입니다.
 - Player는 시작 화면 완료와 포커스를 확인한 뒤 3초를 기다립니다. 모드 전환 예열은 90프레임과 0.25초를 모두 채우고, 측정 중에는 입력과 UI를 멈춥니다.
+- 벤치마크 코드는 `Dev/`의 두 어셈블리에 있고 샘플은 벤치마크를 모릅니다. `Common.OptimizeTool.Benchmark`는 define 조건 `UNITY_EDITOR || OPTIMIZETOOL_BENCHMARK`와 `autoReferenced: false`라서 일반 Player 빌드에 들어가지 않습니다. CPU·GPU 벤치마크 빌드는 `BuildPlayerOptions.extraScriptingDefines`로 `OPTIMIZETOOL_BENCHMARK`를 넘기고, Metal GPU 타이머 플러그인도 같은 define 조건이 있어 그 빌드에만 미리 로드됩니다. Editor 어셈블리는 public 멤버만 쓰므로 `InternalsVisibleTo`가 없습니다.
 - 빌드 메뉴는 활성 타깃과 아키텍처를 자동으로 바꾸지 않습니다. 기본 출력은 `Path.GetTempPath()` 아래 `OptimizeToolBenchmark-yyyyMMdd-HHmmss/OptimizeToolBenchmark.app`이고, 같은 폴더의 `build-status.json`이 `Succeeded`인지 확인합니다.
 - 실행 스크립트는 Player 포커스·ARM64·해상도·GPU 유효성·타임스탬프·표본 수를 검사하고, 분석 스크립트는 실행과 구간을 나눠 변화율·신뢰구간을 계산합니다. 중단했으면 같은 옵션과 출력 폴더로 `--resume`을 붙여 완료된 실행을 재사용합니다. `Frame Timing is unavailable` 오류는 Player Settings의 Frame Timing Stats를 켜고 다시 빌드하면 풀립니다.
 - GPU 측정은 각 면을 64×64로 나눈 9·36·225개 큐브를 생성하고, Metal 계측 플러그인을 포함한 별도 Player를 빌드합니다. macOS Command Line Tools(`xcrun clang++`)가 필요합니다. 약 1.4 GiB의 고밀도 Mesh·씬·플러그인은 다시 만들 수 있으므로 Git에서 제외합니다.

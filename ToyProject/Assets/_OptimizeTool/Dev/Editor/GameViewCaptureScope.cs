@@ -3,7 +3,7 @@ using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 
-namespace Common.OptimizeTool.Samples.Editor
+namespace Common.OptimizeTool.Benchmark.Editor
 {
     /// <summary>Accesses Unity 2023.2's internal Game View API and restores the captured view settings.</summary>
     internal sealed class GameViewCaptureScope : IDisposable

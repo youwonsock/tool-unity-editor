@@ -1,11 +1,11 @@
 using System;
 using System.IO;
 using UnityEditor;
-using UnityEditor.Build.Reporting;
 using UnityEditor.Build;
+using UnityEditor.Build.Reporting;
 using UnityEngine;
 
-namespace Common.OptimizeTool.Samples.Editor
+namespace Common.OptimizeTool.Benchmark.Editor
 {
     /// <summary>Builds only the sample scene without changing the project's build or Player settings.</summary>
     public static class OptimizeToolBenchmarkEditor
@@ -65,7 +65,7 @@ namespace Common.OptimizeTool.Samples.Editor
             }
         }
 
-        // Unity -batchmode -executeMethod Common.OptimizeTool.Samples.Editor.OptimizeToolBenchmarkEditor.BuildBatch
+        // Unity -batchmode -executeMethod Common.OptimizeTool.Benchmark.Editor.OptimizeToolBenchmarkEditor.BuildBatch
         //       --optimize-build-output /absolute/output/folder -quit
         public static void BuildBatch()
         {
@@ -102,7 +102,9 @@ namespace Common.OptimizeTool.Samples.Editor
                 scenes = new[] { scene },
                 locationPathName = Path.Combine(folder, "OptimizeToolBenchmark.app"),
                 target = BuildTarget.StandaloneOSX,
-                options = BuildOptions.Development
+                options = BuildOptions.Development,
+                // The benchmark assembly and the GPU timer plugin are only in Players with this define.
+                extraScriptingDefines = new[] { OptimizeToolMetalPluginBuilder.BenchmarkDefine },
             });
             File.WriteAllText(status, JsonUtility.ToJson(new BuildStatus
             {

@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace Common.OptimizeTool.Samples
+namespace Common.OptimizeTool.Benchmark
 {
     /// <summary>Diagnostic only: synchronous one-pixel readback after rendering bounds inter-frame GPU overlap.</summary>
     internal sealed class BenchmarkGpuDrain : IDisposable

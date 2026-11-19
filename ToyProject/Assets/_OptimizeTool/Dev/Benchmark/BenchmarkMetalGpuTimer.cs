@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-namespace Common.OptimizeTool.Samples
+namespace Common.OptimizeTool.Benchmark
 {
     /// <summary>GPU command-buffer timestamps with explicit frame boundaries. No CPU stopwatch is presented as GPU time.</summary>
     internal sealed class BenchmarkMetalGpuTimer : IDisposable

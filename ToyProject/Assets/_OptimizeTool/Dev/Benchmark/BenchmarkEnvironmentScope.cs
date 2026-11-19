@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-namespace Common.OptimizeTool.Samples
+namespace Common.OptimizeTool.Benchmark
 {
     /// <summary>Captures measurement overrides and restores each one even if another restoration fails.</summary>
     internal sealed class BenchmarkEnvironmentScope : IDisposable

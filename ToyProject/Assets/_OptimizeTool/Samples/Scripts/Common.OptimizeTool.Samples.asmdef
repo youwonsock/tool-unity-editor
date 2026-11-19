@@ -3,8 +3,7 @@
     "rootNamespace": "Common.OptimizeTool.Samples",
     "references": [
         "Common.OptimizeTool.PhysicsRecording",
-        "UnityEngine.UI",
-        "Unity.RenderPipelines.Universal.Runtime"
+        "UnityEngine.UI"
     ],
     "includePlatforms": [],
     "autoReferenced": true

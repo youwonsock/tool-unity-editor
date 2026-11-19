@@ -4,6 +4,7 @@ using System.Linq;
 using Common.OptimizeTool.Editor;
 using Common.OptimizeTool.MeshOptimization;
 using Common.OptimizeTool.MeshOptimization.Editor;
+using Common.OptimizeTool.Samples;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -11,14 +12,14 @@ using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 using Object = UnityEngine.Object;
 
-namespace Common.OptimizeTool.Samples.Editor
+namespace Common.OptimizeTool.Benchmark.Editor
 {
     public static class OptimizeToolScaleBuilder
     {
-        public const string ScenePath = "Assets/_OptimizeTool/Samples/Scenes/OptimizeToolScaleBenchmark.unity";
-        public const string OutputFolder = "Assets/_OptimizeTool/Samples/Settings/Generated/ScaleBenchmark";
-        public const string GpuScenePath = "Assets/_OptimizeTool/Samples/Scenes/OptimizeToolGpuBenchmark.unity";
-        public const string GpuOutputFolder = "Assets/_OptimizeTool/Samples/Settings/Generated/GpuBenchmark";
+        public const string ScenePath = "Assets/_OptimizeTool/Dev/Benchmark/Scenes/OptimizeToolScaleBenchmark.unity";
+        public const string OutputFolder = "Assets/_OptimizeTool/Dev/Benchmark/Generated/ScaleBenchmark";
+        public const string GpuScenePath = "Assets/_OptimizeTool/Dev/Benchmark/Scenes/OptimizeToolGpuBenchmark.unity";
+        public const string GpuOutputFolder = "Assets/_OptimizeTool/Dev/Benchmark/Generated/GpuBenchmark";
         public static readonly int[] TileSides = { 5, 10, 20 };
 
         [MenuItem("Tools/OptimizeTool/Benchmark/Build Scale Benchmark Scene")]

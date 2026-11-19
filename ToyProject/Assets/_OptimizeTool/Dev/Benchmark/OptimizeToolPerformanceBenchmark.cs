@@ -2,12 +2,13 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using Common.OptimizeTool.Samples;
 using Unity.Profiling;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 
-namespace Common.OptimizeTool.Samples
+namespace Common.OptimizeTool.Benchmark
 {
     /// <summary>Opt-in benchmark; normal sample runs never create this component or write results.</summary>
     public sealed class OptimizeToolPerformanceBenchmark : MonoBehaviour

@@ -3,7 +3,7 @@ using System.IO;
 using System.Security.Cryptography;
 using UnityEngine;
 
-namespace Common.OptimizeTool.Samples
+namespace Common.OptimizeTool.Benchmark
 {
     /// <summary>Claims one output directory and publishes completion only after both payloads are durable.</summary>
     internal sealed class BenchmarkCaptureOutput

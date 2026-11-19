@@ -1,0 +1,19 @@
+{
+    "name": "Common.OptimizeTool.Benchmark",
+    "rootNamespace": "Common.OptimizeTool.Benchmark",
+    "references": [
+        "Common.OptimizeTool.Samples",
+        "Unity.RenderPipelines.Universal.Runtime"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_EDITOR || OPTIMIZETOOL_BENCHMARK"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -1,7 +1,8 @@
 using System;
 using System.Globalization;
+using Common.OptimizeTool.Samples;
 
-namespace Common.OptimizeTool.Samples
+namespace Common.OptimizeTool.Benchmark
 {
     internal sealed class BenchmarkRunOptions
     {
