@@ -41,6 +41,8 @@ namespace Common.TransformPath.Samples
         [Header("Presentation")]
         [SerializeField] private TransformPathFreeCamera _freeCamera;
         [SerializeField] private TransformPathOverviewBoard _board;
+        [Tooltip("Unlit URP material for the route lines the sample draws at runtime. Each line sets its own _BaseColor.")]
+        [SerializeField] private Material _routeLineMaterial;
 
         private TransformPathQueueLane _queue;
         private TransformPathLanePresentation _presentation;
@@ -73,7 +75,7 @@ namespace Common.TransformPath.Samples
                 return;
             if (_pathData == null || _pathFollower == null || _multiPathData == null || _multiPathFollower == null
                 || _queueManager == null || _queueFollowers == null || _queueFollowers.Length == 0
-                || _circleShape == null || _shapeFollower == null)
+                || _circleShape == null || _shapeFollower == null || _routeLineMaterial == null)
             {
                 Debug.LogError("TransformPath overview is missing a required serialized reference.", this);
                 return;
@@ -87,7 +89,7 @@ namespace Common.TransformPath.Samples
 
             _queueManager.ConfigureRoute(_queuePathData);
             _queue = new TransformPathQueueLane(_queueManager, _queuePathData, _queueFollowers, () => _isInitialized && !_isPaused);
-            _presentation = new TransformPathLanePresentation(transform);
+            _presentation = new TransformPathLanePresentation(transform, _routeLineMaterial);
             ResolveFreeCamera();
             _presentation.CreateRouteLines(_multiPathData);
             _presentation.CreateShapeLine(_circleShape);

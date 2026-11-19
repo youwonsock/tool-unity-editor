@@ -1068,6 +1068,7 @@ MonoBehaviour:
   _shapeFollower: {fileID: 4944153783124476206}
   _freeCamera: {fileID: 0}
   _board: {fileID: 5308964091590270829}
+  _routeLineMaterial: {fileID: 2100000, guid: 47c8fa7a5487804488f9e08706077621, type: 2}
 --- !u!114 &934123456789012345
 MonoBehaviour:
   m_ObjectHideFlags: 0

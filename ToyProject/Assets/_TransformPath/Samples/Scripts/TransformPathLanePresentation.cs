@@ -7,14 +7,22 @@ namespace Common.TransformPath.Samples
     internal sealed class TransformPathLanePresentation
     {
         private const int SHAPE_LINE_POINTS = 129;
+        private const float LINE_WIDTH = 0.08f;
+        private static readonly int BASE_COLOR_ID = Shader.PropertyToID("_BaseColor");
+        private static readonly Color SEGMENT_LINE_COLOR_A = new Color(0.8f, 0.35f, 1f);
+        private static readonly Color SEGMENT_LINE_COLOR_B = new Color(1f, 0.35f, 0.55f);
         private static readonly Color SHAPE_LINE_COLOR = new Color(0.3f, 0.95f, 0.55f);
 
         private readonly Transform _root;
+        private readonly Material _lineMaterial;
         private readonly List<LineRenderer> _routeLines = new List<LineRenderer>();
+        private MaterialPropertyBlock _lineColor;
 
-        public TransformPathLanePresentation(Transform root)
+        /// <param name="lineMaterial">An unlit material whose _BaseColor each line overrides.</param>
+        public TransformPathLanePresentation(Transform root, Material lineMaterial)
         {
             _root = root;
+            _lineMaterial = lineMaterial;
         }
 
         public void SetVisible(ETransformPathShowcaseLane lane, bool visible)
@@ -66,18 +74,10 @@ namespace Common.TransformPath.Samples
                 PathData path = sequence.GetSegmentPath(i);
                 if (path == null || !path.IsReady)
                     continue;
-                GameObject lineObject = new GameObject($"Multi Path Segment {i + 1} Line");
-                lineObject.transform.SetParent(parent, false);
-                LineRenderer line = lineObject.AddComponent<LineRenderer>();
-                line.useWorldSpace = true;
-                line.widthMultiplier = 0.08f;
-                Color color = i % 2 == 0 ? new Color(0.8f, 0.35f, 1f) : new Color(1f, 0.35f, 0.55f);
-                line.startColor = color;
-                line.endColor = color;
-                line.positionCount = path.SamplePointCount;
+                LineRenderer line = CreateLine(parent, $"Multi Path Segment {i + 1} Line",
+                    i % 2 == 0 ? SEGMENT_LINE_COLOR_A : SEGMENT_LINE_COLOR_B, path.SamplePointCount);
                 for (int point = 0; point < line.positionCount; point++)
                     line.SetPosition(point, path.GetSamplePoint(point));
-                _routeLines.Add(line);
             }
         }
 
@@ -89,17 +89,27 @@ namespace Common.TransformPath.Samples
             Transform parent = _root.Find(GetLaneName(ETransformPathShowcaseLane.Shape));
             if (parent == null)
                 parent = _root;
-            GameObject lineObject = new GameObject("Shape Line");
+            LineRenderer line = CreateLine(parent, "Shape Line", SHAPE_LINE_COLOR, SHAPE_LINE_POINTS);
+            for (int point = 0; point < SHAPE_LINE_POINTS; point++)
+                line.SetPosition(point, shape.Sample(point / (SHAPE_LINE_POINTS - 1f)));
+        }
+
+        // The shared material is unlit and ignores vertex colors, so each line
+        // sets its own _BaseColor through a property block.
+        private LineRenderer CreateLine(Transform parent, string name, Color color, int pointCount)
+        {
+            GameObject lineObject = new GameObject(name);
             lineObject.transform.SetParent(parent, false);
             LineRenderer line = lineObject.AddComponent<LineRenderer>();
             line.useWorldSpace = true;
-            line.widthMultiplier = 0.08f;
-            line.startColor = SHAPE_LINE_COLOR;
-            line.endColor = SHAPE_LINE_COLOR;
-            line.positionCount = SHAPE_LINE_POINTS;
-            for (int point = 0; point < SHAPE_LINE_POINTS; point++)
-                line.SetPosition(point, shape.Sample(point / (SHAPE_LINE_POINTS - 1f)));
+            line.widthMultiplier = LINE_WIDTH;
+            line.sharedMaterial = _lineMaterial;
+            _lineColor ??= new MaterialPropertyBlock();
+            _lineColor.SetColor(BASE_COLOR_ID, color);
+            line.SetPropertyBlock(_lineColor);
+            line.positionCount = pointCount;
             _routeLines.Add(line);
+            return line;
         }
 
         public void DestroyRouteLines()
