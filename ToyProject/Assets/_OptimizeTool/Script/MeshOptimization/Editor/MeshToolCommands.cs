@@ -36,7 +36,7 @@ namespace Common.OptimizeTool.MeshOptimization
             using (MeshBuildResult result = Build(combiner, settings))
             {
                 Mesh[] meshes = result.GetMeshes();
-                List<string> paths = OutputPaths(folder, combiner.MeshName, meshes.Length, settings.CombineIntoSingleMesh);
+                List<string> paths = OutputPaths(folder, combiner.MeshName, meshes.Length, settings.CombineAllIntoSingleMesh);
                 // Without a scene output there is no callback, so each new asset is serialized once.
                 Action<Mesh[]> apply = combiner.CreateSceneOutput
                     ? written => MeshSceneOutput.Apply(combiner, written, result)

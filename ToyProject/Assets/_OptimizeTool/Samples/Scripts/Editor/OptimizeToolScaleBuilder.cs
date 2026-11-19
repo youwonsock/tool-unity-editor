@@ -113,8 +113,8 @@ namespace Common.OptimizeTool.Samples.Editor
                     {
                         MeshBuildResult result = MeshBuildPipeline.Build(sources, Matrix4x4.identity, new MeshBuildSettings
                         {
-                            Camera = camera, AllowReadableCopy = true, CombineIntoSingleMesh = true,
-                            BackfaceCulling = mode == 2, BackfaceAngle = 89f, OcclusionCulling = mode == 3, OcclusionSampleCount = 24,
+                            Camera = camera, AllowReadableCopy = true, CombineAllIntoSingleMesh = true,
+                            BackfaceCulling = mode == 2, BackfaceCullingAngle = 89f, OcclusionCulling = mode == 3, OcclusionSampleCount = 24,
                         });
                         results.Add(result);
                         if (mode == 3 && result.RemovedSources.Count != count * 2 / 3)

@@ -69,14 +69,14 @@ namespace Common.OptimizeTool.MeshOptimization
             AllowReadableCopy = _allowReadableCopy,
             AllowNormalRecalculation = _allowNormalRecalculation,
             OptimizeMesh = _optimizeMesh,
-            CombineIntoSingleMesh = _combineAllIntoSingleMesh,
-            PackLightmapUVs = _packLightmapUvs,
+            CombineAllIntoSingleMesh = _combineAllIntoSingleMesh,
+            PackLightmapUvs = _packLightmapUvs,
             BackfaceCulling = _enableBackfaceCulling,
-            BackfaceAngle = _backfaceCullingAngle,
+            BackfaceCullingAngle = _backfaceCullingAngle,
             OcclusionCulling = _enableOcclusionCulling,
             OcclusionSampleCount = _occlusionSampleCount,
             VisibilityThreshold = _visibilityThreshold,
-            OcclusionLayerMask = _cullingLayerMask,
+            CullingLayerMask = _cullingLayerMask,
         };
 
         // Input selection, save target and scene output: what the editor commands need besides the build options.

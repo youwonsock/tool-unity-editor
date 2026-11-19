@@ -62,7 +62,7 @@ namespace Common.OptimizeTool.Samples.Editor
                 for (int mode = 0; mode < MeshNames.Length; mode++)
                     results.Add(MeshBuildPipeline.Build(filters, original.worldToLocalMatrix, new MeshBuildSettings
                     {
-                        Camera = camera, AllowReadableCopy = true, CombineIntoSingleMesh = true,
+                        Camera = camera, AllowReadableCopy = true, CombineAllIntoSingleMesh = true,
                         BackfaceCulling = mode == 1, OcclusionCulling = mode == 2,
                     }));
                 if (TriangleCount(results[1].Parts[0].Mesh) >= TriangleCount(results[0].Parts[0].Mesh)

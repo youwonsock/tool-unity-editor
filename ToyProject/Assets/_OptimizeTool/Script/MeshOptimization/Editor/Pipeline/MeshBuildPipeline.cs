@@ -35,7 +35,7 @@ namespace Common.OptimizeTool.MeshOptimization
             if (settings.BackfaceCulling || settings.OcclusionCulling) result.AddWarning(ViewWarning);
             if (settings.OcclusionCulling) result.AddWarning(OccluderWarning);
             foreach (string warning in sourceWarnings) result.AddWarning(warning);
-            var work = new BuildWork { PackLightmaps = settings.PackLightmapUVs && rendererSettings.UsesBakedLightmaps };
+            var work = new BuildWork { PackLightmaps = settings.PackLightmapUvs && rendererSettings.UsesBakedLightmaps };
             if (rendererSettings.UsesBakedLightmaps)
             {
                 if (!work.PackLightmaps) result.AddWarning(OverlappingLightmapWarning);
@@ -50,10 +50,10 @@ namespace Common.OptimizeTool.MeshOptimization
             {
                 Physics.SyncTransforms();
                 foreach (MeshFilter filter in inputs) ProcessSource(filter, destinationWorldToLocal, settings, work, result);
-                if (work.PackLightmaps) MeshGeometry.PackLightmapUVs(work.LightmapParts);
+                if (work.PackLightmaps) MeshGeometry.PackLightmapUvs(work.LightmapParts);
                 CombineGroups(work, settings, result);
                 if (result.Parts.Count == 0) throw new InvalidOperationException("No triangles remained after culling.");
-                if (settings.CombineIntoSingleMesh && result.Parts.Count > 1) MergeToSingle(work, settings, result);
+                if (settings.CombineAllIntoSingleMesh && result.Parts.Count > 1) MergeToSingle(work, settings, result);
                 return result;
             }
             catch { result.Dispose(); throw; }
@@ -102,7 +102,7 @@ namespace Common.OptimizeTool.MeshOptimization
             Mesh mesh = work.ReadableCopy(filter.sharedMesh, settings);
             result.AddSource(renderer);
             if (settings.OcclusionCulling && MeshOcclusion.IsOccluded(filter, mesh, settings.Camera,
-                settings.OcclusionSampleCount, settings.VisibilityThreshold, settings.OcclusionLayerMask))
+                settings.OcclusionSampleCount, settings.VisibilityThreshold, settings.CullingLayerMask))
             {
                 result.AddRemoved(renderer);
                 return;
@@ -110,7 +110,7 @@ namespace Common.OptimizeTool.MeshOptimization
             Mesh culled = null;
             if (settings.BackfaceCulling)
             {
-                culled = MeshGeometry.CullBackfaces(mesh, filter.transform, settings.Camera, settings.BackfaceAngle);
+                culled = MeshGeometry.CullBackfaces(mesh, filter.transform, settings.Camera, settings.BackfaceCullingAngle);
                 if (culled == null) { result.AddRemoved(renderer); return; }
                 work.Temporaries.Add(culled);
                 mesh = culled;

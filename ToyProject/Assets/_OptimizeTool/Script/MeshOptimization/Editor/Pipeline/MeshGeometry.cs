@@ -211,7 +211,7 @@ namespace Common.OptimizeTool.MeshOptimization
         /// square grid, keeping the aspect ratio and a margin, and writes them as UV2. A source without UV2 uses its
         /// UV0. Vertex count and layout order do not change.
         /// </summary>
-        internal static void PackLightmapUVs(IReadOnlyList<List<Mesh>> partsBySource)
+        internal static void PackLightmapUvs(IReadOnlyList<List<Mesh>> partsBySource)
         {
             if (partsBySource.Count == 0) return;
             int grid = Mathf.CeilToInt(Mathf.Sqrt(partsBySource.Count));
@@ -222,7 +222,7 @@ namespace Common.OptimizeTool.MeshOptimization
                 Vector2 min = new Vector2(float.MaxValue, float.MaxValue), max = new Vector2(float.MinValue, float.MinValue);
                 foreach (Mesh part in partsBySource[s])
                 {
-                    ReadLightmapUVs(part, uvs);
+                    ReadLightmapUvs(part, uvs);
                     foreach (Vector2 uv in uvs) { min = Vector2.Min(min, uv); max = Vector2.Max(max, uv); }
                 }
                 float extent = Mathf.Max(max.x - min.x, max.y - min.y);
@@ -230,14 +230,14 @@ namespace Common.OptimizeTool.MeshOptimization
                 var origin = new Vector2((s % grid) * cell + margin, (s / grid) * cell + margin);
                 foreach (Mesh part in partsBySource[s])
                 {
-                    ReadLightmapUVs(part, uvs);
+                    ReadLightmapUvs(part, uvs);
                     for (int i = 0; i < uvs.Count; i++) uvs[i] = origin + (uvs[i] - min) * scale;
                     part.SetUVs(1, uvs);
                 }
             }
         }
 
-        private static void ReadLightmapUVs(Mesh mesh, List<Vector2> uvs)
+        private static void ReadLightmapUvs(Mesh mesh, List<Vector2> uvs)
         {
             uvs.Clear();
             if (mesh.HasVertexAttribute(VertexAttribute.TexCoord1)) mesh.GetUVs(1, uvs);
