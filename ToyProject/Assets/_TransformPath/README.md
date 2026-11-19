@@ -10,7 +10,7 @@ Transform 제어점, Vector3 좌표, 코드로 그린 모양(`PathShapeProvider`
 | 이동 방식 | `TimeBased`: Duration과 TimeCurve · `SpeedBased`: 거리와 속도 |
 | 예제 | `Samples/Scenes/TransformPathSample.unity`, `Samples/Prefabs/TransformPathShowcase.prefab` |
 
-구현 세부는 [TechnicalNotes.md](Docs/TechnicalNotes.md)에 있습니다. 코드의 메시지(예외, 로그, Inspector 문구와 Tooltip, 주석)는 모두 영어입니다.
+구현 세부는 [TechnicalNotes.md](Docs/TechnicalNotes.md)에 있습니다. 코드 메시지(예외, 로그, Inspector 문구·Tooltip·Header·HelpBox, XML·코드 주석, 샘플 화면 문구)는 모두 영어입니다. README와 TechnicalNotes 본문은 한국어이고, 인용하는 UI·로그 문구는 영어 원문 그대로 적습니다.
 
 ## 다른 프로젝트로 옮기기
 

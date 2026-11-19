@@ -11,8 +11,10 @@ Unity 프로젝트에서 쓰던 기능을 독립 모듈로 분리하고, `ToyPro
 ## 실행
 
 - Unity 2023.2.20f1 / URP로 `ToyProject`를 엽니다.
-- 샘플 씬은 `FlowFieldSample`, `FlowFieldVolume3DTest`, `TransformPathSample`, `OptimizeToolSample`이며, 화면의 Overview Board가 상태와 조작법을 보여 줍니다.
-- FlowField, TransformPath, OptimizeTool은 다른 프로젝트로 옮기기 쉽게 시스템·에디터 어셈블리만 `Script/`에 두고, 샘플(씬·프리팹·설정 포함)은 `Samples/`에 둡니다. FlowField와 TransformPath의 테스트·측정 도구와 OptimizeTool의 벤치마크는 `Dev/`에 있고, OptimizeTool은 Mesh 최적화와 Physics Recorder를 `Script/` 안에서 따로 옮길 수 있습니다.
+- 샘플 씬은 `FlowFieldSample`, `FlowFieldVolume3DTest`, `TransformPathSample`, `OptimizeToolSample`입니다. 상태와 조작법은 화면의 Overview Board가 보여 주고, `FlowFieldVolume3DTest`는 OnGUI 패널이 보여 줍니다.
+- FlowField, TransformPath, OptimizeTool은 다른 프로젝트로 옮기기 쉽게 시스템·에디터 어셈블리만 `Script/`에 두고, 샘플(씬·프리팹·설정 포함)은 `Samples/`에 둡니다. 이 저장소에서만 쓰는 도구는 `Dev/`에 있습니다: FlowField와 TransformPath의 Player 측정, TransformPath의 EditMode 테스트, OptimizeTool의 벤치마크입니다.
+- OptimizeTool은 Mesh 최적화와 Physics Recorder를 `Script/` 안에서 따로 옮길 수 있습니다. 어느 쪽을 옮기든 공용 Editor 어셈블리 `Script/Shared`도 함께 옮깁니다.
+- 세 도구 모두 코드 메시지(예외, 로그, Inspector 문구·Tooltip·Header·HelpBox, XML·코드 주석, 샘플 화면 문구)는 모두 영어입니다. README와 TechnicalNotes 본문은 한국어이고, 인용하는 UI·로그 문구는 영어 원문 그대로 적습니다.
 
 ## 빌드 확인
 
@@ -20,7 +22,7 @@ Unity 프로젝트에서 쓰던 기능을 독립 모듈로 분리하고, `ToyPro
 
 | 스크립트 | 내용 |
 | --- | --- |
-| `Tools/run-player-probe.sh` | Mac Player에서 FlowField 측정과 모든 샘플 씬 실행. 결과는 CSV |
+| `Tools/run-player-probe.sh` | Mac Player에서 FlowField 측정과 모든 샘플 씬 실행(FlowField 씬은 Bake 모드마다). 결과는 CSV |
 | `Tools/run-transformpath-probe.sh` | Mac Player에서 TransformPath 측정 |
 | `Tools/run-transformpath-tests.sh` | TransformPath EditMode 테스트 |
 | `Tools/run-il2cpp-build.sh` | Android IL2CPP 빌드. 기기에서 실행하지는 않습니다 |
