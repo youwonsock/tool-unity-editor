@@ -240,7 +240,7 @@ namespace Common.FlowField
                 && !CanChangeConfigurationWhilePlaying())
                 throw new InvalidOperationException("Modifier must be registered before changing its collider.");
 
-            ValidateInfluenceCollider(influenceCollider);
+            FlowFieldModifierRegistry.ValidateCollider(influenceCollider);
             Collider previous = _influenceCollider;
             int previousRevision = _revision;
             try
@@ -326,7 +326,7 @@ namespace Common.FlowField
         public IFlowFieldModifierSnapshot CaptureSnapshot()
         {
             ThrowIfFaulted();
-            ValidateInfluenceCollider(_influenceCollider);
+            FlowFieldModifierRegistry.ValidateCollider(_influenceCollider);
             ValidateModifierSettings();
             IFlowFieldModifierSnapshot snapshot = CreateSnapshot();
             if (snapshot == null)
@@ -447,16 +447,6 @@ namespace Common.FlowField
         {
             if (IsFaulted)
                 throw new InvalidOperationException("FlowFieldVectorModifierVolume is faulted. Call Release before use.", _fault);
-        }
-
-        private static void ValidateInfluenceCollider(Collider collider)
-        {
-            if (collider == null)
-                throw new ArgumentNullException(nameof(collider));
-            if (!collider.isTrigger)
-                throw new ArgumentException(FlowFieldModifierMaskBuilder.TriggerRequiredMessage, nameof(collider));
-            if (collider is MeshCollider meshCollider && !meshCollider.convex)
-                throw new ArgumentException(FlowFieldModifierMaskBuilder.ConvexMeshRequiredMessage, nameof(collider));
         }
 
         private void IncrementRevision()

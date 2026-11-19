@@ -200,14 +200,14 @@ namespace Common.FlowField
             _entries.Clear();
         }
 
+        /// <summary>Throws the reason an Influence Collider breaks the rule.</summary>
         internal static void ValidateCollider(Collider collider)
         {
+            if (FlowFieldModifierMaskBuilder.TryValidateInfluenceCollider(collider, out string reason))
+                return;
             if (collider == null)
-                throw new InvalidOperationException("Influence Collider is required.");
-            if (!collider.isTrigger)
-                throw new ArgumentException(FlowFieldModifierMaskBuilder.TriggerRequiredMessage, nameof(collider));
-            if (collider is MeshCollider meshCollider && !meshCollider.convex)
-                throw new ArgumentException(FlowFieldModifierMaskBuilder.ConvexMeshRequiredMessage, nameof(collider));
+                throw new InvalidOperationException(reason);
+            throw new ArgumentException(reason, nameof(collider));
         }
 
         private void ThrowIfPriorityTaken(IFlowFieldVectorModifier modifier, int priority)

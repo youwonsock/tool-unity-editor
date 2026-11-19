@@ -279,8 +279,21 @@ namespace Common.FlowField
 
     internal static class FlowFieldModifierMaskBuilder
     {
-        public const string TriggerRequiredMessage = "Influence Collider must be a trigger.";
-        public const string ConvexMeshRequiredMessage = "A trigger MeshCollider must be convex.";
+        /// <summary>
+        /// The one rule for an Influence Collider: present, a trigger, and
+        /// convex when it is a MeshCollider. False with the first broken part.
+        /// </summary>
+        public static bool TryValidateInfluenceCollider(Collider collider, out string reason)
+        {
+            reason = string.Empty;
+            if (collider == null)
+                reason = "Influence Collider is required.";
+            else if (!collider.isTrigger)
+                reason = "Influence Collider must be a trigger.";
+            else if (collider is MeshCollider meshCollider && !meshCollider.convex)
+                reason = "A trigger MeshCollider must be convex.";
+            return reason.Length == 0;
+        }
 
         public static void Build(
             FlowFieldGridSpace grid,
@@ -350,12 +363,11 @@ namespace Common.FlowField
             }
         }
 
+        // A valid Influence Collider that is enabled in the scene.
         public static bool IsUsableTrigger(Collider influenceCollider)
-            => influenceCollider != null
+            => TryValidateInfluenceCollider(influenceCollider, out _)
                 && influenceCollider.enabled
-                && influenceCollider.gameObject.activeInHierarchy
-                && influenceCollider.isTrigger
-                && (!(influenceCollider is MeshCollider meshCollider) || meshCollider.convex);
+                && influenceCollider.gameObject.activeInHierarchy;
 
         private static void ResolveCandidateRange(
             FlowFieldGridSpace grid,

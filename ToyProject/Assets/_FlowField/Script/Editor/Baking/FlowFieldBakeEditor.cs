@@ -25,8 +25,8 @@ namespace Common.FlowField.Editor
 
         static FlowFieldBakeEditor()
         {
-            AssemblyReloadEvents.beforeAssemblyReload += InvalidateCallbacks;
-            EditorApplication.quitting += InvalidateCallbacks;
+            AssemblyReloadEvents.beforeAssemblyReload += StopBaking;
+            EditorApplication.quitting += StopBaking;
         }
 
         public static bool IsBaking => _isBaking;
@@ -39,22 +39,12 @@ namespace Common.FlowField.Editor
         /// </summary>
         public static void CancelBake()
         {
-            if (!_isBaking && !_asyncPending)
-                return;
-
-            _shuttingDown = true;
-            unchecked { _callbackGeneration++; }
-            _cancel?.Invoke();
-            _cancel = null;
-            _queue.Clear();
-            _asyncPending = false;
-            _isBaking = false;
-            _progressLabel = string.Empty;
-            EditorUtility.ClearProgressBar();
-            _shuttingDown = false;
+            if (_isBaking || _asyncPending)
+                StopBaking();
         }
 
-        private static void InvalidateCallbacks()
+        // A cancel, an assembly reload and quitting drop every queued and running bake.
+        private static void StopBaking()
         {
             _shuttingDown = true;
             unchecked { _callbackGeneration++; }

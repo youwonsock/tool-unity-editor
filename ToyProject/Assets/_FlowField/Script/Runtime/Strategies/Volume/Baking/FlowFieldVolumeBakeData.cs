@@ -168,14 +168,8 @@ namespace Common.FlowField
             if (!TryGetValidationView(out FlowFieldVolumeBakeValidationView view))
                 return Fail(out reason, "Static Volume3D Bake arrays are missing.");
 
-            using (FlowFieldVolumeBakeValidator validator =
-                new FlowFieldVolumeBakeValidator(view, grid))
-            {
-                while (!validator.IsComplete)
-                    validator.Step(4096, 64);
-                if (!validator.IsValid)
-                    return Fail(out reason, validator.Error);
-            }
+            if (!FlowFieldVolumeBakeValidator.ValidatePayload(in view, grid, out string payloadReason))
+                return Fail(out reason, payloadReason);
 
             _validatedRevision = Revision;
             _validatedGrid = grid;

@@ -88,8 +88,6 @@ namespace Common.FlowField.Editor
                     "RuntimeDynamic: the session computes the Surface and obstacles at runtime. No Static Bake Asset is used.",
                     MessageType.Info);
             }
-
-            DrawTransformWarning(manager);
         }
 
         // A settings bundle drawn as a header and its fields, without a foldout.
@@ -277,19 +275,5 @@ namespace Common.FlowField.Editor
                 Undo.AddComponent<FlowFieldDisplaySettings>(manager.gameObject);
         }
 
-        private static void DrawTransformWarning(FlowFieldManager manager)
-        {
-            Transform managerTransform = manager.transform;
-            bool hasWorldRotation = Quaternion.Angle(managerTransform.rotation, Quaternion.identity) > 0.01f;
-            bool hasUnsupportedScale = (managerTransform.lossyScale - Vector3.one).sqrMagnitude > 0.0001f;
-            if (!hasWorldRotation && !hasUnsupportedScale)
-                return;
-
-            EditorGUILayout.Space();
-            EditorGUILayout.HelpBox(
-                "The FlowField grid supports only an unrotated, world-aligned Manager with scale 1. "
-                + "Check the rotation and scale of the Manager and its parents.",
-                MessageType.Warning);
-        }
     }
 }

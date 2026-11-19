@@ -18,18 +18,8 @@ namespace Common.FlowField.Editor
                 return;
             }
 
-            Collider influenceCollider = modifier.InfluenceCollider;
-            if (influenceCollider == null)
-            {
-                DrawWarning("Assign an Influence Collider.", MessageType.Error);
-                return;
-            }
-
-            if (!influenceCollider.isTrigger)
-                DrawWarning(FlowFieldModifierMaskBuilder.TriggerRequiredMessage, MessageType.Error);
-
-            if (influenceCollider is MeshCollider meshCollider && !meshCollider.convex)
-                DrawWarning(FlowFieldModifierMaskBuilder.ConvexMeshRequiredMessage, MessageType.Error);
+            if (!FlowFieldModifierMaskBuilder.TryValidateInfluenceCollider(modifier.InfluenceCollider, out string reason))
+                DrawWarning(reason, MessageType.Error);
 
             DrawDuplicatePriority(modifier);
         }
