@@ -32,15 +32,12 @@ namespace Common.OptimizeTool.Samples.Editor
             AssetFileTransaction.ValidateFolder(folder);
             if (SceneManager.GetSceneByPath(scenePath).isLoaded)
                 throw new InvalidOperationException("Close the scale benchmark scene before rebuilding it.");
-            var paths = new List<string> { scenePath, folder + "/Source.mat" };
             if (faceSubdivisions < 1 || faceSubdivisions > 128) throw new ArgumentOutOfRangeException(nameof(faceSubdivisions));
-            if (faceSubdivisions > 1) paths.Add(folder + "/DenseCube.asset");
             foreach (int side in sides)
-            {
                 if (side < 1 || side > 32) throw new ArgumentOutOfRangeException(nameof(sides));
-                for (int mode = 1; mode < 4; mode++) paths.Add($"{folder}/Cubes-{side * side * 9}-Mode-{mode}.asset");
-            }
-            AssetFileTransaction.Execute(paths, () => BuildScene(scenePath, folder, sides, faceSubdivisions));
+            // The meshes are rolled back by MeshAssetTransaction.Save; only the scene and the material are file snapshots.
+            AssetFileTransaction.Execute(new[] { scenePath, folder + "/Source.mat" },
+                () => BuildScene(scenePath, folder, sides, faceSubdivisions));
         }
 
         private static void BuildScene(string path, string folder, int[] sides, int faceSubdivisions)
@@ -151,7 +148,7 @@ namespace Common.OptimizeTool.Samples.Editor
                     SceneManager.SetActiveScene(target);
                     RenderSettings.ambientMode = AmbientMode.Flat; RenderSettings.ambientLight = Color.gray;
                     if (!EditorSceneManager.SaveScene(target, path)) throw new InvalidOperationException("Cannot save the scale benchmark scene.");
-                }, new[] { path });
+                });
                 AssetDatabase.SaveAssetIfDirty(material);
                 Debug.Log("Built scale benchmark: " + string.Join(", ", cases.Select(c => c.cubeCount)) + " cubes.");
             }

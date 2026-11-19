@@ -7,20 +7,21 @@ using Object = UnityEngine.Object;
 
 namespace Common.OptimizeTool.MeshOptimization
 {
-    /// <summary>Rolls back mesh assets, declared companion asset files, and Undo-recorded scene changes.</summary>
+    /// <summary>Saves mesh assets and rolls back the meshes and the Undo-recorded scene changes of a failed save.</summary>
     public static class MeshAssetTransaction
     {
         /// <summary>
         /// Saves <paramref name="staged"/> at <paramref name="paths"/>, then runs <paramref name="apply"/> with the saved
-        /// meshes. Existing meshes are overwritten in place so their GUIDs survive. If anything fails, the meshes, the
-        /// declared companion files and every Undo-recorded change of this call are restored.
+        /// meshes. Existing meshes are overwritten in place so their GUIDs survive. If anything fails, the meshes and
+        /// every Undo-recorded change of this call are restored. When <paramref name="apply"/> also writes other asset
+        /// files, wrap this call in <see cref="AssetFileTransaction.Execute"/> with their paths.
         /// </summary>
         /// <param name="keepReadable">Keep Read/Write on the saved meshes. Off frees their CPU copy in Players.</param>
         public static Mesh[] Save(IList<Mesh> staged, IList<string> paths, bool overwrite, string undoName,
-            Action<Mesh[]> apply = null, IReadOnlyList<string> companionAssetPaths = null, bool keepReadable = false)
+            Action<Mesh[]> apply = null, bool keepReadable = false)
         {
             AssetFileTransaction.RequireEditMode();
-            var save = new Transaction(staged, paths, overwrite, companionAssetPaths) { KeepReadable = keepReadable };
+            var save = new Transaction(staged, paths, overwrite) { KeepReadable = keepReadable };
             Undo.IncrementCurrentGroup();
             save.UndoGroup = Undo.GetCurrentGroup();
             Undo.SetCurrentGroupName(undoName);
@@ -48,7 +49,6 @@ namespace Common.OptimizeTool.MeshOptimization
             private readonly string[] _paths;
             private readonly Mesh[] _existing;
             private readonly Mesh[] _backups;
-            private readonly List<AssetFileSnapshot> _companions = new List<AssetFileSnapshot>();
             private readonly List<string> _created = new List<string>();
 
             internal Mesh[] Saved { get; }
@@ -56,34 +56,21 @@ namespace Common.OptimizeTool.MeshOptimization
             internal bool KeepReadable { get; set; }
 
             /// <summary>Checks every path before the first write.</summary>
-            internal Transaction(IList<Mesh> staged, IList<string> paths, bool overwrite, IReadOnlyList<string> companionPaths)
+            internal Transaction(IList<Mesh> staged, IList<string> paths, bool overwrite)
             {
                 if (staged.Count == 0 || staged.Count != paths.Count) throw new ArgumentException("Mesh and path counts must match.");
+                foreach (Mesh mesh in staged)
+                    if (mesh == null || mesh.vertexCount == 0) throw new ArgumentException("Cannot save an empty mesh.");
                 _staged = staged;
-                _paths = new string[paths.Count];
+                _paths = AssetFileTransaction.ValidateAssetPaths(paths);
                 _existing = new Mesh[staged.Count];
                 _backups = new Mesh[staged.Count];
                 Saved = new Mesh[staged.Count];
-                var unique = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                for (int i = 0; i < paths.Count; i++)
+                for (int i = 0; i < _paths.Length; i++)
                 {
-                    if (staged[i] == null || staged[i].vertexCount == 0) throw new ArgumentException("Cannot save an empty mesh.");
-                    string path = paths[i].Replace('\\', '/');
-                    string folder = AssetFileTransaction.ValidateFolder(Path.GetDirectoryName(path));
-                    string file = Path.GetFileName(path);
-                    AssetFileTransaction.ValidateFileName(file);
-                    if (!file.EndsWith(".asset", StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Mesh outputs need .asset extensions.");
-                    _paths[i] = folder + "/" + file;
-                    if (!unique.Add(_paths[i])) throw new ArgumentException("Several outputs resolve to the same asset.");
+                    if (!_paths[i].EndsWith(".asset", StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Mesh outputs need .asset extensions.");
                     _existing[i] = (Mesh)AssetFileTransaction.ValidateOutputTarget(_paths[i], typeof(Mesh), overwrite);
                 }
-                if (companionPaths != null)
-                    foreach (string path in companionPaths)
-                    {
-                        string normalized = path.Replace('\\', '/');
-                        if (!unique.Add(normalized)) throw new ArgumentException("An asset was declared more than once.");
-                        _companions.Add(new AssetFileSnapshot(normalized));
-                    }
             }
 
             internal void Write(string undoName, bool hasApply)
@@ -129,8 +116,7 @@ namespace Common.OptimizeTool.MeshOptimization
                 catch { if (!AssetDatabase.Contains(Saved[i])) Object.DestroyImmediate(Saved[i]); throw; }
                 if (AssetDatabase.LoadAssetAtPath<Mesh>(_paths[i]) != Saved[i])
                     throw new IOException($"Failed to create '{_paths[i]}'.");
-                // Preserve the callback's ability to mutate the saved Mesh and have those changes
-                // committed. It sees complete geometry on disk as before.
+                // The callback may change the saved mesh; the final save writes those changes.
                 if (hasApply) EditorUtility.SetDirty(Saved[i]);
             }
 
@@ -138,28 +124,30 @@ namespace Common.OptimizeTool.MeshOptimization
             internal List<Exception> Rollback(Exception saveError)
             {
                 var errors = new List<Exception> { saveError };
-                AssetFileSnapshot.TryRestore(() => Undo.RevertAllDownToGroup(UndoGroup), errors);
+                void Attempt(Action restore)
+                {
+                    try { restore(); }
+                    catch (Exception error) { errors.Add(error); }
+                }
+                Attempt(() => Undo.RevertAllDownToGroup(UndoGroup));
                 for (int i = 0; i < _existing.Length; i++)
                     if (_existing[i] != null && _backups[i] != null)
                     {
                         int index = i;
-                        AssetFileSnapshot.TryRestore(() =>
+                        Attempt(() =>
                         {
                             EditorUtility.CopySerialized(_backups[index], _existing[index]);
                             EditorUtility.SetDirty(_existing[index]);
-                        }, errors);
+                        });
                     }
                 foreach (string path in _created)
-                    AssetFileSnapshot.TryRestore(() =>
+                    Attempt(() =>
                     {
                         if (File.Exists(path) && !AssetDatabase.DeleteAsset(path))
                             throw new IOException($"Cannot remove incomplete mesh asset '{path}'.");
-                    }, errors);
+                    });
                 foreach (Mesh mesh in _existing)
-                    if (mesh != null) AssetFileSnapshot.TryRestore(() => AssetDatabase.SaveAssetIfDirty(mesh), errors);
-                // Restore companions after meshes, so imported prefabs resolve the restored mesh references.
-                foreach (AssetFileSnapshot companion in _companions)
-                    AssetFileSnapshot.TryRestore(companion.Restore, errors);
+                    if (mesh != null) Attempt(() => AssetDatabase.SaveAssetIfDirty(mesh));
                 return errors;
             }
 
