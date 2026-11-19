@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using Unity.Collections;
-using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
 using Object = UnityEngine.Object;
@@ -16,7 +15,7 @@ namespace Common.OptimizeTool.MeshOptimization
     /// </summary>
     internal static class MeshGeometry
     {
-        public static bool IsFinite(Vector3 v) => IsFinite(v.x) && IsFinite(v.y) && IsFinite(v.z);
+        private static bool IsFinite(Vector3 v) => IsFinite(v.x) && IsFinite(v.y) && IsFinite(v.z);
         private static bool IsFinite(float v) => !float.IsNaN(v) && !float.IsInfinity(v);
 
         // Vector3.normalized returns zero below a fixed magnitude, which small

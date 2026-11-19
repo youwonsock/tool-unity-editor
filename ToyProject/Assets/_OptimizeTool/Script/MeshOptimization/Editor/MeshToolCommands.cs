@@ -13,11 +13,13 @@ namespace Common.OptimizeTool.MeshOptimization
     public static class MeshToolCommands
     {
         /// <summary>Creates in-memory results only. Dispose the result after saving or inspecting it.</summary>
-        public static MeshBuildResult BuildMeshes(this MeshCombiner combiner)
+        public static MeshBuildResult BuildMeshes(this MeshCombiner combiner) => Build(combiner, combiner.CreateSettings());
+
+        private static MeshBuildResult Build(MeshCombiner combiner, MeshBuildSettings settings)
         {
             combiner.LastBuildWarnings = Array.Empty<string>();
             MeshFilter[] sources = CollectSources(combiner, out bool skippedDisabledChild);
-            var result = MeshBuildPipeline.Build(sources, combiner.transform.worldToLocalMatrix, combiner.CreateSettings());
+            var result = MeshBuildPipeline.Build(sources, combiner.transform.worldToLocalMatrix, settings);
             if (skippedDisabledChild)
                 result.AddWarning("Child MeshFilters with a disabled Renderer were left out. Assign them directly to bake them.");
             combiner.LastBuildWarnings = result.Warnings;
@@ -30,10 +32,11 @@ namespace Common.OptimizeTool.MeshOptimization
             string folder = AssetFileTransaction.ValidateFolder(combiner.SavePath);
             AssetFileTransaction.ValidateFileName(combiner.MeshName);
             if (combiner.CreateSceneOutput) MeshSceneOutput.RequireReplaceable(combiner.GeneratedRoot);
-            using (MeshBuildResult result = combiner.BuildMeshes())
+            MeshBuildSettings settings = combiner.CreateSettings();
+            using (MeshBuildResult result = Build(combiner, settings))
             {
                 Mesh[] meshes = result.GetMeshes();
-                List<string> paths = OutputPaths(folder, combiner.MeshName, meshes.Length, combiner.CreateSettings().CombineIntoSingleMesh);
+                List<string> paths = OutputPaths(folder, combiner.MeshName, meshes.Length, settings.CombineIntoSingleMesh);
                 Mesh[] saved = MeshAssetTransaction.Save(meshes, paths, combiner.OverwriteExistingAssets, "Combine meshes",
                     written => { if (combiner.CreateSceneOutput) MeshSceneOutput.Apply(combiner, written, result); },
                     keepReadable: combiner.KeepReadable);
