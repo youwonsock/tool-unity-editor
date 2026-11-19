@@ -64,7 +64,10 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
 
         private static string FallbackCameraWarning(Camera camera) => $"No Target Camera; using '{camera.name}'.";
 
-        /// <summary>Saves the combined meshes as assets and applies the scene output.</summary>
+        /// <summary>
+        /// Saves the combined meshes as assets and applies the scene output. In Play Mode the scene output is temporary
+        /// and not recorded with Undo; the saved assets stay.
+        /// </summary>
         public static Mesh[] CombineAndSaveMeshes(this MeshCombiner combiner)
         {
             string folder = AssetFileTransaction.ValidateFolder(combiner.SavePath);
@@ -75,12 +78,25 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
             {
                 Mesh[] meshes = result.GetMeshes();
                 List<string> paths = OutputPaths(folder, combiner.MeshName, meshes.Length, settings.CombineAllIntoSingleMesh);
+                MeshSceneEdit edit = MeshSceneEdit.Begin();
+                if (!edit.IsPersistent && combiner.GeneratedRoot != null)
+                    RequireNotShown(combiner.GeneratedRoot.GetComponentsInChildren<MeshFilter>(true), paths);
                 // Without a scene output there is no callback, so each new asset is serialized once.
                 Action<Mesh[]> apply = combiner.CreateSceneOutput
-                    ? written => MeshSceneOutput.Apply(combiner, written, result)
+                    ? written => MeshSceneOutput.Apply(combiner, written, result, edit)
                     : (Action<Mesh[]>)null;
-                Mesh[] saved = MeshAssetTransaction.Save(meshes, paths, combiner.OverwriteExistingAssets, "Combine meshes",
-                    apply, combiner.KeepReadable);
+                Mesh[] saved;
+                try
+                {
+                    saved = MeshAssetTransaction.Save(meshes, paths, combiner.OverwriteExistingAssets, "Combine meshes",
+                        apply, combiner.KeepReadable);
+                }
+                catch
+                {
+                    edit.Revert();
+                    throw;
+                }
+                edit.Commit();
                 List<string> stale = StaleOutputs(folder, combiner.MeshName, paths);
                 if (stale.Count > 0)
                     combiner.LastBuildWarnings = new List<string>(combiner.LastBuildWarnings)
@@ -112,13 +128,36 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
         }
 
         /// <summary>
-        /// Removes the scene output and re-enables the source Renderers this combiner disabled, as one Undo step.
-        /// Saved mesh assets are kept.
+        /// Removes the scene output and re-enables the source Renderers this combiner disabled, as one Undo step in
+        /// Edit Mode. Saved mesh assets are kept.
         /// </summary>
         public static void RestoreSources(this MeshCombiner combiner)
         {
-            AssetFileTransaction.RequireEditMode();
-            MeshSceneOutput.Restore(combiner);
+            MeshSceneEdit edit = MeshSceneEdit.Begin("Restore combined sources");
+            try { MeshSceneOutput.Restore(combiner, edit); }
+            catch
+            {
+                edit.Revert();
+                throw;
+            }
+            edit.Commit();
+        }
+
+        /// <summary>
+        /// In Play Mode, refuses to write a mesh asset that <paramref name="shownBy"/> shows. That asset is an Edit Mode
+        /// result the saved scene references, so replacing it would silently change the saved scene.
+        /// </summary>
+        private static void RequireNotShown(IEnumerable<MeshFilter> shownBy, IEnumerable<string> paths)
+        {
+            var shown = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (MeshFilter filter in shownBy)
+            {
+                string path = filter != null ? AssetDatabase.GetAssetPath(filter.sharedMesh) : null;
+                if (!string.IsNullOrEmpty(path)) shown.Add(path);
+            }
+            foreach (string path in paths)
+                if (shown.Contains(path))
+                    throw new InvalidOperationException($"'{path}' is shown by the scene and would change the saved scene if replaced in Play Mode. Choose another output folder or name.");
         }
 
         /// <summary>
@@ -126,11 +165,12 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
         /// <c>&lt;MeshFilter name&gt;_BackfaceCulled.asset</c>, and assigns it to that MeshFilter. A MeshFilter that
         /// still shows this baker's output is baked from its recorded original, so baking again does not cut twice; a
         /// mesh assigned by hand since then is the new original. Every result is computed before any asset or
-        /// MeshFilter changes, and a failed save restores both.
+        /// MeshFilter changes, and a failed save restores both. In Play Mode the mesh swap is temporary and not
+        /// recorded with Undo; the saved assets stay.
         /// </summary>
         public static Mesh[] BakeBackfaces(this BackfaceCullMeshBaker baker)
         {
-            AssetFileTransaction.RequireEditMode();
+            MeshSceneEdit edit = MeshSceneEdit.Begin();
             string folder = AssetFileTransaction.ValidateFolder(baker.SavePath);
             float angle = baker.BackfaceCullingAngle;
             MeshBuildSettings.ValidateBackfaceAngle(angle, "Backface Culling Angle");
@@ -160,6 +200,7 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
                 if (!(AssetDatabase.LoadMainAssetAtPath(path) is Mesh existing && IsOwnOutput(baker, existing)))
                     AssetFileTransaction.ValidateOutputTarget(path, typeof(Mesh), baker.OverwriteExistingAssets);
             }
+            if (!edit.IsPersistent) RequireNotShown(filters, paths);
             var staged = new List<Mesh>();
             try
             {
@@ -176,34 +217,46 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
                     }
                     finally { Object.DestroyImmediate(readable); }
                 }
-                return MeshAssetTransaction.Save(staged, paths, true, "Bake backfaces",
-                    baked => AssignBaked(baker, filters, originals, baked));
+                Mesh[] saved;
+                try
+                {
+                    saved = MeshAssetTransaction.Save(staged, paths, true, "Bake backfaces",
+                        baked => AssignBaked(baker, filters, originals, baked, edit));
+                }
+                catch
+                {
+                    edit.Revert();
+                    throw;
+                }
+                edit.Commit();
+                return saved;
             }
             finally { foreach (Mesh mesh in staged) Object.DestroyImmediate(mesh); }
         }
 
         /// <summary>
         /// Gives every MeshFilter that still shows this baker's output its recorded original mesh and clears the record,
-        /// as one Undo step. A mesh assigned by hand since the bake is kept, and saved baked assets are kept; a later
-        /// bake still replaces them without the overwrite setting.
+        /// as one Undo step in Edit Mode. A mesh assigned by hand since the bake is kept, and saved baked assets are
+        /// kept; a later bake still replaces them without the overwrite setting.
         /// </summary>
         public static void RestoreOriginalMeshes(this BackfaceCullMeshBaker baker)
         {
-            AssetFileTransaction.RequireEditMode();
-            Undo.IncrementCurrentGroup();
-            int group = Undo.GetCurrentGroup();
-            Undo.SetCurrentGroupName("Restore original meshes");
-            Undo.RegisterCompleteObjectUndo(baker, "Restore original meshes");
-            foreach (BakedMeshOriginal record in baker.OriginalMeshes)
-                if (record.Filter != null && record.Original != null && record.Baked != null && record.Filter.sharedMesh == record.Baked)
-                {
-                    Undo.RegisterCompleteObjectUndo(record.Filter, "Restore original mesh");
-                    record.Filter.sharedMesh = record.Original;
-                    PrefabUtility.RecordPrefabInstancePropertyModifications(record.Filter);
-                }
-            baker.OriginalMeshes = new List<BakedMeshOriginal>();
-            PrefabUtility.RecordPrefabInstancePropertyModifications(baker);
-            Undo.CollapseUndoOperations(group);
+            MeshSceneEdit edit = MeshSceneEdit.Begin("Restore original meshes");
+            try
+            {
+                RecordBaker(baker, edit, "Restore original meshes");
+                foreach (BakedMeshOriginal record in baker.OriginalMeshes)
+                    if (record.Filter != null && record.Original != null && record.Baked != null && record.Filter.sharedMesh == record.Baked)
+                        SetMesh(record.Filter, record.Original, edit, "Restore original mesh");
+                baker.OriginalMeshes = new List<BakedMeshOriginal>();
+                edit.Changed(baker);
+            }
+            catch
+            {
+                edit.Revert();
+                throw;
+            }
+            edit.Commit();
         }
 
         private static MeshFilter[] BakeTargets(BackfaceCullMeshBaker baker)
@@ -214,7 +267,10 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
             if (filters.Length == 0) throw new ArgumentException("No MeshFilters were found under this object.");
             var seen = new HashSet<MeshFilter>();
             foreach (MeshFilter filter in filters)
+            {
                 if (filter == null || !seen.Add(filter)) throw new ArgumentException("Target MeshFilters must be present and unique.");
+                MeshBuildPipeline.RequireUnbatched(filter);
+            }
             return filters;
         }
 
@@ -230,9 +286,10 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
 
         private static bool IsOwnOutput(BackfaceCullMeshBaker baker, Mesh mesh) => baker.BakedMeshes.Contains(mesh);
 
-        private static void AssignBaked(BackfaceCullMeshBaker baker, MeshFilter[] filters, Mesh[] originals, Mesh[] baked)
+        private static void AssignBaked(BackfaceCullMeshBaker baker, MeshFilter[] filters, Mesh[] originals, Mesh[] baked,
+            MeshSceneEdit edit)
         {
-            Undo.RegisterCompleteObjectUndo(baker, "Record original meshes");
+            RecordBaker(baker, edit, "Record original meshes");
             // Build the new record on the side, like the combiner's ledger, and assign it after the scene changes.
             var records = new List<BakedMeshOriginal>();
             var targets = new HashSet<MeshFilter>(filters);
@@ -240,9 +297,7 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
                 if (record.Filter != null && !targets.Contains(record.Filter)) records.Add(record);
             for (int i = 0; i < filters.Length; i++)
             {
-                Undo.RegisterCompleteObjectUndo(filters[i], "Assign baked mesh");
-                filters[i].sharedMesh = baked[i];
-                PrefabUtility.RecordPrefabInstancePropertyModifications(filters[i]);
+                SetMesh(filters[i], baked[i], edit, "Assign baked mesh");
                 records.Add(new BakedMeshOriginal { Filter = filters[i], Original = originals[i], Baked = baked[i] });
             }
             var outputs = new List<Mesh>();
@@ -251,7 +306,30 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
             outputs.AddRange(baked);
             baker.OriginalMeshes = records;
             baker.BakedMeshes = outputs;
-            PrefabUtility.RecordPrefabInstancePropertyModifications(baker);
+            edit.Changed(baker);
+        }
+
+        /// <summary>Bakes and restores replace both lists as a whole, so keeping the old ones reverts them.</summary>
+        private static void RecordBaker(BackfaceCullMeshBaker baker, MeshSceneEdit edit, string undoName)
+        {
+            List<BakedMeshOriginal> records = baker.OriginalMeshes;
+            List<Mesh> outputs = baker.BakedMeshes;
+            edit.Record(baker, undoName, () =>
+            {
+                baker.OriginalMeshes = records;
+                baker.BakedMeshes = outputs;
+            });
+        }
+
+        private static void SetMesh(MeshFilter filter, Mesh mesh, MeshSceneEdit edit, string undoName)
+        {
+            Mesh previous = filter.sharedMesh;
+            edit.Record(filter, undoName, () =>
+            {
+                if (filter != null) filter.sharedMesh = previous;
+            });
+            filter.sharedMesh = mesh;
+            edit.Changed(filter);
         }
 
         /// <summary>
@@ -269,7 +347,7 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
         private static MeshFilter[] CollectSources(MeshCombiner combiner, out bool skippedDisabledChild)
         {
             skippedDisabledChild = false;
-            AssetFileTransaction.RequireEditMode();
+            AssetFileTransaction.RequireStablePlayMode();
             MeshFilter[] direct = combiner.TargetMeshFilters;
             RequireOneSelection(combiner.CollectChildMeshes, direct);
             MeshFilter[] filters = combiner.CollectChildMeshes

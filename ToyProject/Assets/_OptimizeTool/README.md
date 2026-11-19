@@ -57,7 +57,7 @@ _OptimizeTool/
 
 ## Mesh 도구
 
-Edit Mode에서 Inspector 버튼이나 아래 API로 실행합니다. 별도 초기화 없이 호출하고, 설정을 고친 뒤 같은 API로 재시도합니다. 컴포넌트는 설정만 갖고, 아래 API는 `MeshOptimization.Editor` 어셈블리의 확장 메서드(`MeshToolCommands`, namespace `Common.OptimizeTool.MeshOptimization.Editor`)입니다. 그래서 Editor 어셈블리의 코드에서만 호출할 수 있습니다.
+Inspector 버튼이나 아래 API로 실행합니다. Edit Mode와 Editor Play Mode에서 모두 동작하고, Play Mode가 시작되거나 끝나는 중에는 거부합니다. 별도 초기화 없이 호출하고, 설정을 고친 뒤 같은 API로 재시도합니다. 컴포넌트는 설정만 갖고, 아래 API는 `MeshOptimization.Editor` 어셈블리의 확장 메서드(`MeshToolCommands`, namespace `Common.OptimizeTool.MeshOptimization.Editor`)입니다. 그래서 Editor 어셈블리의 코드에서만 호출할 수 있습니다.
 
 | API | 동작 |
 | --- | --- |
@@ -93,12 +93,13 @@ public static class MeshBuildExample
 - **Backface:** 결합하면서 삼각형 법선과 카메라 방향의 각도로 보이지 않는 면을 지웁니다. 카메라나 Transform이 바뀌면 다시 베이크합니다.
 - **Backface 제자리 베이크:** `BackfaceCullMeshBaker`는 결합하지 않고 MeshFilter마다 Mesh를 바꿉니다. Target Camera 대신 `_useCustomVector`로 고정한 관찰 방향(`_customCameraVector`, 카메라가 바라보는 방향)을 쓸 수 있습니다. 출력 이름이 겹치면 저장 전에 거부하고, 이 Baker가 쓴 출력은 덮어쓰기 설정 없이 다시 쓰며, 다른 기존 파일은 `_overwriteExistingAssets`를 켜야 덮어씁니다.
 - **카메라:** 컬링을 켰는데 `_targetCamera`가 비어 있으면 Combiner와 같은 씬에서 켜진 `MainCamera` 태그 카메라를, 없으면 Hierarchy 순서로 첫 번째 켜진 카메라를 쓰고 `No Target Camera; using '<name>'.` 경고를 남깁니다. 씬에 켜진 카메라가 없으면 빌드가 실패합니다.
-- **출력:** `Assets/` 하위에 저장하며 덮어쓰기는 명시적으로 허용해야 합니다. 실패하면 에셋과 Undo에 등록한 씬 변경을 복원합니다.
+- **출력:** `Assets/` 하위에 저장하며 덮어쓰기는 명시적으로 허용해야 합니다. 실패하면 에셋과 씬 변경을 복원합니다.
+- **Edit Mode와 Play Mode:** Edit Mode의 씬 변경은 Undo 한 단계와 Prefab 인스턴스 오버라이드로 남습니다. Play Mode에서는 Undo를 남기지 않고, 씬 결과(결과 오브젝트, 끈 Renderer, 바꾼 Mesh)는 Play Mode를 나가면 사라지며 저장한 에셋은 남습니다. Play Mode에서는 지금 씬이 보여 주는 Mesh 에셋 경로(Edit Mode에서 만든 결과)에 쓰지 않으므로 다른 출력 폴더나 이름을 고릅니다. 정적 배칭된 Renderer는 Play Mode에서 Mesh가 배치 Mesh로 바뀌어 있으므로 입력으로 받지 않습니다.
 
 컬링 결과는 베이크 시점에 종속되므로 움직이는 카메라용 일반 Mesh를 대체하지 않습니다. 결합은 개별 Renderer 컬링 단위를 줄이므로 가까운 정적 오브젝트끼리 묶습니다.
 
 <p align="center">
-  <img src="Docs/Images/feature-meshcombiner-settings.png" alt="MeshCombiner Inspector: 입력·출력, Occlusion·Backface 컬링, 결합 옵션과 Combine and Save Meshes·Restore Sources 버튼" width="60%">
+  <img src="Docs/Images/feature-meshcombiner-settings.png" alt="MeshCombiner Inspector: 입력·출력, Occlusion·Backface 컬링, 결합 옵션, Play Mode 결과가 Play Mode와 함께 끝난다는 안내와 Combine and Save Meshes·Restore Sources 버튼" width="60%">
 </p>
 
 샘플의 9개 큐브(앞줄 3개가 뒷줄 6개를 가림)에서 얻은 Geometry 수량입니다. GPU 메모리나 프레임 시간이 아닙니다.

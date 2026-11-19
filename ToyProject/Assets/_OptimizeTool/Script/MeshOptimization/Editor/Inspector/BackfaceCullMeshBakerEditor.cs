@@ -10,8 +10,8 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
         {
             DrawDefaultInspector();
             var baker = (BackfaceCullMeshBaker)target;
-            EditorGUILayout.HelpBox("Bake in Edit Mode. Each MeshFilter gets a saved copy of its mesh with only the triangles facing the view, which permanently removes geometry for that view. Baking again starts from the recorded original. Restore Original Meshes puts the originals back; saved mesh assets are kept.", MessageType.Info);
-            using (new EditorGUI.DisabledScope(EditorApplication.isPlayingOrWillChangePlaymode))
+            EditorGUILayout.HelpBox("Each MeshFilter gets a saved copy of its mesh with only the triangles facing the view, which permanently removes geometry for that view. Baking again starts from the recorded original. Restore Original Meshes puts the originals back; saved mesh assets are kept. In Play Mode the mesh swap is discarded when Play Mode ends, while saved mesh assets stay.", MessageType.Info);
+            using (new EditorGUI.DisabledScope(InspectorCommand.PlayModeChanging))
             {
                 if (GUILayout.Button("Bake and Save Backfaces")) InspectorCommand.Run(baker, () => baker.BakeBackfaces());
                 using (new EditorGUI.DisabledScope(baker.OriginalMeshes.Count == 0))

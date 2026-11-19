@@ -14,11 +14,21 @@ namespace Common.OptimizeTool.Editor
     {
         private static readonly char[] ForbiddenNameChars = { '/', '\\', ':', '*', '?', '"', '<', '>', '|' };
 
-        /// <summary>Asset outputs are written in Edit Mode only.</summary>
+        /// <summary>For editor commands that run in Edit Mode only, such as the sample builders.</summary>
         public static void RequireEditMode()
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode)
                 throw new InvalidOperationException("Run this in Edit Mode.");
+        }
+
+        /// <summary>
+        /// For editor commands that run in Edit Mode and Play Mode: fails while Play Mode is starting or stopping, when
+        /// the scene is about to be replaced.
+        /// </summary>
+        public static void RequireStablePlayMode()
+        {
+            if (EditorApplication.isPlaying != EditorApplication.isPlayingOrWillChangePlaymode)
+                throw new InvalidOperationException("Wait until Play Mode has finished starting or stopping.");
         }
 
         /// <summary>

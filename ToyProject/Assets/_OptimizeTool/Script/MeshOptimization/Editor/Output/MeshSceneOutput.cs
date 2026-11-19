@@ -7,7 +7,8 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
 {
     /// <summary>
     /// The scene side of a combine: the generated result objects and the source Renderers the combiner disabled.
-    /// Every change is recorded with Undo and as a Prefab instance override.
+    /// Every change goes through a <see cref="MeshSceneEdit"/>, so Edit Mode records it with Undo and as a Prefab
+    /// instance override, and Play Mode can put it back without Undo.
     /// </summary>
     internal static class MeshSceneOutput
     {
@@ -16,9 +17,9 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
         /// when the combiner asks for it. Sources the previous bake disabled and that are still inputs stay disabled
         /// and keep their recorded original state; dropped sources get their original state back.
         /// </summary>
-        internal static void Apply(MeshCombiner combiner, Mesh[] meshes, MeshBuildResult result)
+        internal static void Apply(MeshCombiner combiner, Mesh[] meshes, MeshBuildResult result, MeshSceneEdit edit)
         {
-            Undo.RegisterCompleteObjectUndo(combiner, "Assign combined result");
+            RecordCombiner(combiner, edit, "Assign combined result");
             // Undo can serialize the owner while Destroy/RegisterCreatedObjectUndo runs. Build the new
             // ledger on the side and assign it only after every scene operation has completed.
             var states = new List<MeshSourceRendererState>();
@@ -31,40 +32,51 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
                 if (state.Renderer != null)
                 {
                     previousStates[state.Renderer] = state;
-                    if (nextSources == null || !nextSources.Contains(state.Renderer)) SetEnabled(state.Renderer, state.Enabled);
+                    if (nextSources == null || !nextSources.Contains(state.Renderer)) SetEnabled(state.Renderer, state.Enabled, edit);
                 }
-            if (combiner.GeneratedRoot != null) Undo.DestroyObjectImmediate(combiner.GeneratedRoot);
-            GameObject root = CreateResults(combiner.transform, combiner.MeshName, meshes, result);
+            // A Temporary edit only hides the previous result until the save succeeds, so a failure can bring it back.
+            if (combiner.GeneratedRoot != null) edit.Remove(combiner.GeneratedRoot);
+            GameObject root = CreateResults(combiner.transform, combiner.MeshName, meshes, result, edit);
             if (disableSources)
                 foreach (Renderer renderer in result.SourceRenderers)
                 {
                     if (previousStates.TryGetValue(renderer, out MeshSourceRendererState state)) states.Add(state);
                     else states.Add(new MeshSourceRendererState { Renderer = renderer, Enabled = renderer.enabled });
-                    SetEnabled(renderer, false);
+                    SetEnabled(renderer, false, edit);
                 }
+            // Recorded again after the result objects exist, so Redo restores the reference to them.
+            edit.Record(combiner, "Assign combined result", () => { });
             combiner.GeneratedRoot = root;
             combiner.SourceRendererStates = states;
-            PrefabUtility.RecordPrefabInstancePropertyModifications(combiner);
+            edit.Changed(combiner);
         }
 
         /// <summary>
-        /// Removes the result objects and gives every recorded source its original enabled state, as one Undo step.
-        /// Saved mesh assets are kept.
+        /// Removes the result objects and gives every recorded source its original enabled state. Saved mesh assets
+        /// are kept.
         /// </summary>
-        internal static void Restore(MeshCombiner combiner)
+        internal static void Restore(MeshCombiner combiner, MeshSceneEdit edit)
         {
             RequireReplaceable(combiner.GeneratedRoot);
-            Undo.IncrementCurrentGroup();
-            int group = Undo.GetCurrentGroup();
-            Undo.SetCurrentGroupName("Restore combined sources");
-            Undo.RegisterCompleteObjectUndo(combiner, "Restore combined sources");
+            RecordCombiner(combiner, edit, "Restore combined sources");
             foreach (MeshSourceRendererState state in combiner.SourceRendererStates)
-                if (state.Renderer != null) SetEnabled(state.Renderer, state.Enabled);
-            if (combiner.GeneratedRoot != null) Undo.DestroyObjectImmediate(combiner.GeneratedRoot);
+                if (state.Renderer != null) SetEnabled(state.Renderer, state.Enabled, edit);
+            if (combiner.GeneratedRoot != null) edit.Remove(combiner.GeneratedRoot);
             combiner.GeneratedRoot = null;
             combiner.SourceRendererStates = new List<MeshSourceRendererState>();
-            PrefabUtility.RecordPrefabInstancePropertyModifications(combiner);
-            Undo.CollapseUndoOperations(group);
+            edit.Changed(combiner);
+        }
+
+        /// <summary>Both operations replace the root and the ledger as a whole, so keeping the old ones reverts them.</summary>
+        private static void RecordCombiner(MeshCombiner combiner, MeshSceneEdit edit, string undoName)
+        {
+            GameObject root = combiner.GeneratedRoot;
+            List<MeshSourceRendererState> states = combiner.SourceRendererStates;
+            edit.Record(combiner, undoName, () =>
+            {
+                combiner.GeneratedRoot = root;
+                combiner.SourceRendererStates = states;
+            });
         }
 
         /// <summary>
@@ -88,15 +100,16 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
             return true;
         }
 
-        private static GameObject CreateResults(Transform parent, string name, Mesh[] meshes, MeshBuildResult result)
+        private static GameObject CreateResults(Transform parent, string name, Mesh[] meshes, MeshBuildResult result,
+            MeshSceneEdit edit)
         {
             var root = new GameObject(name + " Results");
-            Undo.RegisterCreatedObjectUndo(root, "Create combined result");
+            edit.Created(root, "Create combined result");
             root.transform.SetParent(parent, false);
             for (int i = 0; i < meshes.Length; i++)
             {
                 var output = new GameObject(meshes[i].name, typeof(MeshFilter), typeof(MeshRenderer));
-                Undo.RegisterCreatedObjectUndo(output, "Create combined renderer");
+                edit.Created(output, "Create combined renderer");
                 output.transform.SetParent(root.transform, false);
                 output.GetComponent<MeshFilter>().sharedMesh = meshes[i];
                 result.RendererSettings.ApplyTo(output.GetComponent<MeshRenderer>(), result.Parts[i].Materials);
@@ -104,12 +117,16 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
             return root;
         }
 
-        private static void SetEnabled(Renderer renderer, bool enabled)
+        private static void SetEnabled(Renderer renderer, bool enabled, MeshSceneEdit edit)
         {
             if (renderer.enabled == enabled) return;
-            Undo.RegisterCompleteObjectUndo(renderer, "Restore source renderer state");
+            bool previous = renderer.enabled;
+            edit.Record(renderer, "Restore source renderer state", () =>
+            {
+                if (renderer != null) renderer.enabled = previous;
+            });
             renderer.enabled = enabled;
-            PrefabUtility.RecordPrefabInstancePropertyModifications(renderer);
+            edit.Changed(renderer);
         }
     }
 }

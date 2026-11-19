@@ -12,8 +12,8 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
             var combiner = (MeshCombiner)target;
             foreach (string warning in combiner.LastBuildWarnings)
                 EditorGUILayout.HelpBox(warning, MessageType.Warning);
-            EditorGUILayout.HelpBox("Bake in Edit Mode. Camera culling permanently removes geometry for this view. Scene output assigns materials and can disable source Renderers; colliders are retained. Restore Sources removes the scene output and re-enables the Renderers this component disabled; saved mesh assets are kept.", MessageType.Info);
-            using (new EditorGUI.DisabledScope(EditorApplication.isPlayingOrWillChangePlaymode))
+            EditorGUILayout.HelpBox("Camera culling permanently removes geometry for this view. Scene output assigns materials and can disable source Renderers; colliders are retained. Restore Sources removes the scene output and re-enables the Renderers this component disabled. Saved mesh assets stay, while a Play Mode scene result ends with Play Mode.", MessageType.Info);
+            using (new EditorGUI.DisabledScope(InspectorCommand.PlayModeChanging))
             {
                 if (GUILayout.Button("Combine and Save Meshes")) InspectorCommand.Run(combiner, () => combiner.CombineAndSaveMeshes());
                 using (new EditorGUI.DisabledScope(combiner.GeneratedRoot == null && combiner.SourceRendererStates.Count == 0))

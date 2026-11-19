@@ -19,11 +19,11 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
 
         /// <summary>
         /// Builds the combined meshes of <paramref name="sources"/> in the space of
-        /// <paramref name="destinationWorldToLocal"/>. The result owns the new meshes; dispose it.
+        /// <paramref name="destinationWorldToLocal"/>, in Edit Mode or Play Mode. The result owns the new meshes; dispose it.
         /// </summary>
         public static MeshBuildResult Build(IReadOnlyList<MeshFilter> sources, Matrix4x4 destinationWorldToLocal, MeshBuildSettings settings)
         {
-            AssetFileTransaction.RequireEditMode();
+            AssetFileTransaction.RequireStablePlayMode();
             if (sources == null) throw new ArgumentNullException(nameof(sources));
             if (settings == null) throw new ArgumentNullException(nameof(settings));
             settings.Validate();
@@ -75,6 +75,7 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
                 if (filter == null || !seen.Add(filter)) throw new ArgumentException("Sources must be present and unique.");
                 MeshRenderer renderer = filter.GetComponent<MeshRenderer>();
                 if (renderer == null) throw new ArgumentException($"'{filter.name}' needs a MeshRenderer.");
+                RequireUnbatched(filter);
                 MeshRendererSettings.ValidateSupported(renderer);
                 if (rendererSettings == null) rendererSettings = new MeshRendererSettings(renderer);
                 else rendererSettings.ValidateCompatible(renderer);
@@ -92,6 +93,15 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
                     warnings.Add(ProbeWarning);
             }
             return rendererSettings;
+        }
+
+        /// <summary>
+        /// In Play Mode the mesh of a statically batched renderer is the combined batch mesh, not the source geometry.
+        /// </summary>
+        internal static void RequireUnbatched(MeshFilter filter)
+        {
+            if (filter.TryGetComponent(out MeshRenderer renderer) && renderer.isPartOfStaticBatch)
+                throw new ArgumentException($"'{filter.name}' is part of a static batch, so its mesh is the batch mesh in Play Mode. Bake it in Edit Mode.");
         }
 
         /// <summary>Culls one source and adds its submeshes, moved into the destination space, to the material groups.</summary>

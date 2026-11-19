@@ -13,25 +13,30 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
     {
         /// <summary>
         /// Saves <paramref name="staged"/> at <paramref name="paths"/>, then runs <paramref name="apply"/> with the saved
-        /// meshes. Existing meshes are overwritten in place so their GUIDs survive. If anything fails, the meshes and
-        /// every Undo-recorded change of this call are restored. When <paramref name="apply"/> also writes other asset
-        /// files, wrap this call in <see cref="AssetFileTransaction.Execute"/> with their paths.
+        /// meshes. Existing meshes are overwritten in place so their GUIDs survive. If anything fails, the meshes are
+        /// restored. In Edit Mode the call is one Undo step and every Undo-recorded change of <paramref name="apply"/> is
+        /// reverted too; in Play Mode nothing is recorded with Undo, so the caller puts back what
+        /// <paramref name="apply"/> changed. When <paramref name="apply"/> also writes other asset files, wrap this call
+        /// in <see cref="AssetFileTransaction.Execute"/> with their paths.
         /// </summary>
         /// <param name="keepReadable">Keep Read/Write on the saved meshes. Off frees their CPU copy in Players.</param>
         public static Mesh[] Save(IList<Mesh> staged, IList<string> paths, bool overwrite, string undoName,
             Action<Mesh[]> apply = null, bool keepReadable = false)
         {
-            AssetFileTransaction.RequireEditMode();
-            var save = new Transaction(staged, paths, overwrite) { KeepReadable = keepReadable };
-            Undo.IncrementCurrentGroup();
-            save.UndoGroup = Undo.GetCurrentGroup();
-            Undo.SetCurrentGroupName(undoName);
+            bool undo = MeshSceneEdit.CurrentIsPersistent;
+            var save = new Transaction(staged, paths, overwrite) { KeepReadable = keepReadable, RecordsUndo = undo };
+            if (undo)
+            {
+                Undo.IncrementCurrentGroup();
+                save.UndoGroup = Undo.GetCurrentGroup();
+                Undo.SetCurrentGroupName(undoName);
+            }
             try
             {
                 save.Write(undoName, apply != null);
                 apply?.Invoke(save.Saved);
                 foreach (Mesh mesh in save.Saved) AssetDatabase.SaveAssetIfDirty(mesh);
-                Undo.CollapseUndoOperations(save.UndoGroup);
+                if (undo) Undo.CollapseUndoOperations(save.UndoGroup);
                 return save.Saved;
             }
             catch (Exception saveError)
@@ -55,6 +60,7 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
             internal Mesh[] Saved { get; }
             internal int UndoGroup { get; set; }
             internal bool KeepReadable { get; set; }
+            internal bool RecordsUndo { get; set; }
 
             /// <summary>Checks every path before the first write.</summary>
             internal Transaction(IList<Mesh> staged, IList<string> paths, bool overwrite)
@@ -95,7 +101,7 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
 
             private void Overwrite(int i, string undoName)
             {
-                Undo.RegisterCompleteObjectUndo(_existing[i], undoName);
+                if (RecordsUndo) Undo.RegisterCompleteObjectUndo(_existing[i], undoName);
                 EditorUtility.CopySerialized(_staged[i], _existing[i]);
                 Saved[i] = _existing[i];
                 PrepareMesh(Saved[i], _paths[i], KeepReadable);
@@ -130,7 +136,7 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
                     try { restore(); }
                     catch (Exception error) { errors.Add(error); }
                 }
-                Attempt(() => Undo.RevertAllDownToGroup(UndoGroup));
+                if (RecordsUndo) Attempt(() => Undo.RevertAllDownToGroup(UndoGroup));
                 for (int i = 0; i < _existing.Length; i++)
                     if (_existing[i] != null && _backups[i] != null)
                     {

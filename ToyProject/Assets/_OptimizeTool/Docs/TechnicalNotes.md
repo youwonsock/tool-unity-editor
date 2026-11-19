@@ -81,9 +81,9 @@ flowchart LR
 
 실선은 호출·생성, 점선은 결과 데이터 전달이나 인터페이스 구현입니다.
 - `PhysicsRecorder`는 `PhysicsTake`를 채워 Exporter에 넘기며, Take는 Writer를 호출하지 않습니다.
-- 출력 경로 검증, 출력 자리 검사, 폴더 생성, GUID를 유지하는 덮어쓰기, 파일 복원은 두 시스템과 샘플 빌더가 모두 `AssetFileTransaction`을 씁니다. Edit Mode 확인은 Mesh 명령과 샘플 빌더만 씁니다. 물리 기록은 Play Mode에서 저장합니다.
+- `AssetFileTransaction`의 규칙은 쓰는 곳마다 다릅니다. Mesh 명령은 경로·이름 검증, 출력 자리 검사, 폴더 생성, Play Mode 전환 중 거부(`RequireStablePlayMode`)를 씁니다. Physics Recorder는 여기에 GUID를 유지하는 `CreateOrReplace`와 파일 복원 `Execute`를 더 씁니다. 샘플 빌더는 Edit Mode 확인(`RequireEditMode`)과 `Execute`를 씁니다.
 - 출력 자리 검사(`ValidateOutputTarget`)는 폴더, 인식할 수 없는 파일, 다른 타입의 에셋이 있으면 덮어쓰기 설정과 관계없이 거부합니다. 같은 타입의 에셋은 덮어쓰기를 허용한 경우에만 교체합니다.
-- `MeshAssetTransaction.Save`는 Mesh를 저장한 뒤 저장된 Mesh를 `apply` 콜백에 넘깁니다. `CombineAndSaveMeshes`는 이 콜백에서 씬 출력을 만들고, `_createSceneOutput`을 끄면 콜백을 넘기지 않습니다. 샘플 빌더는 콜백에서 저장된 Mesh를 결과 MeshFilter에 할당하고 Prefab이나 씬을 저장합니다. 콜백은 트랜잭션의 최종 저장 완료 전에 실행되며, 실패하면 Mesh 에셋과 Undo에 등록된 씬 변경을 복원합니다.
+- `MeshAssetTransaction.Save`는 Mesh를 저장한 뒤 저장된 Mesh를 `apply` 콜백에 넘깁니다. `CombineAndSaveMeshes`는 이 콜백에서 씬 출력을 만들고, `_createSceneOutput`을 끄면 콜백을 넘기지 않습니다. 샘플 빌더는 콜백에서 저장된 Mesh를 결과 MeshFilter에 할당하고 Prefab이나 씬을 저장합니다. 콜백은 트랜잭션의 최종 저장 완료 전에 실행되며, 실패하면 Mesh 에셋을 복원합니다. Edit Mode에서는 `Save` 전체가 Undo 한 단계이고 콜백의 Undo 기록도 함께 되돌립니다. Play Mode에서는 Undo를 쓰지 않으므로 콜백이 바꾼 씬은 호출자가 되돌립니다.
 - 콜백이 Mesh 말고 다른 에셋 파일도 쓰면 호출자가 `Save` 호출을 `AssetFileTransaction.Execute(그 파일들, ...)`로 감쌉니다. 실패하면 `Save`가 먼저 Mesh를 되돌리고, 그 뒤 `Execute`가 파일과 `.meta`를 복원합니다.
 
 메시 작업은 요청마다 검증·계산·저장하며 초기화 상태를 유지하지 않습니다. 물리 기록은 여러 물리 틱에 걸친 take를 소유하므로 `StartRecording`부터 `StopRecording`·`CancelRecording`·비활성화까지가 한 take의 수명입니다.
@@ -99,9 +99,10 @@ flowchart LR
 | MeshOptimization.Editor | `MeshGeometry` | 원본 Mesh와 importer를 바꾸지 않는 기하 연산: Readable 복사, 원시 정점 버퍼를 옮기는 SubMesh 추출, Backface 제거, 변환, 정점 채널을 맞춘 결합, 라이트맵 UV 배치 |
 | MeshOptimization.Editor | `MeshOcclusion` | 카메라에서 표본 점(Vertex와 삼각형 중심)으로 Raycast해 보이는 비율로 가림 판정. 대상 자신과 표본 점을 품은 조상 Collider는 제외 |
 | MeshOptimization.Editor | `MeshProcessing` | 공개 메시 연산 facade. 인자(null, Readable, 삼각형 토폴로지, 유한 값, 각도·Occlusion 범위, 씬 소속)를 검사한 뒤 internal `MeshGeometry`·`MeshOcclusion`에 넘김. `TransformMesh`는 저장된 에셋을 거부하고, `IsOccluded`는 조회 전에 `Physics.SyncTransforms`를 부름 |
-| MeshOptimization.Editor | `MeshAssetTransaction` | 모든 Mesh 출력 경로와 출력 자리를 쓰기 전에 검증하고, Undo와 함께 GUID를 유지해 저장. 실패하면 메모리 안 백업으로 기존 Mesh를 되돌리고 새로 만든 에셋을 지움. 콜백이 쓰는 다른 파일은 호출자가 `AssetFileTransaction.Execute`로 감쌈 |
-| MeshOptimization.Editor | `MeshSceneOutput` | Undo에 등록하며 결과 Renderer를 만들고 원본 Renderer를 비활성화. 끈 원본의 기록과 `Restore`, Prefab 인스턴스 안의 결과 거부 |
-| OptimizeTool.Editor | `AssetFileTransaction` | 공용 출력 규칙: Edit Mode 확인, `Assets/` 아래 경로·이름 검증(`ValidateAssetPath`, 같은 에셋을 두 번 적은 목록을 거부하는 `ValidateAssetPaths`), 출력 자리 검사(`ValidateOutputTarget`), 폴더 생성, GUID를 유지하는 `CreateOrReplace`, 선언한 파일의 백업과 실패 시 복원(`Execute`) |
+| MeshOptimization.Editor | `MeshAssetTransaction` | 모든 Mesh 출력 경로와 출력 자리를 쓰기 전에 검증하고, GUID를 유지해 저장(Edit Mode에서는 Undo 한 단계). 실패하면 메모리 안 백업으로 기존 Mesh를 되돌리고 새로 만든 에셋을 지움. 콜백이 쓰는 다른 파일은 호출자가 `AssetFileTransaction.Execute`로 감쌈 |
+| MeshOptimization.Editor | `MeshSceneOutput` | `MeshSceneEdit`를 거쳐 결과 Renderer를 만들고 원본 Renderer를 비활성화. 끈 원본의 기록과 `Restore`, Prefab 인스턴스 안의 결과 거부 |
+| MeshOptimization.Editor | `MeshSceneEdit` | 씬 변경 방식을 Editor 모드로 한 곳에서 정함. Edit Mode는 Undo와 Prefab 오버라이드 기록, Play Mode는 기록 없이 바꾼 값을 들고 있다가 실패하면 직접 되돌리고 성공하면 숨겨 둔 이전 결과를 지움 |
+| OptimizeTool.Editor | `AssetFileTransaction` | 공용 출력 규칙: Edit Mode 확인, Play Mode 전환 중 거부, `Assets/` 아래 경로·이름 검증(`ValidateAssetPath`, 같은 에셋을 두 번 적은 목록을 거부하는 `ValidateAssetPaths`), 출력 자리 검사(`ValidateOutputTarget`), 폴더 생성, GUID를 유지하는 `CreateOrReplace`, 선언한 파일의 백업과 실패 시 복원(`Execute`) |
 | PhysicsRecording | `PhysicsRecorder` / `PhysicsTakeSettings` / `PhysicsRecordingResult` | take 시작·종료·취소, 설정 스냅샷과 경로, fixed time 기준, 저장 직전 계층 검증, 결과 게시 |
 | PhysicsRecording | `PhysicsTake` | 물리 스텝마다 쌓는 frame-major 원본 관찰값, 회전 부호 연속성, 요청한 종료 시각의 보간 |
 | PhysicsRecording | `IPhysicsRecordingExporter` | Runtime 녹화가 Editor 저장을 부르는 경계: 검증, 리로드 잠금, 저장 |
@@ -125,13 +126,15 @@ flowchart LR
 - 같은 Material의 SubMesh를 `CombineInstance`로 묶고, `_combineAllIntoSingleMesh`가 켜지면 하나의 Mesh로 다시 결합합니다. `_optimizeMesh`는 정점·인덱스 재정렬이며 폴리곤 단순화가 아닙니다.
 - 병합 입력은 Layer·그림자·Probe·정렬·Rendering Layer·Motion Vector·Static Flag·Receive GI·Ray Tracing Mode·Renderer Priority·Static Shadow Caster·Stitch Seams·Lightmap Parameters·Scale In Lightmap 설정이 같아야 하며, 지원하는 설정은 출력 Renderer에 복사합니다. PropertyBlock, Additional Vertex Streams, 할당된 Lightmap, LODGroup, forceRenderingOff는 저장 전에 거부합니다.
 - `_createSceneOutput`은 결과 MeshFilter·MeshRenderer와 Material 배열을 만들고, `_disableSourceRenderers`는 원본 Renderer만 끕니다(Collider 유지). 재실행 시 도구가 만든 결과는 자식 수집에서 제외합니다.
-- 재빌드에서는 다음 입력에도 남는 원본 Renderer를 계속 끄고, 제거된 원본만 기록해 둔 활성 상태로 복원합니다. 이 기록은 컴포넌트에 직렬화되어 Undo/Redo와 Prefab 인스턴스에도 유지됩니다.
-- `RestoreSources()`(Inspector의 **Restore Sources**)는 결과 오브젝트를 지우고 기록한 모든 원본을 원래 활성 상태로 되돌린 뒤 기록을 비웁니다. 이 작업은 Undo 한 단계이며 저장한 Mesh 에셋은 지우지 않습니다. 결과 오브젝트가 Prefab 인스턴스의 일부(추가 오버라이드가 아닌 것)이면 다시 굽기와 복원 모두 아무것도 바꾸기 전에 거부합니다.
+- 재빌드에서는 다음 입력에도 남는 원본 Renderer를 계속 끄고, 제거된 원본만 기록해 둔 활성 상태로 복원합니다. 이 기록은 컴포넌트에 직렬화되어 Undo/Redo와 Prefab 인스턴스에도 유지됩니다. Combiner는 결과 오브젝트를 만든 뒤 한 번 더 Undo에 기록하므로 Redo도 결과 오브젝트 참조를 되찾습니다.
+- `RestoreSources()`(Inspector의 **Restore Sources**)는 결과 오브젝트를 지우고 기록한 모든 원본을 원래 활성 상태로 되돌린 뒤 기록을 비웁니다. Edit Mode에서는 Undo 한 단계이며 저장한 Mesh 에셋은 지우지 않습니다. 결과 오브젝트가 Prefab 인스턴스의 일부(추가 오버라이드가 아닌 것)이면 다시 굽기와 복원 모두 아무것도 바꾸기 전에 거부합니다.
 - 출력 좌표는 Combiner의 로컬 공간입니다. 조명은 결합한 결과 Renderer를 대상으로 베이크합니다.
 - 입력이 Lightmap Static(Contribute GI)이고 Receive GI가 Lightmaps이면, `_packLightmapUvs`(기본 켬)가 소스마다 라이트맵 UV(UV2, 없으면 UV0)를 [0,1] 안의 같은 크기 칸으로 옮겨 결합 결과의 라이트맵이 겹치지 않게 합니다. 정점 수는 그대로이고 결과는 결정적입니다. 칸 크기가 같아서 소스 크기가 다르면 라이트맵 해상도가 고르지 않습니다. UV2가 없는 소스는 UV0이 자기 자신과 겹칠 수 있어 경고합니다. 끄면 UV를 그대로 두고 겹침을 경고합니다.
 - 저장한 Mesh는 기본으로 Read/Write를 끄므로 Player에서 CPU 사본이 해제됩니다. 실행 중 Mesh를 읽는 스크립트나 Collider가 있으면 `_keepReadable`을 켭니다.
 - 결과 이름은 `_combineAllIntoSingleMesh`를 켜면 `_meshName.asset`이고, 끄면 Material별로 `_meshName_0.asset`, `_meshName_1.asset`, ...입니다. Material이 하나여도 `_0`이 붙습니다. 기존 에셋은 `_overwriteExistingAssets`가 켜진 경우에만 GUID를 유지해 갱신합니다. 이번 저장이 쓰지 않은 같은 이름의 이전 출력(예: 결과가 3개에서 2개로 줄어 남은 `_meshName_2.asset`)이 폴더에 있으면 지우지 않고 경고로 알립니다.
-- 저장에 실패하면 Mesh 에셋과 Undo에 등록한 씬 변경을 복원하고, 복구 오류가 나도 나머지 복구를 계속한 뒤 원래 오류와 함께 보고합니다. Undo 시 새로 만든 에셋 파일은 남습니다.
+- 저장에 실패하면 Mesh 에셋과 씬 변경을 복원하고, 복구 오류가 나도 나머지 복구를 계속한 뒤 원래 오류와 함께 보고합니다. Undo 시 새로 만든 에셋 파일은 남습니다.
+- **Play Mode:** 결합, Restore Sources, Backface 베이크와 복원은 Editor Play Mode에서도 동작합니다. `MeshSceneEdit`가 `EditorApplication.isPlaying`으로 모드를 정하고, `isPlaying`과 `isPlayingOrWillChangePlaymode`가 다르면(Play Mode에 들어가거나 나가는 중) 거부합니다. Play Mode에서는 Undo와 Prefab 오버라이드를 기록하지 않고, 이전 결과 오브젝트를 비활성으로만 두었다가 저장이 성공한 뒤 지웁니다. 실패하면 새 결과를 지우고 이전 결과, Renderer 활성 상태, Combiner·Baker 기록을 직접 되돌립니다. 덮어쓴 Mesh 에셋은 Edit Mode와 같이 메모리 백업으로 되돌립니다. 장면 변경은 Play Mode를 나가면 사라지고 저장한 에셋은 남습니다.
+- Play Mode에서 지금 결과 오브젝트(Baker는 대상 MeshFilter)가 보여 주는 Mesh 에셋 경로에는 쓰지 않습니다. 그 에셋은 저장된 씬이 참조하는 Edit Mode 결과라서, 덮으면 저장된 씬이 조용히 바뀌기 때문입니다. 같은 규칙으로 Play Mode에서 방금 만든 결과 경로에 다시 쓰는 것도 거부되므로, 다시 결합하려면 다른 폴더나 이름을 고릅니다. `isPartOfStaticBatch`인 Renderer는 Play Mode에서 sharedMesh가 배치 Mesh이므로 입력에서 거부합니다.
 - `MeshBuildResult.Warnings`와 Inspector 진단은 Collider 기반 Occlusion, 투명·양면 재질, 다른 카메라·그림자·반사와 Probe 샘플 위치의 한계를 설명합니다. `using` 범위를 벗어난 결과의 `Parts[i].Mesh`를 보관하거나 MeshFilter에 할당하면 안 됩니다. 결과 Renderer에는 `RendererSettings.ApplyTo(renderer, part.Materials)`로 Material과 설정을 적용하고, 메시는 저장된 에셋을 직접 할당합니다. 완전히 제거된 입력은 `RemovedSources`에 있습니다.
 
 ## Occlusion과 Backface
