@@ -138,6 +138,7 @@ flowchart LR
 - 표본 후보는 모든 Vertex와 퇴화하지 않은 삼각형의 중심점입니다. 그래서 Vertex가 적은 큰 면도 안쪽을 검사합니다. 후보 수가 `_occlusionSampleCount` 이하이면 모두를, 더 많으면 균등 간격 표본을 검사합니다(결정적). 보이는 비율이 `_visibilityThreshold`보다 작으면 MeshFilter 전체를 뺍니다. Camera, 양수 샘플 수, `0..1` 임계값, 유효한 LayerMask가 필요합니다.
 - **Backface:** `MeshCombiner`는 결합 중 `_enableBackfaceCulling`과 `_backfaceCullingAngle`로 삼각형마다 World-space Normal과 관찰 방향의 각도를 판정합니다.
 - Perspective는 삼각형 중심에서 카메라로 향하는 방향, Orthographic은 `-camera.forward`를 씁니다. 비균일·음수 Scale은 법선 역전치 변환과 winding 보정으로 처리합니다.
+- Target Camera가 비어 있고 컬링이 켜져 있으면 `MeshToolCommands`가 Combiner의 씬에서 대체 카메라를 고릅니다. 켜진 `MainCamera` 태그 카메라가 먼저이고, 없으면 루트부터 깊이 우선으로 훑어 처음 만난 켜진 카메라입니다. `FindObjectsByType`는 순서를 보장하지 않으므로 쓰지 않습니다. 고른 카메라 이름은 `LastBuildWarnings`에 남습니다. `MeshBuildPipeline.Build`와 `MeshBuildSettings`는 대체하지 않고 카메라를 요구합니다.
 
 ## PhysicsRecorder
 

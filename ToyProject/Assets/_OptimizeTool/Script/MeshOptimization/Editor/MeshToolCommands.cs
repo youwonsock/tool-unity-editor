@@ -4,6 +4,7 @@ using System.IO;
 using System.Text.RegularExpressions;
 using Common.OptimizeTool.Editor;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace Common.OptimizeTool.MeshOptimization.Editor
 {
@@ -20,12 +21,45 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
         {
             combiner.LastBuildWarnings = Array.Empty<string>();
             MeshFilter[] sources = CollectSources(combiner, out bool skippedDisabledChild);
+            string cameraWarning = null;
+            if (settings.Camera == null && (settings.BackfaceCulling || settings.OcclusionCulling))
+            {
+                // Without a fallback, Validate reports the missing camera.
+                settings.Camera = FallbackCamera(combiner.gameObject.scene);
+                if (settings.Camera != null) cameraWarning = FallbackCameraWarning(settings.Camera);
+            }
             var result = MeshBuildPipeline.Build(sources, combiner.transform.worldToLocalMatrix, settings);
+            if (cameraWarning != null) result.AddWarning(cameraWarning);
             if (skippedDisabledChild)
                 result.AddWarning("Child MeshFilters with a disabled Renderer were left out. Assign them directly to bake them.");
             combiner.LastBuildWarnings = result.Warnings;
             return result;
         }
+
+        /// <summary>
+        /// The view used when no Target Camera is assigned: the enabled camera tagged MainCamera in
+        /// <paramref name="scene"/>, otherwise the first enabled camera of that scene in hierarchy order. Null when the
+        /// scene has no enabled camera.
+        /// </summary>
+        private static Camera FallbackCamera(Scene scene)
+        {
+            Camera first = null;
+            var cameras = new List<Camera>();
+            foreach (GameObject root in scene.GetRootGameObjects())
+            {
+                // Depth-first, which is the hierarchy order.
+                root.GetComponentsInChildren(false, cameras);
+                foreach (Camera camera in cameras)
+                {
+                    if (!camera.enabled || !camera.gameObject.activeInHierarchy) continue;
+                    if (camera.CompareTag("MainCamera")) return camera;
+                    if (first == null) first = camera;
+                }
+            }
+            return first;
+        }
+
+        private static string FallbackCameraWarning(Camera camera) => $"No Target Camera; using '{camera.name}'.";
 
         /// <summary>Saves the combined meshes as assets and applies the scene output.</summary>
         public static Mesh[] CombineAndSaveMeshes(this MeshCombiner combiner)

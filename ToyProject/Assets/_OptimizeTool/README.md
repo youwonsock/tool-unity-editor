@@ -88,6 +88,7 @@ public static class MeshBuildExample
 - **입력:** 대상을 직접 지정하거나 자식 계층에서 수집합니다(동시 사용 불가). 병합 입력은 Layer·그림자·Probe·정렬 등 Renderer 설정이 같아야 하며, PropertyBlock·할당된 Lightmap·LODGroup 같은 입력은 저장 전에 거부합니다. Lightmap Static 입력은 결합 결과의 라이트맵이 겹치지 않게 소스마다 라이트맵 UV를 따로 배치합니다.
 - **Occlusion:** 카메라에서 표본 점(Vertex와 삼각형 중심)으로 Raycast해 보이는 비율이 임계값보다 낮은 MeshFilter를 결합에서 뺍니다. Collider 기반 근사이며 픽셀 단위 판정이 아닙니다.
 - **Backface:** 결합하면서 삼각형 법선과 카메라 방향의 각도로 보이지 않는 면을 지웁니다. 카메라나 Transform이 바뀌면 다시 베이크합니다.
+- **카메라:** 컬링을 켰는데 `_targetCamera`가 비어 있으면 Combiner와 같은 씬에서 켜진 `MainCamera` 태그 카메라를, 없으면 Hierarchy 순서로 첫 번째 켜진 카메라를 쓰고 `No Target Camera; using '<name>'.` 경고를 남깁니다. 씬에 켜진 카메라가 없으면 빌드가 실패합니다.
 - **출력:** `Assets/` 하위에 저장하며 덮어쓰기는 명시적으로 허용해야 합니다. 실패하면 에셋과 Undo에 등록한 씬 변경을 복원합니다.
 
 컬링 결과는 베이크 시점에 종속되므로 움직이는 카메라용 일반 Mesh를 대체하지 않습니다. 결합은 개별 Renderer 컬링 단위를 줄이므로 가까운 정적 오브젝트끼리 묶습니다.

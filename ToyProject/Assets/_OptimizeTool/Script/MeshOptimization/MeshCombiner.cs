@@ -19,7 +19,7 @@ namespace Common.OptimizeTool.MeshOptimization
         [SerializeField] private bool _optimizeMesh = true;
         [Tooltip("With child collection, also collect MeshFilters on inactive GameObjects.")]
         [SerializeField] private bool _includeInactive;
-        [Tooltip("View for backface and occlusion culling. Required when either is enabled.")]
+        [Tooltip("View for backface and occlusion culling. When empty, the scene's enabled MainCamera, or else its first enabled camera, is used.")]
         [SerializeField] private Camera _targetCamera;
         [Tooltip("MeshFilters to combine. Leave empty when collecting child meshes.")]
         [SerializeField] private MeshFilter[] _targetMeshFilterArray;
