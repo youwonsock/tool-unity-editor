@@ -2307,7 +2307,7 @@ MonoBehaviour:
   _overwriteExistingAssets: 0
   _keepReadable: 0
   _enableOcclusionCulling: 0
-  _vertexSamplingCount: 100
+  _occlusionSampleCount: 100
   _visibilityThreshold: 0.01
   _cullingLayerMask:
     serializedVersion: 2
@@ -2315,7 +2315,7 @@ MonoBehaviour:
   _enableBackfaceCulling: 0
   _backfaceCullingAngle: 90
   _combineAllIntoSingleMesh: 1
-  _packLightmapUVs: 1
+  _packLightmapUvs: 1
   _createSceneOutput: 0
   _disableSourceRenderers: 1
   _generatedRoot: {fileID: 0}

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Serialization;
 
 namespace Common.OptimizeTool.MeshOptimization
 {
@@ -38,7 +37,6 @@ namespace Common.OptimizeTool.MeshOptimization
         [Tooltip("Remove sources whose sample points are hidden from the camera by Colliders.")]
         [SerializeField] private bool _enableOcclusionCulling;
         [Tooltip("Most sample points tested per source: vertices and triangle centers.")]
-        [FormerlySerializedAs("_vertexSamplingCount")]
         [SerializeField] private int _occlusionSampleCount = 100;
         [Tooltip("A source whose visible sample ratio is below this value is removed.")]
         [SerializeField] private double _visibilityThreshold = 0.01;
@@ -53,7 +51,6 @@ namespace Common.OptimizeTool.MeshOptimization
         [Tooltip("Merge the per-material meshes into one mesh with one submesh per material.")]
         [SerializeField] private bool _combineAllIntoSingleMesh;
         [Tooltip("For lightmap static sources, pack each source's lightmap UVs into its own tile so baked lightmaps do not overlap.")]
-        [FormerlySerializedAs("_packLightmapUVs")]
         [SerializeField] private bool _packLightmapUvs = true;
         [Tooltip("Create renderers for the saved meshes under this object.")]
         [SerializeField] private bool _createSceneOutput = true;
