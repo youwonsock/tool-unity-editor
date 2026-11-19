@@ -124,8 +124,8 @@ _member.StartQueuedPlayback(_manager, PathPlaybackRequest.Single(_path));
 `Blocked`·`Resumed`·`SpeedChanged`로 대기 상태를, `QueueInvalidated`로 경로 무효와 Manager 해제를 알립니다. `QueueInvalidated`가 오면 그 경로의 재생은 일시정지 중이어도 멈추고, 이미 다른 경로를 재생하는 Follower는 그대로 둡니다. 경로의 이동 설정·이벤트·구간 구성이 바뀌면 이전 설정으로 재생 중인 멤버만 `ManagerReleased`로 빠지고, 새 설정으로 다시 시작한 멤버는 남습니다. 기하만 바뀌면 멤버가 Queue 단계에서 새 기하를 먼저 받으므로, 경로가 매 프레임 바뀌어도 Queue가 움직입니다. 재생이 끝나거나 멈춘 멤버는 다음 프레임에 Queue에서 빠집니다. Queue는 같은 경로 위의 진행 거리만 봅니다. Loop 이음매의 간격, 물리 충돌, 교차 경로 회피는 처리하지 않습니다.
 
 <p align="center">
-  <img src="Docs/Images/feature-queue-running.png" alt="Queue 레인이 간격을 유지하며 이동하는 화면" width="48%">
-  <img src="Docs/Images/feature-queue-blocked.png" alt="선두를 막아 뒤따르는 Agent가 대기하는 화면" width="48%">
+  <img src="Docs/Images/feature-queue-running.png" alt="Queue 레인이 간격을 유지하며 이동하고 선두 바로 뒤만 간격 정책으로 두 배 떨어진 화면" width="48%">
+  <img src="Docs/Images/feature-queue-blocked.png" alt="BLOCK LEADER로 선두를 막아 뒤따르는 Agent가 간격을 두고 대기하는 화면" width="48%">
 </p>
 
 ## 이벤트
@@ -145,11 +145,11 @@ _member.StartQueuedPlayback(_manager, PathPlaybackRequest.Single(_path));
 
 ## 기능
 
-**경로:** 왼쪽은 `Linear`, 오른쪽은 곡선 경로를 끝 부근으로 Seek한 화면입니다.
+**경로:** 왼쪽은 `Linear`, 오른쪽은 `SplineApproximating` 경로를 끝 부근으로 Seek한 화면입니다.
 
 <p align="center">
   <img src="Docs/Images/feature-path-linear.png" alt="Linear 경로 재생 화면" width="48%">
-  <img src="Docs/Images/feature-playback-seek.png" alt="곡선 경로에서 Seek한 화면" width="48%">
+  <img src="Docs/Images/feature-playback-seek.png" alt="SplineApproximating 경로에서 끝 부근으로 Seek한 화면" width="48%">
 </p>
 
 **연결 경로:** `MultiPathData`가 여러 `PathData`를 구간별 이동 설정과 함께 잇습니다. 전체와 구간 진행률을 각각 Seek할 수 있습니다.
@@ -159,7 +159,7 @@ _member.StartQueuedPlayback(_manager, PathPlaybackRequest.Single(_path));
   <img src="Docs/Images/feature-multipath-seek.png" alt="MultiPath Seek 화면" width="48%">
 </p>
 
-**Editor 작성:** 제어점은 Scene View에서, 이벤트는 Inspector에서 편집합니다. 연결점과 그룹 동기화는 Undo/Redo를 지원합니다. `MultiPathData` Inspector의 **Apply Drawing Sizes To All Paths**와 **Assign Distinct Path Colors**로 구간 경로의 미리보기 모양을 맞춥니다.
+**Editor 작성:** 제어점은 Scene View에서, 이벤트는 Inspector에서 편집합니다. 연결점과 그룹 동기화는 Undo/Redo를 지원합니다. `MultiPathData` Inspector의 **Apply Drawing Sizes To All Paths**와 **Assign Distinct Path Colors**로 구간 경로의 미리보기 모양을 맞춥니다. `PathShapeProvider`는 샘플한 모양을 Scene View에 그립니다(오른쪽 화면 가장자리의 원).
 
 <p align="center">
   <img src="Docs/Images/feature-editor-authoring.png" alt="Scene View의 경로 작성 화면" width="48%">
