@@ -10,7 +10,7 @@ namespace Common.FlowField
             in FlowFieldManagerConfig config,
             out Bounds worldBounds,
             out FlowFieldGridSpace grid)
-            => FlowFieldBakeBoundsUtility.TryCreateVolumeWorldLayout(
+            => FlowFieldLayoutUtility.TryCreateVolumeWorldLayout(
                 config.Position,
                 config.Grid.BakeBoundsLocal,
                 config.Grid.CellSize,
@@ -91,7 +91,7 @@ namespace Common.FlowField
             FlowFieldObstacleSettings obstacles = config.Obstacles;
             if (!TryCreateLayout(in config, out Bounds volumeBounds, out FlowFieldGridSpace volumeGrid) || !volumeGrid.IsValid)
                 return FlowFieldManagerConfig.Fail(out reason, "Volume Bounds and Cell Size do not produce a valid grid.");
-            if (volumeGrid.CellCount > FlowFieldBakeBoundsUtility.MaxVolumeCellCount)
+            if (volumeGrid.CellCount > FlowFieldLayoutUtility.MaxVolumeCellCount)
                 return FlowFieldManagerConfig.Fail(out reason, "Volume cell count exceeds one million cells.");
             if (config.BakeMode != FlowFieldBakeMode.StaticBaked)
                 return true;

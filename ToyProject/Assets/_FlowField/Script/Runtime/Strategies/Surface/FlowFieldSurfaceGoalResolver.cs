@@ -146,7 +146,7 @@ namespace Common.FlowField
 
     internal sealed class FlowFieldSurfaceGoalTracker
     {
-        private const float VALUE_EPSILON = 0.0001f;
+        private const float ValueEpsilon = 0.0001f;
         private bool _lastBuiltHadGoal;
         private bool _hasBuiltRequest;
         private int _lastBuiltSourceCellIndex = -1;
@@ -158,7 +158,7 @@ namespace Common.FlowField
             => _hasBuiltRequest
                 && request.HasGoal == _lastBuiltHadGoal
                 && request.SourceCellIndex == _lastBuiltSourceCellIndex
-                && System.Math.Abs(request.InfluenceRadius - _lastBuiltRadius) <= VALUE_EPSILON;
+                && System.Math.Abs(request.InfluenceRadius - _lastBuiltRadius) <= ValueEpsilon;
 
         internal bool HasChanged(in FlowFieldSurfaceGoalSolveInput request)
         {
@@ -167,7 +167,7 @@ namespace Common.FlowField
 
             return !_lastBuiltHadGoal
                 || request.SourceCellIndex != _lastBuiltSourceCellIndex
-                || System.Math.Abs(request.InfluenceRadius - _lastBuiltRadius) > VALUE_EPSILON;
+                || System.Math.Abs(request.InfluenceRadius - _lastBuiltRadius) > ValueEpsilon;
         }
 
         internal bool HasChanged(in FlowFieldSurfaceGoalResolution resolution)

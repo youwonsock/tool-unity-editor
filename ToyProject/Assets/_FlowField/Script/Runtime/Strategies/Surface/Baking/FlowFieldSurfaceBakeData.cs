@@ -11,7 +11,7 @@ namespace Common.FlowField
     /// </summary>
     internal sealed class FlowFieldSurfaceBakeSnapshot
     {
-        private const float EPSILON = 0.0001f;
+        private const float Epsilon = 0.0001f;
 
         private readonly FlowFieldSurfaceBakeSettings _surfaceSettings;
         private readonly FlowFieldSurfaceData _surface;
@@ -103,10 +103,10 @@ namespace Common.FlowField
             reason = string.Empty;
             if (!settings.IsValid
                 || !_surfaceSettings.Grid.MatchesBounds(settings.Grid)
-                || !FlowFieldBakeBoundsUtility.Approximately(_surfaceSettings.BakeBounds, settings.BakeBounds)
+                || !FlowFieldLayoutUtility.Approximately(_surfaceSettings.BakeBounds, settings.BakeBounds)
                 || _surfaceSettings.GroundLayer.value != settings.GroundLayer.value
-                || Mathf.Abs(_surfaceSettings.MaxSurfaceSlope - settings.MaxSurfaceSlope) > EPSILON
-                || Mathf.Abs(_surfaceSettings.MaxStepHeight - settings.MaxStepHeight) > EPSILON)
+                || Mathf.Abs(_surfaceSettings.MaxSurfaceSlope - settings.MaxSurfaceSlope) > Epsilon
+                || Mathf.Abs(_surfaceSettings.MaxStepHeight - settings.MaxStepHeight) > Epsilon)
             {
                 reason = "Static Flow Bake Surface 설정이 현재 설정과 다릅니다.";
                 return false;
@@ -123,9 +123,9 @@ namespace Common.FlowField
         {
             reason = string.Empty;
             if (_obstacleLayer.value != layer.value
-                || Mathf.Abs(_obstacleCheckHeight - checkHeight) > EPSILON
-                || Mathf.Abs(_obstacleCheckCenterOffset - centerOffset) > EPSILON
-                || Mathf.Abs(_obstacleClearance - clearance) > EPSILON)
+                || Mathf.Abs(_obstacleCheckHeight - checkHeight) > Epsilon
+                || Mathf.Abs(_obstacleCheckCenterOffset - centerOffset) > Epsilon
+                || Mathf.Abs(_obstacleClearance - clearance) > Epsilon)
             {
                 reason = "Static Flow Bake 장애물 설정이 현재 설정과 다릅니다.";
                 return false;
@@ -169,10 +169,10 @@ namespace Common.FlowField
     /// only immutable base navigation data; default direction and modifiers
     /// remain runtime inputs and are composed after loading the snapshot.
     /// </summary>
-    public sealed class FlowFieldStaticBakeData : FlowFieldBakeAsset, ISerializationCallbackReceiver
+    public sealed class FlowFieldSurfaceBakeData : FlowFieldBakeAsset, ISerializationCallbackReceiver
     {
-        internal const int CURRENT_FORMAT_VERSION = 6;
-        private const float EPSILON = 0.0001f;
+        internal const int SupportedFormatVersion = 6;
+        private const float Epsilon = 0.0001f;
         private const int MinSentinel = -3;
 
         [SerializeField] private Vector3 _gridOriginWorld;
@@ -219,7 +219,7 @@ namespace Common.FlowField
         [NonSerialized] private bool _validationResult;
         [NonSerialized] private string _validationReason = string.Empty;
 
-        private protected override int CurrentFormatVersion => CURRENT_FORMAT_VERSION;
+        private protected override int CurrentFormatVersion => SupportedFormatVersion;
         public bool HasGoal => _hasGoal;
         public Vector3 RequestedGoalWorld => _requestedGoalWorld;
         public float GoalInfluenceRadius => _goalInfluenceRadius;
@@ -288,15 +288,15 @@ namespace Common.FlowField
             reason = string.Empty;
             if (!HasCurrentFormat)
                 return Fail(out reason, $"FlowField Static Bake format {FormatVersion} is unsupported; ReBake is required.");
-            if (!FlowFieldBakeBoundsUtility.TryValidateCellCount(_width, _depth, out int count)
+            if (!FlowFieldLayoutUtility.TryValidateCellCount(_width, _depth, out int count)
                 || !FlowFieldGridSpace.IsFinite(_gridOriginWorld)
                 || !FlowFieldGridSpace.IsFinite(_cellSize)
-                || _cellSize < FlowFieldBakeBoundsUtility.MinCellSize
+                || _cellSize < FlowFieldLayoutUtility.MinCellSize
                 || _groundLayerMask == 0
                 || !FlowFieldGridSpace.IsFinite(_bakeBoundsCenterWorld)
                 || !FlowFieldGridSpace.IsFinite(_bakeBoundsSizeWorld)
                 || _bakeBoundsSizeWorld.x <= 0f
-                || _bakeBoundsSizeWorld.y < FlowFieldBakeBoundsUtility.MinBoundsHeight
+                || _bakeBoundsSizeWorld.y < FlowFieldLayoutUtility.MinBoundsHeight
                 || _bakeBoundsSizeWorld.z <= 0f
                 || !FlowFieldGridSpace.IsFinite(_maxSurfaceSlope)
                 || _maxSurfaceSlope < 0f || _maxSurfaceSlope >= 90f
@@ -324,7 +324,7 @@ namespace Common.FlowField
                 bool valid = (_surfaceFlags[i] & 1) != 0;
                 if ((_surfaceFlags[i] & ~1) != 0
                     || (!valid && _surfaceNeighborMasks[i] != 0)
-                    || valid && (_surfaceNormals[i].sqrMagnitude <= FlowFieldVectorUtility.DIRECTION_EPSILON_SQR
+                    || valid && (_surfaceNormals[i].sqrMagnitude <= FlowFieldVectorUtility.DirectionEpsilonSqr
                         || !ApproximatelyUnit(_surfaceNormals[i])))
                     return Fail(out reason, "FlowField Static Bake contains an invalid Surface cell.");
                 if (!FlowFieldVectorUtility.IsUnitOrZero(_escapeDirections[i]) || !FlowFieldVectorUtility.IsUnitOrZero(_goalDirections[i]))
@@ -430,7 +430,7 @@ namespace Common.FlowField
                 {
                     int x = i % _width;
                     int z = i / _width;
-                    for (int topologyDirection = 0; topologyDirection < FlowFieldNeighborUtility.Count; topologyDirection++)
+                    for (int topologyDirection = 0; topologyDirection < FlowFieldNeighborUtility.SurfaceCount; topologyDirection++)
                     {
                         bool expected = CanTraverseSnapshot(i, x, z, topologyDirection);
                         bool actual = (_topologyMasks[i] & (1 << topologyDirection)) != 0;
@@ -477,7 +477,7 @@ namespace Common.FlowField
                 int direction = FindDirection(i, next);
                 if (direction < 0 || (_topologyMasks[i] & (1 << direction)) == 0
                     || _goalFlags[i] != FlowFieldGoalFlags.Directed
-                    || _goalDirections[i].sqrMagnitude <= FlowFieldVectorUtility.DIRECTION_EPSILON_SQR
+                    || _goalDirections[i].sqrMagnitude <= FlowFieldVectorUtility.DirectionEpsilonSqr
                     || !ApproximatelyUnit(_goalDirections[i]))
                     return false;
 
@@ -495,7 +495,7 @@ namespace Common.FlowField
         {
             int x = index % _width;
             int z = index / _width;
-            for (int direction = 0; direction < FlowFieldNeighborUtility.Count; direction++)
+            for (int direction = 0; direction < FlowFieldNeighborUtility.SurfaceCount; direction++)
             {
                 if ((_surfaceNeighborMasks[index] & (1 << direction)) == 0)
                     continue;
@@ -575,7 +575,7 @@ namespace Common.FlowField
             int fromZ = from / _width;
             int dx = to % _width - fromX;
             int dz = to / _width - fromZ;
-            for (int i = 0; i < FlowFieldNeighborUtility.Count; i++)
+            for (int i = 0; i < FlowFieldNeighborUtility.SurfaceCount; i++)
                 if (FlowFieldNeighborUtility.DeltaX[i] == dx && FlowFieldNeighborUtility.DeltaZ[i] == dz)
                     return i;
             return -1;
@@ -587,7 +587,7 @@ namespace Common.FlowField
             Vector3 next = CellCenter(to);
             Vector3 normal = _surfaceNormals[from].normalized;
             Vector3 projected = Vector3.ProjectOnPlane(next - current, normal);
-            return projected.sqrMagnitude > FlowFieldVectorUtility.DIRECTION_EPSILON_SQR
+            return projected.sqrMagnitude > FlowFieldVectorUtility.DirectionEpsilonSqr
                 ? projected.normalized
                 : Vector3.zero;
         }
@@ -612,13 +612,13 @@ namespace Common.FlowField
                 return false;
             FlowFieldGridSpace grid = settings.Grid;
             if (!settings.IsValid || _width != grid.Width || _depth != grid.Depth
-                || Mathf.Abs(_cellSize - grid.CellSize) > EPSILON
-                || (_gridOriginWorld - grid.Origin).sqrMagnitude > EPSILON * EPSILON
+                || Mathf.Abs(_cellSize - grid.CellSize) > Epsilon
+                || (_gridOriginWorld - grid.Origin).sqrMagnitude > Epsilon * Epsilon
                 || _groundLayerMask != settings.GroundLayer.value
-                || (_bakeBoundsCenterWorld - settings.BakeBounds.center).sqrMagnitude > EPSILON * EPSILON
-                || (_bakeBoundsSizeWorld - settings.BakeBounds.size).sqrMagnitude > EPSILON * EPSILON
-                || Mathf.Abs(_maxSurfaceSlope - settings.MaxSurfaceSlope) > EPSILON
-                || Mathf.Abs(_maxStepHeight - settings.MaxStepHeight) > EPSILON)
+                || (_bakeBoundsCenterWorld - settings.BakeBounds.center).sqrMagnitude > Epsilon * Epsilon
+                || (_bakeBoundsSizeWorld - settings.BakeBounds.size).sqrMagnitude > Epsilon * Epsilon
+                || Mathf.Abs(_maxSurfaceSlope - settings.MaxSurfaceSlope) > Epsilon
+                || Mathf.Abs(_maxStepHeight - settings.MaxStepHeight) > Epsilon)
             {
                 reason = "Static Flow Bake Surface 설정이 현재 설정과 다릅니다.";
                 return false;
@@ -631,9 +631,9 @@ namespace Common.FlowField
             if (!Validate(out reason))
                 return false;
             if (_obstacleLayerMask != layer.value
-                || Mathf.Abs(_obstacleCheckHeight - checkHeight) > EPSILON
-                || Mathf.Abs(_obstacleCheckCenterOffset - centerOffset) > EPSILON
-                || Mathf.Abs(_obstacleClearance - clearance) > EPSILON)
+                || Mathf.Abs(_obstacleCheckHeight - checkHeight) > Epsilon
+                || Mathf.Abs(_obstacleCheckCenterOffset - centerOffset) > Epsilon
+                || Mathf.Abs(_obstacleClearance - clearance) > Epsilon)
             {
                 reason = "Static Flow Bake 장애물 설정이 현재 설정과 다릅니다.";
                 return false;
@@ -645,8 +645,8 @@ namespace Common.FlowField
         {
             reason = string.Empty;
             if (hasGoal == _hasGoal && (!hasGoal
-                    || (requestedGoalWorld - _requestedGoalWorld).sqrMagnitude <= EPSILON * EPSILON
-                        && Mathf.Abs(influenceRadius - _goalInfluenceRadius) <= EPSILON))
+                    || (requestedGoalWorld - _requestedGoalWorld).sqrMagnitude <= Epsilon * Epsilon
+                        && Mathf.Abs(influenceRadius - _goalInfluenceRadius) <= Epsilon))
                 return true;
             return Fail(out reason, "Static Flow Bake Goal differs from the Manager settings. ReBake is required.");
         }
@@ -737,7 +737,7 @@ namespace Common.FlowField
             // cannot partially replace serialized metadata or increment the
             // Asset revision. Only the successful commit below clones data
             // into the persistent Asset.
-            FlowFieldStaticBakeData candidate = ScriptableObject.CreateInstance<FlowFieldStaticBakeData>();
+            FlowFieldSurfaceBakeData candidate = ScriptableObject.CreateInstance<FlowFieldSurfaceBakeData>();
             try
             {
                 // The candidate is checked as the bake it would become: current format.

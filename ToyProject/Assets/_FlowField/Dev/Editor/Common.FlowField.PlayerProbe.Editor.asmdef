@@ -1,6 +1,6 @@
 {
     "name": "Common.FlowField.PlayerProbe.Editor",
-    "rootNamespace": "Common.FlowField.Editor",
+    "rootNamespace": "Common.FlowField.PlayerProbe.Editor",
     "references": [
         "Common.FlowField",
         "Common.FlowField.PlayerProbe"

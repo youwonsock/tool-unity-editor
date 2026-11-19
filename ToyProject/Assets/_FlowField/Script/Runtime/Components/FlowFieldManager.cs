@@ -111,7 +111,7 @@ namespace Common.FlowField
 
         private void Reset()
         {
-            _grid.BakeBoundsLocal = FlowFieldBakeBoundsUtility.DefaultLocalBounds;
+            _grid.BakeBoundsLocal = FlowFieldLayoutUtility.DefaultLocalBounds;
             _grid.CellSize = 0.5f;
             _surface.GroundLayer = Physics.DefaultRaycastLayers;
             _spaceMode = FlowFieldSpaceMode.Surface2D;

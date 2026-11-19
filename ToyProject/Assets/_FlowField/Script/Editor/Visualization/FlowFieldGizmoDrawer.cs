@@ -31,11 +31,11 @@ namespace Common.FlowField.Editor
 
     internal static class FlowFieldGizmoDrawer
     {
-        private const float SURFACE_PADDING = 0.05f;
-        private const float DIRECTION_EPSILON_SQR = 0.0001f;
-        private const int LARGE_GRID_CELL_THRESHOLD = 2500;
-        private static readonly Color VALID_BAKE_BOUNDS_COLOR = new Color(0.15f, 0.85f, 1f, 0.9f);
-        private static readonly Color STALE_BAKE_BOUNDS_COLOR = new Color(1f, 0.55f, 0.1f, 0.9f);
+        private const float SurfacePadding = 0.05f;
+        private const float DirectionEpsilonSqr = 0.0001f;
+        private const int LargeGridCellThreshold = 2500;
+        private static readonly Color ValidBakeBoundsColor = new Color(0.15f, 0.85f, 1f, 0.9f);
+        private static readonly Color StaleBakeBoundsColor = new Color(1f, 0.55f, 0.1f, 0.9f);
 
         internal static void Draw(in FlowFieldGizmoRequest request)
         {
@@ -48,7 +48,7 @@ namespace Common.FlowField.Editor
 
         internal static void DrawBakeBounds(Bounds worldBounds, bool isValid)
         {
-            Color color = isValid ? VALID_BAKE_BOUNDS_COLOR : STALE_BAKE_BOUNDS_COLOR;
+            Color color = isValid ? ValidBakeBoundsColor : StaleBakeBoundsColor;
             Gizmos.color = new Color(color.r, color.g, color.b, 0.05f);
             Gizmos.DrawCube(worldBounds.center, worldBounds.size);
             Gizmos.color = color;
@@ -57,14 +57,14 @@ namespace Common.FlowField.Editor
             float padding = Mathf.Min(0.1f, worldBounds.size.y * 0.1f);
             Vector3 arrowStart = new Vector3(worldBounds.center.x, worldBounds.max.y - padding, worldBounds.center.z);
             float arrowLength = Mathf.Max(
-                FlowFieldBakeBoundsUtility.MinBoundsHeight,
+                FlowFieldLayoutUtility.MinBoundsHeight,
                 worldBounds.size.y - padding * 2f);
             DrawBakeDirectionArrow(arrowStart, arrowLength);
         }
 
         private static void DrawGridAnchor(FlowFieldGridSpace grid)
         {
-            Vector3 anchor = grid.Origin + Vector3.up * SURFACE_PADDING;
+            Vector3 anchor = grid.Origin + Vector3.up * SurfacePadding;
             const float arm = 0.35f;
             Gizmos.color = new Color(0.2f, 1f, 0.35f, 0.95f);
             Gizmos.DrawLine(anchor + Vector3.left * arm, anchor + Vector3.right * arm);
@@ -136,7 +136,7 @@ namespace Common.FlowField.Editor
             if (!request.View.IsValid)
                 return;
 
-            int stride = request.Grid.CellCount > LARGE_GRID_CELL_THRESHOLD ? 2 : 1;
+            int stride = request.Grid.CellCount > LargeGridCellThreshold ? 2 : 1;
             for (int z = 0; z < request.Grid.Depth; z += stride)
             {
                 for (int x = 0; x < request.Grid.Width; x += stride)
@@ -145,7 +145,7 @@ namespace Common.FlowField.Editor
                     bool hasSurface = request.View.Surface.IsSurfaceValid(index);
                     Vector3 position = hasSurface
                         ? CellCenter(request, index)
-                        : request.Grid.LocalToWorldCenter(x, z) + Vector3.up * SURFACE_PADDING;
+                        : request.Grid.LocalToWorldCenter(x, z) + Vector3.up * SurfacePadding;
                     if (!hasSurface)
                     {
                         Gizmos.color = new Color(0.5f, 0.5f, 0.5f, 0.65f);
@@ -166,7 +166,7 @@ namespace Common.FlowField.Editor
                         : (goalFlags & FlowFieldGoalFlags.Directed) != 0
                             ? new Color(0.2f, 1f, 0.4f, 0.95f)
                             : Color.yellow;
-                    if (direction.sqrMagnitude <= DIRECTION_EPSILON_SQR || speed <= 0f)
+                    if (direction.sqrMagnitude <= DirectionEpsilonSqr || speed <= 0f)
                     {
                         DrawStop(position, request.CellSize * 0.14f);
                         continue;
@@ -178,16 +178,16 @@ namespace Common.FlowField.Editor
         }
 
         private static Vector3 CellCenter(in FlowFieldGizmoRequest request, int index)
-            => request.View.Surface.GetCellCenter(request.Grid, index) + Vector3.up * SURFACE_PADDING;
+            => request.View.Surface.GetCellCenter(request.Grid, index) + Vector3.up * SurfacePadding;
 
         private static void DrawArrow(Vector3 position, Vector3 direction, float length)
         {
-            if (direction.sqrMagnitude <= DIRECTION_EPSILON_SQR)
+            if (direction.sqrMagnitude <= DirectionEpsilonSqr)
                 return;
 
             Vector3 body = direction.normalized * length;
             Vector3 side = Vector3.Cross(body.normalized, Vector3.up);
-            if (side.sqrMagnitude <= DIRECTION_EPSILON_SQR)
+            if (side.sqrMagnitude <= DirectionEpsilonSqr)
                 return;
             side.Normalize();
             Vector3 back = -body.normalized * length * 0.35f;

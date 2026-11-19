@@ -30,7 +30,7 @@ if [ -z "$skip_build" ]; then
     rm -rf "$app"
     echo "== Build"
     run_limited "$build_timeout" "$unity" -batchmode -quit -projectPath "$worktree/ToyProject" -buildTarget StandaloneOSX \
-        -executeMethod Common.FlowField.Editor.FlowFieldPlayerProbeBuild.Build \
+        -executeMethod Common.FlowField.PlayerProbe.Editor.FlowFieldPlayerProbeBuild.Build \
         -flowFieldProbeApp "$app" -logFile "$results/player-build.log" || {
             code=$?
             echo "Build failed. See $results/player-build.log"

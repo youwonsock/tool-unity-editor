@@ -35,7 +35,7 @@ namespace Common.FlowField.Editor
             // A StaticBaked field draws the Goal it was baked with.
             if (!manager.TryGetLayout(out _, out FlowFieldGridSpace grid)
                 || !grid.IsValid
-                || !FlowFieldBakeBoundsUtility.TryValidateCellCount(grid.Width, grid.Depth, out _)
+                || !FlowFieldLayoutUtility.TryValidateCellCount(grid.Width, grid.Depth, out _)
                 || !manager.TryValidateConfig(
                     out _,
                     includeStaticGoal: manager.BakeMode != FlowFieldBakeMode.StaticBaked))
@@ -56,7 +56,7 @@ namespace Common.FlowField.Editor
             if (!view.IsValid)
                 return;
 
-            FlowFieldStaticBakeData bake = manager.CaptureConfig().BakeAssets.Surface;
+            FlowFieldSurfaceBakeData bake = manager.CaptureConfig().BakeAssets.Surface;
             FlowFieldSurfaceGoalResolution goal = manager.BakeMode == FlowFieldBakeMode.StaticBaked && bake != null
                 ? new FlowFieldSurfaceGoalResolution(
                     bake.HasGoal,

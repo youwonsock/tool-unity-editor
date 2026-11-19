@@ -63,7 +63,7 @@ namespace Common.FlowField
         /// </summary>
         internal bool TryValidateShared(bool bakeModeLocked, out string reason)
         {
-            if (!FlowFieldGridSpace.IsFinite(Grid.CellSize) || Grid.CellSize < FlowFieldBakeBoundsUtility.MinCellSize)
+            if (!FlowFieldGridSpace.IsFinite(Grid.CellSize) || Grid.CellSize < FlowFieldLayoutUtility.MinCellSize)
                 return Fail(out reason, "Cell Size must be finite and positive.");
             Bounds bounds = Grid.BakeBoundsLocal;
             if (!FlowFieldGridSpace.IsFinite(bounds.center)

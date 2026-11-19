@@ -88,7 +88,7 @@ namespace Common.FlowField
             in FlowFieldManagerConfig config,
             out Bounds worldBounds,
             out FlowFieldGridSpace grid)
-            => FlowFieldBakeBoundsUtility.TryCreateWorldLayout(
+            => FlowFieldLayoutUtility.TryCreateWorldLayout(
                 config.Position,
                 config.Grid.BakeBoundsLocal,
                 config.Grid.CellSize,
@@ -121,9 +121,9 @@ namespace Common.FlowField
             in FlowFieldManagerConfig config,
             in FlowFieldSurfaceBakeSettings settings)
         {
-            FlowFieldStaticBakeData bakeData = config.BakeAssets.Surface;
+            FlowFieldSurfaceBakeData bakeData = config.BakeAssets.Surface;
             if (bakeData == null)
-                throw new InvalidOperationException("StaticBaked mode requires a FlowFieldStaticBakeData asset.");
+                throw new InvalidOperationException("StaticBaked mode requires a FlowFieldSurfaceBakeData asset.");
             return bakeData.CreateSnapshot(
                 settings,
                 config.Obstacles.Layer,
@@ -202,9 +202,9 @@ namespace Common.FlowField
 
             if (config.BakeMode != FlowFieldBakeMode.StaticBaked)
                 return true;
-            FlowFieldStaticBakeData bakeData = config.BakeAssets.Surface;
+            FlowFieldSurfaceBakeData bakeData = config.BakeAssets.Surface;
             if (bakeData == null)
-                return FlowFieldManagerConfig.Fail(out reason, "StaticBaked mode requires a FlowFieldStaticBakeData asset.");
+                return FlowFieldManagerConfig.Fail(out reason, "StaticBaked mode requires a FlowFieldSurfaceBakeData asset.");
             if (!bakeData.MatchesSurface(CreateBakeSettings(in config), out reason)
                 || !bakeData.MatchesObstacles(
                     obstacles.Layer,

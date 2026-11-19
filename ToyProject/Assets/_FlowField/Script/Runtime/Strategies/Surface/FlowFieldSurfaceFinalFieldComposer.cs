@@ -52,7 +52,7 @@ namespace Common.FlowField
             if (rebuildBase)
             {
                 if (!FlowFieldGridSpace.IsFinite(defaultDirection)
-                    || defaultDirection.sqrMagnitude <= FlowFieldVectorUtility.DIRECTION_EPSILON_SQR)
+                    || defaultDirection.sqrMagnitude <= FlowFieldVectorUtility.DirectionEpsilonSqr)
                     throw new ArgumentOutOfRangeException(nameof(defaultDirection));
                 Array.Clear(workspace.ModifierInfluence, 0, grid.CellCount);
             }
@@ -230,7 +230,7 @@ namespace Common.FlowField
             {
                 direction = workspace.EscapeDirections[index];
                 if (!FlowFieldGridSpace.IsFinite(direction)
-                    || direction.sqrMagnitude <= FlowFieldVectorUtility.DIRECTION_EPSILON_SQR)
+                    || direction.sqrMagnitude <= FlowFieldVectorUtility.DirectionEpsilonSqr)
                     direction = Vector3.zero;
             }
             else if ((workspace.GoalFlags[index] & FlowFieldGoalFlags.Unreachable) != 0)
@@ -249,7 +249,7 @@ namespace Common.FlowField
             }
 
             // Same rule as Volume3D: a cell without a base direction is stopped.
-            float speed = direction.sqrMagnitude > FlowFieldVectorUtility.DIRECTION_EPSILON_SQR ? 1f : 0f;
+            float speed = direction.sqrMagnitude > FlowFieldVectorUtility.DirectionEpsilonSqr ? 1f : 0f;
             var baseState = new FlowFieldVectorState(direction, speed);
             if (!FlowFieldGridSpace.IsFinite(baseState.Direction)
                 || !FlowFieldGridSpace.IsFinite(baseState.SpeedMultiplier)

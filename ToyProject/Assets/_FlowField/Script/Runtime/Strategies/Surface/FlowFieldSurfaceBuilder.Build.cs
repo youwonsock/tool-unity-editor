@@ -312,7 +312,7 @@ namespace Common.FlowField
             Vector3 latestDefaultDirection = _latestDefaultDirection ?? finalRequest.DefaultDirection;
             if (FlowFieldGridSpace.IsFinite(latestDefaultDirection)
                 && latestDefaultDirection.sqrMagnitude
-                    > FlowFieldVectorUtility.DIRECTION_EPSILON_SQR)
+                    > FlowFieldVectorUtility.DirectionEpsilonSqr)
             {
                 Vector3 resolvedDefault = FlowFieldVectorUtility.NormalizeDefaultDirection(
                     latestDefaultDirection);

@@ -354,7 +354,7 @@ namespace Common.FlowField
         {
             if (!request.Grid.IsValid || request.Grid.SpaceMode != FlowFieldSpaceMode.Volume3D)
                 throw new ArgumentException("Volume request requires a valid Volume3D grid.", nameof(request));
-            if ((long)request.Grid.CellCount > FlowFieldBakeBoundsUtility.MaxVolumeCellCount)
+            if ((long)request.Grid.CellCount > FlowFieldLayoutUtility.MaxVolumeCellCount)
                 throw new ArgumentOutOfRangeException(nameof(request), "Volume cell count exceeds one million cells.");
             if (request.ObstacleLayer.value == 0)
                 throw new ArgumentException("Volume obstacle layer must contain at least one layer.", nameof(request));

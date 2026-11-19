@@ -18,7 +18,7 @@ rm -f "$output"
 echo "== Build"
 code=0
 run_limited "$build_timeout" "$unity" -batchmode -quit -projectPath "$worktree/ToyProject" -buildTarget Android \
-    -executeMethod Common.FlowField.Editor.FlowFieldPlayerProbeBuild.BuildIl2cppCheck \
+    -executeMethod Common.FlowField.PlayerProbe.Editor.FlowFieldPlayerProbeBuild.BuildIl2cppCheck \
     -flowFieldProbeApp "$output" -logFile "$results/il2cpp-build.log" || code=$?
 
 if [ "$code" -ne 0 ]; then

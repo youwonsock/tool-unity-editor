@@ -5,7 +5,7 @@ namespace Common.FlowField
 {
     public readonly struct FlowFieldGridSpace
     {
-        private const float MIN_CLAMP_EPSILON = 0.00001f;
+        private const float MinClampEpsilon = 0.00001f;
 
         public Vector3 Origin { get; }
         public float WorldSizeX { get; }
@@ -45,10 +45,10 @@ namespace Common.FlowField
                 && IsFinite(WorldSizeX)
                 && IsFinite(WorldSizeY)
                 && IsFinite(WorldSizeZ)
-                && CellSize >= FlowFieldBakeBoundsUtility.MinCellSize
+                && CellSize >= FlowFieldLayoutUtility.MinCellSize
                 && (SpaceMode == FlowFieldSpaceMode.Volume3D
-                    ? FlowFieldBakeBoundsUtility.TryValidateVolumeCellCount(Width, Height, Depth, out _)
-                    : FlowFieldBakeBoundsUtility.TryValidateCellCount(Width, Depth, out _));
+                    ? FlowFieldLayoutUtility.TryValidateVolumeCellCount(Width, Height, Depth, out _)
+                    : FlowFieldLayoutUtility.TryValidateCellCount(Width, Depth, out _));
             CellCount = IsValid ? (int)((long)Width * Height * Depth) : 0;
         }
 
@@ -58,9 +58,9 @@ namespace Common.FlowField
                 throw new System.ArgumentOutOfRangeException(nameof(origin));
             if (width <= 0 || depth <= 0)
                 throw new System.ArgumentOutOfRangeException(nameof(width));
-            if (!FlowFieldBakeBoundsUtility.TryValidateCellCount(width, depth, out _))
+            if (!FlowFieldLayoutUtility.TryValidateCellCount(width, depth, out _))
                 throw new System.ArgumentOutOfRangeException(nameof(width), "Grid cell count exceeds the supported limit.");
-            if (!IsFinite(cellSize) || cellSize < FlowFieldBakeBoundsUtility.MinCellSize)
+            if (!IsFinite(cellSize) || cellSize < FlowFieldLayoutUtility.MinCellSize)
                 throw new System.ArgumentOutOfRangeException(nameof(cellSize));
             if (!IsFinite((float)((double)width * cellSize))
                 || !IsFinite((float)((double)depth * cellSize)))
@@ -86,9 +86,9 @@ namespace Common.FlowField
                 throw new ArgumentOutOfRangeException(nameof(origin));
             if (width <= 0 || height <= 0 || depth <= 0)
                 throw new ArgumentOutOfRangeException(nameof(width));
-            if (!FlowFieldBakeBoundsUtility.TryValidateVolumeCellCount(width, height, depth, out _))
+            if (!FlowFieldLayoutUtility.TryValidateVolumeCellCount(width, height, depth, out _))
                 throw new ArgumentOutOfRangeException(nameof(width), "Volume cell count exceeds the supported limit.");
-            if (!IsFinite(cellSize) || cellSize < FlowFieldBakeBoundsUtility.MinCellSize)
+            if (!IsFinite(cellSize) || cellSize < FlowFieldLayoutUtility.MinCellSize)
                 throw new ArgumentOutOfRangeException(nameof(cellSize));
             if (!IsFinite((float)((double)width * cellSize))
                 || !IsFinite((float)((double)height * cellSize))
@@ -297,7 +297,7 @@ namespace Common.FlowField
             if (!IsFinite(world.x) || !IsFinite(world.z))
                 throw new System.ArgumentOutOfRangeException(nameof(world));
 
-            double epsilon = Math.Max(MIN_CLAMP_EPSILON, CellSize * 0.0001f);
+            double epsilon = Math.Max(MinClampEpsilon, CellSize * 0.0001f);
             world.x = ClampAxis(world.x, Origin.x, WorldSizeX, epsilon);
             world.z = ClampAxis(world.z, Origin.z, WorldSizeZ, epsilon);
             return world;
@@ -310,7 +310,7 @@ namespace Common.FlowField
             if (!IsFinite(world.x) || !IsFinite(world.y) || !IsFinite(world.z))
                 throw new ArgumentOutOfRangeException(nameof(world));
 
-            double epsilon = Math.Max(MIN_CLAMP_EPSILON, CellSize * 0.0001f);
+            double epsilon = Math.Max(MinClampEpsilon, CellSize * 0.0001f);
             world.x = ClampAxis(world.x, Origin.x, WorldSizeX, epsilon);
             world.y = ClampAxis(world.y, Origin.y, WorldSizeY, epsilon);
             world.z = ClampAxis(world.z, Origin.z, WorldSizeZ, epsilon);
@@ -472,13 +472,12 @@ namespace Common.FlowField
         }
     }
 
-    internal static class FlowFieldBakeBoundsUtility
+    internal static class FlowFieldLayoutUtility
     {
         public const float MinCellSize = 0.01f;
         public const float MinBoundsHeight = 0.01f;
         public const int MaxSurfaceCellCount = 100000;
         public const int MaxVolumeCellCount = 1000000;
-        public const int MaxCellCount = MaxSurfaceCellCount;
         private const float CompareEpsilon = 0.0001f;
 
         public static Bounds DefaultLocalBounds
@@ -930,7 +929,6 @@ namespace Common.FlowField
     internal static class FlowFieldNeighborUtility
     {
         public const int SurfaceCount = 8;
-        public const int Count = SurfaceCount;
         public const int VolumeCount = 26;
         public static readonly int[] VolumeFaceDirections = { 0, 1, 2, 3, 8, 9 };
         public static readonly int[] DeltaX =
@@ -965,7 +963,7 @@ namespace Common.FlowField
 
         public static int FindDirectionIndex(int deltaX, int deltaZ)
         {
-            for (int i = 0; i < Count; i++)
+            for (int i = 0; i < SurfaceCount; i++)
             {
                 if (DeltaX[i] == deltaX && DeltaZ[i] == deltaZ && DeltaY[i] == 0)
                     return i;

@@ -6,8 +6,8 @@ namespace Common.FlowField
 {
     internal static class FlowFieldObstacleMaskBuilder
     {
-        private const int INITIAL_OVERLAP_CAPACITY = 32;
-        private const int MAX_OVERLAP_HITS = 4096;
+        private const int InitialOverlapCapacity = 32;
+        private const int MaxOverlapHits = 4096;
 
         public static bool Build(
             FlowFieldGridSpace grid,
@@ -213,7 +213,7 @@ namespace Common.FlowField
             ref Collider[] overlapBuffer)
         {
             FlowFieldOverlapUtility.EnsureCapacity(
-                ref overlapBuffer, INITIAL_OVERLAP_CAPACITY, INITIAL_OVERLAP_CAPACITY, MAX_OVERLAP_HITS);
+                ref overlapBuffer, InitialOverlapCapacity, InitialOverlapCapacity, MaxOverlapHits);
             Vector3 center = grid.Origin + new Vector3(grid.WorldSizeX * 0.5f, 0f, grid.WorldSizeZ * 0.5f);
             center.y = (minCenterY + maxCenterY) * 0.5f;
             Vector3 halfExtents = new Vector3(
@@ -235,14 +235,14 @@ namespace Common.FlowField
                     return count;
                 }
 
-                if (overlapBuffer.Length >= MAX_OVERLAP_HITS)
+                if (overlapBuffer.Length >= MaxOverlapHits)
                 {
                     throw new InvalidOperationException(
-                        $"Obstacle overlap count reached the configured capacity of {MAX_OVERLAP_HITS}.");
+                        $"Obstacle overlap count reached the configured capacity of {MaxOverlapHits}.");
                 }
 
                 FlowFieldOverlapUtility.EnsureCapacity(
-                    ref overlapBuffer, overlapBuffer.Length * 2, INITIAL_OVERLAP_CAPACITY, MAX_OVERLAP_HITS);
+                    ref overlapBuffer, overlapBuffer.Length * 2, InitialOverlapCapacity, MaxOverlapHits);
             }
         }
 
@@ -377,8 +377,8 @@ namespace Common.FlowField
     /// </summary>
     internal static class FlowFieldOverlapUtility
     {
-        private const int INITIAL_OVERLAP_CAPACITY = 8;
-        private const int MAX_OVERLAP_HITS = 256;
+        private const int InitialOverlapCapacity = 8;
+        private const int MaxOverlapHits = 256;
         private const float CellQuerySkin = 0.0001f;
 
         /// <summary>
@@ -398,7 +398,7 @@ namespace Common.FlowField
             QueryTriggerInteraction triggerInteraction,
             ref Collider[] overlapBuffer)
         {
-            EnsureCapacity(ref overlapBuffer, INITIAL_OVERLAP_CAPACITY, INITIAL_OVERLAP_CAPACITY, MAX_OVERLAP_HITS);
+            EnsureCapacity(ref overlapBuffer, InitialOverlapCapacity, InitialOverlapCapacity, MaxOverlapHits);
             while (true)
             {
                 int count = Physics.OverlapBoxNonAlloc(
@@ -418,11 +418,11 @@ namespace Common.FlowField
                 if (count < overlapBuffer.Length)
                     return false;
 
-                if (overlapBuffer.Length >= MAX_OVERLAP_HITS)
+                if (overlapBuffer.Length >= MaxOverlapHits)
                     throw new System.InvalidOperationException(
-                        $"Target overlap count reached the configured capacity of {MAX_OVERLAP_HITS}.");
+                        $"Target overlap count reached the configured capacity of {MaxOverlapHits}.");
 
-                EnsureCapacity(ref overlapBuffer, overlapBuffer.Length * 2, INITIAL_OVERLAP_CAPACITY, MAX_OVERLAP_HITS);
+                EnsureCapacity(ref overlapBuffer, overlapBuffer.Length * 2, InitialOverlapCapacity, MaxOverlapHits);
             }
         }
 

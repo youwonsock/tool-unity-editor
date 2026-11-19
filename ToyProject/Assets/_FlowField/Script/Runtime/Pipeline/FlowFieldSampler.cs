@@ -67,7 +67,7 @@ namespace Common.FlowField
                 return FlowFieldSample.Stopped;
             Vector3 normal = surface.GetSurfaceNormal(index);
             Vector3 direction = field.FinalDirections[index];
-            if (direction.sqrMagnitude > FlowFieldVectorUtility.DIRECTION_EPSILON_SQR)
+            if (direction.sqrMagnitude > FlowFieldVectorUtility.DirectionEpsilonSqr)
                 direction = Vector3.ProjectOnPlane(direction, normal).normalized;
             return new FlowFieldSample(direction, field.FinalSpeeds[index], normal, true, true);
         }

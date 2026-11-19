@@ -67,7 +67,7 @@ namespace Common.FlowField
     internal struct FlowFieldBakeAssets
     {
         [Tooltip("Surface2D 정적 모드에서 사용할 Flow Field Snapshot입니다.")]
-        [SerializeField] internal FlowFieldStaticBakeData Surface;
+        [SerializeField] internal FlowFieldSurfaceBakeData Surface;
         [Tooltip("Volume3D 정적 모드에서 사용할 v6 Flow Field Snapshot입니다.")]
         [SerializeField] internal FlowFieldVolumeBakeData Volume;
     }

@@ -133,14 +133,14 @@ namespace Common.FlowField
         {
             Vector3 escape = cells.EscapeDirection(index);
             if (!FlowFieldGridSpace.IsFinite(escape)
-                || escape.sqrMagnitude <= FlowFieldVectorUtility.DIRECTION_EPSILON_SQR
+                || escape.sqrMagnitude <= FlowFieldVectorUtility.DirectionEpsilonSqr
                 || IsEscapeTargetUnsafe(field.Grid, index, escape, in cells))
                 return Stop(published);
             if (field.Surface == null)
                 return new FlowFieldSample(escape, 1f, Vector3.zero, false, true);
             Vector3 normal = FlowFieldVectorUtility.ValidateSurfaceNormal(field.Surface.GetSurfaceNormal(index));
             Vector3 direction = Vector3.ProjectOnPlane(escape, normal);
-            direction = direction.sqrMagnitude > FlowFieldVectorUtility.DIRECTION_EPSILON_SQR
+            direction = direction.sqrMagnitude > FlowFieldVectorUtility.DirectionEpsilonSqr
                 ? direction.normalized
                 : Vector3.zero;
             return new FlowFieldSample(direction, 1f, normal, true, true);

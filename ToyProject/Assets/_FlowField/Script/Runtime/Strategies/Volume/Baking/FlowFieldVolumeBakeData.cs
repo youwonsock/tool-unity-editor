@@ -5,7 +5,7 @@ namespace Common.FlowField
 {
     public sealed class FlowFieldVolumeBakeData : FlowFieldBakeAsset, ISerializationCallbackReceiver
     {
-        public const int CURRENT_FORMAT_VERSION = 6;
+        internal const int SupportedFormatVersion = 6;
 
         [SerializeField] private Vector3 _gridOriginWorld;
         [SerializeField] private int _width;
@@ -43,7 +43,7 @@ namespace Common.FlowField
         [NonSerialized] private float[] _speeds = Array.Empty<float>();
         [NonSerialized] private Vector3[] _escapeDirections = Array.Empty<Vector3>();
 
-        private protected override int CurrentFormatVersion => CURRENT_FORMAT_VERSION;
+        private protected override int CurrentFormatVersion => SupportedFormatVersion;
         public bool HasGoal => _hasGoal;
         public Vector3 RequestedGoalWorld => _requestedGoalWorld;
         public float GoalInfluenceRadius => _goalInfluenceRadius;
@@ -155,7 +155,7 @@ namespace Common.FlowField
                 && _validatedRevision == Revision
                 && _validatedContentGeneration == ContentGeneration
                 && _validatedGrid.MatchesBounds(grid)
-                && FlowFieldBakeBoundsUtility.Approximately(_validatedBounds, bounds)
+                && FlowFieldLayoutUtility.Approximately(_validatedBounds, bounds)
                 && _validatedObstacleLayer == obstacleLayer.value
                 && Mathf.Abs(_validatedObstacleClearance - obstacleClearance) <= 0.0001f)
                 return true;
@@ -241,7 +241,7 @@ namespace Common.FlowField
                 || _bakeBoundsSizeWorld.x <= 0f
                 || _bakeBoundsSizeWorld.y <= 0f
                 || _bakeBoundsSizeWorld.z <= 0f
-                || !FlowFieldBakeBoundsUtility.Approximately(
+                || !FlowFieldLayoutUtility.Approximately(
                     new Bounds(
                         grid.Origin + new Vector3(grid.WorldSizeX, grid.WorldSizeY, grid.WorldSizeZ) * 0.5f,
                         new Vector3(grid.WorldSizeX, grid.WorldSizeY, grid.WorldSizeZ)),
@@ -376,7 +376,7 @@ namespace Common.FlowField
             Bounds expectedBounds = new Bounds(
                 grid.Origin + new Vector3(grid.WorldSizeX, grid.WorldSizeY, grid.WorldSizeZ) * 0.5f,
                 new Vector3(grid.WorldSizeX, grid.WorldSizeY, grid.WorldSizeZ));
-            if (!FlowFieldBakeBoundsUtility.Approximately(expectedBounds, bounds))
+            if (!FlowFieldLayoutUtility.Approximately(expectedBounds, bounds))
                 throw new ArgumentException("Bake Bounds do not match the Volume3D grid.", nameof(bounds));
             if (obstacleLayer.value == 0
                 || !FlowFieldGridSpace.IsFinite(obstacleClearance)
@@ -430,7 +430,7 @@ namespace Common.FlowField
                 return Vector3.zero;
             if (target == -1)
             {
-                speed = defaultDirection.sqrMagnitude > FlowFieldVectorUtility.DIRECTION_EPSILON_SQR ? 1f : 0f;
+                speed = defaultDirection.sqrMagnitude > FlowFieldVectorUtility.DirectionEpsilonSqr ? 1f : 0f;
                 return defaultDirection;
             }
             int layer = width * depth;
@@ -531,7 +531,7 @@ namespace Common.FlowField
                     + new Vector3(grid.WorldSizeX, grid.WorldSizeY, grid.WorldSizeZ) * 0.5f,
                 new Vector3(grid.WorldSizeX, grid.WorldSizeY, grid.WorldSizeZ));
             FlowFieldVolumeBakeValidationView view = new FlowFieldVolumeBakeValidationView(
-                FlowFieldVolumeBakeData.CURRENT_FORMAT_VERSION,
+                FlowFieldVolumeBakeData.SupportedFormatVersion,
                 0,
                 grid.Width,
                 grid.Height,

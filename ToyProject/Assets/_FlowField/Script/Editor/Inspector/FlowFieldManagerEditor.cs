@@ -142,11 +142,11 @@ namespace Common.FlowField.Editor
                     candidateWorld.size);
                 FlowFieldManagerConfig config = manager.CaptureConfig();
                 Bounds snapped = manager.SpaceMode == FlowFieldSpaceMode.Volume3D
-                    ? FlowFieldBakeBoundsUtility.SnapVolumeResizedKeepingOppositeFace(
+                    ? FlowFieldLayoutUtility.SnapVolumeResizedKeepingOppositeFace(
                         config.Grid.BakeBoundsLocal,
                         candidateLocal,
                         config.Grid.CellSize)
-                    : FlowFieldBakeBoundsUtility.SnapResizedKeepingOppositeFace(
+                    : FlowFieldLayoutUtility.SnapResizedKeepingOppositeFace(
                         config.Grid.BakeBoundsLocal,
                         candidateLocal,
                         config.Grid.CellSize);
@@ -160,8 +160,8 @@ namespace Common.FlowField.Editor
         {
             bool validLayout = manager.TryGetLayout(out Bounds worldBounds, out FlowFieldGridSpace grid);
             int maxCells = manager.SpaceMode == FlowFieldSpaceMode.Volume3D
-                ? FlowFieldBakeBoundsUtility.MaxVolumeCellCount
-                : FlowFieldBakeBoundsUtility.MaxSurfaceCellCount;
+                ? FlowFieldLayoutUtility.MaxVolumeCellCount
+                : FlowFieldLayoutUtility.MaxSurfaceCellCount;
             if (!validLayout)
             {
                 // The layout also fails above the cell limit.

@@ -47,7 +47,7 @@ namespace Common.FlowField
 
         internal bool HasSameGrid(in FlowFieldVolumeRequest other)
             => Grid.MatchesBounds(other.Grid)
-                && FlowFieldBakeBoundsUtility.Approximately(WorldBounds, other.WorldBounds)
+                && FlowFieldLayoutUtility.Approximately(WorldBounds, other.WorldBounds)
                 && BakeMode == other.BakeMode
                 && ReferenceEquals(StaticBakeData, other.StaticBakeData)
                 && StaticBakeRevision == other.StaticBakeRevision

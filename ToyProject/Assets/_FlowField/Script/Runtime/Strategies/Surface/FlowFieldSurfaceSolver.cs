@@ -160,7 +160,7 @@ namespace Common.FlowField
     /// </summary>
     internal static class FlowFieldSurfaceGraphTraversal
     {
-        private const float DISTANCE_TIE_EPSILON = 0.000001f;
+        private const float DistanceTieEpsilon = 0.000001f;
 
         public static void BuildTopologyMasks(
             FlowFieldGridSpace grid,
@@ -283,8 +283,8 @@ namespace Common.FlowField
                     continue;
 
                 float distanceSqr = (surface.GetCellCenter(grid, index) - anchor).sqrMagnitude;
-                bool replace = distanceSqr < bestDistanceSqr - DISTANCE_TIE_EPSILON
-                    || Mathf.Abs(distanceSqr - bestDistanceSqr) <= DISTANCE_TIE_EPSILON
+                bool replace = distanceSqr < bestDistanceSqr - DistanceTieEpsilon
+                    || Mathf.Abs(distanceSqr - bestDistanceSqr) <= DistanceTieEpsilon
                         && index < bestIndex;
                 if (replace)
                 {
@@ -307,7 +307,7 @@ namespace Common.FlowField
                 && !workspace.Blocked[index];
 
         public static Vector3 NormalizeOrZero(Vector3 direction)
-            => direction.sqrMagnitude > FlowFieldVectorUtility.DIRECTION_EPSILON_SQR
+            => direction.sqrMagnitude > FlowFieldVectorUtility.DirectionEpsilonSqr
                 ? direction.normalized
                 : Vector3.zero;
     }

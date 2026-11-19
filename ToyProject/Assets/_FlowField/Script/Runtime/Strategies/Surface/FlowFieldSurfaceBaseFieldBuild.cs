@@ -280,7 +280,7 @@ namespace Common.FlowField
                 CellSize = grid.CellSize,
                 Origin = grid.Origin,
                 Goal = goalIndex,
-                DirectionEpsilonSqr = FlowFieldVectorUtility.DIRECTION_EPSILON_SQR,
+                DirectionEpsilonSqr = FlowFieldVectorUtility.DirectionEpsilonSqr,
                 ProjectionEpsilon = Mathf.Epsilon,
             };
             for (int direction = 0; direction < FlowFieldNeighborUtility.SurfaceCount; direction++)

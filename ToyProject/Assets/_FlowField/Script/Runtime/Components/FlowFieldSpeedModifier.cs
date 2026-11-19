@@ -4,13 +4,12 @@ namespace Common.FlowField
 {
     public sealed class FlowFieldSpeedModifier : FlowFieldVectorModifierVolume
     {
-        private const int DEFAULT_PRIORITY = 100;
 
         [SerializeField] private float _speedMultiplier = 1.5f;
 
         public float SpeedMultiplier => _speedMultiplier;
 
-        protected override int DefaultPriority => DEFAULT_PRIORITY;
+        protected override int DefaultPriority => 100;
         protected override int ModifierValueHash => _speedMultiplier.GetHashCode();
 
         public void SetSpeedMultiplier(float speedMultiplier)

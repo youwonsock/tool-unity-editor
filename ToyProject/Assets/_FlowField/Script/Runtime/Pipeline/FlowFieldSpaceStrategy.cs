@@ -56,7 +56,7 @@ namespace Common.FlowField
                 => FlowFieldSurfaceBuilder.TryCreateLayout(in config, out worldBounds, out grid);
 
             internal override Bounds SnapBounds(Bounds localBounds, float cellSize)
-                => FlowFieldBakeBoundsUtility.SnapCenterAnchored(localBounds, cellSize);
+                => FlowFieldLayoutUtility.SnapCenterAnchored(localBounds, cellSize);
         }
 
         private sealed class Volume : FlowFieldSpaceStrategy
@@ -75,7 +75,7 @@ namespace Common.FlowField
                 => FlowFieldVolumeBuilder.TryCreateLayout(in config, out worldBounds, out grid);
 
             internal override Bounds SnapBounds(Bounds localBounds, float cellSize)
-                => FlowFieldBakeBoundsUtility.SnapVolumeCenterAnchored(localBounds, cellSize);
+                => FlowFieldLayoutUtility.SnapVolumeCenterAnchored(localBounds, cellSize);
         }
     }
 }

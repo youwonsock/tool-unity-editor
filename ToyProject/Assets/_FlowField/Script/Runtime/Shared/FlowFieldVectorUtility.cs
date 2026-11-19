@@ -5,13 +5,13 @@ namespace Common.FlowField
 {
     internal static class FlowFieldVectorUtility
     {
-        internal const float DIRECTION_EPSILON_SQR = 0.00000001f;
+        internal const float DirectionEpsilonSqr = 0.00000001f;
 
         /// <summary>A stored direction: zero, or of unit length within 1% of its square.</summary>
         internal static bool IsUnitOrZero(Vector3 value)
         {
             float sqr = value.sqrMagnitude;
-            return sqr <= DIRECTION_EPSILON_SQR || Mathf.Abs(sqr - 1f) <= 0.01f;
+            return sqr <= DirectionEpsilonSqr || Mathf.Abs(sqr - 1f) <= 0.01f;
         }
 
         /// <summary>
@@ -22,7 +22,7 @@ namespace Common.FlowField
         internal static bool CanApplyModifier(bool blocked, FlowFieldGoalFlags goalFlags, Vector3 baseDirection)
             => !blocked
                 && (goalFlags & (FlowFieldGoalFlags.Anchor | FlowFieldGoalFlags.Unreachable)) == 0
-                && baseDirection.sqrMagnitude > DIRECTION_EPSILON_SQR;
+                && baseDirection.sqrMagnitude > DirectionEpsilonSqr;
 
         internal static bool IsMissingModifier(IFlowFieldVectorModifier modifier)
             => modifier == null
@@ -56,7 +56,7 @@ namespace Common.FlowField
                 throw new System.ArgumentOutOfRangeException(nameof(candidate.SpeedMultiplier));
             bool onSurface = surfaceNormal != Vector3.zero;
             Vector3 normal = onSurface ? ValidateSurfaceNormal(surfaceNormal) : Vector3.zero;
-            if (candidate.Direction.sqrMagnitude <= DIRECTION_EPSILON_SQR)
+            if (candidate.Direction.sqrMagnitude <= DirectionEpsilonSqr)
                 return;
 
             float directionLength = candidate.Direction.magnitude;
@@ -72,12 +72,12 @@ namespace Common.FlowField
         internal static float3 ProjectOnSurface(float3 direction, float3 surfaceNormal)
         {
             float normalLengthSq = math.lengthsq(surfaceNormal);
-            if (normalLengthSq <= DIRECTION_EPSILON_SQR)
+            if (normalLengthSq <= DirectionEpsilonSqr)
                 return float3.zero;
             float3 normal = math.normalize(surfaceNormal);
             float3 projected = direction - normal * math.dot(direction, normal);
             float directionLengthSq = math.lengthsq(projected);
-            return directionLengthSq > DIRECTION_EPSILON_SQR
+            return directionLengthSq > DirectionEpsilonSqr
                 ? math.normalize(projected)
                 : float3.zero;
         }
@@ -89,7 +89,7 @@ namespace Common.FlowField
         {
             if (!FlowFieldGridSpace.IsFinite(direction))
                 throw new System.ArgumentOutOfRangeException(nameof(direction));
-            if (direction.sqrMagnitude <= DIRECTION_EPSILON_SQR)
+            if (direction.sqrMagnitude <= DirectionEpsilonSqr)
                 throw new System.ArgumentOutOfRangeException(nameof(direction));
 
             return direction.normalized;
@@ -98,7 +98,7 @@ namespace Common.FlowField
         internal static Vector3 ValidateSurfaceNormal(Vector3 surfaceNormal)
         {
             if (!FlowFieldGridSpace.IsFinite(surfaceNormal)
-                || surfaceNormal.sqrMagnitude <= DIRECTION_EPSILON_SQR)
+                || surfaceNormal.sqrMagnitude <= DirectionEpsilonSqr)
                 throw new System.ArgumentOutOfRangeException(nameof(surfaceNormal));
 
             return surfaceNormal.normalized;
@@ -115,7 +115,7 @@ namespace Common.FlowField
             float spatialFrequency,
             int seed)
         {
-            if (direction.sqrMagnitude <= FlowFieldVectorUtility.DIRECTION_EPSILON_SQR || maxAngleDegrees <= 0f)
+            if (direction.sqrMagnitude <= FlowFieldVectorUtility.DirectionEpsilonSqr || maxAngleDegrees <= 0f)
                 return direction;
 
             ResolveSeedOffsets(seed, out float seedX, out float seedZ);
@@ -123,7 +123,7 @@ namespace Common.FlowField
                 cellCenter.x * spatialFrequency + seedX,
                 cellCenter.z * spatialFrequency + seedZ);
             float angle = (noise * 2f - 1f) * maxAngleDegrees;
-            if (surfaceNormal.sqrMagnitude <= FlowFieldVectorUtility.DIRECTION_EPSILON_SQR)
+            if (surfaceNormal.sqrMagnitude <= FlowFieldVectorUtility.DirectionEpsilonSqr)
                 throw new System.ArgumentOutOfRangeException(nameof(surfaceNormal));
             Vector3 axis = surfaceNormal.normalized;
             return Quaternion.AngleAxis(angle, axis) * direction;
@@ -136,7 +136,7 @@ namespace Common.FlowField
             float spatialFrequency,
             int seed)
         {
-            if (direction.sqrMagnitude <= FlowFieldVectorUtility.DIRECTION_EPSILON_SQR || maxAngleDegrees <= 0f)
+            if (direction.sqrMagnitude <= FlowFieldVectorUtility.DirectionEpsilonSqr || maxAngleDegrees <= 0f)
                 return direction;
 
             ResolveSeedOffsets(seed, out float seedX, out float seedZ);
@@ -148,7 +148,7 @@ namespace Common.FlowField
                 Mathf.Sin((seed * 0.017f) + cellCenter.y),
                 Mathf.Cos((seed * 0.031f) + cellCenter.x),
                 Mathf.Sin((seed * 0.047f) + cellCenter.z));
-            if (axis.sqrMagnitude <= FlowFieldVectorUtility.DIRECTION_EPSILON_SQR)
+            if (axis.sqrMagnitude <= FlowFieldVectorUtility.DirectionEpsilonSqr)
                 axis = Vector3.up;
             return Quaternion.AngleAxis(angle, axis.normalized) * direction;
         }

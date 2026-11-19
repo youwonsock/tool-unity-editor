@@ -15,7 +15,7 @@ namespace Common.FlowField
     {
         // Far above what a frame raises. Handlers that keep triggering each other
         // would otherwise hang the player here, with no frame and no log.
-        private const int MAX_WORK_PER_DRAIN = 100000;
+        private const int MaxWorkPerDrain = 100000;
 
         private readonly Queue<Action> _deferredCommands = new Queue<Action>(4);
         private readonly Queue<QueuedEvent> _events = new Queue<QueuedEvent>(8);
@@ -84,10 +84,10 @@ namespace Common.FlowField
             {
                 while (true)
                 {
-                    if (_deferredCommands.Count + _events.Count > 0 && ++done > MAX_WORK_PER_DRAIN)
+                    if (_deferredCommands.Count + _events.Count > 0 && ++done > MaxWorkPerDrain)
                     {
                         int dropped = DropRunawayWork();
-                        Debug.LogError($"[FlowField] 핸들러가 명령과 이벤트를 연달아 {MAX_WORK_PER_DRAIN}개 넘게 만들었습니다. "
+                        Debug.LogError($"[FlowField] 핸들러가 명령과 이벤트를 연달아 {MaxWorkPerDrain}개 넘게 만들었습니다. "
                             + $"{dropped}개를 버렸고, Released와 해제 이벤트는 전달했습니다.");
                         return;
                     }

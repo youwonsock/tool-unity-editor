@@ -220,7 +220,7 @@ namespace Common.FlowField
                 return;
             }
 
-            if (_view.Blocked.Length > FlowFieldBakeBoundsUtility.MaxVolumeCellCount)
+            if (_view.Blocked.Length > FlowFieldLayoutUtility.MaxVolumeCellCount)
             {
                 _phase = Phase.Complete;
                 _status = FlowFieldVolumeBakeValidationStatus.Invalid;
@@ -370,7 +370,7 @@ namespace Common.FlowField
         private bool ValidateMetadata(out string reason)
         {
             reason = string.Empty;
-            if (_view.FormatVersion != FlowFieldVolumeBakeData.CURRENT_FORMAT_VERSION)
+            if (_view.FormatVersion != FlowFieldVolumeBakeData.SupportedFormatVersion)
             {
                 reason = $"FlowField Volume Bake format {_view.FormatVersion} is unsupported; ReBake is required.";
                 return false;
@@ -382,7 +382,7 @@ namespace Common.FlowField
                 || _view.Depth != _expectedGrid.Depth
                 || !FlowFieldGridSpace.IsFinite(_view.Origin)
                 || !FlowFieldGridSpace.IsFinite(_view.CellSize)
-                || _view.CellSize < FlowFieldBakeBoundsUtility.MinCellSize
+                || _view.CellSize < FlowFieldLayoutUtility.MinCellSize
                 || !FlowFieldGridSpace.Approximately(_view.Origin, _expectedGrid.Origin, 0.000001d)
                 || Mathf.Abs(_view.CellSize - _expectedGrid.CellSize) > 0.0001f)
             {
@@ -412,7 +412,7 @@ namespace Common.FlowField
                     _expectedGrid.WorldSizeX,
                     _expectedGrid.WorldSizeY,
                     _expectedGrid.WorldSizeZ));
-            if (!FlowFieldBakeBoundsUtility.Approximately(
+            if (!FlowFieldLayoutUtility.Approximately(
                     expectedBounds,
                     new Bounds(_view.BoundsCenter, _view.BoundsSize)))
             {
@@ -500,7 +500,7 @@ namespace Common.FlowField
             if (next == -1)
             {
                 if (flags != FlowFieldGoalFlags.None
-                    || direction.sqrMagnitude <= FlowFieldVectorUtility.DIRECTION_EPSILON_SQR
+                    || direction.sqrMagnitude <= FlowFieldVectorUtility.DirectionEpsilonSqr
                     || Mathf.Abs(direction.magnitude - 1f) > 0.001f
                     || Mathf.Abs(speed - 1f) > 0.001f)
                     reason = DescribeCell(index, "default cell is inconsistent");
@@ -533,7 +533,7 @@ namespace Common.FlowField
             Vector3 expectedDirection = new Vector3(nx - x, ny - y, nz - z).normalized;
             if ((direction - expectedDirection).sqrMagnitude > DirectionToleranceSqr
                 || flags != FlowFieldGoalFlags.Directed
-                || direction.sqrMagnitude <= FlowFieldVectorUtility.DIRECTION_EPSILON_SQR
+                || direction.sqrMagnitude <= FlowFieldVectorUtility.DirectionEpsilonSqr
                 || Mathf.Abs(direction.magnitude - 1f) > 0.001f
                 || Mathf.Abs(speed - 1f) > 0.001f)
             {

@@ -59,7 +59,7 @@ namespace Common.FlowField.Editor
         {
             FlowFieldManagerConfig config = manager.CaptureConfig();
             Bounds snapped = FlowFieldSpaceStrategy.For(config.SpaceMode).SnapBounds(localBounds, config.Grid.CellSize);
-            if (FlowFieldBakeBoundsUtility.Approximately(config.Grid.BakeBoundsLocal, snapped))
+            if (FlowFieldLayoutUtility.Approximately(config.Grid.BakeBoundsLocal, snapped))
                 return;
             // One Undo step under undoName; ApplyModifiedProperties would add a
             // second, separately named one.

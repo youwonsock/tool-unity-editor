@@ -9,7 +9,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using Random = System.Random;
 
-namespace Common.FlowField.Editor
+namespace Common.FlowField.PlayerProbe.Editor
 {
     /// <summary>
     /// Builds the measurement Player for Tools/run-player-probe.sh. The probe

@@ -11,8 +11,8 @@ namespace Common.FlowField
     /// </summary>
     internal sealed class FlowFieldSurfaceData
     {
-        private const byte VALID_SURFACE = 1 << 0;
-        private const float NORMAL_EPSILON_SQR = 0.000001f;
+        private const byte ValidSurface = 1 << 0;
+        private const float NormalEpsilonSqr = 0.000001f;
 
         private readonly FlowFieldGridSpace _grid;
         private readonly Bounds _bakeBounds;
@@ -120,10 +120,10 @@ namespace Common.FlowField
                 return false;
             }
             if (!_grid.MatchesBounds(settings.Grid)
-                || !FlowFieldBakeBoundsUtility.Approximately(_bakeBounds, settings.BakeBounds)
+                || !FlowFieldLayoutUtility.Approximately(_bakeBounds, settings.BakeBounds)
                 || _groundLayer.value != settings.GroundLayer.value
-                || !FlowFieldBakeBoundsUtility.Approximately(_maxSurfaceSlope, settings.MaxSurfaceSlope)
-                || !FlowFieldBakeBoundsUtility.Approximately(_maxStepHeight, settings.MaxStepHeight))
+                || !FlowFieldLayoutUtility.Approximately(_maxSurfaceSlope, settings.MaxSurfaceSlope)
+                || !FlowFieldLayoutUtility.Approximately(_maxStepHeight, settings.MaxStepHeight))
             {
                 reason = "Surface signature does not match the requested settings.";
                 return false;
@@ -135,10 +135,10 @@ namespace Common.FlowField
         {
             if (other == null
                 || !_grid.MatchesBounds(other._grid)
-                || !FlowFieldBakeBoundsUtility.Approximately(_bakeBounds, other._bakeBounds)
+                || !FlowFieldLayoutUtility.Approximately(_bakeBounds, other._bakeBounds)
                 || _groundLayer.value != other._groundLayer.value
-                || !FlowFieldBakeBoundsUtility.Approximately(_maxSurfaceSlope, other._maxSurfaceSlope)
-                || !FlowFieldBakeBoundsUtility.Approximately(_maxStepHeight, other._maxStepHeight)
+                || !FlowFieldLayoutUtility.Approximately(_maxSurfaceSlope, other._maxSurfaceSlope)
+                || !FlowFieldLayoutUtility.Approximately(_maxStepHeight, other._maxStepHeight)
                 || _surfaceHeights.Length != other._surfaceHeights.Length)
                 return false;
 
@@ -157,7 +157,7 @@ namespace Common.FlowField
             => IsValid
                 && index >= 0
                 && index < _surfaceFlags.Length
-                && (_surfaceFlags[index] & VALID_SURFACE) != 0;
+                && (_surfaceFlags[index] & ValidSurface) != 0;
 
         internal Vector3 GetCellCenter(FlowFieldGridSpace grid, int index)
         {
@@ -174,7 +174,7 @@ namespace Common.FlowField
             if (!IsSurfaceValid(index))
                 return Vector3.zero;
             Vector3 normal = _surfaceNormals[index];
-            if (!FlowFieldGridSpace.IsFinite(normal) || normal.sqrMagnitude <= NORMAL_EPSILON_SQR)
+            if (!FlowFieldGridSpace.IsFinite(normal) || normal.sqrMagnitude <= NormalEpsilonSqr)
                 throw new ArgumentException("Surface contains an invalid normal.", nameof(index));
             return normal.normalized;
         }
@@ -202,7 +202,7 @@ namespace Common.FlowField
 
         internal bool HasConnection(int index, int directionIndex)
             => directionIndex >= 0
-                && directionIndex < FlowFieldNeighborUtility.Count
+                && directionIndex < FlowFieldNeighborUtility.SurfaceCount
                 && (GetNeighborMask(index) & (1 << directionIndex)) != 0;
 
         internal bool TryGetHeightRange(out float minHeight, out float maxHeight)
@@ -226,7 +226,7 @@ namespace Common.FlowField
             int validCount = 0;
             for (int index = 0; index < CellCount; index++)
             {
-                if ((_surfaceFlags[index] & ~VALID_SURFACE) != 0)
+                if ((_surfaceFlags[index] & ~ValidSurface) != 0)
                     return false;
                 if (!FlowFieldGridSpace.IsFinite(_surfaceHeights[index])
                     || !FlowFieldGridSpace.IsFinite(_surfaceNormals[index]))
@@ -239,7 +239,7 @@ namespace Common.FlowField
                 }
 
                 Vector3 normal = _surfaceNormals[index];
-                if (normal.sqrMagnitude <= NORMAL_EPSILON_SQR
+                if (normal.sqrMagnitude <= NormalEpsilonSqr
                     || !FlowFieldGridSpace.IsFinite(normal)
                     || Vector3.Dot(normal, Vector3.up) <= 0f)
                     return false;
@@ -255,7 +255,7 @@ namespace Common.FlowField
         }
 
         private bool IsSurfaceValidUnchecked(int index)
-            => (_surfaceFlags[index] & VALID_SURFACE) != 0;
+            => (_surfaceFlags[index] & ValidSurface) != 0;
     }
 
     internal interface IFlowFieldSurfaceSource

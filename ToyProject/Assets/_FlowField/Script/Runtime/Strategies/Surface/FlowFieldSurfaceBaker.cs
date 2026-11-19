@@ -33,7 +33,7 @@ namespace Common.FlowField
             && FlowFieldGridSpace.IsFinite(BakeBounds.center)
             && FlowFieldGridSpace.IsFinite(BakeBounds.size)
             && BakeBounds.size.x > 0f
-            && BakeBounds.size.y >= FlowFieldBakeBoundsUtility.MinBoundsHeight
+            && BakeBounds.size.y >= FlowFieldLayoutUtility.MinBoundsHeight
             && BakeBounds.size.z > 0f
             && Mathf.Abs(BakeBounds.size.x - Grid.WorldSizeX) <= 0.0001f
             && Mathf.Abs(BakeBounds.size.z - Grid.WorldSizeZ) <= 0.0001f
@@ -84,8 +84,8 @@ namespace Common.FlowField
 
     internal static class FlowFieldSurfaceBaker
     {
-        private const float NORMAL_EPSILON_SQR = 0.000001f;
-        private const float BOUNDS_QUERY_EPSILON = 0.001f;
+        private const float NormalEpsilonSqr = 0.000001f;
+        private const float BoundsQueryEpsilon = 0.001f;
 
         public static FlowFieldSurfaceBakeResult Bake(
             in FlowFieldSurfaceBakeSettings settings,
@@ -117,7 +117,7 @@ namespace Common.FlowField
             Vector3 normal = hit.normal;
             if (!FlowFieldGridSpace.IsFinite(hit.point)
                 || !FlowFieldGridSpace.IsFinite(normal)
-                || normal.sqrMagnitude <= NORMAL_EPSILON_SQR)
+                || normal.sqrMagnitude <= NormalEpsilonSqr)
                 return;
 
             normal.Normalize();
@@ -136,9 +136,9 @@ namespace Common.FlowField
             Bounds bounds = settings.BakeBounds;
             Vector3 origin = new Vector3(
                 cellCenter.x,
-                bounds.max.y + BOUNDS_QUERY_EPSILON,
+                bounds.max.y + BoundsQueryEpsilon,
                 cellCenter.z);
-            float distance = bounds.size.y + BOUNDS_QUERY_EPSILON * 2f;
+            float distance = bounds.size.y + BoundsQueryEpsilon * 2f;
             if (!Physics.Raycast(
                     origin,
                     Vector3.down,
@@ -179,7 +179,7 @@ namespace Common.FlowField
                 return;
 
             byte mask = 0;
-            for (int directionIndex = 0; directionIndex < FlowFieldNeighborUtility.Count; directionIndex++)
+            for (int directionIndex = 0; directionIndex < FlowFieldNeighborUtility.SurfaceCount; directionIndex++)
             {
                 int dx = FlowFieldNeighborUtility.DeltaX[directionIndex];
                 int dz = FlowFieldNeighborUtility.DeltaZ[directionIndex];
@@ -283,13 +283,13 @@ namespace Common.FlowField
                 throw new ArgumentException(
                     "Grid, Ground Layer 또는 Bake Bounds 설정이 유효하지 않습니다.",
                     nameof(settings));
-            if (!FlowFieldBakeBoundsUtility.TryValidateCellCount(
+            if (!FlowFieldLayoutUtility.TryValidateCellCount(
                     settings.Grid.Width,
                     settings.Grid.Depth,
                     out _cellCount))
                 throw new ArgumentOutOfRangeException(
                     nameof(settings),
-                    $"Cell Count가 상한({FlowFieldBakeBoundsUtility.MaxCellCount:N0})을 초과합니다. "
+                    $"Cell Count가 상한({FlowFieldLayoutUtility.MaxSurfaceCellCount:N0})을 초과합니다. "
                     + $"현재 {settings.Grid.Width} × {settings.Grid.Depth} cells입니다. "
                     + "Bake Bounds 또는 Cell Size를 줄이세요.");
 

@@ -4,7 +4,6 @@ namespace Common.FlowField
 {
     public sealed class FlowFieldNoiseModifier : FlowFieldVectorModifierVolume
     {
-        private const int DEFAULT_PRIORITY = 200;
         [SerializeField] private float _maxAngleDegrees = 15f;
         [SerializeField] private float _spatialFrequency = 0.3f;
         [SerializeField] private int _seed;
@@ -13,7 +12,7 @@ namespace Common.FlowField
         public float SpatialFrequency => _spatialFrequency;
         public int Seed => _seed;
 
-        protected override int DefaultPriority => DEFAULT_PRIORITY;
+        protected override int DefaultPriority => 200;
         protected override int ModifierValueHash
         {
             get
