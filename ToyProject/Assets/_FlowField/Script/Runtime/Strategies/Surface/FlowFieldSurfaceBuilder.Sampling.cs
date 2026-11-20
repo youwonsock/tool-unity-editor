@@ -71,11 +71,6 @@ namespace Common.FlowField
         bool IFlowFieldLatestCells.IsWalkable(int index)
             => _state.Surface != null && _state.Surface.IsSurfaceValid(index);
 
-        bool IFlowFieldLatestCells.HasLink(int index, int direction)
-            => _state.Workspace.TopologyMasks != null
-                && index < _state.Workspace.TopologyMasks.Length
-                && (_state.Workspace.TopologyMasks[index] & (1 << direction)) != 0;
-
         Vector3 IFlowFieldLatestCells.EscapeDirection(int index)
             => _state.Workspace.EscapeDirections != null ? _state.Workspace.EscapeDirections[index] : Vector3.zero;
     }

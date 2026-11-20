@@ -4,7 +4,10 @@ namespace Common.FlowField
 {
     /// <summary>
     /// What a mode knows about its cells that the published field may not
-    /// show yet, such as the base stage of a build in progress.
+    /// show yet, such as the base stage of a build in progress: which cells
+    /// are blocked or walkable now, and how to leave a blocked one. Links stay
+    /// with the published field, because a build in progress links its cells
+    /// for its own Goal, not for the steps the published field takes.
     /// </summary>
     internal interface IFlowFieldLatestCells
     {
@@ -12,7 +15,6 @@ namespace Common.FlowField
         bool Describes(FlowFieldField field);
         bool IsBlocked(int index);
         bool IsWalkable(int index);
-        bool HasLink(int index, int direction);
         Vector3 EscapeDirection(int index);
     }
 
@@ -179,10 +181,10 @@ namespace Common.FlowField
                     ? _latest.IsWalkable(index)
                     : _field.Surface == null || _field.Surface.IsSurfaceValid(index);
 
+            // The published link: a newly blocked cell on the way is caught by
+            // the cell checks around it.
             internal bool HasLink(int index, int direction)
-                => _latest != null
-                    ? _latest.HasLink(index, direction)
-                    : (_field.Topology[index] & (1u << direction)) != 0u;
+                => (_field.Topology[index] & (1u << direction)) != 0u;
 
             internal Vector3 EscapeDirection(int index)
                 => _latest != null
