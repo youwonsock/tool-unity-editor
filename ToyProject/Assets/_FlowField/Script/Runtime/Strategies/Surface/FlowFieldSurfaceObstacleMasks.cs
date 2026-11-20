@@ -418,8 +418,7 @@ namespace Common.FlowField
                 throw new ArgumentNullException(nameof(workspace));
             if (workspace.Capacity != grid.CellCount)
                 throw new ArgumentException("Obstacle workspace capacity must match the grid.", nameof(workspace));
-            workspace.RebuildCombinedBlocked();
-            FlowFieldSurfaceNavigationPreparation.BuildEscapeDirections(grid, surface, workspace);
+            FlowFieldSurfaceNavigationPreparation.CombineBlockedAndBuildEscapeDirections(grid, surface, workspace);
         }
 
         private static void ValidateRequest(in FlowFieldSurfaceObstacleRequest request)

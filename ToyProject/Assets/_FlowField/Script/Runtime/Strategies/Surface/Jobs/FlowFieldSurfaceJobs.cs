@@ -300,6 +300,126 @@ namespace Common.FlowField
     }
 
     /// <summary>
+    /// Escape directions out of blocked cells: a multi-source BFS over the four
+    /// face neighbours from every walkable cell, each blocked cell it reaches
+    /// pointing back at the cell it came from. With CombineBlocked the first
+    /// pass also writes Blocked = StaticBlocked | DynamicBlocked. The vector
+    /// arithmetic is that of Vector3 and normalized, so the result is the same
+    /// as the managed search it replaced.
+    /// </summary>
+    [BurstCompile(FloatMode = FloatMode.Strict, FloatPrecision = FloatPrecision.Standard)]
+    internal unsafe struct FlowFieldSurfaceEscapeJob : IJob
+    {
+        internal const int FaceCount = 4;
+        internal const int PinnedArrayCount = 10;
+        internal const int ResultCount = 2;
+        internal const int AnyBlockedResult = 0;
+        internal const int WalkableResult = 1;
+        private const int Unreachable = int.MaxValue;
+        private const byte ValidSurface = 1;
+        // Vector3.kEpsilon, the threshold of Vector3.normalized.
+        private const float NormalizeEpsilon = 0.00001f;
+
+        [NativeDisableUnsafePtrRestriction] internal bool* Blocked;
+        [NativeDisableUnsafePtrRestriction] internal bool* StaticBlocked;
+        [NativeDisableUnsafePtrRestriction] internal bool* DynamicBlocked;
+        [NativeDisableUnsafePtrRestriction] internal byte* SurfaceFlags;
+        [NativeDisableUnsafePtrRestriction] internal byte* NeighborMasks;
+        [NativeDisableUnsafePtrRestriction] internal float* Heights;
+        [NativeDisableUnsafePtrRestriction] internal Vector3* EscapeDirections;
+        [NativeDisableUnsafePtrRestriction] internal int* Costs;
+        [NativeDisableUnsafePtrRestriction] internal int* Queue;
+        // [AnyBlockedResult]: some cell is blocked (CombineBlocked only); [WalkableResult]: some cell is walkable.
+        [NativeDisableUnsafePtrRestriction] internal int* Result;
+
+        internal int Width;
+        internal int Depth;
+        internal float CellSize;
+        internal Vector3 Origin;
+        internal bool CombineBlocked;
+        internal float DirectionEpsilonSqr;
+        internal fixed int DeltaX[FaceCount];
+        internal fixed int DeltaZ[FaceCount];
+
+        public void Execute()
+        {
+            int count = Width * Depth;
+            int head = 0;
+            int tail = 0;
+            bool anyBlocked = false;
+            for (int index = 0; index < count; index++)
+            {
+                bool blocked;
+                if (CombineBlocked)
+                {
+                    blocked = StaticBlocked[index] || DynamicBlocked[index];
+                    Blocked[index] = blocked;
+                    anyBlocked |= blocked;
+                }
+                else
+                {
+                    blocked = Blocked[index];
+                }
+                EscapeDirections[index] = Vector3.zero;
+                if ((SurfaceFlags[index] & ValidSurface) == 0 || blocked)
+                {
+                    Costs[index] = Unreachable;
+                    continue;
+                }
+                Costs[index] = 0;
+                Queue[tail++] = index;
+            }
+            Result[AnyBlockedResult] = anyBlocked ? 1 : 0;
+            Result[WalkableResult] = tail > 0 ? 1 : 0;
+
+            while (head < tail)
+            {
+                int current = Queue[head++];
+                int z = current / Width;
+                int x = current - z * Width;
+                int nextCost = Costs[current] + 1;
+                // A cell without ground connects to nothing.
+                int mask = (SurfaceFlags[current] & ValidSurface) != 0 ? NeighborMasks[current] : 0;
+                for (int direction = 0; direction < FaceCount; direction++)
+                {
+                    if ((mask & (1 << direction)) == 0)
+                        continue;
+                    int nx = x + DeltaX[direction];
+                    int nz = z + DeltaZ[direction];
+                    if (nx < 0 || nx >= Width || nz < 0 || nz >= Depth)
+                        continue;
+                    int neighbor = nz * Width + nx;
+                    if (!Blocked[neighbor] || Costs[neighbor] != Unreachable)
+                        continue;
+
+                    Costs[neighbor] = nextCost;
+                    Vector3 from = CellCenter(x, z, Heights[current]);
+                    Vector3 to = CellCenter(nx, nz, Heights[neighbor]);
+                    var step = new Vector3(from.x - to.x, from.y - to.y, from.z - to.z);
+                    EscapeDirections[neighbor] = Dot(step, step) > DirectionEpsilonSqr ? Normalize(step) : Vector3.zero;
+                    Queue[tail++] = neighbor;
+                }
+            }
+        }
+
+        private Vector3 CellCenter(int x, int z, float height)
+            => new Vector3(
+                Origin.x + (x * CellSize + CellSize * 0.5f),
+                height,
+                Origin.z + (z * CellSize + CellSize * 0.5f));
+
+        private static float Dot(Vector3 a, Vector3 b) => a.x * b.x + a.y * b.y + a.z * b.z;
+
+        private static Vector3 Normalize(Vector3 value)
+        {
+            float length = (float)System.Math.Sqrt(Dot(value, value));
+            return length > NormalizeEpsilon
+                ? new Vector3(value.x / length, value.y / length, value.z / length)
+                : Vector3.zero;
+        }
+    }
+
+    /// <summary>
     /// The ground scan's neighbour masks for cells [Start, Start + count): a
     /// step to an in-grid neighbour is open when both cells have ground within
     /// MaxStepHeight of each other, and a diagonal also needs both cells

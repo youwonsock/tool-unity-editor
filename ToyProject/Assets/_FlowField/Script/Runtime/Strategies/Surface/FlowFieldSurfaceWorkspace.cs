@@ -36,7 +36,7 @@ namespace Common.FlowField
         internal bool HasActiveGoal { get; private set; }
 
         public int Capacity => Blocked == null ? 0 : Blocked.Length;
-        public bool HasBlockedCells { get; private set; }
+        public bool HasBlockedCells { get; internal set; }
 
         // Set while a scheduled Surface solve job holds pinned pointers into
         // these arrays. The Job safety system cannot see managed arrays, so

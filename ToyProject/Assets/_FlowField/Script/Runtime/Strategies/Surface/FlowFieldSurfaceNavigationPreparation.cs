@@ -12,61 +12,72 @@ namespace Common.FlowField
     /// </summary>
     internal static class FlowFieldSurfaceNavigationPreparation
     {
-        private const int UNREACHABLE = int.MaxValue;
-
+        /// <summary>
+        /// The escape directions out of the workspace's blocked cells
+        /// (<see cref="FlowFieldSurfaceEscapeJob"/>). False when no cell is walkable.
+        /// </summary>
         public static bool BuildEscapeDirections(
             FlowFieldGridSpace grid,
             FlowFieldSurfaceData surface,
             FlowFieldSurfaceWorkspace workspace)
+            => RunEscapeJob(grid, surface, workspace, combineBlocked: false);
+
+        /// <summary>
+        /// Writes Blocked = static | dynamic mask, then the escape directions,
+        /// in one job. False when no cell is walkable.
+        /// </summary>
+        public static bool CombineBlockedAndBuildEscapeDirections(
+            FlowFieldGridSpace grid,
+            FlowFieldSurfaceData surface,
+            FlowFieldSurfaceWorkspace workspace)
+            => RunEscapeJob(grid, surface, workspace, combineBlocked: true);
+
+        private static unsafe bool RunEscapeJob(
+            FlowFieldGridSpace grid,
+            FlowFieldSurfaceData surface,
+            FlowFieldSurfaceWorkspace workspace,
+            bool combineBlocked)
         {
             ValidateWorkspace(grid, surface, workspace);
             workspace.AssertWritable(nameof(BuildEscapeDirections));
 
-            int count = grid.CellCount;
-            Array.Clear(workspace.EscapeDirections, 0, count);
-            int head = 0;
-            int tail = 0;
-            for (int index = 0; index < count; index++)
+            var result = new int[FlowFieldSurfaceEscapeJob.ResultCount];
+            var pins = new FlowFieldPinnedArrays(FlowFieldSurfaceEscapeJob.PinnedArrayCount);
+            try
             {
-                if (!surface.IsSurfaceValid(index) || workspace.Blocked[index])
+                var job = new FlowFieldSurfaceEscapeJob
                 {
-                    workspace.Costs[index] = UNREACHABLE;
-                    continue;
+                    Blocked = pins.Pin(workspace.Blocked),
+                    StaticBlocked = pins.Pin(workspace.StaticBlocked),
+                    DynamicBlocked = pins.Pin(workspace.DynamicBlocked),
+                    SurfaceFlags = pins.Pin(surface.Flags),
+                    NeighborMasks = pins.Pin(surface.NeighborMasks),
+                    Heights = pins.Pin(surface.Heights),
+                    EscapeDirections = pins.Pin(workspace.EscapeDirections),
+                    Costs = pins.Pin(workspace.Costs),
+                    Queue = pins.Pin(workspace.Queue),
+                    Result = pins.Pin(result),
+                    Width = grid.Width,
+                    Depth = grid.Depth,
+                    CellSize = grid.CellSize,
+                    Origin = grid.Origin,
+                    CombineBlocked = combineBlocked,
+                    DirectionEpsilonSqr = FlowFieldVectorUtility.DirectionEpsilonSqr,
+                };
+                for (int direction = 0; direction < FlowFieldSurfaceEscapeJob.FaceCount; direction++)
+                {
+                    job.DeltaX[direction] = FlowFieldNeighborUtility.DeltaX[direction];
+                    job.DeltaZ[direction] = FlowFieldNeighborUtility.DeltaZ[direction];
                 }
-
-                workspace.Costs[index] = 0;
-                workspace.Queue[tail++] = index;
+                job.Run();
             }
-
-            bool hasWalkableCell = tail > 0;
-            while (head < tail)
+            finally
             {
-                int current = workspace.Queue[head++];
-                grid.FromFlatIndex(current, out int currentX, out int currentZ);
-                int nextCost = workspace.Costs[current] + 1;
-                for (int directionIndex = 0; directionIndex < 4; directionIndex++)
-                {
-                    if (!surface.HasConnection(current, directionIndex))
-                        continue;
-
-                    int nx = currentX + FlowFieldNeighborUtility.DeltaX[directionIndex];
-                    int nz = currentZ + FlowFieldNeighborUtility.DeltaZ[directionIndex];
-                    if (!grid.IsLocalInBounds(nx, nz))
-                        continue;
-
-                    int neighbor = grid.ToFlatIndex(nx, nz);
-                    if (!workspace.Blocked[neighbor] || workspace.Costs[neighbor] != UNREACHABLE)
-                        continue;
-
-                    workspace.Costs[neighbor] = nextCost;
-                    Vector3 direction = surface.GetCellCenter(grid, current)
-                        - surface.GetCellCenter(grid, neighbor);
-                    workspace.EscapeDirections[neighbor] = FlowFieldSurfaceGraphTraversal.NormalizeOrZero(direction);
-                    workspace.Queue[tail++] = neighbor;
-                }
+                pins.Release();
             }
-
-            return hasWalkableCell;
+            if (combineBlocked)
+                workspace.HasBlockedCells = result[FlowFieldSurfaceEscapeJob.AnyBlockedResult] != 0;
+            return result[FlowFieldSurfaceEscapeJob.WalkableResult] != 0;
         }
 
         public static bool PrepareGoal(

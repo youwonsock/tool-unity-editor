@@ -79,7 +79,7 @@
 ## Surface2D
 
 - 통지가 dirty 표시와 요청을 남기면 Scheduler가 Session을 진행합니다. 직접 `Session.Pump()`를 호출하는 베이크와 미리보기는 호출자가 입력을 책임집니다.
-- 표면·장애물·Goal·Modifier 영역은 Physics 결과가 한 스냅샷이 되도록 한 프레임에 실행합니다. 장애물 마스크를 다시 만들 때는 먼저 `Physics.SyncTransforms`를 한 번 합니다. 등록부도 Collider Bounds를 읽기 전에 sync하므로, Auto Sync Transforms가 꺼져 있어도 같은 프레임에 옮기고 알린 이동을 놓치지 않습니다. BFS와 방향은 워커 스레드, Topology는 메인 스레드의 Burst입니다. 합성은 예산에 맞춰 나눕니다.
+- 표면·장애물·Goal·Modifier 영역은 Physics 결과가 한 스냅샷이 되도록 한 프레임에 실행합니다. 장애물 마스크를 다시 만들 때는 먼저 `Physics.SyncTransforms`를 한 번 합니다. 등록부도 Collider Bounds를 읽기 전에 sync하므로, Auto Sync Transforms가 꺼져 있어도 같은 프레임에 옮기고 알린 이동을 놓치지 않습니다. BFS와 방향은 워커 스레드, Topology는 메인 스레드의 Burst입니다. 장애물 마스크가 바뀌면 막힘 합치기(정적 | 동적)와 탈출 방향 BFS(네 면 이웃)도 메인 스레드의 Burst Job 하나(`FlowFieldSurfaceEscapeJob`)로 하고, 벡터 계산은 이전 관리 코드의 Vector3 계산과 같습니다. 합성은 예산에 맞춰 나눕니다.
 - 지면 scan(`FlowFieldSurfaceGroundScan`)은 셀마다 아래로 쏘는 ray를 `RaycastCommand` 묶음(최대 1,024개: Ground Layer, trigger 무시, 가장 가까운 hit 하나, back face는 `Physics.queriesHitBackfaces`대로)으로 워커 스레드에서 돌리고, 결과는 셀 순서대로 읽습니다. 이웃 마스크는 Burst Job이 16,384셀씩 만듭니다. Editor Bake는 같은 scan을 단계마다 2ms 예산으로 나눠 돌리고, 묶음은 직전 묶음의 ray당 시간으로 남은 예산에 맞게 줄입니다.
 - BFS가 예정된 빌드는 사전 합성을 생략하고, 완료 후 전체를 한 번 합성합니다.
 - 바닥 Layer와 경사·단차 조건이 필요합니다.
