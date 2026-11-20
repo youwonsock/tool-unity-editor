@@ -95,7 +95,7 @@ namespace Common.FlowField
                 throw new InvalidOperationException("Cannot register a destroyed Collider.");
             if (IndexOf(collider) >= 0)
                 return false;
-            Bounds current = collider.bounds;
+            Bounds current = SyncedBounds(collider);
             _colliders.Add(collider);
             _bounds.Add(current);
             _set.Add(collider);
@@ -144,7 +144,7 @@ namespace Common.FlowField
                 changed = true;
                 return true;
             }
-            Bounds current = collider.bounds;
+            Bounds current = SyncedBounds(collider);
             if ((current.center - previous.center).sqrMagnitude <= MoveEpsilonSqr
                 && (current.size - previous.size).sqrMagnitude <= MoveEpsilonSqr)
                 return true;
@@ -153,6 +153,16 @@ namespace Common.FlowField
                 FlowFieldObstacleChangeKind.Moved, collider, true, previous, true, current);
             changed = true;
             return true;
+        }
+
+        // Collider.bounds lags a Transform move until the physics scene syncs,
+        // and Auto Sync Transforms is off unless a project turns it on. A
+        // Collider moved and notified in the same frame would otherwise report
+        // where it was, and the move would be lost.
+        private static Bounds SyncedBounds(Collider collider)
+        {
+            Physics.SyncTransforms();
+            return collider.bounds;
         }
 
         private int IndexOf(Collider collider)

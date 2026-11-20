@@ -22,8 +22,7 @@ namespace Common.FlowField
             float clearance,
             bool[] destination,
             FlowFieldCellRect region,
-            ref Collider[] overlapBuffer,
-            bool syncTransformsBeforeQuery = false)
+            ref Collider[] overlapBuffer)
         {
             var policy = new AnyObstaclePolicy();
             Scan(
@@ -36,7 +35,6 @@ namespace Common.FlowField
                 destination,
                 region,
                 ref overlapBuffer,
-                syncTransformsBeforeQuery,
                 ref policy);
         }
 
@@ -56,8 +54,7 @@ namespace Common.FlowField
             FlowFieldCellRect region,
             HashSet<Collider> registeredObstacles,
             ref Collider[] overlapBuffer,
-            ref Collider[] targetOverlapBuffer,
-            bool syncTransformsBeforeQuery = false)
+            ref Collider[] targetOverlapBuffer)
         {
             var policy = new StaticObstaclePolicy
             {
@@ -74,7 +71,6 @@ namespace Common.FlowField
                 destination,
                 region,
                 ref overlapBuffer,
-                syncTransformsBeforeQuery,
                 ref policy);
             targetOverlapBuffer = policy.TargetBuffer;
         }
@@ -90,7 +86,6 @@ namespace Common.FlowField
             bool[] destination,
             FlowFieldCellRect region,
             ref Collider[] overlapBuffer,
-            bool syncTransformsBeforeQuery,
             ref TPolicy policy)
             where TPolicy : struct, IObstaclePolicy
         {
@@ -98,9 +93,6 @@ namespace Common.FlowField
             region = FlowFieldCellRect.Intersect(region, FlowFieldCellRect.Full(grid));
             if (!region.IsValid)
                 return;
-
-            if (syncTransformsBeforeQuery)
-                Physics.SyncTransforms();
 
             for (int z = region.MinZ; z <= region.MaxZ; z++)
                 Array.Clear(destination, grid.ToFlatIndex(region.MinX, z), region.MaxX - region.MinX + 1);
@@ -302,17 +294,13 @@ namespace Common.FlowField
             float checkHeight,
             float centerOffset,
             bool[] destination,
-            ref Collider[] overlapBuffer,
-            bool syncTransformsBeforeQuery = false)
+            ref Collider[] overlapBuffer)
         {
             FlowFieldMaskArguments.ValidateTarget(grid, surface, destination);
 
             Array.Clear(destination, 0, destination.Length);
             if (!IsUsableTrigger(influenceCollider))
                 return;
-
-            if (syncTransformsBeforeQuery)
-                Physics.SyncTransforms();
 
             Bounds colliderBounds = influenceCollider.bounds;
             if (!FlowFieldGridSpace.IsFinite(checkHeight) || checkHeight <= 0f)

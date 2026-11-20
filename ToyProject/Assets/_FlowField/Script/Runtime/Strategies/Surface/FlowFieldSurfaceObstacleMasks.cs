@@ -85,6 +85,10 @@ namespace Common.FlowField
             bool rebuildDynamic)
         {
             ValidateRequest(request);
+            // Every query below reads one synced pose, so an obstacle moved by
+            // its Transform is found where it is now, whichever mask rebuilds.
+            if (rebuildStatic || rebuildDynamic)
+                Physics.SyncTransforms();
             bool staticChanged = false;
             bool dynamicChanged = false;
             FlowFieldCellRect dynamicDirty = FlowFieldCellRect.Invalid;
@@ -149,8 +153,7 @@ namespace Common.FlowField
                 request.Clearance,
                 workspace.SweptBlocked,
                 request.DirtyRegion.IsValid ? request.DirtyRegion : FlowFieldCellRect.Full(request.Grid),
-                ref _overlapBuffer,
-                syncTransformsBeforeQuery: true);
+                ref _overlapBuffer);
             bool[] overlay = workspace.ObstacleScratch;
             bool[] swept = workspace.SweptBlocked;
             for (int i = 0; i < workspace.Capacity; i++)
@@ -258,8 +261,7 @@ namespace Common.FlowField
                     region,
                     _registry.Set,
                     ref _overlapBuffer,
-                    ref _targetOverlapBuffer,
-                    syncTransformsBeforeQuery: true);
+                    ref _targetOverlapBuffer);
             bool changed = !FlowFieldObstacleMaskBuilder.AreEqual(scratch, workspace.StaticBlocked);
             if (changed)
                 Array.Copy(scratch, workspace.StaticBlocked, workspace.Capacity);
