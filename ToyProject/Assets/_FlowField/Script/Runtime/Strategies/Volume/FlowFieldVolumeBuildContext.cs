@@ -106,6 +106,9 @@ namespace Common.FlowField
         private int[] _solveCancel;
         private int[] _solveGoal;
         internal readonly bool IsModifierRecompose;
+        // RequestRebuild or NotifyCellsDirty asked this build to query every
+        // obstacle; if it is discarded, the build that replaces it still must.
+        internal bool RequiresFullQuery;
         // Blocked, Topology and EscapeDirections follow only from the obstacles,
         // so they are shared read-only with the published field.
         internal bool ReusesObstacleQueries;

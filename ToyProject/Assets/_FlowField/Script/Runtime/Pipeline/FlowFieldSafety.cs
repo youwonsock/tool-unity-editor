@@ -39,8 +39,9 @@ namespace Common.FlowField
         /// without publishing leaves them observed, because what follows it
         /// publishes those queries too: in Surface2D a rejected build keeps
         /// its query results in staging and its replacement always carries
-        /// the Goal flag, and in Volume3D a discarded build is always followed
-        /// by a complete build.
+        /// the Goal flag, and in Volume3D the observed regions keep the next
+        /// build from reusing obstacle results, so it queries them again
+        /// (the changed regions, or every cell).
         /// </summary>
         internal void BeginBuild()
         {

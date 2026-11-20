@@ -200,7 +200,9 @@ namespace Common.FlowField
             if (!_requests.Pending && !_hasPendingModifierRecompose)
                 return false;
 
-            bool recompose = !_requests.Pending;
+            // A Modifier change recomposes the published navigation. Before
+            // any field is published it builds in full like any request.
+            bool recompose = !_requests.Pending && _committed != null;
             FlowFieldVolumeRequest request = recompose ? _committed.Request : _requests.Latest;
             _requests.Pending = false;
             _hasPendingModifierRecompose = false;
@@ -226,8 +228,10 @@ namespace Common.FlowField
             {
                 bool reuseObstacles = CanReuseObstacleQueries(request);
                 bool requeryChangedCells = !reuseObstacles && CanRequeryChangedCells(request);
+                bool requiresFullQuery = _obstacleQueryRequired;
                 _obstacleQueryRequired = false;
                 _build = new BuildContext(request, modifierSnapshots);
+                _build.RequiresFullQuery = requiresFullQuery;
                 if (reuseObstacles)
                 {
                     _build.ReusesObstacleQueries = true;
@@ -255,9 +259,10 @@ namespace Common.FlowField
 
         /// <summary>
         /// Tracked obstacle changes report their regions, so the rest of the published
-        /// mask stays correct. An explicit rebuild or a resubmitted request still
-        /// queries every cell, which picks up a collider that moved without being tracked;
-        /// in BakedBase it starts again from the bake.
+        /// mask stays correct. Only an explicit rebuild (RequestRebuild,
+        /// NotifyCellsDirty) or new obstacle settings query every cell, which picks up
+        /// a collider that moved without being tracked; in BakedBase it starts again
+        /// from the bake.
         /// </summary>
         private bool CanRequeryChangedCells(in FlowFieldVolumeRequest request)
             => !_obstacleQueryRequired
@@ -266,14 +271,17 @@ namespace Common.FlowField
                 && _safety.UncertainRegionCount > 0
                 && _committed.Request.HasSameObstacleInputs(request);
 
-        /// <summary>A Goal change keeps the obstacle result unless a tracked obstacle changed.</summary>
+        /// <summary>
+        /// The obstacle result stands while nothing about the obstacles changed:
+        /// a Goal, Default Direction or Modifier change reuses it, an explicit
+        /// rebuild, a tracked change or new obstacle settings do not.
+        /// </summary>
         private bool CanReuseObstacleQueries(in FlowFieldVolumeRequest request)
             => !_obstacleQueryRequired
                 && _committed != null
                 && request.BakeMode != FlowFieldBakeMode.StaticBaked
                 && _safety.UncertainRegionCount == 0
-                && _committed.Request.HasSameObstacleInputs(request)
-                && !_committed.Request.HasSameGoal(request);
+                && _committed.Request.HasSameObstacleInputs(request);
 
         // A BakedBase build that starts again from the bake queries what the
         // bake cannot know: the uncertain regions, every region a change
@@ -306,6 +314,9 @@ namespace Common.FlowField
             BuildContext previous = _build;
             _build = null;
             _buildReservationBytes = 0;
+            // The build that replaces it still owes the full query it was asked for.
+            if (previous != null && previous.RequiresFullQuery)
+                _obstacleQueryRequired = true;
             previous?.Dispose();
         }
 
@@ -380,25 +391,22 @@ namespace Common.FlowField
             if (!_requests.Pending && _committed == null && _build == null)
                 return;
             // Modifiers only affect the final composition. Unobserved colliders
-            // wait for the next full build, as in Surface2D.
-            if (!_requests.Pending
-                && _committed != null
-                && _requests.HasLatest
-                && _committed.Request.HasSameResult(_requests.Latest))
+            // wait for the next full build, as in Surface2D. When the running
+            // build or, with none, the published field answers the latest
+            // request, only the composition is owed, during the first build too.
+            if (!_requests.Pending && _requests.HasLatest)
             {
-                _hasPendingModifierRecompose = true;
-                return;
+                FlowFieldVolumeRequest next = _build != null ? _build.Request : _committed.Request;
+                if (next.HasSameResult(_requests.Latest))
+                {
+                    _hasPendingModifierRecompose = true;
+                    return;
+                }
             }
+            // The latest input was already accepted, and a Goal move within its
+            // cell must not make Submit skip this build.
             if (_requests.HasLatest)
-            {
-                // The latest input was already accepted, and a Goal move within
-                // its cell must not make Submit skip this build.
                 _requests.Pending = true;
-            }
-            else if (_committed != null)
-                Submit(_committed.Request);
-            else if (_build != null)
-                Submit(_build.Request);
         }
 
         private static Vector3 ObstacleHalfExtents(float cellSize, float clearance)
