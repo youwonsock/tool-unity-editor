@@ -84,6 +84,7 @@ namespace Common.FlowField
                 return;
             }
             _reportedMissingCollider = false;
+            FlowFieldPhysicsSync.SyncOncePerFrame();
             Bounds bounds = _influenceCollider.bounds;
             if (bounds == _reportedBounds)
                 return;
@@ -102,7 +103,9 @@ namespace Common.FlowField
         private void RememberReportedArea()
         {
             _reportedMissingCollider = _influenceCollider == null;
-            _reportedBounds = _reportedMissingCollider ? default : _influenceCollider.bounds;
+            _reportedBounds = _reportedMissingCollider
+                ? default
+                : FlowFieldPhysicsSync.SyncedBounds(_influenceCollider);
         }
 
         private void OnDestroy()

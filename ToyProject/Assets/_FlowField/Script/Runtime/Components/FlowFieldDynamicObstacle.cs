@@ -17,6 +17,7 @@ namespace Common.FlowField
         [SerializeField] private Collider _collider;
 
         [NonSerialized] private FlowFieldManager _registered;
+        [NonSerialized] private Collider _registeredCollider;
         [NonSerialized] private Bounds _reportedBounds;
 
         public FlowFieldManager Manager => _manager;
@@ -30,21 +31,25 @@ namespace Common.FlowField
 
         // Registers on the first frame the Manager can take it, and again
         // whenever its registration is gone: the Manager's Init order and a
-        // later Release and Init, in one frame or two, need no care.
+        // later Release and Init, in one frame or two, need no care. A new
+        // Manager or Collider replaces the registration.
         private void LateUpdate()
         {
+            if (_registered != null && (_registered != _manager || _registeredCollider != _collider))
+                Unregister();
             if (_manager == null || _collider == null || !CanTakeInput(_manager))
                 return;
-            if (_registered != _manager || !_manager.IsDynamicObstacleRegistered(_collider))
+            if (_registered == null || !_manager.IsDynamicObstacleRegistered(_collider))
             {
-                if (_registered != _manager)
-                    Unregister();
                 _manager.RegisterDynamicObstacle(_collider);
                 _registered = _manager;
+                _registeredCollider = _collider;
+                // Registration synced the physics scene, so these are current.
                 _reportedBounds = _collider.bounds;
                 return;
             }
 
+            FlowFieldPhysicsSync.SyncOncePerFrame();
             Bounds bounds = _collider.bounds;
             if (bounds == _reportedBounds)
                 return;
@@ -60,10 +65,12 @@ namespace Common.FlowField
         private void Unregister()
         {
             FlowFieldManager registered = _registered;
+            Collider collider = _registeredCollider;
             _registered = null;
+            _registeredCollider = null;
             // A faulted Manager takes the removal too, so its retry leaves it out.
-            if (registered != null && (registered.IsInitialized || registered.IsFaulted) && _collider is not null)
-                registered.UnregisterDynamicObstacle(_collider);
+            if (registered != null && (registered.IsInitialized || registered.IsFaulted) && collider is not null)
+                registered.UnregisterDynamicObstacle(collider);
         }
     }
 }
