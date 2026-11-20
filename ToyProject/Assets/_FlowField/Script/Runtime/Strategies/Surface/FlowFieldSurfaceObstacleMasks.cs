@@ -107,13 +107,17 @@ namespace Common.FlowField
                     effectiveMaskDirtyWithoutDynamic);
             }
 
-            RebuildDynamicOverlay(
+            // Every registered Collider where it is now. The session owns the
+            // registry: a destroyed Collider is skipped here and pruned there.
+            FlowFieldObstacleMaskBuilder.BuildRegistered(
                 request.Grid,
                 request.Surface,
                 request.CheckHeight,
                 request.CenterOffset,
                 request.Clearance,
-                request.Workspace.ObstacleScratch);
+                request.Workspace.ObstacleScratch,
+                _registry,
+                ref _overlapBuffer);
             AddSweptObstacles(in request);
             dynamicChanged = CommitDynamicScratch(request.Workspace);
 
@@ -278,80 +282,6 @@ namespace Common.FlowField
                         grid, Reach(collider.bounds, grid.CellSize, request.Clearance)));
             }
             return region;
-        }
-
-        // Draws every registered Collider where it is now. The session owns the
-        // registry: a destroyed Collider is skipped here and pruned there.
-        public void RebuildDynamicOverlay(
-            FlowFieldGridSpace grid,
-            FlowFieldSurfaceData surface,
-            float checkHeight,
-            float centerOffset,
-            float clearance,
-            bool[] dynamicBlocked)
-        {
-            if (!grid.IsValid)
-                throw new ArgumentException("Dynamic obstacle rebuild requires a valid grid.", nameof(grid));
-            if (!surface.IsValid)
-                throw new ArgumentException("Dynamic obstacle rebuild requires a valid surface bake.", nameof(surface));
-            if (dynamicBlocked == null)
-                throw new ArgumentNullException(nameof(dynamicBlocked));
-            if (dynamicBlocked.Length != grid.CellCount)
-                throw new ArgumentException("Dynamic obstacle destination length must match the grid.", nameof(dynamicBlocked));
-            System.Array.Clear(dynamicBlocked, 0, dynamicBlocked.Length);
-            if (!FlowFieldGridSpace.IsFinite(checkHeight) || checkHeight <= 0f)
-                throw new System.ArgumentOutOfRangeException(nameof(checkHeight));
-            if (!FlowFieldGridSpace.IsFinite(centerOffset))
-                throw new System.ArgumentOutOfRangeException(nameof(centerOffset));
-            if (!FlowFieldGridSpace.IsFinite(clearance) || clearance < 0f)
-                throw new System.ArgumentOutOfRangeException(nameof(clearance));
-            float halfHeight = checkHeight * 0.5f;
-            float halfXZ = FlowFieldOverlapUtility.CellHalfExtent(grid.CellSize, clearance);
-            Vector3 cellHalfExtents = new Vector3(halfXZ, halfHeight, halfXZ);
-
-            for (int i = 0; i < _registry.Count; i++)
-            {
-                Collider collider = _registry.GetCollider(i);
-                if (collider == null)
-                    continue;
-
-                Bounds expanded = collider.bounds;
-                expanded.Expand(new Vector3(halfXZ * 2f, 0f, halfXZ * 2f));
-                if (!grid.TryGetOverlappingCells(
-                        expanded,
-                        out int minX,
-                        out int maxX,
-                        out int minZ,
-                        out int maxZ))
-                    continue;
-
-                int layerMask = 1 << collider.gameObject.layer;
-                for (int z = minZ; z <= maxZ; z++)
-                {
-                    for (int x = minX; x <= maxX; x++)
-                    {
-                        int index = grid.ToFlatIndex(x, z);
-                        if (!surface.IsSurfaceValid(index) || dynamicBlocked[index])
-                            continue;
-
-                        Vector3 center = surface.GetCellCenter(grid, index);
-                        center.y += centerOffset;
-                        dynamicBlocked[index] = Physics.CheckBox(
-                            center,
-                            cellHalfExtents,
-                            Quaternion.identity,
-                            layerMask,
-                            QueryTriggerInteraction.Ignore)
-                            && FlowFieldOverlapUtility.OverlapsTarget(
-                                center,
-                                cellHalfExtents,
-                                layerMask,
-                                collider,
-                                QueryTriggerInteraction.Ignore,
-                                ref _overlapBuffer);
-                    }
-                }
-            }
         }
 
         public void CommitCombinedAndBuildEscape(
