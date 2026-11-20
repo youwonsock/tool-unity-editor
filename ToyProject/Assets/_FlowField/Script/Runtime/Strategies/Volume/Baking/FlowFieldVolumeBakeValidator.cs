@@ -12,46 +12,11 @@ namespace Common.FlowField
     }
 
     /// <summary>
-    /// A non-owning view of serialized Volume3D bake data.  The validator
-    /// keeps its own small state arrays, but never clones the bake payload.
-    /// </summary>
-    internal readonly struct FlowFieldVolumeBakeValidationView
-    {
-        internal readonly FlowFieldVolumeBakeMetadata Metadata;
-        internal readonly bool[] Blocked;
-        internal readonly uint[] TopologyMasks;
-        internal readonly FlowFieldGoalFlags[] GoalFlags;
-        internal readonly int[] NextCells;
-        internal readonly Vector3[] Directions;
-        internal readonly float[] Speeds;
-        internal readonly Vector3[] EscapeDirections;
-
-        internal FlowFieldVolumeBakeValidationView(
-            FlowFieldVolumeBakeMetadata metadata,
-            bool[] blocked,
-            uint[] topologyMasks,
-            FlowFieldGoalFlags[] goalFlags,
-            int[] nextCells,
-            Vector3[] directions,
-            float[] speeds,
-            Vector3[] escapeDirections)
-        {
-            Metadata = metadata;
-            Blocked = blocked;
-            TopologyMasks = topologyMasks;
-            GoalFlags = goalFlags;
-            NextCells = nextCells;
-            Directions = directions;
-            Speeds = speeds;
-            EscapeDirections = escapeDirections;
-        }
-    }
-
-    /// <summary>
     /// Cooperative structural validator shared by editor display checks and
     /// the synchronous callers that need the same payload rules.  A call to
     /// Step performs bounded cell work or bounded graph work and can resume
-    /// without walking an already confirmed path again.
+    /// without walking an already confirmed path again. It reads the payload
+    /// in place and keeps only its own small state arrays.
     /// </summary>
     internal sealed class FlowFieldVolumeBakeValidator : IDisposable
     {
@@ -67,7 +32,7 @@ namespace Common.FlowField
         private const float DirectionToleranceSqr = 0.00000001f;
 
         private readonly FlowFieldGridSpace _expectedGrid;
-        private FlowFieldVolumeBakeValidationView _view;
+        private FlowFieldVolumeBakePayload _payload;
         private byte[] _graphState;
         private int[] _path;
         private int _cellCursor;
@@ -110,29 +75,29 @@ namespace Common.FlowField
             FlowFieldGridSpace expectedGrid)
         {
             _expectedGrid = expectedGrid;
-            if (asset == null || !asset.TryGetValidationView(out FlowFieldVolumeBakeValidationView view))
+            if (asset == null)
             {
                 Initialize(default, invalidReason: "Static Volume3D Bake arrays are missing.");
                 return;
             }
-            Initialize(view);
+            Initialize(asset.Payload);
         }
 
         internal FlowFieldVolumeBakeValidator(
-            in FlowFieldVolumeBakeValidationView view,
+            in FlowFieldVolumeBakePayload payload,
             FlowFieldGridSpace expectedGrid)
         {
             _expectedGrid = expectedGrid;
-            Initialize(view);
+            Initialize(payload);
         }
 
         internal static bool ValidatePayload(
-            in FlowFieldVolumeBakeValidationView view,
+            in FlowFieldVolumeBakePayload payload,
             FlowFieldGridSpace expectedGrid,
             out string reason)
         {
             using (FlowFieldVolumeBakeValidator validator =
-                new FlowFieldVolumeBakeValidator(view, expectedGrid))
+                new FlowFieldVolumeBakeValidator(payload, expectedGrid))
             {
                 while (!validator.IsComplete)
                     validator.Step(4096, 64);
@@ -142,10 +107,10 @@ namespace Common.FlowField
         }
 
         private void Initialize(
-            in FlowFieldVolumeBakeValidationView view,
+            in FlowFieldVolumeBakePayload payload,
             string invalidReason = null)
         {
-            _view = view;
+            _payload = payload;
             _graphState = null;
             _path = null;
             _cellCursor = 0;
@@ -164,13 +129,7 @@ namespace Common.FlowField
                 _error = invalidReason;
                 return;
             }
-            if (_view.Blocked == null
-                || _view.TopologyMasks == null
-                || _view.GoalFlags == null
-                || _view.NextCells == null
-                || _view.Directions == null
-                || _view.Speeds == null
-                || _view.EscapeDirections == null)
+            if (!_payload.HasArrays)
             {
                 _phase = Phase.Complete;
                 _status = FlowFieldVolumeBakeValidationStatus.Invalid;
@@ -178,7 +137,7 @@ namespace Common.FlowField
                 return;
             }
 
-            if (_view.Blocked.Length > FlowFieldLayoutUtility.MaxVolumeCellCount)
+            if (_payload.Blocked.Length > FlowFieldLayoutUtility.MaxVolumeCellCount)
             {
                 _phase = Phase.Complete;
                 _status = FlowFieldVolumeBakeValidationStatus.Invalid;
@@ -186,8 +145,8 @@ namespace Common.FlowField
                 return;
             }
 
-            _graphState = new byte[_view.Blocked.Length];
-            _path = new int[_view.Blocked.Length];
+            _graphState = new byte[_payload.Blocked.Length];
+            _path = new int[_payload.Blocked.Length];
         }
 
         internal void Cancel()
@@ -228,7 +187,7 @@ namespace Common.FlowField
         private bool StepCells(int cellBudget)
         {
             int processed = 0;
-            while (_cellCursor < _view.Blocked.Length && processed < cellBudget)
+            while (_cellCursor < _payload.Blocked.Length && processed < cellBudget)
             {
                 if (!ValidateCell(_cellCursor, out string cellError))
                 {
@@ -239,14 +198,14 @@ namespace Common.FlowField
                 processed++;
             }
 
-            if (_cellCursor < _view.Blocked.Length)
+            if (_cellCursor < _payload.Blocked.Length)
                 return false;
-            if (_view.Metadata.HasGoal && _anchorCount != 1)
+            if (_payload.Metadata.HasGoal && _anchorCount != 1)
             {
                 Fail($"Static Volume3D Bake must contain exactly one Goal anchor; found {_anchorCount}.");
                 return false;
             }
-            if (!_view.Metadata.HasGoal && _anchorCount != 0)
+            if (!_payload.Metadata.HasGoal && _anchorCount != 0)
             {
                 Fail("Static Volume3D Bake without a Goal contains an anchor.");
                 return false;
@@ -258,14 +217,14 @@ namespace Common.FlowField
         private void StepGraph(int graphBudget)
         {
             int graphSteps = 0;
-            while (_graphCursor < _view.NextCells.Length && graphSteps < graphBudget)
+            while (_graphCursor < _payload.NextCells.Length && graphSteps < graphBudget)
             {
                 if (_currentNode < 0)
                 {
-                    while (_graphCursor < _view.NextCells.Length
+                    while (_graphCursor < _payload.NextCells.Length
                         && !IsDirectedCell(_graphCursor))
                         _graphCursor++;
-                    if (_graphCursor >= _view.NextCells.Length)
+                    if (_graphCursor >= _payload.NextCells.Length)
                         break;
                     if (_graphState[_graphCursor] == 2)
                     {
@@ -276,7 +235,7 @@ namespace Common.FlowField
                     _pathCount = 0;
                 }
 
-                if (_currentNode == _view.Metadata.ResolvedGoalIndex)
+                if (_currentNode == _payload.Metadata.ResolvedGoalIndex)
                 {
                     ConfirmPath();
                     _graphCursor++;
@@ -284,9 +243,9 @@ namespace Common.FlowField
                     graphSteps++;
                     continue;
                 }
-                if (_currentNode < 0 || _currentNode >= _view.NextCells.Length
-                    || _view.Blocked[_currentNode]
-                    || _view.NextCells[_currentNode] < 0)
+                if (_currentNode < 0 || _currentNode >= _payload.NextCells.Length
+                    || _payload.Blocked[_currentNode]
+                    || _payload.NextCells[_currentNode] < 0)
                 {
                     Fail(DescribeCell(_currentNode, "directed path does not reach the Goal anchor"));
                     return;
@@ -307,11 +266,11 @@ namespace Common.FlowField
 
                 _graphState[_currentNode] = 1;
                 _path[_pathCount++] = _currentNode;
-                _currentNode = _view.NextCells[_currentNode];
+                _currentNode = _payload.NextCells[_currentNode];
                 graphSteps++;
             }
 
-            if (_graphCursor >= _view.NextCells.Length && _currentNode < 0)
+            if (_graphCursor >= _payload.NextCells.Length && _currentNode < 0)
             {
                 _phase = Phase.Complete;
                 _status = FlowFieldVolumeBakeValidationStatus.Valid;
@@ -327,7 +286,7 @@ namespace Common.FlowField
 
         private bool ValidateMetadata(out string reason)
         {
-            FlowFieldVolumeBakeMetadata metadata = _view.Metadata;
+            FlowFieldVolumeBakeMetadata metadata = _payload.Metadata;
             if (!metadata.TryValidate(out reason))
                 return false;
             if (!metadata.MatchesGrid(_expectedGrid))
@@ -336,18 +295,12 @@ namespace Common.FlowField
                 return false;
             }
             int count = _expectedGrid.CellCount;
-            if (_view.Blocked.Length != count
-                || _view.TopologyMasks.Length != count
-                || _view.GoalFlags.Length != count
-                || _view.NextCells.Length != count
-                || _view.Directions.Length != count
-                || _view.Speeds.Length != count
-                || _view.EscapeDirections.Length != count)
+            if (!_payload.HasCellCount(count))
             {
                 reason = "Static Volume3D Bake arrays do not match the grid.";
                 return false;
             }
-            if (metadata.HasGoal && _view.Blocked[metadata.ResolvedGoalIndex])
+            if (metadata.HasGoal && _payload.Blocked[metadata.ResolvedGoalIndex])
             {
                 reason = DescribeCell(metadata.ResolvedGoalIndex, "Goal index points to a blocked cell");
                 return false;
@@ -358,25 +311,25 @@ namespace Common.FlowField
         private bool ValidateCell(int index, out string reason)
         {
             reason = string.Empty;
-            bool blocked = _view.Blocked[index];
+            bool blocked = _payload.Blocked[index];
             uint validTopologyBits = (1u << FlowFieldNeighborUtility.VolumeCount) - 1u;
-            Vector3 direction = _view.Directions[index];
-            Vector3 escape = _view.EscapeDirections[index];
-            float speed = _view.Speeds[index];
-            int next = _view.NextCells[index];
-            FlowFieldGoalFlags flags = _view.GoalFlags[index];
+            Vector3 direction = _payload.Directions[index];
+            Vector3 escape = _payload.EscapeDirections[index];
+            float speed = _payload.Speeds[index];
+            int next = _payload.NextCells[index];
+            FlowFieldGoalFlags flags = _payload.GoalFlags[index];
 
             if (!FlowFieldGridSpace.IsFinite(direction)
                 || !FlowFieldGridSpace.IsFinite(escape)
                 || !FlowFieldGridSpace.IsFinite(speed)
                 || speed < 0f
                 || next < MinSentinel
-                || next >= _view.Blocked.Length
+                || next >= _payload.Blocked.Length
                 || (flags & ~(FlowFieldGoalFlags.Directed
                     | FlowFieldGoalFlags.Anchor
                     | FlowFieldGoalFlags.Unreachable)) != 0
                 || !FlowFieldVectorUtility.IsUnitOrZero(escape)
-                || (_view.TopologyMasks[index] & ~validTopologyBits) != 0u)
+                || (_payload.TopologyMasks[index] & ~validTopologyBits) != 0u)
             {
                 reason = DescribeCell(index, "invalid numeric, sentinel, flags, escape direction, or topology");
                 return false;
@@ -384,7 +337,7 @@ namespace Common.FlowField
 
             if (blocked)
             {
-                if (_view.TopologyMasks[index] != 0u
+                if (_payload.TopologyMasks[index] != 0u
                     || flags != FlowFieldGoalFlags.None
                     || next != -2
                     || direction != Vector3.zero
@@ -418,8 +371,8 @@ namespace Common.FlowField
             if (next == index)
             {
                 _anchorCount++;
-                if (!_view.Metadata.HasGoal
-                    || index != _view.Metadata.ResolvedGoalIndex
+                if (!_payload.Metadata.HasGoal
+                    || index != _payload.Metadata.ResolvedGoalIndex
                     || direction != Vector3.zero
                     || speed != 0f
                     || flags != (FlowFieldGoalFlags.Directed | FlowFieldGoalFlags.Anchor))
@@ -432,8 +385,8 @@ namespace Common.FlowField
             expectedGrid.FromFlatIndex(next, out int nx, out int ny, out int nz);
             int directionIndex = FlowFieldNeighborUtility.FindDirectionIndex(nx - x, ny - y, nz - z);
             if (directionIndex < 0
-                || (_view.TopologyMasks[index] & (1u << directionIndex)) == 0u
-                || _view.Blocked[next]
+                || (_payload.TopologyMasks[index] & (1u << directionIndex)) == 0u
+                || _payload.Blocked[next]
                 || !IsCornerClear(index, next))
             {
                 reason = DescribeCell(index, "NextCell is not a traversable neighbour or cuts through a blocked diagonal corner");
@@ -478,16 +431,16 @@ namespace Common.FlowField
                 int iy = y + (sy == 1 ? dy : 0);
                 int iz = z + (sz == 1 ? dz : 0);
                 if (!_expectedGrid.IsLocalInBounds(ix, iy, iz)
-                    || _view.Blocked[_expectedGrid.ToFlatIndex(ix, iy, iz)])
+                    || _payload.Blocked[_expectedGrid.ToFlatIndex(ix, iy, iz)])
                     return false;
             }
             return true;
         }
 
         private bool IsDirectedCell(int index)
-            => !_view.Blocked[index]
-                && _view.NextCells[index] >= 0
-                && _view.NextCells[index] != index;
+            => !_payload.Blocked[index]
+                && _payload.NextCells[index] >= 0
+                && _payload.NextCells[index] != index;
 
         private void ConfirmPath()
         {
@@ -505,7 +458,7 @@ namespace Common.FlowField
 
         private string DescribeCell(int index, string reason)
         {
-            if (index < 0 || index >= _view.Blocked.Length)
+            if (index < 0 || index >= _payload.Blocked.Length)
                 return $"Static Volume3D Bake cell index {index} is invalid: {reason}.";
             _expectedGrid.FromFlatIndex(index, out int x, out int y, out int z);
             return $"Static Volume3D Bake cell {index} ({x}, {y}, {z}) is invalid: {reason}.";

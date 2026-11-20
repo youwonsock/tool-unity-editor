@@ -6,43 +6,43 @@ namespace Common.FlowField
     internal sealed partial class FlowFieldVolumeBuilder
     {
         /// <summary>
-        /// What a Static Bake stores: copies of the published base field.
-        /// False while nothing is published.
+        /// What a Static Bake stores: the published request as metadata and
+        /// copies of the published base field. False while nothing is published.
         /// </summary>
-        internal bool TryExportBakeData(
-            out FlowFieldVolumeRequest request,
-            out bool[] blocked,
-            out uint[] topology,
-            out FlowFieldGoalFlags[] goalFlags,
-            out int[] next,
-            out Vector3[] directions,
-            out float[] speeds,
-            out Vector3[] escapeDirections,
-            out int resolvedGoalIndex)
+        internal bool TryExportBakeData(out FlowFieldVolumeBakePayload payload)
         {
-            request = default;
-            blocked = null;
-            topology = null;
-            goalFlags = null;
-            next = null;
-            directions = null;
-            speeds = null;
-            escapeDirections = null;
-            resolvedGoalIndex = -1;
+            payload = default;
             if (_committed == null)
                 return false;
-            request = _committed.Request;
-            blocked = (bool[])_committed.Blocked.Clone();
-            topology = (uint[])_committed.Topology.Clone();
-            goalFlags = (FlowFieldGoalFlags[])_committed.GoalFlags.Clone();
-            next = (int[])_committed.NextCells.Clone();
+            FlowFieldVolumeRequest request = _committed.Request;
+            FlowFieldGridSpace grid = request.Grid;
+            FlowFieldVolumeBakeMetadata metadata = new FlowFieldVolumeBakeMetadata(
+                FlowFieldVolumeBakeData.SupportedFormatVersion,
+                grid.Width,
+                grid.Height,
+                grid.Depth,
+                grid.CellSize,
+                grid.Origin,
+                request.WorldBounds.center,
+                request.WorldBounds.size,
+                request.ObstacleLayer.value,
+                request.ObstacleClearance,
+                request.HasGoal,
+                request.GoalWorld,
+                request.GoalInfluenceRadius,
+                request.HasGoal ? _committed.GoalIndex : -1);
             // Static bake assets store the immutable base field. The current
             // Default Direction and registered Modifiers are runtime inputs
             // and are composed again when the snapshot is loaded.
-            directions = (Vector3[])_committed.BaseDirections.Clone();
-            speeds = (float[])_committed.BaseSpeeds.Clone();
-            escapeDirections = (Vector3[])_committed.EscapeDirections.Clone();
-            resolvedGoalIndex = _committed.GoalIndex;
+            payload = new FlowFieldVolumeBakePayload(
+                metadata,
+                (bool[])_committed.Blocked.Clone(),
+                (uint[])_committed.Topology.Clone(),
+                (FlowFieldGoalFlags[])_committed.GoalFlags.Clone(),
+                (int[])_committed.NextCells.Clone(),
+                (Vector3[])_committed.BaseDirections.Clone(),
+                (float[])_committed.BaseSpeeds.Clone(),
+                (Vector3[])_committed.EscapeDirections.Clone());
             return true;
         }
 

@@ -494,37 +494,9 @@ namespace Common.FlowField.Editor
                 VolumeTarget,
                 () =>
                 {
-                    if (!session.Volume.TryExportBakeData(
-                            out FlowFieldVolumeRequest committedRequest,
-                            out bool[] blocked,
-                            out uint[] topology,
-                            out FlowFieldGoalFlags[] goalFlags,
-                            out int[] next,
-                            out Vector3[] directions,
-                            out float[] speeds,
-                            out Vector3[] escapeDirections,
-                            out int resolvedGoalIndex))
+                    if (!session.Volume.TryExportBakeData(out FlowFieldVolumeBakePayload payload))
                         throw new InvalidOperationException("Volume3D bake produced no committed field.");
-                    return asset =>
-                    {
-                        FlowFieldManagerConfig config = manager.CaptureConfig();
-                        asset.Apply(
-                            committedRequest.Grid,
-                            committedRequest.WorldBounds,
-                            config.Obstacles.Layer,
-                            config.Obstacles.Clearance,
-                            committedRequest.HasGoal,
-                            committedRequest.GoalWorld,
-                            committedRequest.GoalInfluenceRadius,
-                            resolvedGoalIndex,
-                            blocked,
-                            topology,
-                            goalFlags,
-                            next,
-                            directions,
-                            speeds,
-                            escapeDirections);
-                    };
+                    return asset => asset.Apply(in payload);
                 });
 
         /// <summary>

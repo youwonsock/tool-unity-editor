@@ -104,25 +104,16 @@ namespace Common.FlowField
             return true;
         }
 
-        internal bool TryGetValidationView(out FlowFieldVolumeBakeValidationView view)
-        {
-            view = default;
-            if (_blocked == null || _topologyMasks == null || _goalFlags == null
-                || _nextCells == null || _directions == null || _speeds == null
-                || _escapeDirections == null)
-                return false;
-
-            view = new FlowFieldVolumeBakeValidationView(
-                Metadata,
-                _blocked,
-                _topologyMasks,
-                _goalFlags,
-                _nextCells,
-                _directions,
-                _speeds,
-                _escapeDirections);
-            return true;
-        }
+        /// <summary>The serialized bake, read in place: the arrays are not copied.</summary>
+        internal FlowFieldVolumeBakePayload Payload => new FlowFieldVolumeBakePayload(
+            Metadata,
+            _blocked,
+            _topologyMasks,
+            _goalFlags,
+            _nextCells,
+            _directions,
+            _speeds,
+            _escapeDirections);
 
         internal bool Matches(
             FlowFieldGridSpace grid,
@@ -142,10 +133,8 @@ namespace Common.FlowField
                 return true;
             if (!MatchesMetadata(grid, obstacleLayer, obstacleClearance, out reason))
                 return false;
-            if (!TryGetValidationView(out FlowFieldVolumeBakeValidationView view))
-                return Fail(out reason, "Static Volume3D Bake arrays are missing.");
-
-            if (!FlowFieldVolumeBakeValidator.ValidatePayload(in view, grid, out string payloadReason))
+            FlowFieldVolumeBakePayload payload = Payload;
+            if (!FlowFieldVolumeBakeValidator.ValidatePayload(in payload, grid, out string payloadReason))
                 return Fail(out reason, payloadReason);
 
             RecordValidatedPayload(grid, bounds, obstacleLayer, obstacleClearance);
@@ -234,16 +223,10 @@ namespace Common.FlowField
             blocked = null;
             directions = null;
             speeds = null;
-            FlowFieldVolumeBakeMetadata metadata = Metadata;
-            if (!metadata.TryValidate(out _)
-                || !metadata.MatchesGrid(grid)
-                || _blocked == null || _blocked.Length != grid.CellCount
-                || _topologyMasks == null || _topologyMasks.Length != grid.CellCount
-                || _goalFlags == null || _goalFlags.Length != grid.CellCount
-                || _nextCells == null || _nextCells.Length != grid.CellCount
-                || _directions == null || _directions.Length != grid.CellCount
-                || _speeds == null || _speeds.Length != grid.CellCount
-                || _escapeDirections == null || _escapeDirections.Length != grid.CellCount)
+            FlowFieldVolumeBakePayload payload = Payload;
+            if (!payload.Metadata.TryValidate(out _)
+                || !payload.Metadata.MatchesGrid(grid)
+                || !payload.HasCellCount(grid.CellCount))
                 return false;
             blocked = _blocked;
             directions = _directions;
@@ -251,62 +234,28 @@ namespace Common.FlowField
             return true;
         }
 
-        internal void Apply(
-            FlowFieldGridSpace grid,
-            Bounds bounds,
-            LayerMask obstacleLayer,
-            float obstacleClearance,
-            bool hasGoal,
-            Vector3 requestedGoalWorld,
-            float goalInfluenceRadius,
-            int resolvedGoalIndex,
-            bool[] blocked,
-            uint[] topology,
-            FlowFieldGoalFlags[] goalFlags,
-            int[] next,
-            Vector3[] directions,
-            float[] speeds,
-            Vector3[] escapeDirections)
+        /// <summary>
+        /// Writes a new bake. The grid follows from the payload's metadata, and
+        /// the whole payload is validated against it before any serialized
+        /// field changes, so a rejected bake leaves the previous Asset
+        /// contents, GUID and Revision untouched.
+        /// </summary>
+        internal void Apply(in FlowFieldVolumeBakePayload payload)
         {
-            if (grid.SpaceMode != FlowFieldSpaceMode.Volume3D || grid.CellCount <= 0)
-                throw new ArgumentException("A valid Volume3D grid is required.", nameof(grid));
-            FlowFieldVolumeBakeMetadata metadata = new FlowFieldVolumeBakeMetadata(
-                SupportedFormatVersion,
-                grid.Width,
-                grid.Height,
-                grid.Depth,
-                grid.CellSize,
-                grid.Origin,
-                bounds.center,
-                bounds.size,
-                obstacleLayer.value,
-                obstacleClearance,
-                hasGoal,
-                requestedGoalWorld,
-                goalInfluenceRadius,
-                hasGoal ? resolvedGoalIndex : -1);
-
-            // Validate the complete incoming payload, metadata included, before
-            // changing any serialized field. A rejected bake must leave the
-            // previous Asset contents, GUID and Revision untouched.
-            FlowFieldVolumeBakeValidationView view = new FlowFieldVolumeBakeValidationView(
-                metadata,
-                blocked,
-                topology,
-                goalFlags,
-                next,
-                directions,
-                speeds,
-                escapeDirections);
-            if (!FlowFieldVolumeBakeValidator.ValidatePayload(in view, grid, out string reason))
+            FlowFieldVolumeBakeMetadata metadata = payload.Metadata;
+            if (!metadata.TryValidate(out string reason))
+                throw new ArgumentException(reason, nameof(payload));
+            FlowFieldGridSpace grid = FlowFieldGridSpace.FromVolumeCellGrid(
+                metadata.Origin,
+                metadata.Width,
+                metadata.Height,
+                metadata.Depth,
+                metadata.CellSize);
+            if (!FlowFieldVolumeBakeValidator.ValidatePayload(in payload, grid, out reason))
                 throw new InvalidOperationException(reason);
             if (!TryEncodeVectors(
                     grid,
-                    blocked,
-                    next,
-                    directions,
-                    speeds,
-                    escapeDirections,
+                    in payload,
                     out Vector3 defaultDirection,
                     out byte[] escapeFaces,
                     out reason))
@@ -325,15 +274,19 @@ namespace Common.FlowField
             _requestedGoalWorld = metadata.RequestedGoalWorld;
             _goalInfluenceRadius = metadata.GoalInfluenceRadius;
             _resolvedGoalIndex = metadata.ResolvedGoalIndex;
-            _blocked = (bool[])blocked.Clone();
-            _topologyMasks = (uint[])topology.Clone();
-            _goalFlags = (FlowFieldGoalFlags[])goalFlags.Clone();
-            _nextCells = (int[])next.Clone();
+            _blocked = (bool[])payload.Blocked.Clone();
+            _topologyMasks = (uint[])payload.TopologyMasks.Clone();
+            _goalFlags = (FlowFieldGoalFlags[])payload.GoalFlags.Clone();
+            _nextCells = (int[])payload.NextCells.Clone();
             _defaultDirection = defaultDirection;
             _escapeFaces = escapeFaces;
             RebuildDerivedArrays();
             MarkBaked();
-            RecordValidatedPayload(grid, bounds, obstacleLayer, obstacleClearance);
+            RecordValidatedPayload(
+                grid,
+                new Bounds(metadata.BoundsCenter, metadata.BoundsSize),
+                metadata.ObstacleLayerMask,
+                metadata.ObstacleClearance);
         }
 
         private void RebuildDerivedArrays()
@@ -412,15 +365,16 @@ namespace Common.FlowField
         /// </summary>
         private static bool TryEncodeVectors(
             FlowFieldGridSpace grid,
-            bool[] blocked,
-            int[] next,
-            Vector3[] directions,
-            float[] speeds,
-            Vector3[] escapeDirections,
+            in FlowFieldVolumeBakePayload payload,
             out Vector3 defaultDirection,
             out byte[] escapeFaces,
             out string reason)
         {
+            bool[] blocked = payload.Blocked;
+            int[] next = payload.NextCells;
+            Vector3[] directions = payload.Directions;
+            float[] speeds = payload.Speeds;
+            Vector3[] escapeDirections = payload.EscapeDirections;
             int count = grid.CellCount;
             defaultDirection = Vector3.zero;
             escapeFaces = new byte[count];
