@@ -32,7 +32,7 @@
   - 검증은 한 경로입니다. `TryValidate`가 처음 잘못된 설정의 이유를 돌려주고, Init의 `Validate`는 그 이유로 `InvalidOperationException`을 던집니다. 실행 중 세션과 다른 Space Mode·Bake Mode(`spaceModeLocked`·`bakeModeLocked`)도 여기서 거부합니다. Inspector, Scene View, Volume 표시도 같은 `TryValidate`를 써서 Init과 같은 문구를 보여 줍니다.
   - 공통 검사는 `FlowFieldManagerConfig.TryValidateShared`가 같은 순서와 메시지로 합니다.
 - 공통 부품: 게시 필드 `FlowFieldField`, 조회 `FlowFieldSampler`, 요청 보관 `FlowFieldRequestInbox`, 셀 합성 규칙 `FlowFieldVectorUtility.ApplyModifier`, 이벤트 경계 `FlowFieldExecutionBoundary`, 예산 `FlowFieldBuildScheduler`.
-- Modifier가 닿는 셀을 찾는 방식만 모드별입니다. Surface는 셀 마스크(`FlowFieldSurfaceModifierArea`)를 보관해 바뀐 영역만 다시 합성하고, Volume은 빌드마다 64셀씩 후보를 조회합니다.
+- Modifier가 닿는 셀을 찾는 방식만 모드별입니다. Surface는 셀 마스크(`FlowFieldSurfaceModifierArea`)를 보관해 바뀐 영역만 다시 합성하고, Volume은 빌드마다 64셀씩 후보를 조회합니다. Surface 마스크를 다시 만들면 영향 칸 목록과 사각형은 마스크가 조회한 사각형(Influence Collider Bounds 주변) 안에서만 찾습니다.
 - **Editor 경계:** Runtime Manager가 공개 API 밖으로 Editor에 내놓는 것은 설정 스냅샷 `CaptureConfig()`, 게시 필드 `TryGetPublishedField`, 직렬화 경로 `PropertyNames`입니다. 그 밖에 Editor가 쓰는 시스템 내부는 다음과 같습니다.
   - 모드별 묘사 `FlowFieldSpaceStrategy`(레이아웃, 검증, 스냅, 최대 셀 수)
   - Bake와 미리보기의 독립 세션(`FlowFieldSession`)과 Builder 정적 함수(요청, Goal 해석), 내보내기 `TryExportBakeData`(Builder마다 하나)

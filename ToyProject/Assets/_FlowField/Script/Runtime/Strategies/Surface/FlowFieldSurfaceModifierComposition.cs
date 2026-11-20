@@ -78,7 +78,7 @@ namespace Common.FlowField
                 ResizeRuntimeMask(entry, request.Grid.CellCount);
                 Collider collider = entry.Modifier.Observe().InfluenceCollider;
 
-                FlowFieldModifierMaskBuilder.Build(
+                FlowFieldCellRect queried = FlowFieldModifierMaskBuilder.Build(
                     request.Grid,
                     request.Surface,
                     collider,
@@ -97,7 +97,7 @@ namespace Common.FlowField
 
                 if (maskChanged || !AreaOf(entry).InfluenceIndicesBuilt)
                 {
-                    RebuildInfluenceIndices(entry, request.Grid);
+                    RebuildInfluenceIndices(entry, request.Grid, queried);
                 }
 
                 if (maskChanged)
@@ -127,31 +127,41 @@ namespace Common.FlowField
                 throw new ArgumentOutOfRangeException(nameof(request.ObstacleCheckCenterOffset));
         }
 
-        private static void RebuildInfluenceIndices(FlowFieldModifierEntry entry, FlowFieldGridSpace grid)
+        // Only the cells the mask build queried can be set, so only they are
+        // scanned, row by row in index order.
+        private static void RebuildInfluenceIndices(
+            FlowFieldModifierEntry entry,
+            FlowFieldGridSpace grid,
+            FlowFieldCellRect queried)
         {
-            AreaOf(entry).InfluenceIndices.Clear();
+            FlowFieldSurfaceModifierArea area = AreaOf(entry);
+            area.InfluenceIndices.Clear();
             // The rect comes from the mask, not the collider bounds: a
             // cell that only touches the collider belongs to the mask,
             // and a partial composition rewrites nothing outside the rect.
             FlowFieldCellRect maskRect = FlowFieldCellRect.Invalid;
-            for (int index = 0; index < AreaOf(entry).InfluenceMask.Length; index++)
+            queried = FlowFieldCellRect.Intersect(queried, FlowFieldCellRect.Full(grid));
+            for (int z = queried.MinZ; queried.IsValid && z <= queried.MaxZ; z++)
             {
-                if (!AreaOf(entry).InfluenceMask[index])
-                    continue;
-                AreaOf(entry).InfluenceIndices.Add(index);
-                grid.FromFlatIndex(index, out int x, out int z);
-                maskRect = FlowFieldCellRect.Union(maskRect, new FlowFieldCellRect
+                for (int x = queried.MinX; x <= queried.MaxX; x++)
                 {
-                    MinX = x,
-                    MaxX = x,
-                    MinY = 0,
-                    MaxY = grid.Height - 1,
-                    MinZ = z,
-                    MaxZ = z,
-                });
+                    int index = grid.ToFlatIndex(x, z);
+                    if (!area.InfluenceMask[index])
+                        continue;
+                    area.InfluenceIndices.Add(index);
+                    maskRect = FlowFieldCellRect.Union(maskRect, new FlowFieldCellRect
+                    {
+                        MinX = x,
+                        MaxX = x,
+                        MinY = 0,
+                        MaxY = grid.Height - 1,
+                        MinZ = z,
+                        MaxZ = z,
+                    });
+                }
             }
-            AreaOf(entry).InfluenceIndicesBuilt = true;
-            AreaOf(entry).InfluenceRect = maskRect;
+            area.InfluenceIndicesBuilt = true;
+            area.InfluenceRect = maskRect;
         }
 
         /// <summary>Takes the Modifier snapshots for one composition, then <see cref="StepFinalField"/> runs it.</summary>

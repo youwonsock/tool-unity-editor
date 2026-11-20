@@ -399,7 +399,12 @@ namespace Common.FlowField
             return reason.Length == 0;
         }
 
-        public static void Build(
+        /// <summary>
+        /// Writes the cells the Influence Collider touches; every other cell is
+        /// cleared. Returns the rectangle of cells it queried: no cell outside
+        /// it is set. Invalid when it queried none.
+        /// </summary>
+        public static FlowFieldCellRect Build(
             FlowFieldGridSpace grid,
             FlowFieldSurfaceData surface,
             Collider influenceCollider,
@@ -412,7 +417,7 @@ namespace Common.FlowField
 
             Array.Clear(destination, 0, destination.Length);
             if (!IsUsableTrigger(influenceCollider))
-                return;
+                return FlowFieldCellRect.Invalid;
 
             Bounds colliderBounds = influenceCollider.bounds;
             if (!FlowFieldGridSpace.IsFinite(checkHeight) || checkHeight <= 0f)
@@ -421,12 +426,12 @@ namespace Common.FlowField
             if (!FlowFieldGridSpace.IsFinite(centerOffset))
                 throw new ArgumentOutOfRangeException(nameof(centerOffset));
             if (!surface.TryGetHeightRange(out float minSurfaceY, out float maxSurfaceY))
-                return;
+                return FlowFieldCellRect.Invalid;
 
             float checkMinY = minSurfaceY + centerOffset - halfHeight;
             float checkMaxY = maxSurfaceY + centerOffset + halfHeight;
             if (colliderBounds.max.y < checkMinY || colliderBounds.min.y > checkMaxY)
-                return;
+                return FlowFieldCellRect.Invalid;
 
             ResolveCandidateRange(
                 grid,
@@ -436,7 +441,7 @@ namespace Common.FlowField
                 out int minZ,
                 out int maxZ);
             if (minX > maxX || minZ > maxZ)
-                return;
+                return FlowFieldCellRect.Invalid;
 
             float halfXZ = FlowFieldOverlapUtility.CellHalfExtent(grid.CellSize);
             Vector3 halfExtents = new Vector3(halfXZ, halfHeight, halfXZ);
@@ -461,6 +466,15 @@ namespace Common.FlowField
                         ref overlapBuffer);
                 }
             }
+            return new FlowFieldCellRect
+            {
+                MinX = minX,
+                MaxX = maxX,
+                MinY = 0,
+                MaxY = grid.Height - 1,
+                MinZ = minZ,
+                MaxZ = maxZ,
+            };
         }
 
         // A valid Influence Collider that is enabled in the scene.
