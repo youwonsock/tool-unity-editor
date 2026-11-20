@@ -56,6 +56,23 @@ namespace Common.FlowField
 
         internal int Count => Width * Height * Depth;
 
+        /// <summary>Copies FlowFieldNeighborUtility's direction, face and corner tables.</summary>
+        internal void FillNeighborTables()
+        {
+            for (int direction = 0; direction < NeighborCount; direction++)
+            {
+                DeltaX[direction] = FlowFieldNeighborUtility.DeltaX[direction];
+                DeltaY[direction] = FlowFieldNeighborUtility.DeltaY[direction];
+                DeltaZ[direction] = FlowFieldNeighborUtility.DeltaZ[direction];
+            }
+            for (int face = 0; face < FlowFieldNeighborUtility.VolumeFaceDirections.Length; face++)
+                FaceDirections[face] = FlowFieldNeighborUtility.VolumeFaceDirections[face];
+            for (int direction = 0; direction <= NeighborCount; direction++)
+                CornerStart[direction] = FlowFieldNeighborUtility.VolumeCornerStart[direction];
+            for (int corner = 0; corner < CornerCount; corner++)
+                CornerDirections[corner] = FlowFieldNeighborUtility.VolumeCornerDirections[corner];
+        }
+
         internal int ChunkCount => (Count + ChunkSize - 1) / ChunkSize;
 
         internal bool Cancelled => Volatile.Read(ref *Cancel) != 0;
@@ -124,16 +141,29 @@ namespace Common.FlowField
         internal JobHandle ScheduleChain(bool buildObstacleResults)
         {
             int chunks = ChunkCount;
-            JobHandle handle = new FlowFieldVolumeResetJob { Data = this }.Schedule(chunks, 1);
-            if (buildObstacleResults)
-                handle = new FlowFieldVolumeTopologyJob { Data = this }.Schedule(chunks, 1, handle);
-            handle = new FlowFieldVolumeGoalJob { Data = this }.Schedule(handle);
-            handle = new FlowFieldVolumeInfluenceJob { Data = this }.Schedule(chunks, 1, handle);
-            handle = new FlowFieldVolumeBfsJob { Data = this }.Schedule(handle);
-            handle = new FlowFieldVolumeDirectionsJob { Data = this }.Schedule(chunks, 1, handle);
-            if (buildObstacleResults)
-                handle = new FlowFieldVolumeEscapeJob { Data = this }.Schedule(handle);
-            return handle;
+            JobHandle handle = default;
+            try
+            {
+                handle = new FlowFieldVolumeResetJob { Data = this }.Schedule(chunks, 1);
+                if (buildObstacleResults)
+                    handle = new FlowFieldVolumeTopologyJob { Data = this }.Schedule(chunks, 1, handle);
+                handle = new FlowFieldVolumeGoalJob { Data = this }.Schedule(handle);
+                handle = new FlowFieldVolumeInfluenceJob { Data = this }.Schedule(chunks, 1, handle);
+                handle = new FlowFieldVolumeBfsJob { Data = this }.Schedule(handle);
+                handle = new FlowFieldVolumeDirectionsJob { Data = this }.Schedule(chunks, 1, handle);
+                if (buildObstacleResults)
+                    handle = new FlowFieldVolumeEscapeJob { Data = this }.Schedule(handle);
+                return handle;
+            }
+            catch
+            {
+                // What was scheduled still reads the pinned arrays: stop it and
+                // wait, so the owner may release them.
+                if (Cancel != null)
+                    Volatile.Write(ref *Cancel, 1);
+                handle.Complete();
+                throw;
+            }
         }
     }
 

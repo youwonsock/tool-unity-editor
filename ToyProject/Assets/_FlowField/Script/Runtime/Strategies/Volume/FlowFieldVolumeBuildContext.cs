@@ -210,10 +210,9 @@ namespace Common.FlowField
             _solvePins = new FlowFieldPinnedArrays(FlowFieldVolumeSolveData.PinnedArrayCount + 2);
             _solveCancel = new int[1];
             _solveGoal = new[] { -1 };
-            FlowFieldVolumeSolveData data;
             try
             {
-                data = new FlowFieldVolumeSolveData
+                var data = new FlowFieldVolumeSolveData
                 {
                     Blocked = _solvePins.Pin(Blocked),
                     Topology = _solvePins.Pin(Topology),
@@ -236,28 +235,17 @@ namespace Common.FlowField
                     GoalInfluenceRadius = Request.GoalInfluenceRadius,
                     DefaultDirection = FlowFieldVectorUtility.NormalizeDefaultDirection(Request.DefaultDirection),
                 };
+                data.FillNeighborTables();
+                SolveHandle = data.ScheduleChain(buildObstacleResults: !ReusesObstacleQueries);
             }
             catch
             {
-                // Nothing is scheduled yet, and SolveRunning is still false, so
-                // CancelSolve would not release these: free them here.
+                // SolveRunning is still false, so CancelSolve would not release
+                // these, and a schedule that failed has already waited for what
+                // it began: free them here.
                 _solvePins.Release();
                 throw;
             }
-            for (int direction = 0; direction < FlowFieldNeighborUtility.VolumeCount; direction++)
-            {
-                data.DeltaX[direction] = FlowFieldNeighborUtility.DeltaX[direction];
-                data.DeltaY[direction] = FlowFieldNeighborUtility.DeltaY[direction];
-                data.DeltaZ[direction] = FlowFieldNeighborUtility.DeltaZ[direction];
-            }
-            for (int face = 0; face < FlowFieldNeighborUtility.VolumeFaceDirections.Length; face++)
-                data.FaceDirections[face] = FlowFieldNeighborUtility.VolumeFaceDirections[face];
-            for (int direction = 0; direction <= FlowFieldNeighborUtility.VolumeCount; direction++)
-                data.CornerStart[direction] = FlowFieldNeighborUtility.VolumeCornerStart[direction];
-            for (int corner = 0; corner < FlowFieldNeighborUtility.VolumeCornerCount; corner++)
-                data.CornerDirections[corner] = FlowFieldNeighborUtility.VolumeCornerDirections[corner];
-
-            SolveHandle = data.ScheduleChain(buildObstacleResults: !ReusesObstacleQueries);
             SolveRunning = true;
             JobHandle.ScheduleBatchedJobs();
         }
