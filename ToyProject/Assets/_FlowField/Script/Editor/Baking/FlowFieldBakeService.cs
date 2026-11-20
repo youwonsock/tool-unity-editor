@@ -49,10 +49,10 @@ namespace Common.FlowField.Editor
 
         // ----- Surface2D -----------------------------------------------------
 
-        internal static FlowFieldSurfaceBakeSettings CreateSurfaceBakeSettings(this FlowFieldManager manager)
+        internal static FlowFieldSurfaceSignature CreateSurfaceSignature(this FlowFieldManager manager)
         {
             FlowFieldManagerConfig config = manager.CaptureConfig();
-            return FlowFieldSurfaceBuilder.CreateBakeSettings(in config);
+            return FlowFieldSurfaceBuilder.CreateSignature(in config);
         }
 
         internal static FlowFieldSurfaceGoalResolution ResolveConfiguredGoal(this FlowFieldManager manager, FlowFieldGridSpace grid)

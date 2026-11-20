@@ -14,11 +14,8 @@ namespace Common.FlowField
         private const byte ValidSurface = 1 << 0;
         private const float NormalEpsilonSqr = 0.000001f;
 
+        private readonly FlowFieldSurfaceBakeSettings _settings;
         private readonly FlowFieldGridSpace _grid;
-        private readonly Bounds _bakeBounds;
-        private readonly LayerMask _groundLayer;
-        private readonly float _maxSurfaceSlope;
-        private readonly float _maxStepHeight;
         private readonly float[] _surfaceHeights;
         private readonly Vector3[] _surfaceNormals;
         private readonly byte[] _surfaceFlags;
@@ -31,10 +28,10 @@ namespace Common.FlowField
         internal int CellCount => _grid.CellCount;
         internal int ValidCellCount { get; }
         internal int Revision { get; }
-        internal Bounds BakeBoundsWorld => _bakeBounds;
-        internal LayerMask GroundLayer => _groundLayer;
-        internal float MaxSurfaceSlope => _maxSurfaceSlope;
-        internal float MaxStepHeight => _maxStepHeight;
+        internal Bounds BakeBoundsWorld => _settings.BakeBounds;
+        internal LayerMask GroundLayer => _settings.GroundLayer;
+        internal float MaxSurfaceSlope => _settings.MaxSurfaceSlope;
+        internal float MaxStepHeight => _settings.MaxStepHeight;
         internal bool IsValid { get; }
 
         private FlowFieldSurfaceData(
@@ -59,11 +56,8 @@ namespace Common.FlowField
                 || neighborMasks.Length != settings.Grid.CellCount)
                 throw new ArgumentException("Surface arrays do not match the grid.");
 
+            _settings = settings;
             _grid = settings.Grid;
-            _bakeBounds = settings.BakeBounds;
-            _groundLayer = settings.GroundLayer;
-            _maxSurfaceSlope = settings.MaxSurfaceSlope;
-            _maxStepHeight = settings.MaxStepHeight;
             _surfaceHeights = copyArrays ? (float[])surfaceHeights.Clone() : surfaceHeights;
             _surfaceNormals = copyArrays ? (Vector3[])surfaceNormals.Clone() : surfaceNormals;
             _surfaceFlags = copyArrays ? (byte[])surfaceFlags.Clone() : surfaceFlags;
@@ -119,11 +113,7 @@ namespace Common.FlowField
                 reason = "Surface settings are invalid.";
                 return false;
             }
-            if (!_grid.MatchesBounds(settings.Grid)
-                || !FlowFieldLayoutUtility.Approximately(_bakeBounds, settings.BakeBounds)
-                || _groundLayer.value != settings.GroundLayer.value
-                || !FlowFieldLayoutUtility.Approximately(_maxSurfaceSlope, settings.MaxSurfaceSlope)
-                || !FlowFieldLayoutUtility.Approximately(_maxStepHeight, settings.MaxStepHeight))
+            if (!FlowFieldSurfaceSignature.SurfaceMatches(_settings, settings))
             {
                 reason = "Surface signature does not match the requested settings.";
                 return false;
@@ -134,11 +124,7 @@ namespace Common.FlowField
         internal bool ContentEquals(FlowFieldSurfaceData other)
         {
             if (other == null
-                || !_grid.MatchesBounds(other._grid)
-                || !FlowFieldLayoutUtility.Approximately(_bakeBounds, other._bakeBounds)
-                || _groundLayer.value != other._groundLayer.value
-                || !FlowFieldLayoutUtility.Approximately(_maxSurfaceSlope, other._maxSurfaceSlope)
-                || !FlowFieldLayoutUtility.Approximately(_maxStepHeight, other._maxStepHeight)
+                || !FlowFieldSurfaceSignature.SurfaceMatches(_settings, other._settings)
                 || _surfaceHeights.Length != other._surfaceHeights.Length)
                 return false;
 

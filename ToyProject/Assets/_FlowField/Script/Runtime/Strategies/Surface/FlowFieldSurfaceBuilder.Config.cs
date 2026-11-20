@@ -19,16 +19,16 @@ namespace Common.FlowField
             {
                 case FlowFieldConfigChange.Rebuild:
                 {
-                    FlowFieldSurfaceBakeSettings settings = CreateBakeSettings(in config);
+                    FlowFieldSurfaceSignature signature = CreateSignature(in config);
                     // A StaticBaked field takes no runtime obstacles.
                     bool requeryObstacles = _session.BakeMode != FlowFieldBakeMode.StaticBaked;
                     Bounds? invalidated = Submit(CreateRequest(
                         in config,
                         _session.BakeMode,
-                        in settings,
+                        in signature,
                         requeryObstacles ? RequeryObstacleFlags : FlowFieldSurfaceDirtyFlags.None,
                         FlowFieldCellRect.Invalid,
-                        requeryObstacles ? FlowFieldCellRect.Full(settings.Grid) : FlowFieldCellRect.Invalid));
+                        requeryObstacles ? FlowFieldCellRect.Full(signature.Surface.Grid) : FlowFieldCellRect.Invalid));
                     _configOwed = false;
                     return invalidated;
                 }
@@ -100,7 +100,7 @@ namespace Common.FlowField
             => CreateRequest(
                 in config,
                 _session.BakeMode,
-                CreateBakeSettings(in config),
+                CreateSignature(in config),
                 FlowFieldSurfaceDirtyFlags.None,
                 FlowFieldCellRect.Invalid,
                 FlowFieldCellRect.Invalid);
@@ -128,6 +128,15 @@ namespace Common.FlowField
                 config.Surface.MaxStepHeight);
         }
 
+        /// <summary>The surface and obstacle settings the configuration builds and bakes with.</summary>
+        internal static FlowFieldSurfaceSignature CreateSignature(in FlowFieldManagerConfig config)
+            => new FlowFieldSurfaceSignature(
+                CreateBakeSettings(in config),
+                config.Obstacles.Layer,
+                config.Surface.ObstacleCheckHeight,
+                config.Surface.ObstacleCheckCenterOffset,
+                config.Obstacles.Clearance);
+
         internal static FlowFieldSurfaceGoalResolution ResolveGoal(
             in FlowFieldManagerConfig config,
             FlowFieldGridSpace grid)
@@ -139,17 +148,12 @@ namespace Common.FlowField
 
         internal static FlowFieldSurfaceBakeSnapshot CreateBakeSnapshot(
             in FlowFieldManagerConfig config,
-            in FlowFieldSurfaceBakeSettings settings)
+            in FlowFieldSurfaceSignature signature)
         {
             FlowFieldSurfaceBakeData bakeData = config.BakeAssets.Surface;
             if (bakeData == null)
                 throw new InvalidOperationException("StaticBaked and BakedBase modes require a FlowFieldSurfaceBakeData asset.");
-            return bakeData.CreateSnapshot(
-                settings,
-                config.Obstacles.Layer,
-                config.Surface.ObstacleCheckHeight,
-                config.Surface.ObstacleCheckCenterOffset,
-                config.Obstacles.Clearance);
+            return bakeData.CreateSnapshot(in signature);
         }
 
         /// <summary>
@@ -159,7 +163,7 @@ namespace Common.FlowField
         internal static FlowFieldSurfaceRequest CreateRequest(
             in FlowFieldManagerConfig config,
             FlowFieldBakeMode bakeMode,
-            in FlowFieldSurfaceBakeSettings settings,
+            in FlowFieldSurfaceSignature signature,
             FlowFieldSurfaceDirtyFlags dirtyFlags,
             FlowFieldCellRect dirtyFinalRegion,
             FlowFieldCellRect dirtyObstacleRegion)
@@ -167,15 +171,11 @@ namespace Common.FlowField
             if (bakeMode == FlowFieldBakeMode.BakedBase)
             {
                 return FlowFieldSurfaceRequest.ForBakedBase(
-                    settings,
+                    signature,
                     config.BakeAssets.Surface,
-                    CreateBakeSnapshot(in config, in settings),
-                    config.Obstacles.Layer,
-                    config.Surface.ObstacleCheckHeight,
-                    config.Surface.ObstacleCheckCenterOffset,
-                    config.Obstacles.Clearance,
+                    CreateBakeSnapshot(in config, in signature),
                     config.Obstacles.SweepUnregistered,
-                    ResolveGoal(in config, settings.Grid),
+                    ResolveGoal(in config, signature.Surface.Grid),
                     config.Flow.DefaultDirection,
                     dirtyFlags,
                     dirtyFinalRegion,
@@ -185,25 +185,17 @@ namespace Common.FlowField
             if (bakeMode == FlowFieldBakeMode.StaticBaked)
             {
                 return FlowFieldSurfaceRequest.ForStaticSnapshot(
-                    settings,
+                    signature,
                     config.BakeAssets.Surface,
-                    CreateBakeSnapshot(in config, in settings),
-                    config.Obstacles.Layer,
-                    config.Surface.ObstacleCheckHeight,
-                    config.Surface.ObstacleCheckCenterOffset,
-                    config.Obstacles.Clearance,
+                    CreateBakeSnapshot(in config, in signature),
                     config.Flow.DefaultDirection,
                     dirtyFlags);
             }
 
             return FlowFieldSurfaceRequest.ForSceneBuild(
-                settings,
-                config.Obstacles.Layer,
-                config.Surface.ObstacleCheckHeight,
-                config.Surface.ObstacleCheckCenterOffset,
-                config.Obstacles.Clearance,
+                signature,
                 config.Obstacles.SweepUnregistered,
-                ResolveGoal(in config, settings.Grid),
+                ResolveGoal(in config, signature.Surface.Grid),
                 config.Flow.DefaultDirection,
                 dirtyFlags,
                 dirtyFinalRegion,
@@ -225,7 +217,6 @@ namespace Common.FlowField
             if (!config.TryValidateShared(spaceModeLocked, bakeModeLocked, out reason))
                 return false;
             FlowFieldSurfaceSettings surface = config.Surface;
-            FlowFieldObstacleSettings obstacles = config.Obstacles;
             if (surface.GroundLayer.value == 0)
                 return FlowFieldManagerConfig.Fail(out reason, "Ground Bake LayerMask must contain at least one layer.");
             if (!FlowFieldGridSpace.IsFinite(surface.MaxSlope) || surface.MaxSlope < 0f || surface.MaxSlope > 89f)
@@ -245,13 +236,7 @@ namespace Common.FlowField
             FlowFieldSurfaceBakeData bakeData = config.BakeAssets.Surface;
             if (bakeData == null)
                 return FlowFieldManagerConfig.Fail(out reason, $"{config.BakeMode} mode requires a FlowFieldSurfaceBakeData asset.");
-            if (!bakeData.MatchesSurface(CreateBakeSettings(in config), out reason)
-                || !bakeData.MatchesObstacles(
-                    obstacles.Layer,
-                    surface.ObstacleCheckHeight,
-                    surface.ObstacleCheckCenterOffset,
-                    obstacles.Clearance,
-                    out reason))
+            if (!bakeData.Matches(CreateSignature(in config), out reason))
                 return false;
             // Only StaticBaked keeps the baked Goal; BakedBase solves its own.
             return config.BakeMode != FlowFieldBakeMode.StaticBaked

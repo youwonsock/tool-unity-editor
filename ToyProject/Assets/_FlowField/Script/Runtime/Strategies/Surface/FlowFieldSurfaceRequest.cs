@@ -18,14 +18,15 @@ namespace Common.FlowField
     internal readonly struct FlowFieldSurfaceRequest
     {
         internal FlowFieldSurfaceSourceKind SourceKind { get; }
-        internal FlowFieldSurfaceBakeSettings SurfaceSettings { get; }
+        internal FlowFieldSurfaceSignature Signature { get; }
         internal FlowFieldSurfaceBakeData BakeSource { get; }
         internal FlowFieldSurfaceBakeSnapshot BakeSnapshot { get; }
         private readonly int _bakeContentGeneration;
-        internal LayerMask ObstacleLayer { get; }
-        internal float ObstacleCheckHeight { get; }
-        internal float ObstacleCheckCenterOffset { get; }
-        internal float ObstacleClearance { get; }
+        internal FlowFieldSurfaceBakeSettings SurfaceSettings => Signature.Surface;
+        internal LayerMask ObstacleLayer => Signature.ObstacleLayer;
+        internal float ObstacleCheckHeight => Signature.ObstacleCheckHeight;
+        internal float ObstacleCheckCenterOffset => Signature.ObstacleCheckCenterOffset;
+        internal float ObstacleClearance => Signature.ObstacleClearance;
         // Compared with the obstacle inputs, so switching the sweep rescans every obstacle.
         internal bool SweepUnregistered { get; }
         internal FlowFieldSurfaceGoalResolution Goal { get; }
@@ -36,13 +37,9 @@ namespace Common.FlowField
 
         private FlowFieldSurfaceRequest(
             FlowFieldSurfaceSourceKind sourceKind,
-            in FlowFieldSurfaceBakeSettings surfaceSettings,
+            in FlowFieldSurfaceSignature signature,
             FlowFieldSurfaceBakeData bakeSource,
             FlowFieldSurfaceBakeSnapshot bakeSnapshot,
-            LayerMask obstacleLayer,
-            float obstacleCheckHeight,
-            float obstacleCheckCenterOffset,
-            float obstacleClearance,
             bool sweepUnregistered,
             in FlowFieldSurfaceGoalResolution goal,
             Vector3 defaultDirection,
@@ -51,14 +48,10 @@ namespace Common.FlowField
             FlowFieldCellRect dirtyObstacleRegion)
         {
             SourceKind = sourceKind;
-            SurfaceSettings = surfaceSettings;
+            Signature = signature;
             BakeSource = bakeSource;
             BakeSnapshot = bakeSnapshot;
             _bakeContentGeneration = bakeSource != null ? bakeSource.ContentGeneration : -1;
-            ObstacleLayer = obstacleLayer;
-            ObstacleCheckHeight = obstacleCheckHeight;
-            ObstacleCheckCenterOffset = obstacleCheckCenterOffset;
-            ObstacleClearance = obstacleClearance;
             SweepUnregistered = sweepUnregistered;
             Goal = goal;
             DefaultDirection = defaultDirection;
@@ -68,11 +61,7 @@ namespace Common.FlowField
         }
 
         internal static FlowFieldSurfaceRequest ForSceneBuild(
-            in FlowFieldSurfaceBakeSettings settings,
-            LayerMask obstacleLayer,
-            float obstacleCheckHeight,
-            float obstacleCheckCenterOffset,
-            float obstacleClearance,
+            in FlowFieldSurfaceSignature signature,
             bool sweepUnregistered,
             in FlowFieldSurfaceGoalResolution goal,
             Vector3 defaultDirection,
@@ -81,13 +70,9 @@ namespace Common.FlowField
             FlowFieldCellRect dirtyObstacleRegion)
             => new FlowFieldSurfaceRequest(
                 FlowFieldSurfaceSourceKind.SceneBuild,
-                settings,
+                signature,
                 null,
                 null,
-                obstacleLayer,
-                obstacleCheckHeight,
-                obstacleCheckCenterOffset,
-                obstacleClearance,
                 sweepUnregistered,
                 goal,
                 defaultDirection,
@@ -96,13 +81,9 @@ namespace Common.FlowField
                 dirtyObstacleRegion);
 
         internal static FlowFieldSurfaceRequest ForBakedBase(
-            in FlowFieldSurfaceBakeSettings settings,
+            in FlowFieldSurfaceSignature signature,
             FlowFieldSurfaceBakeData bakeSource,
             FlowFieldSurfaceBakeSnapshot bakeSnapshot,
-            LayerMask obstacleLayer,
-            float obstacleCheckHeight,
-            float obstacleCheckCenterOffset,
-            float obstacleClearance,
             bool sweepUnregistered,
             in FlowFieldSurfaceGoalResolution goal,
             Vector3 defaultDirection,
@@ -111,13 +92,9 @@ namespace Common.FlowField
             FlowFieldCellRect dirtyObstacleRegion)
             => new FlowFieldSurfaceRequest(
                 FlowFieldSurfaceSourceKind.BakedBase,
-                settings,
+                signature,
                 bakeSource,
                 bakeSnapshot,
-                obstacleLayer,
-                obstacleCheckHeight,
-                obstacleCheckCenterOffset,
-                obstacleClearance,
                 sweepUnregistered,
                 goal,
                 defaultDirection,
@@ -126,24 +103,16 @@ namespace Common.FlowField
                 dirtyObstacleRegion);
 
         internal static FlowFieldSurfaceRequest ForStaticSnapshot(
-            in FlowFieldSurfaceBakeSettings settings,
+            in FlowFieldSurfaceSignature signature,
             FlowFieldSurfaceBakeData bakeSource,
             FlowFieldSurfaceBakeSnapshot bakeSnapshot,
-            LayerMask obstacleLayer,
-            float obstacleCheckHeight,
-            float obstacleCheckCenterOffset,
-            float obstacleClearance,
             Vector3 defaultDirection,
             FlowFieldSurfaceDirtyFlags dirtyFlags)
             => new FlowFieldSurfaceRequest(
                 FlowFieldSurfaceSourceKind.StaticSnapshot,
-                settings,
+                signature,
                 bakeSource,
                 bakeSnapshot,
-                obstacleLayer,
-                obstacleCheckHeight,
-                obstacleCheckCenterOffset,
-                obstacleClearance,
                 false,
                 FlowFieldSurfaceGoalResolution.None,
                 defaultDirection,
@@ -163,17 +132,14 @@ namespace Common.FlowField
         /// </summary>
         internal bool HasSameSource(in FlowFieldSurfaceRequest other)
             => SourceKind == other.SourceKind
-                && SurfaceSettingsMatch(SurfaceSettings, other.SurfaceSettings)
+                && Signature.SurfaceMatches(other.Signature)
                 && HasSameBake(other);
 
         internal bool HasSameBaseInputs(in FlowFieldSurfaceRequest other)
             => SourceKind == other.SourceKind
-                && SurfaceSettingsMatch(SurfaceSettings, other.SurfaceSettings)
+                && Signature.SurfaceMatches(other.Signature)
                 && HasSameBake(other)
-                && ObstacleLayer.value == other.ObstacleLayer.value
-                && FlowFieldLayoutUtility.Approximately(ObstacleCheckHeight, other.ObstacleCheckHeight)
-                && FlowFieldLayoutUtility.Approximately(ObstacleCheckCenterOffset, other.ObstacleCheckCenterOffset)
-                && FlowFieldLayoutUtility.Approximately(ObstacleClearance, other.ObstacleClearance)
+                && Signature.ObstaclesMatch(other.Signature)
                 && SweepUnregistered == other.SweepUnregistered
                 && GoalMatch(Goal, other.Goal);
 
@@ -183,17 +149,14 @@ namespace Common.FlowField
         internal FlowFieldSurfaceDirtyFlags GetInputDirtyFlags(in FlowFieldSurfaceRequest other)
         {
             FlowFieldSurfaceDirtyFlags flags = FlowFieldSurfaceDirtyFlags.None;
-            bool surfaceChanged = !SurfaceSettingsMatch(SurfaceSettings, other.SurfaceSettings)
+            bool surfaceChanged = !Signature.SurfaceMatches(other.Signature)
                 || !HasSameBake(other)
                 || SourceKind != other.SourceKind;
             if (surfaceChanged)
             {
                 flags |= FlowFieldSurfaceDirtyFlags.All;
             }
-            else if (ObstacleLayer.value != other.ObstacleLayer.value
-                || !FlowFieldLayoutUtility.Approximately(ObstacleCheckHeight, other.ObstacleCheckHeight)
-                || !FlowFieldLayoutUtility.Approximately(ObstacleCheckCenterOffset, other.ObstacleCheckCenterOffset)
-                || !FlowFieldLayoutUtility.Approximately(ObstacleClearance, other.ObstacleClearance)
+            else if (!Signature.ObstaclesMatch(other.Signature)
                 || SweepUnregistered != other.SweepUnregistered)
             {
                 flags |= FlowFieldSurfaceDirtyFlags.StaticObstacles
@@ -213,15 +176,6 @@ namespace Common.FlowField
                 && (ReferenceEquals(BakeSource, null)
                     || (BakeSnapshot?.Revision ?? -1) == (other.BakeSnapshot?.Revision ?? -1)
                     && _bakeContentGeneration == other._bakeContentGeneration);
-
-        private static bool SurfaceSettingsMatch(
-            in FlowFieldSurfaceBakeSettings left,
-            in FlowFieldSurfaceBakeSettings right)
-            => left.Grid.MatchesBounds(right.Grid)
-                && FlowFieldLayoutUtility.Approximately(left.BakeBounds, right.BakeBounds)
-                && left.GroundLayer.value == right.GroundLayer.value
-                && FlowFieldLayoutUtility.Approximately(left.MaxSurfaceSlope, right.MaxSurfaceSlope)
-                && FlowFieldLayoutUtility.Approximately(left.MaxStepHeight, right.MaxStepHeight);
 
         private static bool GoalMatch(
             in FlowFieldSurfaceGoalResolution left,

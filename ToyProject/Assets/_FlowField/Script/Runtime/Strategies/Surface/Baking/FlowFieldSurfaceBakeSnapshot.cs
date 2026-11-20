@@ -11,14 +11,8 @@ namespace Common.FlowField
     /// </summary>
     internal sealed class FlowFieldSurfaceBakeSnapshot
     {
-        private const float Epsilon = 0.0001f;
-
-        private readonly FlowFieldSurfaceBakeSettings _surfaceSettings;
+        private readonly FlowFieldSurfaceSignature _signature;
         private readonly FlowFieldSurfaceData _surface;
-        private readonly LayerMask _obstacleLayer;
-        private readonly float _obstacleCheckHeight;
-        private readonly float _obstacleCheckCenterOffset;
-        private readonly float _obstacleClearance;
         private readonly bool[] _blocked;
         private readonly Vector3[] _escapeDirections;
         private readonly byte[] _topologyMasks;
@@ -38,11 +32,7 @@ namespace Common.FlowField
         internal FlowFieldSurfaceData Surface => _surface;
 
         internal FlowFieldSurfaceBakeSnapshot(
-            FlowFieldSurfaceBakeSettings surfaceSettings,
-            LayerMask obstacleLayer,
-            float obstacleCheckHeight,
-            float obstacleCheckCenterOffset,
-            float obstacleClearance,
+            in FlowFieldSurfaceSignature signature,
             int revision,
             bool hasGoal,
             Vector3 requestedGoalWorld,
@@ -56,9 +46,9 @@ namespace Common.FlowField
             Vector3[] goalDirections,
             int[] nextCells)
         {
-            if (!surfaceSettings.IsValid || surface == null || !surface.IsValid)
+            if (!signature.Surface.IsValid || surface == null || !surface.IsValid)
                 throw new ArgumentException("Static bake snapshot Surface is invalid.", nameof(surface));
-            int count = surfaceSettings.Grid.CellCount;
+            int count = signature.Surface.Grid.CellCount;
             if (!MatchesLength(blocked, count)
                 || !MatchesLength(escapeDirections, count)
                 || !MatchesLength(topologyMasks, count)
@@ -69,22 +59,18 @@ namespace Common.FlowField
             if (!FlowFieldGridSpace.IsFinite(requestedGoalWorld)
                 || !FlowFieldGridSpace.IsFinite(goalInfluenceRadius)
                 || goalInfluenceRadius < 0f
-                || obstacleLayer.value == 0
-                || !FlowFieldGridSpace.IsFinite(obstacleCheckHeight)
-                || obstacleCheckHeight <= 0f
-                || !FlowFieldGridSpace.IsFinite(obstacleCheckCenterOffset)
-                || !FlowFieldGridSpace.IsFinite(obstacleClearance)
-                || obstacleClearance < 0f
+                || signature.ObstacleLayer.value == 0
+                || !FlowFieldGridSpace.IsFinite(signature.ObstacleCheckHeight)
+                || signature.ObstacleCheckHeight <= 0f
+                || !FlowFieldGridSpace.IsFinite(signature.ObstacleCheckCenterOffset)
+                || !FlowFieldGridSpace.IsFinite(signature.ObstacleClearance)
+                || signature.ObstacleClearance < 0f
                 || hasGoal && (resolvedGoalIndex < 0 || resolvedGoalIndex >= count)
                 || !hasGoal && resolvedGoalIndex != -1)
                 throw new ArgumentException("Static bake snapshot Goal data is invalid.");
 
-            _surfaceSettings = surfaceSettings;
+            _signature = signature;
             _surface = surface;
-            _obstacleLayer = obstacleLayer;
-            _obstacleCheckHeight = obstacleCheckHeight;
-            _obstacleCheckCenterOffset = obstacleCheckCenterOffset;
-            _obstacleClearance = obstacleClearance;
             Revision = revision;
             HasGoal = hasGoal;
             RequestedGoalWorld = requestedGoalWorld;
@@ -98,44 +84,25 @@ namespace Common.FlowField
             _nextCells = Clone(nextCells);
         }
 
-        internal bool MatchesSurface(in FlowFieldSurfaceBakeSettings settings, out string reason)
+        /// <summary>
+        /// True when the snapshot was made with these settings and holds
+        /// valid data; otherwise the reason, the surface part first.
+        /// </summary>
+        internal bool Matches(in FlowFieldSurfaceSignature signature, out string reason)
         {
             reason = string.Empty;
-            if (!settings.IsValid
-                || !_surfaceSettings.Grid.MatchesBounds(settings.Grid)
-                || !FlowFieldLayoutUtility.Approximately(_surfaceSettings.BakeBounds, settings.BakeBounds)
-                || _surfaceSettings.GroundLayer.value != settings.GroundLayer.value
-                || Mathf.Abs(_surfaceSettings.MaxSurfaceSlope - settings.MaxSurfaceSlope) > Epsilon
-                || Mathf.Abs(_surfaceSettings.MaxStepHeight - settings.MaxStepHeight) > Epsilon)
+            if (!signature.Surface.IsValid || !_signature.SurfaceMatches(signature))
             {
                 reason = "Static Flow Bake Surface settings differ from the Manager settings.";
                 return false;
             }
-            if (!HasValidData)
-                reason = InvalidDataReason;
-            return HasValidData;
-        }
-
-        private const string InvalidDataReason = "Static Flow Bake data is missing or invalid.";
-
-        internal bool MatchesObstacles(
-            LayerMask layer,
-            float checkHeight,
-            float centerOffset,
-            float clearance,
-            out string reason)
-        {
-            reason = string.Empty;
-            if (_obstacleLayer.value != layer.value
-                || Mathf.Abs(_obstacleCheckHeight - checkHeight) > Epsilon
-                || Mathf.Abs(_obstacleCheckCenterOffset - centerOffset) > Epsilon
-                || Mathf.Abs(_obstacleClearance - clearance) > Epsilon)
+            if (!_signature.ObstaclesMatch(signature))
             {
                 reason = "Static Flow Bake obstacle settings differ from the Manager settings.";
                 return false;
             }
             if (!HasValidData)
-                reason = InvalidDataReason;
+                reason = "Static Flow Bake data is missing or invalid.";
             return HasValidData;
         }
 
@@ -144,7 +111,7 @@ namespace Common.FlowField
             if (!HasValidData
                 || workspace == null
                 || !grid.IsValid
-                || !grid.MatchesBounds(_surfaceSettings.Grid)
+                || !grid.MatchesBounds(_signature.Surface.Grid)
                 || workspace.Capacity != grid.CellCount)
                 throw new ArgumentException("Static bake snapshot workspace does not match the grid.", nameof(workspace));
 

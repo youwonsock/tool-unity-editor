@@ -191,20 +191,20 @@ namespace Common.FlowField.Editor
                 return;
             }
 
-            FlowFieldSurfaceBakeSettings settings = manager.CreateSurfaceBakeSettings();
+            FlowFieldSurfaceSignature signature = manager.CreateSurfaceSignature();
             int inputGeneration = FlowFieldBakeService.CaptureInputGeneration(manager);
             FlowFieldSurfaceBakeJob bakeJob = new FlowFieldSurfaceBakeJob(
-                settings,
+                signature.Surface,
                 ReportSurfaceProgress);
             var run = new BakeRun(
                 manager,
                 SurfaceTarget.Label,
                 () => IsCurrentInput(manager, inputGeneration),
                 session => session.Pump(),
-                session => SaveSurfaceBake(manager, settings, session),
+                session => SaveSurfaceBake(manager, signature, session),
                 bakeJob.Cancel);
             // The ground scan runs first; the session starts on its result.
-            run.Prepare = () => StepSurfaceGroundScan(run, manager, settings, bakeJob);
+            run.Prepare = () => StepSurfaceGroundScan(run, manager, signature, bakeJob);
             run.Start("Baking Surface");
         }
 
@@ -212,7 +212,7 @@ namespace Common.FlowField.Editor
         private static bool StepSurfaceGroundScan(
             BakeRun run,
             FlowFieldManager manager,
-            FlowFieldSurfaceBakeSettings settings,
+            FlowFieldSurfaceSignature signature,
             FlowFieldSurfaceBakeJob bakeJob)
         {
             bakeJob.Step(2.0);
@@ -236,7 +236,7 @@ namespace Common.FlowField.Editor
             if (!bakeJob.IsValid)
                 throw new InvalidOperationException(bakeJob.Error);
 
-            FlowFieldSurfaceData surface = FlowFieldSurfaceData.FromRuntime(settings, bakeJob.Result, 1);
+            FlowFieldSurfaceData surface = FlowFieldSurfaceData.FromRuntime(signature.Surface, bakeJob.Result, 1);
             FlowFieldSession session = FlowFieldSession.CreateSurface(surfaceSource: new FlowFieldFixedSurfaceSource(surface));
             run.Attach(session);
             session.Initialize(FlowFieldBakeMode.RuntimeDynamic);
@@ -245,10 +245,10 @@ namespace Common.FlowField.Editor
             session.Surface.Submit(FlowFieldSurfaceBuilder.CreateRequest(
                 in config,
                 FlowFieldBakeMode.RuntimeDynamic,
-                in settings,
+                in signature,
                 FlowFieldSurfaceDirtyFlags.All,
-                FlowFieldCellRect.Full(settings.Grid),
-                FlowFieldCellRect.Full(settings.Grid)));
+                FlowFieldCellRect.Full(signature.Surface.Grid),
+                FlowFieldCellRect.Full(signature.Surface.Grid)));
             session.Pump();
             return true;
         }
@@ -464,7 +464,7 @@ namespace Common.FlowField.Editor
 
         private static void SaveSurfaceBake(
             FlowFieldManager manager,
-            FlowFieldSurfaceBakeSettings settings,
+            FlowFieldSurfaceSignature signature,
             FlowFieldSession session)
             => SaveBakeAsset<FlowFieldSurfaceBakeData>(
                 manager,
@@ -479,11 +479,8 @@ namespace Common.FlowField.Editor
                     return asset =>
                     {
                         bool hasGoal = workspace.HasActiveGoal && workspace.ResolvedGoalIndex >= 0;
-                        FlowFieldSurfaceGoalResolution goal = manager.ResolveConfiguredGoal(settings.Grid);
-                        FlowFieldManagerConfig config = manager.CaptureConfig();
-                        asset.Apply(settings, committedSurface, config.Obstacles.Layer,
-                            config.Surface.ObstacleCheckHeight, config.Surface.ObstacleCheckCenterOffset,
-                            config.Obstacles.Clearance, hasGoal, goal.RequestedWorld,
+                        FlowFieldSurfaceGoalResolution goal = manager.ResolveConfiguredGoal(signature.Surface.Grid);
+                        asset.Apply(signature, committedSurface, hasGoal, goal.RequestedWorld,
                             goal.InfluenceRadius, hasGoal ? workspace.ResolvedGoalIndex : -1, workspace);
                     };
                 });

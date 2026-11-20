@@ -104,20 +104,8 @@ namespace Common.FlowField
 
             if (request.BakeSnapshot == null || !request.BakeSnapshot.HasValidData)
                 throw new InvalidOperationException("Static Flow Bake Asset is missing or invalid.");
-            bool surfaceMatches = request.BakeSnapshot.MatchesSurface(
-                request.SurfaceSettings,
-                out string surfaceMismatch);
-            bool obstaclesMatch = request.BakeSnapshot.MatchesObstacles(
-                request.ObstacleLayer,
-                request.ObstacleCheckHeight,
-                request.ObstacleCheckCenterOffset,
-                request.ObstacleClearance,
-                out string obstacleMismatch);
-            if (!surfaceMatches || !obstaclesMatch)
-            {
-                throw new InvalidOperationException(
-                    string.IsNullOrEmpty(surfaceMismatch) ? obstacleMismatch : surfaceMismatch);
-            }
+            if (!request.BakeSnapshot.Matches(request.Signature, out string mismatch))
+                throw new InvalidOperationException(mismatch);
             return request.BakeSnapshot.Surface;
         }
 

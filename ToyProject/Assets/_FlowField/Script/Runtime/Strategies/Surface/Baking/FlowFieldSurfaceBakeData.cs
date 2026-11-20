@@ -126,6 +126,8 @@ namespace Common.FlowField
                 || !FlowFieldGridSpace.IsFinite(_gridOriginWorld)
                 || !FlowFieldGridSpace.IsFinite(_cellSize)
                 || _cellSize < FlowFieldLayoutUtility.MinCellSize
+                || !FlowFieldGridSpace.IsFinite(_width * _cellSize)
+                || !FlowFieldGridSpace.IsFinite(_depth * _cellSize)
                 || _groundLayerMask == 0
                 || !FlowFieldGridSpace.IsFinite(_bakeBoundsCenterWorld)
                 || !FlowFieldGridSpace.IsFinite(_bakeBoundsSizeWorld)
@@ -191,36 +193,19 @@ namespace Common.FlowField
         /// The cache is invalidated whenever Apply writes a new revision, so a
         /// Goal/default-direction-only request does not clone the asset again.
         /// </summary>
-        internal FlowFieldSurfaceBakeSnapshot CreateSnapshot(
-            in FlowFieldSurfaceBakeSettings settings,
-            LayerMask obstacleLayer,
-            float checkHeight,
-            float centerOffset,
-            float clearance)
+        internal FlowFieldSurfaceBakeSnapshot CreateSnapshot(in FlowFieldSurfaceSignature signature)
         {
-            if (!MatchesSurface(settings, out string surfaceReason))
-                throw new InvalidOperationException(surfaceReason);
-            if (!MatchesObstacles(obstacleLayer, checkHeight, centerOffset, clearance, out string obstacleReason))
-                throw new InvalidOperationException(obstacleReason);
+            if (!Matches(signature, out string reason))
+                throw new InvalidOperationException(reason);
 
             if (_snapshotCache != null
                 && _snapshotCacheRevision == Revision
-                && _snapshotCache.MatchesSurface(settings, out _)
-                && _snapshotCache.MatchesObstacles(
-                    obstacleLayer,
-                    checkHeight,
-                    centerOffset,
-                    clearance,
-                    out _))
+                && _snapshotCache.Matches(signature, out _))
                 return _snapshotCache;
 
-            FlowFieldSurfaceData surface = CreateSurfaceData(settings);
+            FlowFieldSurfaceData surface = CreateSurfaceData(signature.Surface);
             _snapshotCache = new FlowFieldSurfaceBakeSnapshot(
-                settings,
-                obstacleLayer,
-                checkHeight,
-                centerOffset,
-                clearance,
+                signature,
                 Revision,
                 _hasGoal,
                 _requestedGoalWorld,
@@ -439,41 +424,36 @@ namespace Common.FlowField
         private static bool ApproximatelyUnit(Vector3 value)
             => Mathf.Abs(value.sqrMagnitude - 1f) <= 0.01f;
 
-
-        internal bool MatchesSurface(in FlowFieldSurfaceBakeSettings settings, out string reason)
+        /// <summary>
+        /// True when the asset is valid and was baked with these settings;
+        /// otherwise the reason, the surface part first.
+        /// </summary>
+        internal bool Matches(in FlowFieldSurfaceSignature signature, out string reason)
         {
             if (!Validate(out reason))
                 return false;
-            FlowFieldGridSpace grid = settings.Grid;
-            if (!settings.IsValid || _width != grid.Width || _depth != grid.Depth
-                || Mathf.Abs(_cellSize - grid.CellSize) > Epsilon
-                || (_gridOriginWorld - grid.Origin).sqrMagnitude > Epsilon * Epsilon
-                || _groundLayerMask != settings.GroundLayer.value
-                || (_bakeBoundsCenterWorld - settings.BakeBounds.center).sqrMagnitude > Epsilon * Epsilon
-                || (_bakeBoundsSizeWorld - settings.BakeBounds.size).sqrMagnitude > Epsilon * Epsilon
-                || Mathf.Abs(_maxSurfaceSlope - settings.MaxSurfaceSlope) > Epsilon
-                || Mathf.Abs(_maxStepHeight - settings.MaxStepHeight) > Epsilon)
-            {
-                reason = "Static Flow Bake Surface settings differ from the Manager settings.";
-                return false;
-            }
+            FlowFieldSurfaceSignature baked = BakedSignature();
+            if (!signature.Surface.IsValid || !baked.SurfaceMatches(signature))
+                return Fail(out reason, "Static Flow Bake Surface settings differ from the Manager settings.");
+            if (!baked.ObstaclesMatch(signature))
+                return Fail(out reason, "Static Flow Bake obstacle settings differ from the Manager settings.");
             return true;
         }
 
-        internal bool MatchesObstacles(LayerMask layer, float checkHeight, float centerOffset, float clearance, out string reason)
-        {
-            if (!Validate(out reason))
-                return false;
-            if (_obstacleLayerMask != layer.value
-                || Mathf.Abs(_obstacleCheckHeight - checkHeight) > Epsilon
-                || Mathf.Abs(_obstacleCheckCenterOffset - centerOffset) > Epsilon
-                || Mathf.Abs(_obstacleClearance - clearance) > Epsilon)
-            {
-                reason = "Static Flow Bake obstacle settings differ from the Manager settings.";
-                return false;
-            }
-            return true;
-        }
+        // The settings the header records. Only a validated header has them:
+        // FromCellGrid throws on an invalid one.
+        private FlowFieldSurfaceSignature BakedSignature()
+            => new FlowFieldSurfaceSignature(
+                new FlowFieldSurfaceBakeSettings(
+                    FlowFieldGridSpace.FromCellGrid(_gridOriginWorld, _width, _depth, _cellSize),
+                    new Bounds(_bakeBoundsCenterWorld, _bakeBoundsSizeWorld),
+                    _groundLayerMask,
+                    _maxSurfaceSlope,
+                    _maxStepHeight),
+                _obstacleLayerMask,
+                _obstacleCheckHeight,
+                _obstacleCheckCenterOffset,
+                _obstacleClearance);
 
         internal bool MatchesGoal(bool hasGoal, Vector3 requestedGoalWorld, float influenceRadius, out string reason)
         {
@@ -485,10 +465,9 @@ namespace Common.FlowField
             return Fail(out reason, "Static Flow Bake Goal differs from the Manager settings. ReBake is required.");
         }
 
-        internal FlowFieldSurfaceData CreateSurfaceData(in FlowFieldSurfaceBakeSettings settings)
+        // Called once Matches accepted the settings.
+        private FlowFieldSurfaceData CreateSurfaceData(in FlowFieldSurfaceBakeSettings settings)
         {
-            if (!MatchesSurface(settings, out string reason))
-                throw new InvalidOperationException(reason);
             int valid = 0;
             for (int i = 0; i < _surfaceFlags.Length; i++)
                 if ((_surfaceFlags[i] & 1) != 0) valid++;
@@ -503,16 +482,13 @@ namespace Common.FlowField
         }
 
         private void AssignHeader(
-            in FlowFieldSurfaceBakeSettings settings,
-            LayerMask obstacleLayer,
-            float checkHeight,
-            float centerOffset,
-            float clearance,
+            in FlowFieldSurfaceSignature signature,
             bool hasGoal,
             Vector3 requestedGoalWorld,
             float goalInfluenceRadius,
             int resolvedGoalIndex)
         {
+            FlowFieldSurfaceBakeSettings settings = signature.Surface;
             _gridOriginWorld = settings.Grid.Origin;
             _width = settings.Grid.Width;
             _depth = settings.Grid.Depth;
@@ -522,10 +498,10 @@ namespace Common.FlowField
             _bakeBoundsSizeWorld = settings.BakeBounds.size;
             _maxSurfaceSlope = settings.MaxSurfaceSlope;
             _maxStepHeight = settings.MaxStepHeight;
-            _obstacleLayerMask = obstacleLayer.value;
-            _obstacleCheckHeight = checkHeight;
-            _obstacleCheckCenterOffset = centerOffset;
-            _obstacleClearance = clearance;
+            _obstacleLayerMask = signature.ObstacleLayer.value;
+            _obstacleCheckHeight = signature.ObstacleCheckHeight;
+            _obstacleCheckCenterOffset = signature.ObstacleCheckCenterOffset;
+            _obstacleClearance = signature.ObstacleClearance;
             _hasGoal = hasGoal;
             _requestedGoalWorld = requestedGoalWorld;
             _goalInfluenceRadius = goalInfluenceRadius;
@@ -533,18 +509,15 @@ namespace Common.FlowField
         }
 
         internal void Apply(
-            in FlowFieldSurfaceBakeSettings settings,
+            in FlowFieldSurfaceSignature signature,
             FlowFieldSurfaceData surface,
-            LayerMask obstacleLayer,
-            float checkHeight,
-            float centerOffset,
-            float clearance,
             bool hasGoal,
             Vector3 requestedGoalWorld,
             float goalInfluenceRadius,
             int resolvedGoalIndex,
             FlowFieldSurfaceWorkspace workspace)
         {
+            FlowFieldSurfaceBakeSettings settings = signature.Surface;
             if (!settings.IsValid || surface == null || !surface.IsValid)
                 throw new ArgumentException("Static Flow Bake input is invalid.");
             if (workspace == null || workspace.Capacity != settings.Grid.CellCount)
@@ -552,11 +525,11 @@ namespace Common.FlowField
             if (!FlowFieldGridSpace.IsFinite(requestedGoalWorld)
                 || !FlowFieldGridSpace.IsFinite(goalInfluenceRadius) || goalInfluenceRadius < 0f)
                 throw new ArgumentOutOfRangeException(nameof(goalInfluenceRadius));
-            if (obstacleLayer.value == 0
-                || !FlowFieldGridSpace.IsFinite(checkHeight) || checkHeight <= 0f
-                || !FlowFieldGridSpace.IsFinite(centerOffset)
-                || !FlowFieldGridSpace.IsFinite(clearance) || clearance < 0f)
-                throw new ArgumentOutOfRangeException(nameof(clearance));
+            if (signature.ObstacleLayer.value == 0
+                || !FlowFieldGridSpace.IsFinite(signature.ObstacleCheckHeight) || signature.ObstacleCheckHeight <= 0f
+                || !FlowFieldGridSpace.IsFinite(signature.ObstacleCheckCenterOffset)
+                || !FlowFieldGridSpace.IsFinite(signature.ObstacleClearance) || signature.ObstacleClearance < 0f)
+                throw new ArgumentOutOfRangeException(nameof(signature));
             if (hasGoal && (resolvedGoalIndex < 0 || resolvedGoalIndex >= settings.Grid.CellCount))
                 throw new ArgumentOutOfRangeException(nameof(resolvedGoalIndex));
 
@@ -576,8 +549,7 @@ namespace Common.FlowField
             {
                 // The candidate is checked as the bake it would become: current format.
                 candidate.MarkBaked();
-                candidate.AssignHeader(settings, obstacleLayer, checkHeight, centerOffset, clearance,
-                    hasGoal, requestedGoalWorld, goalInfluenceRadius, resolvedGoalIndex);
+                candidate.AssignHeader(signature, hasGoal, requestedGoalWorld, goalInfluenceRadius, resolvedGoalIndex);
                 candidate._surfaceHeights = surfaceHeights;
                 candidate._surfaceNormals = surfaceNormals;
                 candidate._surfaceFlags = surfaceFlags;
@@ -595,8 +567,7 @@ namespace Common.FlowField
                 _snapshotCache = null;
                 _snapshotCacheRevision = -1;
                 MarkBaked();
-                AssignHeader(settings, obstacleLayer, checkHeight, centerOffset, clearance,
-                    hasGoal, requestedGoalWorld, goalInfluenceRadius, resolvedGoalIndex);
+                AssignHeader(signature, hasGoal, requestedGoalWorld, goalInfluenceRadius, resolvedGoalIndex);
                 _surfaceHeights = surfaceHeights;
                 _surfaceNormals = surfaceNormals;
                 _surfaceFlags = surfaceFlags;
