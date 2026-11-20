@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace Common.FlowField
@@ -52,7 +51,7 @@ namespace Common.FlowField
             float clearance,
             bool[] destination,
             FlowFieldCellRect region,
-            HashSet<Collider> registeredObstacles,
+            FlowFieldObstacleRegistry registeredObstacles,
             ref Collider[] overlapBuffer,
             ref Collider[] targetOverlapBuffer)
         {
@@ -231,7 +230,7 @@ namespace Common.FlowField
         private struct StaticObstaclePolicy : IObstaclePolicy
         {
             public Collider[] TargetBuffer;
-            public HashSet<Collider> Registered;
+            public FlowFieldObstacleRegistry Registered;
 
             // GameObject.isStatic is always false in a Player, so it cannot
             // decide this. A Collider without a Rigidbody is what the physics

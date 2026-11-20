@@ -254,7 +254,7 @@ namespace Common.FlowField
                     request.Clearance,
                     scratch,
                     region,
-                    _registry.Set,
+                    _registry,
                     ref _overlapBuffer,
                     ref _targetOverlapBuffer);
             bool changed = !FlowFieldObstacleMaskBuilder.AreEqual(scratch, workspace.StaticBlocked);

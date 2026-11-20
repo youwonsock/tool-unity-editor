@@ -81,7 +81,7 @@ namespace Common.FlowField
         // Whether the running session holds this Collider; a Release clears
         // every registration, so FlowFieldDynamicObstacle registers again.
         internal bool IsDynamicObstacleRegistered(Collider collider)
-            => ActiveSession != null && ActiveSession.Obstacles.Set.Contains(collider);
+            => ActiveSession != null && ActiveSession.Obstacles.Contains(collider);
 
         /// <summary>
         /// A registered obstacle moved. The cells of its last built bounds and of

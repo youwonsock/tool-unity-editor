@@ -117,7 +117,7 @@ namespace Common.FlowField
                 Collider collider = _hits[_cursor];
                 if (collider == null)
                     continue;
-                if (registry.Set.Contains(collider))
+                if (registry.Contains(collider))
                 {
                     _observed.Remove(collider);
                     continue;

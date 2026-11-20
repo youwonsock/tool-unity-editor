@@ -57,31 +57,44 @@ namespace Common.FlowField
     {
         private const float MoveEpsilonSqr = 0.00000001f;
 
+        // Nothing reads the registry in order, so a removal moves the last
+        // entry into the freed slot and the index map finds every Collider
+        // without a scan.
         private readonly List<Collider> _colliders = new List<Collider>(16);
         // Kept beside each reference, so a destroyed Collider can still clear
         // the cells it used to block.
         private readonly List<Bounds> _bounds = new List<Bounds>(16);
-        private readonly HashSet<Collider> _set = new HashSet<Collider>();
+        private readonly Dictionary<Collider, int> _indices = new Dictionary<Collider, int>();
 
         internal int Count => _colliders.Count;
         internal Collider GetCollider(int index) => _colliders[index];
         // Where each Collider was last reported: registration or a notified move.
         internal Bounds GetBounds(int index) => _bounds[index];
-        // Static masks leave these Colliders to the dynamic mask.
-        internal HashSet<Collider> Set => _set;
+
+        /// <summary>Whether the Collider is registered. Static masks leave these Colliders to the dynamic mask.</summary>
+        internal bool Contains(Collider collider)
+            => !ReferenceEquals(collider, null) && _indices.ContainsKey(collider);
 
         private void RemoveAt(int index)
         {
-            _set.Remove(_colliders[index]);
-            _colliders.RemoveAt(index);
-            _bounds.RemoveAt(index);
+            _indices.Remove(_colliders[index]);
+            int last = _colliders.Count - 1;
+            if (index != last)
+            {
+                Collider moved = _colliders[last];
+                _colliders[index] = moved;
+                _bounds[index] = _bounds[last];
+                _indices[moved] = index;
+            }
+            _colliders.RemoveAt(last);
+            _bounds.RemoveAt(last);
         }
 
         internal void Clear()
         {
             _colliders.Clear();
             _bounds.Clear();
-            _set.Clear();
+            _indices.Clear();
         }
 
         /// <summary>False when it is already registered.</summary>
@@ -92,12 +105,12 @@ namespace Common.FlowField
                 throw new ArgumentNullException(nameof(collider));
             if (collider == null)
                 throw new InvalidOperationException("Cannot register a destroyed Collider.");
-            if (IndexOf(collider) >= 0)
+            if (_indices.ContainsKey(collider))
                 return false;
             Bounds current = SyncedBounds(collider);
+            _indices.Add(collider, _colliders.Count);
             _colliders.Add(collider);
             _bounds.Add(current);
-            _set.Add(collider);
             change = new FlowFieldObstacleChange(
                 FlowFieldObstacleChangeKind.Registered, collider, false, default, true, current);
             return true;
@@ -109,8 +122,7 @@ namespace Common.FlowField
             change = default;
             if (ReferenceEquals(collider, null))
                 throw new ArgumentNullException(nameof(collider));
-            int index = IndexOf(collider);
-            if (index < 0)
+            if (!_indices.TryGetValue(collider, out int index))
                 return false;
             Bounds previous = _bounds[index];
             RemoveAt(index);
@@ -131,8 +143,7 @@ namespace Common.FlowField
             changed = false;
             if (ReferenceEquals(collider, null))
                 throw new ArgumentNullException(nameof(collider));
-            int index = IndexOf(collider);
-            if (index < 0)
+            if (!_indices.TryGetValue(collider, out int index))
                 return false;
             Bounds previous = _bounds[index];
             if (collider == null)
@@ -162,16 +173,6 @@ namespace Common.FlowField
         {
             Physics.SyncTransforms();
             return collider.bounds;
-        }
-
-        private int IndexOf(Collider collider)
-        {
-            for (int index = 0; index < _colliders.Count; index++)
-            {
-                if (ReferenceEquals(_colliders[index], collider))
-                    return index;
-            }
-            return -1;
         }
     }
 }
