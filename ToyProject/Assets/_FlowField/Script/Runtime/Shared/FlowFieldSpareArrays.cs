@@ -25,19 +25,6 @@ namespace Common.FlowField
         internal bool[] Influence;
         internal bool[] ModifierInfluence;
 
-        internal long Bytes => (Blocked?.Length ?? 0)
-            + (Influence?.Length ?? 0)
-            + (ModifierInfluence?.Length ?? 0)
-            + 4L * (Topology?.Length ?? 0)
-            + (GoalFlags?.Length ?? 0)
-            + 4L * (Next?.Length ?? 0)
-            + 12L * (Directions?.Length ?? 0)
-            + 4L * (Speeds?.Length ?? 0)
-            + 12L * (FinalDirections?.Length ?? 0)
-            + 4L * (FinalSpeeds?.Length ?? 0)
-            + 12L * (EscapeDirections?.Length ?? 0)
-            + 4L * (Costs?.Length ?? 0)
-            + 4L * (Queue?.Length ?? 0);
 
         /// <summary>
         /// Takes the spare array when it has the requested size and clears it,

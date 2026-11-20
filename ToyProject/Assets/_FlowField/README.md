@@ -8,7 +8,7 @@
 | 환경 | Unity 2023.2.20f1, C#, Burst Job (샘플 표시는 URP 16.0.6, UGUI) |
 | 공간 모드 | `Surface2D`: 바닥 표면, 8방향 · `Volume3D`: Bounds 내부 정육면체 셀, 26방향 |
 | 실행 모드 | `RuntimeDynamic`: 런타임 계산 · `StaticBaked`: Editor에서 Bake한 Asset 로드 · `BakedBase`: Bake한 바닥과 장애물 위에서 Goal과 장애물을 런타임에 계산 |
-| 규모 | Surface2D 최대 10만 셀 · Volume3D 최대 100만 셀, Manager별 512MiB |
+| 규모 | Surface2D 최대 10만 셀 · Volume3D 최대 100만 셀 |
 
 구현 세부는 [TechnicalNotes.md](Docs/TechnicalNotes.md)에 있습니다.
 

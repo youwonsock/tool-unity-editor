@@ -31,12 +31,6 @@ namespace Common.FlowField
         private Bounds[] _modifierBounds = new Bounds[4];
         private bool[] _modifierNear = new bool[4];
 
-        internal long BufferBytes
-            => 8L * (_layerHits?.Length ?? 0)
-                + 24L * _layerBounds.Length
-                + 36L * _registered.Length
-                + 25L * _modifierBounds.Length;
-
         /// <summary>World box enclosing the query boxes of cells [start, end).</summary>
         internal static Bounds StepBounds(FlowFieldGridSpace grid, int start, int end, Vector3 halfExtents)
         {

@@ -15,7 +15,6 @@ namespace Common.FlowField
     {
         private const int CellsPerStep = FlowFieldVolumeNavigation.CellsPerStep;
         private const int ArrayElementsPerStep = FlowFieldVolumeNavigation.ArrayElementsPerStep;
-        private const long MemoryBudgetBytes = 512L * 1024L * 1024L;
         private Collider[] _registeredObstacleOverlapBuffer;
         private readonly int[] _obstacleCells = new int[CellsPerStep];
         private readonly FlowFieldVolumeCellQuery _cellQuery = new FlowFieldVolumeCellQuery();
@@ -35,8 +34,6 @@ namespace Common.FlowField
         // Whoever pumps directly (a bake, the Editor preview) waits for the
         // worker thread. The scheduler polls it, so no frame blocks on a solve.
         private bool _waitForSolve;
-        private long _buildReservationBytes;
-        private long _committedReservationBytes;
         // BakedBase: every region an obstacle change reached since Initialize.
         // A reloaded bake queries it again, because the bake still holds what
         // was there before the changes.
@@ -62,16 +59,6 @@ namespace Common.FlowField
 
         // The latest request's grid, which the next build uses, as in Surface2D.
         public FlowFieldGridSpace LatestGrid => _requests.HasLatest ? _requests.Latest.Grid : Grid;
-        internal long TrackedMemoryBytes
-        {
-            get
-            {
-                return checked(
-                    _buildReservationBytes
-                    + _committedReservationBytes
-                    + EstimateAuxiliaryBytes());
-            }
-        }
         internal FlowFieldGridSpace Grid
             => _committed?.Grid ?? _build?.Request.Grid ?? (_requests.HasLatest ? _requests.Latest.Grid : default);
         public bool HasPendingRequest => _requests.Pending || _hasPendingModifierRecompose || _build != null;
@@ -103,8 +90,6 @@ namespace Common.FlowField
             _requests.Clear();
             _hasPendingModifierRecompose = false;
             _obstacleQueryRequired = false;
-            _buildReservationBytes = 0;
-            _committedReservationBytes = 0;
             _bakedBaseTouched = null;
         }
 
@@ -209,12 +194,6 @@ namespace Common.FlowField
             FlowFieldModifierWorkItem[] modifierSnapshots;
             using (_session.Boundary.EnterUserCode())
                 modifierSnapshots = _session.Modifiers.CaptureSnapshots();
-            long reservation = EstimateBuildBytes(request.Grid.CellCount, modifierSnapshots.Length);
-            if (!CanReserveForBuild(request, reservation))
-                throw new InvalidOperationException(
-                    $"FlowField Volume3D tracked memory would exceed the "
-                    + $"{MemoryBudgetBytes / (1024d * 1024d):0} MiB manager budget "
-                    + $"(required {EstimateRequiredBytes(request, reservation) / (1024d * 1024d):0.0} MiB).");
             // A recompose queries no obstacles, so it resolves no safety region.
             if (recompose)
             {
@@ -253,7 +232,6 @@ namespace Common.FlowField
                         && !_bakedBaseTouched.HasValue;
                 }
             }
-            _buildReservationBytes = reservation;
             return true;
         }
 
@@ -313,7 +291,6 @@ namespace Common.FlowField
         {
             BuildContext previous = _build;
             _build = null;
-            _buildReservationBytes = 0;
             // The build that replaces it still owes the full query it was asked for.
             if (previous != null && previous.RequiresFullQuery)
                 _obstacleQueryRequired = true;
@@ -368,14 +345,12 @@ namespace Common.FlowField
         public void DropComputedState()
         {
             _committed = null;
-            _committedReservationBytes = 0;
             _requests.Pending = _requests.HasLatest;
         }
 
         public void ReleaseResources()
         {
             _committed = null;
-            _committedReservationBytes = 0;
             _requests.Clear();
             _bakedBaseTouched = null;
             _registeredObstacleOverlapBuffer = null;
@@ -442,12 +417,6 @@ namespace Common.FlowField
                 throw new InvalidOperationException(
                     $"{request.BakeMode} Volume3D requests cannot carry a bake asset.");
 
-            long buildReservation = EstimateBuildBytes(request.Grid.CellCount, _session.Modifiers.Count);
-            long estimate = EstimateRequiredBytes(request, buildReservation);
-            if (estimate > MemoryBudgetBytes)
-                throw new InvalidOperationException(
-                    $"FlowField Volume3D tracked memory {estimate / (1024d * 1024d):0.0} MiB "
-                    + "exceeds the 512 MiB manager budget.");
             if (request.BakeData != null
                 && !request.BakeData.Matches(
                     request.Grid,

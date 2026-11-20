@@ -347,7 +347,6 @@ namespace Common.FlowField
             bool changed = !FlowFieldField.HasSameContent(_committed, next);
             _spares.Retire(_committed, next);
             _committed = next;
-            _committedReservationBytes = EstimateCommittedBytes(build.Count);
             if (!build.IsModifierRecompose)
             {
                 // The published field holds none of these.
@@ -356,7 +355,6 @@ namespace Common.FlowField
                 _spares.Influence = build.Influence ?? _spares.Influence;
             }
             _build = null;
-            _buildReservationBytes = 0;
             return changed;
         }
     }
