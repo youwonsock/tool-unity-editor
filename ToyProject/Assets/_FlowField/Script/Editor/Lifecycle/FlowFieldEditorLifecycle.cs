@@ -9,11 +9,15 @@ namespace Common.FlowField.Editor
     /// The one place the FlowField Editor subscribes to editor events. It
     /// tells both displays what changed: the Surface2D Edit Mode preview
     /// (<see cref="FlowFieldEditorPreview"/>) and the Volume3D display
-    /// (<see cref="FlowFieldVolumeVisualizationEditor"/>). Managers join a
-    /// display when the Scene View first draws them and leave it when they
-    /// are disabled or destroyed. Every subscription is dropped before an
-    /// assembly reload and on quitting, so disabling domain reload cannot
-    /// accumulate callbacks.
+    /// (<see cref="FlowFieldVolumeVisualizationEditor"/>), and cancels a bake
+    /// (<see cref="FlowFieldBakeEditor"/>) when the Editor leaves Edit Mode,
+    /// reloads or quits. Managers join a display when the Scene View first
+    /// draws them. The preview drops a disabled or destroyed Manager; the
+    /// Volume3D display drops only a destroyed one and keeps a disabled one's
+    /// bake validation. Every subscription is
+    /// dropped before an assembly reload and on quitting, so disabling domain
+    /// reload cannot accumulate callbacks. A running bake alone adds its own
+    /// editor update for as long as it runs.
     /// </summary>
     [InitializeOnLoad]
     internal static class FlowFieldEditorLifecycle
@@ -63,6 +67,10 @@ namespace Common.FlowField.Editor
 
         private static void OnPlayModeStateChanged(PlayModeStateChange change)
         {
+            // A bake reads and writes the Edit Mode scene, so leaving it stops
+            // the bake and the existing Asset stays as it was.
+            if (change == PlayModeStateChange.ExitingEditMode)
+                FlowFieldBakeEditor.CancelBake();
             // Every Play Mode change ends the Edit Mode previews.
             FlowFieldModifierPriorities.ClearCache();
             FlowFieldEditorPreview.DisposeAll();
@@ -131,6 +139,7 @@ namespace Common.FlowField.Editor
             EditorApplication.quitting -= Unregister;
             AssemblyReloadEvents.beforeAssemblyReload -= Unregister;
             _registered = false;
+            FlowFieldBakeEditor.CancelBake();
             FlowFieldModifierPriorities.ClearCache();
             FlowFieldEditorPreview.DisposeAll();
             FlowFieldVolumeVisualizationEditor.Clear();

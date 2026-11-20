@@ -17,24 +17,10 @@ namespace Common.FlowField.Editor
         private static bool _isBaking;
         private static bool _asyncPending;
         private static bool _processingQueue;
-        private static bool _shuttingDown;
         private static int _callbackGeneration;
         private static readonly Queue<int> _queue = new Queue<int>();
         private static Action _cancel;
         private static string _progressLabel = string.Empty;
-
-        static FlowFieldBakeEditor()
-        {
-            AssemblyReloadEvents.beforeAssemblyReload += StopBaking;
-            EditorApplication.quitting += StopBaking;
-            // A bake reads and writes the Edit Mode scene. Entering Play Mode
-            // stops it, and the existing Asset stays as it was.
-            EditorApplication.playModeStateChanged += state =>
-            {
-                if (state == PlayModeStateChange.ExitingEditMode)
-                    CancelBake();
-            };
-        }
 
         // Bakes and Clear Bake change Assets and the scene, so they run in Edit Mode only.
         private static bool RefuseInPlayMode(UnityEngine.Object context)
@@ -51,7 +37,9 @@ namespace Common.FlowField.Editor
         /// <summary>
         /// Cancels the active bake at the next safe callback/readback
         /// boundary. The generation is invalidated before cleanup so a late
-        /// callback cannot write an Asset after the user cancels.
+        /// callback cannot write an Asset after the user cancels. Leaving Edit
+        /// Mode, an assembly reload and quitting cancel it too
+        /// (<see cref="FlowFieldEditorLifecycle"/>); the existing Asset stays.
         /// </summary>
         public static void CancelBake()
         {
@@ -59,20 +47,20 @@ namespace Common.FlowField.Editor
                 StopBaking();
         }
 
-        // A cancel, an assembly reload and quitting drop every queued and running bake.
+        // Drops every queued and running bake. The generation moves and the
+        // queue empties first, so the stopped run's callbacks log nothing and
+        // find no next bake to start.
         private static void StopBaking()
         {
-            _shuttingDown = true;
             unchecked { _callbackGeneration++; }
+            _queue.Clear();
             _cancel?.Invoke();
             _cancel = null;
-            _queue.Clear();
             _asyncPending = false;
             _isBaking = false;
             _processingQueue = false;
             _progressLabel = string.Empty;
             EditorUtility.ClearProgressBar();
-            _shuttingDown = false;
         }
 
         [MenuItem("Tools/FlowField/Bake All Managers In Open Scenes")]
@@ -161,8 +149,6 @@ namespace Common.FlowField.Editor
 
         private static void ScheduleNextOrStop()
         {
-            if (_shuttingDown)
-                return;
             if (_queue.Count > 0)
             {
                 _isBaking = true;
@@ -216,11 +202,6 @@ namespace Common.FlowField.Editor
             FlowFieldSurfaceGroundScan groundScan)
         {
             groundScan.Step(2.0);
-            if (_shuttingDown)
-            {
-                run.Stop();
-                return false;
-            }
             _progressLabel = $"Baking Surface {groundScan.Progress:P0}";
             if (EditorUtility.DisplayCancelableProgressBar(
                     "FlowField Static Bake",
@@ -396,7 +377,7 @@ namespace Common.FlowField.Editor
             {
                 try
                 {
-                    if (_generation == _callbackGeneration && !_shuttingDown)
+                    if (_generation == _callbackGeneration)
                         Debug.LogError($"[{nameof(FlowFieldManager)}] {_name} failed: {exception?.Message}", _manager);
                 }
                 finally
@@ -568,8 +549,6 @@ namespace Common.FlowField.Editor
 
         private static bool ReportSurfaceProgress(int row, int rowCount)
         {
-            if (_shuttingDown)
-                return false;
             _progressLabel = $"Baking Surface row {row + 1}/{rowCount}";
             float progress = rowCount <= 0 ? 0f : (float)row / rowCount;
             return !EditorUtility.DisplayCancelableProgressBar(
@@ -580,8 +559,6 @@ namespace Common.FlowField.Editor
 
         private static bool ReportVolumeProgress(float progress)
         {
-            if (_shuttingDown)
-                return false;
             progress = Mathf.Clamp01(progress);
             _progressLabel = $"Baking Volume3D {progress:P0}";
             return !EditorUtility.DisplayCancelableProgressBar(
