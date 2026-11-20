@@ -237,8 +237,16 @@ namespace Common.FlowField
             // can reach need to be walked. They are rarely more than a small part.
             if (build.ModifierCells == null)
             {
-                Array.Copy(build.Directions, build.FinalDirections, build.Count);
-                Array.Copy(build.Speeds, build.FinalSpeeds, build.Count);
+                // Copied in steps like the other array stages: 16 MB at a
+                // million cells. Every way into this stage starts the cursor at 0.
+                if (build.Cursor < build.Count)
+                {
+                    int copied = Math.Min(ArrayElementsPerStep, build.Count - build.Cursor);
+                    Array.Copy(build.Directions, build.Cursor, build.FinalDirections, build.Cursor, copied);
+                    Array.Copy(build.Speeds, build.Cursor, build.FinalSpeeds, build.Cursor, copied);
+                    build.Cursor += copied;
+                    return false;
+                }
                 if (build.Modifiers.Length == 0)
                     return true;
                 Physics.SyncTransforms();
