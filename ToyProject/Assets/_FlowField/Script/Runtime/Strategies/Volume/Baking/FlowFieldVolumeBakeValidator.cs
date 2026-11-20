@@ -35,6 +35,9 @@ namespace Common.FlowField
         private FlowFieldVolumeBakePayload _payload;
         private byte[] _graphState;
         private int[] _path;
+        // Flat offsets of each neighbour and corner cell of an interior cell.
+        private int[] _neighborOffsets;
+        private int[] _cornerOffsets;
         private int _cellCursor;
         private int _graphCursor;
         private int _pathCount;
@@ -113,6 +116,8 @@ namespace Common.FlowField
             _payload = payload;
             _graphState = null;
             _path = null;
+            _neighborOffsets = null;
+            _cornerOffsets = null;
             _cellCursor = 0;
             _graphCursor = 0;
             _pathCount = 0;
@@ -180,8 +185,22 @@ namespace Common.FlowField
                 Fail(metadataError);
                 return false;
             }
+            BuildInteriorOffsets();
             _phase = Phase.Cells;
             return true;
+        }
+
+        private void BuildInteriorOffsets()
+        {
+            _neighborOffsets = new int[FlowFieldNeighborUtility.VolumeCount];
+            for (int direction = 0; direction < _neighborOffsets.Length; direction++)
+                _neighborOffsets[direction] = _expectedGrid.ToFlatIndex(
+                    FlowFieldNeighborUtility.DeltaX[direction],
+                    FlowFieldNeighborUtility.DeltaY[direction],
+                    FlowFieldNeighborUtility.DeltaZ[direction]);
+            _cornerOffsets = new int[FlowFieldNeighborUtility.VolumeCornerCount];
+            for (int i = 0; i < _cornerOffsets.Length; i++)
+                _cornerOffsets[i] = _neighborOffsets[FlowFieldNeighborUtility.VolumeCornerDirections[i]];
         }
 
         private bool StepCells(int cellBudget)
@@ -282,6 +301,8 @@ namespace Common.FlowField
         {
             _graphState = null;
             _path = null;
+            _neighborOffsets = null;
+            _cornerOffsets = null;
         }
 
         private bool ValidateMetadata(out string reason)
@@ -312,7 +333,7 @@ namespace Common.FlowField
         {
             reason = string.Empty;
             bool blocked = _payload.Blocked[index];
-            uint validTopologyBits = (1u << FlowFieldNeighborUtility.VolumeCount) - 1u;
+            uint topology = _payload.TopologyMasks[index];
             Vector3 direction = _payload.Directions[index];
             Vector3 escape = _payload.EscapeDirections[index];
             float speed = _payload.Speeds[index];
@@ -328,22 +349,32 @@ namespace Common.FlowField
                 || (flags & ~(FlowFieldGoalFlags.Directed
                     | FlowFieldGoalFlags.Anchor
                     | FlowFieldGoalFlags.Unreachable)) != 0
-                || !FlowFieldVectorUtility.IsUnitOrZero(escape)
-                || (_payload.TopologyMasks[index] & ~validTopologyBits) != 0u)
+                || !FlowFieldVectorUtility.IsUnitOrZero(escape))
             {
-                reason = DescribeCell(index, "invalid numeric, sentinel, flags, escape direction, or topology");
+                reason = DescribeCell(index, "invalid numeric, sentinel, flags, or escape direction");
                 return false;
             }
 
             if (blocked)
             {
-                if (_payload.TopologyMasks[index] != 0u
+                if (topology != 0u
                     || flags != FlowFieldGoalFlags.None
                     || next != -2
                     || direction != Vector3.zero
                     || speed != 0f)
                     reason = DescribeCell(index, "blocked cell contains navigable output");
                 return string.IsNullOrEmpty(reason);
+            }
+
+            FlowFieldGridSpace expectedGrid = _expectedGrid;
+            expectedGrid.FromFlatIndex(index, out int x, out int y, out int z);
+            uint openSteps = OpenSteps(index, x, y, z);
+            if (topology != openSteps)
+            {
+                reason = DescribeCell(
+                    index,
+                    $"Topology 0x{topology:X7} differs from its open steps 0x{openSteps:X7}");
+                return false;
             }
 
             if (next == -2)
@@ -380,14 +411,10 @@ namespace Common.FlowField
                 return string.IsNullOrEmpty(reason);
             }
 
-            FlowFieldGridSpace expectedGrid = _expectedGrid;
-            expectedGrid.FromFlatIndex(index, out int x, out int y, out int z);
+            // Topology matches the open steps, so its bit says whether NextCell is one.
             expectedGrid.FromFlatIndex(next, out int nx, out int ny, out int nz);
             int directionIndex = FlowFieldNeighborUtility.FindDirectionIndex(nx - x, ny - y, nz - z);
-            if (directionIndex < 0
-                || (_payload.TopologyMasks[index] & (1u << directionIndex)) == 0u
-                || _payload.Blocked[next]
-                || !IsCornerClear(index, next))
+            if (directionIndex < 0 || (topology & (1u << directionIndex)) == 0u)
             {
                 reason = DescribeCell(index, "NextCell is not a traversable neighbour or cuts through a blocked diagonal corner");
                 return false;
@@ -405,37 +432,47 @@ namespace Common.FlowField
             return true;
         }
 
-        private bool IsCornerClear(int from, int to)
+        /// <summary>
+        /// The Topology an open cell must have: bit d is set exactly when the
+        /// neighbour in direction d and every corner cell of that step are
+        /// inside the grid and open.
+        /// </summary>
+        private uint OpenSteps(int index, int x, int y, int z)
         {
-            _expectedGrid.FromFlatIndex(from, out int x, out int y, out int z);
-            _expectedGrid.FromFlatIndex(to, out int nx, out int ny, out int nz);
-            int dx = nx - x;
-            int dy = ny - y;
-            int dz = nz - z;
-            if (Math.Abs(dx) + Math.Abs(dy) + Math.Abs(dz) <= 1)
-                return true;
-
-            int xSteps = dx == 0 ? 0 : 1;
-            int ySteps = dy == 0 ? 0 : 1;
-            int zSteps = dz == 0 ? 0 : 1;
-            for (int sx = 0; sx <= xSteps; sx++)
-            for (int sy = 0; sy <= ySteps; sy++)
-            for (int sz = 0; sz <= zSteps; sz++)
+            bool[] blockedCells = _payload.Blocked;
+            uint mask = 0u;
+            bool interior = x > 0 && x < _expectedGrid.Width - 1
+                && y > 0 && y < _expectedGrid.Height - 1
+                && z > 0 && z < _expectedGrid.Depth - 1;
+            for (int direction = 0; direction < FlowFieldNeighborUtility.VolumeCount; direction++)
             {
-                bool isStart = sx == 0 && sy == 0 && sz == 0;
-                bool isEnd = sx == xSteps && sy == ySteps && sz == zSteps;
-                if (isStart || isEnd)
-                    continue;
-
-                int ix = x + (sx == 1 ? dx : 0);
-                int iy = y + (sy == 1 ? dy : 0);
-                int iz = z + (sz == 1 ? dz : 0);
-                if (!_expectedGrid.IsLocalInBounds(ix, iy, iz)
-                    || _payload.Blocked[_expectedGrid.ToFlatIndex(ix, iy, iz)])
-                    return false;
+                bool open = interior
+                    ? !blockedCells[index + _neighborOffsets[direction]]
+                    : IsOpen(
+                        x + FlowFieldNeighborUtility.DeltaX[direction],
+                        y + FlowFieldNeighborUtility.DeltaY[direction],
+                        z + FlowFieldNeighborUtility.DeltaZ[direction]);
+                for (int i = FlowFieldNeighborUtility.VolumeCornerStart[direction];
+                     open && i < FlowFieldNeighborUtility.VolumeCornerStart[direction + 1];
+                     i++)
+                {
+                    int corner = FlowFieldNeighborUtility.VolumeCornerDirections[i];
+                    open = interior
+                        ? !blockedCells[index + _cornerOffsets[i]]
+                        : IsOpen(
+                            x + FlowFieldNeighborUtility.DeltaX[corner],
+                            y + FlowFieldNeighborUtility.DeltaY[corner],
+                            z + FlowFieldNeighborUtility.DeltaZ[corner]);
+                }
+                if (open)
+                    mask |= 1u << direction;
             }
-            return true;
+            return mask;
         }
+
+        private bool IsOpen(int x, int y, int z)
+            => _expectedGrid.IsLocalInBounds(x, y, z)
+                && !_payload.Blocked[_expectedGrid.ToFlatIndex(x, y, z)];
 
         private bool IsDirectedCell(int index)
             => !_payload.Blocked[index]

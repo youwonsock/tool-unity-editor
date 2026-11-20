@@ -243,6 +243,10 @@ namespace Common.FlowField
             }
             for (int face = 0; face < FlowFieldNeighborUtility.VolumeFaceDirections.Length; face++)
                 data.FaceDirections[face] = FlowFieldNeighborUtility.VolumeFaceDirections[face];
+            for (int direction = 0; direction <= FlowFieldNeighborUtility.VolumeCount; direction++)
+                data.CornerStart[direction] = FlowFieldNeighborUtility.VolumeCornerStart[direction];
+            for (int corner = 0; corner < FlowFieldNeighborUtility.VolumeCornerCount; corner++)
+                data.CornerDirections[corner] = FlowFieldNeighborUtility.VolumeCornerDirections[corner];
 
             SolveHandle = data.ScheduleChain(buildObstacleResults: !ReusesObstacleQueries);
             SolveRunning = true;

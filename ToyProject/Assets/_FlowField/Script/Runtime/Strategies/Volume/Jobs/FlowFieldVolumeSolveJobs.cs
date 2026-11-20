@@ -17,7 +17,7 @@ namespace Common.FlowField
     internal unsafe struct FlowFieldVolumeSolveData
     {
         internal const int NeighborCount = FlowFieldNeighborUtility.VolumeCount;
-        internal const int MaxCorners = 96;
+        internal const int CornerCount = FlowFieldNeighborUtility.VolumeCornerCount;
         // Cells per parallel work item. Every stage also checks for a cancel
         // request this often.
         internal const int ChunkSize = 4096;
@@ -50,6 +50,9 @@ namespace Common.FlowField
         internal fixed int DeltaY[NeighborCount];
         internal fixed int DeltaZ[NeighborCount];
         internal fixed int FaceDirections[6];
+        // FlowFieldNeighborUtility's corner table: the cells each diagonal step passes beside.
+        internal fixed int CornerStart[NeighborCount + 1];
+        internal fixed int CornerDirections[CornerCount];
 
         internal int Count => Width * Height * Depth;
 
@@ -76,55 +79,33 @@ namespace Common.FlowField
         internal bool InBounds(int x, int y, int z)
             => x >= 0 && x < Width && y >= 0 && y < Height && z >= 0 && z < Depth;
 
-        internal void BuildInteriorOffsets(int* neighbor, int* cornerStart, int* corner)
+        /// <summary>
+        /// Flat offsets of each neighbour and of each corner cell, valid for a
+        /// cell whose 26 neighbours are all inside the grid.
+        /// </summary>
+        internal void BuildInteriorOffsets(int* neighbor, int* corner)
         {
-            int count = 0;
             for (int direction = 0; direction < NeighborCount; direction++)
-            {
-                int dx = DeltaX[direction];
-                int dy = DeltaY[direction];
-                int dz = DeltaZ[direction];
-                neighbor[direction] = Flat(dx, dy, dz);
-                cornerStart[direction] = count;
-                int maxX = dx == 0 ? 0 : 1;
-                int maxY = dy == 0 ? 0 : 1;
-                int maxZ = dz == 0 ? 0 : 1;
-                for (int sx = 0; sx <= maxX; sx++)
-                for (int sy = 0; sy <= maxY; sy++)
-                for (int sz = 0; sz <= maxZ; sz++)
-                {
-                    if (sx == 0 && sy == 0 && sz == 0 || sx == maxX && sy == maxY && sz == maxZ)
-                        continue;
-                    corner[count++] = Flat(sx == 1 ? dx : 0, sy == 1 ? dy : 0, sz == 1 ? dz : 0);
-                }
-            }
-            cornerStart[NeighborCount] = count;
+                neighbor[direction] = Flat(DeltaX[direction], DeltaY[direction], DeltaZ[direction]);
+            for (int i = 0; i < CornerCount; i++)
+                corner[i] = neighbor[CornerDirections[i]];
         }
 
+        /// <summary>Whether the step is open: its neighbour and every corner cell are in the grid and open.</summary>
         internal bool CanTraverse(int x, int y, int z, int direction)
         {
-            int dx = DeltaX[direction];
-            int dy = DeltaY[direction];
-            int dz = DeltaZ[direction];
-            if (!InBounds(x + dx, y + dy, z + dz) || Blocked[Flat(x + dx, y + dy, z + dz)])
+            if (!IsOpen(x + DeltaX[direction], y + DeltaY[direction], z + DeltaZ[direction]))
                 return false;
-            int maxX = dx == 0 ? 0 : 1;
-            int maxY = dy == 0 ? 0 : 1;
-            int maxZ = dz == 0 ? 0 : 1;
-            for (int sx = 0; sx <= maxX; sx++)
-            for (int sy = 0; sy <= maxY; sy++)
-            for (int sz = 0; sz <= maxZ; sz++)
+            for (int i = CornerStart[direction]; i < CornerStart[direction + 1]; i++)
             {
-                if (sx == 0 && sy == 0 && sz == 0 || sx == maxX && sy == maxY && sz == maxZ)
-                    continue;
-                int ix = x + (sx == 1 ? dx : 0);
-                int iy = y + (sy == 1 ? dy : 0);
-                int iz = z + (sz == 1 ? dz : 0);
-                if (!InBounds(ix, iy, iz) || Blocked[Flat(ix, iy, iz)])
+                int corner = CornerDirections[i];
+                if (!IsOpen(x + DeltaX[corner], y + DeltaY[corner], z + DeltaZ[corner]))
                     return false;
             }
             return true;
         }
+
+        private bool IsOpen(int x, int y, int z) => InBounds(x, y, z) && !Blocked[Flat(x, y, z)];
 
         internal Vector3 StepDirection(int direction)
             => Normalized(DeltaX[direction], DeltaY[direction], DeltaZ[direction]);
@@ -185,9 +166,8 @@ namespace Common.FlowField
             if (Data.Cancelled)
                 return;
             int* neighbor = stackalloc int[NeighborCount];
-            int* cornerStart = stackalloc int[NeighborCount + 1];
-            int* corner = stackalloc int[FlowFieldVolumeSolveData.MaxCorners];
-            Data.BuildInteriorOffsets(neighbor, cornerStart, corner);
+            int* corner = stackalloc int[FlowFieldVolumeSolveData.CornerCount];
+            Data.BuildInteriorOffsets(neighbor, corner);
 
             int width = Data.Width;
             int height = Data.Height;
@@ -213,7 +193,7 @@ namespace Common.FlowField
                         if (Data.Blocked[index + neighbor[direction]])
                             continue;
                         bool open = true;
-                        for (int i = cornerStart[direction]; i < cornerStart[direction + 1]; i++)
+                        for (int i = Data.CornerStart[direction]; i < Data.CornerStart[direction + 1]; i++)
                         {
                             if (Data.Blocked[index + corner[i]])
                             {
