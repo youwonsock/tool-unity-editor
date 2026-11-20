@@ -197,11 +197,10 @@ namespace Common.FlowField
             {
                 if (Data.Blocked[index])
                 {
-                    // A blocked cell is never traversed, so its Topology is not written.
-                    Data.Next[index] = -2;
-                    Data.GoalFlags[index] = FlowFieldGoalFlags.None;
-                    Data.Directions[index] = Vector3.zero;
-                    Data.Speeds[index] = 0f;
+                    // A blocked cell has no links. The array may hold the
+                    // bake's topology or a reused one, so it is written here;
+                    // the directions job writes the cell's other outputs.
+                    Data.Topology[index] = 0u;
                     continue;
                 }
 
