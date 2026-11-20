@@ -9,10 +9,11 @@ namespace Common.FlowField.Editor
     /// Edit Mode preview of a Surface2D Manager: a short-lived session per
     /// Manager. The first draw solves it at once; after that a change only
     /// marks it stale, the last ready field stays on screen, and the preview
-    /// is solved again once the changes have stopped for a moment. A failed
-    /// preview keeps its reason until its inputs change. Runtime code never
-    /// calls into it; <see cref="FlowFieldEditorLifecycle"/> reports the
-    /// editor changes.
+    /// is solved again once the changes have stopped for a moment, if it was
+    /// drawn since its last solve. A preview nobody draws is dropped and
+    /// solves again on its next draw. A failed preview keeps its reason until
+    /// its inputs change. Runtime code never calls into it;
+    /// <see cref="FlowFieldEditorLifecycle"/> reports the editor changes.
     /// </summary>
     internal static class FlowFieldEditorPreview
     {
@@ -25,6 +26,10 @@ namespace Common.FlowField.Editor
             internal string Fault;
             internal bool Stale;
             internal double StaleSince;
+            // Drawn since its last solve.
+            internal bool Viewed;
+            // Modifiers already reported as rejected, so a rebuild logs each once.
+            internal HashSet<string> Rejections = new HashSet<string>();
 
             internal void DisposeSession()
             {
@@ -57,6 +62,7 @@ namespace Common.FlowField.Editor
                 Entries[manager] = entry;
                 Rebuild(manager, entry);
             }
+            entry.Viewed = true;
             if (entry.Session == null || !entry.Session.TryGetPublishedField(out FlowFieldField field))
                 return false;
             view = FlowFieldReadView.FromSurfaceField(field);
@@ -101,7 +107,9 @@ namespace Common.FlowField.Editor
             Entries.Clear();
         }
 
-        // Each editor update: rebuild the previews whose changes have settled.
+        // Each editor update: rebuild the drawn previews whose changes have
+        // settled, and drop the ones nobody drew (Show Field off, another
+        // Space Mode, a hidden Scene View).
         internal static void RebuildStale()
         {
             if (Entries.Count == 0 || EditorApplication.isPlayingOrWillChangePlaymode)
@@ -115,29 +123,34 @@ namespace Common.FlowField.Editor
             }
             if (Scratch.Count == 0)
                 return;
+            bool rebuilt = false;
             foreach (FlowFieldManager manager in Scratch)
             {
-                if (manager == null)
+                Entry entry = Entries[manager];
+                if (manager == null || !entry.Viewed || manager.SpaceMode != FlowFieldSpaceMode.Surface2D)
                 {
-                    Entries[manager].DisposeSession();
+                    entry.DisposeSession();
                     Entries.Remove(manager);
                     continue;
                 }
-                Rebuild(manager, Entries[manager]);
+                Rebuild(manager, entry);
+                rebuilt = true;
             }
-            SceneView.RepaintAll();
+            if (rebuilt)
+                SceneView.RepaintAll();
         }
 
         private static void Rebuild(FlowFieldManager manager, Entry entry)
         {
             entry.Stale = false;
+            entry.Viewed = false;
             entry.DisposeSession();
             entry.Fault = null;
             FlowFieldSession session = FlowFieldSession.CreateSurface();
             try
             {
                 session.Initialize(manager.BakeMode);
-                RegisterModifiers(manager, session);
+                RegisterModifiers(manager, session, entry);
                 // The same submission as a running Manager, without the runtime scheduler.
                 session.SubmitConfig(manager.CaptureConfig(), FlowFieldConfigChange.Rebuild);
                 // The preview owns its session and waits for the worker, so it
@@ -161,8 +174,9 @@ namespace Common.FlowField.Editor
 
         // Only the Modifiers a running Manager would register: enabled ones in
         // a scene, for this Manager, in Priority order.
-        private static void RegisterModifiers(FlowFieldManager manager, FlowFieldSession session)
+        private static void RegisterModifiers(FlowFieldManager manager, FlowFieldSession session, Entry entry)
         {
+            var rejected = new HashSet<string>();
             FlowFieldVectorModifierVolume[] volumes = UnityEngine.Object.FindObjectsByType<FlowFieldVectorModifierVolume>(
                 FindObjectsInactive.Exclude,
                 FindObjectsSortMode.None);
@@ -183,15 +197,20 @@ namespace Common.FlowField.Editor
                     continue;
                 // A rejected Modifier (a duplicate Priority, say) stays out, as
                 // it would at runtime; the rebuild waits for the next change.
+                // The Inspector shows the reason, so the Console gets it once.
                 try
                 {
                     session.RegisterModifierCommand(volume);
                 }
                 catch (Exception exception)
                 {
-                    Debug.LogException(exception, volume);
+                    string key = volume.GetInstanceID() + ":" + exception.Message;
+                    rejected.Add(key);
+                    if (!entry.Rejections.Contains(key))
+                        Debug.LogException(exception, volume);
                 }
             }
+            entry.Rejections = rejected;
         }
 
         // A destroyed or disabled Manager ends its preview.
