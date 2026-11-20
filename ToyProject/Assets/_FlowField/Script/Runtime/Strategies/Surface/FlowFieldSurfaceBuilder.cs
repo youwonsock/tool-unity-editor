@@ -362,6 +362,8 @@ namespace Common.FlowField
             FlowFieldModifierChangeResult result = update.Result;
             if (!area && !result.Any)
                 return;
+            if (area)
+                FlowFieldSurfaceModifierComposition.AreaOf(update.Entry).AreaDirty = true;
             // A new priority order recomposes every touched cell.
             FlowFieldModifierRegistry registry = _session.Modifiers;
             FlowFieldCellRect dirty = FlowFieldCellRect.Invalid;

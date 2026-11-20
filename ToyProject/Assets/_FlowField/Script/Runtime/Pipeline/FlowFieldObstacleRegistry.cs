@@ -65,13 +65,12 @@ namespace Common.FlowField
 
         internal int Count => _colliders.Count;
         internal Collider GetCollider(int index) => _colliders[index];
+        // Where each Collider was last reported: registration or a notified move.
         internal Bounds GetBounds(int index) => _bounds[index];
-        // A mask build reads every Collider again and records where it found it.
-        internal void SetBounds(int index, Bounds bounds) => _bounds[index] = bounds;
         // Static masks leave these Colliders to the dynamic mask.
         internal HashSet<Collider> Set => _set;
 
-        internal void RemoveAt(int index)
+        private void RemoveAt(int index)
         {
             _set.Remove(_colliders[index]);
             _colliders.RemoveAt(index);

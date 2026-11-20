@@ -34,7 +34,6 @@ namespace Common.FlowField
         private readonly FlowFieldSurfaceComposeRun _composeRun = new FlowFieldSurfaceComposeRun();
         private Collider[] _overlapBuffer;
 
-        internal FlowFieldModifierRegistry Registry => _registry;
 
         // The cells a Modifier touches, which this composition created for it.
         internal static FlowFieldSurfaceModifierArea AreaOf(FlowFieldModifierEntry entry)
@@ -58,7 +57,7 @@ namespace Common.FlowField
             bool hasDirtyArea = false;
             for (int i = 0; i < _registry.Entries.Count; i++)
             {
-                if (_registry.Entries[i].AreaDirty)
+                if (AreaOf(_registry.Entries[i]).AreaDirty)
                 {
                     hasDirtyArea = true;
                     break;
@@ -72,7 +71,7 @@ namespace Common.FlowField
             for (int i = 0; i < _registry.Entries.Count; i++)
             {
                 FlowFieldModifierEntry entry = _registry.Entries[i];
-                if (!entry.AreaDirty)
+                if (!AreaOf(entry).AreaDirty)
                     continue;
 
                 FlowFieldCellRect previousRect = AreaOf(entry).InfluenceRect;
@@ -106,8 +105,7 @@ namespace Common.FlowField
                         changedRegion,
                         FlowFieldCellRect.Union(previousRect, AreaOf(entry).InfluenceRect));
 
-                entry.InfluenceCollider = collider;
-                entry.AreaDirty = false;
+                AreaOf(entry).AreaDirty = false;
             }
 
             return changedRegion;
@@ -189,11 +187,18 @@ namespace Common.FlowField
 
         internal bool StepFinalField(in FlowFieldBuildBudget budget) => _composeRun.Step(in budget);
 
+        // The session clears its registry before the builder releases this.
         internal void Clear()
         {
             _runtimeLayers.Clear();
             _overlapBuffer = null;
-            _registry.Clear();
+        }
+
+        /// <summary>A new Surface: every Modifier finds its cells again.</summary>
+        internal void MarkAllAreasDirty()
+        {
+            for (int i = 0; i < _registry.Entries.Count; i++)
+                AreaOf(_registry.Entries[i]).AreaDirty = true;
         }
 
         private void BuildRuntimeLayers(int cellCount)

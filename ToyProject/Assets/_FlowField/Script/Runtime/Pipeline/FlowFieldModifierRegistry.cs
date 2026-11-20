@@ -18,17 +18,13 @@ namespace Common.FlowField
     {
         internal readonly IFlowFieldVectorModifier Modifier;
         internal readonly IFlowFieldModifierArea Area;
-        internal Collider InfluenceCollider;
         internal int Priority;
         internal int Revision;
-        // The cells it touches must be found again before the next composition.
-        internal bool AreaDirty = true;
 
         internal FlowFieldModifierEntry(IFlowFieldVectorModifier modifier, IFlowFieldModifierArea area, in FlowFieldModifierObservation observation)
         {
             Modifier = modifier;
             Area = area;
-            InfluenceCollider = observation.InfluenceCollider;
             Priority = observation.Priority;
             Revision = observation.Revision;
         }
@@ -154,9 +150,6 @@ namespace Common.FlowField
             if (priorityChanged)
                 ThrowIfPriorityTaken(modifier, observation.Priority);
 
-            entry.InfluenceCollider = observation.InfluenceCollider;
-            if ((change & FlowFieldModifierChange.Area) != 0)
-                entry.AreaDirty = true;
             if (priorityChanged)
             {
                 entry.Priority = observation.Priority;
@@ -165,12 +158,6 @@ namespace Common.FlowField
             bool valueChanged = (change & FlowFieldModifierChange.Value) != 0 || entry.Revision != observation.Revision;
             entry.Revision = observation.Revision;
             return new FlowFieldModifierChangeResult(priorityChanged, valueChanged);
-        }
-
-        internal void MarkAllAreasDirty()
-        {
-            for (int i = 0; i < _entries.Count; i++)
-                _entries[i].AreaDirty = true;
         }
 
         /// <summary>The values a build applies, fixed when it starts.</summary>

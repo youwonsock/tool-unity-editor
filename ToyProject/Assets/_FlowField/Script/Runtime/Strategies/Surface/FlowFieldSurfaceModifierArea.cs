@@ -11,6 +11,8 @@ namespace Common.FlowField
         internal List<int> InfluenceIndices;
         internal bool InfluenceIndicesBuilt;
         internal FlowFieldCellRect InfluenceRect = FlowFieldCellRect.Invalid;
+        // The cells it touches must be found again before the next composition.
+        internal bool AreaDirty = true;
 
         public void Release()
         {

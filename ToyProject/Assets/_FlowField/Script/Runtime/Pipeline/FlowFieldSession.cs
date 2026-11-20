@@ -491,6 +491,8 @@ namespace Common.FlowField
                         if (begun >= policy.MaxBuildsBegunPerPump
                             || !policy.BeginsAfterBudget && budget.IsExpired)
                             return;
+                        if (_builder.HasPendingRequest || _builder.HasOwedInput)
+                            PruneDestroyedObstacles();
                         bool started = _builder.TryBeginBuild(out FlowFieldBuildStart start);
                         if (start.InvalidatedRegion.HasValue)
                             Safety.InvalidateRegion(start.InvalidatedRegion.Value);
@@ -539,6 +541,23 @@ namespace Common.FlowField
             catch (Exception exception)
             {
                 ReportFault(exception);
+            }
+        }
+
+        // A registered Collider destroyed without being unregistered leaves the
+        // registry here, before the build that is owed begins, as a move away
+        // from where it was last reported: its cells are uncertain until that
+        // build publishes. Builders read the registry and never change it.
+        // Nothing is polled while no build is owed.
+        private void PruneDestroyedObstacles()
+        {
+            for (int index = Obstacles.Count - 1; index >= 0; index--)
+            {
+                Collider collider = Obstacles.GetCollider(index);
+                if (collider != null)
+                    continue;
+                if (Obstacles.NotifyMoved(collider, out FlowFieldObstacleChange change, out bool changed) && changed)
+                    ApplyObstacleChange(in change);
             }
         }
 

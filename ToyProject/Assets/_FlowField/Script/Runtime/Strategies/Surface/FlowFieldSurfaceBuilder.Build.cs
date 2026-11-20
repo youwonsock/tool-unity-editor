@@ -17,7 +17,7 @@ namespace Common.FlowField
             _state.DirtyFlags = FlowFieldSurfaceDirtyFlags.None;
 
             // A failure leaves through StepBuild and the session faults.
-            bool surfaceChanged = _baseStage.PrepareSurface(request, pending, _modifierComposition?.Registry);
+            bool surfaceChanged = _baseStage.PrepareSurface(request, pending, _modifierComposition);
             // Surface preparation may invalidate every downstream stage
             // (for example after a grid change). Include those flags in
             // this build rather than leaving them for a later no-op tick.

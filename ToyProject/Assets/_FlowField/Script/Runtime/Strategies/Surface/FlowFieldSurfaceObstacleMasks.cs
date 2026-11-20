@@ -91,7 +91,6 @@ namespace Common.FlowField
                 Physics.SyncTransforms();
             bool staticChanged = false;
             bool dynamicChanged = false;
-            FlowFieldCellRect dynamicDirty = FlowFieldCellRect.Invalid;
             if (rebuildStatic)
                 staticChanged = BuildStaticScratch(in request);
 
@@ -102,32 +101,27 @@ namespace Common.FlowField
                     request.Workspace,
                     staticChanged,
                     dynamicChanged,
-                    ref dynamicDirty,
                     out FlowFieldCellRect effectiveMaskDirtyWithoutDynamic);
                 return new FlowFieldSurfaceObstacleResult(
                     effectiveMaskChangedWithoutDynamic,
                     effectiveMaskDirtyWithoutDynamic);
             }
 
-            {
-                dynamicDirty = RebuildDynamicOverlay(
-                    request.Grid,
-                    request.Surface,
-                    request.CheckHeight,
-                    request.CenterOffset,
-                    request.Clearance,
-                    request.Workspace.ObstacleScratch,
-                    request.DirtyRegion);
-                AddSweptObstacles(in request);
-                dynamicChanged = CommitDynamicScratch(request.Workspace);
-            }
+            RebuildDynamicOverlay(
+                request.Grid,
+                request.Surface,
+                request.CheckHeight,
+                request.CenterOffset,
+                request.Clearance,
+                request.Workspace.ObstacleScratch);
+            AddSweptObstacles(in request);
+            dynamicChanged = CommitDynamicScratch(request.Workspace);
 
             bool effectiveMaskChanged = CompareEffectiveMask(
                 request.Grid,
                 request.Workspace,
                 staticChanged,
                 dynamicChanged,
-                ref dynamicDirty,
                 out FlowFieldCellRect effectiveMaskDirty);
             return new FlowFieldSurfaceObstacleResult(
                 effectiveMaskChanged,
@@ -173,7 +167,6 @@ namespace Common.FlowField
             FlowFieldSurfaceWorkspace workspace,
             bool staticChanged,
             bool dynamicChanged,
-            ref FlowFieldCellRect dynamicDirty,
             out FlowFieldCellRect dirty)
         {
             dirty = FlowFieldCellRect.Invalid;
@@ -205,8 +198,6 @@ namespace Common.FlowField
 
             if (effectiveChanged && staticChanged)
                 dirty = FlowFieldCellRect.Full(grid);
-            else if (effectiveChanged && !dirty.IsValid)
-                dirty = dynamicDirty;
             return effectiveChanged;
         }
 
@@ -289,14 +280,15 @@ namespace Common.FlowField
             return region;
         }
 
-        public FlowFieldCellRect RebuildDynamicOverlay(
+        // Draws every registered Collider where it is now. The session owns the
+        // registry: a destroyed Collider is skipped here and pruned there.
+        public void RebuildDynamicOverlay(
             FlowFieldGridSpace grid,
             FlowFieldSurfaceData surface,
             float checkHeight,
             float centerOffset,
             float clearance,
-            bool[] dynamicBlocked,
-            FlowFieldCellRect extraDirty)
+            bool[] dynamicBlocked)
         {
             if (!grid.IsValid)
                 throw new ArgumentException("Dynamic obstacle rebuild requires a valid grid.", nameof(grid));
@@ -307,7 +299,6 @@ namespace Common.FlowField
             if (dynamicBlocked.Length != grid.CellCount)
                 throw new ArgumentException("Dynamic obstacle destination length must match the grid.", nameof(dynamicBlocked));
             System.Array.Clear(dynamicBlocked, 0, dynamicBlocked.Length);
-            FlowFieldCellRect dirty = extraDirty;
             if (!FlowFieldGridSpace.IsFinite(checkHeight) || checkHeight <= 0f)
                 throw new System.ArgumentOutOfRangeException(nameof(checkHeight));
             if (!FlowFieldGridSpace.IsFinite(centerOffset))
@@ -318,25 +309,13 @@ namespace Common.FlowField
             float halfXZ = FlowFieldOverlapUtility.CellHalfExtent(grid.CellSize, clearance);
             Vector3 cellHalfExtents = new Vector3(halfXZ, halfHeight, halfXZ);
 
-            for (int i = _registry.Count - 1; i >= 0; i--)
+            for (int i = 0; i < _registry.Count; i++)
             {
                 Collider collider = _registry.GetCollider(i);
                 if (collider == null)
-                {
-                    dirty = FlowFieldCellRect.Union(
-                        dirty,
-                        FlowFieldCellRect.FromBounds(grid, _registry.GetBounds(i)));
-                    _registry.RemoveAt(i);
                     continue;
-                }
 
-                Bounds previous = _registry.GetBounds(i);
-                Bounds current = collider.bounds;
-                dirty = FlowFieldCellRect.Union(dirty, FlowFieldCellRect.FromBounds(grid, previous));
-                dirty = FlowFieldCellRect.Union(dirty, FlowFieldCellRect.FromBounds(grid, current));
-                _registry.SetBounds(i, current);
-
-                Bounds expanded = current;
+                Bounds expanded = collider.bounds;
                 expanded.Expand(new Vector3(halfXZ * 2f, 0f, halfXZ * 2f));
                 if (!grid.TryGetOverlappingCells(
                         expanded,
@@ -373,8 +352,6 @@ namespace Common.FlowField
                     }
                 }
             }
-
-            return dirty;
         }
 
         public void CommitCombinedAndBuildEscape(
