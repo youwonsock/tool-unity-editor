@@ -840,10 +840,30 @@ namespace Common.FlowField
             };
         }
 
+        // The cells the bounds overlap: X and Z, and Y in a Volume3D grid.
         public static FlowFieldCellRect FromBounds(FlowFieldGridSpace grid, Bounds worldBounds)
         {
             if (grid.SpaceMode == FlowFieldSpaceMode.Volume3D)
-                return FromBounds(grid, worldBounds, includeY: true);
+            {
+                if (!grid.TryGetOverlappingCells(
+                        worldBounds,
+                        out int volumeMinX,
+                        out int volumeMaxX,
+                        out int volumeMinY,
+                        out int volumeMaxY,
+                        out int volumeMinZ,
+                        out int volumeMaxZ))
+                    return Invalid;
+                return new FlowFieldCellRect
+                {
+                    MinX = volumeMinX,
+                    MaxX = volumeMaxX,
+                    MinY = volumeMinY,
+                    MaxY = volumeMaxY,
+                    MinZ = volumeMinZ,
+                    MaxZ = volumeMaxZ,
+                };
+            }
 
             if (!grid.TryGetOverlappingCells(
                     worldBounds,
@@ -921,32 +941,6 @@ namespace Common.FlowField
                 && MinY <= 0 && MaxY >= grid.Height - 1
                 && MinZ <= 0 && MaxZ >= grid.Depth - 1;
 
-        public static FlowFieldCellRect FromBounds(
-            FlowFieldGridSpace grid,
-            Bounds worldBounds,
-            bool includeY)
-        {
-            if (!includeY || grid.SpaceMode != FlowFieldSpaceMode.Volume3D)
-                return FromBounds(grid, worldBounds);
-            if (!grid.TryGetOverlappingCells(
-                    worldBounds,
-                    out int minX,
-                    out int maxX,
-                    out int minY,
-                    out int maxY,
-                    out int minZ,
-                    out int maxZ))
-                return Invalid;
-            return new FlowFieldCellRect
-            {
-                MinX = minX,
-                MaxX = maxX,
-                MinY = minY,
-                MaxY = maxY,
-                MinZ = minZ,
-                MaxZ = maxZ,
-            };
-        }
     }
 
     internal static class FlowFieldNeighborUtility

@@ -67,7 +67,7 @@ namespace Common.FlowField
         }
 
         public static Vector3 ProjectDefaultOnSurface(Vector3 direction, Vector3 surfaceNormal)
-            => (Vector3)ProjectDefaultOnSurface((float3)direction, (float3)surfaceNormal);
+            => (Vector3)ProjectOnSurface((float3)direction, (float3)surfaceNormal);
 
         internal static float3 ProjectOnSurface(float3 direction, float3 surfaceNormal)
         {
@@ -81,9 +81,6 @@ namespace Common.FlowField
                 ? math.normalize(projected)
                 : float3.zero;
         }
-
-        internal static float3 ProjectDefaultOnSurface(float3 direction, float3 surfaceNormal)
-            => ProjectOnSurface(direction, surfaceNormal);
 
         public static Vector3 NormalizeDefaultDirection(Vector3 direction)
         {

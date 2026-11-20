@@ -80,16 +80,9 @@ namespace Common.FlowField
                 {
                     if (_cursor >= Sessions.Count)
                         _cursor = 0;
+                    // Register rejects null, so every entry is a session.
                     FlowFieldSession session = Sessions[_cursor];
                     _cursor = (_cursor + 1) % Math.Max(1, Sessions.Count);
-
-                    if (session == null)
-                    {
-                        visitedWithoutWork++;
-                        if (visitedWithoutWork >= Math.Max(1, Sessions.Count))
-                            break;
-                        continue;
-                    }
 
                     FlowFieldBuildBudget budget = new FlowFieldBuildBudget(
                         budgetMilliseconds,

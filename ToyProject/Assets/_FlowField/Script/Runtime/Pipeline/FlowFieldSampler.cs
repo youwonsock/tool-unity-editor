@@ -9,7 +9,6 @@ namespace Common.FlowField
         NotReady,
         NonFinite,
         OutOfGrid,
-        Inconsistent,
     }
 
     /// <summary>
@@ -39,7 +38,7 @@ namespace Common.FlowField
             if (field.Surface != null)
             {
                 if (!grid.TryWorldToLocal(worldPosition, out int x, out int z))
-                    return FlowFieldSampleStatus.Inconsistent;
+                    return FlowFieldSampleStatus.OutOfGrid;
                 index = grid.ToFlatIndex(x, z);
                 sample = ReadSurfaceCell(field, index);
             }
