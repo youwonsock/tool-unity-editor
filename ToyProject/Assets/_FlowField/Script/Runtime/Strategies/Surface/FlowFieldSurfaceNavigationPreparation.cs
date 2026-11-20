@@ -14,9 +14,9 @@ namespace Common.FlowField
     {
         /// <summary>
         /// The escape directions out of the workspace's blocked cells
-        /// (<see cref="FlowFieldSurfaceEscapeJob"/>). False when no cell is walkable.
+        /// (<see cref="FlowFieldSurfaceEscapeJob"/>).
         /// </summary>
-        public static bool BuildEscapeDirections(
+        public static void BuildEscapeDirections(
             FlowFieldGridSpace grid,
             FlowFieldSurfaceData surface,
             FlowFieldSurfaceWorkspace workspace)
@@ -24,15 +24,15 @@ namespace Common.FlowField
 
         /// <summary>
         /// Writes Blocked = static | dynamic mask, then the escape directions,
-        /// in one job. False when no cell is walkable.
+        /// in one job.
         /// </summary>
-        public static bool CombineBlockedAndBuildEscapeDirections(
+        public static void CombineBlockedAndBuildEscapeDirections(
             FlowFieldGridSpace grid,
             FlowFieldSurfaceData surface,
             FlowFieldSurfaceWorkspace workspace)
             => RunEscapeJob(grid, surface, workspace, combineBlocked: true);
 
-        private static unsafe bool RunEscapeJob(
+        private static unsafe void RunEscapeJob(
             FlowFieldGridSpace grid,
             FlowFieldSurfaceData surface,
             FlowFieldSurfaceWorkspace workspace,
@@ -41,7 +41,6 @@ namespace Common.FlowField
             ValidateWorkspace(grid, surface, workspace);
             workspace.AssertWritable(nameof(BuildEscapeDirections));
 
-            var result = new int[FlowFieldSurfaceEscapeJob.ResultCount];
             var pins = new FlowFieldPinnedArrays(FlowFieldSurfaceEscapeJob.PinnedArrayCount);
             try
             {
@@ -56,7 +55,6 @@ namespace Common.FlowField
                     EscapeDirections = pins.Pin(workspace.EscapeDirections),
                     Costs = pins.Pin(workspace.Costs),
                     Queue = pins.Pin(workspace.Queue),
-                    Result = pins.Pin(result),
                     Width = grid.Width,
                     Depth = grid.Depth,
                     CellSize = grid.CellSize,
@@ -75,9 +73,6 @@ namespace Common.FlowField
             {
                 pins.Release();
             }
-            if (combineBlocked)
-                workspace.HasBlockedCells = result[FlowFieldSurfaceEscapeJob.AnyBlockedResult] != 0;
-            return result[FlowFieldSurfaceEscapeJob.WalkableResult] != 0;
         }
 
         public static bool PrepareGoal(
@@ -323,10 +318,5 @@ namespace Common.FlowField
                 && surface.IsSurfaceValid(index)
                 && workspace.InfluenceMask[index]
                 && !workspace.Blocked[index];
-
-        public static Vector3 NormalizeOrZero(Vector3 direction)
-            => direction.sqrMagnitude > FlowFieldVectorUtility.DirectionEpsilonSqr
-                ? direction.normalized
-                : Vector3.zero;
     }
 }

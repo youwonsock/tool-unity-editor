@@ -171,9 +171,6 @@ namespace Common.FlowField
         internal byte[] Flags => _surfaceFlags;
         internal byte[] NeighborMasks => _neighborMasks;
 
-        internal byte GetNeighborMask(int index)
-            => IsSurfaceValid(index) ? _neighborMasks[index] : (byte)0;
-
         internal void CopyToArrays(
             out float[] heights,
             out Vector3[] normals,
@@ -185,11 +182,6 @@ namespace Common.FlowField
             flags = (byte[])_surfaceFlags.Clone();
             neighborMasks = (byte[])_neighborMasks.Clone();
         }
-
-        internal bool HasConnection(int index, int directionIndex)
-            => directionIndex >= 0
-                && directionIndex < FlowFieldNeighborUtility.SurfaceCount
-                && (GetNeighborMask(index) & (1 << directionIndex)) != 0;
 
         internal bool TryGetHeightRange(out float minHeight, out float maxHeight)
         {

@@ -200,7 +200,6 @@ namespace Common.FlowField
                         _state.Grid,
                         _state.Surface,
                         _state.Workspace);
-                _state.ExpandObstacleDirty(prepared.ObstacleDirtyRegion);
                 UpdateBlockedWarning(prepared.HasWalkableSurface);
                 pending |= FlowFieldSurfaceDirtyFlags.Goal | FlowFieldSurfaceDirtyFlags.FinalRegion;
                 _state.ExpandFinalDirty(FlowFieldCellRect.Full(_state.Grid));

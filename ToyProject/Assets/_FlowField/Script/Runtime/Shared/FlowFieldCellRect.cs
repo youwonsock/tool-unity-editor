@@ -83,22 +83,6 @@ namespace Common.FlowField
             };
         }
 
-        public FlowFieldCellRect Expand(FlowFieldGridSpace grid, int ring)
-        {
-            if (!IsValid || !grid.IsValid)
-                return Invalid;
-
-            return new FlowFieldCellRect
-            {
-                MinX = Mathf.Max(0, MinX - ring),
-                MaxX = Mathf.Min(grid.Width - 1, MaxX + ring),
-                MinY = Mathf.Max(0, MinY - ring),
-                MaxY = Mathf.Min(grid.Height - 1, MaxY + ring),
-                MinZ = Mathf.Max(0, MinZ - ring),
-                MaxZ = Mathf.Min(grid.Depth - 1, MaxZ + ring),
-            };
-        }
-
         public static FlowFieldCellRect Union(FlowFieldCellRect left, FlowFieldCellRect right)
         {
             if (!left.IsValid)

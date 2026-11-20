@@ -31,7 +31,6 @@ namespace Common.FlowField
     internal readonly struct FlowFieldSurfaceBuildResult
     {
         internal bool ObstacleMaskChanged { get; }
-        internal FlowFieldCellRect ObstacleDirtyRegion { get; }
         internal bool HasWalkableSurface { get; }
         internal FlowFieldSurfaceGoalBuildStatus GoalStatus { get; }
         internal bool GoalChanged => GoalStatus == FlowFieldSurfaceGoalBuildStatus.Built
@@ -40,12 +39,10 @@ namespace Common.FlowField
 
         internal FlowFieldSurfaceBuildResult(
             bool obstacleMaskChanged,
-            FlowFieldCellRect obstacleDirtyRegion,
             bool hasWalkableSurface,
             FlowFieldSurfaceGoalBuildStatus goalStatus)
         {
             ObstacleMaskChanged = obstacleMaskChanged;
-            ObstacleDirtyRegion = obstacleDirtyRegion;
             HasWalkableSurface = hasWalkableSurface;
             GoalStatus = goalStatus;
         }

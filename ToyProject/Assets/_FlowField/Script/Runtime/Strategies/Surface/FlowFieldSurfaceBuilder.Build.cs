@@ -225,16 +225,11 @@ namespace Common.FlowField
             _composeStage.Clear();
         }
 
+        // Only a build with an active Goal solves; the others compose directly.
         private void StartBfs(in FlowFieldSurfaceRequest request)
         {
             // A solve callback can arrive after this lifetime has ended.
             int generation = _session.LifetimeGeneration;
-            if (!_state.Workspace.HasActiveGoal)
-            {
-                ComposeThenCommit(request, rebuildBase: true, resultChanged: true);
-                return;
-            }
-
             FlowFieldSurfaceBfsRequest bfsRequest = new FlowFieldSurfaceBfsRequest(
                 _state.Grid,
                 _state.Surface,

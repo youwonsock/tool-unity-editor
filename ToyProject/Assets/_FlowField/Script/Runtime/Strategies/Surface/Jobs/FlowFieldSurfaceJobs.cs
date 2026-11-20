@@ -311,10 +311,7 @@ namespace Common.FlowField
     internal unsafe struct FlowFieldSurfaceEscapeJob : IJob
     {
         internal const int FaceCount = 4;
-        internal const int PinnedArrayCount = 10;
-        internal const int ResultCount = 2;
-        internal const int AnyBlockedResult = 0;
-        internal const int WalkableResult = 1;
+        internal const int PinnedArrayCount = 9;
         private const int Unreachable = int.MaxValue;
         private const byte ValidSurface = 1;
         // Vector3.kEpsilon, the threshold of Vector3.normalized.
@@ -329,8 +326,6 @@ namespace Common.FlowField
         [NativeDisableUnsafePtrRestriction] internal Vector3* EscapeDirections;
         [NativeDisableUnsafePtrRestriction] internal int* Costs;
         [NativeDisableUnsafePtrRestriction] internal int* Queue;
-        // [AnyBlockedResult]: some cell is blocked (CombineBlocked only); [WalkableResult]: some cell is walkable.
-        [NativeDisableUnsafePtrRestriction] internal int* Result;
 
         internal int Width;
         internal int Depth;
@@ -346,7 +341,6 @@ namespace Common.FlowField
             int count = Width * Depth;
             int head = 0;
             int tail = 0;
-            bool anyBlocked = false;
             for (int index = 0; index < count; index++)
             {
                 bool blocked;
@@ -354,7 +348,6 @@ namespace Common.FlowField
                 {
                     blocked = StaticBlocked[index] || DynamicBlocked[index];
                     Blocked[index] = blocked;
-                    anyBlocked |= blocked;
                 }
                 else
                 {
@@ -369,8 +362,6 @@ namespace Common.FlowField
                 Costs[index] = 0;
                 Queue[tail++] = index;
             }
-            Result[AnyBlockedResult] = anyBlocked ? 1 : 0;
-            Result[WalkableResult] = tail > 0 ? 1 : 0;
 
             while (head < tail)
             {

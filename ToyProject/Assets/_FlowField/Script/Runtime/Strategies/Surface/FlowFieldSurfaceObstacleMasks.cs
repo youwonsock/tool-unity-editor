@@ -51,20 +51,6 @@ namespace Common.FlowField
         }
     }
 
-    internal readonly struct FlowFieldSurfaceObstacleResult
-    {
-        public bool MaskChanged { get; }
-        public FlowFieldCellRect DirtyRegion { get; }
-
-        public FlowFieldSurfaceObstacleResult(
-            bool maskChanged,
-            FlowFieldCellRect dirtyRegion)
-        {
-            MaskChanged = maskChanged;
-            DirtyRegion = dirtyRegion;
-        }
-    }
-
     internal sealed class FlowFieldSurfaceObstacleMasks
     {
         private Collider[] _overlapBuffer;
@@ -111,7 +97,8 @@ namespace Common.FlowField
 
         public bool AllBlockedWarningIssued;
 
-        internal FlowFieldSurfaceObstacleResult RebuildMasks(
+        /// <summary>True when the effective mask, static | dynamic, differs from Blocked.</summary>
+        internal bool RebuildMasks(
             in FlowFieldSurfaceObstacleRequest request,
             bool rebuildStatic,
             bool rebuildDynamic)
@@ -127,17 +114,7 @@ namespace Common.FlowField
                 staticChanged = BuildStaticScratch(in request);
 
             if (!rebuildDynamic)
-            {
-                bool effectiveMaskChangedWithoutDynamic = CompareEffectiveMask(
-                    request.Grid,
-                    request.Workspace,
-                    staticChanged,
-                    dynamicChanged,
-                    out FlowFieldCellRect effectiveMaskDirtyWithoutDynamic);
-                return new FlowFieldSurfaceObstacleResult(
-                    effectiveMaskChangedWithoutDynamic,
-                    effectiveMaskDirtyWithoutDynamic);
-            }
+                return EffectiveMaskChanged(request.Grid, request.Workspace, staticChanged, dynamicChanged);
 
             // Every registered Collider where it is now. The session owns the
             // registry: a destroyed Collider is skipped here and pruned there.
@@ -146,15 +123,7 @@ namespace Common.FlowField
             AddSweptObstacles(in request);
             dynamicChanged = CommitDynamicScratch(request.Workspace);
 
-            bool effectiveMaskChanged = CompareEffectiveMask(
-                request.Grid,
-                request.Workspace,
-                staticChanged,
-                dynamicChanged,
-                out FlowFieldCellRect effectiveMaskDirty);
-            return new FlowFieldSurfaceObstacleResult(
-                effectiveMaskChanged,
-                effectiveMaskDirty);
+            return EffectiveMaskChanged(request.Grid, request.Workspace, staticChanged, dynamicChanged);
         }
 
         private void RedrawRegisteredOverlay(in FlowFieldSurfaceObstacleRequest request)
@@ -287,43 +256,22 @@ namespace Common.FlowField
             return true;
         }
 
-        private static bool CompareEffectiveMask(
+        // Any cell whose static | dynamic mask differs from Blocked; the base
+        // stage then rebuilds the whole field, so no region is kept.
+        private static bool EffectiveMaskChanged(
             FlowFieldGridSpace grid,
             FlowFieldSurfaceWorkspace workspace,
             bool staticChanged,
-            bool dynamicChanged,
-            out FlowFieldCellRect dirty)
+            bool dynamicChanged)
         {
-            dirty = FlowFieldCellRect.Invalid;
             if (!staticChanged && !dynamicChanged)
                 return false;
-
-            bool effectiveChanged = false;
             for (int index = 0; index < grid.CellCount; index++)
             {
-                bool effectiveBlocked = workspace.StaticBlocked[index]
-                    || workspace.DynamicBlocked[index];
-                if (workspace.Blocked[index] == effectiveBlocked)
-                    continue;
-                effectiveChanged = true;
-                if (!staticChanged && dynamicChanged)
-                {
-                    grid.FromFlatIndex(index, out int x, out int z);
-                    dirty = FlowFieldCellRect.Union(
-                        dirty,
-                        new FlowFieldCellRect
-                        {
-                            MinX = x,
-                            MaxX = x,
-                            MinZ = z,
-                            MaxZ = z,
-                        });
-                }
+                if (workspace.Blocked[index] != (workspace.StaticBlocked[index] || workspace.DynamicBlocked[index]))
+                    return true;
             }
-
-            if (effectiveChanged && staticChanged)
-                dirty = FlowFieldCellRect.Full(grid);
-            return effectiveChanged;
+            return false;
         }
 
         /// <summary>

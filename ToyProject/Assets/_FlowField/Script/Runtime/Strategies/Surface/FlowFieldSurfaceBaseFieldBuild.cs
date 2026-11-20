@@ -24,18 +24,15 @@ namespace Common.FlowField
             ValidateRequest(request, obstacleMasks);
             FlowFieldSurfaceWorkspace workspace = request.Obstacles.Workspace;
             bool obstacleChanged = false;
-            FlowFieldCellRect obstacleDirtyRegion = FlowFieldCellRect.Invalid;
             bool hasWalkableSurface = false;
             FlowFieldSurfaceGoalBuildStatus goalStatus = FlowFieldSurfaceGoalBuildStatus.None;
 
             if (rebuildStaticObstacles || rebuildDynamicObstacles)
             {
-                FlowFieldSurfaceObstacleResult obstacleResult = obstacleMasks.RebuildMasks(
+                obstacleChanged = obstacleMasks.RebuildMasks(
                     request.Obstacles,
                     rebuildStaticObstacles,
                     rebuildDynamicObstacles);
-                obstacleChanged = obstacleResult.MaskChanged;
-                obstacleDirtyRegion = obstacleResult.DirtyRegion;
                 if (obstacleChanged)
                 {
                     obstacleMasks.CommitCombinedAndBuildEscape(
@@ -60,7 +57,6 @@ namespace Common.FlowField
 
             return new FlowFieldSurfaceBuildResult(
                 obstacleChanged,
-                obstacleDirtyRegion,
                 hasWalkableSurface,
                 goalStatus);
         }

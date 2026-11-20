@@ -36,7 +36,6 @@ namespace Common.FlowField
         internal bool HasActiveGoal { get; private set; }
 
         public int Capacity => Blocked == null ? 0 : Blocked.Length;
-        public bool HasBlockedCells { get; internal set; }
 
         // Set while a scheduled Surface solve job holds pinned pointers into
         // these arrays. The Job safety system cannot see managed arrays, so
@@ -110,19 +109,14 @@ namespace Common.FlowField
             TopologyMasks = null;
             ResolvedGoalIndex = -1;
             HasActiveGoal = false;
-            HasBlockedCells = false;
         }
 
         public void RebuildCombinedBlocked()
         {
             AssertWritable(nameof(RebuildCombinedBlocked));
             int count = Capacity;
-            HasBlockedCells = false;
             for (int i = 0; i < count; i++)
-            {
                 Blocked[i] = StaticBlocked[i] || DynamicBlocked[i];
-                HasBlockedCells |= Blocked[i];
-            }
         }
 
         public void ClearGoal()
@@ -198,7 +192,6 @@ namespace Common.FlowField
             Array.Clear(StaticBlocked, 0, Capacity);
             Array.Clear(DynamicBlocked, 0, Capacity);
             Array.Clear(SweptBlocked, 0, Capacity);
-            HasBlockedCells = false;
             Array.Clear(EscapeDirections, 0, Capacity);
             ClearGoal();
             Array.Clear(TopologyMasks, 0, Capacity);
