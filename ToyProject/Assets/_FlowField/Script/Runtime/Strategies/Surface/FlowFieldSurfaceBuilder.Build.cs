@@ -281,6 +281,8 @@ namespace Common.FlowField
         /// The exceptions are a replaced Grid or stale configuration, whose cells
         /// no longer match, and a removed Goal, which movers must stop following.
         /// A request without a Goal keeps GoalRemoved set and has nothing to stop.
+        /// A StaticBaked field loads its baked Goal and never sets GoalRemoved,
+        /// so a composition that spans several pumps publishes.
         /// </summary>
         private bool RejectOutdatedWork()
         {

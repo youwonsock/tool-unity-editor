@@ -24,6 +24,9 @@ namespace Common.FlowField
         // what was there before the changes.
         internal Bounds? BakedBaseTouched;
         internal bool BaseComposed;
+        // The owner removed the runtime Goal, so a build still composing for
+        // the old one must not publish. A StaticBaked field keeps its baked
+        // Goal and never sets it.
         internal bool GoalRemoved;
 
         public void ExpandFinalDirty(FlowFieldCellRect rect)

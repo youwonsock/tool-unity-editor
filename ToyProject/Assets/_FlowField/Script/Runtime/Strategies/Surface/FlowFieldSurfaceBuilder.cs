@@ -269,8 +269,15 @@ namespace Common.FlowField
                 _requests.Pending = true;
         }
 
-        /// <summary>The owner cleared the Goal. A solve still running for the old one must not publish.</summary>
-        internal void ObserveGoalRemoved() => _state.GoalRemoved = true;
+        /// <summary>
+        /// The owner cleared the Goal. A solve still running for the old one
+        /// must not publish. A StaticBaked field has no runtime Goal to clear.
+        /// </summary>
+        internal void ObserveGoalRemoved()
+        {
+            if (_sourceKind != FlowFieldSurfaceSourceKind.StaticSnapshot)
+                _state.GoalRemoved = true;
+        }
 
         /// <summary>
         /// Accepts a request. Returns the Bake Bounds when new obstacle
@@ -311,7 +318,10 @@ namespace Common.FlowField
                 _state.ExpandObstacleDirty(FlowFieldCellRect.Full(request.SurfaceSettings.Grid));
 
             _requests.Accept(request);
-            _state.GoalRemoved = !request.Goal.IsValid;
+            // A StaticBaked request carries no runtime Goal: the field loads
+            // the baked one, which nothing can remove.
+            _state.GoalRemoved = request.SourceKind != FlowFieldSurfaceSourceKind.StaticSnapshot
+                && !request.Goal.IsValid;
             // A new grid or source hides the published field at once; the session
             // reports the state when the input is accepted.
             return invalidated;
