@@ -10,7 +10,7 @@ namespace Common.FlowField
     /// <summary>The cooperative stages of one Volume3D build, up to its commit.</summary>
     internal sealed partial class FlowFieldVolumeBuilder
     {
-        private bool StepBuild(BuildContext build, in FlowFieldBuildBudget budget)
+        private bool StepBuild(BuildContext build, in FlowFieldBuildBudget budget, bool waitForSolve)
         {
             while (!budget.IsExpired)
             {
@@ -51,7 +51,7 @@ namespace Common.FlowField
                         }
                         break;
                     case BuildPhase.Solve:
-                        if (!StepSolve(build))
+                        if (!StepSolve(build, waitForSolve))
                             return false;
                         build.Cursor = 0;
                         build.Phase = BuildPhase.Modifiers;
@@ -77,11 +77,12 @@ namespace Common.FlowField
                     $"[FlowField] Volume {stage} ran while its solve job was running.");
         }
 
-        private bool StepSolve(BuildContext build)
+        // A direct owner (a bake) waits for the worker; the scheduler polls it.
+        private bool StepSolve(BuildContext build, bool waitForSolve)
         {
             if (!build.SolveRunning)
                 build.StartSolve();
-            if (!_waitForSolve && !build.SolveHandle.IsCompleted)
+            if (!waitForSolve && !build.SolveHandle.IsCompleted)
                 return false;
             build.FinishSolve();
             return true;
@@ -140,36 +141,36 @@ namespace Common.FlowField
             // constructing the entire Volume3D staging graph in one frame.
             switch (build.AllocationStage)
             {
-                case 0:
+                case FlowFieldVolumeAllocation.Blocked:
                     build.Blocked ??= FlowFieldSpareArrays.Rent(ref _spares.Blocked, build.Count);
                     if (build.PublishedBlocked != null)
                         Array.Copy(build.PublishedBlocked, build.Blocked, build.Count);
                     break;
-                case 1: build.Topology ??= FlowFieldSpareArrays.Rent(ref _spares.Topology, build.Count); break;
-                case 2: build.GoalFlags = FlowFieldSpareArrays.Rent(ref _spares.GoalFlags, build.Count); break;
-                case 3: build.Next = FlowFieldSpareArrays.Rent(ref _spares.Next, build.Count); break;
-                case 4: build.Directions = FlowFieldSpareArrays.Rent(ref _spares.Directions, build.Count); break;
-                case 5: build.Speeds = FlowFieldSpareArrays.Rent(ref _spares.Speeds, build.Count); break;
-                case 6: build.FinalDirections = FlowFieldSpareArrays.Rent(ref _spares.FinalDirections, build.Count); break;
-                case 7: build.FinalSpeeds = FlowFieldSpareArrays.Rent(ref _spares.FinalSpeeds, build.Count); break;
-                case 8: build.EscapeDirections ??= FlowFieldSpareArrays.Rent(ref _spares.EscapeDirections, build.Count); break;
+                case FlowFieldVolumeAllocation.Topology: build.Topology ??= FlowFieldSpareArrays.Rent(ref _spares.Topology, build.Count); break;
+                case FlowFieldVolumeAllocation.GoalFlags: build.GoalFlags = FlowFieldSpareArrays.Rent(ref _spares.GoalFlags, build.Count); break;
+                case FlowFieldVolumeAllocation.Next: build.Next = FlowFieldSpareArrays.Rent(ref _spares.Next, build.Count); break;
+                case FlowFieldVolumeAllocation.Directions: build.Directions = FlowFieldSpareArrays.Rent(ref _spares.Directions, build.Count); break;
+                case FlowFieldVolumeAllocation.Speeds: build.Speeds = FlowFieldSpareArrays.Rent(ref _spares.Speeds, build.Count); break;
+                case FlowFieldVolumeAllocation.FinalDirections: build.FinalDirections = FlowFieldSpareArrays.Rent(ref _spares.FinalDirections, build.Count); break;
+                case FlowFieldVolumeAllocation.FinalSpeeds: build.FinalSpeeds = FlowFieldSpareArrays.Rent(ref _spares.FinalSpeeds, build.Count); break;
+                case FlowFieldVolumeAllocation.EscapeDirections: build.EscapeDirections ??= FlowFieldSpareArrays.Rent(ref _spares.EscapeDirections, build.Count); break;
                 // A StaticBaked build loads its navigation and never searches.
-                case 9:
+                case FlowFieldVolumeAllocation.Costs:
                     if (build.Request.BakeMode != FlowFieldBakeMode.StaticBaked)
                         build.Costs = FlowFieldSpareArrays.Rent(ref _spares.Costs, build.Count);
                     break;
-                case 10:
+                case FlowFieldVolumeAllocation.Queue:
                     if (build.Request.BakeMode != FlowFieldBakeMode.StaticBaked)
                         build.Queue = FlowFieldSpareArrays.Rent(ref _spares.Queue, build.Count);
                     break;
-                case 11:
+                case FlowFieldVolumeAllocation.Influence:
                     if (build.Request.BakeMode != FlowFieldBakeMode.StaticBaked)
                         build.Influence = FlowFieldSpareArrays.Rent(ref _spares.Influence, build.Count);
                     break;
             }
 
             build.AllocationStage++;
-            return build.AllocationStage > 11;
+            return build.AllocationStage > FlowFieldVolumeAllocation.Influence;
         }
 
         private bool StepObstacles(BuildContext build)
@@ -186,19 +187,19 @@ namespace Common.FlowField
                     build.LimitToRegions(BakedBaseRegions(build));
                 build.ObstaclesSynced = true;
             }
-            int count = build.NextObstacleCells(_obstacleCells);
+            int count = build.NextObstacleCells(_stepCells);
             if (count == 0)
                 return true;
 
             FlowFieldGridSpace grid = build.Request.Grid;
             Vector3 half = ObstacleHalfExtents(grid.CellSize, build.Request.ObstacleClearance);
             _cellQuery.BeginObstacleStep(
-                FlowFieldVolumeCellQuery.StepBounds(grid, _obstacleCells, count, half),
+                FlowFieldVolumeCellQuery.StepBounds(grid, _stepCells, count, half),
                 build.Request.ObstacleLayer,
                 _session.Obstacles);
             for (int i = 0; i < count; i++)
             {
-                int index = _obstacleCells[i];
+                int index = _stepCells[i];
                 grid.FromFlatIndex(index, out int x, out int y, out int z);
                 Vector3 center = grid.LocalToWorldCenter(x, y, z);
                 var cellBox = new Bounds(center, half * 2f);
@@ -215,7 +216,7 @@ namespace Common.FlowField
                         center,
                         half,
                         cellBox,
-                        ref _registeredObstacleOverlapBuffer);
+                        ref _overlapBuffer);
                 }
             }
             return false;
@@ -236,18 +237,18 @@ namespace Common.FlowField
                 build.ModifierCells = new FlowFieldVolumeCellCursor(ModifierReach(build));
             }
 
-            int count = build.ModifierCells.Next(build.Request.Grid, _obstacleCells);
+            int count = build.ModifierCells.Next(build.Request.Grid, _stepCells);
             if (count == 0)
                 return true;
 
             Vector3 cellHalf = Vector3.one * FlowFieldOverlapUtility.CellHalfExtent(build.Request.Grid.CellSize);
             _cellQuery.BeginModifierStep(
-                FlowFieldVolumeCellQuery.StepBounds(build.Request.Grid, _obstacleCells, count, cellHalf),
+                FlowFieldVolumeCellQuery.StepBounds(build.Request.Grid, _stepCells, count, cellHalf),
                 build.Modifiers);
             using FlowFieldExecutionBoundary.OperationScope userCode = _session.Boundary.EnterUserCode();
             for (int i = 0; i < count; i++)
             {
-                int index = _obstacleCells[i];
+                int index = _stepCells[i];
                 if (!FlowFieldVectorUtility.CanApplyModifier(
                         build.Blocked[index],
                         build.GoalFlags[index],
@@ -274,7 +275,7 @@ namespace Common.FlowField
                             layerMask,
                             collider,
                             QueryTriggerInteraction.Collide,
-                            ref _registeredObstacleOverlapBuffer))
+                            ref _overlapBuffer))
                         continue;
                     FlowFieldVectorModifierContext context = new FlowFieldVectorModifierContext(
                         index,

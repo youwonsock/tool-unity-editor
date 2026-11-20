@@ -4,6 +4,23 @@ using UnityEngine;
 
 namespace Common.FlowField
 {
+    /// <summary>The per-cell arrays a Volume3D build allocates, one per step, in order.</summary>
+    internal enum FlowFieldVolumeAllocation
+    {
+        Blocked,
+        Topology,
+        GoalFlags,
+        Next,
+        Directions,
+        Speeds,
+        FinalDirections,
+        FinalSpeeds,
+        EscapeDirections,
+        Costs,
+        Queue,
+        Influence,
+    }
+
     internal enum FlowFieldVolumeBuildPhase
     {
         Allocate,
@@ -98,7 +115,7 @@ namespace Common.FlowField
         internal FlowFieldVolumeBuildPhase Phase;
         internal int Cursor;
         internal int GoalIndex = -1;
-        internal int AllocationStage;
+        internal FlowFieldVolumeAllocation AllocationStage;
         internal bool ObstaclesSynced;
         internal JobHandle SolveHandle;
         internal bool SolveRunning;

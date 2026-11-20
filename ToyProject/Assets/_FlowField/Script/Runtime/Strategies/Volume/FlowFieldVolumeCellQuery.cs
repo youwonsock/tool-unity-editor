@@ -31,24 +31,6 @@ namespace Common.FlowField
         private Bounds[] _modifierBounds = new Bounds[4];
         private bool[] _modifierNear = new bool[4];
 
-        /// <summary>World box enclosing the query boxes of cells [start, end).</summary>
-        internal static Bounds StepBounds(FlowFieldGridSpace grid, int start, int end, Vector3 halfExtents)
-        {
-            grid.FromFlatIndex(start, out int x, out int y, out int z);
-            Vector3 min = grid.LocalToWorldCenter(x, y, z);
-            Vector3 max = min;
-            for (int index = start + 1; index < end; index++)
-            {
-                grid.FromFlatIndex(index, out x, out y, out z);
-                Vector3 center = grid.LocalToWorldCenter(x, y, z);
-                min = Vector3.Min(min, center);
-                max = Vector3.Max(max, center);
-            }
-            var bounds = new Bounds();
-            bounds.SetMinMax(min - halfExtents, max + halfExtents);
-            return bounds;
-        }
-
         /// <summary>World box enclosing the query boxes of the listed cells.</summary>
         internal static Bounds StepBounds(FlowFieldGridSpace grid, int[] cells, int count, Vector3 halfExtents)
         {

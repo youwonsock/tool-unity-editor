@@ -13,10 +13,12 @@ namespace Common.FlowField
     /// </summary>
     internal sealed partial class FlowFieldVolumeBuilder : IFlowFieldSpaceBuilder
     {
-        private const int CellsPerStep = FlowFieldVolumeNavigation.CellsPerStep;
-        private const int ArrayElementsPerStep = FlowFieldVolumeNavigation.ArrayElementsPerStep;
-        private Collider[] _registeredObstacleOverlapBuffer;
-        private readonly int[] _obstacleCells = new int[CellsPerStep];
+        private const int CellsPerStep = FlowFieldVolumeSteps.CellsPerStep;
+        private const int ArrayElementsPerStep = FlowFieldVolumeSteps.ArrayElementsPerStep;
+        // Shared by the obstacle and Modifier steps: the cells of one step and
+        // the Colliders one cell query found.
+        private Collider[] _overlapBuffer;
+        private readonly int[] _stepCells = new int[CellsPerStep];
         private readonly FlowFieldVolumeCellQuery _cellQuery = new FlowFieldVolumeCellQuery();
         private readonly FlowFieldSpareArrays _spares = new FlowFieldSpareArrays();
         // The uncertain regions, which the session owns and updates. The
@@ -32,8 +34,6 @@ namespace Common.FlowField
         // An explicit rebuild re-queries obstacles even when only the Goal changed.
         private bool _obstacleQueryRequired;
         // Whoever pumps directly (a bake, the Editor preview) waits for the
-        // worker thread. The scheduler polls it, so no frame blocks on a solve.
-        private bool _waitForSolve;
         // BakedBase: every region an obstacle change reached since Initialize.
         // A reloaded bake queries it again, because the bake still holds what
         // was there before the changes.
@@ -150,6 +150,10 @@ namespace Common.FlowField
 
         public bool HasActiveBuild => _build != null;
 
+        // Volume3D knows nothing newer than its published field; the shared
+        // rule reads that field and the notified uncertain regions.
+        public IFlowFieldLatestCells LatestCells => null;
+
         // Every build but a Modifier recompose queries the obstacles.
         public bool TryBeginBuild(out FlowFieldBuildStart start)
         {
@@ -162,17 +166,9 @@ namespace Common.FlowField
         {
             if (IsWaitingForExternalCompletion && !waitForWorker)
                 return FlowFieldBuildStep.Waiting;
-            _waitForSolve = waitForWorker;
-            try
-            {
-                if (StepBuild(_build, budget))
-                    return FlowFieldBuildStep.Completed;
-                return _build.SolveRunning ? FlowFieldBuildStep.Waiting : FlowFieldBuildStep.Yield;
-            }
-            finally
-            {
-                _waitForSolve = false;
-            }
+            if (StepBuild(_build, budget, waitForWorker))
+                return FlowFieldBuildStep.Completed;
+            return _build.SolveRunning ? FlowFieldBuildStep.Waiting : FlowFieldBuildStep.Yield;
         }
 
         public bool PublishBuild() => CommitBuild(_build);
@@ -353,7 +349,7 @@ namespace Common.FlowField
             _committed = null;
             _requests.Clear();
             _bakedBaseTouched = null;
-            _registeredObstacleOverlapBuffer = null;
+            _overlapBuffer = null;
             _cellQuery.Clear();
             _spares.Clear();
         }

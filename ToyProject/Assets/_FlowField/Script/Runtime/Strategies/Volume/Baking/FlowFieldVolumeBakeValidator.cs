@@ -135,7 +135,7 @@ namespace Common.FlowField
                     return 1f;
                 if (_status == FlowFieldVolumeBakeValidationStatus.Invalid
                     || _status == FlowFieldVolumeBakeValidationStatus.Cancelled)
-                    return Mathf.Clamp01(_phase == Phase.Metadata ? 0f : 1f);
+                    return _phase == Phase.Metadata ? 0f : 1f;
                 int count = Math.Max(1, _expectedGrid.CellCount);
                 if (_phase == Phase.Metadata)
                     return 0f;
