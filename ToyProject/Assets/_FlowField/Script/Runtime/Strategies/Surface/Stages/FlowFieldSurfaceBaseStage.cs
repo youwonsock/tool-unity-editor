@@ -38,7 +38,7 @@ namespace Common.FlowField
             FlowFieldSurfaceDirtyFlags pending,
             FlowFieldSurfaceModifierComposition modifiers)
         {
-            if ((pending & FlowFieldSurfaceDirtyFlags.Grid) == 0
+            if ((pending & (FlowFieldSurfaceDirtyFlags.Grid | FlowFieldSurfaceDirtyFlags.Ground)) == 0
                 && _state.Grid.IsValid
                 && _state.SurfaceReady)
                 return false;

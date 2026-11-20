@@ -24,7 +24,7 @@ namespace Common.FlowField
             if (surfaceChanged)
                 pending |= _state.DirtyFlags;
             else
-                pending &= ~FlowFieldSurfaceDirtyFlags.Grid;
+                pending &= ~(FlowFieldSurfaceDirtyFlags.Grid | FlowFieldSurfaceDirtyFlags.Ground);
             _state.DirtyFlags = FlowFieldSurfaceDirtyFlags.None;
             if (request.SourceKind == FlowFieldSurfaceSourceKind.StaticSnapshot)
             {
@@ -273,6 +273,8 @@ namespace Common.FlowField
         /// a Goal or obstacle that keeps moving must not starve movers of a field.
         /// The exceptions are a replaced Grid or stale configuration, whose cells
         /// no longer match, and a removed Goal, which movers must stop following.
+        /// NotifyCellsDirty keeps the grid: the ground is scanned again by the
+        /// next build.
         /// A request without a Goal keeps GoalRemoved set and has nothing to stop.
         /// A StaticBaked field loads its baked Goal and never sets GoalRemoved,
         /// so a composition that spans several pumps publishes.

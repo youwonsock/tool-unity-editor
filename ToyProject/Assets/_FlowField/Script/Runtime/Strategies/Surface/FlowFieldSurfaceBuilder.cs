@@ -472,6 +472,7 @@ namespace Common.FlowField
         }
 
         private const FlowFieldSurfaceDirtyFlags BaseDirtyMask = FlowFieldSurfaceDirtyFlags.Grid
+            | FlowFieldSurfaceDirtyFlags.Ground
             | FlowFieldSurfaceDirtyFlags.StaticObstacles
             | FlowFieldSurfaceDirtyFlags.DynamicObstacles
             | FlowFieldSurfaceDirtyFlags.Escape

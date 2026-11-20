@@ -23,8 +23,12 @@ namespace Common.FlowField
         // or one left.
         ModifierStack = 1 << 7,
         FinalRegion = 1 << 8,
+        // Scan the ground again. Unlike Grid the cells keep their layout, so
+        // a solve or composition already running still publishes; a ground
+        // that really changed then rebuilds like a new grid.
+        Ground = 1 << 9,
         Obstacles = StaticObstacles | DynamicObstacles,
         All = Grid | StaticObstacles | DynamicObstacles | Escape
-            | DefaultDirection | Goal | ModifierArea | ModifierStack | FinalRegion,
+            | DefaultDirection | Goal | ModifierArea | ModifierStack | FinalRegion | Ground,
     }
 }

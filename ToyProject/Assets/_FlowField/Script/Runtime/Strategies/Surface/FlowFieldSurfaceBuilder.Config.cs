@@ -41,8 +41,9 @@ namespace Common.FlowField
                     return SubmitOrOwe(in config, immediately: false);
                 case FlowFieldConfigChange.Cells:
                     // Every cell again: the ground and, as a RequestRebuild
-                    // does, every obstacle.
-                    MarkDirty(FlowFieldSurfaceDirtyFlags.Grid | RequeryObstacleFlags,
+                    // does, every obstacle. The grid stays, so work already
+                    // running still publishes, as in Volume3D.
+                    MarkDirty(FlowFieldSurfaceDirtyFlags.Ground | RequeryObstacleFlags,
                         FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
                     return null;
                 default:
