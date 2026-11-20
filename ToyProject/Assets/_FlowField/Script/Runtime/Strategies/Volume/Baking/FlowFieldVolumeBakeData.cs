@@ -66,6 +66,22 @@ namespace Common.FlowField
         void ISerializationCallbackReceiver.OnAfterDeserialize()
             => RebuildDerivedArrays();
 
+        private FlowFieldVolumeBakeMetadata Metadata => new FlowFieldVolumeBakeMetadata(
+            FormatVersion,
+            _width,
+            _height,
+            _depth,
+            _cellSize,
+            _gridOriginWorld,
+            _bakeBoundsCenterWorld,
+            _bakeBoundsSizeWorld,
+            _obstacleLayerMask,
+            _obstacleClearance,
+            _hasGoal,
+            _requestedGoalWorld,
+            _goalInfluenceRadius,
+            _resolvedGoalIndex);
+
         /// <summary>
         /// Checks only the serialized source metadata.  This intentionally
         /// does not walk any cell or direction array so editor visualization
@@ -74,42 +90,17 @@ namespace Common.FlowField
         /// </summary>
         internal bool MatchesMetadata(
             FlowFieldGridSpace grid,
-            Bounds bounds,
             LayerMask obstacleLayer,
             float obstacleClearance,
             out string reason)
         {
-            reason = string.Empty;
-            if (!HasCurrentFormat)
-                return Fail(out reason, $"FlowField Volume Bake format {FormatVersion} is unsupported; ReBake is required.");
-            if (_width <= 0 || _height <= 0 || _depth <= 0
-                || !FlowFieldGridSpace.IsFinite(_gridOriginWorld)
-                || !FlowFieldGridSpace.IsFinite(_cellSize)
-                || !FlowFieldGridSpace.IsFinite(_bakeBoundsCenterWorld)
-                || !FlowFieldGridSpace.IsFinite(_bakeBoundsSizeWorld)
-                || _bakeBoundsSizeWorld.x <= 0f
-                || _bakeBoundsSizeWorld.y <= 0f
-                || _bakeBoundsSizeWorld.z <= 0f
-                || !FlowFieldGridSpace.IsFinite(_obstacleClearance)
-                || _obstacleClearance < 0f
-                || _obstacleLayerMask == 0)
-                return Fail(out reason, "Static Volume3D Bake metadata is invalid.");
-            if (!grid.IsValid || grid.SpaceMode != FlowFieldSpaceMode.Volume3D
-                || _width != grid.Width || _height != grid.Height || _depth != grid.Depth
-                || Mathf.Abs(_cellSize - grid.CellSize) > 0.0001f
-                || !FlowFieldGridSpace.Approximately(_gridOriginWorld, grid.Origin, 0.000001d)
-                || !FlowFieldGridSpace.Approximately(_bakeBoundsCenterWorld, bounds.center, 0.000001d)
-                || !FlowFieldGridSpace.Approximately(_bakeBoundsSizeWorld, bounds.size, 0.000001d)
-                || _obstacleLayerMask != obstacleLayer.value
-                || Mathf.Abs(_obstacleClearance - obstacleClearance) > 0.0001f)
+            FlowFieldVolumeBakeMetadata metadata = Metadata;
+            if (!metadata.TryValidate(out reason))
+                return false;
+            if (!metadata.MatchesGrid(grid)
+                || metadata.ObstacleLayerMask != obstacleLayer.value
+                || Mathf.Abs(metadata.ObstacleClearance - obstacleClearance) > 0.0001f)
                 return Fail(out reason, "Static Volume3D Bake settings differ from the Manager settings.");
-            if (!FlowFieldGridSpace.IsFinite(_requestedGoalWorld)
-                || !FlowFieldGridSpace.IsFinite(_goalInfluenceRadius)
-                || _goalInfluenceRadius < 0f)
-                return Fail(out reason, "Static Volume3D Bake Goal data is invalid.");
-            if (!_hasGoal && _resolvedGoalIndex != -1
-                || _hasGoal && (_resolvedGoalIndex < 0 || _resolvedGoalIndex >= grid.CellCount))
-                return Fail(out reason, "Static Volume3D Bake Goal index is invalid.");
             return true;
         }
 
@@ -122,21 +113,7 @@ namespace Common.FlowField
                 return false;
 
             view = new FlowFieldVolumeBakeValidationView(
-                FormatVersion,
-                Revision,
-                _width,
-                _height,
-                _depth,
-                _cellSize,
-                _gridOriginWorld,
-                _bakeBoundsCenterWorld,
-                _bakeBoundsSizeWorld,
-                _obstacleLayerMask,
-                _obstacleClearance,
-                _hasGoal,
-                _requestedGoalWorld,
-                _goalInfluenceRadius,
-                _resolvedGoalIndex,
+                Metadata,
                 _blocked,
                 _topologyMasks,
                 _goalFlags,
@@ -163,7 +140,7 @@ namespace Common.FlowField
                 && _validatedObstacleLayer == obstacleLayer.value
                 && Mathf.Abs(_validatedObstacleClearance - obstacleClearance) <= 0.0001f)
                 return true;
-            if (!MatchesMetadata(grid, bounds, obstacleLayer, obstacleClearance, out reason))
+            if (!MatchesMetadata(grid, obstacleLayer, obstacleClearance, out reason))
                 return false;
             if (!TryGetValidationView(out FlowFieldVolumeBakeValidationView view))
                 return Fail(out reason, "Static Volume3D Bake arrays are missing.");
@@ -257,24 +234,9 @@ namespace Common.FlowField
             blocked = null;
             directions = null;
             speeds = null;
-            if (!HasCurrentFormat
-                || !grid.IsValid
-                || grid.SpaceMode != FlowFieldSpaceMode.Volume3D
-                || _width != grid.Width || _height != grid.Height || _depth != grid.Depth
-                || !FlowFieldGridSpace.IsFinite(_gridOriginWorld)
-                || !FlowFieldGridSpace.IsFinite(_cellSize)
-                || Mathf.Abs(_cellSize - grid.CellSize) > 0.0001f
-                || (_gridOriginWorld - grid.Origin).sqrMagnitude > 0.000001f
-                || !FlowFieldGridSpace.IsFinite(_bakeBoundsCenterWorld)
-                || !FlowFieldGridSpace.IsFinite(_bakeBoundsSizeWorld)
-                || _bakeBoundsSizeWorld.x <= 0f
-                || _bakeBoundsSizeWorld.y <= 0f
-                || _bakeBoundsSizeWorld.z <= 0f
-                || !FlowFieldLayoutUtility.Approximately(
-                    new Bounds(
-                        grid.Origin + new Vector3(grid.WorldSizeX, grid.WorldSizeY, grid.WorldSizeZ) * 0.5f,
-                        new Vector3(grid.WorldSizeX, grid.WorldSizeY, grid.WorldSizeZ)),
-                    new Bounds(_bakeBoundsCenterWorld, _bakeBoundsSizeWorld))
+            FlowFieldVolumeBakeMetadata metadata = Metadata;
+            if (!metadata.TryValidate(out _)
+                || !metadata.MatchesGrid(grid)
                 || _blocked == null || _blocked.Length != grid.CellCount
                 || _topologyMasks == null || _topologyMasks.Length != grid.CellCount
                 || _goalFlags == null || _goalFlags.Length != grid.CellCount
@@ -306,43 +268,37 @@ namespace Common.FlowField
             float[] speeds,
             Vector3[] escapeDirections)
         {
-            ValidateApplyHeader(grid, bounds, obstacleLayer, obstacleClearance, requestedGoalWorld, goalInfluenceRadius);
-            int count = grid.CellCount;
-            if (blocked == null || blocked.Length != count
-                || topology == null || topology.Length != count
-                || goalFlags == null || goalFlags.Length != count
-                || next == null || next.Length != count
-                || directions == null || directions.Length != count
-                || speeds == null || speeds.Length != count
-                || escapeDirections == null || escapeDirections.Length != count)
-                throw new ArgumentException("Volume3D bake arrays must match the grid cell count.");
-            if (!FlowFieldGridSpace.IsFinite(requestedGoalWorld)
-                || !FlowFieldGridSpace.IsFinite(goalInfluenceRadius)
-                || goalInfluenceRadius < 0f)
-                throw new ArgumentOutOfRangeException(nameof(goalInfluenceRadius));
-            if (hasGoal && (resolvedGoalIndex < 0 || resolvedGoalIndex >= count || blocked[resolvedGoalIndex]))
-                throw new InvalidOperationException(
-                    "Cannot bake a Volume3D Goal without a valid unblocked resolved Goal cell.");
-            if (!hasGoal)
-                resolvedGoalIndex = -1;
+            if (grid.SpaceMode != FlowFieldSpaceMode.Volume3D || grid.CellCount <= 0)
+                throw new ArgumentException("A valid Volume3D grid is required.", nameof(grid));
+            FlowFieldVolumeBakeMetadata metadata = new FlowFieldVolumeBakeMetadata(
+                SupportedFormatVersion,
+                grid.Width,
+                grid.Height,
+                grid.Depth,
+                grid.CellSize,
+                grid.Origin,
+                bounds.center,
+                bounds.size,
+                obstacleLayer.value,
+                obstacleClearance,
+                hasGoal,
+                requestedGoalWorld,
+                goalInfluenceRadius,
+                hasGoal ? resolvedGoalIndex : -1);
 
-            // Validate the complete incoming payload before changing any
-            // serialized field. A rejected bake must leave the previous Asset
-            // contents, GUID and Revision untouched.
-            if (!ValidateIncomingArrays(
-                     grid,
-                     hasGoal,
-                     resolvedGoalIndex,
-                     requestedGoalWorld,
-                     goalInfluenceRadius,
-                     blocked,
-                    topology,
-                    goalFlags,
-                    next,
-                    directions,
-                    speeds,
-                    escapeDirections,
-                    out string reason))
+            // Validate the complete incoming payload, metadata included, before
+            // changing any serialized field. A rejected bake must leave the
+            // previous Asset contents, GUID and Revision untouched.
+            FlowFieldVolumeBakeValidationView view = new FlowFieldVolumeBakeValidationView(
+                metadata,
+                blocked,
+                topology,
+                goalFlags,
+                next,
+                directions,
+                speeds,
+                escapeDirections);
+            if (!FlowFieldVolumeBakeValidator.ValidatePayload(in view, grid, out string reason))
                 throw new InvalidOperationException(reason);
             if (!TryEncodeVectors(
                     grid,
@@ -356,19 +312,19 @@ namespace Common.FlowField
                     out reason))
                 throw new InvalidOperationException(reason);
 
-            _gridOriginWorld = grid.Origin;
-            _width = grid.Width;
-            _height = grid.Height;
-            _depth = grid.Depth;
-            _cellSize = grid.CellSize;
-            _bakeBoundsCenterWorld = bounds.center;
-            _bakeBoundsSizeWorld = bounds.size;
-            _obstacleLayerMask = obstacleLayer.value;
-            _obstacleClearance = obstacleClearance;
-            _hasGoal = hasGoal;
-            _requestedGoalWorld = requestedGoalWorld;
-            _goalInfluenceRadius = goalInfluenceRadius;
-            _resolvedGoalIndex = resolvedGoalIndex;
+            _gridOriginWorld = metadata.Origin;
+            _width = metadata.Width;
+            _height = metadata.Height;
+            _depth = metadata.Depth;
+            _cellSize = metadata.CellSize;
+            _bakeBoundsCenterWorld = metadata.BoundsCenter;
+            _bakeBoundsSizeWorld = metadata.BoundsSize;
+            _obstacleLayerMask = metadata.ObstacleLayerMask;
+            _obstacleClearance = metadata.ObstacleClearance;
+            _hasGoal = metadata.HasGoal;
+            _requestedGoalWorld = metadata.RequestedGoalWorld;
+            _goalInfluenceRadius = metadata.GoalInfluenceRadius;
+            _resolvedGoalIndex = metadata.ResolvedGoalIndex;
             _blocked = (bool[])blocked.Clone();
             _topologyMasks = (uint[])topology.Clone();
             _goalFlags = (FlowFieldGoalFlags[])goalFlags.Clone();
@@ -377,43 +333,7 @@ namespace Common.FlowField
             _escapeFaces = escapeFaces;
             RebuildDerivedArrays();
             MarkBaked();
-            _validatedRevision = Revision;
-            _validatedGrid = grid;
-            _validatedBounds = bounds;
-            _validatedObstacleLayer = obstacleLayer.value;
-            _validatedObstacleClearance = obstacleClearance;
-            _validatedContentGeneration = ContentGeneration;
-            _hasValidatedSignature = true;
-        }
-
-        private static void ValidateApplyHeader(
-            FlowFieldGridSpace grid,
-            Bounds bounds,
-            LayerMask obstacleLayer,
-            float obstacleClearance,
-            Vector3 requestedGoalWorld,
-            float goalInfluenceRadius)
-        {
-            if (grid.SpaceMode != FlowFieldSpaceMode.Volume3D || grid.CellCount <= 0)
-                throw new ArgumentException("A valid Volume3D grid is required.", nameof(grid));
-            if (!FlowFieldGridSpace.IsFinite(bounds.center)
-                || !FlowFieldGridSpace.IsFinite(bounds.size)
-                || bounds.size.x <= 0f
-                || bounds.size.y <= 0f
-                || bounds.size.z <= 0f)
-                throw new ArgumentOutOfRangeException(nameof(bounds));
-            Bounds expectedBounds = new Bounds(
-                grid.Origin + new Vector3(grid.WorldSizeX, grid.WorldSizeY, grid.WorldSizeZ) * 0.5f,
-                new Vector3(grid.WorldSizeX, grid.WorldSizeY, grid.WorldSizeZ));
-            if (!FlowFieldLayoutUtility.Approximately(expectedBounds, bounds))
-                throw new ArgumentException("Bake Bounds do not match the Volume3D grid.", nameof(bounds));
-            if (obstacleLayer.value == 0
-                || !FlowFieldGridSpace.IsFinite(obstacleClearance)
-                || obstacleClearance < 0f
-                || !FlowFieldGridSpace.IsFinite(requestedGoalWorld)
-                || !FlowFieldGridSpace.IsFinite(goalInfluenceRadius)
-                || goalInfluenceRadius < 0f)
-                throw new ArgumentOutOfRangeException(nameof(obstacleClearance));
+            RecordValidatedPayload(grid, bounds, obstacleLayer, obstacleClearance);
         }
 
         private void RebuildDerivedArrays()
@@ -539,52 +459,5 @@ namespace Common.FlowField
             }
             return true;
         }
-
-        private static bool ValidateIncomingArrays(
-            FlowFieldGridSpace grid,
-            bool hasGoal,
-            int resolvedGoalIndex,
-            Vector3 requestedGoalWorld,
-            float goalInfluenceRadius,
-            bool[] blocked,
-            uint[] topology,
-            FlowFieldGoalFlags[] goalFlags,
-            int[] next,
-            Vector3[] directions,
-            float[] speeds,
-            Vector3[] escapeDirections,
-            out string reason)
-        {
-            Bounds bounds = new Bounds(
-                grid.Origin
-                    + new Vector3(grid.WorldSizeX, grid.WorldSizeY, grid.WorldSizeZ) * 0.5f,
-                new Vector3(grid.WorldSizeX, grid.WorldSizeY, grid.WorldSizeZ));
-            FlowFieldVolumeBakeValidationView view = new FlowFieldVolumeBakeValidationView(
-                FlowFieldVolumeBakeData.SupportedFormatVersion,
-                0,
-                grid.Width,
-                grid.Height,
-                grid.Depth,
-                grid.CellSize,
-                grid.Origin,
-                bounds.center,
-                bounds.size,
-                1,
-                0f,
-                hasGoal,
-                requestedGoalWorld,
-                goalInfluenceRadius,
-                resolvedGoalIndex,
-                blocked,
-                topology,
-                goalFlags,
-                next,
-                directions,
-                speeds,
-                escapeDirections);
-            return FlowFieldVolumeBakeValidator.ValidatePayload(in view, grid, out reason);
-        }
-
-
     }
 }

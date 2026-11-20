@@ -115,7 +115,7 @@ namespace Common.FlowField
         {
             if (!config.TryValidateShared(spaceModeLocked, bakeModeLocked, out reason))
                 return false;
-            if (!TryCreateLayout(in config, out Bounds volumeBounds, out FlowFieldGridSpace volumeGrid) || !volumeGrid.IsValid)
+            if (!TryCreateLayout(in config, out _, out FlowFieldGridSpace volumeGrid) || !volumeGrid.IsValid)
                 return FlowFieldManagerConfig.Fail(out reason, "Volume Bounds and Cell Size do not produce a valid grid.");
             if (!FlowFieldBakeModes.UsesBakeAsset(config.BakeMode))
                 return true;
@@ -123,7 +123,7 @@ namespace Common.FlowField
             if (bakeData == null)
                 return FlowFieldManagerConfig.Fail(out reason, $"Volume3D {config.BakeMode} mode requires a FlowFieldVolumeBakeData asset.");
             FlowFieldObstacleSettings obstacles = config.Obstacles;
-            return bakeData.MatchesMetadata(volumeGrid, volumeBounds, obstacles.Layer, obstacles.Clearance, out reason);
+            return bakeData.MatchesMetadata(volumeGrid, obstacles.Layer, obstacles.Clearance, out reason);
         }
     }
 }

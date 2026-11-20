@@ -17,21 +17,7 @@ namespace Common.FlowField
     /// </summary>
     internal readonly struct FlowFieldVolumeBakeValidationView
     {
-        internal readonly int FormatVersion;
-        internal readonly int Revision;
-        internal readonly int Width;
-        internal readonly int Height;
-        internal readonly int Depth;
-        internal readonly float CellSize;
-        internal readonly Vector3 Origin;
-        internal readonly Vector3 BoundsCenter;
-        internal readonly Vector3 BoundsSize;
-        internal readonly int ObstacleLayerMask;
-        internal readonly float ObstacleClearance;
-        internal readonly bool HasGoal;
-        internal readonly Vector3 RequestedGoalWorld;
-        internal readonly float GoalInfluenceRadius;
-        internal readonly int ResolvedGoalIndex;
+        internal readonly FlowFieldVolumeBakeMetadata Metadata;
         internal readonly bool[] Blocked;
         internal readonly uint[] TopologyMasks;
         internal readonly FlowFieldGoalFlags[] GoalFlags;
@@ -41,21 +27,7 @@ namespace Common.FlowField
         internal readonly Vector3[] EscapeDirections;
 
         internal FlowFieldVolumeBakeValidationView(
-            int formatVersion,
-            int revision,
-            int width,
-            int height,
-            int depth,
-            float cellSize,
-            Vector3 origin,
-            Vector3 boundsCenter,
-            Vector3 boundsSize,
-            int obstacleLayerMask,
-            float obstacleClearance,
-            bool hasGoal,
-            Vector3 requestedGoalWorld,
-            float goalInfluenceRadius,
-            int resolvedGoalIndex,
+            FlowFieldVolumeBakeMetadata metadata,
             bool[] blocked,
             uint[] topologyMasks,
             FlowFieldGoalFlags[] goalFlags,
@@ -64,21 +36,7 @@ namespace Common.FlowField
             float[] speeds,
             Vector3[] escapeDirections)
         {
-            FormatVersion = formatVersion;
-            Revision = revision;
-            Width = width;
-            Height = height;
-            Depth = depth;
-            CellSize = cellSize;
-            Origin = origin;
-            BoundsCenter = boundsCenter;
-            BoundsSize = boundsSize;
-            ObstacleLayerMask = obstacleLayerMask;
-            ObstacleClearance = obstacleClearance;
-            HasGoal = hasGoal;
-            RequestedGoalWorld = requestedGoalWorld;
-            GoalInfluenceRadius = goalInfluenceRadius;
-            ResolvedGoalIndex = resolvedGoalIndex;
+            Metadata = metadata;
             Blocked = blocked;
             TopologyMasks = topologyMasks;
             GoalFlags = goalFlags;
@@ -283,12 +241,12 @@ namespace Common.FlowField
 
             if (_cellCursor < _view.Blocked.Length)
                 return false;
-            if (_view.HasGoal && _anchorCount != 1)
+            if (_view.Metadata.HasGoal && _anchorCount != 1)
             {
                 Fail($"Static Volume3D Bake must contain exactly one Goal anchor; found {_anchorCount}.");
                 return false;
             }
-            if (!_view.HasGoal && _anchorCount != 0)
+            if (!_view.Metadata.HasGoal && _anchorCount != 0)
             {
                 Fail("Static Volume3D Bake without a Goal contains an anchor.");
                 return false;
@@ -318,7 +276,7 @@ namespace Common.FlowField
                     _pathCount = 0;
                 }
 
-                if (_currentNode == _view.ResolvedGoalIndex)
+                if (_currentNode == _view.Metadata.ResolvedGoalIndex)
                 {
                     ConfirmPath();
                     _graphCursor++;
@@ -369,54 +327,12 @@ namespace Common.FlowField
 
         private bool ValidateMetadata(out string reason)
         {
-            reason = string.Empty;
-            if (_view.FormatVersion != FlowFieldVolumeBakeData.SupportedFormatVersion)
-            {
-                reason = $"FlowField Volume Bake format {_view.FormatVersion} is unsupported; ReBake is required.";
+            FlowFieldVolumeBakeMetadata metadata = _view.Metadata;
+            if (!metadata.TryValidate(out reason))
                 return false;
-            }
-            if (!_expectedGrid.IsValid
-                || _expectedGrid.SpaceMode != FlowFieldSpaceMode.Volume3D
-                || _view.Width != _expectedGrid.Width
-                || _view.Height != _expectedGrid.Height
-                || _view.Depth != _expectedGrid.Depth
-                || !FlowFieldGridSpace.IsFinite(_view.Origin)
-                || !FlowFieldGridSpace.IsFinite(_view.CellSize)
-                || _view.CellSize < FlowFieldLayoutUtility.MinCellSize
-                || !FlowFieldGridSpace.Approximately(_view.Origin, _expectedGrid.Origin, 0.000001d)
-                || Mathf.Abs(_view.CellSize - _expectedGrid.CellSize) > 0.0001f)
+            if (!metadata.MatchesGrid(_expectedGrid))
             {
-                reason = "Static Volume3D Bake metadata does not match the display grid.";
-                return false;
-            }
-            if (_view.BoundsSize.x <= 0f || _view.BoundsSize.y <= 0f || _view.BoundsSize.z <= 0f
-                || !FlowFieldGridSpace.IsFinite(_view.BoundsCenter)
-                || !FlowFieldGridSpace.IsFinite(_view.BoundsSize)
-                || !FlowFieldGridSpace.IsFinite(_view.ObstacleClearance)
-                || _view.ObstacleClearance < 0f
-                || _view.ObstacleLayerMask == 0
-                || !FlowFieldGridSpace.IsFinite(_view.RequestedGoalWorld)
-                || !FlowFieldGridSpace.IsFinite(_view.GoalInfluenceRadius)
-                || _view.GoalInfluenceRadius < 0f)
-            {
-                reason = "Static Volume3D Bake metadata is invalid.";
-                return false;
-            }
-            Bounds expectedBounds = new Bounds(
-                _expectedGrid.Origin
-                    + new Vector3(
-                        _expectedGrid.WorldSizeX,
-                        _expectedGrid.WorldSizeY,
-                        _expectedGrid.WorldSizeZ) * 0.5f,
-                new Vector3(
-                    _expectedGrid.WorldSizeX,
-                    _expectedGrid.WorldSizeY,
-                    _expectedGrid.WorldSizeZ));
-            if (!FlowFieldLayoutUtility.Approximately(
-                    expectedBounds,
-                    new Bounds(_view.BoundsCenter, _view.BoundsSize)))
-            {
-                reason = "Static Volume3D Bake Bounds do not match the display grid.";
+                reason = "Static Volume3D Bake metadata does not match the grid.";
                 return false;
             }
             int count = _expectedGrid.CellCount;
@@ -428,19 +344,12 @@ namespace Common.FlowField
                 || _view.Speeds.Length != count
                 || _view.EscapeDirections.Length != count)
             {
-                reason = "Static Volume3D Bake arrays do not match the display grid.";
+                reason = "Static Volume3D Bake arrays do not match the grid.";
                 return false;
             }
-            if ((!_view.HasGoal && _view.ResolvedGoalIndex != -1)
-                || (_view.HasGoal
-                    && (_view.ResolvedGoalIndex < 0 || _view.ResolvedGoalIndex >= count)))
+            if (metadata.HasGoal && _view.Blocked[metadata.ResolvedGoalIndex])
             {
-                reason = "Static Volume3D Bake Goal index is invalid.";
-                return false;
-            }
-            if (_view.HasGoal && _view.Blocked[_view.ResolvedGoalIndex])
-            {
-                reason = DescribeCell(_view.ResolvedGoalIndex, "Goal index points to a blocked cell");
+                reason = DescribeCell(metadata.ResolvedGoalIndex, "Goal index points to a blocked cell");
                 return false;
             }
             return true;
@@ -509,8 +418,8 @@ namespace Common.FlowField
             if (next == index)
             {
                 _anchorCount++;
-                if (!_view.HasGoal
-                    || index != _view.ResolvedGoalIndex
+                if (!_view.Metadata.HasGoal
+                    || index != _view.Metadata.ResolvedGoalIndex
                     || direction != Vector3.zero
                     || speed != 0f
                     || flags != (FlowFieldGoalFlags.Directed | FlowFieldGoalFlags.Anchor))
