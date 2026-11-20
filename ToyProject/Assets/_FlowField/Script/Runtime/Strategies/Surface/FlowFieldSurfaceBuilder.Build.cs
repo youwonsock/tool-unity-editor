@@ -56,23 +56,15 @@ namespace Common.FlowField
                 }
                 if (!modifierAreaChanged
                     && _state.BaseComposed && _fieldStore.IsValid
+                    && !IsBaseDirty(pending)
                     && (pending & (FlowFieldSurfaceDirtyFlags.ModifierValue
-                        | FlowFieldSurfaceDirtyFlags.DefaultDirection
-                        | FlowFieldSurfaceDirtyFlags.Grid
-                        | FlowFieldSurfaceDirtyFlags.StaticObstacles
-                        | FlowFieldSurfaceDirtyFlags.DynamicObstacles
-                        | FlowFieldSurfaceDirtyFlags.Escape
-                        | FlowFieldSurfaceDirtyFlags.Goal)) == 0)
+                        | FlowFieldSurfaceDirtyFlags.DefaultDirection)) == 0)
                 {
                     pending &= ~(FlowFieldSurfaceDirtyFlags.ModifierArea | FlowFieldSurfaceDirtyFlags.FinalRegion);
                     _state.DirtyFinalRegion = FlowFieldCellRect.Invalid;
                 }
             }
-            bool topologyChanged = (pending & (FlowFieldSurfaceDirtyFlags.Grid
-                | FlowFieldSurfaceDirtyFlags.StaticObstacles
-                | FlowFieldSurfaceDirtyFlags.DynamicObstacles
-                | FlowFieldSurfaceDirtyFlags.Escape
-                | FlowFieldSurfaceDirtyFlags.Goal)) != 0;
+            bool topologyChanged = IsBaseDirty(pending);
             // A pending BFS recomposes the whole field when it completes
             // (OnBfsCompleted), and a rejected solve restores the published
             // field, so composing before the solve would never be visible.
