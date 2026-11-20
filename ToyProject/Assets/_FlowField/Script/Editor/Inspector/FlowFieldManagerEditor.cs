@@ -177,12 +177,15 @@ namespace Common.FlowField.Editor
             return false;
         }
 
+        // A handle nudge smaller than a cell snaps back to the same bounds and
+        // leaves the Manager and its scene as they were.
         private static void ApplyBoundsChange(
             FlowFieldManager manager,
             Bounds localBounds,
             string undoName)
         {
-            manager.SetBakeBoundsLocal(localBounds, undoName);
+            if (!manager.SetBakeBoundsLocal(localBounds, undoName))
+                return;
             FlowFieldEditorPreview.Invalidate(manager);
             FlowFieldVolumeVisualizationEditor.RequestRefresh(manager);
             EditorUtility.SetDirty(manager);

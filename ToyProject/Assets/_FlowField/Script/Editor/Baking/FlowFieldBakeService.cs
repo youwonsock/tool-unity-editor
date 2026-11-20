@@ -103,20 +103,22 @@ namespace Common.FlowField.Editor
 
         /// <summary>
         /// A Bake Bounds handle edit, snapped to whole cells, with Undo. A
-        /// running session hears of it through OnValidate.
+        /// running session hears of it through OnValidate. False when the
+        /// snapped bounds are the ones it already has.
         /// </summary>
-        internal static void SetBakeBoundsLocal(this FlowFieldManager manager, Bounds localBounds, string undoName)
+        internal static bool SetBakeBoundsLocal(this FlowFieldManager manager, Bounds localBounds, string undoName)
         {
             FlowFieldManagerConfig config = manager.CaptureConfig();
             Bounds snapped = FlowFieldSpaceStrategy.For(config.SpaceMode).SnapBounds(localBounds, config.Grid.CellSize);
             if (FlowFieldLayoutUtility.Approximately(config.Grid.BakeBoundsLocal, snapped))
-                return;
+                return false;
             // One Undo step under undoName; ApplyModifiedProperties would add a
             // second, separately named one.
             Undo.RecordObject(manager, undoName);
             var serialized = new SerializedObject(manager);
             serialized.FindProperty(FlowFieldManager.PropertyNames.BakeBoundsLocal).boundsValue = snapped;
             serialized.ApplyModifiedPropertiesWithoutUndo();
+            return true;
         }
 
         // A bake assigns or clears its asset at the property path without an Undo step.
