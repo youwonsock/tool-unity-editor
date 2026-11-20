@@ -123,6 +123,7 @@ namespace Common.FlowField.Editor
             = new Dictionary<int, ManagerState>(16);
         private static readonly Dictionary<FlowFieldVolumeBakeData, AssetState> Assets
             = new Dictionary<FlowFieldVolumeBakeData, AssetState>(8);
+        private static readonly List<int> ScratchIds = new List<int>();
         private static int _managerCursor;
         private static long _nextAssetResultId;
 
@@ -149,41 +150,28 @@ namespace Common.FlowField.Editor
             }
         }
 
-        internal static void Unregister(FlowFieldManager manager)
+        /// <summary>
+        /// Drops the state of destroyed Managers and the validation of bakes no
+        /// Manager uses any more. A disabled Manager keeps both, so enabling it
+        /// again shows its bake without validating it again.
+        /// </summary>
+        internal static void PruneDestroyed()
         {
-            if (manager == null)
-                return;
-            int id = manager.GetInstanceID();
-            if (!Managers.TryGetValue(id, out ManagerState state))
-                return;
-            state.Dispose();
-            Managers.Remove(id);
-            _managerCursor = Math.Min(_managerCursor, Managers.Count);
-            RemoveUnusedAssets();
-        }
-
-        /// <summary>Drops the state of Managers that were destroyed or disabled.</summary>
-        internal static void PruneInactive()
-        {
-            var stale = new List<FlowFieldManager>();
-            var missing = new List<int>();
+            ScratchIds.Clear();
             foreach (KeyValuePair<int, ManagerState> entry in Managers)
             {
                 if (entry.Value.Manager == null)
-                    missing.Add(entry.Key);
-                else if (!entry.Value.Manager.isActiveAndEnabled)
-                    stale.Add(entry.Value.Manager);
+                    ScratchIds.Add(entry.Key);
             }
-            foreach (int id in missing)
+            if (ScratchIds.Count == 0)
+                return;
+            foreach (int id in ScratchIds)
             {
                 Managers[id].Dispose();
                 Managers.Remove(id);
             }
-            foreach (FlowFieldManager manager in stale)
-                Unregister(manager);
             _managerCursor = Math.Min(_managerCursor, Managers.Count);
-            if (missing.Count > 0)
-                RemoveUnusedAssets();
+            RemoveUnusedAssets();
         }
 
         internal static void RequestRefresh(FlowFieldManager manager)
@@ -233,7 +221,8 @@ namespace Common.FlowField.Editor
                     _managerCursor = 0;
                 ManagerState state = GetManagerAtCursor();
                 _managerCursor = (_managerCursor + 1) % Math.Max(1, Managers.Count);
-                if (state == null || state.Manager == null)
+                // A disabled Manager keeps its state but has nothing to show.
+                if (state == null || state.Manager == null || !state.Manager.isActiveAndEnabled)
                 {
                     withoutWork++;
                     if (withoutWork >= Math.Max(1, Managers.Count))
@@ -378,6 +367,8 @@ namespace Common.FlowField.Editor
                 pair.Value.Validator = null;
                 pair.Value.Stale = true;
             }
+            // A deleted asset leaves its key behind.
+            RemoveUnusedAssets();
             foreach (ManagerState managerState in Managers.Values)
                 managerState.RefreshRequested = true;
         }
@@ -432,7 +423,7 @@ namespace Common.FlowField.Editor
 
             FlowFieldManagerConfig config = manager.CaptureConfig();
             FlowFieldVolumeBakeData asset = config.BakeAssets.Volume;
-            AssetState assetState = GetAssetState(asset, grid);
+            AssetState assetState = GetAssetState(asset);
             if (!assetState.ValidationComplete && assetState.Validator == null)
             {
                 assetState.Validator = new FlowFieldVolumeBakeValidator(asset, grid);
@@ -475,7 +466,9 @@ namespace Common.FlowField.Editor
             // The payload is valid for this grid, and the checks above matched
             // the rest of its signature, so Init's check reads it without
             // validating it again. That check also covers the StaticBaked Goal.
-            asset.RecordValidatedPayload(grid, worldBounds, config.Obstacles.Layer, config.Obstacles.Clearance);
+            // A validation or a settings change records it, not every pump.
+            if (validationFinished || refreshRequested)
+                asset.RecordValidatedPayload(grid, worldBounds, config.Obstacles.Layer, config.Obstacles.Clearance);
             if (!manager.TryValidateConfig(out string configReason))
             {
                 SetUnavailable(state, configReason, FlowFieldVolumeVisualizationStatusCode.Invalid);
@@ -626,9 +619,7 @@ namespace Common.FlowField.Editor
             }
         }
 
-        private static AssetState GetAssetState(
-            FlowFieldVolumeBakeData asset,
-            FlowFieldGridSpace grid)
+        private static AssetState GetAssetState(FlowFieldVolumeBakeData asset)
         {
             if (!Assets.TryGetValue(asset, out AssetState state))
             {
@@ -785,8 +776,11 @@ namespace Common.FlowField.Editor
             var used = new HashSet<FlowFieldVolumeBakeData>();
             foreach (ManagerState state in Managers.Values)
             {
-                if (state.Manager != null && state.Manager.CaptureConfig().BakeAssets.Volume != null)
-                    used.Add(state.Manager.CaptureConfig().BakeAssets.Volume);
+                FlowFieldVolumeBakeData asset = state.Manager != null
+                    ? state.Manager.CaptureConfig().BakeAssets.Volume
+                    : null;
+                if (asset != null)
+                    used.Add(asset);
             }
             var remove = new List<FlowFieldVolumeBakeData>();
             foreach (KeyValuePair<FlowFieldVolumeBakeData, AssetState> pair in Assets)

@@ -58,7 +58,7 @@ namespace Common.FlowField.Editor
         {
             FlowFieldModifierPriorities.ClearCache();
             FlowFieldEditorPreview.PruneDestroyed();
-            FlowFieldVolumeVisualizationEditor.PruneInactive();
+            FlowFieldVolumeVisualizationEditor.PruneDestroyed();
         }
 
         private static void OnPlayModeStateChanged(PlayModeStateChange change)
