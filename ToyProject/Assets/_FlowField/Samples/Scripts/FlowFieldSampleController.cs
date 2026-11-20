@@ -259,11 +259,10 @@ namespace Common.FlowField.Samples
             }
 
             _manager.SetGoal(FlowFieldGoalRequest.None);
-            _manager.RequestRebuild();
             _activeGoalIndex = -1;
             _hasActiveGoal = false;
             _goalMarker.gameObject.SetActive(false);
-            LastStatus = "Cleared the runtime Goal and requested a rebuild.";
+            LastStatus = "Cleared the runtime Goal.";
             return true;
         }
 
@@ -276,7 +275,6 @@ namespace Common.FlowField.Samples
 
             Vector3 goalPosition = _goalPositions[index];
             _manager.SetGoal(FlowFieldGoalRequest.Position(goalPosition, _goalInfluenceRadius));
-            _manager.RequestRebuild();
             _activeGoalIndex = index;
             _activeGoalPosition = goalPosition;
             _hasActiveGoal = true;
@@ -379,11 +377,9 @@ namespace Common.FlowField.Samples
             bool sameGoal = fieldInfo.HasRequestedGoal
                 && Approximately(fieldInfo.RequestedGoalWorld, initialGoal)
                 && Mathf.Abs(fieldInfo.GoalInfluenceRadius - _goalInfluenceRadius) <= 0.0001f;
+            // SetGoal rebuilds the Goal and reuses the obstacle results.
             if (!sameGoal)
-            {
                 _manager.SetGoal(FlowFieldGoalRequest.Position(initialGoal, _goalInfluenceRadius));
-                _manager.RequestRebuild();
-            }
 
             _activeGoalIndex = 0;
             _activeGoalPosition = initialGoal;

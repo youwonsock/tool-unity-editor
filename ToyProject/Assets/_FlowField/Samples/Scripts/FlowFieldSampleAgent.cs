@@ -32,17 +32,8 @@ namespace Common.FlowField.Samples
 
         private void Awake()
         {
+            // FlowFieldSampleController configures and initializes every agent it spawns.
             _rigidbody = GetComponent<Rigidbody>();
-            // Prefab instances are configured by FlowFieldSampleController while their
-            // parent is inactive. Awake can run before Configure, so only auto-init when
-            // a provider was already serialized; the controller performs explicit Init
-            // after Configure for newly spawned agents.
-            if (Application.isPlaying && _provider != null && !_isInitialized)
-                Init();
-        }
-
-        private void OnValidate()
-        {
         }
 
         private void OnDestroy()

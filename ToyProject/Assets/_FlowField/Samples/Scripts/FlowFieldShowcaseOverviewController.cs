@@ -144,7 +144,7 @@ namespace Common.FlowField.Samples
                 if (_manager.BakeMode == FlowFieldBakeMode.StaticBaked)
                     _lastAction = "Goal changes are disabled in StaticBaked mode.";
                 else if (_sampleController.ClearGoal())
-                    _lastAction = "Cleared the runtime Goal and requested a rebuild.";
+                    _lastAction = "Cleared the runtime Goal.";
             }
             if (Input.GetKeyDown(KeyCode.Alpha1))
                 ApplyMode(ShowcaseMode.Baseline);
@@ -200,7 +200,7 @@ namespace Common.FlowField.Samples
                 return;
             }
             if (_sampleController.AdvanceToNextGoal())
-                _lastAction = "Advanced to the next runtime Goal and requested a rebuild.";
+                _lastAction = "Advanced to the next runtime Goal.";
             RenderBoard();
         }
 
@@ -224,18 +224,17 @@ namespace Common.FlowField.Samples
                 return;
             }
 
-            bool changed = false;
-
+            // Registering and unregistering rebuild the cells the obstacle
+            // reaches; no explicit rebuild is needed.
             if (enabled == _dynamicObstacleEnabled)
             {
                 _dynamicObstacleObject.SetActive(enabled);
                 if (enabled && !_dynamicObstacleRegistered && _manager.IsReady)
-                    changed = RegisterDynamicObstacle();
-                if (changed)
-                    _manager.RequestRebuild();
+                    RegisterDynamicObstacle();
                 return;
             }
 
+            bool changed = false;
             if (enabled)
             {
                 _dynamicObstacleObject.SetActive(true);
@@ -255,10 +254,9 @@ namespace Common.FlowField.Samples
 
             if (changed)
             {
-                _manager.RequestRebuild();
                 _lastAction = enabled
-                    ? "Enabled the dynamic obstacle and requested a rebuild."
-                    : "Disabled the dynamic obstacle and requested a rebuild.";
+                    ? "Enabled the dynamic obstacle."
+                    : "Disabled the dynamic obstacle.";
             }
 
             RenderBoard();
@@ -305,11 +303,10 @@ namespace Common.FlowField.Samples
             bool changed = _mode != mode;
             _mode = mode;
 
+            // Each Modifier Volume registers or unregisters as it is enabled or
+            // disabled, and the Manager composes the cells it touched again.
             if (changed && _manager.IsInitialized && !_manager.IsFaulted)
-            {
-                _manager.RequestRebuild();
-                _lastAction = "Updated Modifier mode and requested a rebuild.";
-            }
+                _lastAction = "Updated Modifier mode.";
 
             if (mode == ShowcaseMode.SampleAndClamp)
                 RefreshDiagnostics();

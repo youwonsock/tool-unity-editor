@@ -160,11 +160,10 @@ namespace Common.FlowField.Samples
                 _dynamicGateObject.SetActive(true);
                 try
                 {
-                    Physics.SyncTransforms();
-                    bool added = _manager.RegisterDynamicObstacle(_dynamicGate);
+                    // Registration reads the synced bounds and rebuilds the
+                    // cells the gate reaches.
+                    _manager.RegisterDynamicObstacle(_dynamicGate);
                     _dynamicGateRegistered = true;
-                    if (added)
-                        _manager.RequestRebuild();
                 }
                 catch
                 {
@@ -176,13 +175,10 @@ namespace Common.FlowField.Samples
 
             try
             {
-                bool removed = false;
                 if (_dynamicGateRegistered && _manager.IsInitialized && !_manager.IsFaulted)
-                    removed = _manager.UnregisterDynamicObstacle(_dynamicGate);
+                    _manager.UnregisterDynamicObstacle(_dynamicGate);
                 _dynamicGateRegistered = false;
                 _dynamicGateObject.SetActive(false);
-                if (removed)
-                    _manager.RequestRebuild();
             }
             catch
             {
