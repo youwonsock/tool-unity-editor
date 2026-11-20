@@ -72,9 +72,9 @@ namespace Common.FlowField
             ObserveDefaultDirection(current.DefaultDirection);
             FlowFieldSurfaceDirtyFlags flags = GetInputDirtyFlags(current);
             bool gridChanged = (flags & FlowFieldSurfaceDirtyFlags.Grid) != 0;
-            Vector3 normalized = FlowFieldVectorUtility.NormalizeDefaultDirection(config.Flow.DefaultDirection);
-            if ((_state.ResolvedDefaultDirection - normalized).sqrMagnitude
-                > FlowFieldManagerConfig.ValueEpsilon * FlowFieldManagerConfig.ValueEpsilon)
+            if (!FlowFieldVectorUtility.SameDefaultDirection(
+                    _state.ResolvedDefaultDirection,
+                    FlowFieldVectorUtility.NormalizeDefaultDirection(config.Flow.DefaultDirection)))
                 flags |= FlowFieldSurfaceDirtyFlags.DefaultDirection | FlowFieldSurfaceDirtyFlags.FinalRegion;
             MarkDirty(flags, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
             // A new grid hides the published field at once.

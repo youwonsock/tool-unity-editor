@@ -93,10 +93,7 @@ namespace Common.FlowField
         }
 
         private bool HasSameFlowSettings(in FlowFieldVolumeRequest other)
-            => FlowFieldGridSpace.Approximately(
-                   DefaultDirection,
-                   other.DefaultDirection,
-                   0.00000001d);
+            => FlowFieldVectorUtility.SameDefaultDirection(DefaultDirection, other.DefaultDirection);
 
         private bool HasSameGoalCell(in FlowFieldVolumeRequest other)
             => HasGoal == other.HasGoal

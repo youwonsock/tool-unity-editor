@@ -82,15 +82,38 @@ namespace Common.FlowField
                 : float3.zero;
         }
 
+        // Two Default Directions closer than this are the same direction.
+        private const float DefaultDirectionEpsilon = 0.0001f;
+
+        /// <summary>
+        /// The one Default Direction normalizer, in both space modes: a finite,
+        /// non-zero direction becomes a unit vector; anything else throws.
+        /// </summary>
         public static Vector3 NormalizeDefaultDirection(Vector3 direction)
         {
-            if (!FlowFieldGridSpace.IsFinite(direction))
+            if (!TryNormalizeDefaultDirection(direction, out Vector3 normalized))
                 throw new System.ArgumentOutOfRangeException(nameof(direction));
-            if (direction.sqrMagnitude <= DirectionEpsilonSqr)
-                throw new System.ArgumentOutOfRangeException(nameof(direction));
-
-            return direction.normalized;
+            return normalized;
         }
+
+        /// <summary><see cref="NormalizeDefaultDirection"/> for input that may be invalid.</summary>
+        internal static bool TryNormalizeDefaultDirection(Vector3 direction, out Vector3 normalized)
+        {
+            if (!FlowFieldGridSpace.IsFinite(direction) || direction.sqrMagnitude <= DirectionEpsilonSqr)
+            {
+                normalized = Vector3.zero;
+                return false;
+            }
+            normalized = direction.normalized;
+            return true;
+        }
+
+        /// <summary>
+        /// The one Default Direction comparison. It compares the two values as
+        /// given, so pass both as configured or both normalized.
+        /// </summary>
+        internal static bool SameDefaultDirection(Vector3 left, Vector3 right)
+            => (left - right).sqrMagnitude <= DefaultDirectionEpsilon * DefaultDirectionEpsilon;
 
         internal static Vector3 ValidateSurfaceNormal(Vector3 surfaceNormal)
         {

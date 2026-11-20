@@ -317,17 +317,11 @@ namespace Common.FlowField
 
             // Default Direction is final-only: apply its newest value to the freshly
             // solved base rather than solving again.
-            Vector3 latestDefaultDirection = _latestDefaultDirection ?? finalRequest.DefaultDirection;
-            if (FlowFieldGridSpace.IsFinite(latestDefaultDirection)
-                && latestDefaultDirection.sqrMagnitude
-                    > FlowFieldVectorUtility.DirectionEpsilonSqr)
-            {
-                Vector3 resolvedDefault = FlowFieldVectorUtility.NormalizeDefaultDirection(
-                    latestDefaultDirection);
-                if ((_state.ResolvedDefaultDirection - resolvedDefault).sqrMagnitude
-                    > 0.0001f * 0.0001f)
-                    _state.ResolvedDefaultDirection = resolvedDefault;
-            }
+            if (FlowFieldVectorUtility.TryNormalizeDefaultDirection(
+                    _latestDefaultDirection ?? finalRequest.DefaultDirection,
+                    out Vector3 resolvedDefault)
+                && !FlowFieldVectorUtility.SameDefaultDirection(_state.ResolvedDefaultDirection, resolvedDefault))
+                _state.ResolvedDefaultDirection = resolvedDefault;
             if ((pending & FlowFieldSurfaceDirtyFlags.ModifierArea) != 0)
                 RebuildModifierAreaData(finalRequest);
             ComposeThenCommit(finalRequest, rebuildBase: true, resultChanged: true, includeBase: true);

@@ -397,8 +397,7 @@ namespace Common.FlowField
                 throw new ArgumentException("Volume obstacle layer must contain at least one layer.", nameof(request));
             if (!FlowFieldGridSpace.IsFinite(request.ObstacleClearance) || request.ObstacleClearance < 0f)
                 throw new ArgumentOutOfRangeException(nameof(request.ObstacleClearance));
-            if (!FlowFieldGridSpace.IsFinite(request.DefaultDirection)
-                || request.DefaultDirection.sqrMagnitude <= 0.00000001f)
+            if (!FlowFieldVectorUtility.TryNormalizeDefaultDirection(request.DefaultDirection, out _))
                 throw new ArgumentOutOfRangeException(nameof(request.DefaultDirection));
             if (request.HasGoal && !FlowFieldGridSpace.IsFinite(request.GoalWorld))
                 throw new ArgumentOutOfRangeException(nameof(request.GoalWorld));

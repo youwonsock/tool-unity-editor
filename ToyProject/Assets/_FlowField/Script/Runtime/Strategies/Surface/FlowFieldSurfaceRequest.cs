@@ -122,7 +122,7 @@ namespace Common.FlowField
 
         internal bool HasSameInputs(in FlowFieldSurfaceRequest other)
             => HasSameBaseInputs(other)
-                && VectorMatch(DefaultDirection, other.DefaultDirection);
+                && HasSameFinalInputs(other);
 
         /// <summary>
         /// Identifies the immutable field source. Goal, obstacle and final
@@ -144,7 +144,7 @@ namespace Common.FlowField
                 && GoalMatch(Goal, other.Goal);
 
         internal bool HasSameFinalInputs(in FlowFieldSurfaceRequest other)
-            => VectorMatch(DefaultDirection, other.DefaultDirection);
+            => FlowFieldVectorUtility.SameDefaultDirection(DefaultDirection, other.DefaultDirection);
 
         internal FlowFieldSurfaceDirtyFlags GetInputDirtyFlags(in FlowFieldSurfaceRequest other)
         {
@@ -166,7 +166,7 @@ namespace Common.FlowField
 
             if (!GoalMatch(Goal, other.Goal))
                 flags |= FlowFieldSurfaceDirtyFlags.Goal | FlowFieldSurfaceDirtyFlags.FinalRegion;
-            if (!VectorMatch(DefaultDirection, other.DefaultDirection))
+            if (!HasSameFinalInputs(other))
                 flags |= FlowFieldSurfaceDirtyFlags.DefaultDirection | FlowFieldSurfaceDirtyFlags.FinalRegion;
             return flags;
         }

@@ -187,10 +187,8 @@ namespace Common.FlowField
         /// </summary>
         internal void ObserveDefaultDirection(Vector3 direction)
         {
-            if (!FlowFieldGridSpace.IsFinite(direction)
-                || direction.sqrMagnitude <= FlowFieldVectorUtility.DirectionEpsilonSqr)
-                return;
-            _latestDefaultDirection = FlowFieldVectorUtility.NormalizeDefaultDirection(direction);
+            if (FlowFieldVectorUtility.TryNormalizeDefaultDirection(direction, out Vector3 normalized))
+                _latestDefaultDirection = normalized;
         }
 
         internal bool HasSameBaseInputs(in FlowFieldSurfaceRequest request)
