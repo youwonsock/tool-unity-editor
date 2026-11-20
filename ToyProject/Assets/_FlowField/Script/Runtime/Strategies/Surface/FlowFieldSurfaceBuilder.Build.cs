@@ -81,17 +81,17 @@ namespace Common.FlowField
                     rebuildBase: IsBaseDirty(pending)
                         || (pending & FlowFieldSurfaceDirtyFlags.DefaultDirection) != 0
                         || !_state.BaseComposed,
-                    resultChanged: (pending & FlowFieldSurfaceDirtyFlags.FinalRegion) != 0,
-                    includeBase: IsBaseDirty(pending) || !_fieldStore.IsValid);
+                    resultChanged: (pending & FlowFieldSurfaceDirtyFlags.FinalRegion) != 0);
                 return;
             }
 
             // Nothing to compose here: the branch above takes every final-region
-            // change, so the published cells stay as they are.
+            // change, so the published cells stay as they are and Commit copies
+            // nothing.
             QueueCommit(
                 request,
                 resultChanged: false,
-                includeBase: IsBaseDirty(pending) || !_fieldStore.IsValid,
+                includeBase: false,
                 finalRegion: _state.LastComposedRegion);
         }
 
@@ -151,14 +151,14 @@ namespace Common.FlowField
                     | FlowFieldSurfaceDirtyFlags.DefaultDirection)) != 0;
             if (finalDirty)
             {
-                ComposeThenCommit(request, rebuildBase, resultChanged: true, includeBase: rebuildBase);
+                ComposeThenCommit(request, rebuildBase, resultChanged: true);
                 return;
             }
 
             QueueCommit(
                 request,
                 resultChanged: false,
-                includeBase: rebuildBase,
+                includeBase: false,
                 finalRegion: _state.LastComposedRegion);
         }
 
@@ -176,11 +176,13 @@ namespace Common.FlowField
 
         // Snapshots are taken here. The composition itself can continue over the
         // next frames, while input arriving meanwhile waits for the next build.
+        // A composition that rebuilds the base publishes the base arrays too:
+        // the sample safety rule, a restore after a rejected build and the bake
+        // export all read them.
         private void ComposeThenCommit(
             in FlowFieldSurfaceRequest request,
             bool rebuildBase,
-            bool resultChanged,
-            bool includeBase)
+            bool resultChanged)
         {
             FlowFieldCellRect region = _state.DirtyFinalRegion.IsValid
                 ? _state.DirtyFinalRegion
@@ -200,7 +202,7 @@ namespace Common.FlowField
             }
             _state.LastComposedRegion = rebuildBase ? FlowFieldCellRect.Full(_state.Grid) : region;
             _state.DirtyFinalRegion = FlowFieldCellRect.Invalid;
-            _composeStage.Begin(request, rebuildBase, resultChanged, includeBase);
+            _composeStage.Begin(request, rebuildBase, resultChanged);
             _phase = BuildPhase.Composing;
             ContinueCompose();
         }
@@ -218,7 +220,7 @@ namespace Common.FlowField
             QueueCommit(
                 _composeStage.Request,
                 _composeStage.ResultChanged,
-                _composeStage.IncludeBase,
+                _composeStage.RebuildBase,
                 _state.LastComposedRegion);
             _composeStage.Clear();
         }
@@ -229,7 +231,7 @@ namespace Common.FlowField
             int generation = _session.LifetimeGeneration;
             if (!_state.Workspace.HasActiveGoal)
             {
-                ComposeThenCommit(request, rebuildBase: true, resultChanged: true, includeBase: true);
+                ComposeThenCommit(request, rebuildBase: true, resultChanged: true);
                 return;
             }
 
@@ -322,7 +324,7 @@ namespace Common.FlowField
                 _state.ResolvedDefaultDirection = resolvedDefault;
             if ((pending & FlowFieldSurfaceDirtyFlags.ModifierArea) != 0)
                 RebuildModifierAreaData(finalRequest);
-            ComposeThenCommit(finalRequest, rebuildBase: true, resultChanged: true, includeBase: true);
+            ComposeThenCommit(finalRequest, rebuildBase: true, resultChanged: true);
         }
 
         private void RestoreStagingAfterStaleResult()
