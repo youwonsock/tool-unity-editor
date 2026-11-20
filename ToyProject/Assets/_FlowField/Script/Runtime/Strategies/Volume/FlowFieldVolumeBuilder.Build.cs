@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using UnityEngine;
 using BuildContext = Common.FlowField.FlowFieldVolumeBuildContext;
@@ -310,31 +311,41 @@ namespace Common.FlowField
             return false;
         }
 
-        // One region around every Modifier, so a cell is walked only once and
-        // each Modifier still applies in priority order.
-        private static Bounds[] ModifierReach(BuildContext build)
+        // One cell box per Modifier, joined where boxes overlap: a cell walked
+        // twice would apply its Modifiers twice, and every Modifier that
+        // reaches a cell must still apply there in priority order.
+        private static FlowFieldCellRect[] ModifierReach(BuildContext build)
         {
-            Bounds reach = default;
-            bool any = false;
+            FlowFieldGridSpace grid = build.Request.Grid;
+            var rects = new List<FlowFieldCellRect>(build.Modifiers.Length);
             foreach (FlowFieldModifierWorkItem modifier in build.Modifiers)
             {
                 if (!FlowFieldModifierMaskBuilder.IsUsableTrigger(modifier.InfluenceCollider))
                     continue;
                 Bounds bounds = modifier.InfluenceCollider.bounds;
-                if (any)
+                bounds.Expand(grid.CellSize * 2f);
+                FlowFieldCellRect rect = FlowFieldCellRect.FromBounds(grid, bounds);
+                if (!rect.IsValid)
+                    continue;
+                // The boxes so far do not overlap; absorb every one this box
+                // reaches, again after each union grows it.
+                bool joined;
+                do
                 {
-                    reach.Encapsulate(bounds);
+                    joined = false;
+                    for (int i = rects.Count - 1; i >= 0; i--)
+                    {
+                        if (!FlowFieldCellRect.Intersect(rects[i], rect).IsValid)
+                            continue;
+                        rect = FlowFieldCellRect.Union(rects[i], rect);
+                        rects.RemoveAt(i);
+                        joined = true;
+                    }
                 }
-                else
-                {
-                    reach = bounds;
-                    any = true;
-                }
+                while (joined);
+                rects.Add(rect);
             }
-            if (!any)
-                return Array.Empty<Bounds>();
-            reach.Expand(build.Request.Grid.CellSize * 2f);
-            return new[] { reach };
+            return rects.ToArray();
         }
 
         private bool CommitBuild(BuildContext build)

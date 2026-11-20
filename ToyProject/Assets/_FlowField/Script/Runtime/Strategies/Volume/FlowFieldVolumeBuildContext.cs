@@ -64,6 +64,13 @@ namespace Common.FlowField
             _rects = rects.ToArray();
         }
 
+        /// <summary>Cell boxes already inside the grid; they must not overlap, so no cell is walked twice.</summary>
+        internal FlowFieldVolumeCellCursor(FlowFieldGridSpace grid, FlowFieldCellRect[] rects)
+        {
+            _grid = grid;
+            _rects = rects;
+        }
+
         /// <summary>Writes the next cells and returns how many. Zero means finished.</summary>
         internal int Next(int[] cells)
         {
