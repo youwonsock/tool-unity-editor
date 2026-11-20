@@ -28,7 +28,7 @@ namespace Common.FlowField.Editor
         internal int SelectedCellCount { get; }
         internal int MovingCellCount { get; }
         internal int StoppedCellCount { get; }
-        internal bool IsSampled { get; }
+        internal bool HasSelection { get; }
         internal float ValidationProgress { get; }
 
         internal FlowFieldVolumeVisualizationStatus(
@@ -41,7 +41,7 @@ namespace Common.FlowField.Editor
             int selectedCellCount,
             int movingCellCount,
             int stoppedCellCount,
-            bool isSampled,
+            bool hasSelection,
             float validationProgress)
         {
             Code = code;
@@ -53,7 +53,7 @@ namespace Common.FlowField.Editor
             SelectedCellCount = selectedCellCount;
             MovingCellCount = movingCellCount;
             StoppedCellCount = stoppedCellCount;
-            IsSampled = isSampled;
+            HasSelection = hasSelection;
             ValidationProgress = validationProgress;
         }
     }
@@ -266,7 +266,7 @@ namespace Common.FlowField.Editor
             if (!TryGetStatus(manager, out FlowFieldVolumeVisualizationStatus status)
                 || !status.CanDraw
                 || !status.HasView
-                || !status.IsSampled)
+                || !status.HasSelection)
                 return;
 
             Color previousColor = Gizmos.color;

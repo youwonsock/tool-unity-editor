@@ -110,15 +110,6 @@ namespace Common.FlowField
             return ActiveSession?.TryGetPublishedField(out field) ?? false;
         }
 
-        private void Reset()
-        {
-            _grid.BakeBoundsLocal = FlowFieldLayoutUtility.DefaultLocalBounds;
-            _grid.CellSize = 0.5f;
-            _surface.GroundLayer = Physics.DefaultRaycastLayers;
-            _spaceMode = FlowFieldSpaceMode.Surface2D;
-            _bakeMode = FlowFieldBakeMode.RuntimeDynamic;
-        }
-
         private void Awake()
         {
             if (Application.isPlaying)

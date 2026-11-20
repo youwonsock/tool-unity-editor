@@ -34,8 +34,9 @@ namespace Common.FlowField.Editor
         private const float SurfacePadding = 0.05f;
         private const float DirectionEpsilonSqr = 0.0001f;
         private const int LargeGridCellThreshold = 2500;
-        private static readonly Color ValidBakeBoundsColor = new Color(0.15f, 0.85f, 1f, 0.9f);
-        private static readonly Color StaleBakeBoundsColor = new Color(1f, 0.55f, 0.1f, 0.9f);
+        // The Bounds colors the gizmo and the Inspector handles share.
+        internal static readonly Color ValidBakeBoundsColor = new Color(0.15f, 0.85f, 1f, 0.9f);
+        internal static readonly Color StaleBakeBoundsColor = new Color(1f, 0.55f, 0.1f, 0.9f);
 
         internal static void Draw(in FlowFieldGizmoRequest request)
         {

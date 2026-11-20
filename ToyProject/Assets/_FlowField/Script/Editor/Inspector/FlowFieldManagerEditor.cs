@@ -8,8 +8,6 @@ namespace Common.FlowField.Editor
     [CustomEditor(typeof(FlowFieldManager))]
     internal sealed class FlowFieldManagerEditor : UnityEditor.Editor
     {
-        private static readonly Color ValidBoundsColor = new Color(0.15f, 0.85f, 1f, 0.9f);
-        private static readonly Color StaleBoundsColor = new Color(1f, 0.55f, 0.1f, 0.9f);
         private readonly BoxBoundsHandle _boundsHandle = new BoxBoundsHandle();
 
         public override void OnInspectorGUI()
@@ -121,7 +119,7 @@ namespace Common.FlowField.Editor
                 ? FlowFieldVolumeVisualizationEditor.TryGetBoundsValidity(manager, out bool volumeValid)
                     && volumeValid
                 : manager.TryValidateConfig(out _);
-            Color color = validBounds ? ValidBoundsColor : StaleBoundsColor;
+            Color color = validBounds ? FlowFieldGizmoDrawer.ValidBakeBoundsColor : FlowFieldGizmoDrawer.StaleBakeBoundsColor;
             Color previousHandlesColor = Handles.color;
             Handles.color = color;
             EditorGUI.BeginChangeCheck();
@@ -228,7 +226,7 @@ namespace Common.FlowField.Editor
                         $"{displayMode}: {volumeStatus.SelectedCellCount:N0} selected, "
                         + $"{volumeStatus.MovingCellCount:N0} moving, "
                         + $"{volumeStatus.StoppedCellCount:N0} stopped");
-                    if (volumeStatus.IsSampled)
+                    if (volumeStatus.HasSelection)
                     {
                         int limit = display.VolumeGizmoMode == FlowFieldVolumeGizmoMode.FullVolume
                             ? FlowFieldVolumeDisplaySelection.DefaultFullVolumeLimit

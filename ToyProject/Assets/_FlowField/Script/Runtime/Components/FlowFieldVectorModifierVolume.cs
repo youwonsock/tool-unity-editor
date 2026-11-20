@@ -397,12 +397,10 @@ namespace Common.FlowField
 
             // Manager/Modifier execution order is not a configuration error.
             // Keep the component initialized and wait for Manager reattach.
+            // A faulted Manager is not initialized either; its retry reattaches.
             if (!_flowFieldManager.IsInitialized
                 || _flowFieldManager.State == FlowFieldRuntimeState.Suspended)
                 return;
-            if (_flowFieldManager.IsFaulted)
-                throw new InvalidOperationException("Configured FlowFieldManager is faulted.",
-                    new InvalidOperationException(_flowFieldManager.LastError));
 
             if (_registeredManager == _flowFieldManager)
                 throw new InvalidOperationException("FlowField Vector Modifier is already registered with the configured manager.");

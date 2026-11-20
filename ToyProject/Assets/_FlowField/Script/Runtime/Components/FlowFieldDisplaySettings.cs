@@ -20,6 +20,17 @@ namespace Common.FlowField
         [SerializeField] private FlowFieldVolumeSliceAxis _volumeGizmoSliceAxis = FlowFieldVolumeSliceAxis.Y;
         [SerializeField, Tooltip("-1 uses the middle slice.")] private int _volumeGizmoSlice = -1;
 
+        /// <summary>Serialized property paths, for SerializedObject access.</summary>
+        internal static class PropertyNames
+        {
+            internal const string ShowField = nameof(_showField);
+            internal const string VolumeGizmoMode = nameof(_volumeGizmoMode);
+            internal const string ShowVolumeCells = nameof(_showVolumeCells);
+            internal const string ShowVolumeVectors = nameof(_showVolumeVectors);
+            internal const string VolumeGizmoSliceAxis = nameof(_volumeGizmoSliceAxis);
+            internal const string VolumeGizmoSlice = nameof(_volumeGizmoSlice);
+        }
+
         public bool ShowField => _showField;
         public FlowFieldVolumeGizmoMode VolumeGizmoMode => _volumeGizmoMode;
         public bool ShowVolumeCells => _showVolumeCells;

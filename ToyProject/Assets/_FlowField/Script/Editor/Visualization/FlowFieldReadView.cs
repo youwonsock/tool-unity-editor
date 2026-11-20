@@ -291,7 +291,6 @@ namespace Common.FlowField.Editor
         private readonly FlowFieldVolumeSliceAxis _sliceAxis;
 
         internal FlowFieldVolumeGizmoMode Mode { get; }
-        internal int Slice => _fixedCoordinate;
         internal int DisplayCount { get; }
 
         private FlowFieldVolumeDisplaySelection(

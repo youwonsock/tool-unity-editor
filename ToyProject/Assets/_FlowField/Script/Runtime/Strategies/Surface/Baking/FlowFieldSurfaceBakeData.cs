@@ -111,8 +111,12 @@ namespace Common.FlowField
                 reason = "Static Flow Bake Surface settings differ from the Manager settings.";
                 return false;
             }
+            if (!HasValidData)
+                reason = InvalidDataReason;
             return HasValidData;
         }
+
+        private const string InvalidDataReason = "Static Flow Bake data is missing or invalid.";
 
         internal bool MatchesObstacles(
             LayerMask layer,
@@ -130,6 +134,8 @@ namespace Common.FlowField
                 reason = "Static Flow Bake obstacle settings differ from the Manager settings.";
                 return false;
             }
+            if (!HasValidData)
+                reason = InvalidDataReason;
             return HasValidData;
         }
 

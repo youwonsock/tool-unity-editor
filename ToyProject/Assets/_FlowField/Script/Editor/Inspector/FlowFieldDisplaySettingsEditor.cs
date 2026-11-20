@@ -10,17 +10,17 @@ namespace Common.FlowField.Editor
             serializedObject.Update();
             var settings = (FlowFieldDisplaySettings)target;
             var manager = settings.GetComponent<FlowFieldManager>();
-            EditorGUILayout.PropertyField(serializedObject.FindProperty("_showField"));
+            EditorGUILayout.PropertyField(serializedObject.FindProperty(FlowFieldDisplaySettings.PropertyNames.ShowField));
             if (manager != null && manager.CaptureConfig().SpaceMode == FlowFieldSpaceMode.Volume3D)
             {
-                SerializedProperty gizmoMode = serializedObject.FindProperty("_volumeGizmoMode");
+                SerializedProperty gizmoMode = serializedObject.FindProperty(FlowFieldDisplaySettings.PropertyNames.VolumeGizmoMode);
                 EditorGUILayout.PropertyField(gizmoMode);
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("_showVolumeCells"));
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("_showVolumeVectors"));
+                EditorGUILayout.PropertyField(serializedObject.FindProperty(FlowFieldDisplaySettings.PropertyNames.ShowVolumeCells));
+                EditorGUILayout.PropertyField(serializedObject.FindProperty(FlowFieldDisplaySettings.PropertyNames.ShowVolumeVectors));
                 if (gizmoMode.enumValueIndex == (int)FlowFieldVolumeGizmoMode.Slice)
                 {
-                    EditorGUILayout.PropertyField(serializedObject.FindProperty("_volumeGizmoSliceAxis"));
-                    EditorGUILayout.PropertyField(serializedObject.FindProperty("_volumeGizmoSlice"));
+                    EditorGUILayout.PropertyField(serializedObject.FindProperty(FlowFieldDisplaySettings.PropertyNames.VolumeGizmoSliceAxis));
+                    EditorGUILayout.PropertyField(serializedObject.FindProperty(FlowFieldDisplaySettings.PropertyNames.VolumeGizmoSlice));
                 }
             }
             if (serializedObject.ApplyModifiedProperties() && manager != null)

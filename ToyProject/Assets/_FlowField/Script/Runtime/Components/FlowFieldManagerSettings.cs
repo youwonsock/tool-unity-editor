@@ -13,7 +13,7 @@ namespace Common.FlowField
 
         internal static FlowFieldGridSettings Default => new FlowFieldGridSettings
         {
-            BakeBoundsLocal = new Bounds(new Vector3(20f, 0f, 20f), new Vector3(40f, 10f, 40f)),
+            BakeBoundsLocal = FlowFieldLayoutUtility.DefaultLocalBounds,
             CellSize = 0.5f,
         };
     }
