@@ -300,6 +300,71 @@ namespace Common.FlowField
     }
 
     /// <summary>
+    /// The ground scan's neighbour masks for cells [Start, Start + count): a
+    /// step to an in-grid neighbour is open when both cells have ground within
+    /// MaxStepHeight of each other, and a diagonal also needs both cells
+    /// beside it connected to its ends. A cell without ground keeps mask 0.
+    /// </summary>
+    [BurstCompile(FloatMode = FloatMode.Strict, FloatPrecision = FloatPrecision.Standard)]
+    internal unsafe struct FlowFieldSurfaceNeighbourMaskJob : IJobParallelFor
+    {
+        private const int NeighborCount = FlowFieldNeighborUtility.SurfaceCount;
+        private const byte ValidSurface = 1;
+
+        internal const int PinnedArrayCount = 3;
+
+        [NativeDisableUnsafePtrRestriction] internal byte* CellFlags;
+        [NativeDisableUnsafePtrRestriction] internal float* Heights;
+        [NativeDisableUnsafePtrRestriction] internal byte* NeighborMasks;
+
+        internal int Width;
+        internal int Depth;
+        internal int Start;
+        internal float MaxStepHeight;
+        internal fixed int DeltaX[NeighborCount];
+        internal fixed int DeltaZ[NeighborCount];
+
+        public void Execute(int offset)
+        {
+            int index = Start + offset;
+            if ((CellFlags[index] & ValidSurface) == 0)
+                return;
+            int z = index / Width;
+            int x = index - z * Width;
+            byte mask = 0;
+            for (int direction = 0; direction < NeighborCount; direction++)
+            {
+                int dx = DeltaX[direction];
+                int dz = DeltaZ[direction];
+                int nx = x + dx;
+                int nz = z + dz;
+                if (nx < 0 || nx >= Width || nz < 0 || nz >= Depth)
+                    continue;
+                int neighbor = nz * Width + nx;
+                if (!CanConnect(index, neighbor))
+                    continue;
+                if (dx != 0 && dz != 0)
+                {
+                    int besideX = z * Width + nx;
+                    int besideZ = nz * Width + x;
+                    if (!CanConnect(index, besideX)
+                        || !CanConnect(index, besideZ)
+                        || !CanConnect(besideX, neighbor)
+                        || !CanConnect(besideZ, neighbor))
+                        continue;
+                }
+                mask |= (byte)(1 << direction);
+            }
+            NeighborMasks[index] = mask;
+        }
+
+        private bool CanConnect(int left, int right)
+            => (CellFlags[left] & ValidSurface) != 0
+                && (CellFlags[right] & ValidSurface) != 0
+                && System.Math.Abs(Heights[left] - Heights[right]) <= MaxStepHeight;
+    }
+
+    /// <summary>
     /// Copies a composed region into the published field and reports whether
     /// anything changed. The comparisons match Vector3 != and Mathf.Approximately.
     /// </summary>
