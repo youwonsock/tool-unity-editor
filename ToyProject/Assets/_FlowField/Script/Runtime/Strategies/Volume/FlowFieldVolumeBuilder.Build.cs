@@ -139,33 +139,38 @@ namespace Common.FlowField
             // Keep large managed allocations as individually observable work
             // units. A build can therefore yield between arrays instead of
             // constructing the entire Volume3D staging graph in one frame.
+            // A taken spare keeps its old values: Blocked is filled by the copy
+            // below, the obstacle queries or the bake copy, every other array
+            // by the static bake copy or the solve jobs, which write each cell
+            // (Escape clears all before its search), and the final field by
+            // the Modifier stage's full copy of the base field.
             switch (build.AllocationStage)
             {
                 case FlowFieldVolumeAllocation.Blocked:
-                    build.Blocked ??= FlowFieldSpareArrays.Rent(ref _spares.Blocked, build.Count);
+                    build.Blocked ??= FlowFieldSpareArrays.Take(ref _spares.Blocked, build.Count);
                     if (build.PublishedBlocked != null)
                         Array.Copy(build.PublishedBlocked, build.Blocked, build.Count);
                     break;
-                case FlowFieldVolumeAllocation.Topology: build.Topology ??= FlowFieldSpareArrays.Rent(ref _spares.Topology, build.Count); break;
-                case FlowFieldVolumeAllocation.GoalFlags: build.GoalFlags = FlowFieldSpareArrays.Rent(ref _spares.GoalFlags, build.Count); break;
-                case FlowFieldVolumeAllocation.Next: build.Next = FlowFieldSpareArrays.Rent(ref _spares.Next, build.Count); break;
-                case FlowFieldVolumeAllocation.Directions: build.Directions = FlowFieldSpareArrays.Rent(ref _spares.Directions, build.Count); break;
-                case FlowFieldVolumeAllocation.Speeds: build.Speeds = FlowFieldSpareArrays.Rent(ref _spares.Speeds, build.Count); break;
-                case FlowFieldVolumeAllocation.FinalDirections: build.FinalDirections = FlowFieldSpareArrays.Rent(ref _spares.FinalDirections, build.Count); break;
-                case FlowFieldVolumeAllocation.FinalSpeeds: build.FinalSpeeds = FlowFieldSpareArrays.Rent(ref _spares.FinalSpeeds, build.Count); break;
-                case FlowFieldVolumeAllocation.EscapeDirections: build.EscapeDirections ??= FlowFieldSpareArrays.Rent(ref _spares.EscapeDirections, build.Count); break;
+                case FlowFieldVolumeAllocation.Topology: build.Topology ??= FlowFieldSpareArrays.Take(ref _spares.Topology, build.Count); break;
+                case FlowFieldVolumeAllocation.GoalFlags: build.GoalFlags = FlowFieldSpareArrays.Take(ref _spares.GoalFlags, build.Count); break;
+                case FlowFieldVolumeAllocation.Next: build.Next = FlowFieldSpareArrays.Take(ref _spares.Next, build.Count); break;
+                case FlowFieldVolumeAllocation.Directions: build.Directions = FlowFieldSpareArrays.Take(ref _spares.Directions, build.Count); break;
+                case FlowFieldVolumeAllocation.Speeds: build.Speeds = FlowFieldSpareArrays.Take(ref _spares.Speeds, build.Count); break;
+                case FlowFieldVolumeAllocation.FinalDirections: build.FinalDirections = FlowFieldSpareArrays.Take(ref _spares.FinalDirections, build.Count); break;
+                case FlowFieldVolumeAllocation.FinalSpeeds: build.FinalSpeeds = FlowFieldSpareArrays.Take(ref _spares.FinalSpeeds, build.Count); break;
+                case FlowFieldVolumeAllocation.EscapeDirections: build.EscapeDirections ??= FlowFieldSpareArrays.Take(ref _spares.EscapeDirections, build.Count); break;
                 // A StaticBaked build loads its navigation and never searches.
                 case FlowFieldVolumeAllocation.Costs:
                     if (build.Request.BakeMode != FlowFieldBakeMode.StaticBaked)
-                        build.Costs = FlowFieldSpareArrays.Rent(ref _spares.Costs, build.Count);
+                        build.Costs = FlowFieldSpareArrays.Take(ref _spares.Costs, build.Count);
                     break;
                 case FlowFieldVolumeAllocation.Queue:
                     if (build.Request.BakeMode != FlowFieldBakeMode.StaticBaked)
-                        build.Queue = FlowFieldSpareArrays.Rent(ref _spares.Queue, build.Count);
+                        build.Queue = FlowFieldSpareArrays.Take(ref _spares.Queue, build.Count);
                     break;
                 case FlowFieldVolumeAllocation.Influence:
                     if (build.Request.BakeMode != FlowFieldBakeMode.StaticBaked)
-                        build.Influence = FlowFieldSpareArrays.Rent(ref _spares.Influence, build.Count);
+                        build.Influence = FlowFieldSpareArrays.Take(ref _spares.Influence, build.Count);
                     break;
             }
 

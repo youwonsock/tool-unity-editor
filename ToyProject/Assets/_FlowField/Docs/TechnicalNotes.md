@@ -92,7 +92,7 @@
 - 장애물·Modifier 단계는 64셀씩 진행합니다. 스텝마다 `OverlapBox`로 후보를 모아 후보가 닿는 셀만 정확히 검사합니다(`FlowFieldVolumeCellQuery`). 등록 장애물은 빌드가 장애물 조회 전에 `Physics.SyncTransforms`한 직후 한 번(`CaptureRegistered`: Collider, 넓힌 Bounds, Layer) 읽고, 스텝마다 그 Bounds가 스텝 상자에 닿는 것만 고릅니다. 읽은 뒤 움직이거나 해제된 등록 장애물은 통지로 불확실 영역이 되고, 그 영역은 이 빌드가 게시된 뒤에도 남아 다음 빌드가 다시 조회합니다.
 - **부분 재계산:** Modifier만 바뀌면 게시된 내비게이션에 다시 합성합니다. 첫 빌드 중 바뀐 Modifier도 그 빌드가 게시된 뒤 합성만 다시 합니다. 장애물 입력과 불확실 영역이 그대로인 빌드(Goal이나 Default Direction 변경)는 장애물 결과와 Topology를 재사용합니다. 그래서 Play 중 Inspector 설정 변경도 장애물을 다시 조회하지 않고, 알리지 않은 Collider는 `RequestRebuild`나 `NotifyCellsDirty`, 영역 알림, sweep으로 반영합니다. Goal이 같은 셀 안에서 움직이면 빌드하지 않습니다. Goal을 지우면 진행 중인 빌드를 버립니다.
 - **등록하지 않은 Collider:** `RequestRebuild()`나 `NotifyCellsDirty()`의 전체 조회, 또는 `NotifyObstacleRegionDirty()`와 sweep이 알린 영역의 조회에서 반영됩니다.
-- **배열 재사용:** 교체된 게시 배열을 다음 빌드에 씁니다(`FlowFieldSpareArrays`).
+- **배열 재사용:** 교체된 게시 배열을 다음 빌드에 씁니다(`FlowFieldSpareArrays.Take`, Surface 게시도 같습니다). 가져온 배열은 지우지 않습니다. 빌드가 모든 칸을 읽기 전에 쓰기 때문입니다. Volume의 막힘은 게시 막힘이나 Bake 복사, 또는 전체 조회가 채우고, 나머지는 Static Bake 복사나 풀이 Job이 모든 칸에 씁니다(탈출 Job은 먼저 전부 0으로 씁니다). 최종 필드는 Modifier 단계가 기본 필드를 통째로 복사한 데서 시작합니다. Surface 게시는 전체 commit이면 모든 칸을 쓰고, 부분 commit이면 게시 필드를 먼저 통째로 복사합니다.
 
 ## Modifier
 

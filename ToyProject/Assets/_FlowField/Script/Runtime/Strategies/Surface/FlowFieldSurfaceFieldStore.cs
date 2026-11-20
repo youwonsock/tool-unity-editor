@@ -101,7 +101,11 @@ namespace Common.FlowField
                 includeBase = true;
             }
 
-            FlowFieldField next = Rent(grid, surface, grid.CellCount, workspace);
+            // A full commit writes every cell of each array, and a partial one
+            // copies the published field first, so no spare value survives.
+            // The commit job compares the old values only to report a change,
+            // which a full commit reports anyway.
+            FlowFieldField next = TakeField(grid, surface, grid.CellCount, workspace);
             if (!full)
                 CopyAll(previous, next);
 
@@ -135,7 +139,7 @@ namespace Common.FlowField
             return true;
         }
 
-        private FlowFieldField Rent(
+        private FlowFieldField TakeField(
             FlowFieldGridSpace grid,
             FlowFieldSurfaceData surface,
             int count,
@@ -143,16 +147,16 @@ namespace Common.FlowField
             => new FlowFieldField(
                 grid,
                 surface,
-                FlowFieldSpareArrays.Rent(ref _spares.Blocked, count),
-                FlowFieldSpareArrays.Rent(ref _spares.Topology, count),
-                FlowFieldSpareArrays.Rent(ref _spares.GoalFlags, count),
-                FlowFieldSpareArrays.Rent(ref _spares.Next, count),
-                FlowFieldSpareArrays.Rent(ref _spares.Directions, count),
-                FlowFieldSpareArrays.Rent(ref _spares.Speeds, count),
-                FlowFieldSpareArrays.Rent(ref _spares.FinalDirections, count),
-                FlowFieldSpareArrays.Rent(ref _spares.FinalSpeeds, count),
+                FlowFieldSpareArrays.Take(ref _spares.Blocked, count),
+                FlowFieldSpareArrays.Take(ref _spares.Topology, count),
+                FlowFieldSpareArrays.Take(ref _spares.GoalFlags, count),
+                FlowFieldSpareArrays.Take(ref _spares.Next, count),
+                FlowFieldSpareArrays.Take(ref _spares.Directions, count),
+                FlowFieldSpareArrays.Take(ref _spares.Speeds, count),
+                FlowFieldSpareArrays.Take(ref _spares.FinalDirections, count),
+                FlowFieldSpareArrays.Take(ref _spares.FinalSpeeds, count),
                 escapeDirections: null,
-                FlowFieldSpareArrays.Rent(ref _spares.ModifierInfluence, count),
+                FlowFieldSpareArrays.Take(ref _spares.ModifierInfluence, count),
                 workspace.HasActiveGoal,
                 workspace.ResolvedGoalIndex);
 

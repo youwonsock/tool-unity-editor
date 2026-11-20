@@ -196,8 +196,8 @@ namespace Common.FlowField
                 _build = new BuildContext(
                     _committed,
                     modifierSnapshots,
-                    FlowFieldSpareArrays.Rent(ref _spares.FinalDirections, request.Grid.CellCount),
-                    FlowFieldSpareArrays.Rent(ref _spares.FinalSpeeds, request.Grid.CellCount));
+                    FlowFieldSpareArrays.Take(ref _spares.FinalDirections, request.Grid.CellCount),
+                    FlowFieldSpareArrays.Take(ref _spares.FinalSpeeds, request.Grid.CellCount));
             }
             else
             {

@@ -1,4 +1,3 @@
-using System;
 using UnityEngine;
 
 namespace Common.FlowField
@@ -25,19 +24,16 @@ namespace Common.FlowField
         internal bool[] Influence;
         internal bool[] ModifierInfluence;
 
-
         /// <summary>
-        /// Takes the spare array when it has the requested size and clears it,
-        /// which leaves it in the same state as a new allocation.
+        /// Takes the spare array when it has the requested size, or allocates
+        /// one. A spare still holds the field it came from and is not cleared:
+        /// every caller writes each element before anything reads it.
         /// </summary>
-        internal static T[] Rent<T>(ref T[] spare, int count)
+        internal static T[] Take<T>(ref T[] spare, int count)
         {
             T[] array = spare;
             spare = null;
-            if (array == null || array.Length != count)
-                return new T[count];
-            Array.Clear(array, 0, count);
-            return array;
+            return array != null && array.Length == count ? array : new T[count];
         }
 
         internal void Retire(FlowFieldField replaced, FlowFieldField next)
