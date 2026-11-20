@@ -80,9 +80,8 @@ namespace Common.FlowField
             return workspace != null;
         }
 
-        // Building without composing means a solve is running elsewhere.
-        public bool IsWaitingForExternalCompletion
-            => !_composeStage.IsRunning && _phase == BuildPhase.WaitingSolve;
+        // A solve is running on a worker thread.
+        public bool IsWaitingForExternalCompletion => _phase == BuildPhase.WaitingSolve;
 
         public bool HasActiveBuild => _phase != BuildPhase.None;
 
@@ -205,7 +204,6 @@ namespace Common.FlowField
                 ? FlowFieldSurfaceDirtyFlags.All
                 : _requests.Latest.GetInputDirtyFlags(request);
 
-        internal bool ObserveGrid(in FlowFieldGridSpace grid) => _baseStage.ObserveGrid(grid);
 
         // The session that runs this builder. Lifecycle, events and the build
         // loop live there.

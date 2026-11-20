@@ -126,13 +126,13 @@ namespace Common.FlowField
             }
 
             FlowFieldSurfaceModifierLayer layer = _layers[_layerIndex];
-            if (layer.Snapshot == null || layer.InfluenceMask == null || layer.InfluenceMask.Length != _grid.CellCount)
+            if (layer.Snapshot == null
+                || layer.InfluenceMask == null
+                || layer.InfluenceMask.Length != _grid.CellCount
+                || layer.InfluenceIndices == null)
                 throw new ArgumentException("Modifier layer data is inconsistent.");
 
-            bool finished = layer.InfluenceIndices != null
-                ? StepIndexedLayer(layer)
-                : StepMaskedLayer(layer);
-            if (finished)
+            if (StepIndexedLayer(layer))
             {
                 _layerIndex++;
                 _cursor = 0;
@@ -151,17 +151,6 @@ namespace Common.FlowField
                 ApplyIfInRegion(layer.Snapshot, index);
             }
             return _cursor >= indices.Count;
-        }
-
-        private bool StepMaskedLayer(in FlowFieldSurfaceModifierLayer layer)
-        {
-            int end = Math.Min(_cursor + CellsPerCheck, _grid.CellCount);
-            for (; _cursor < end; _cursor++)
-            {
-                if (layer.InfluenceMask[_cursor])
-                    ApplyIfInRegion(layer.Snapshot, _cursor);
-            }
-            return _cursor >= _grid.CellCount;
         }
 
         private void ApplyIfInRegion(IFlowFieldModifierSnapshot modifier, int index)
@@ -289,11 +278,6 @@ namespace Common.FlowField
         public IFlowFieldModifierSnapshot Snapshot { get; }
         public bool[] InfluenceMask { get; }
         public IReadOnlyList<int> InfluenceIndices { get; }
-
-        public FlowFieldSurfaceModifierLayer(IFlowFieldModifierSnapshot snapshot, bool[] influenceMask)
-            : this(snapshot, influenceMask, null)
-        {
-        }
 
         public FlowFieldSurfaceModifierLayer(
             IFlowFieldModifierSnapshot snapshot,

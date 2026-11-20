@@ -202,7 +202,7 @@ namespace Common.FlowField.Editor
                 () => IsCurrentInput(manager, inputGeneration),
                 session => session.Pump(),
                 session => SaveSurfaceBake(manager, settings, session),
-                bakeJob.Dispose);
+                bakeJob.Cancel);
             // The ground scan runs first; the session starts on its result.
             run.Prepare = () => StepSurfaceGroundScan(run, manager, settings, bakeJob);
             run.Start("Baking Surface");

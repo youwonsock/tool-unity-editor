@@ -3,7 +3,6 @@ namespace Common.FlowField
     /// <summary>A composition in progress and what to publish once it finishes.</summary>
     internal sealed class FlowFieldSurfaceComposeStage
     {
-        internal bool IsRunning { get; private set; }
         internal FlowFieldSurfaceRequest Request { get; private set; }
         internal bool RebuildBase { get; private set; }
         internal bool ResultChanged { get; private set; }
@@ -18,13 +17,11 @@ namespace Common.FlowField
             RebuildBase = rebuildBase;
             ResultChanged = resultChanged;
             IncludeBase = includeBase;
-            IsRunning = true;
         }
 
         internal void Clear()
         {
             Request = default;
-            IsRunning = false;
         }
     }
 }

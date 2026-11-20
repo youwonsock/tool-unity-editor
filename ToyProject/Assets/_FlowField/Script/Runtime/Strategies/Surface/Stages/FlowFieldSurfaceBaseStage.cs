@@ -13,7 +13,6 @@ namespace Common.FlowField
         private readonly FlowFieldSurfaceObstacleMasks _obstacleMasks;
         private readonly FlowFieldSurfaceGoalTracker _goalTracker;
         private readonly IFlowFieldSurfaceSource _surfaceSource;
-        private FlowFieldGridSpace? _observedGrid;
 
         internal FlowFieldSurfaceBaseStage(
             FlowFieldSurfaceState state,
@@ -29,24 +28,8 @@ namespace Common.FlowField
 
         internal FlowFieldSurfaceBakeSnapshot LoadedSnapshot { get; set; }
 
-        /// <summary>
-        /// Records the latest authoring grid observed by the Unity adapter. The
-        /// adapter may call this while a solve is in flight; keeping the
-        /// observation here prevents repeated dirty increments for one transform.
-        /// </summary>
-        internal bool ObserveGrid(in FlowFieldGridSpace grid)
-        {
-            if (!grid.IsValid)
-                return false;
-            bool changed = _observedGrid.HasValue && !_observedGrid.Value.MatchesBounds(grid);
-            if (changed || !_observedGrid.HasValue)
-                _observedGrid = grid;
-            return changed;
-        }
-
         internal void Clear()
         {
-            _observedGrid = null;
             LoadedSnapshot = null;
         }
 
@@ -87,7 +70,6 @@ namespace Common.FlowField
                 return false;
 
             _state.Grid = request.SurfaceSettings.Grid;
-            _observedGrid = _state.Grid;
             // A StaticBaked build records its snapshot once it loads the whole
             // field; a BakedBase build has loaded what it uses from it here.
             if (request.SourceKind == FlowFieldSurfaceSourceKind.BakedBase)

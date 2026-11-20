@@ -135,7 +135,7 @@ namespace Common.FlowField
             FlowFieldSurfaceGoalTracker goalTracker,
             bool forceRebuild)
         {
-            FlowFieldSurfaceGoalTracker tracker = goalTracker ?? new FlowFieldSurfaceGoalTracker();
+            FlowFieldSurfaceGoalTracker tracker = goalTracker;
             FlowFieldSurfaceGoalBuildStatus status = FlowFieldSurfaceGoalResolver.Build(
                 request.Goal,
                 request.Grid,
@@ -210,7 +210,6 @@ namespace Common.FlowField
         internal FlowFieldGridSpace Grid { get; }
         internal FlowFieldSurfaceData Surface { get; }
         internal FlowFieldSurfaceWorkspace Workspace { get; }
-        internal bool HasGoal { get; }
         internal int GoalX { get; }
         internal int GoalZ { get; }
         internal float GoalInfluenceRadius { get; }
@@ -220,7 +219,6 @@ namespace Common.FlowField
             FlowFieldGridSpace grid,
             FlowFieldSurfaceData surface,
             FlowFieldSurfaceWorkspace workspace,
-            bool hasGoal,
             int goalX,
             int goalZ,
             float goalInfluenceRadius,
@@ -229,7 +227,6 @@ namespace Common.FlowField
             Grid = grid;
             Surface = surface;
             Workspace = workspace;
-            HasGoal = hasGoal;
             GoalX = goalX;
             GoalZ = goalZ;
             GoalInfluenceRadius = goalInfluenceRadius;
@@ -326,13 +323,6 @@ namespace Common.FlowField
                 return false;
             ValidateRequest(request);
 
-            if (!request.HasGoal)
-            {
-                request.Workspace.ClearGoal();
-                completed(request);
-                return true;
-            }
-
             _solve = FlowFieldSurfaceSolve.Create(
                 request.Grid,
                 request.Surface,
@@ -384,8 +374,6 @@ namespace Common.FlowField
                 throw new ArgumentException("FlowField BFS requires a valid Surface Bake.", nameof(request));
             if (request.Workspace == null || request.Workspace.Capacity != request.Grid.CellCount)
                 throw new ArgumentException("FlowField BFS workspace capacity does not match the grid.", nameof(request));
-            if (!request.HasGoal)
-                return;
             if (!request.Grid.IsLocalInBounds(request.GoalX, request.GoalZ)
                 || request.GoalIndex < 0
                 || request.GoalIndex >= request.Grid.CellCount)

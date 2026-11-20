@@ -91,16 +91,14 @@ namespace Common.FlowField
             in FlowFieldSurfaceBakeSettings settings,
             FlowFieldSurfaceBakeProgress progress = null)
         {
-            using (var job = new FlowFieldSurfaceBakeJob(settings, progress))
-            {
-                while (!job.IsComplete)
-                    job.Step(double.MaxValue);
-                if (job.Status == FlowFieldSurfaceBakeJobStatus.Cancelled)
-                    throw new OperationCanceledException(job.Error);
-                if (job.Status == FlowFieldSurfaceBakeJobStatus.Failed)
-                    throw new InvalidOperationException(job.Error);
-                return job.Result;
-            }
+            var job = new FlowFieldSurfaceBakeJob(settings, progress);
+            while (!job.IsComplete)
+                job.Step(double.MaxValue);
+            if (job.Status == FlowFieldSurfaceBakeJobStatus.Cancelled)
+                throw new OperationCanceledException(job.Error);
+            if (job.Status == FlowFieldSurfaceBakeJobStatus.Failed)
+                throw new InvalidOperationException(job.Error);
+            return job.Result;
         }
 
         internal static void BakeCell(
@@ -255,7 +253,7 @@ namespace Common.FlowField
     /// advances this job from its update, so the raycast rows do not hold one
     /// callback.
     /// </summary>
-    internal sealed class FlowFieldSurfaceBakeJob : IDisposable
+    internal sealed class FlowFieldSurfaceBakeJob
     {
         private enum Phase
         {
@@ -273,7 +271,6 @@ namespace Common.FlowField
         private string _error;
         private int _cursor;
         private bool _physicsSynchronized;
-        private bool _disposed;
 
         internal FlowFieldSurfaceBakeJob(
             in FlowFieldSurfaceBakeSettings settings,
@@ -336,7 +333,7 @@ namespace Common.FlowField
 
         internal void Step(double budgetMilliseconds = 2.0)
         {
-            if (_disposed || IsComplete)
+            if (IsComplete)
                 return;
             if (budgetMilliseconds <= 0d)
                 budgetMilliseconds = 2.0;
@@ -400,13 +397,6 @@ namespace Common.FlowField
             {
                 Fail(exception.Message);
             }
-        }
-
-        public void Dispose()
-        {
-            if (_disposed)
-                return;
-            _disposed = true;
         }
 
         private void Fail(string reason)

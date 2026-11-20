@@ -72,8 +72,6 @@ namespace Common.FlowField
             ObserveDefaultDirection(current.DefaultDirection);
             FlowFieldSurfaceDirtyFlags flags = GetInputDirtyFlags(current);
             bool gridChanged = (flags & FlowFieldSurfaceDirtyFlags.Grid) != 0;
-            if (gridChanged && TryCreateLayout(in config, out _, out FlowFieldGridSpace grid))
-                ObserveGrid(grid);
             Vector3 normalized = FlowFieldVectorUtility.NormalizeDefaultDirection(config.Flow.DefaultDirection);
             if ((_state.ResolvedDefaultDirection - normalized).sqrMagnitude
                 > FlowFieldManagerConfig.ValueEpsilon * FlowFieldManagerConfig.ValueEpsilon)

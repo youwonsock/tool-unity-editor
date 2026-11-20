@@ -94,9 +94,11 @@ namespace Common.FlowField
                 return;
             }
 
+            // Nothing to compose here: the branch above takes every final-region
+            // change, so the published cells stay as they are.
             QueueCommit(
                 request,
-                resultChanged: (pending & FlowFieldSurfaceDirtyFlags.FinalRegion) != 0,
+                resultChanged: false,
                 includeBase: IsBaseDirty(pending) || !_fieldStore.IsValid,
                 finalRegion: _state.LastComposedRegion);
         }
@@ -243,7 +245,6 @@ namespace Common.FlowField
                 _state.Grid,
                 _state.Surface,
                 _state.Workspace,
-                true,
                 request.Goal.LocalX,
                 request.Goal.LocalZ,
                 request.Goal.InfluenceRadius,
