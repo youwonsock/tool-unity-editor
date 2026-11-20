@@ -6,7 +6,7 @@ namespace Common.FlowField
     internal static class FlowFieldObstacleMaskBuilder
     {
         private const int InitialOverlapCapacity = 32;
-        private const int MaxOverlapHits = 4096;
+        private const int MaxOverlapHits = FlowFieldOverlapUtility.MaxOverlapHits;
 
         /// <summary>
         /// Writes every obstacle Collider of the layer into the cells of
@@ -531,7 +531,9 @@ namespace Common.FlowField
     internal static class FlowFieldOverlapUtility
     {
         private const int InitialOverlapCapacity = 8;
-        private const int MaxOverlapHits = 256;
+        // One cap for every overlap query: a cell box overlapping more
+        // Colliders than this faults the session.
+        internal const int MaxOverlapHits = 4096;
         private const float CellQuerySkin = 0.0001f;
 
         /// <summary>
