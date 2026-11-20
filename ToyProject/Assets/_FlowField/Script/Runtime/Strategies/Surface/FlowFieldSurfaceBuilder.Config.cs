@@ -44,7 +44,14 @@ namespace Common.FlowField
         {
             FlowFieldSurfaceRequest current = CreateCurrentRequest(in config);
             if (HasSubmittedRequest && HasSameBaseInputs(current) && HasSameFinalInputs(current))
+            {
+                // The settings are back to the submitted request, Goal
+                // included, so a change owed during this build was reverted
+                // before it began: drop it, and compose with this direction.
+                ObserveDefaultDirection(current.DefaultDirection);
+                _configOwed = false;
                 return null;
+            }
 
             // Visible to a solve callback even before the next Submit.
             ObserveDefaultDirection(current.DefaultDirection);
