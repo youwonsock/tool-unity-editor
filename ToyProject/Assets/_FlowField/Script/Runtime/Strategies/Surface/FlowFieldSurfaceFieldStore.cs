@@ -207,7 +207,7 @@ namespace Common.FlowField
             // Escape vectors are a diagnostic/bake concern rather than part
             // of the compact runtime field. Reconstruct them only when an
             // explicit workspace snapshot is requested.
-            FlowFieldSurfaceSolver.BuildEscapeDirections(Grid, Surface, workspace);
+            FlowFieldSurfaceNavigationPreparation.BuildEscapeDirections(Grid, Surface, workspace);
         }
 
         /// <summary>

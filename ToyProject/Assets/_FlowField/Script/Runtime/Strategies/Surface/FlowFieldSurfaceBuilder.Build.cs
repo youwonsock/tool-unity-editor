@@ -242,13 +242,11 @@ namespace Common.FlowField
                 request.Goal.InfluenceRadius,
                 _state.Workspace.ResolvedGoalIndex);
 
-            // Set first: a solve that completes synchronously reports through
-            // the callback, which moves the phase on.
+            // Set first: the callback that reports the solve moves the phase on.
             _phase = BuildPhase.WaitingSolve;
-            // Stop drops the backend; the next solve takes a new one.
-            _solveStage.Prepare(_sourceKind);
-            bool accepted = _solveStage.Start(bfsRequest, _ => RunBfsCallback(generation));
-            // A synchronous completion has already moved the phase on.
+            PrepareSolveBackend();
+            bool accepted = _solveBackend.StartBfs(bfsRequest, _ => RunBfsCallback(generation));
+            // Only a disposed backend refuses a solve.
             if (!accepted && IsCurrentBuild(generation))
                 throw new InvalidOperationException("FlowField BFS session could not be started.");
         }
@@ -260,8 +258,8 @@ namespace Common.FlowField
                 && generation == _session.LifetimeGeneration
                 && _phase == BuildPhase.WaitingSolve;
 
-        // The backend calls back from StartBfs or Poll, both inside StepBuild:
-        // a failure leaves through StepBuild and the session faults.
+        // The backend calls back from Poll, inside StepBuild: a failure leaves
+        // through StepBuild and the session faults.
         private void RunBfsCallback(int generation)
         {
             if (IsCurrentBuild(generation))

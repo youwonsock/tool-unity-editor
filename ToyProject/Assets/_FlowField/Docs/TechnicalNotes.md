@@ -18,7 +18,7 @@
 - `FlowFieldSession`은 두 모드가 같이 쓰는 파이프라인입니다. 모드와 무관한 규칙은 모두 여기 있습니다.
   - 수명 전이(`Initialize`·`Stop`·`Restart`·`Release`·Fault·`Dispose`), 세대 번호, 이벤트
   - 빌드 루프(`RunPipeline`, 직접 소유자의 `Pump`). 빌드 중 상태 전이, Revision, `FieldChanged`, Fault, 불확실 영역 갱신도 여기서만 합니다. Builder는 빌드를 시작할 때 그 빌드가 장애물을 조회하는지와 새 장애물 설정이 불확실하게 만든 영역(`FlowFieldBuildStart`)을, 단계마다 결과(계속·대기·버림·완료)와 "게시한 필드가 달라졌는지"만 돌려주고, 실패는 예외로 알립니다. 버린 결과 뒤에 남은 입력이 있으면 Ready로 돌아가지 않고 Building을 유지합니다.
-  - Surface 풀이 완료 콜백은 세대 번호와 빌드 단계(`WaitingSolve`)로 유효성을 판단합니다. 콜백은 `StartBfs`나 `Poll` 안, 곧 `StepBuild` 안에서만 옵니다.
+  - Surface 풀이 완료 콜백은 세대 번호와 빌드 단계(`WaitingSolve`)로 유효성을 판단합니다. 콜백은 `Poll` 안, 곧 `StepBuild` 안에서만 옵니다.
   - 조회(`TrySample`·`ClampPositionToGrid`·`IsReady`·`TryGetFieldInfo`의 준비 판정)와 조회 실패를 예외로 바꾸는 일(`FlowFieldFailures`). `TrySample`과 `TryClampPositionToGrid`는 예외 없이 상태를 돌려주는 같은 함수(`TrySampleStatus`·`TryClampStatus`)를 쓰고, 예외를 던지는 쪽은 그 상태를 예외로 바꿉니다.
   - 장애물 등록(`FlowFieldObstacleRegistry`), Modifier 등록(`FlowFieldModifierRegistry`), 통지 영역을 불확실 영역으로 표시하는 일(`FlowFieldSafety`, 여백 = 셀 크기 + Obstacle Clearance)
 - 모드마다 다른 일은 `IFlowFieldSpaceBuilder`(`FlowFieldSurfaceBuilder`, `FlowFieldVolumeBuilder`)가 맡습니다. 자기 멤버 21개와 상속한 `Dispose`입니다.

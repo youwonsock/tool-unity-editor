@@ -92,7 +92,7 @@ namespace Common.FlowField
                 return FlowFieldSurfaceGoalBuildStatus.Invalid;
             }
 
-            bool built = FlowFieldSurfaceSolver.PrepareGoal(
+            bool built = FlowFieldSurfaceNavigationPreparation.PrepareGoal(
                 grid,
                 surface,
                 workspace,

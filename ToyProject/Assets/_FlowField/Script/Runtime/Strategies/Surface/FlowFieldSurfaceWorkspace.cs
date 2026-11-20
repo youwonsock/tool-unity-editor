@@ -4,9 +4,10 @@ using UnityEngine;
 namespace Common.FlowField
 {
     /// <summary>
-    /// Managed backing for FlowField rebuild. A Manager owns one staging workspace
-    /// and one committed workspace so asynchronous builds cannot expose partially
-    /// written data.
+    /// The managed arrays of a Surface2D build. The builder stages every build
+    /// in one workspace and publishes it into the compact field store, so a
+    /// build that spans frames never exposes partly written cells. A bake
+    /// loads into it and a bake export copies the store into a new one.
     /// </summary>
     internal sealed class FlowFieldSurfaceWorkspace
     {

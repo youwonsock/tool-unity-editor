@@ -5,61 +5,11 @@ using UnityEngine;
 namespace Common.FlowField
 {
     /// <summary>
-    /// Inputs consumed by Surface2D base preparation. Grid and Surface come
-    /// from the obstacle request so the two stages share one source identity.
-    /// </summary>
-    internal readonly struct FlowFieldSurfaceBuildRequest
-    {
-        internal FlowFieldGridSpace Grid => Obstacles.Grid;
-        internal FlowFieldSurfaceData Surface => Obstacles.Surface;
-        internal FlowFieldSurfaceObstacleRequest Obstacles { get; }
-        internal FlowFieldSurfaceGoalResolution Goal { get; }
-        internal bool SurfaceChanged { get; }
-
-        internal FlowFieldSurfaceBuildRequest(
-            FlowFieldSurfaceObstacleRequest obstacles,
-            FlowFieldSurfaceGoalResolution goal,
-            bool surfaceChanged = false)
-        {
-            Obstacles = obstacles;
-            Goal = goal;
-            SurfaceChanged = surfaceChanged;
-        }
-    }
-
-    /// <summary>
-    /// Effective changes from base preparation. Navigation arrays remain in
-    /// the session's staging workspace; this result carries only decisions.
-    /// </summary>
-    internal readonly struct FlowFieldSurfaceBuildResult
-    {
-        internal bool ObstacleMaskChanged { get; }
-        internal FlowFieldCellRect ObstacleDirtyRegion { get; }
-        internal bool HasWalkableSurface { get; }
-        internal FlowFieldSurfaceGoalBuildStatus GoalStatus { get; }
-        internal bool GoalChanged => GoalStatus == FlowFieldSurfaceGoalBuildStatus.Built
-            || GoalStatus == FlowFieldSurfaceGoalBuildStatus.NoWalkableSurface
-            || GoalStatus == FlowFieldSurfaceGoalBuildStatus.Invalid;
-
-        internal FlowFieldSurfaceBuildResult(
-            bool obstacleMaskChanged,
-            FlowFieldCellRect obstacleDirtyRegion,
-            bool hasWalkableSurface,
-            FlowFieldSurfaceGoalBuildStatus goalStatus)
-        {
-            ObstacleMaskChanged = obstacleMaskChanged;
-            ObstacleDirtyRegion = obstacleDirtyRegion;
-            HasWalkableSurface = hasWalkableSurface;
-            GoalStatus = goalStatus;
-        }
-    }
-
-    /// <summary>
-    /// Runs the shared, synchronous base-field preparation stages.  Runtime
-    /// and editor adapters can choose which dirty obstacle stages to execute,
-    /// but the actual mask, escape, Goal and topology code remains here.
-    /// BFS itself is started separately so a caller keeps its own
-    /// commit/session lifetime rules.
+    /// The synchronous part of a Surface2D base build: rebuilds the obstacle
+    /// masks it is asked to (and the escape directions when they changed),
+    /// then prepares the Goal and topology the solve reads. The base stage
+    /// calls it in one frame; the solve then runs on a worker thread (the
+    /// instance part below).
     /// </summary>
     internal sealed partial class FlowFieldSurfaceBaseFieldBuild
     {
@@ -200,41 +150,6 @@ namespace Common.FlowField
         }
     }
 
-    /// <summary>
-    /// The common BFS portion of a FlowField build.  Runtime and editor code
-    /// prepare the same workspace and enter this runner; only their commit
-    /// side effects differ.
-    /// </summary>
-    internal readonly struct FlowFieldSurfaceBfsRequest
-    {
-        internal FlowFieldGridSpace Grid { get; }
-        internal FlowFieldSurfaceData Surface { get; }
-        internal FlowFieldSurfaceWorkspace Workspace { get; }
-        internal int GoalX { get; }
-        internal int GoalZ { get; }
-        internal float GoalInfluenceRadius { get; }
-        internal int GoalIndex { get; }
-
-        internal FlowFieldSurfaceBfsRequest(
-            FlowFieldGridSpace grid,
-            FlowFieldSurfaceData surface,
-            FlowFieldSurfaceWorkspace workspace,
-            int goalX,
-            int goalZ,
-            float goalInfluenceRadius,
-            int goalIndex)
-        {
-            Grid = grid;
-            Surface = surface;
-            Workspace = workspace;
-            GoalX = goalX;
-            GoalZ = goalZ;
-            GoalInfluenceRadius = goalInfluenceRadius;
-            GoalIndex = goalIndex;
-        }
-
-    }
-
     /// <summary>One Surface2D solve: the job, its pinned arrays and its cancel flag.</summary>
     internal sealed class FlowFieldSurfaceSolve
     {
@@ -303,9 +218,8 @@ namespace Common.FlowField
     }
 
     /// <summary>
-    /// The Surface2D solve on a worker thread. It owns the running work; the
-    /// session owns the request lifetime and decides how a completed result
-    /// is committed.
+    /// The Surface2D solve on a worker thread. It owns the running job; the
+    /// builder owns the request and decides what a completed solve publishes.
     /// </summary>
     internal sealed partial class FlowFieldSurfaceBaseFieldBuild : IDisposable
     {
@@ -315,8 +229,7 @@ namespace Common.FlowField
         private Action<FlowFieldSurfaceBfsRequest> _completed;
         private bool _disposed;
 
-        // completed is called only from StartBfs (a solve finished at once) or
-        // Poll, both inside the builder's StepBuild.
+        // completed is called only from Poll, inside the builder's StepBuild.
         internal bool StartBfs(in FlowFieldSurfaceBfsRequest request, Action<FlowFieldSurfaceBfsRequest> completed)
         {
             if (_disposed || completed == null)

@@ -18,7 +18,10 @@ namespace Common.FlowField
         private readonly FlowFieldRequestInbox<FlowFieldSurfaceRequest> _requests
             = new FlowFieldRequestInbox<FlowFieldSurfaceRequest>();
         private readonly FlowFieldSurfaceBaseStage _baseStage;
-        private readonly FlowFieldSurfaceSolveStage _solveStage = new FlowFieldSurfaceSolveStage();
+        // The worker-thread solve. A StaticBaked field never solves and has
+        // none; dropping the computed state drops it, and the next solve
+        // takes a new one.
+        private FlowFieldSurfaceBaseFieldBuild _solveBackend;
         private readonly FlowFieldSurfaceComposeStage _composeStage = new FlowFieldSurfaceComposeStage();
         private FlowFieldSurfaceModifierComposition _modifierComposition;
         private FlowFieldSurfaceRequest? _committedRequest;
@@ -121,7 +124,7 @@ namespace Common.FlowField
                     case BuildPhase.WaitingSolve:
                         // A finished solve reports through its callback, which
                         // moves the build on.
-                        _solveStage.Poll(waitForWorker);
+                        _solveBackend?.Poll(waitForWorker);
                         break;
                     case BuildPhase.Composing:
                         // Input can only change between frames, so checking here
@@ -229,7 +232,7 @@ namespace Common.FlowField
             };
             _state.BakedBaseTouched = null;
             _modifierComposition ??= new FlowFieldSurfaceModifierComposition(_session.Modifiers);
-            _solveStage.Prepare(_sourceKind);
+            PrepareSolveBackend();
             MarkDirty(FlowFieldSurfaceDirtyFlags.All, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
         }
 
@@ -395,7 +398,7 @@ namespace Common.FlowField
         // The session advanced its generation, so a late solve callback is dropped.
         public void CancelWork()
         {
-            _solveStage.Cancel();
+            _solveBackend?.Cancel();
             _composeStage.Clear();
             _phase = BuildPhase.None;
             _state.DirtyFlags = FlowFieldSurfaceDirtyFlags.None;
@@ -406,7 +409,7 @@ namespace Common.FlowField
         // rebuild queries every obstacle again.
         public void DropComputedState()
         {
-            _solveStage.DetachBackend();
+            DetachSolveBackend();
             _baseStage.LoadedSnapshot = null;
 
             _committedRequest = null;
@@ -426,7 +429,7 @@ namespace Common.FlowField
 
         public void ReleaseResources()
         {
-            _solveStage.DetachBackend();
+            DetachSolveBackend();
             _modifierComposition?.Clear();
             _modifierComposition = null;
             _goalTracker.Clear();
@@ -451,6 +454,18 @@ namespace Common.FlowField
             _state.BakedBaseTouched = null;
             _masksSweep = false;
             _latestDefaultDirection = null;
+        }
+
+        private void PrepareSolveBackend()
+        {
+            if (_solveBackend == null && _sourceKind != FlowFieldSurfaceSourceKind.StaticSnapshot)
+                _solveBackend = new FlowFieldSurfaceBaseFieldBuild();
+        }
+
+        private void DetachSolveBackend()
+        {
+            _solveBackend?.Dispose();
+            _solveBackend = null;
         }
 
         // Release already freed everything a Surface2D builder holds.

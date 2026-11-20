@@ -193,7 +193,7 @@ namespace Common.FlowField.Editor
 
             FlowFieldSurfaceSignature signature = manager.CreateSurfaceSignature();
             int inputGeneration = FlowFieldBakeService.CaptureInputGeneration(manager);
-            FlowFieldSurfaceBakeJob bakeJob = new FlowFieldSurfaceBakeJob(
+            var groundScan = new FlowFieldSurfaceGroundScan(
                 signature.Surface,
                 ReportSurfaceProgress);
             var run = new BakeRun(
@@ -202,9 +202,9 @@ namespace Common.FlowField.Editor
                 () => IsCurrentInput(manager, inputGeneration),
                 session => session.Pump(),
                 session => SaveSurfaceBake(manager, signature, session),
-                bakeJob.Cancel);
+                groundScan.Cancel);
             // The ground scan runs first; the session starts on its result.
-            run.Prepare = () => StepSurfaceGroundScan(run, manager, signature, bakeJob);
+            run.Prepare = () => StepSurfaceGroundScan(run, manager, signature, groundScan);
             run.Start("Baking Surface");
         }
 
@@ -213,30 +213,30 @@ namespace Common.FlowField.Editor
             BakeRun run,
             FlowFieldManager manager,
             FlowFieldSurfaceSignature signature,
-            FlowFieldSurfaceBakeJob bakeJob)
+            FlowFieldSurfaceGroundScan groundScan)
         {
-            bakeJob.Step(2.0);
+            groundScan.Step(2.0);
             if (_shuttingDown)
             {
                 run.Stop();
                 return false;
             }
-            _progressLabel = $"Baking Surface {bakeJob.Progress:P0}";
+            _progressLabel = $"Baking Surface {groundScan.Progress:P0}";
             if (EditorUtility.DisplayCancelableProgressBar(
                     "FlowField Static Bake",
                     _progressLabel,
-                    bakeJob.Progress))
+                    groundScan.Progress))
             {
-                bakeJob.Cancel();
+                groundScan.Cancel();
             }
-            if (!bakeJob.IsComplete)
+            if (!groundScan.IsComplete)
                 return false;
-            if (bakeJob.Status == FlowFieldSurfaceBakeJobStatus.Cancelled)
+            if (groundScan.Status == FlowFieldSurfaceGroundScanStatus.Cancelled)
                 throw new OperationCanceledException();
-            if (!bakeJob.IsValid)
-                throw new InvalidOperationException(bakeJob.Error);
+            if (!groundScan.IsValid)
+                throw new InvalidOperationException(groundScan.Error);
 
-            FlowFieldSurfaceData surface = FlowFieldSurfaceData.FromRuntime(signature.Surface, bakeJob.Result, 1);
+            FlowFieldSurfaceData surface = FlowFieldSurfaceData.FromRuntime(signature.Surface, groundScan.Result, 1);
             FlowFieldSession session = FlowFieldSession.CreateSurface(surfaceSource: new FlowFieldFixedSurfaceSource(surface));
             run.Attach(session);
             session.Initialize(FlowFieldBakeMode.RuntimeDynamic);

@@ -4,7 +4,13 @@ using UnityEngine;
 
 namespace Common.FlowField
 {
-    internal static class FlowFieldSurfaceSolver
+    /// <summary>
+    /// What the Surface2D base stage prepares for the solve: the escape
+    /// directions out of blocked cells, and the Goal cell with its influence
+    /// mask and topology masks. The solve itself runs in
+    /// <see cref="FlowFieldSurfaceBaseFieldBuild"/>.
+    /// </summary>
+    internal static class FlowFieldSurfaceNavigationPreparation
     {
         private const int UNREACHABLE = int.MaxValue;
 
@@ -145,18 +151,19 @@ namespace Common.FlowField
             FlowFieldSurfaceWorkspace workspace)
         {
             if (!grid.IsValid)
-                throw new ArgumentException("FlowField solver requires a valid grid.", nameof(grid));
+                throw new ArgumentException("Surface navigation preparation requires a valid grid.", nameof(grid));
             if (surface == null || !surface.IsValid)
-                throw new ArgumentException("FlowField solver requires a valid surface bake.", nameof(surface));
+                throw new ArgumentException("Surface navigation preparation requires a valid surface bake.", nameof(surface));
             if (workspace == null)
                 throw new ArgumentNullException(nameof(workspace));
             if (workspace.Capacity != grid.CellCount)
-                throw new ArgumentException("FlowField solver workspace capacity must match the grid.", nameof(workspace));
+                throw new ArgumentException("Surface navigation preparation workspace capacity must match the grid.", nameof(workspace));
         }
     }
 
     /// <summary>
-    /// Graph traversal helpers the solvers share.
+    /// Graph helpers the navigation preparation, the base build and the
+    /// solve check share.
     /// </summary>
     internal static class FlowFieldSurfaceGraphTraversal
     {

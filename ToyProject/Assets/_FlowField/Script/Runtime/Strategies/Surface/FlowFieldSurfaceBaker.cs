@@ -91,14 +91,14 @@ namespace Common.FlowField
             in FlowFieldSurfaceBakeSettings settings,
             FlowFieldSurfaceBakeProgress progress = null)
         {
-            var job = new FlowFieldSurfaceBakeJob(settings, progress);
-            while (!job.IsComplete)
-                job.Step(double.MaxValue);
-            if (job.Status == FlowFieldSurfaceBakeJobStatus.Cancelled)
-                throw new OperationCanceledException(job.Error);
-            if (job.Status == FlowFieldSurfaceBakeJobStatus.Failed)
-                throw new InvalidOperationException(job.Error);
-            return job.Result;
+            var scan = new FlowFieldSurfaceGroundScan(settings, progress);
+            while (!scan.IsComplete)
+                scan.Step(double.MaxValue);
+            if (scan.Status == FlowFieldSurfaceGroundScanStatus.Cancelled)
+                throw new OperationCanceledException(scan.Error);
+            if (scan.Status == FlowFieldSurfaceGroundScanStatus.Failed)
+                throw new InvalidOperationException(scan.Error);
+            return scan.Result;
         }
 
         internal static void BakeCell(
@@ -239,7 +239,7 @@ namespace Common.FlowField
             => (result.CellFlags[index] & 1) != 0;
     }
 
-    internal enum FlowFieldSurfaceBakeJobStatus
+    internal enum FlowFieldSurfaceGroundScanStatus
     {
         Pending = 0,
         Complete = 1,
@@ -248,12 +248,12 @@ namespace Common.FlowField
     }
 
     /// <summary>
-    /// The Surface2D ground scan in resumable steps. Runtime builds use the
-    /// synchronous <see cref="FlowFieldSurfaceBaker"/>; the Editor bake
-    /// advances this job from its update, so the raycast rows do not hold one
-    /// callback.
+    /// The Surface2D ground scan in resumable steps: one downward raycast per
+    /// cell, then the neighbour masks. Runtime builds run it at once through
+    /// <see cref="FlowFieldSurfaceBaker"/>; the Editor bake advances it from
+    /// its update, so the raycast rows do not hold one callback.
     /// </summary>
-    internal sealed class FlowFieldSurfaceBakeJob
+    internal sealed class FlowFieldSurfaceGroundScan
     {
         private enum Phase
         {
@@ -267,12 +267,12 @@ namespace Common.FlowField
         private readonly FlowFieldSurfaceBakeResult _result;
         private readonly int _cellCount;
         private Phase _phase;
-        private FlowFieldSurfaceBakeJobStatus _status;
+        private FlowFieldSurfaceGroundScanStatus _status;
         private string _error;
         private int _cursor;
         private bool _physicsSynchronized;
 
-        internal FlowFieldSurfaceBakeJob(
+        internal FlowFieldSurfaceGroundScan(
             in FlowFieldSurfaceBakeSettings settings,
             FlowFieldSurfaceBakeProgress progress = null)
         {
@@ -294,15 +294,15 @@ namespace Common.FlowField
             _progress = progress;
             _result = new FlowFieldSurfaceBakeResult(_cellCount);
             _phase = Phase.SurfaceCells;
-            _status = FlowFieldSurfaceBakeJobStatus.Pending;
+            _status = FlowFieldSurfaceGroundScanStatus.Pending;
             _error = string.Empty;
         }
 
-        internal FlowFieldSurfaceBakeJobStatus Status => _status;
-        internal bool IsComplete => _status == FlowFieldSurfaceBakeJobStatus.Complete
-            || _status == FlowFieldSurfaceBakeJobStatus.Failed
-            || _status == FlowFieldSurfaceBakeJobStatus.Cancelled;
-        internal bool IsValid => _status == FlowFieldSurfaceBakeJobStatus.Complete
+        internal FlowFieldSurfaceGroundScanStatus Status => _status;
+        internal bool IsComplete => _status == FlowFieldSurfaceGroundScanStatus.Complete
+            || _status == FlowFieldSurfaceGroundScanStatus.Failed
+            || _status == FlowFieldSurfaceGroundScanStatus.Cancelled;
+        internal bool IsValid => _status == FlowFieldSurfaceGroundScanStatus.Complete
             && _result.IsValidFor(_cellCount);
         internal string Error => _error;
         internal FlowFieldSurfaceBakeResult Result => IsValid ? _result : null;
@@ -310,7 +310,7 @@ namespace Common.FlowField
         {
             get
             {
-                if (_status == FlowFieldSurfaceBakeJobStatus.Complete)
+                if (_status == FlowFieldSurfaceGroundScanStatus.Complete)
                     return 1f;
                 if (IsComplete)
                     return 0f;
@@ -327,7 +327,7 @@ namespace Common.FlowField
             if (IsComplete)
                 return;
             _phase = Phase.Complete;
-            _status = FlowFieldSurfaceBakeJobStatus.Cancelled;
+            _status = FlowFieldSurfaceGroundScanStatus.Cancelled;
             _error = "FlowField Surface Bake was cancelled.";
         }
 
@@ -382,7 +382,7 @@ namespace Common.FlowField
                         if (_cursor >= _cellCount)
                         {
                             _phase = Phase.Complete;
-                            _status = FlowFieldSurfaceBakeJobStatus.Complete;
+                            _status = FlowFieldSurfaceGroundScanStatus.Complete;
                             _error = string.Empty;
                             return;
                         }
@@ -402,7 +402,7 @@ namespace Common.FlowField
         private void Fail(string reason)
         {
             _phase = Phase.Complete;
-            _status = FlowFieldSurfaceBakeJobStatus.Failed;
+            _status = FlowFieldSurfaceGroundScanStatus.Failed;
             _error = string.IsNullOrEmpty(reason)
                 ? "FlowField Surface Bake failed."
                 : reason;
