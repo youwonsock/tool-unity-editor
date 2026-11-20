@@ -152,9 +152,22 @@ namespace Common.FlowField
 
             CacheValidationSnapshot();
 
-            if (Application.isPlaying
-                && (valueChanged || priorityChanged || areaChanged)
-                && _registeredManager != null)
+            if (!Application.isPlaying)
+                return;
+            // The Inspector assigned another Manager: move the registration
+            // there, as SetFlowFieldManager does. A faulted one takes none.
+            if (_registeredManager != _flowFieldManager)
+            {
+                UnregisterFromCurrentManager();
+                if (_flowFieldManager != null && !_flowFieldManager.IsFaulted)
+                    ReattachToConfiguredManager();
+                return;
+            }
+            // A Manager that stopped or faulted has nothing to rebuild.
+            if ((valueChanged || priorityChanged || areaChanged)
+                && _registeredManager != null
+                && _registeredManager.IsInitialized
+                && !_registeredManager.IsFaulted)
             {
                 // Modifier edits only affect the final composition. Keep the
                 // committed base field usable while the Session coalesces the
