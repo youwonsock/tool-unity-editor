@@ -72,6 +72,38 @@ namespace Common.FlowField
         // The session's registered obstacles; the dynamic mask is built from them.
         private readonly FlowFieldObstacleRegistry _registry;
 
+        // The registered overlay, kept between rebuilds with what each Collider
+        // was drawn as, so a rebuild redraws only the cells a change can reach:
+        // the dirty region and the old and new footprints of every Collider
+        // that moved, appeared, left or changed. Cells outside see the same
+        // Colliders as before, so they keep the values a full redraw would give.
+        private bool[] _overlay;
+        private FlowFieldGridSpace _overlayGrid;
+        private FlowFieldSurfaceData _overlaySurface;
+        private float _overlayCheckHeight;
+        private float _overlayCenterOffset;
+        private float _overlayClearance;
+        private readonly Dictionary<Collider, DrawnObstacle> _drawn = new Dictionary<Collider, DrawnObstacle>();
+        private readonly List<KeyValuePair<Collider, DrawnObstacle>> _current = new List<KeyValuePair<Collider, DrawnObstacle>>();
+
+        // What a registered Collider looked like when the overlay drew it. A
+        // disabled Collider, or one on an inactive GameObject, has empty bounds.
+        private readonly struct DrawnObstacle
+        {
+            internal readonly Bounds Bounds;
+            internal readonly bool IsTrigger;
+
+            internal DrawnObstacle(Collider collider)
+            {
+                Bounds = collider.bounds;
+                IsTrigger = collider.isTrigger;
+            }
+
+            // Exact, as the cell queries are.
+            internal bool Matches(in DrawnObstacle other)
+                => IsTrigger == other.IsTrigger && Bounds.Equals(other.Bounds);
+        }
+
         internal FlowFieldSurfaceObstacleMasks(FlowFieldObstacleRegistry registry)
         {
             _registry = registry ?? throw new ArgumentNullException(nameof(registry));
@@ -109,15 +141,8 @@ namespace Common.FlowField
 
             // Every registered Collider where it is now. The session owns the
             // registry: a destroyed Collider is skipped here and pruned there.
-            FlowFieldObstacleMaskBuilder.BuildRegistered(
-                request.Grid,
-                request.Surface,
-                request.CheckHeight,
-                request.CenterOffset,
-                request.Clearance,
-                request.Workspace.ObstacleScratch,
-                _registry,
-                ref _overlapBuffer);
+            RedrawRegisteredOverlay(in request);
+            Array.Copy(_overlay, request.Workspace.ObstacleScratch, request.Workspace.Capacity);
             AddSweptObstacles(in request);
             dynamicChanged = CommitDynamicScratch(request.Workspace);
 
@@ -130,6 +155,102 @@ namespace Common.FlowField
             return new FlowFieldSurfaceObstacleResult(
                 effectiveMaskChanged,
                 effectiveMaskDirty);
+        }
+
+        private void RedrawRegisteredOverlay(in FlowFieldSurfaceObstacleRequest request)
+        {
+            FlowFieldGridSpace grid = request.Grid;
+            FlowFieldCellRect region = request.DirtyRegion;
+            bool keep = _overlay != null
+                && _overlay.Length == grid.CellCount
+                && SameGrid(_overlayGrid, grid)
+                && ReferenceEquals(_overlaySurface, request.Surface)
+                && _overlayCheckHeight == request.CheckHeight
+                && _overlayCenterOffset == request.CenterOffset
+                && _overlayClearance == request.Clearance
+                && region.IsValid
+                && !region.Covers(grid);
+
+            _current.Clear();
+            int stillDrawn = 0;
+            for (int i = 0; i < _registry.Count; i++)
+            {
+                Collider collider = _registry.GetCollider(i);
+                bool alive = collider != null;
+                DrawnObstacle now = alive ? new DrawnObstacle(collider) : default;
+                if (alive)
+                    _current.Add(new KeyValuePair<Collider, DrawnObstacle>(collider, now));
+                if (!keep)
+                    continue;
+                if (_drawn.TryGetValue(collider, out DrawnObstacle drawn))
+                {
+                    stillDrawn++;
+                    if (alive && now.Matches(in drawn))
+                        continue;
+                    region = FlowFieldCellRect.Union(region, Footprint(in request, drawn.Bounds));
+                }
+                if (alive)
+                    region = FlowFieldCellRect.Union(region, Footprint(in request, now.Bounds));
+            }
+            // A Collider that left the registry leaves its old cells.
+            if (keep && stillDrawn < _drawn.Count)
+            {
+                foreach (KeyValuePair<Collider, DrawnObstacle> entry in _drawn)
+                {
+                    if (!_registry.Contains(entry.Key))
+                        region = FlowFieldCellRect.Union(region, Footprint(in request, entry.Value.Bounds));
+                }
+            }
+
+            if (!keep)
+            {
+                if (_overlay == null || _overlay.Length != grid.CellCount)
+                    _overlay = new bool[grid.CellCount];
+                region = FlowFieldCellRect.Full(grid);
+                _overlayGrid = grid;
+                _overlaySurface = request.Surface;
+                _overlayCheckHeight = request.CheckHeight;
+                _overlayCenterOffset = request.CenterOffset;
+                _overlayClearance = request.Clearance;
+            }
+            FlowFieldObstacleMaskBuilder.BuildRegistered(
+                grid,
+                request.Surface,
+                request.CheckHeight,
+                request.CenterOffset,
+                request.Clearance,
+                _overlay,
+                region,
+                _registry,
+                ref _overlapBuffer);
+
+            _drawn.Clear();
+            foreach (KeyValuePair<Collider, DrawnObstacle> entry in _current)
+                _drawn[entry.Key] = entry.Value;
+            _current.Clear();
+        }
+
+        private static FlowFieldCellRect Footprint(in FlowFieldSurfaceObstacleRequest request, Bounds bounds)
+            => FlowFieldObstacleMaskBuilder.Footprint(request.Grid, bounds, request.CheckHeight, request.Clearance);
+
+        // Exact, unlike MatchesBounds: every cell centre follows from these.
+        private static bool SameGrid(FlowFieldGridSpace left, FlowFieldGridSpace right)
+            => left.IsValid
+                && left.SpaceMode == right.SpaceMode
+                && left.Width == right.Width
+                && left.Height == right.Height
+                && left.Depth == right.Depth
+                && left.CellSize == right.CellSize
+                && left.Origin.Equals(right.Origin);
+
+        /// <summary>Drops the kept overlay; the next dynamic rebuild draws every cell.</summary>
+        internal void Clear()
+        {
+            _overlay = null;
+            _overlaySurface = null;
+            _overlayGrid = default;
+            _drawn.Clear();
+            _current.Clear();
         }
 
         // The swept mask scans the dirty cells again with every obstacle

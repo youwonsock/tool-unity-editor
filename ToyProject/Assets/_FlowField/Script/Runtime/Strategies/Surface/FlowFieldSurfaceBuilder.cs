@@ -434,6 +434,7 @@ namespace Common.FlowField
             _modifierComposition = null;
             _goalTracker.Clear();
             _baseStage.Clear();
+            _obstacleMasks.Clear();
 
             _committedRequest = null;
             _fieldStore.Clear();

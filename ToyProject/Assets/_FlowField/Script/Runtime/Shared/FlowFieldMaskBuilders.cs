@@ -75,9 +75,10 @@ namespace Common.FlowField
         }
 
         /// <summary>
-        /// Writes only the registered obstacles into every cell, each Collider
-        /// by its own layer whether or not the obstacle layer holds it; the
-        /// mask starts empty. A destroyed Collider is skipped.
+        /// Writes only the registered obstacles into the cells of
+        /// <paramref name="region"/>, each Collider by its own layer whether or
+        /// not the obstacle layer holds it; those cells start empty and the
+        /// other cells keep their values. A destroyed Collider is skipped.
         /// </summary>
         public static void BuildRegistered(
             FlowFieldGridSpace grid,
@@ -86,26 +87,65 @@ namespace Common.FlowField
             float centerOffset,
             float clearance,
             bool[] destination,
+            FlowFieldCellRect region,
             FlowFieldObstacleRegistry registered,
             ref Collider[] overlapBuffer)
         {
             FlowFieldMaskArguments.ValidateTarget(grid, surface, destination);
             if (registered == null)
                 throw new ArgumentNullException(nameof(registered));
-            Array.Clear(destination, 0, destination.Length);
             FlowFieldMaskArguments.ValidateObstacleBox(checkHeight, centerOffset, clearance);
+            region = FlowFieldCellRect.Intersect(region, FlowFieldCellRect.Full(grid));
+            if (!region.IsValid)
+                return;
+            for (int z = region.MinZ; z <= region.MaxZ; z++)
+                Array.Clear(destination, grid.ToFlatIndex(region.MinX, z), region.MaxX - region.MinX + 1);
             Vector3 cellHalfExtents = CellHalfExtents(grid, checkHeight, clearance);
-            FlowFieldCellRect region = FlowFieldCellRect.Full(grid);
             var policy = new RegisteredObstaclePolicy { TargetBuffer = overlapBuffer };
             for (int i = 0; i < registered.Count; i++)
             {
                 Collider obstacle = registered.GetCollider(i);
                 if (!policy.Accepts(obstacle))
                     continue;
+                Bounds bounds = obstacle.bounds;
+                if (!FlowFieldCellRect.Intersect(Footprint(grid, bounds, cellHalfExtents), region).IsValid)
+                    continue;
                 MarkCells(grid, surface, region, centerOffset, cellHalfExtents,
-                    1 << obstacle.gameObject.layer, destination, obstacle, ref policy);
+                    1 << obstacle.gameObject.layer, destination, obstacle, bounds, ref policy);
             }
             overlapBuffer = policy.TargetBuffer;
+        }
+
+        /// <summary>
+        /// The cells an obstacle with these bounds can block: those whose query
+        /// box reaches the bounds. Invalid when none of the grid's cells can.
+        /// </summary>
+        internal static FlowFieldCellRect Footprint(
+            FlowFieldGridSpace grid,
+            Bounds obstacleBounds,
+            float checkHeight,
+            float clearance)
+            => Footprint(grid, obstacleBounds, CellHalfExtents(grid, checkHeight, clearance));
+
+        private static FlowFieldCellRect Footprint(FlowFieldGridSpace grid, Bounds obstacleBounds, Vector3 cellHalfExtents)
+        {
+            obstacleBounds.Expand(new Vector3(cellHalfExtents.x * 2f, 0f, cellHalfExtents.z * 2f));
+            if (!grid.TryGetOverlappingCells(
+                    obstacleBounds,
+                    out int minX,
+                    out int maxX,
+                    out int minZ,
+                    out int maxZ))
+                return FlowFieldCellRect.Invalid;
+            return new FlowFieldCellRect
+            {
+                MinX = minX,
+                MaxX = maxX,
+                MinY = 0,
+                MaxY = grid.Height - 1,
+                MinZ = minZ,
+                MaxZ = maxZ,
+            };
         }
 
         // A struct constraint keeps the per-cell query free of delegate calls.
@@ -155,7 +195,7 @@ namespace Common.FlowField
                 Collider obstacle = overlapBuffer[hitIndex];
                 if (policy.Accepts(obstacle))
                     MarkCells(grid, surface, region, centerOffset, cellHalfExtents,
-                        obstacleLayer, destination, obstacle, ref policy);
+                        obstacleLayer, destination, obstacle, obstacle.bounds, ref policy);
             }
         }
 
@@ -176,22 +216,17 @@ namespace Common.FlowField
             LayerMask queryLayer,
             bool[] destination,
             Collider obstacle,
+            Bounds obstacleBounds,
             ref TPolicy policy)
             where TPolicy : struct, IObstaclePolicy
         {
-            Bounds candidateBounds = obstacle.bounds;
-            candidateBounds.Expand(new Vector3(cellHalfExtents.x * 2f, 0f, cellHalfExtents.z * 2f));
-            if (!grid.TryGetOverlappingCells(
-                    candidateBounds,
-                    out int minX,
-                    out int maxX,
-                    out int minZ,
-                    out int maxZ))
+            FlowFieldCellRect footprint = Footprint(grid, obstacleBounds, cellHalfExtents);
+            if (!footprint.IsValid)
                 return;
-            minX = Math.Max(minX, region.MinX);
-            maxX = Math.Min(maxX, region.MaxX);
-            minZ = Math.Max(minZ, region.MinZ);
-            maxZ = Math.Min(maxZ, region.MaxZ);
+            int minX = Math.Max(footprint.MinX, region.MinX);
+            int maxX = Math.Min(footprint.MaxX, region.MaxX);
+            int minZ = Math.Max(footprint.MinZ, region.MinZ);
+            int maxZ = Math.Min(footprint.MaxZ, region.MaxZ);
 
             for (int z = minZ; z <= maxZ; z++)
             {
