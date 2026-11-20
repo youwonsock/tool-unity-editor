@@ -337,13 +337,8 @@ namespace Common.FlowField
                 speed = defaultDirection.sqrMagnitude > FlowFieldVectorUtility.DirectionEpsilonSqr ? 1f : 0f;
                 return defaultDirection;
             }
-            int layer = width * depth;
-            int y = index / layer;
-            int z = (index - y * layer) / width;
-            int x = index - y * layer - z * width;
-            int ny = target / layer;
-            int nz = (target - ny * layer) / width;
-            int nx = target - ny * layer - nz * width;
+            FlowFieldGridSpace.FromFlatIndex(index, width, depth, out int x, out int y, out int z);
+            FlowFieldGridSpace.FromFlatIndex(target, width, depth, out int nx, out int ny, out int nz);
             speed = 1f;
             return new Vector3(nx - x, ny - y, nz - z).normalized;
         }

@@ -231,11 +231,21 @@ namespace Common.FlowField
         }
 
         public void FromFlatIndex(int index, out int localX, out int localY, out int localZ)
+            => FromFlatIndex(index, Width, Depth, out localX, out localY, out localZ);
+
+        /// <summary>The cell of a flat index in a Volume3D layout of this width and depth.</summary>
+        internal static void FromFlatIndex(
+            int index,
+            int width,
+            int depth,
+            out int localX,
+            out int localY,
+            out int localZ)
         {
-            localY = index / (Width * Depth);
-            int remainder = index - localY * Width * Depth;
-            localZ = remainder / Width;
-            localX = remainder - localZ * Width;
+            localY = index / (width * depth);
+            int remainder = index - localY * width * depth;
+            localZ = remainder / width;
+            localX = remainder - localZ * width;
         }
 
         // ----- Mode-neutral cell access: Surface2D cells have localY 0 -------
