@@ -188,6 +188,14 @@ namespace Common.FlowField.Editor
                 && speed >= 0f;
         }
 
+        /// <summary>
+        /// The Surface2D cell a Goal in this cell anchors to, as the build
+        /// resolves it: the cell itself when it has ground, otherwise the
+        /// nearest cell that has. -1 when no cell has ground.
+        /// </summary>
+        internal int FindSurfaceGoalAnchor(int localX, int localZ)
+            => FlowFieldSurfaceGraphTraversal.FindNearestSurfaceAnchor(_grid, _surface, localX, localZ);
+
         internal static FlowFieldReadView CreateSurface(
             FlowFieldGridSpace grid,
             FlowFieldSurfaceData surface,

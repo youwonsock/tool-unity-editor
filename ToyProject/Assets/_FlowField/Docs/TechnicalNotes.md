@@ -27,7 +27,8 @@
   - 게시 필드와 격자(`PublishedField`·`TryGetFieldInfo`, `LatestGrid` = 마지막 요청의 Grid로 `ClampPositionToGrid`가 씀), 게시 필드보다 새 셀 정보(`LatestCells`: Surface는 진행 중인 빌드의 기본 단계 결과, Volume은 없음)
   - 입력 반영(`ApplyObstacleChange`·`ApplyModifierChange`·`CreateModifierArea`)
   - 수명 훅(`CancelWork`·`DropComputedState`·`ReleaseResources`)
-- Manager, Session, Editor는 모드별 정적 묘사 `FlowFieldSpaceStrategy.For(mode)`로 모드에 따라 달라지는 것을 고르고, 모드를 직접 나누지 않습니다: 세션 생성, 검증(`TryValidate`), 격자(`TryCreateLayout`), 최대 셀 수(`MaxCellCount`), Bounds 스냅(`SnapBounds`, 핸들 크기 조정은 `SnapResized`), sweep 조회 범위(`ObstacleSweepBounds`). 각 묘사는 Builder의 정적 함수로 넘기고, Builder는 `FlowFieldManagerConfig` 스냅샷으로 요청을 스스로 만듭니다.
+- Manager와 Session은 모드에 따라 달라지는 것을 모드별 정적 묘사 `FlowFieldSpaceStrategy.For(mode)`로 고릅니다: 세션 생성, 검증(`TryValidate`), 격자(`TryCreateLayout`), 최대 셀 수(`MaxCellCount`), Bounds 스냅(`SnapBounds`, 핸들 크기 조정은 `SnapResized`), sweep 조회 범위(`ObstacleSweepBounds`). 각 묘사는 Builder의 정적 함수로 넘기고, Builder는 `FlowFieldManagerConfig` 스냅샷으로 요청을 스스로 만듭니다.
+- Editor도 검증, 레이아웃, Bake를 이 strategy와 `FlowFieldBakeService`로 합니다(Bake 세션도 모드마다 BakeService가 만듭니다). 표시만 모드를 보고 그리는 쪽을 고릅니다. Scene View와 Inspector는 Surface2D를 `FlowFieldGizmoDrawer`로, Volume3D를 `FlowFieldVolumeVisualizationEditor`로 그립니다.
   - 검증은 한 경로입니다. `TryValidate`가 처음 잘못된 설정의 이유를 돌려주고, Init의 `Validate`는 그 이유로 `InvalidOperationException`을 던집니다. 실행 중 세션과 다른 Space Mode·Bake Mode(`spaceModeLocked`·`bakeModeLocked`)도 여기서 거부합니다. Inspector, Scene View, Volume 표시도 같은 `TryValidate`를 써서 Init과 같은 문구를 보여 줍니다.
   - 공통 검사는 `FlowFieldManagerConfig.TryValidateShared`가 같은 순서와 메시지로 합니다.
 - 공통 부품: 게시 필드 `FlowFieldField`, 조회 `FlowFieldSampler`, 요청 보관 `FlowFieldRequestInbox`, 셀 합성 규칙 `FlowFieldVectorUtility.ApplyModifier`, 이벤트 경계 `FlowFieldExecutionBoundary`, 예산 `FlowFieldBuildScheduler`.
@@ -37,7 +38,7 @@
   - Bake와 미리보기의 독립 세션(`FlowFieldSession`)과 Builder 정적 함수(요청, Goal 해석), 내보내기 `TryExportBakeData`(Builder마다 하나)
   - Bake Asset의 검증과 쓰기(`Apply`), Volume 표시의 검증기 `FlowFieldVolumeBakeValidator`
   - Modifier 규칙(`FlowFieldModifierRegistry.DuplicatePriorityMessage`, `FlowFieldModifierMaskBuilder.TryValidateInfluenceCollider`)
-  - `FlowFieldBakeService`가 레이아웃(`TryGetLayout`)과 설정 검사(`TryValidateConfig`)는 strategy로, 요청과 Goal 해석은 Builder 정적 함수로 만듭니다. Volume 표시는 Init이 payload 전에 하는 검사(`TryValidateVolumeConfigBeforePayload`)를 같은 순서·문구로 하고, payload는 단계로 나눠 검증한 뒤 그 결과를 Bake 검증 캐시에 넣어 `TryValidateConfig`를 그대로 돌립니다. Bake 입력 해시(`ComputeBakeInputHash`)는 BakeService가 설정 스냅샷으로 계산하고, Bake는 프레임마다 시작 때와 비교합니다.
+  - `FlowFieldBakeService`가 레이아웃(`TryGetLayout`)과 설정 검사(`TryValidateConfig`)는 strategy로, 요청과 Goal 해석은 Builder 정적 함수로 만들고, 두 모드의 독립 Bake 세션(Surface2D는 지면 scan이 끝난 뒤 `CreateSurfaceBakeSession`, Volume3D는 `CreateVolumeBakeSession`)도 만듭니다. Volume 표시는 Init이 payload 전에 하는 검사(`TryValidateVolumeConfigBeforePayload`)를 같은 순서·문구로 하고, payload는 단계로 나눠 검증한 뒤 그 결과를 Bake 검증 캐시에 넣어 `TryValidateConfig`를 그대로 돌립니다. Bake 입력 해시(`ComputeBakeInputHash`)는 BakeService가 설정 스냅샷으로 계산하고, Bake는 프레임마다 시작 때와 비교합니다.
   - 쓰기는 `SerializedObject`로 합니다. Bounds 핸들은 Undo를 남기고, Bake Asset 지정은 Bake 저장과 같은 Undo 묶음에, Clear Bake의 해제는 자기 Undo 단계에 기록합니다. 실행 중인 세션에는 `OnValidate`로 통지됩니다.
 
 ## 수명과 게시 규칙
@@ -130,7 +131,7 @@
 
 ## Editor 표시
 
-표시 상한은 FullVolume 8,192셀, Slice 4,096셀입니다. Volume 표시는 갱신 요청이 있거나 상태가 바뀔 때만 repaint합니다. Surface의 Edit Mode 미리보기는 처음 그릴 때 바로 풀고, 그 뒤 변경은 표시만 해 두었다가 변경이 약 150ms 멈추면 한 번 다시 풉니다. 그동안에는 마지막 결과를 그립니다. 실패한 미리보기는 다음 변경까지 그대로 두고 그 이유를 Manager Inspector에 보여 주며, 켜진 Modifier만 등록합니다. Bake와 Clear Bake는 Edit Mode에서만 실행하고, Play Mode에 들어가면 진행 중인 Bake를 멈춥니다. Play Mode의 Surface 표시는 합성을 거친 최종 결과이므로 Asset의 원본 방향과 다를 수 있습니다. 왼쪽은 Surface2D 상세, 오른쪽은 Volume3D 중앙 단면입니다.
+표시 상한은 FullVolume 8,192셀, Slice 4,096셀입니다. Volume 표시는 갱신 요청이 있거나 상태가 바뀔 때만 repaint합니다. 에디터 이벤트(변경 알림, Undo, 계층 변경, Play Mode, 씬 닫기, 업데이트)는 `FlowFieldEditorLifecycle` 한 곳에서 받아 Surface 미리보기와 Volume 표시에 알립니다. Surface의 Edit Mode 미리보기는 처음 그릴 때 바로 풀고, 그 뒤 변경은 표시만 해 두었다가 변경이 약 150ms 멈추면 한 번 다시 풉니다. 그동안에는 마지막 결과를 그립니다. 실패한 미리보기는 다음 변경까지 그대로 두고 그 이유를 Manager Inspector에 보여 주며, 켜진 Modifier만 등록합니다. Bake와 Clear Bake는 Edit Mode에서만 실행하고, Play Mode에 들어가면 진행 중인 Bake를 멈춥니다. Play Mode의 Surface 표시는 합성을 거친 최종 결과이므로 Asset의 원본 방향과 다를 수 있습니다. 왼쪽은 Surface2D 상세, 오른쪽은 Volume3D 중앙 단면입니다.
 
 <p align="center">
   <img src="Images/feature-surface2d-editor-detail.png" alt="Surface2D 통로 주변 상세 Scene View 방향장" width="48%">

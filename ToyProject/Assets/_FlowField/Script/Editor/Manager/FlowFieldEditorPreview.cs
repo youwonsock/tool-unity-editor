@@ -11,9 +11,9 @@ namespace Common.FlowField.Editor
     /// marks it stale, the last ready field stays on screen, and the preview
     /// is solved again once the changes have stopped for a moment. A failed
     /// preview keeps its reason until its inputs change. Runtime code never
-    /// calls into it; changes are observed here.
+    /// calls into it; <see cref="FlowFieldEditorLifecycle"/> reports the
+    /// editor changes.
     /// </summary>
-    [InitializeOnLoad]
     internal static class FlowFieldEditorPreview
     {
         // A drag or a burst of edits rebuilds once, after this quiet time.
@@ -36,17 +36,6 @@ namespace Common.FlowField.Editor
         private static readonly Dictionary<FlowFieldManager, Entry> Entries
             = new Dictionary<FlowFieldManager, Entry>();
         private static readonly List<FlowFieldManager> Scratch = new List<FlowFieldManager>();
-
-        static FlowFieldEditorPreview()
-        {
-            ObjectChangeEvents.changesPublished += OnChangesPublished;
-            Undo.undoRedoPerformed += InvalidateAll;
-            EditorApplication.playModeStateChanged += _ => DisposeAll();
-            EditorApplication.hierarchyChanged += PruneDestroyed;
-            EditorApplication.update += RebuildStale;
-            AssemblyReloadEvents.beforeAssemblyReload += DisposeAll;
-            EditorApplication.quitting += DisposeAll;
-        }
 
         /// <summary>
         /// The preview field. The first request solves it at once; a stale
@@ -105,14 +94,15 @@ namespace Common.FlowField.Editor
         }
 
         // Play Mode, a domain reload and quitting end every preview at once.
-        private static void DisposeAll()
+        internal static void DisposeAll()
         {
             foreach (Entry entry in Entries.Values)
                 entry.DisposeSession();
             Entries.Clear();
         }
 
-        private static void RebuildStale()
+        // Each editor update: rebuild the previews whose changes have settled.
+        internal static void RebuildStale()
         {
             if (Entries.Count == 0 || EditorApplication.isPlayingOrWillChangePlaymode)
                 return;
@@ -204,43 +194,8 @@ namespace Common.FlowField.Editor
             }
         }
 
-        // An edited Manager or Modifier marks its preview stale. Any structural
-        // change can add or remove a Modifier, so it marks every preview.
-        private static void OnChangesPublished(ref ObjectChangeEventStream stream)
-        {
-            for (int i = 0; i < stream.length; i++)
-            {
-                if (stream.GetEventType(i) != ObjectChangeKind.ChangeGameObjectOrComponentProperties)
-                {
-                    InvalidateAll();
-                    FlowFieldVolumeVisualizationEditor.InvalidateAll();
-                    continue;
-                }
-                stream.GetChangeGameObjectOrComponentPropertiesEvent(i, out var change);
-                UnityEngine.Object changed = EditorUtility.InstanceIDToObject(change.instanceId);
-                FlowFieldManager manager = changed switch
-                {
-                    FlowFieldManager m => m,
-                    FlowFieldVectorModifierVolume volume => volume.FlowFieldManager,
-                    FlowFieldDisplaySettings display => display.GetComponent<FlowFieldManager>(),
-                    Component component => component.GetComponent<FlowFieldManager>(),
-                    GameObject gameObject => gameObject.GetComponent<FlowFieldManager>(),
-                    _ => null,
-                };
-                if (manager == null)
-                {
-                    // A moved Transform or edited Collider can change the
-                    // surface or an obstacle of any Manager.
-                    if (changed is Component || changed is GameObject)
-                        InvalidateAll();
-                    continue;
-                }
-                Invalidate(manager);
-                FlowFieldVolumeVisualizationEditor.RequestRefresh(manager);
-            }
-        }
-
-        private static void PruneDestroyed()
+        // A destroyed or disabled Manager ends its preview.
+        internal static void PruneDestroyed()
         {
             Scratch.Clear();
             foreach (FlowFieldManager manager in Entries.Keys)
@@ -253,7 +208,6 @@ namespace Common.FlowField.Editor
                 Entries[manager].DisposeSession();
                 Entries.Remove(manager);
             }
-            FlowFieldVolumeVisualizationEditor.PruneInactive();
         }
     }
 }

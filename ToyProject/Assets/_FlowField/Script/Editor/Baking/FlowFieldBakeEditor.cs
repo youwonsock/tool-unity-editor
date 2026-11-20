@@ -236,19 +236,10 @@ namespace Common.FlowField.Editor
             if (!groundScan.IsValid)
                 throw new InvalidOperationException(groundScan.Error);
 
-            FlowFieldSurfaceData surface = FlowFieldSurfaceData.FromRuntime(signature.Surface, groundScan.Result, 1);
-            FlowFieldSession session = FlowFieldSession.CreateSurface(surfaceSource: new FlowFieldFixedSurfaceSource(surface));
-            run.Attach(session);
-            session.Initialize(FlowFieldBakeMode.RuntimeDynamic);
             // The inputs are those the bake started with: a change stops it first.
-            FlowFieldManagerConfig config = manager.CaptureConfig();
-            session.Surface.Submit(FlowFieldSurfaceBuilder.CreateRequest(
-                in config,
-                FlowFieldBakeMode.RuntimeDynamic,
-                in signature,
-                FlowFieldSurfaceDirtyFlags.All,
-                FlowFieldCellRect.Full(signature.Surface.Grid),
-                FlowFieldCellRect.Full(signature.Surface.Grid)));
+            FlowFieldSession session = FlowFieldBakeService.CreateSurfaceBakeSession(
+                manager, in signature, groundScan.Result);
+            run.Attach(session);
             session.Pump();
             return true;
         }
@@ -540,11 +531,14 @@ namespace Common.FlowField.Editor
                 }
                 Undo.RecordObject(asset, $"Bake FlowField {target.Snapshot} Snapshot");
                 apply(asset);
+                // Apply writes the fields directly, and Undo marks the asset
+                // dirty only when it flushes the record, after the save below.
                 EditorUtility.SetDirty(asset);
                 Undo.RecordObject(manager, $"Assign FlowField {target.Snapshot} Snapshot");
+                // A changed reference is a SerializedObject write, which marks
+                // the Manager dirty; the scene needs its own mark.
                 manager.AssignBakeAsset(target.PropertyPath, asset);
                 FlowFieldEditorPreview.Invalidate(manager);
-                EditorUtility.SetDirty(manager);
                 if (manager.gameObject.scene.IsValid())
                     EditorSceneManager.MarkSceneDirty(manager.gameObject.scene);
                 FlowFieldBakeAssetUtility.Save(asset);
@@ -613,7 +607,6 @@ namespace Common.FlowField.Editor
             Undo.RecordObject(manager, $"Clear FlowField {target.Snapshot} Bake Reference");
             manager.AssignBakeAsset(target.PropertyPath, null);
             FlowFieldEditorPreview.Invalidate(manager);
-            EditorUtility.SetDirty(manager);
             if (manager.gameObject.scene.IsValid())
                 EditorSceneManager.MarkSceneDirty(manager.gameObject.scene);
         }

@@ -9,7 +9,7 @@ namespace Common.FlowField.Editor
     /// Bake support that only the Editor needs: the layouts, checks and
     /// requests a bake builds from a Manager's settings, the edits it makes
     /// to them, telling whether its inputs changed during a bake, and the
-    /// isolated Volume3D bake session. Everything reads the Manager through
+    /// isolated bake session of each mode. Everything reads the Manager through
     /// <see cref="FlowFieldManager.CaptureConfig()"/> and writes it through
     /// its serialized properties.
     /// </summary>
@@ -59,6 +59,44 @@ namespace Common.FlowField.Editor
         {
             FlowFieldManagerConfig config = manager.CaptureConfig();
             return FlowFieldSurfaceBuilder.ResolveGoal(in config, grid);
+        }
+
+        /// <summary>
+        /// Creates an isolated Surface2D bake session on a finished ground scan
+        /// made with <paramref name="signature"/>, and submits the whole grid.
+        /// The caller owns and must dispose it, and pumps it from the Editor
+        /// update loop.
+        /// </summary>
+        internal static FlowFieldSession CreateSurfaceBakeSession(
+            FlowFieldManager manager,
+            in FlowFieldSurfaceSignature signature,
+            FlowFieldSurfaceBakeResult ground)
+        {
+            FlowFieldManagerConfig config = manager.CaptureConfig();
+            if (config.SpaceMode != FlowFieldSpaceMode.Surface2D)
+                throw new InvalidOperationException("Surface bake requires Surface2D mode.");
+            FlowFieldSurfaceData surface = FlowFieldSurfaceData.FromRuntime(signature.Surface, ground, 1);
+            FlowFieldGridSpace grid = signature.Surface.Grid;
+            FlowFieldSurfaceRequest request = FlowFieldSurfaceBuilder.CreateRequest(
+                in config,
+                FlowFieldBakeMode.RuntimeDynamic,
+                in signature,
+                FlowFieldSurfaceDirtyFlags.All,
+                FlowFieldCellRect.Full(grid),
+                FlowFieldCellRect.Full(grid));
+
+            var session = FlowFieldSession.CreateSurface(surfaceSource: new FlowFieldFixedSurfaceSource(surface));
+            try
+            {
+                session.Initialize(FlowFieldBakeMode.RuntimeDynamic);
+                session.Surface.Submit(request);
+                return session;
+            }
+            catch
+            {
+                session.Dispose();
+                throw;
+            }
         }
 
         // ----- Edits -----------------------------------------------------------
