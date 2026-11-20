@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEditor.SceneManagement;
@@ -8,7 +9,21 @@ namespace Common.FlowField.Editor
     [CustomEditor(typeof(FlowFieldManager))]
     internal sealed class FlowFieldManagerEditor : UnityEditor.Editor
     {
+        // The open Manager Inspectors. The Volume3D display repaints them when
+        // the status they show changes, and leaves the other windows alone.
+        private static readonly List<FlowFieldManagerEditor> Open = new List<FlowFieldManagerEditor>();
+
         private readonly BoxBoundsHandle _boundsHandle = new BoxBoundsHandle();
+
+        private void OnEnable() => Open.Add(this);
+
+        private void OnDisable() => Open.Remove(this);
+
+        internal static void RepaintOpen()
+        {
+            foreach (FlowFieldManagerEditor editor in Open)
+                editor.Repaint();
+        }
 
         public override void OnInspectorGUI()
         {

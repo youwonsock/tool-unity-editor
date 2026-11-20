@@ -254,10 +254,12 @@ namespace Common.FlowField.Editor
                     break;
             }
 
+            // The Scene View draws the cells and the Manager Inspector shows
+            // the status; no other window reads them.
             if (changed)
             {
-                UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
                 SceneView.RepaintAll();
+                FlowFieldManagerEditor.RepaintOpen();
             }
             return changed;
         }
