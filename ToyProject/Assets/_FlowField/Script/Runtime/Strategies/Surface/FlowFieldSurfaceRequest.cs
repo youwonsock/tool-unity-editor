@@ -136,12 +136,14 @@ namespace Common.FlowField
                 && HasSameBake(other);
 
         internal bool HasSameBaseInputs(in FlowFieldSurfaceRequest other)
-            => SourceKind == other.SourceKind
-                && Signature.SurfaceMatches(other.Signature)
-                && HasSameBake(other)
-                && Signature.ObstaclesMatch(other.Signature)
-                && SweepUnregistered == other.SweepUnregistered
+            => HasSameSource(other)
+                && HasSameObstacleInputs(other)
                 && GoalMatch(Goal, other.Goal);
+
+        // The obstacle settings and whether unregistered obstacles are swept.
+        internal bool HasSameObstacleInputs(in FlowFieldSurfaceRequest other)
+            => Signature.ObstaclesMatch(other.Signature)
+                && SweepUnregistered == other.SweepUnregistered;
 
         internal bool HasSameFinalInputs(in FlowFieldSurfaceRequest other)
             => FlowFieldVectorUtility.SameDefaultDirection(DefaultDirection, other.DefaultDirection);
@@ -156,8 +158,7 @@ namespace Common.FlowField
             {
                 flags |= FlowFieldSurfaceDirtyFlags.All;
             }
-            else if (!Signature.ObstaclesMatch(other.Signature)
-                || SweepUnregistered != other.SweepUnregistered)
+            else if (!HasSameObstacleInputs(other))
             {
                 flags |= FlowFieldSurfaceDirtyFlags.StaticObstacles
                     | FlowFieldSurfaceDirtyFlags.DynamicObstacles

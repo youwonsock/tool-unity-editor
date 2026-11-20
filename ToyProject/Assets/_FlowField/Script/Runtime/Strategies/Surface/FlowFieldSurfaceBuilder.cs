@@ -329,16 +329,20 @@ namespace Common.FlowField
         /// <summary>
         /// New obstacle settings make every cell uncertain from the moment they
         /// are notified: a build that began with the previous settings may still
-        /// publish, and the first build may be one of them. A new grid hides
-        /// the field instead.
+        /// publish, and the first build may be one of them. The comparison is
+        /// with the latest accepted request on the same source; when the latest
+        /// is on another grid or source, the published field shows again once
+        /// this request returns to its source, so it is compared with that one.
+        /// A new grid hides the field instead.
         /// </summary>
         internal Bounds? ObstacleSettingsInvalidation(in FlowFieldSurfaceRequest request)
         {
-            FlowFieldSurfaceDirtyFlags flags = InputDirtyFlags(request);
-            return (flags & FlowFieldSurfaceDirtyFlags.StaticObstacles) != 0
-                && (flags & FlowFieldSurfaceDirtyFlags.Grid) == 0
-                    ? request.SurfaceSettings.BakeBounds
-                    : (Bounds?)null;
+            bool changed = _requests.HasLatest && _requests.Latest.HasSameSource(request)
+                ? !_requests.Latest.HasSameObstacleInputs(request)
+                : _committedRequest.HasValue
+                    && _committedRequest.Value.HasSameSource(request)
+                    && !_committedRequest.Value.HasSameObstacleInputs(request);
+            return changed ? request.SurfaceSettings.BakeBounds : (Bounds?)null;
         }
 
         public IFlowFieldModifierArea CreateModifierArea() => new FlowFieldSurfaceModifierArea();
