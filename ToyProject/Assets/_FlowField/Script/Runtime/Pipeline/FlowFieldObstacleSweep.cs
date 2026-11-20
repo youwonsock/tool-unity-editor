@@ -107,7 +107,11 @@ namespace Common.FlowField
             }
             _lastFrame = frame;
 
-            int end = Math.Min(_hitCount, _cursor + CollidersPerStep);
+            // The first pass records every Collider in the frame it lists them.
+            // Spread over frames, a Collider moved after the build scanned it
+            // but before this pass reached it would be recorded where it moved
+            // to, and that move would never be reported.
+            int end = _recorded ? Math.Min(_hitCount, _cursor + CollidersPerStep) : _hitCount;
             for (; _cursor < end; _cursor++)
             {
                 Collider collider = _hits[_cursor];
