@@ -7,27 +7,52 @@ namespace Common.FlowField.Editor
 {
     /// <summary>
     /// Edit Mode preview of a Surface2D Manager: a short-lived session per
-    /// Manager, solved on demand and dropped whenever its inputs may have
-    /// changed. Runtime code never calls into it; changes are observed here.
+    /// Manager. The first draw solves it at once; after that a change only
+    /// marks it stale, the last ready field stays on screen, and the preview
+    /// is solved again once the changes have stopped for a moment. A failed
+    /// preview keeps its reason until its inputs change. Runtime code never
+    /// calls into it; changes are observed here.
     /// </summary>
     [InitializeOnLoad]
     internal static class FlowFieldEditorPreview
     {
-        private static readonly Dictionary<FlowFieldManager, FlowFieldSession> Sessions
-            = new Dictionary<FlowFieldManager, FlowFieldSession>();
-        private static readonly List<FlowFieldManager> Stale = new List<FlowFieldManager>();
+        // A drag or a burst of edits rebuilds once, after this quiet time.
+        private const double RebuildDelaySeconds = 0.15d;
+
+        private sealed class Entry
+        {
+            internal FlowFieldSession Session;
+            internal string Fault;
+            internal bool Stale;
+            internal double StaleSince;
+
+            internal void DisposeSession()
+            {
+                Session?.Dispose();
+                Session = null;
+            }
+        }
+
+        private static readonly Dictionary<FlowFieldManager, Entry> Entries
+            = new Dictionary<FlowFieldManager, Entry>();
+        private static readonly List<FlowFieldManager> Scratch = new List<FlowFieldManager>();
 
         static FlowFieldEditorPreview()
         {
             ObjectChangeEvents.changesPublished += OnChangesPublished;
             Undo.undoRedoPerformed += InvalidateAll;
-            EditorApplication.playModeStateChanged += _ => InvalidateAll();
+            EditorApplication.playModeStateChanged += _ => DisposeAll();
             EditorApplication.hierarchyChanged += PruneDestroyed;
-            AssemblyReloadEvents.beforeAssemblyReload += InvalidateAll;
-            EditorApplication.quitting += InvalidateAll;
+            EditorApplication.update += RebuildStale;
+            AssemblyReloadEvents.beforeAssemblyReload += DisposeAll;
+            EditorApplication.quitting += DisposeAll;
         }
 
-        /// <summary>Returns the preview field, solving it first when none is current.</summary>
+        /// <summary>
+        /// The preview field. The first request solves it at once; a stale
+        /// preview keeps answering with its last ready field until it is solved
+        /// again. False while a failed preview waits for its inputs to change.
+        /// </summary>
         internal static bool TryGetView(
             FlowFieldManager manager,
             out FlowFieldReadView view,
@@ -37,53 +62,119 @@ namespace Common.FlowField.Editor
             grid = default;
             if (manager == null)
                 return false;
-            if (!Sessions.TryGetValue(manager, out FlowFieldSession session) || !session.IsReady)
+            if (!Entries.TryGetValue(manager, out Entry entry))
             {
-                Invalidate(manager);
-                session = Build(manager);
-                if (session == null)
-                    return false;
-                Sessions[manager] = session;
+                entry = new Entry();
+                Entries[manager] = entry;
+                Rebuild(manager, entry);
             }
-            if (!session.TryGetPublishedField(out FlowFieldField field))
+            if (entry.Session == null || !entry.Session.TryGetPublishedField(out FlowFieldField field))
                 return false;
             view = FlowFieldReadView.FromSurfaceField(field);
             grid = field.Grid;
             return view.IsValid;
         }
 
+        /// <summary>Why the preview of this Manager failed, until its inputs change.</summary>
+        internal static bool TryGetFault(FlowFieldManager manager, out string reason)
+        {
+            reason = null;
+            if (manager == null || !Entries.TryGetValue(manager, out Entry entry))
+                return false;
+            reason = entry.Fault;
+            return !string.IsNullOrEmpty(reason);
+        }
+
+        /// <summary>The Manager's inputs changed: solve its preview again once they settle.</summary>
         internal static void Invalidate(FlowFieldManager manager)
         {
-            if (manager is null || !Sessions.TryGetValue(manager, out FlowFieldSession session))
+            if (manager is null || !Entries.TryGetValue(manager, out Entry entry))
                 return;
-            Sessions.Remove(manager);
-            session.Dispose();
+            entry.Stale = true;
+            entry.StaleSince = EditorApplication.timeSinceStartup;
         }
 
         internal static void InvalidateAll()
         {
-            foreach (FlowFieldSession session in Sessions.Values)
-                session.Dispose();
-            Sessions.Clear();
+            double now = EditorApplication.timeSinceStartup;
+            foreach (Entry entry in Entries.Values)
+            {
+                entry.Stale = true;
+                entry.StaleSince = now;
+            }
         }
 
-        private static FlowFieldSession Build(FlowFieldManager manager)
+        // Play Mode, a domain reload and quitting end every preview at once.
+        private static void DisposeAll()
         {
-            var session = FlowFieldSession.CreateSurface();
-            session.Initialize(manager.BakeMode);
-            RegisterModifiers(manager, session);
-            // The same submission as a running Manager, without the runtime scheduler.
-            session.SubmitConfig(manager.CaptureConfig(), FlowFieldConfigChange.Rebuild);
-            // The preview owns its session and waits for the worker, so it
-            // completes in the same editor repaint that asked for it.
-            session.Pump();
-            return session;
+            foreach (Entry entry in Entries.Values)
+                entry.DisposeSession();
+            Entries.Clear();
         }
 
+        private static void RebuildStale()
+        {
+            if (Entries.Count == 0 || EditorApplication.isPlayingOrWillChangePlaymode)
+                return;
+            double now = EditorApplication.timeSinceStartup;
+            Scratch.Clear();
+            foreach (KeyValuePair<FlowFieldManager, Entry> pair in Entries)
+            {
+                if (pair.Value.Stale && now - pair.Value.StaleSince >= RebuildDelaySeconds)
+                    Scratch.Add(pair.Key);
+            }
+            if (Scratch.Count == 0)
+                return;
+            foreach (FlowFieldManager manager in Scratch)
+            {
+                if (manager == null)
+                {
+                    Entries[manager].DisposeSession();
+                    Entries.Remove(manager);
+                    continue;
+                }
+                Rebuild(manager, Entries[manager]);
+            }
+            SceneView.RepaintAll();
+        }
+
+        private static void Rebuild(FlowFieldManager manager, Entry entry)
+        {
+            entry.Stale = false;
+            entry.DisposeSession();
+            entry.Fault = null;
+            FlowFieldSession session = FlowFieldSession.CreateSurface();
+            try
+            {
+                session.Initialize(manager.BakeMode);
+                RegisterModifiers(manager, session);
+                // The same submission as a running Manager, without the runtime scheduler.
+                session.SubmitConfig(manager.CaptureConfig(), FlowFieldConfigChange.Rebuild);
+                // The preview owns its session and waits for the worker, so it
+                // completes in the same editor update that asked for it.
+                session.Pump();
+            }
+            catch (Exception exception)
+            {
+                session.Dispose();
+                entry.Fault = exception.Message;
+                return;
+            }
+            if (session.IsFaulted)
+            {
+                entry.Fault = session.LastError;
+                session.Dispose();
+                return;
+            }
+            entry.Session = session;
+        }
+
+        // Only the Modifiers a running Manager would register: enabled ones in
+        // a scene, for this Manager, in Priority order.
         private static void RegisterModifiers(FlowFieldManager manager, FlowFieldSession session)
         {
             FlowFieldVectorModifierVolume[] volumes = UnityEngine.Object.FindObjectsByType<FlowFieldVectorModifierVolume>(
-                FindObjectsInactive.Include,
+                FindObjectsInactive.Exclude,
                 FindObjectsSortMode.None);
             Array.Sort(volumes, (left, right) =>
             {
@@ -96,9 +187,12 @@ namespace Common.FlowField.Editor
             {
                 FlowFieldVectorModifierVolume volume = volumes[i];
                 if (volume == null
+                    || !volume.isActiveAndEnabled
                     || volume.FlowFieldManager != manager
                     || !volume.gameObject.scene.IsValid())
                     continue;
+                // A rejected Modifier (a duplicate Priority, say) stays out, as
+                // it would at runtime; the rebuild waits for the next change.
                 try
                 {
                     session.RegisterModifierCommand(volume);
@@ -110,8 +204,8 @@ namespace Common.FlowField.Editor
             }
         }
 
-        // An edited Manager or Modifier drops its preview. Any structural
-        // change can add or remove a Modifier, so it drops every preview.
+        // An edited Manager or Modifier marks its preview stale. Any structural
+        // change can add or remove a Modifier, so it marks every preview.
         private static void OnChangesPublished(ref ObjectChangeEventStream stream)
         {
             for (int i = 0; i < stream.length; i++)
@@ -148,14 +242,17 @@ namespace Common.FlowField.Editor
 
         private static void PruneDestroyed()
         {
-            Stale.Clear();
-            foreach (FlowFieldManager manager in Sessions.Keys)
+            Scratch.Clear();
+            foreach (FlowFieldManager manager in Entries.Keys)
             {
                 if (manager == null || !manager.isActiveAndEnabled)
-                    Stale.Add(manager);
+                    Scratch.Add(manager);
             }
-            foreach (FlowFieldManager manager in Stale)
-                Invalidate(manager);
+            foreach (FlowFieldManager manager in Scratch)
+            {
+                Entries[manager].DisposeSession();
+                Entries.Remove(manager);
+            }
             FlowFieldVolumeVisualizationEditor.PruneInactive();
         }
     }

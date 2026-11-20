@@ -246,6 +246,8 @@ namespace Common.FlowField.Editor
                 EditorGUILayout.HelpBox("Static Flow Bake is valid.", MessageType.Info);
             else
                 EditorGUILayout.HelpBox("Runtime Dynamic uses a fresh downward raycast Surface bake.", MessageType.Info);
+            if (FlowFieldEditorPreview.TryGetFault(manager, out string previewFault))
+                EditorGUILayout.HelpBox($"The Edit Mode preview failed: {previewFault}", MessageType.Warning);
         }
 
         // Registration rejects a second Modifier with the same Priority.
