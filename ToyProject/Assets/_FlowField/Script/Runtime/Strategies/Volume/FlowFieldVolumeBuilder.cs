@@ -121,6 +121,16 @@ namespace Common.FlowField
             if (requeryObstacles)
                 _obstacleQueryRequired = true;
             bool goalMovedWithinCell = IsGoalMoveWithinCell(request);
+            // New obstacle settings make every cell uncertain from now. The
+            // comparison is with the latest accepted request, not the
+            // published one: a build that began with the previous settings,
+            // the first build included, may still publish. A new grid hides
+            // the field instead.
+            Bounds? invalidated = _requests.HasLatest
+                && _requests.Latest.HasSameGrid(request)
+                && !_requests.Latest.HasSameObstacleInputs(request)
+                    ? request.WorldBounds
+                    : (Bounds?)null;
             // Keep the last accepted request independently of the committed
             // field.  A dirty notification that arrives while another Goal is
             // building must never resurrect the older committed Goal.
@@ -131,12 +141,6 @@ namespace Common.FlowField
             if (_build != null
                 && (!_build.Request.HasSameGrid(request) || _build.Request.HasGoal && !request.HasGoal))
                 DiscardBuild();
-            Bounds? invalidated = _committed != null
-                && _committed.Request.HasSameGrid(request)
-                && (_committed.Request.ObstacleLayer.value != request.ObstacleLayer.value
-                    || Mathf.Abs(_committed.Request.ObstacleClearance - request.ObstacleClearance) > 0.0001f)
-                    ? request.WorldBounds
-                    : (Bounds?)null;
             if (!goalMovedWithinCell)
                 _requests.Pending = true;
             return invalidated;

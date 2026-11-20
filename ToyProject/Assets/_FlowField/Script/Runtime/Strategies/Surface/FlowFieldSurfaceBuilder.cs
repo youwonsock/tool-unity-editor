@@ -292,15 +292,9 @@ namespace Common.FlowField
             if (request.SourceKind != _sourceKind)
                 throw new InvalidOperationException("FlowField request source does not match the active session.");
 
-            FlowFieldSurfaceDirtyFlags inputFlags = FlowFieldSurfaceDirtyFlags.None;
-            if (_requests.HasLatest && !request.HasSameInputs(_requests.Latest))
-                inputFlags = _requests.Latest.GetInputDirtyFlags(request);
+            FlowFieldSurfaceDirtyFlags inputFlags = InputDirtyFlags(request);
             ObserveDefaultDirection(request.DefaultDirection);
-            Bounds? invalidated = (inputFlags & FlowFieldSurfaceDirtyFlags.StaticObstacles) != 0
-                && (inputFlags & FlowFieldSurfaceDirtyFlags.Grid) == 0
-                && _committedRequest.HasValue
-                    ? request.SurfaceSettings.BakeBounds
-                    : (Bounds?)null;
+            Bounds? invalidated = ObstacleSettingsInvalidation(request);
 
             FlowFieldSurfaceDirtyFlags combinedFlags = inputFlags | request.DirtyFlags;
             _state.DirtyFlags |= combinedFlags;
@@ -325,6 +319,27 @@ namespace Common.FlowField
             // A new grid or source hides the published field at once; the session
             // reports the state when the input is accepted.
             return invalidated;
+        }
+
+        // What differs from the latest accepted request.
+        private FlowFieldSurfaceDirtyFlags InputDirtyFlags(in FlowFieldSurfaceRequest request)
+            => _requests.HasLatest && !request.HasSameInputs(_requests.Latest)
+                ? _requests.Latest.GetInputDirtyFlags(request)
+                : FlowFieldSurfaceDirtyFlags.None;
+
+        /// <summary>
+        /// New obstacle settings make every cell uncertain from the moment they
+        /// are notified: a build that began with the previous settings may still
+        /// publish, and the first build may be one of them. A new grid hides
+        /// the field instead.
+        /// </summary>
+        internal Bounds? ObstacleSettingsInvalidation(in FlowFieldSurfaceRequest request)
+        {
+            FlowFieldSurfaceDirtyFlags flags = InputDirtyFlags(request);
+            return (flags & FlowFieldSurfaceDirtyFlags.StaticObstacles) != 0
+                && (flags & FlowFieldSurfaceDirtyFlags.Grid) == 0
+                    ? request.SurfaceSettings.BakeBounds
+                    : (Bounds?)null;
         }
 
         public IFlowFieldModifierArea CreateModifierArea() => new FlowFieldSurfaceModifierArea();

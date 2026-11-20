@@ -69,7 +69,8 @@ namespace Common.FlowField
         }
 
         // A running build keeps the request it started with; the next build
-        // submits the newer configuration before it begins.
+        // submits the newer configuration before it begins. New obstacle
+        // settings are uncertain from now, not from that later submission.
         private Bounds? SubmitOrOwe(in FlowFieldManagerConfig config, bool immediately)
         {
             if (immediately || !HasActiveBuild)
@@ -79,7 +80,7 @@ namespace Common.FlowField
             }
             _owedConfig = config;
             _configOwed = true;
-            return null;
+            return ObstacleSettingsInvalidation(CreateCurrentRequest(in config));
         }
 
         private FlowFieldSurfaceRequest CreateCurrentRequest(in FlowFieldManagerConfig config)
