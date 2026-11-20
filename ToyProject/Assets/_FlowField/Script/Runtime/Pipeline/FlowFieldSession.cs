@@ -275,10 +275,6 @@ namespace Common.FlowField
         internal bool UnregisterObstacleCommand(Collider collider)
             => Boundary.IsInUserCode ? DeferUnregisterObstacle(collider) : UnregisterObstacleNow(collider);
 
-        internal bool NotifyObstacleMovedCommand(Collider collider)
-            => Boundary.IsInUserCode
-                ? Defer(() => NotifyObstacleMovedNow(collider))
-                : NotifyObstacleMovedNow(collider);
 
         // Kept apart so only a deferred call allocates the closure.
         private bool DeferRegisterModifier(IFlowFieldVectorModifier modifier)
@@ -318,10 +314,10 @@ namespace Common.FlowField
                 Debug.LogWarning($"[FlowField] The session stopped, so a deferred {registration} registration was dropped.");
         }
 
+        // The Manager has checked the bounds are finite and refuses this, like
+        // a move, inside Modifier code.
         internal void NotifyObstacleRegionDirtyCommand(Bounds worldBounds)
         {
-            if (!FlowFieldGridSpace.IsFinite(worldBounds.center) || !FlowFieldGridSpace.IsFinite(worldBounds.size))
-                throw new ArgumentOutOfRangeException(nameof(worldBounds));
             ThrowIfInputUnavailable();
             ApplyObstacleChange(new FlowFieldObstacleChange(
                 FlowFieldObstacleChangeKind.RegionDirty, null, false, default, true, worldBounds));
@@ -403,7 +399,8 @@ namespace Common.FlowField
             return true;
         }
 
-        private bool NotifyObstacleMovedNow(Collider collider)
+        // The Manager refuses it inside Modifier code, so it never waits.
+        internal bool NotifyObstacleMovedCommand(Collider collider)
         {
             ThrowIfInputUnavailable();
             if (!Obstacles.NotifyMoved(collider, out FlowFieldObstacleChange change, out bool changed))
