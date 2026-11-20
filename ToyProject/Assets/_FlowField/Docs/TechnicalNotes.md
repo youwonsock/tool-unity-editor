@@ -20,9 +20,9 @@
   - 빌드 루프(`RunPipeline`, 직접 소유자의 `Pump`). 빌드 중 상태 전이, Revision, `FieldChanged`, Fault, 불확실 영역 갱신도 여기서만 합니다. Builder는 빌드를 시작할 때 그 빌드가 장애물을 조회하는지와 새 장애물 설정이 불확실하게 만든 영역(`FlowFieldBuildStart`)을, 단계마다 결과(계속·대기·버림·완료)와 "게시한 필드가 달라졌는지"만 돌려주고, 실패는 예외로 알립니다. 버린 결과 뒤에 남은 입력이 있으면 Ready로 돌아가지 않고 Building을 유지합니다.
   - Surface 풀이 완료 콜백은 세대 번호와 빌드 단계(`WaitingSolve`)로 유효성을 판단합니다. 콜백은 `Poll` 안, 곧 `StepBuild` 안에서만 옵니다.
   - 조회(`TrySample`·`ClampPositionToGrid`·`IsReady`·`TryGetFieldInfo`의 준비 판정)와 조회 실패를 예외로 바꾸는 일(`FlowFieldFailures`). `TrySample`과 `TryClampPositionToGrid`는 예외 없이 상태를 돌려주는 같은 함수(`TrySampleStatus`·`TryClampStatus`)를 쓰고, 예외를 던지는 쪽은 그 상태를 예외로 바꿉니다.
-  - 장애물 등록(`FlowFieldObstacleRegistry`), Modifier 등록(`FlowFieldModifierRegistry`), 통지 영역을 불확실 영역으로 표시하는 일(`FlowFieldSafety`, 여백 = 셀 크기 + Obstacle Clearance)
-- 모드마다 다른 일은 `IFlowFieldSpaceBuilder`(`FlowFieldSurfaceBuilder`, `FlowFieldVolumeBuilder`)가 맡습니다. 자기 멤버 21개와 상속한 `Dispose`입니다.
-  - 요청 만들기(`Initialize`, `SubmitConfig`)
+  - 장애물 등록(`FlowFieldObstacleRegistry`), Modifier 등록(`FlowFieldModifierRegistry`), 통지 영역을 불확실 영역으로 표시하는 일(`FlowFieldSafety`, 여백 = 셀 크기 + Obstacle Clearance). 이 여백을 더해도 이전·현재 Bounds 어느 쪽도 격자에 닿지 않는 변경은 건너뜁니다
+- 모드마다 다른 일은 `IFlowFieldSpaceBuilder`(`FlowFieldSurfaceBuilder`, `FlowFieldVolumeBuilder`)가 맡습니다. 멤버는 21개입니다. Dispose는 없고, `ReleaseResources`가 Builder가 가진 것을 모두 놓습니다.
+  - 요청 만들기(`Initialize`는 Session이 정한 Bake Mode를 읽음, `SubmitConfig`)
   - 빌드 단계(`TryBeginBuild`·`StepBuild`·`PublishBuild`, `BuildPolicy`)
   - 게시 필드와 격자(`PublishedField`·`TryGetFieldInfo`, `LatestGrid` = 마지막 요청의 Grid로 `ClampPositionToGrid`가 씀), 게시 필드보다 새 셀 정보(`LatestCells`: Surface는 진행 중인 빌드의 기본 단계 결과, Volume은 없음)
   - 입력 반영(`ApplyObstacleChange`·`ApplyModifierChange`·`CreateModifierArea`)
@@ -38,7 +38,7 @@
   - Bake와 미리보기의 독립 세션(`FlowFieldSession`)과 Builder 정적 함수(요청, Goal 해석), 내보내기 `TryExportBakeData`(Builder마다 하나)
   - Bake Asset의 검증과 쓰기(`Apply`), Volume 표시의 검증기 `FlowFieldVolumeBakeValidator`
   - Modifier 규칙(`FlowFieldModifierRegistry.DuplicatePriorityMessage`, `FlowFieldModifierMaskBuilder.TryValidateInfluenceCollider`)
-  - `FlowFieldBakeService`가 레이아웃(`TryGetLayout`)과 설정 검사(`TryValidateConfig`)는 strategy로, 요청과 Goal 해석은 Builder 정적 함수로 만들고, 두 모드의 독립 Bake 세션(Surface2D는 지면 scan이 끝난 뒤 `CreateSurfaceBakeSession`, Volume3D는 `CreateVolumeBakeSession`)도 만듭니다. Volume 표시는 Init이 payload 전에 하는 검사(`TryValidateVolumeConfigBeforePayload`)를 같은 순서·문구로 하고, payload는 단계로 나눠 검증한 뒤 그 결과를 Bake 검증 캐시에 넣어 `TryValidateConfig`를 그대로 돌립니다. Bake 입력 해시(`ComputeBakeInputHash`)는 BakeService가 설정 스냅샷으로 계산하고, Bake는 프레임마다 시작 때와 비교합니다.
+  - `FlowFieldBakeService`가 레이아웃(`TryGetLayout`)과 설정 검사(`TryValidateConfig`)는 strategy로, 요청과 Goal 해석은 Builder 정적 함수로 만들고, 두 모드의 독립 Bake 세션(Surface2D는 지면 scan이 끝난 뒤 `CreateSurfaceBakeSession`, Volume3D는 `CreateVolumeBakeSession`)도 만듭니다. Volume 표시는 Init이 payload 전에 하는 검사(`TryValidateVolumeConfigBeforePayload`)를 같은 순서·문구로 하고, payload는 단계로 나눠 검증한 뒤, 검증이 끝났거나 설정이 바뀌었을 때 그 결과를 Bake 검증 캐시에 넣어 `TryValidateConfig`를 그대로 돌립니다. Bake 입력 해시(`ComputeBakeInputHash`)는 BakeService가 설정 스냅샷으로 계산하고, Bake는 프레임마다 시작 때와 비교합니다.
   - 쓰기는 `SerializedObject`로 합니다. Bounds 핸들은 Undo를 남기고, Bake Asset 지정은 Bake 저장과 같은 Undo 묶음에, Clear Bake의 해제는 자기 Undo 단계에 기록합니다. 실행 중인 세션에는 `OnValidate`로 통지됩니다.
 
 ## 수명과 게시 규칙
@@ -55,7 +55,7 @@
   3. 다음 칸이 있으면 지금 칸과 다음 칸을 감싸는 칸 중 하나라도 위험하거나 그 방향 연결이 끊겼으면 정지합니다.
   4. Default Direction 칸(`NextCells == -1`)은 기본 방향의 축 부호로 갈 수 있는 이웃 조합 중 하나라도 격자 밖이거나 위험하면 정지합니다.
   - "최신 정보"는 Surface의 경우 진행 중인 빌드의 작업 공간이 게시 필드와 같은 격자·지면일 때의 막힘·지면·탈출이고, 그 밖에는 게시 필드입니다. 연결은 항상 게시 필드에서 읽습니다. 진행 중인 빌드는 새 Goal의 영향 반경으로 연결을 다시 만들기 때문에, 게시된 걸음과 맞지 않습니다. 새로 막힌 칸은 3번의 칸 검사가 막습니다. 세션 상태(`IsRebuilding`)는 보지 않습니다.
-- **끝난 풀이:** 새 입력이 들어와 있어도 게시합니다. 계속 움직이는 Goal 때문에 결과가 끊기지 않게 하기 위해서입니다. Grid나 설정이 바뀌었거나 Goal이 사라진 경우만 거부합니다.
+- **끝난 풀이:** 새 입력이 들어와 있어도 게시합니다. 계속 움직이는 Goal 때문에 결과가 끊기지 않게 하기 위해서입니다. Grid나 설정이 바뀌었거나 Goal이 사라진 경우만 거부합니다. `NotifyCellsDirty`는 격자를 그대로 두므로 거부하지 않고(Surface `Ground` flag), 바닥은 다음 빌드가 다시 scan합니다. 바닥이 실제로 바뀌었으면 그 빌드가 새 격자처럼 전체를 다시 만듭니다.
 - **Revision:** 두 모드 모두 게시 내용(셀 상태, 방향, 속도, Goal)이 실제로 바뀔 때만 증가하고 `FieldChanged`를 보냅니다. Volume은 `FlowFieldField.HasSameContent`(memcmp)로 비교합니다. 내용이 같아도 요청 스냅샷 갱신, 불확실 영역 정리, Ready 전환은 그대로 합니다.
 - **재진입 없음:** `FlowFieldExecutionBoundary`가 이벤트를 큐에 모아 가장 바깥 작업이 끝난 뒤 전달합니다. `Release`·`Stop`·`Restart`·Fault 이전의 이벤트는 버리고 `Released`만 항상 전달합니다. 핸들러가 서로를 계속 깨우면 100,000건에서 오류를 남기고 남은 일을 버립니다. 이때도 `Released`와 해제 이벤트는 순서대로 한 번 전달하고, 그 핸들러가 새로 만든 일은 버립니다.
 - **정지와 재시작:** 비활성화는 `Stop`(빌드 취소, 게시 결과 버림)입니다. 다시 활성화와 Fault 재시도(`RequestRebuild`)는 같은 `Restart` 경로로 처음부터 다시 빌드하고, 등록된 장애물과 Modifier는 유지합니다. 재시작에 실패하면 Fault로 남습니다. 새 결과가 게시되기 전까지 Ready가 아니고, `ClampPositionToGrid`는 최신 요청의 격자로 계속 동작합니다. 비활성 상태에서 `Init()`해도 요청은 제출하므로, 두 모드 모두 그 격자로 Clamp하고 장애물 통지를 받습니다.
@@ -64,15 +64,16 @@
 
 ## 입력 변경
 
-- **통지 방식:** 기본으로 FlowField는 씬을 폴링하지 않습니다. 변경은 공개 API와 FlowField 컴포넌트의 통지로만 들어옵니다. `FlowFieldDynamicObstacle`, `FlowFieldGoalTarget`, Modifier Volume은 자기 Transform이나 Collider Bounds를 프레임당 한 번 확인합니다(컴포넌트당 O(1)).
+- **통지 방식:** 기본으로 FlowField는 씬을 폴링하지 않습니다. 변경은 공개 API와 FlowField 컴포넌트의 통지로만 들어옵니다. `FlowFieldDynamicObstacle`, `FlowFieldGoalTarget`, Modifier Volume은 자기 Transform이나 Collider Bounds를 프레임당 한 번 확인합니다(컴포넌트당 O(1)). Collider Bounds는 물리 장면을 sync해야 Transform 이동을 따라가므로, 두 Collider 컴포넌트는 프레임당 한 번 `Physics.SyncTransforms`(`FlowFieldPhysicsSync`) 뒤에 읽습니다. 그래서 Auto Sync Transforms가 꺼져 있고 물리 step이 없어도 LateUpdate 전에 옮긴 이동은 그 프레임에 알리고, 다른 스크립트가 LateUpdate에서 옮긴 이동은 다음 프레임에 알립니다. 등록할 때 읽는 Bounds는 바로 sync합니다. `FlowFieldDynamicObstacle`은 등록한 Manager와 Collider를 기억해, 둘 중 하나가 바뀌면 그 등록을 해제합니다.
 - **장애물 등록부(`FlowFieldObstacleRegistry`):** Collider에서 자리로 가는 사전을 두어, 등록·해제·이동 통지가 목록을 훑지 않습니다. 등록 순서를 읽는 곳이 없으므로 해제는 마지막 항목을 빈 자리로 옮깁니다. 정적 마스크 규칙, sweep, `FlowFieldDynamicObstacle`은 `Contains`로 등록 여부만 묻습니다.
 - **미등록 장애물 sweep(`FlowFieldObstacleSweep`):** Session이 소유하고, runtime scheduler가 부르는 빌드 루프(`RunPipeline`의 try 안)에서만 프레임당 한 번 돕니다. 그래서 Bake와 Edit Mode 미리보기, 직접 `Pump()`하는 세션은 sweep하지 않습니다(`SweepsObstacles`). 한 pass는 sweep Bounds(`FlowFieldSpaceStrategy.ObstacleSweepBounds`: Surface2D는 장애물 조회 상자가 닿는 높이와 Clearance까지, Volume3D는 셀 하나와 Clearance만큼 넓힌 Bounds)를 한 번 조회하고, 등록하지 않은 Collider를 1,024개씩 이전 pass의 Bounds와 비교합니다. 사라짐은 pass 끝에서 판정합니다. 바뀐 Collider는 이전·현재 Bounds를 `RegionDirty` 장애물 변화로 보내 기존 경로(불확실 영역, 다시 조회)를 탑니다. 첫 pass는 목록을 뽑은 그 프레임에 모두 기록만 합니다. 여러 프레임에 나누면 빌드가 scan한 뒤 옮겨진 Collider가 옮긴 자리로 기록되어 그 이동을 놓치기 때문입니다. 설정(켜기, Bounds, Layer)이 바뀌거나 Stop·Release 때 기록을 비웁니다. 65,536개에 이르면 그 세션에서 멈추고, 멈춘 Bounds 전체를 다시 빌드합니다.
   - Surface2D 동적 마스크 = 등록 overlay ∪ swept 마스크(모든 obstacle Collider, dirty 영역만 다시 scan)입니다. 등록 overlay는 빌드 사이에 보관하고, 각 Collider를 그릴 때의 Bounds와 isTrigger를 기억합니다(꺼진 Collider는 빈 Bounds입니다). 다시 만들 때는 dirty 영역과, 그 값이 바뀌었거나 새로 등록·해제·파괴된 Collider의 이전·현재 칸만 다시 그리므로, 결과는 모든 Collider를 다시 그린 것과 같습니다. 격자·지면·장애물 상자 설정이 바뀌었거나 dirty 영역이 격자 전체이면 전부 그립니다. `RuntimeDynamic`에서 sweep이 이 세션에서 돌면 정적 마스크는 비웁니다. 옮긴 정적 Collider의 잔상을 남기지 않기 위해서입니다. `BakedBase`의 정적 마스크는 Bake에서 시작하므로 그대로 두고, sweep이 알린 영역을 정적 규칙으로도 다시 scan해 옮긴 Collider의 Bake 자리를 풉니다. sweep이 시작되거나 멈추면 모든 장애물 마스크를 다시 만듭니다.
   - Volume3D는 다시 조회할 때 이미 레이어의 모든 Collider를 읽으므로 영역 알림만으로 충분합니다. Bake 때 Rigidbody Collider가 있던 자리도 sweep이 그 영역을 알리면 풀립니다.
 - **등록부:** 장애물과 Modifier 등록부는 Session만 바꾸고, Builder는 읽기만 합니다. 해제하지 않고 파괴된 등록 Collider는 할 일이 있는 빌드가 시작되기 직전에 Session이 지우고, 마지막으로 알린 자리를 이동처럼 불확실 영역으로 둡니다. 할 일이 없는 동안에는 등록부를 훑지 않습니다.
-- **불확실 영역:** 장애물 등록·해제·이동·영역 dirty 통지를 받은 그 프레임에 영역을 표시하고, 그 영역을 조회한 빌드가 게시될 때까지 그 셀과 그 셀로 가는 경로는 속도 0입니다. 목록은 Session만 바꿉니다(`FlowFieldSafety`). 장애물을 조회하는 빌드가 시작되면 목록을 옮기고, 다음 게시 때 지웁니다. 시작 후 기록된 영역은 다음 빌드까지 남습니다. 게시하지 못하고 끝난 빌드가 옮긴 영역도 남았다가 뒤따르는 빌드의 게시 때 지웁니다. Surface에서 거부된 빌드의 조회 결과는 staging에 남고 대체 빌드는 항상 Goal 플래그를 가지며, Volume에서는 남은 영역 때문에 뒤따르는 빌드가 장애물 결과를 재사용하지 못하고 그 영역(또는 전체)을 다시 조회하기 때문입니다. `RequestRebuild`가 시작한 빌드가 버려지면 전체 조회 요청은 대신하는 빌드가 이어받습니다. 목록이 64개를 넘으면 합쳐서 더 넓게 정지합니다(Surface는 XZ, Volume은 3D로 비교). 장애물 설정(Layer, Clearance 등)이 바뀌면 알린 그 순간부터 필드 전체가 불확실합니다. 비교 대상은 마지막으로 받은 요청이라, 첫 빌드나 이전 설정으로 시작한 빌드가 게시되어도 새 설정으로 조회한 빌드가 게시될 때까지 정지합니다.
+- **불확실 영역:** 장애물 등록·해제·이동·영역 dirty 통지를 받은 그 프레임에 영역을 표시하고, 그 영역을 조회한 빌드가 게시될 때까지 그 셀과 그 셀로 가는 경로는 속도 0입니다. 목록은 Session만 바꿉니다(`FlowFieldSafety`). 장애물을 조회하는 빌드가 시작되면 목록을 옮기고, 다음 게시 때 지웁니다. 시작 후 기록된 영역은 다음 빌드까지 남습니다. 게시하지 못하고 끝난 빌드가 옮긴 영역도 남았다가 뒤따르는 빌드의 게시 때 지웁니다. Surface에서 거부된 빌드의 조회 결과는 staging에 남고 대체 빌드는 항상 Goal 플래그를 가지며, Volume에서는 남은 영역 때문에 뒤따르는 빌드가 장애물 결과를 재사용하지 못하고 그 영역(또는 전체)을 다시 조회하기 때문입니다. `RequestRebuild`가 시작한 빌드가 버려지면 전체 조회 요청은 대신하는 빌드가 이어받습니다. 목록이 64개를 넘으면 합쳐서 더 넓게 정지합니다(Surface는 XZ, Volume은 3D로 비교). 장애물 설정(Layer, Clearance 등)이 바뀌면 알린 그 순간부터 필드 전체가 불확실합니다. 비교 대상은 같은 격자·source의 마지막으로 받은 요청이라, 첫 빌드나 이전 설정으로 시작한 빌드가 게시되어도 새 설정으로 조회한 빌드가 게시될 때까지 정지합니다. 마지막 요청이 다른 격자에 있으면(격자를 바꿨다가 되돌린 경우) 게시된 요청과 비교합니다. 되돌아온 격자의 게시 필드가 다시 보이기 때문입니다.
+- **격자 밖 변경:** 이전·현재 Bounds 어느 쪽도 셀 크기와 Clearance만큼 넓혀서 격자에 닿지 않는 장애물 변화(등록·해제·이동·영역 알림, 파괴 정리)는 Session이 건너뜁니다. 불확실 영역도 다시 빌드도 없고, BakedBase의 변화 영역도 넓히지 않습니다. 등록부는 이미 그 Bounds를 기록했으므로, 나중에 격자 안으로 옮기면 이전·현재가 모두 알려집니다.
 - `SetGoal()`은 장애물 결과를 재사용합니다. 같이 `RequestRebuild()`를 부르면 이 이점을 잃습니다.
-- `RequestRebuild()`는 두 모드 모두 장애물을 전체 다시 조회합니다. `BakedBase`는 Bake 막힘에서 다시 시작해 Init 뒤 바뀐 영역과 등록 장애물 영역만 다시 조회합니다. Surface의 `RequestRebuild()`는 바닥 Raycast를 다시 하지 않으므로, 바닥 형상이 바뀌면 `NotifyCellsDirty()`를 씁니다. `NotifyCellsDirty()`는 두 모드 모두 바닥(Volume은 모든 셀)과 장애물을 다시 계산합니다.
+- `RequestRebuild()`는 두 모드 모두 장애물을 전체 다시 조회합니다. `BakedBase`는 Bake 막힘에서 다시 시작해 Init 뒤 바뀐 영역과 등록 장애물 영역만 다시 조회합니다. Surface의 `RequestRebuild()`는 바닥 Raycast를 다시 하지 않으므로, 바닥 형상이 바뀌면 `NotifyCellsDirty()`를 씁니다. `NotifyCellsDirty()`는 두 모드 모두 바닥(Volume은 모든 셀)과 장애물을 다시 계산합니다. 진행 중인 빌드는 버리지 않고, 불확실 영역도 표시하지 않습니다(`RequestRebuild()`와 같습니다).
 - 풀이 중에 바뀐 Goal과 설정은 Builder가 보관했다가 다음 빌드를 시작할 때 제출합니다.
 - Surface2D의 정적 장애물은 Obstacle Layer에서 Rigidbody가 없고 등록하지 않은 Collider입니다. 장애물 변화는 그 변화가 닿는 셀(Bounds + 셀 크기 + Clearance)만 정적 마스크를 다시 scan합니다. 대상은 Rigidbody 없는 Collider의 등록·해제와 `NotifyObstacleRegionDirty`이고, `BakedBase`에서는 모든 장애물 변화입니다. 영역 없이 들어온 장애물 작업(첫 빌드, 장애물 설정 변경)은 전체를 scan합니다.
 - `StaticBaked`는 동적 장애물 등록을 거부하고, 형식이 다른 Bake Asset도 거부하므로 다시 Bake해야 합니다.
@@ -86,15 +87,15 @@
 - 바닥 Layer와 경사·단차 조건이 필요합니다.
 - 격자가 2,500셀을 넘으면 Scene View는 방향 화살표를 가로·세로 한 칸씩 건너 4칸 중 1칸만 그립니다. 막힌 칸과 Modifier 칸 표시는 줄이지 않습니다.
 - 한 번의 조회에서 겹치는 장애물이 4,096개에 이르면 Session이 Fault 납니다. 일부만 쓰면 장애물을 놓치기 때문입니다. Volume3D는 이때 셀별 검사로 넘어갑니다.
-- 특정 Collider가 한 셀에 닿는지 확인할 때(장애물 마스크, Modifier 영향 영역, Volume3D 셀별 검사), 그 셀 상자에 겹친 Collider가 256개에 이르면 같은 이유로 Session이 Fault 납니다(`FlowFieldOverlapUtility`).
+- 특정 Collider가 한 셀에 닿는지 확인할 때(장애물 마스크, Modifier 영향 영역, Volume3D 셀별 검사)도 같은 상한(`FlowFieldOverlapUtility.MaxOverlapHits`, 4,096개)을 씁니다.
 
 ## Volume3D
 
 - 셀은 `x + Width × (z + Depth × y)` 순서로 저장합니다. 두 축·세 축 대각선은 중간 셀이 모두 통과 가능할 때만 연결합니다.
-- 장애물·Modifier 단계는 64셀씩 진행합니다. 스텝마다 `OverlapBox`로 후보를 모아 후보가 닿는 셀만 정확히 검사합니다(`FlowFieldVolumeCellQuery`). 등록 장애물은 빌드가 장애물 조회 전에 `Physics.SyncTransforms`한 직후 한 번(`CaptureRegistered`: Collider, 넓힌 Bounds, Layer) 읽고, 스텝마다 그 Bounds가 스텝 상자에 닿는 것만 고릅니다. 읽은 뒤 움직이거나 해제된 등록 장애물은 통지로 불확실 영역이 되고, 그 영역은 이 빌드가 게시된 뒤에도 남아 다음 빌드가 다시 조회합니다.
+- 장애물·Modifier 단계는 64셀씩 진행합니다. Modifier 단계는 Modifier마다 칸 상자를 만들고 겹치는 상자를 합쳐서, 서로 겹치지 않는 상자만 돕니다. 같은 칸을 두 번 돌면 Modifier가 두 번 적용되기 때문입니다. 스텝마다 `OverlapBox`로 후보를 모아 후보가 닿는 셀만 정확히 검사합니다(`FlowFieldVolumeCellQuery`). 등록 장애물은 빌드가 장애물 조회 전에 `Physics.SyncTransforms`한 직후 한 번(`CaptureRegistered`: Collider, 넓힌 Bounds, Layer) 읽고, 스텝마다 그 Bounds가 스텝 상자에 닿는 것만 고릅니다. 읽은 뒤 움직이거나 해제된 등록 장애물은 통지로 불확실 영역이 되고, 그 영역은 이 빌드가 게시된 뒤에도 남아 다음 빌드가 다시 조회합니다.
 - **부분 재계산:** Modifier만 바뀌면 게시된 내비게이션에 다시 합성합니다. 첫 빌드 중 바뀐 Modifier도 그 빌드가 게시된 뒤 합성만 다시 합니다. 장애물 입력과 불확실 영역이 그대로인 빌드(Goal이나 Default Direction 변경)는 장애물 결과와 Topology를 재사용합니다. 그래서 Play 중 Inspector 설정 변경도 장애물을 다시 조회하지 않고, 알리지 않은 Collider는 `RequestRebuild`나 `NotifyCellsDirty`, 영역 알림, sweep으로 반영합니다. Goal이 같은 셀 안에서 움직이면 빌드하지 않습니다. Goal을 지우면 진행 중인 빌드를 버립니다.
 - **등록하지 않은 Collider:** `RequestRebuild()`나 `NotifyCellsDirty()`의 전체 조회, 또는 `NotifyObstacleRegionDirty()`와 sweep이 알린 영역의 조회에서 반영됩니다.
-- **배열 재사용:** 교체된 게시 배열을 다음 빌드에 씁니다(`FlowFieldSpareArrays.Take`, Surface 게시도 같습니다). 가져온 배열은 지우지 않습니다. 빌드가 모든 칸을 읽기 전에 쓰기 때문입니다. Volume의 막힘은 게시 막힘이나 Bake 복사, 또는 전체 조회가 채우고, 나머지는 Static Bake 복사나 풀이 Job이 모든 칸에 씁니다(탈출 Job은 먼저 전부 0으로 씁니다). 최종 필드는 Modifier 단계가 기본 필드를 통째로 복사한 데서 시작합니다. Surface 게시는 전체 commit이면 모든 칸을 쓰고, 부분 commit이면 게시 필드를 먼저 통째로 복사합니다.
+- **배열 재사용:** 교체된 게시 배열을 다음 빌드에 씁니다(`FlowFieldSpareArrays.Take`, Surface 게시도 같습니다). 가져온 배열은 지우지 않습니다. 빌드가 모든 칸을 읽기 전에 쓰기 때문입니다. Volume의 막힘은 게시 막힘이나 Bake 복사, 또는 전체 조회가 채우고, 나머지는 Static Bake 복사나 풀이 Job이 모든 칸에 씁니다(탈출 Job은 먼저 전부 0으로 씁니다). 최종 필드는 Modifier 단계가 기본 필드를 4,096개씩 나눠 복사한 데서 시작합니다. Surface 게시는 전체 commit이면 모든 칸을 쓰고, 부분 commit이면 게시 필드를 먼저 통째로 복사합니다.
 
 ## Modifier
 
@@ -107,6 +108,7 @@
 - 등록된 Modifier의 설정이 통지 시점에 잘못되면 두 모드 모두 Fault입니다. 등록되지 않은 Modifier를 통지하면 `InvalidOperationException`입니다.
 - Fault 중에는 해제만 받습니다. 재시도가 전부 다시 빌드하므로 작업을 예약하지 않고, Fault 중 켜진 Modifier는 재시작의 요청 제출 전에 등록합니다.
 - 셀 판정은 `FlowFieldOverlapUtility.CellHalfExtent`로 0.0001 줄인 상자를 써서, 격자에 맞춘 Collider가 이웃 셀을 잡지 않게 합니다.
+- Surface에서 Modifier를 해제해도, 이미 시작한 합성은 그 Modifier가 가져간 칸 목록으로 끝까지 마치고, 다음 빌드가 그 칸을 다시 합성합니다. 해제와 Priority 변경은 값 변경처럼 원인 flag(`ModifierStack`)로 남으므로, 같은 빌드의 다른 변화가 아무것도 바꾸지 않아도 그 칸을 다시 합성합니다.
 - Influence Collider가 파괴되면 설정 오류로 보고 Fault를 냅니다. 무시하면 영향 영역이 조용히 사라집니다. 기본 Modifier Volume은 파괴를 다음 LateUpdate에 알립니다.
 - Modifier 자체의 Fault는 Manager 재빌드로 풀리지 않습니다. Modifier를 끈 상태에서 `Release()`, 값 수정, `Init()` 순서로 복구한 뒤 원래 활성 상태로 되돌립니다.
 
@@ -126,6 +128,7 @@
 - **BakedBase(Volume3D):** 첫 빌드와 Bake를 다시 읽는 빌드는 Allocate 다음 `BakedObstacles` 단계에서 막힘·topology·탈출 방향을 예산 단위(4,096셀)로 복사하고(`CopyObstaclesToBuild`), 불확실 영역·Init 뒤 변화가 닿은 영역·등록 장애물 영역만 다시 조회합니다. 셋 다 없으면 obstacle 결과를 Bake 그대로 쓰고 BFS만 합니다. 게시된 필드가 있으면 `RuntimeDynamic`처럼 Goal 변경은 obstacle 결과를 재사용하고, 장애물 변화는 바뀐 영역만 다시 조회합니다. topology와 탈출 방향은 막힘에만 기대므로 Goal이 다른 Bake에서도 복사할 수 있습니다.
 - **BakedBase가 모르는 것:** Bake 뒤 아무도 지켜보지 않을 때 옮긴 장면 장애물(등록 전이나 알리지 않은 이동)은 Bake 때 자리가 막힌 채, 새 자리는 열린 채 남습니다. 등록 장애물은 등록할 때 지금 자리를 조회하므로 새 자리는 막히고, 등록 전에 옮겼다면 Bake 때 자리만 남습니다.
 - Editor Bake는 두 모드가 같은 실행 코드(`BakeRun`), 입력 검사, 저장 코드(`SaveBakeAsset`)를 쓰고, 모드마다 다른 이름·파일 접미사·참조 속성은 `BakeTarget`에 둡니다. Bake 입력 해시가 시작 때와 달라지면 그 프레임에 멈추고 기존 Asset을 유지하며, 저장은 Undo 한 묶음입니다.
+- Volume Bake 검증(`FlowFieldVolumeBakeValidator`)은 열린 칸의 Topology를 풀이와 같은 Burst topology job(`FlowFieldVolumeSolveData.ForTopology`)이 만든 값과 비교하므로, Bake와 런타임이 같은 규칙을 씁니다. Editor 표시는 job이 끝날 때까지 폴링하고, Init의 검사는 기다립니다. job은 payload를 고정한 채 Editor 프레임을 넘을 수 있어, 검증기를 버릴 때 job을 멈추고 기다립니다.
 - Volume은 방향·속도·탈출 벡터를 저장하지 않고 NextCell과 면 인덱스(`_escapeFaces`)에서 재구성합니다. Surface는 배열을 `FlowFieldBakeBlob`으로 `byte[]`에 비트 그대로 저장합니다.
 - Surface 런타임은 Asset을 검증한 뒤 만든 변하지 않는 사본(`FlowFieldSurfaceBakeSnapshot`, Revision마다 한 번)을 읽습니다. request가 들고 있는 Asset 참조는 Revision·내용 세대와 함께 같은 Bake인지 비교하는 데만 씁니다.
 - 저장에 실패하면 기존 Asset의 내용, Revision, GUID를 유지합니다.
@@ -135,7 +138,7 @@
 
 ## Editor 표시
 
-표시 상한은 FullVolume 8,192셀, Slice 4,096셀입니다. Volume 표시는 갱신 요청이 있거나 상태가 바뀔 때만 repaint하고, Bake를 검증하는 동안에는 보여 주는 진행률(%)이 바뀔 때만 repaint합니다. Bake 검증 결과는 Asset의 Revision이나 내용 세대가 바뀌거나 Asset 파일을 다시 가져올 때만 다시 만들고, Undo나 계층 변경 같은 에디터 변경은 표시만 새로 고칩니다. 그릴 때 Display Settings는 칸마다가 아니라 한 번만 읽습니다. Inspector의 Priority 중복 경고는 Edit Mode에서 Manager마다 결과를 보관하고, 계층·속성 변경, Undo, Play Mode 전환, 씬 닫기, Modifier Volume Inspector 편집 때 버립니다. Play Mode에서는 스크립트가 Priority를 바꿔도 에디터 이벤트가 없으므로 보관하지 않습니다. 에디터 이벤트(변경 알림, Undo, 계층 변경, Play Mode, 씬 닫기, 업데이트)는 `FlowFieldEditorLifecycle` 한 곳에서 받아 Surface 미리보기와 Volume 표시에 알립니다. Surface의 Edit Mode 미리보기는 처음 그릴 때 바로 풀고, 그 뒤 변경은 표시만 해 두었다가 변경이 약 150ms 멈추면 한 번 다시 풉니다. 그동안에는 마지막 결과를 그립니다. 실패한 미리보기는 다음 변경까지 그대로 두고 그 이유를 Manager Inspector에 보여 주며, 켜진 Modifier만 등록합니다. Bake와 Clear Bake는 Edit Mode에서만 실행하고, Play Mode에 들어가면 진행 중인 Bake를 멈춥니다. Play Mode의 Surface 표시는 합성을 거친 최종 결과이므로 Asset의 원본 방향과 다를 수 있습니다. 왼쪽은 Surface2D 상세, 오른쪽은 Volume3D 중앙 단면입니다.
+표시 상한은 FullVolume 8,192셀, Slice 4,096셀입니다. Volume 표시는 갱신 요청이 있거나 상태가 바뀔 때만 Scene View와 열린 Manager Inspector를 repaint하고, Bake를 검증하는 동안에는 보여 주는 진행률(%)이 바뀔 때만 repaint합니다. Bake 검증 결과는 Asset의 Revision이나 내용 세대가 바뀌거나 Asset 파일을 다시 가져올 때만 다시 만들고, Undo나 계층 변경 같은 에디터 변경은 표시만 새로 고칩니다. Manager를 껐다 켜도 검증 결과는 남고, 파괴된 Manager만 표시 상태를 지웁니다. 그릴 때 Display Settings는 칸마다가 아니라 한 번만 읽습니다. Inspector의 Priority 중복 경고는 Edit Mode에서 Manager마다 결과를 보관하고, 계층·속성 변경, Undo, Play Mode 전환, 씬 닫기, Modifier Volume Inspector 편집 때 버립니다. Play Mode에서는 스크립트가 Priority를 바꿔도 에디터 이벤트가 없으므로 보관하지 않습니다. 에디터 이벤트(변경 알림, Undo, 계층 변경, Play Mode, 씬 닫기, 업데이트, reload, 종료)는 `FlowFieldEditorLifecycle` 한 곳에서 받아 Surface 미리보기와 Volume 표시에 알리고, Edit Mode를 떠나거나 reload·종료할 때 Bake를 취소합니다. 실행 중인 Bake만 그동안 자기 업데이트를 따로 구독합니다. Surface의 Edit Mode 미리보기는 처음 그릴 때 바로 풀고, 그 뒤 변경은 표시만 해 두었다가 변경이 약 150ms 멈추면 한 번 다시 풉니다. 그동안에는 마지막 결과를 그립니다. 마지막 풀이 뒤에 그려진 미리보기만 다시 풀고, 그려지지 않은 미리보기(Show Field 끔, Volume3D)는 버렸다가 다음에 그릴 때 처음처럼 풉니다. 실패한 미리보기는 다음 변경까지 그대로 두고 그 이유를 Manager Inspector에 보여 주며, 켜진 Modifier만 등록합니다. 거부된 Modifier(Priority 중복 등)는 미리보기마다 한 번만 Console에 남깁니다. Bake와 Clear Bake는 Edit Mode에서만 실행하고, Play Mode에 들어가면 진행 중인 Bake를 멈춥니다. Play Mode의 Surface 표시는 합성을 거친 최종 결과이므로 Asset의 원본 방향과 다를 수 있습니다. 왼쪽은 Surface2D 상세, 오른쪽은 Volume3D 중앙 단면입니다.
 
 <p align="center">
   <img src="Images/feature-surface2d-editor-detail.png" alt="Surface2D 통로 주변 상세 Scene View 방향장" width="48%">
