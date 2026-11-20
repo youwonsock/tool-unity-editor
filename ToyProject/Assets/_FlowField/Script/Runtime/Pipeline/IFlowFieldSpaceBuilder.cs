@@ -1,4 +1,3 @@
-using System;
 using UnityEngine;
 
 namespace Common.FlowField
@@ -57,7 +56,7 @@ namespace Common.FlowField
     /// these members; a builder reaches the session through the reference it
     /// was created with.
     /// </summary>
-    internal interface IFlowFieldSpaceBuilder : IDisposable
+    internal interface IFlowFieldSpaceBuilder
     {
         FlowFieldSpaceMode SpaceMode { get; }
         bool HasPendingRequest { get; }
@@ -94,9 +93,10 @@ namespace Common.FlowField
         // ----- Configuration -------------------------------------------------
         // The builder turns the Manager's settings into its own request; every
         // change arrives as a notification, never by polling the scene.
-        // Initialize prepares a builder that has no request yet. SubmitConfig
-        // returns the region new obstacle settings made uncertain, if any.
-        void Initialize(FlowFieldBakeMode bakeMode);
+        // Initialize prepares a builder that has no request yet, for the bake
+        // mode the session has just set. SubmitConfig returns the region new
+        // obstacle settings made uncertain, if any.
+        void Initialize();
         Bounds? SubmitConfig(in FlowFieldManagerConfig config, FlowFieldConfigChange change);
 
         // ----- Input ----------------------------------------------------------
@@ -114,8 +114,8 @@ namespace Common.FlowField
         // CancelWork: drop the build in progress, its callbacks and owed input.
         // DropComputedState: drop the published field and what was computed;
         // the next build is complete and starts from the latest request.
-        // ReleaseResources: forget the requests and free what the builder holds.
-        // Dispose (after ReleaseResources): free what outlives a Release.
+        // ReleaseResources: forget the requests and free what the builder
+        // holds; nothing outlives it.
         void CancelWork();
         void DropComputedState();
         void ReleaseResources();

@@ -222,9 +222,9 @@ namespace Common.FlowField
         }
 
         // The session set the bake mode and cleared the uncertain regions.
-        public void Initialize(FlowFieldBakeMode bakeMode)
+        public void Initialize()
         {
-            _sourceKind = bakeMode switch
+            _sourceKind = _session.BakeMode switch
             {
                 FlowFieldBakeMode.StaticBaked => FlowFieldSurfaceSourceKind.StaticSnapshot,
                 FlowFieldBakeMode.BakedBase => FlowFieldSurfaceSourceKind.BakedBase,
@@ -468,11 +468,6 @@ namespace Common.FlowField
         {
             _solveBackend?.Dispose();
             _solveBackend = null;
-        }
-
-        // Release already freed everything a Surface2D builder holds.
-        public void Dispose()
-        {
         }
 
         private const FlowFieldSurfaceDirtyFlags BaseDirtyMask = FlowFieldSurfaceDirtyFlags.Grid

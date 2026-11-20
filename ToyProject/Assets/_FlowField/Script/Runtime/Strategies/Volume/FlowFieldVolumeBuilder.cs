@@ -85,7 +85,7 @@ namespace Common.FlowField
 
         // The session set the bake mode and cleared the uncertain regions.
         // Running with no request yet; the first Submit starts a build.
-        public void Initialize(FlowFieldBakeMode bakeMode)
+        public void Initialize()
         {
             _requests.Clear();
             _hasPendingModifierRecompose = false;
@@ -423,11 +423,6 @@ namespace Common.FlowField
                     request.ObstacleClearance,
                     out string staticReason))
                 throw new InvalidOperationException(staticReason);
-        }
-
-        // Release already freed everything a Volume3D builder holds.
-        public void Dispose()
-        {
         }
     }
 

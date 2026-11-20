@@ -626,7 +626,7 @@ namespace Common.FlowField
             BakeMode = bakeMode;
             Fault = null;
             Safety.ClearRegions();
-            _builder.Initialize(bakeMode);
+            _builder.Initialize();
             SetLifecycle(FlowFieldSessionLifecycle.Active);
         }
 
@@ -693,7 +693,6 @@ namespace Common.FlowField
             Disposed = true;
             ReleaseState();
             SetLifecycle(FlowFieldSessionLifecycle.Released);
-            _builder.Dispose();
             ClosePublishing();
         }
 
