@@ -6,13 +6,15 @@ namespace Common.FlowField
     /// <summary>What changed in the Manager's configuration, so a builder knows what to rebuild.</summary>
     internal enum FlowFieldConfigChange
     {
-        // Init, RequestRebuild or a restart: build everything from these settings.
+        // Init, RequestRebuild or a restart: build from these settings and
+        // query every obstacle again. The ground is kept unless its settings
+        // changed; BakedBase starts again from the bake.
         Rebuild,
         // A serialized setting was edited: rebuild what differs from the last request.
         Settings,
         // SetGoal changed the Goal.
         Goal,
-        // NotifyCellsDirty: regenerate every cell.
+        // NotifyCellsDirty: regenerate every cell, the ground included.
         Cells,
     }
 

@@ -6,20 +6,32 @@ namespace Common.FlowField
     /// <summary>How Surface2D reads a Manager configuration: its grid, checks and requests.</summary>
     internal sealed partial class FlowFieldSurfaceBuilder
     {
+        // An explicit rebuild queries every obstacle again, as in Volume3D:
+        // RuntimeDynamic rescans both masks, BakedBase starts again from the
+        // bake and rescans what changed since. The ground is scanned again
+        // only by NotifyCellsDirty or new surface settings.
+        private const FlowFieldSurfaceDirtyFlags RequeryObstacleFlags
+            = FlowFieldSurfaceDirtyFlags.Obstacles | FlowFieldSurfaceDirtyFlags.Escape;
+
         public Bounds? SubmitConfig(in FlowFieldManagerConfig config, FlowFieldConfigChange change)
         {
             switch (change)
             {
                 case FlowFieldConfigChange.Rebuild:
+                {
+                    FlowFieldSurfaceBakeSettings settings = CreateBakeSettings(in config);
+                    // A StaticBaked field takes no runtime obstacles.
+                    bool requeryObstacles = _session.BakeMode != FlowFieldBakeMode.StaticBaked;
                     Bounds? invalidated = Submit(CreateRequest(
                         in config,
                         _session.BakeMode,
-                        CreateBakeSettings(in config),
-                        FlowFieldSurfaceDirtyFlags.None,
-                        _state.DirtyFinalRegion,
-                        _state.DirtyObstacleRegion));
+                        in settings,
+                        requeryObstacles ? RequeryObstacleFlags : FlowFieldSurfaceDirtyFlags.None,
+                        FlowFieldCellRect.Invalid,
+                        requeryObstacles ? FlowFieldCellRect.Full(settings.Grid) : FlowFieldCellRect.Invalid));
                     _configOwed = false;
                     return invalidated;
+                }
                 case FlowFieldConfigChange.Goal:
                     _goalTracker.ResetWarning();
                     MarkDirty(FlowFieldSurfaceDirtyFlags.Goal, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
@@ -28,7 +40,10 @@ namespace Common.FlowField
                     // The request holds the Goal.
                     return SubmitOrOwe(in config, immediately: false);
                 case FlowFieldConfigChange.Cells:
-                    MarkDirty(FlowFieldSurfaceDirtyFlags.Grid, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
+                    // Every cell again: the ground and, as a RequestRebuild
+                    // does, every obstacle.
+                    MarkDirty(FlowFieldSurfaceDirtyFlags.Grid | RequeryObstacleFlags,
+                        FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
                     return null;
                 default:
                     return SubmitSettings(in config);
