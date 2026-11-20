@@ -56,6 +56,38 @@ namespace Common.FlowField
 
         internal int Count => Width * Height * Depth;
 
+        /// <summary>
+        /// Only what the topology job reads: the obstacles, the dimensions and
+        /// the tables. The bake validator uses it, so a bake and the runtime
+        /// follow one rule for which steps are open.
+        /// </summary>
+        internal static FlowFieldVolumeSolveData ForTopology(
+            bool* blocked,
+            uint* topology,
+            int* cancel,
+            FlowFieldGridSpace grid)
+        {
+            var data = new FlowFieldVolumeSolveData
+            {
+                Blocked = blocked,
+                Topology = topology,
+                Cancel = cancel,
+                Width = grid.Width,
+                Height = grid.Height,
+                Depth = grid.Depth,
+                CellSize = grid.CellSize,
+            };
+            data.FillNeighborTables();
+            return data;
+        }
+
+        internal JobHandle ScheduleTopology()
+        {
+            JobHandle handle = new FlowFieldVolumeTopologyJob { Data = this }.Schedule(ChunkCount, 1);
+            JobHandle.ScheduleBatchedJobs();
+            return handle;
+        }
+
         /// <summary>Copies FlowFieldNeighborUtility's direction, face and corner tables.</summary>
         internal void FillNeighborTables()
         {

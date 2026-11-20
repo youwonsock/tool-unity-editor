@@ -1,4 +1,6 @@
 using System;
+using System.Threading;
+using Unity.Jobs;
 using UnityEngine;
 
 namespace Common.FlowField
@@ -16,13 +18,16 @@ namespace Common.FlowField
     /// the synchronous callers that need the same payload rules.  A call to
     /// Step performs bounded cell work or bounded graph work and can resume
     /// without walking an already confirmed path again. It reads the payload
-    /// in place and keeps only its own small state arrays.
+    /// in place and keeps only its own state arrays. The Topology every open
+    /// cell must have comes from the solve's Burst job, which may run across
+    /// editor frames with the payload pinned: Dispose or Cancel waits for it.
     /// </summary>
     internal sealed class FlowFieldVolumeBakeValidator : IDisposable
     {
         private enum Phase
         {
             Metadata,
+            Topology,
             Cells,
             Graph,
             Complete,
@@ -35,9 +40,12 @@ namespace Common.FlowField
         private FlowFieldVolumeBakePayload _payload;
         private byte[] _graphState;
         private int[] _path;
-        // Flat offsets of each neighbour and corner cell of an interior cell.
-        private int[] _neighborOffsets;
-        private int[] _cornerOffsets;
+        // The Topology each open cell must have, from the solve's topology job.
+        private uint[] _expectedTopology;
+        private FlowFieldPinnedArrays _topologyPins;
+        private int[] _topologyCancel;
+        private JobHandle _topologyHandle;
+        private bool _topologyRunning;
         private int _cellCursor;
         private int _graphCursor;
         private int _pathCount;
@@ -65,6 +73,8 @@ namespace Common.FlowField
                 int count = Math.Max(1, _expectedGrid.CellCount);
                 if (_phase == Phase.Metadata)
                     return 0f;
+                if (_phase == Phase.Topology)
+                    return 0.05f;
                 if (_phase == Phase.Cells)
                     return 0.05f + 0.7f * _cellCursor / count;
                 if (_phase == Phase.Graph)
@@ -103,7 +113,7 @@ namespace Common.FlowField
                 new FlowFieldVolumeBakeValidator(payload, expectedGrid))
             {
                 while (!validator.IsComplete)
-                    validator.Step(4096, 64);
+                    validator.Step(4096, 64, waitForTopology: true);
                 reason = validator.Error;
                 return validator.IsValid;
             }
@@ -116,8 +126,7 @@ namespace Common.FlowField
             _payload = payload;
             _graphState = null;
             _path = null;
-            _neighborOffsets = null;
-            _cornerOffsets = null;
+            _expectedTopology = null;
             _cellCursor = 0;
             _graphCursor = 0;
             _pathCount = 0;
@@ -156,6 +165,7 @@ namespace Common.FlowField
 
         internal void Cancel()
         {
+            StopTopology();
             if (IsComplete)
                 return;
             _phase = Phase.Complete;
@@ -163,7 +173,11 @@ namespace Common.FlowField
             _error = "Static Volume3D Bake validation was cancelled.";
         }
 
-        internal void Step(int cellBudget = 4096, int graphBudget = 64)
+        /// <summary>
+        /// One bounded piece of work. The topology job runs on worker threads;
+        /// a step returns while it runs unless <paramref name="waitForTopology"/>.
+        /// </summary>
+        internal void Step(int cellBudget = 4096, int graphBudget = 64, bool waitForTopology = false)
         {
             if (IsComplete)
                 return;
@@ -171,6 +185,8 @@ namespace Common.FlowField
             graphBudget = Math.Max(1, graphBudget);
 
             if (_phase == Phase.Metadata && !StepMetadata())
+                return;
+            if (_phase == Phase.Topology && !StepTopology(waitForTopology))
                 return;
             if (_phase == Phase.Cells && !StepCells(cellBudget))
                 return;
@@ -185,22 +201,54 @@ namespace Common.FlowField
                 Fail(metadataError);
                 return false;
             }
-            BuildInteriorOffsets();
+            _phase = Phase.Topology;
+            return true;
+        }
+
+        private unsafe bool StepTopology(bool wait)
+        {
+            if (!_topologyRunning)
+            {
+                _expectedTopology = new uint[_payload.Blocked.Length];
+                _topologyCancel = new int[1];
+                _topologyPins = new FlowFieldPinnedArrays(3);
+                try
+                {
+                    FlowFieldVolumeSolveData data = FlowFieldVolumeSolveData.ForTopology(
+                        _topologyPins.Pin(_payload.Blocked),
+                        _topologyPins.Pin(_expectedTopology),
+                        _topologyPins.Pin(_topologyCancel),
+                        _expectedGrid);
+                    _topologyHandle = data.ScheduleTopology();
+                }
+                catch
+                {
+                    _topologyPins.Release();
+                    throw;
+                }
+                _topologyRunning = true;
+            }
+            if (!wait && !_topologyHandle.IsCompleted)
+                return false;
+            FinishTopology();
             _phase = Phase.Cells;
             return true;
         }
 
-        private void BuildInteriorOffsets()
+        private void FinishTopology()
         {
-            _neighborOffsets = new int[FlowFieldNeighborUtility.VolumeCount];
-            for (int direction = 0; direction < _neighborOffsets.Length; direction++)
-                _neighborOffsets[direction] = _expectedGrid.ToFlatIndex(
-                    FlowFieldNeighborUtility.DeltaX[direction],
-                    FlowFieldNeighborUtility.DeltaY[direction],
-                    FlowFieldNeighborUtility.DeltaZ[direction]);
-            _cornerOffsets = new int[FlowFieldNeighborUtility.VolumeCornerCount];
-            for (int i = 0; i < _cornerOffsets.Length; i++)
-                _cornerOffsets[i] = _neighborOffsets[FlowFieldNeighborUtility.VolumeCornerDirections[i]];
+            _topologyHandle.Complete();
+            _topologyRunning = false;
+            _topologyPins.Release();
+        }
+
+        // The job reads the payload in place: stop it before the validator lets go.
+        private void StopTopology()
+        {
+            if (!_topologyRunning)
+                return;
+            Volatile.Write(ref _topologyCancel[0], 1);
+            FinishTopology();
         }
 
         private bool StepCells(int cellBudget)
@@ -219,6 +267,7 @@ namespace Common.FlowField
 
             if (_cellCursor < _payload.Blocked.Length)
                 return false;
+            _expectedTopology = null;
             if (_payload.Metadata.HasGoal && _anchorCount != 1)
             {
                 Fail($"Static Volume3D Bake must contain exactly one Goal anchor; found {_anchorCount}.");
@@ -299,10 +348,10 @@ namespace Common.FlowField
 
         public void Dispose()
         {
+            StopTopology();
             _graphState = null;
             _path = null;
-            _neighborOffsets = null;
-            _cornerOffsets = null;
+            _expectedTopology = null;
         }
 
         private bool ValidateMetadata(out string reason)
@@ -368,7 +417,7 @@ namespace Common.FlowField
 
             FlowFieldGridSpace expectedGrid = _expectedGrid;
             expectedGrid.FromFlatIndex(index, out int x, out int y, out int z);
-            uint openSteps = OpenSteps(index, x, y, z);
+            uint openSteps = _expectedTopology[index];
             if (topology != openSteps)
             {
                 reason = DescribeCell(
@@ -432,48 +481,6 @@ namespace Common.FlowField
             return true;
         }
 
-        /// <summary>
-        /// The Topology an open cell must have: bit d is set exactly when the
-        /// neighbour in direction d and every corner cell of that step are
-        /// inside the grid and open.
-        /// </summary>
-        private uint OpenSteps(int index, int x, int y, int z)
-        {
-            bool[] blockedCells = _payload.Blocked;
-            uint mask = 0u;
-            bool interior = x > 0 && x < _expectedGrid.Width - 1
-                && y > 0 && y < _expectedGrid.Height - 1
-                && z > 0 && z < _expectedGrid.Depth - 1;
-            for (int direction = 0; direction < FlowFieldNeighborUtility.VolumeCount; direction++)
-            {
-                bool open = interior
-                    ? !blockedCells[index + _neighborOffsets[direction]]
-                    : IsOpen(
-                        x + FlowFieldNeighborUtility.DeltaX[direction],
-                        y + FlowFieldNeighborUtility.DeltaY[direction],
-                        z + FlowFieldNeighborUtility.DeltaZ[direction]);
-                for (int i = FlowFieldNeighborUtility.VolumeCornerStart[direction];
-                     open && i < FlowFieldNeighborUtility.VolumeCornerStart[direction + 1];
-                     i++)
-                {
-                    int corner = FlowFieldNeighborUtility.VolumeCornerDirections[i];
-                    open = interior
-                        ? !blockedCells[index + _cornerOffsets[i]]
-                        : IsOpen(
-                            x + FlowFieldNeighborUtility.DeltaX[corner],
-                            y + FlowFieldNeighborUtility.DeltaY[corner],
-                            z + FlowFieldNeighborUtility.DeltaZ[corner]);
-                }
-                if (open)
-                    mask |= 1u << direction;
-            }
-            return mask;
-        }
-
-        private bool IsOpen(int x, int y, int z)
-            => _expectedGrid.IsLocalInBounds(x, y, z)
-                && !_payload.Blocked[_expectedGrid.ToFlatIndex(x, y, z)];
-
         private bool IsDirectedCell(int index)
             => !_payload.Blocked[index]
                 && _payload.NextCells[index] >= 0
@@ -488,6 +495,7 @@ namespace Common.FlowField
 
         private void Fail(string reason)
         {
+            StopTopology();
             _phase = Phase.Complete;
             _status = FlowFieldVolumeBakeValidationStatus.Invalid;
             _error = string.IsNullOrEmpty(reason) ? "Static Volume3D Bake is invalid." : reason;
