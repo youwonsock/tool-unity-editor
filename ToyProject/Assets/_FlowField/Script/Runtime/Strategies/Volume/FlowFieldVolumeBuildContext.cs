@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Unity.Jobs;
 using UnityEngine;
 
@@ -37,54 +38,62 @@ namespace Common.FlowField
     /// <summary>Walks the cells of world-space regions, a few at a time.</summary>
     internal sealed class FlowFieldVolumeCellCursor
     {
-        private readonly Bounds[] _regions;
-        private int _region;
+        private readonly FlowFieldGridSpace _grid;
+        private readonly FlowFieldCellRect[] _rects;
+        private int _rect;
         private int _x;
         private int _y;
         private int _z;
         private bool _open;
 
-        internal FlowFieldVolumeCellCursor(Bounds[] regions) => _regions = regions;
+        /// <summary>
+        /// A region must include the cell size and any clearance: every cell
+        /// whose query box can touch the change has its center inside. A region
+        /// that misses the grid has no cells.
+        /// </summary>
+        internal FlowFieldVolumeCellCursor(FlowFieldGridSpace grid, Bounds[] regions)
+        {
+            _grid = grid;
+            var rects = new List<FlowFieldCellRect>(regions.Length);
+            foreach (Bounds region in regions)
+            {
+                FlowFieldCellRect rect = FlowFieldCellRect.FromBounds(grid, region);
+                if (rect.IsValid)
+                    rects.Add(rect);
+            }
+            _rects = rects.ToArray();
+        }
 
         /// <summary>Writes the next cells and returns how many. Zero means finished.</summary>
-        internal int Next(FlowFieldGridSpace grid, int[] cells)
+        internal int Next(int[] cells)
         {
             int written = 0;
-            while (written < cells.Length && _region < _regions.Length)
+            while (written < cells.Length && _rect < _rects.Length)
             {
-                // A region must include the cell size and any clearance: every cell
-                // whose query box can touch the change has its center inside.
-                Vector3 min = _regions[_region].min - grid.Origin;
-                Vector3 max = _regions[_region].max - grid.Origin;
-                int minX = Mathf.Clamp(Mathf.FloorToInt(min.x / grid.CellSize), 0, grid.Width - 1);
-                int minY = Mathf.Clamp(Mathf.FloorToInt(min.y / grid.CellSize), 0, grid.Height - 1);
-                int minZ = Mathf.Clamp(Mathf.FloorToInt(min.z / grid.CellSize), 0, grid.Depth - 1);
-                int maxX = Mathf.Clamp(Mathf.FloorToInt(max.x / grid.CellSize), 0, grid.Width - 1);
-                int maxY = Mathf.Clamp(Mathf.FloorToInt(max.y / grid.CellSize), 0, grid.Height - 1);
-                int maxZ = Mathf.Clamp(Mathf.FloorToInt(max.z / grid.CellSize), 0, grid.Depth - 1);
+                FlowFieldCellRect rect = _rects[_rect];
                 if (!_open)
                 {
                     _open = true;
-                    _x = minX;
-                    _y = minY;
-                    _z = minZ;
+                    _x = rect.MinX;
+                    _y = rect.MinY;
+                    _z = rect.MinZ;
                 }
-                while (written < cells.Length && _y <= maxY)
+                while (written < cells.Length && _y <= rect.MaxY)
                 {
-                    cells[written++] = grid.ToFlatIndex(_x, _y, _z);
-                    if (++_x > maxX)
+                    cells[written++] = _grid.ToFlatIndex(_x, _y, _z);
+                    if (++_x > rect.MaxX)
                     {
-                        _x = minX;
-                        if (++_z > maxZ)
+                        _x = rect.MinX;
+                        if (++_z > rect.MaxZ)
                         {
-                            _z = minZ;
+                            _z = rect.MinZ;
                             _y++;
                         }
                     }
                 }
-                if (_y > maxY)
+                if (_y > rect.MaxY)
                 {
-                    _region++;
+                    _rect++;
                     _open = false;
                 }
             }
@@ -174,7 +183,7 @@ namespace Common.FlowField
         // The obstacle stage then queries only the regions LimitToRegions names.
         internal void QueryOnlyChangedRegions(bool[] publishedBlocked) => PublishedBlocked = publishedBlocked;
 
-        internal void LimitToRegions(Bounds[] regions) => _changedCells = new FlowFieldVolumeCellCursor(regions);
+        internal void LimitToRegions(Bounds[] regions) => _changedCells = new FlowFieldVolumeCellCursor(Request.Grid, regions);
 
         /// <summary>
         /// Writes the next cells the obstacle stage must query and returns how many.
@@ -183,7 +192,7 @@ namespace Common.FlowField
         internal int NextObstacleCells(int[] cells)
         {
             if (_changedCells != null)
-                return _changedCells.Next(Request.Grid, cells);
+                return _changedCells.Next(cells);
             int written = 0;
             for (; written < cells.Length && Cursor < Count; written++)
                 cells[written] = Cursor++;

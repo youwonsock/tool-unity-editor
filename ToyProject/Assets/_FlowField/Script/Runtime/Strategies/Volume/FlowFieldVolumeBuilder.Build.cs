@@ -242,10 +242,10 @@ namespace Common.FlowField
                 if (build.Modifiers.Length == 0)
                     return true;
                 Physics.SyncTransforms();
-                build.ModifierCells = new FlowFieldVolumeCellCursor(ModifierReach(build));
+                build.ModifierCells = new FlowFieldVolumeCellCursor(build.Request.Grid, ModifierReach(build));
             }
 
-            int count = build.ModifierCells.Next(build.Request.Grid, _stepCells);
+            int count = build.ModifierCells.Next(_stepCells);
             if (count == 0)
                 return true;
 

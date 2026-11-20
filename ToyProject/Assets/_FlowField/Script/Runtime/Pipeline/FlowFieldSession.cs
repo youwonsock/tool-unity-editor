@@ -414,28 +414,42 @@ namespace Common.FlowField
         }
 
         // Cells a change can reach stop from this frame until a build that
-        // queried them is published; the builder then rebuilds them.
+        // queried them is published; the builder then rebuilds them. A change
+        // that reaches no cell of the grid is left out: the registry already
+        // holds its bounds, and a later move into the grid reports both sides.
         private void ApplyObstacleChange(in FlowFieldObstacleChange change)
         {
-            if (BakeMode != FlowFieldBakeMode.StaticBaked)
+            FlowFieldGridSpace grid = _builder.LatestGrid;
+            float reach = grid.IsValid ? ObstacleReach(grid) : 0f;
+            if (grid.IsValid
+                && (change.HasPrevious || change.HasCurrent)
+                && !Reaches(grid, change.HasPrevious, change.Previous, reach)
+                && !Reaches(grid, change.HasCurrent, change.Current, reach))
+                return;
+            if (BakeMode != FlowFieldBakeMode.StaticBaked && grid.IsValid)
             {
                 if (change.HasPrevious)
-                    MarkUncertain(change.Previous);
+                    Safety.MarkDirty(change.Previous, reach);
                 if (change.HasCurrent)
-                    MarkUncertain(change.Current);
+                    Safety.MarkDirty(change.Current, reach);
             }
             _builder.ApplyObstacleChange(in change);
             EnterBuildingIfOwed();
         }
 
-        // Grown by the cell size and the Obstacle Clearance a change can reach.
-        private void MarkUncertain(Bounds bounds)
+        // A change reaches the cell size and the Obstacle Clearance beyond its bounds.
+        private float ObstacleReach(FlowFieldGridSpace grid)
+            => grid.CellSize + (_hasConfig ? _config.Obstacles.Clearance : 0f);
+
+        // Bounds that are not finite count as reaching, so marking them reports the fault.
+        private static bool Reaches(FlowFieldGridSpace grid, bool has, Bounds bounds, float reach)
         {
-            FlowFieldGridSpace grid = _builder.LatestGrid;
-            if (!grid.IsValid)
-                return;
-            float clearance = _hasConfig ? _config.Obstacles.Clearance : 0f;
-            Safety.MarkDirty(bounds, grid.CellSize + clearance);
+            if (!has)
+                return false;
+            if (!FlowFieldGridSpace.IsFinite(bounds.center) || !FlowFieldGridSpace.IsFinite(bounds.size))
+                return true;
+            bounds.Expand(2f * reach);
+            return FlowFieldCellRect.FromBounds(grid, bounds).IsValid;
         }
 
         private void ThrowIfInputUnavailable()
