@@ -184,29 +184,40 @@ namespace Common.FlowField
             _solvePins = new FlowFieldPinnedArrays(FlowFieldVolumeSolveData.PinnedArrayCount + 2);
             _solveCancel = new int[1];
             _solveGoal = new[] { -1 };
-            var data = new FlowFieldVolumeSolveData
+            FlowFieldVolumeSolveData data;
+            try
             {
-                Blocked = _solvePins.Pin(Blocked),
-                Topology = _solvePins.Pin(Topology),
-                GoalFlags = _solvePins.Pin(GoalFlags),
-                Next = _solvePins.Pin(Next),
-                Directions = _solvePins.Pin(Directions),
-                Speeds = _solvePins.Pin(Speeds),
-                EscapeDirections = _solvePins.Pin(EscapeDirections),
-                Costs = _solvePins.Pin(Costs),
-                Queue = _solvePins.Pin(Queue),
-                Influence = _solvePins.Pin(Influence),
-                Cancel = _solvePins.Pin(_solveCancel),
-                ResolvedGoal = _solvePins.Pin(_solveGoal),
-                Width = grid.Width,
-                Height = grid.Height,
-                Depth = grid.Depth,
-                CellSize = grid.CellSize,
-                HasGoal = Request.HasGoal,
-                RequestedGoal = Request.HasGoal ? Request.GoalCell : -1,
-                GoalInfluenceRadius = Request.GoalInfluenceRadius,
-                DefaultDirection = FlowFieldVectorUtility.NormalizeDefaultDirection(Request.DefaultDirection),
-            };
+                data = new FlowFieldVolumeSolveData
+                {
+                    Blocked = _solvePins.Pin(Blocked),
+                    Topology = _solvePins.Pin(Topology),
+                    GoalFlags = _solvePins.Pin(GoalFlags),
+                    Next = _solvePins.Pin(Next),
+                    Directions = _solvePins.Pin(Directions),
+                    Speeds = _solvePins.Pin(Speeds),
+                    EscapeDirections = _solvePins.Pin(EscapeDirections),
+                    Costs = _solvePins.Pin(Costs),
+                    Queue = _solvePins.Pin(Queue),
+                    Influence = _solvePins.Pin(Influence),
+                    Cancel = _solvePins.Pin(_solveCancel),
+                    ResolvedGoal = _solvePins.Pin(_solveGoal),
+                    Width = grid.Width,
+                    Height = grid.Height,
+                    Depth = grid.Depth,
+                    CellSize = grid.CellSize,
+                    HasGoal = Request.HasGoal,
+                    RequestedGoal = Request.HasGoal ? Request.GoalCell : -1,
+                    GoalInfluenceRadius = Request.GoalInfluenceRadius,
+                    DefaultDirection = FlowFieldVectorUtility.NormalizeDefaultDirection(Request.DefaultDirection),
+                };
+            }
+            catch
+            {
+                // Nothing is scheduled yet, and SolveRunning is still false, so
+                // CancelSolve would not release these: free them here.
+                _solvePins.Release();
+                throw;
+            }
             for (int direction = 0; direction < FlowFieldNeighborUtility.VolumeCount; direction++)
             {
                 data.DeltaX[direction] = FlowFieldNeighborUtility.DeltaX[direction];

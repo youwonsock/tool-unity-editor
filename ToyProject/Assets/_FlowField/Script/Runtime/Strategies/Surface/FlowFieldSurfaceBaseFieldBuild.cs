@@ -260,28 +260,38 @@ namespace Common.FlowField
         {
             var pins = new FlowFieldPinnedArrays(FlowFieldSurfaceSolveJob.PinnedArrayCount);
             var cancel = new int[1];
-            var job = new FlowFieldSurfaceSolveJob
+            FlowFieldSurfaceSolveJob job;
+            try
             {
-                Costs = pins.Pin(workspace.Costs),
-                Queue = pins.Pin(workspace.Queue),
-                Topology = pins.Pin(workspace.TopologyMasks),
-                NextCells = pins.Pin(workspace.NextCells),
-                GoalFlags = pins.Pin(workspace.GoalFlags),
-                GoalDirections = pins.Pin(workspace.GoalDirections),
-                Blocked = pins.Pin(workspace.Blocked),
-                Influence = pins.Pin(workspace.InfluenceMask),
-                SurfaceFlags = pins.Pin(surface.Flags),
-                Heights = pins.Pin(surface.Heights),
-                Normals = pins.Pin(surface.Normals),
-                Cancel = pins.Pin(cancel),
-                Width = grid.Width,
-                Depth = grid.Depth,
-                CellSize = grid.CellSize,
-                Origin = grid.Origin,
-                Goal = goalIndex,
-                DirectionEpsilonSqr = FlowFieldVectorUtility.DirectionEpsilonSqr,
-                ProjectionEpsilon = Mathf.Epsilon,
-            };
+                job = new FlowFieldSurfaceSolveJob
+                {
+                    Costs = pins.Pin(workspace.Costs),
+                    Queue = pins.Pin(workspace.Queue),
+                    Topology = pins.Pin(workspace.TopologyMasks),
+                    NextCells = pins.Pin(workspace.NextCells),
+                    GoalFlags = pins.Pin(workspace.GoalFlags),
+                    GoalDirections = pins.Pin(workspace.GoalDirections),
+                    Blocked = pins.Pin(workspace.Blocked),
+                    Influence = pins.Pin(workspace.InfluenceMask),
+                    SurfaceFlags = pins.Pin(surface.Flags),
+                    Heights = pins.Pin(surface.Heights),
+                    Normals = pins.Pin(surface.Normals),
+                    Cancel = pins.Pin(cancel),
+                    Width = grid.Width,
+                    Depth = grid.Depth,
+                    CellSize = grid.CellSize,
+                    Origin = grid.Origin,
+                    Goal = goalIndex,
+                    DirectionEpsilonSqr = FlowFieldVectorUtility.DirectionEpsilonSqr,
+                    ProjectionEpsilon = Mathf.Epsilon,
+                };
+            }
+            catch
+            {
+                // Nothing is scheduled yet: free what was pinned before the failure.
+                pins.Release();
+                throw;
+            }
             for (int direction = 0; direction < FlowFieldNeighborUtility.SurfaceCount; direction++)
             {
                 job.DeltaX[direction] = FlowFieldNeighborUtility.DeltaX[direction];
