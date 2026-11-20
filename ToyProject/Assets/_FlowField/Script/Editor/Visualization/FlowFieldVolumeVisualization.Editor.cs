@@ -324,8 +324,11 @@ namespace Common.FlowField.Editor
                 return false;
             if (!TryGetStatus(manager, out FlowFieldVolumeVisualizationStatus status))
                 return false;
+            // RuntimeOnly: valid settings (and bake) whose vectors appear once
+            // the Manager runs, so the Bounds are not stale.
             valid = status.Code == FlowFieldVolumeVisualizationStatusCode.Valid
-                || status.Code == FlowFieldVolumeVisualizationStatusCode.Rebuilding;
+                || status.Code == FlowFieldVolumeVisualizationStatusCode.Rebuilding
+                || status.Code == FlowFieldVolumeVisualizationStatusCode.RuntimeOnly;
             return true;
         }
 
@@ -410,10 +413,9 @@ namespace Common.FlowField.Editor
 
             if (Application.isPlaying)
                 return PumpRuntime(manager, state);
-            // The settings as Init checks them; the asset follows in chunks below.
-            FlowFieldManagerConfig settings = manager.CaptureConfig(FlowFieldBakeMode.RuntimeDynamic);
-            if (!FlowFieldSpaceStrategy.For(FlowFieldSpaceMode.Volume3D)
-                    .TryValidate(in settings, spaceModeLocked: false, bakeModeLocked: false, validateStaticGoal: false, out string settingsReason))
+            // Init's checks before the bake payload, in its words. The payload
+            // follows in steps below, then the rest of Init's check reads it.
+            if (!manager.TryValidateVolumeConfigBeforePayload(out string settingsReason))
             {
                 SetUnavailable(state, settingsReason, FlowFieldVolumeVisualizationStatusCode.Invalid);
                 return refreshRequested;
@@ -425,38 +427,8 @@ namespace Common.FlowField.Editor
                 return refreshRequested;
             }
 
-            FlowFieldVolumeBakeData asset = manager.CaptureConfig().BakeAssets.Volume;
-            if (asset == null)
-            {
-                SetUnavailable(state, $"{manager.BakeMode} Volume3D requires a Bake Asset.");
-                return false;
-            }
-
             FlowFieldManagerConfig config = manager.CaptureConfig();
-            string metadataReason;
-            string goalReason = string.Empty;
-            bool metadataMatches = asset.MatchesMetadata(
-                grid,
-                worldBounds,
-                config.Obstacles.Layer,
-                config.Obstacles.Clearance,
-                out metadataReason);
-            // Only StaticBaked keeps the baked Goal; BakedBase solves its own.
-            bool goalMatches = manager.BakeMode != FlowFieldBakeMode.StaticBaked
-                || asset.MatchesGoal(
-                    config.HasGoal,
-                    config.GoalWorld,
-                    config.Flow.GoalInfluenceRadius,
-                    out goalReason);
-            if (!metadataMatches || !goalMatches)
-            {
-                SetUnavailable(
-                    state,
-                    string.IsNullOrEmpty(metadataReason) ? goalReason : metadataReason,
-                    FlowFieldVolumeVisualizationStatusCode.Invalid);
-                return refreshRequested;
-            }
-
+            FlowFieldVolumeBakeData asset = config.BakeAssets.Volume;
             AssetState assetState = GetAssetState(asset, grid);
             if (!assetState.ValidationComplete && assetState.Validator == null)
             {
@@ -490,6 +462,17 @@ namespace Common.FlowField.Editor
                     FlowFieldVolumeVisualizationStatusCode.Invalid);
                 state.ValidationProgress = 1f;
                 // The Inspector still shows the progress until the next repaint.
+                return validationFinished || refreshRequested;
+            }
+
+            // The payload is valid for this grid, and the checks above matched
+            // the rest of its signature, so Init's check reads it without
+            // validating it again. That check also covers the StaticBaked Goal.
+            asset.RecordValidatedPayload(grid, worldBounds, config.Obstacles.Layer, config.Obstacles.Clearance);
+            if (!manager.TryValidateConfig(out string configReason))
+            {
+                SetUnavailable(state, configReason, FlowFieldVolumeVisualizationStatusCode.Invalid);
+                state.ValidationProgress = 1f;
                 return validationFinished || refreshRequested;
             }
 

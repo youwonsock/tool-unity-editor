@@ -171,6 +171,22 @@ namespace Common.FlowField
             if (!FlowFieldVolumeBakeValidator.ValidatePayload(in view, grid, out string payloadReason))
                 return Fail(out reason, payloadReason);
 
+            RecordValidatedPayload(grid, bounds, obstacleLayer, obstacleClearance);
+            return true;
+        }
+
+        /// <summary>
+        /// Keeps a valid payload for this signature, so <see cref="Matches"/>
+        /// does not validate it again. The Editor calls it after validating the
+        /// same payload in steps, as <see cref="FlowFieldVolumeBakeValidator"/>
+        /// does for Matches.
+        /// </summary>
+        internal void RecordValidatedPayload(
+            FlowFieldGridSpace grid,
+            Bounds bounds,
+            LayerMask obstacleLayer,
+            float obstacleClearance)
+        {
             _validatedRevision = Revision;
             _validatedGrid = grid;
             _validatedBounds = bounds;
@@ -178,7 +194,6 @@ namespace Common.FlowField
             _validatedObstacleClearance = obstacleClearance;
             _validatedContentGeneration = ContentGeneration;
             _hasValidatedSignature = true;
-            return true;
         }
 
         internal bool MatchesGoal(

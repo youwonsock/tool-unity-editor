@@ -35,6 +35,18 @@ namespace Common.FlowField.Editor
                 .TryValidate(in config, spaceModeLocked: false, bakeModeLocked: false, includeStaticGoal, out reason);
         }
 
+        /// <summary>
+        /// The Volume3D checks Init makes before the bake payload, with its
+        /// reasons. The Volume display validates the payload in steps, then
+        /// runs <see cref="TryValidateConfig"/> on the validated payload.
+        /// </summary>
+        internal static bool TryValidateVolumeConfigBeforePayload(this FlowFieldManager manager, out string reason)
+        {
+            FlowFieldManagerConfig config = manager.CaptureConfig(manager.BakeMode);
+            return FlowFieldVolumeBuilder.TryValidateBeforePayload(
+                in config, spaceModeLocked: false, bakeModeLocked: false, out reason);
+        }
+
         // ----- Surface2D -----------------------------------------------------
 
         internal static FlowFieldSurfaceBakeSettings CreateSurfaceBakeSettings(this FlowFieldManager manager)

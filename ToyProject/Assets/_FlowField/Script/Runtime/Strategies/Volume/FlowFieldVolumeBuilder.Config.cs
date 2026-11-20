@@ -87,9 +87,34 @@ namespace Common.FlowField
             bool validateStaticGoal,
             out string reason)
         {
+            if (!TryValidateBeforePayload(in config, spaceModeLocked, bakeModeLocked, out reason))
+                return false;
+            if (!FlowFieldBakeModes.UsesBakeAsset(config.BakeMode))
+                return true;
+            FlowFieldObstacleSettings obstacles = config.Obstacles;
+            TryCreateLayout(in config, out Bounds volumeBounds, out FlowFieldGridSpace volumeGrid);
+            FlowFieldVolumeBakeData bakeData = config.BakeAssets.Volume;
+            if (!bakeData.Matches(volumeGrid, volumeBounds, obstacles.Layer, obstacles.Clearance, out reason))
+                return false;
+            // Only StaticBaked keeps the baked Goal; BakedBase solves its own.
+            return config.BakeMode != FlowFieldBakeMode.StaticBaked
+                || !validateStaticGoal
+                || bakeData.MatchesGoal(config.HasGoal, config.GoalWorld, config.Flow.GoalInfluenceRadius, out reason);
+        }
+
+        /// <summary>
+        /// The checks <see cref="TryValidate"/> makes before the bake payload,
+        /// in its order and words. The Editor runs them first and validates a
+        /// large payload in steps instead of on the main thread at once.
+        /// </summary>
+        internal static bool TryValidateBeforePayload(
+            in FlowFieldManagerConfig config,
+            bool spaceModeLocked,
+            bool bakeModeLocked,
+            out string reason)
+        {
             if (!config.TryValidateShared(spaceModeLocked, bakeModeLocked, out reason))
                 return false;
-            FlowFieldObstacleSettings obstacles = config.Obstacles;
             if (!TryCreateLayout(in config, out Bounds volumeBounds, out FlowFieldGridSpace volumeGrid) || !volumeGrid.IsValid)
                 return FlowFieldManagerConfig.Fail(out reason, "Volume Bounds and Cell Size do not produce a valid grid.");
             if (!FlowFieldBakeModes.UsesBakeAsset(config.BakeMode))
@@ -97,12 +122,8 @@ namespace Common.FlowField
             FlowFieldVolumeBakeData bakeData = config.BakeAssets.Volume;
             if (bakeData == null)
                 return FlowFieldManagerConfig.Fail(out reason, $"Volume3D {config.BakeMode} mode requires a FlowFieldVolumeBakeData asset.");
-            if (!bakeData.Matches(volumeGrid, volumeBounds, obstacles.Layer, obstacles.Clearance, out reason))
-                return false;
-            // Only StaticBaked keeps the baked Goal; BakedBase solves its own.
-            return config.BakeMode != FlowFieldBakeMode.StaticBaked
-                || !validateStaticGoal
-                || bakeData.MatchesGoal(config.HasGoal, config.GoalWorld, config.Flow.GoalInfluenceRadius, out reason);
+            FlowFieldObstacleSettings obstacles = config.Obstacles;
+            return bakeData.MatchesMetadata(volumeGrid, volumeBounds, obstacles.Layer, obstacles.Clearance, out reason);
         }
     }
 }
