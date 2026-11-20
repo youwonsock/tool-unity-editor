@@ -49,12 +49,14 @@ namespace Common.FlowField.Editor
 
         private static void OnUndoRedo()
         {
+            FlowFieldModifierPriorities.ClearCache();
             FlowFieldEditorPreview.InvalidateAll();
             FlowFieldVolumeVisualizationEditor.InvalidateAll();
         }
 
         private static void OnHierarchyChanged()
         {
+            FlowFieldModifierPriorities.ClearCache();
             FlowFieldEditorPreview.PruneDestroyed();
             FlowFieldVolumeVisualizationEditor.PruneInactive();
         }
@@ -62,6 +64,7 @@ namespace Common.FlowField.Editor
         private static void OnPlayModeStateChanged(PlayModeStateChange change)
         {
             // Every Play Mode change ends the Edit Mode previews.
+            FlowFieldModifierPriorities.ClearCache();
             FlowFieldEditorPreview.DisposeAll();
             if (change == PlayModeStateChange.ExitingEditMode
                 || change == PlayModeStateChange.EnteredEditMode
@@ -70,13 +73,19 @@ namespace Common.FlowField.Editor
         }
 
         private static void OnSceneClosing(Scene scene, bool removingScene)
-            => FlowFieldVolumeVisualizationEditor.InvalidateAll();
+        {
+            FlowFieldModifierPriorities.ClearCache();
+            FlowFieldVolumeVisualizationEditor.InvalidateAll();
+        }
 
         // An edited Manager or Modifier marks its own displays stale. Any
         // structural change can add or remove a Modifier, so it marks every
         // display.
         private static void OnChangesPublished(ref ObjectChangeEventStream stream)
         {
+            // Any change can add, remove or re-prioritize a Modifier Volume.
+            if (stream.length > 0)
+                FlowFieldModifierPriorities.ClearCache();
             for (int i = 0; i < stream.length; i++)
             {
                 if (stream.GetEventType(i) != ObjectChangeKind.ChangeGameObjectOrComponentProperties)
@@ -122,6 +131,7 @@ namespace Common.FlowField.Editor
             EditorApplication.quitting -= Unregister;
             AssemblyReloadEvents.beforeAssemblyReload -= Unregister;
             _registered = false;
+            FlowFieldModifierPriorities.ClearCache();
             FlowFieldEditorPreview.DisposeAll();
             FlowFieldVolumeVisualizationEditor.Clear();
         }

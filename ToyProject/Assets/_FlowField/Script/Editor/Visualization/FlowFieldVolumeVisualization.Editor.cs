@@ -75,7 +75,8 @@ namespace Common.FlowField.Editor
             internal FlowFieldVolumeBakeData Asset;
             internal int Revision;
             internal int ContentGeneration;
-            internal int InvalidationGeneration;
+            // The asset file was imported, moved or deleted since the validation.
+            internal bool Stale;
             internal FlowFieldVolumeBakeValidator Validator;
             internal bool ValidationComplete;
             internal bool ValidationValid;
@@ -122,7 +123,6 @@ namespace Common.FlowField.Editor
             = new Dictionary<int, ManagerState>(16);
         private static readonly Dictionary<FlowFieldVolumeBakeData, AssetState> Assets
             = new Dictionary<FlowFieldVolumeBakeData, AssetState>(8);
-        private static int _contentGeneration;
         private static int _managerCursor;
         private static long _nextAssetResultId;
 
@@ -241,8 +241,11 @@ namespace Common.FlowField.Editor
                     continue;
                 }
 
-                bool didWork = PumpManager(state);
-                changed |= didWork;
+                bool repaint = PumpManager(state);
+                changed |= repaint;
+                // A validation step that leaves the shown percentage as it was
+                // is still work, so the budget keeps stepping it.
+                bool didWork = repaint || state.Code == FlowFieldVolumeVisualizationStatusCode.Validating;
                 if (didWork)
                     withoutWork = 0;
                 else
@@ -272,6 +275,7 @@ namespace Common.FlowField.Editor
             Color previousColor = Gizmos.color;
             Matrix4x4 previousMatrix = Gizmos.matrix;
             Gizmos.matrix = Matrix4x4.identity;
+            FlowFieldDisplay display = FlowFieldDisplay.Of(manager);
             try
             {
                 FlowFieldGridSpace grid = status.View.Grid;
@@ -292,7 +296,7 @@ namespace Common.FlowField.Editor
                         continue;
 
                     Vector3 center = grid.LocalToWorldCenter(x, y, z);
-                    if (FlowFieldDisplay.Of(manager).ShowVolumeCells)
+                    if (display.ShowVolumeCells)
                     {
                         Gizmos.color = blocked
                             ? new Color(0.92f, 0.18f, 0.18f, 0.72f)
@@ -300,7 +304,7 @@ namespace Common.FlowField.Editor
                         Gizmos.DrawWireCube(center, Vector3.one * grid.CellSize);
                     }
 
-                    if (!FlowFieldDisplay.Of(manager).ShowVolumeVectors)
+                    if (!display.ShowVolumeVectors)
                         continue;
                     if (speed <= 0f || direction.sqrMagnitude <= 0.00000001f)
                         DrawStopMarker(center, grid.CellSize);
@@ -351,14 +355,11 @@ namespace Common.FlowField.Editor
             }
         }
 
+        // Any editor change can change what a Manager shows, so each one
+        // refreshes. A bake's validation stands: the asset's Revision and
+        // content generation tell when its arrays changed (GetAssetState).
         internal static void InvalidateAll()
         {
-            _contentGeneration++;
-            foreach (AssetState assetState in Assets.Values)
-            {
-                assetState.Validator?.Cancel();
-                assetState.Validator = null;
-            }
             foreach (ManagerState managerState in Managers.Values)
                 managerState.RefreshRequested = true;
         }
@@ -373,7 +374,7 @@ namespace Common.FlowField.Editor
                     continue;
                 pair.Value.Validator?.Cancel();
                 pair.Value.Validator = null;
-                pair.Value.InvalidationGeneration = _contentGeneration - 1;
+                pair.Value.Stale = true;
             }
             foreach (ManagerState managerState in Managers.Values)
                 managerState.RefreshRequested = true;
@@ -437,12 +438,16 @@ namespace Common.FlowField.Editor
             }
             if (!assetState.ValidationComplete && !assetState.Validator.IsComplete)
             {
+                // The views repaint when the shown percentage moves, not every step.
+                string message = $"Validating the Volume3D bake... {assetState.Validator.Progress:P0}";
+                bool shownChanged = state.Code != FlowFieldVolumeVisualizationStatusCode.Validating
+                    || state.Message != message;
                 state.Code = FlowFieldVolumeVisualizationStatusCode.Validating;
-                state.Message = $"Validating the Volume3D bake... {assetState.Validator.Progress:P0}";
+                state.Message = message;
                 state.ValidationProgress = assetState.Validator.Progress;
                 assetState.Validator.Step(CellValidationBudget, GraphValidationBudget);
                 state.RefreshRequested = false;
-                return true;
+                return shownChanged;
             }
             bool validationFinished = false;
             if (!assetState.ValidationComplete)
@@ -564,17 +569,18 @@ namespace Common.FlowField.Editor
             state.Code = code;
             state.Message = message;
             state.ValidationProgress = 1f;
-            int selectionHash = ComputeSelectionHash(manager, view.Grid);
+            FlowFieldDisplay display = FlowFieldDisplay.Of(manager);
+            int selectionHash = ComputeSelectionHash(display, view.Grid);
             if (!state.HasSelection || state.SelectionHash != selectionHash)
             {
-                int max = FlowFieldDisplay.Of(manager).VolumeGizmoMode == FlowFieldVolumeGizmoMode.Slice
+                int max = display.VolumeGizmoMode == FlowFieldVolumeGizmoMode.Slice
                     ? FlowFieldVolumeDisplaySelection.DefaultSliceLimit
                     : FlowFieldVolumeDisplaySelection.DefaultFullVolumeLimit;
                 state.HasSelection = FlowFieldVolumeDisplaySelection.TryCreate(
                     view.Grid,
-                    FlowFieldDisplay.Of(manager).VolumeGizmoMode,
-                    FlowFieldDisplay.Of(manager).VolumeGizmoSliceAxis,
-                    FlowFieldDisplay.Of(manager).VolumeGizmoSlice,
+                    display.VolumeGizmoMode,
+                    display.VolumeGizmoSliceAxis,
+                    display.VolumeGizmoSlice,
                     max,
                     out state.Selection);
                 state.SelectionHash = selectionHash;
@@ -631,13 +637,13 @@ namespace Common.FlowField.Editor
             if (state.Asset != asset
                 || state.Revision != asset.Revision
                 || state.ContentGeneration != contentGeneration
-                || state.InvalidationGeneration != _contentGeneration)
+                || state.Stale)
             {
                 state.Validator?.Dispose();
                 state.Asset = asset;
                 state.Revision = asset.Revision;
                 state.ContentGeneration = contentGeneration;
-                state.InvalidationGeneration = _contentGeneration;
+                state.Stale = false;
                 state.Validator = null;
                 state.ValidationComplete = false;
                 state.ValidationValid = false;
@@ -648,7 +654,7 @@ namespace Common.FlowField.Editor
         }
 
         private static int ComputeSelectionHash(
-            FlowFieldManager manager,
+            in FlowFieldDisplay display,
             FlowFieldGridSpace grid)
         {
             unchecked
@@ -658,9 +664,9 @@ namespace Common.FlowField.Editor
                 hash = hash * 31 + grid.Height;
                 hash = hash * 31 + grid.Depth;
                 hash = hash * 31 + grid.CellSize.GetHashCode();
-                hash = hash * 31 + (int)FlowFieldDisplay.Of(manager).VolumeGizmoMode;
-                hash = hash * 31 + (int)FlowFieldDisplay.Of(manager).VolumeGizmoSliceAxis;
-                hash = hash * 31 + FlowFieldDisplay.Of(manager).VolumeGizmoSlice;
+                hash = hash * 31 + (int)display.VolumeGizmoMode;
+                hash = hash * 31 + (int)display.VolumeGizmoSliceAxis;
+                hash = hash * 31 + display.VolumeGizmoSlice;
                 return hash;
             }
         }

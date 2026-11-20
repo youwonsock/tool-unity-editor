@@ -9,7 +9,10 @@ namespace Common.FlowField.Editor
     {
         public override void OnInspectorGUI()
         {
-            DrawDefaultInspector();
+            // An edited Priority or Manager shows in this repaint, before the
+            // editor's change events drop the cached duplicates.
+            if (DrawDefaultInspector())
+                FlowFieldModifierPriorities.ClearCache();
 
             var modifier = (FlowFieldVectorModifierVolume)target;
             if (modifier.FlowFieldManager == null)

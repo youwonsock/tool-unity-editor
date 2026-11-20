@@ -83,7 +83,7 @@
 - 지면 scan(`FlowFieldSurfaceGroundScan`)은 셀마다 아래로 쏘는 ray를 `RaycastCommand` 묶음(최대 1,024개: Ground Layer, trigger 무시, 가장 가까운 hit 하나, back face는 `Physics.queriesHitBackfaces`대로)으로 워커 스레드에서 돌리고, 결과는 셀 순서대로 읽습니다. 이웃 마스크는 Burst Job이 16,384셀씩 만듭니다. Editor Bake는 같은 scan을 단계마다 2ms 예산으로 나눠 돌리고, 묶음은 직전 묶음의 ray당 시간으로 남은 예산에 맞게 줄입니다.
 - BFS가 예정된 빌드는 사전 합성을 생략하고, 완료 후 전체를 한 번 합성합니다.
 - 바닥 Layer와 경사·단차 조건이 필요합니다.
-- 격자가 2,500셀을 넘으면 Scene View는 표시 대상을 줄입니다.
+- 격자가 2,500셀을 넘으면 Scene View는 방향 화살표를 가로·세로 한 칸씩 건너 4칸 중 1칸만 그립니다. 막힌 칸과 Modifier 칸 표시는 줄이지 않습니다.
 - 한 번의 조회에서 겹치는 장애물이 4,096개에 이르면 Session이 Fault 납니다. 일부만 쓰면 장애물을 놓치기 때문입니다. Volume3D는 이때 셀별 검사로 넘어갑니다.
 - 특정 Collider가 한 셀에 닿는지 확인할 때(장애물 마스크, Modifier 영향 영역, Volume3D 셀별 검사), 그 셀 상자에 겹친 Collider가 256개에 이르면 같은 이유로 Session이 Fault 납니다(`FlowFieldOverlapUtility`).
 
@@ -134,7 +134,7 @@
 
 ## Editor 표시
 
-표시 상한은 FullVolume 8,192셀, Slice 4,096셀입니다. Volume 표시는 갱신 요청이 있거나 상태가 바뀔 때만 repaint합니다. 에디터 이벤트(변경 알림, Undo, 계층 변경, Play Mode, 씬 닫기, 업데이트)는 `FlowFieldEditorLifecycle` 한 곳에서 받아 Surface 미리보기와 Volume 표시에 알립니다. Surface의 Edit Mode 미리보기는 처음 그릴 때 바로 풀고, 그 뒤 변경은 표시만 해 두었다가 변경이 약 150ms 멈추면 한 번 다시 풉니다. 그동안에는 마지막 결과를 그립니다. 실패한 미리보기는 다음 변경까지 그대로 두고 그 이유를 Manager Inspector에 보여 주며, 켜진 Modifier만 등록합니다. Bake와 Clear Bake는 Edit Mode에서만 실행하고, Play Mode에 들어가면 진행 중인 Bake를 멈춥니다. Play Mode의 Surface 표시는 합성을 거친 최종 결과이므로 Asset의 원본 방향과 다를 수 있습니다. 왼쪽은 Surface2D 상세, 오른쪽은 Volume3D 중앙 단면입니다.
+표시 상한은 FullVolume 8,192셀, Slice 4,096셀입니다. Volume 표시는 갱신 요청이 있거나 상태가 바뀔 때만 repaint하고, Bake를 검증하는 동안에는 보여 주는 진행률(%)이 바뀔 때만 repaint합니다. Bake 검증 결과는 Asset의 Revision이나 내용 세대가 바뀌거나 Asset 파일을 다시 가져올 때만 다시 만들고, Undo나 계층 변경 같은 에디터 변경은 표시만 새로 고칩니다. 그릴 때 Display Settings는 칸마다가 아니라 한 번만 읽습니다. Inspector의 Priority 중복 경고는 Edit Mode에서 Manager마다 결과를 보관하고, 계층·속성 변경, Undo, Play Mode 전환, 씬 닫기, Modifier Volume Inspector 편집 때 버립니다. Play Mode에서는 스크립트가 Priority를 바꿔도 에디터 이벤트가 없으므로 보관하지 않습니다. 에디터 이벤트(변경 알림, Undo, 계층 변경, Play Mode, 씬 닫기, 업데이트)는 `FlowFieldEditorLifecycle` 한 곳에서 받아 Surface 미리보기와 Volume 표시에 알립니다. Surface의 Edit Mode 미리보기는 처음 그릴 때 바로 풀고, 그 뒤 변경은 표시만 해 두었다가 변경이 약 150ms 멈추면 한 번 다시 풉니다. 그동안에는 마지막 결과를 그립니다. 실패한 미리보기는 다음 변경까지 그대로 두고 그 이유를 Manager Inspector에 보여 주며, 켜진 Modifier만 등록합니다. Bake와 Clear Bake는 Edit Mode에서만 실행하고, Play Mode에 들어가면 진행 중인 Bake를 멈춥니다. Play Mode의 Surface 표시는 합성을 거친 최종 결과이므로 Asset의 원본 방향과 다를 수 있습니다. 왼쪽은 Surface2D 상세, 오른쪽은 Volume3D 중앙 단면입니다.
 
 <p align="center">
   <img src="Images/feature-surface2d-editor-detail.png" alt="Surface2D 통로 주변 상세 Scene View 방향장" width="48%">

@@ -9,12 +9,32 @@ namespace Common.FlowField.Editor
     /// </summary>
     internal static class FlowFieldModifierPriorities
     {
+        // Edit Mode results per Manager, dropped on any scene change
+        // (FlowFieldEditorLifecycle). In Play Mode a script can change a
+        // Priority without an editor event, so nothing is kept there.
+        private static readonly Dictionary<FlowFieldManager, List<KeyValuePair<int, List<FlowFieldVectorModifierVolume>>>> Cache
+            = new Dictionary<FlowFieldManager, List<KeyValuePair<int, List<FlowFieldVectorModifierVolume>>>>();
+
+        internal static void ClearCache() => Cache.Clear();
+
         /// <summary>
         /// Each Priority that more than one Modifier Volume of this Manager
         /// uses, inactive ones included, with those volumes. Only the
-        /// Manager's own scene is searched.
+        /// Manager's own scene is searched. The caller must not change the list.
         /// </summary>
         internal static List<KeyValuePair<int, List<FlowFieldVectorModifierVolume>>> FindDuplicatePriorities(FlowFieldManager manager)
+        {
+            if (manager == null || Application.isPlaying)
+            {
+                Cache.Clear();
+                return Find(manager);
+            }
+            if (!Cache.TryGetValue(manager, out List<KeyValuePair<int, List<FlowFieldVectorModifierVolume>>> duplicates))
+                Cache.Add(manager, duplicates = Find(manager));
+            return duplicates;
+        }
+
+        private static List<KeyValuePair<int, List<FlowFieldVectorModifierVolume>>> Find(FlowFieldManager manager)
         {
             var duplicates = new List<KeyValuePair<int, List<FlowFieldVectorModifierVolume>>>();
             if (manager == null || !manager.gameObject.scene.IsValid())
