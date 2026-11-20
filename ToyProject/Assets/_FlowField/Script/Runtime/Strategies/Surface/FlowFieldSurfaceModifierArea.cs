@@ -23,25 +23,4 @@ namespace Common.FlowField
             InfluenceRect = FlowFieldCellRect.Invalid;
         }
     }
-
-    /// <summary>What a Modifier change makes Surface2D compose again.</summary>
-    internal readonly struct FlowFieldSurfaceModifierRegistryResult
-    {
-        public bool AreaDirty { get; }
-        public bool ValueDirty { get; }
-        public bool FinalDirty { get; }
-        public FlowFieldCellRect DirtyRegion { get; }
-
-        public FlowFieldSurfaceModifierRegistryResult(
-            bool areaDirty,
-            bool valueDirty,
-            bool finalDirty,
-            FlowFieldCellRect dirtyRegion)
-        {
-            AreaDirty = areaDirty;
-            ValueDirty = valueDirty;
-            FinalDirty = finalDirty;
-            DirtyRegion = dirtyRegion;
-        }
-    }
 }

@@ -57,7 +57,7 @@ namespace Common.FlowField
                 if (!modifierAreaChanged
                     && _state.BaseComposed && _fieldStore.IsValid
                     && !IsBaseDirty(pending)
-                    && (pending & (FlowFieldSurfaceDirtyFlags.ModifierValue
+                    && (pending & (FlowFieldSurfaceDirtyFlags.ModifierStack
                         | FlowFieldSurfaceDirtyFlags.DefaultDirection)) == 0)
                 {
                     pending &= ~(FlowFieldSurfaceDirtyFlags.ModifierArea | FlowFieldSurfaceDirtyFlags.FinalRegion);
@@ -74,7 +74,7 @@ namespace Common.FlowField
                 return;
             }
 
-            if ((pending & (FlowFieldSurfaceDirtyFlags.ModifierValue | FlowFieldSurfaceDirtyFlags.FinalRegion)) != 0)
+            if ((pending & (FlowFieldSurfaceDirtyFlags.ModifierStack | FlowFieldSurfaceDirtyFlags.FinalRegion)) != 0)
             {
                 ComposeThenCommit(
                     request,
@@ -147,7 +147,7 @@ namespace Common.FlowField
             bool finalDirty = rebuildBase
                 || (pending & (FlowFieldSurfaceDirtyFlags.FinalRegion
                     | FlowFieldSurfaceDirtyFlags.ModifierArea
-                    | FlowFieldSurfaceDirtyFlags.ModifierValue
+                    | FlowFieldSurfaceDirtyFlags.ModifierStack
                     | FlowFieldSurfaceDirtyFlags.DefaultDirection)) != 0;
             if (finalDirty)
             {

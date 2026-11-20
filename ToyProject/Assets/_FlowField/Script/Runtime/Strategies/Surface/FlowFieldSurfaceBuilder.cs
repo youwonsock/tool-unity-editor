@@ -250,7 +250,7 @@ namespace Common.FlowField
             if (IsBaseDirty(flags)
                 || (flags & (FlowFieldSurfaceDirtyFlags.DefaultDirection
                     | FlowFieldSurfaceDirtyFlags.ModifierArea
-                    | FlowFieldSurfaceDirtyFlags.ModifierValue)) != 0)
+                    | FlowFieldSurfaceDirtyFlags.ModifierStack)) != 0)
             {
                 flags |= FlowFieldSurfaceDirtyFlags.FinalRegion;
             }
@@ -349,12 +349,18 @@ namespace Common.FlowField
             switch (update.Kind)
             {
                 case FlowFieldModifierUpdateKind.Registered:
-                    ApplyModifierRegistryResult(new FlowFieldSurfaceModifierRegistryResult(
-                        true, false, true, FlowFieldCellRect.Invalid));
+                    // Rebuilding the area data reports the cells it touches.
+                    MarkDirty(
+                        FlowFieldSurfaceDirtyFlags.ModifierArea,
+                        FlowFieldCellRect.Invalid,
+                        FlowFieldCellRect.Invalid);
                     return;
                 case FlowFieldModifierUpdateKind.Unregistered:
-                    ApplyModifierRegistryResult(new FlowFieldSurfaceModifierRegistryResult(
-                        false, false, true, FlowFieldSurfaceModifierComposition.AreaOf(update.Entry).InfluenceRect));
+                    // The cells it touched are composed again without it.
+                    MarkDirty(
+                        FlowFieldSurfaceDirtyFlags.ModifierStack,
+                        FlowFieldSurfaceModifierComposition.AreaOf(update.Entry).InfluenceRect,
+                        FlowFieldCellRect.Invalid);
                     return;
             }
             bool area = (update.Requested & FlowFieldModifierChange.Area) != 0;
@@ -372,27 +378,18 @@ namespace Common.FlowField
                 if (result.PriorityChanged || ReferenceEquals(entry, update.Entry))
                     dirty = FlowFieldCellRect.Union(dirty, FlowFieldSurfaceModifierComposition.AreaOf(entry).InfluenceRect);
             }
-            ApplyModifierRegistryResult(new FlowFieldSurfaceModifierRegistryResult(
-                area, result.ValueChanged, result.Any, dirty));
+            FlowFieldSurfaceDirtyFlags flags = FlowFieldSurfaceDirtyFlags.None;
+            if (area)
+                flags |= FlowFieldSurfaceDirtyFlags.ModifierArea;
+            if (result.Any)
+                flags |= FlowFieldSurfaceDirtyFlags.ModifierStack;
+            MarkDirty(flags, dirty, FlowFieldCellRect.Invalid);
         }
 
         private void EnsureModifierServices()
         {
             if (_modifierComposition == null)
                 throw new InvalidOperationException("FlowField modifier services are not initialized.");
-        }
-
-        private void ApplyModifierRegistryResult(FlowFieldSurfaceModifierRegistryResult result)
-        {
-            FlowFieldSurfaceDirtyFlags flags = FlowFieldSurfaceDirtyFlags.None;
-            if (result.AreaDirty)
-                flags |= FlowFieldSurfaceDirtyFlags.ModifierArea;
-            if (result.ValueDirty)
-                flags |= FlowFieldSurfaceDirtyFlags.ModifierValue;
-            if (result.FinalDirty)
-                flags |= FlowFieldSurfaceDirtyFlags.FinalRegion;
-            if (flags != FlowFieldSurfaceDirtyFlags.None)
-                MarkDirty(flags, result.DirtyRegion, FlowFieldCellRect.Invalid);
         }
 
         // The session advanced its generation, so a late solve callback is dropped.
