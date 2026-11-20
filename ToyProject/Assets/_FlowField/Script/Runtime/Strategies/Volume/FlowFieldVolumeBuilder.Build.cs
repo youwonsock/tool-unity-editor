@@ -179,6 +179,7 @@ namespace Common.FlowField
             if (!build.ObstaclesSynced)
             {
                 Physics.SyncTransforms();
+                _cellQuery.CaptureRegistered(_session.Obstacles);
                 // The session observed the uncertain regions after this build
                 // began, so they are read here, before the first query.
                 if (build.PublishedBlocked != null)
@@ -195,8 +196,7 @@ namespace Common.FlowField
             Vector3 half = ObstacleHalfExtents(grid.CellSize, build.Request.ObstacleClearance);
             _cellQuery.BeginObstacleStep(
                 FlowFieldVolumeCellQuery.StepBounds(grid, _stepCells, count, half),
-                build.Request.ObstacleLayer,
-                _session.Obstacles);
+                build.Request.ObstacleLayer);
             for (int i = 0; i < count; i++)
             {
                 int index = _stepCells[i];

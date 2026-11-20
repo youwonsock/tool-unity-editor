@@ -6,11 +6,13 @@ namespace Common.FlowField
     /// <summary>
     /// Per-step candidate filter for the Volume3D cell queries. One OverlapBox
     /// per build step collects the layer colliders near the step's cells, and
-    /// registered obstacle / modifier bounds are read once per step. A cell
-    /// then runs its exact CheckBox / OverlapsTarget only when a candidate's
-    /// AABB reaches it. The result equals querying every cell: a collider that
-    /// overlaps a cell box also overlaps the enclosing step box, and its
-    /// (margin-expanded) AABB intersects that cell box.
+    /// modifier bounds are read once per step. The registered obstacles are
+    /// read once per build (<see cref="CaptureRegistered"/>), and a step only
+    /// keeps the ones whose bounds reach it. A cell then runs its exact
+    /// CheckBox / OverlapsTarget only when a candidate's AABB reaches it. The
+    /// result equals querying every cell: a collider that overlaps a cell box
+    /// also overlaps the enclosing step box, and its (margin-expanded) AABB
+    /// intersects that cell box.
     /// </summary>
     internal sealed class FlowFieldVolumeCellQuery
     {
@@ -23,10 +25,17 @@ namespace Common.FlowField
         private int _layerCount;
         private bool _layerComplete;
 
+        // The registered obstacles as the build's synced pose found them.
         private Collider[] _registered = new Collider[8];
         private Bounds[] _registeredBounds = new Bounds[8];
+        // Each Bounds' min and max, read once, for the per-step filter.
+        private Vector3[] _registeredMin = new Vector3[8];
+        private Vector3[] _registeredMax = new Vector3[8];
         private int[] _registeredLayers = new int[8];
         private int _registeredCount;
+        // The captured entries whose bounds reach the current step.
+        private int[] _stepRegistered = new int[8];
+        private int _stepRegisteredCount;
 
         private Bounds[] _modifierBounds = new Bounds[4];
         private bool[] _modifierNear = new bool[4];
@@ -47,28 +56,56 @@ namespace Common.FlowField
             return bounds;
         }
 
-        internal void BeginObstacleStep(Bounds stepBox, LayerMask obstacleLayer, FlowFieldObstacleRegistry registry)
+        /// <summary>
+        /// Reads every registered obstacle once for the build, right after its
+        /// Physics.SyncTransforms: the Collider, its expanded bounds and its
+        /// layer. A registered Collider that moves or leaves later in the build
+        /// is notified, and its uncertain region outlives this build.
+        /// </summary>
+        internal void CaptureRegistered(FlowFieldObstacleRegistry registry)
         {
-            CollectLayerCandidates(stepBox, obstacleLayer);
+            Array.Clear(_registered, 0, _registeredCount);
             _registeredCount = 0;
             for (int index = 0; index < registry.Count; index++)
             {
                 Collider collider = registry.GetCollider(index);
                 if (collider == null || collider.isTrigger)
                     continue;
-                Bounds bounds = ExpandedBounds(collider);
-                if (!bounds.Intersects(stepBox))
-                    continue;
                 if (_registeredCount == _registered.Length)
                 {
                     Array.Resize(ref _registered, _registeredCount * 2);
                     Array.Resize(ref _registeredBounds, _registeredCount * 2);
+                    Array.Resize(ref _registeredMin, _registeredCount * 2);
+                    Array.Resize(ref _registeredMax, _registeredCount * 2);
                     Array.Resize(ref _registeredLayers, _registeredCount * 2);
+                    Array.Resize(ref _stepRegistered, _registeredCount * 2);
                 }
+                Bounds bounds = ExpandedBounds(collider);
                 _registered[_registeredCount] = collider;
                 _registeredBounds[_registeredCount] = bounds;
+                _registeredMin[_registeredCount] = bounds.min;
+                _registeredMax[_registeredCount] = bounds.max;
                 _registeredLayers[_registeredCount] = 1 << collider.gameObject.layer;
                 _registeredCount++;
+            }
+        }
+
+        internal void BeginObstacleStep(Bounds stepBox, LayerMask obstacleLayer)
+        {
+            CollectLayerCandidates(stepBox, obstacleLayer);
+            _stepRegisteredCount = 0;
+            // Bounds.Intersects with every min and max read once: a build at a
+            // million cells runs this for each registered obstacle 15,625 times.
+            Vector3 stepMin = stepBox.min;
+            Vector3 stepMax = stepBox.max;
+            for (int index = 0; index < _registeredCount; index++)
+            {
+                Vector3 min = _registeredMin[index];
+                Vector3 max = _registeredMax[index];
+                if (min.x <= stepMax.x && max.x >= stepMin.x
+                    && min.y <= stepMax.y && max.y >= stepMin.y
+                    && min.z <= stepMax.z && max.z >= stepMin.z)
+                    _stepRegistered[_stepRegisteredCount++] = index;
             }
         }
 
@@ -91,8 +128,9 @@ namespace Common.FlowField
             in Bounds cellBox,
             ref Collider[] overlapBuffer)
         {
-            for (int index = 0; index < _registeredCount; index++)
+            for (int step = 0; step < _stepRegisteredCount; step++)
             {
+                int index = _stepRegistered[step];
                 if (!_registeredBounds[index].Intersects(cellBox))
                     continue;
                 int layerMask = _registeredLayers[index];
@@ -147,6 +185,7 @@ namespace Common.FlowField
             Array.Clear(_registered, 0, _registered.Length);
             _layerCount = 0;
             _registeredCount = 0;
+            _stepRegisteredCount = 0;
         }
 
         private void CollectLayerCandidates(Bounds stepBox, LayerMask obstacleLayer)
