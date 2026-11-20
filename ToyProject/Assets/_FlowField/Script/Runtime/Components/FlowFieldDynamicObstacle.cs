@@ -28,15 +28,17 @@ namespace Common.FlowField
 
         private void OnDestroy() => Unregister();
 
-        // Registers on the first frame the Manager can take it, so the
-        // Manager's Init order and a later Release and Init need no care.
+        // Registers on the first frame the Manager can take it, and again
+        // whenever its registration is gone: the Manager's Init order and a
+        // later Release and Init, in one frame or two, need no care.
         private void LateUpdate()
         {
             if (_manager == null || _collider == null || !CanTakeInput(_manager))
                 return;
-            if (_registered != _manager)
+            if (_registered != _manager || !_manager.IsDynamicObstacleRegistered(_collider))
             {
-                Unregister();
+                if (_registered != _manager)
+                    Unregister();
                 _manager.RegisterDynamicObstacle(_collider);
                 _registered = _manager;
                 _reportedBounds = _collider.bounds;
@@ -47,9 +49,7 @@ namespace Common.FlowField
             if (bounds == _reportedBounds)
                 return;
             _reportedBounds = bounds;
-            // False: a Release cleared the registration; register again next frame.
-            if (!_manager.NotifyDynamicObstacleMoved(_collider))
-                _registered = null;
+            _manager.NotifyDynamicObstacleMoved(_collider);
         }
 
         private static bool CanTakeInput(FlowFieldManager manager)
