@@ -27,6 +27,22 @@ namespace Common.FlowField.Editor
         {
             AssemblyReloadEvents.beforeAssemblyReload += StopBaking;
             EditorApplication.quitting += StopBaking;
+            // A bake reads and writes the Edit Mode scene. Entering Play Mode
+            // stops it, and the existing Asset stays as it was.
+            EditorApplication.playModeStateChanged += state =>
+            {
+                if (state == PlayModeStateChange.ExitingEditMode)
+                    CancelBake();
+            };
+        }
+
+        // Bakes and Clear Bake change Assets and the scene, so they run in Edit Mode only.
+        private static bool RefuseInPlayMode(UnityEngine.Object context)
+        {
+            if (!EditorApplication.isPlayingOrWillChangePlaymode)
+                return false;
+            Debug.LogWarning("FlowField bakes and Clear Bake run in Edit Mode only.", context);
+            return true;
         }
 
         public static bool IsBaking => _isBaking;
@@ -62,6 +78,8 @@ namespace Common.FlowField.Editor
         [MenuItem("Tools/FlowField/Bake All Managers In Open Scenes")]
         private static void BakeAllManagersInOpenScenes()
         {
+            if (RefuseInPlayMode(null))
+                return;
             if (_isBaking)
                 throw new InvalidOperationException("A FlowField bake is already in progress.");
             FlowFieldManager[] managers = Resources.FindObjectsOfTypeAll<FlowFieldManager>();
@@ -82,6 +100,8 @@ namespace Common.FlowField.Editor
         {
             if (manager == null)
                 throw new ArgumentNullException(nameof(manager));
+            if (RefuseInPlayMode(manager))
+                return;
             if (!FlowFieldBakeModes.UsesBakeAsset(manager.BakeMode))
             {
                 Debug.Log("RuntimeDynamic saves no bake asset. The runtime session builds the Surface again.", manager);
@@ -618,7 +638,7 @@ namespace Common.FlowField.Editor
 
         public static void ClearReference(FlowFieldManager manager)
         {
-            if (!HasBakeAsset(manager))
+            if (!HasBakeAsset(manager) || RefuseInPlayMode(manager))
                 return;
             BakeTarget target = BakeTarget.For(manager.SpaceMode);
             Undo.RecordObject(manager, $"Clear FlowField {target.Snapshot} Bake Reference");

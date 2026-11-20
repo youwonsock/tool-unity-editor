@@ -47,9 +47,12 @@ namespace Common.FlowField.Editor
             EditorGUILayout.Space();
             bool exceedsCellLimit = DrawBakeLayout(manager);
             DrawBakeStatus(manager);
-            bool disableBakeActions = FlowFieldBakeEditor.IsBaking || exceedsCellLimit;
+            // Bakes change Assets and the scene, so Play Mode keeps them off.
+            bool disableBakeActions = FlowFieldBakeEditor.IsBaking || exceedsCellLimit || Application.isPlaying;
             if (FlowFieldBakeModes.UsesBakeAsset(manager.BakeMode))
             {
+                if (Application.isPlaying)
+                    EditorGUILayout.HelpBox("Bake and Clear Bake run in Edit Mode.", MessageType.None);
                 if (manager.BakeMode == FlowFieldBakeMode.BakedBase)
                     EditorGUILayout.HelpBox(
                         "BakedBase: the bake supplies the Surface and obstacles, and the session solves the Goal "
