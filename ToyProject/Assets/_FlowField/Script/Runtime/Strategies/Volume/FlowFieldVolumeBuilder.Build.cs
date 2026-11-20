@@ -92,27 +92,30 @@ namespace Common.FlowField
         {
             AssertSolveIdle(build, nameof(StepStaticData));
             FlowFieldVolumeBakeData data = build.Request.BakeData;
-            int end = Math.Min(build.Cursor + ArrayElementsPerStep, build.Count);
+            int count = Math.Min(ArrayElementsPerStep, build.Count - build.Cursor);
+            int end = build.Cursor + count;
+            data.CopyCellsToBuild(
+                build.Cursor,
+                count,
+                build.Blocked,
+                build.Topology,
+                build.GoalFlags,
+                build.Next,
+                build.Directions,
+                build.Speeds,
+                build.EscapeDirections);
+            // Default Direction is a runtime input, as on Surface2D. The
+            // asset keeps its bake-time value only to rebuild its own arrays.
             Vector3 defaultDirection = FlowFieldVectorUtility.NormalizeDefaultDirection(build.Request.DefaultDirection);
-            for (; build.Cursor < end; build.Cursor++)
+            for (int index = build.Cursor; index < end; index++)
             {
-                data.CopyCellToBuild(
-                    build.Cursor,
-                    build.Blocked,
-                    build.Topology,
-                    build.GoalFlags,
-                    build.Next,
-                    build.Directions,
-                    build.Speeds,
-                    build.EscapeDirections);
-                // Default Direction is a runtime input, as on Surface2D. The
-                // asset keeps its bake-time value only to rebuild its own arrays.
-                if (!build.Blocked[build.Cursor] && build.Next[build.Cursor] == -1)
+                if (!build.Blocked[index] && build.Next[index] == -1)
                 {
-                    build.Directions[build.Cursor] = defaultDirection;
-                    build.Speeds[build.Cursor] = 1f;
+                    build.Directions[index] = defaultDirection;
+                    build.Speeds[index] = 1f;
                 }
             }
+            build.Cursor = end;
             if (build.Cursor < build.Count)
                 return false;
             build.GoalIndex = data.ResolvedGoalIndex;

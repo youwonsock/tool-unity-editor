@@ -179,8 +179,10 @@ namespace Common.FlowField
             return true;
         }
 
-        internal void CopyCellToBuild(
-            int index,
+        /// <summary>Copies the whole baked field of cells [start, start + count) for a StaticBaked build.</summary>
+        internal void CopyCellsToBuild(
+            int start,
+            int count,
             bool[] blocked,
             uint[] topology,
             FlowFieldGoalFlags[] goalFlags,
@@ -189,13 +191,13 @@ namespace Common.FlowField
             float[] speeds,
             Vector3[] escapeDirections)
         {
-            blocked[index] = _blocked[index];
-            topology[index] = _topologyMasks[index];
-            goalFlags[index] = _goalFlags[index];
-            next[index] = _nextCells[index];
-            directions[index] = _directions[index];
-            speeds[index] = _speeds[index];
-            escapeDirections[index] = _escapeDirections[index];
+            Array.Copy(_blocked, start, blocked, start, count);
+            Array.Copy(_topologyMasks, start, topology, start, count);
+            Array.Copy(_goalFlags, start, goalFlags, start, count);
+            Array.Copy(_nextCells, start, next, start, count);
+            Array.Copy(_directions, start, directions, start, count);
+            Array.Copy(_speeds, start, speeds, start, count);
+            Array.Copy(_escapeDirections, start, escapeDirections, start, count);
         }
 
         /// <summary>
