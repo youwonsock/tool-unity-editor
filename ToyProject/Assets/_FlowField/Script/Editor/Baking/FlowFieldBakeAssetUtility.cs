@@ -126,8 +126,8 @@ namespace Common.FlowField.Editor
         {
             if (existingAsset != null && typedAsset == null)
                 throw new InvalidOperationException(
-                    $"{modeName} Bake target '{assetPath}' already exists and is not assigned to this Manager. "
-                    + "Choose a new asset or explicitly assign the existing asset before baking.");
+                    $"{modeName} Bake target '{assetPath}' already exists and is not a {modeName} Bake Asset. "
+                    + "Move or delete it before baking.");
             if (typedAsset != null && typedAsset.OwnerId.Length > 0 && typedAsset.OwnerId != ownerId)
                 throw new InvalidOperationException(
                     $"{modeName} Bake target '{assetPath}' belongs to another Manager. "
