@@ -171,6 +171,12 @@ namespace Common.FlowField
         internal string LastError => Fault?.Message;
         internal int Revision { get; private set; }
         internal bool Disposed { get; private set; }
+
+        /// <summary>
+        /// Counts on from the session this one replaces after a Space Mode
+        /// change, so a Manager never shows the same Revision for two fields.
+        /// </summary>
+        internal void ContinueRevision(int revision) => Revision = revision;
         // Advances when the session stops being what earlier work was for:
         // Stop, Restart, Release and a fault, which must also drop a late
         // solve callback. Queued events and late solve callbacks

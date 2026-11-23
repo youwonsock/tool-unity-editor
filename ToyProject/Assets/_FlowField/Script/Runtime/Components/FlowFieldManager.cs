@@ -93,7 +93,9 @@ namespace Common.FlowField
         public FlowFieldSpaceMode SpaceMode => IsInitialized || IsFaulted
             ? ActiveSession.SpaceMode
             : _spaceMode;
-        public int Revision => ActiveSession?.Revision ?? 0;
+        // The count goes on across sessions, so it never goes back, even
+        // while an edited Space Mode leaves no active session.
+        public int Revision => _session?.Revision ?? 0;
         public event Action FieldChanged;
         public event Action<FlowFieldRuntimeState> StateChanged;
 
@@ -208,8 +210,10 @@ namespace Common.FlowField
         {
             if (_session != null && _session.SpaceMode == _spaceMode)
                 return;
+            int revision = _session?.Revision ?? 0;
             _session?.Dispose();
             _session = FlowFieldSpaceStrategy.For(_spaceMode).CreateSession(_boundary);
+            _session.ContinueRevision(revision);
             ForwardSessionEvents(_session);
         }
 
