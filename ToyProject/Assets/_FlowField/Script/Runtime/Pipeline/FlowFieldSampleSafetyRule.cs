@@ -28,6 +28,9 @@ namespace Common.FlowField
     {
         private const float EscapeAxisThreshold = 0.001f;
         private const float DirectionAxisThreshold = 0.000001f;
+        // sin 22.5°: the share of a direction an axis needs to point to the
+        // neighbour on that axis rather than the one beside it.
+        private const float TurnedAxisFraction = 0.38268343f;
 
         /// <summary>Returns true and the sample to use when the rule overrides the published one.</summary>
         internal static bool Apply(
@@ -52,11 +55,21 @@ namespace Common.FlowField
                 return true;
             }
 
+            // The sample follows the final direction. Where a Modifier turned
+            // it, the neighbour it now heads for is checked too: an axis counts
+            // only when the direction leans into it as far as a step to that
+            // neighbour would, so a small turn along a wall keeps moving.
             int next = field.NextCells[index];
+            Vector3 baseDirection = field.BaseDirections[index];
+            Vector3 direction = field.FinalDirections[index];
+            bool turned = direction != baseDirection;
+            float turnedThreshold = TurnedAxisFraction * direction.magnitude;
             bool unsafeMove = next >= 0 && next != index
                 ? IsStepUnsafe(field.Grid, index, next, in cells)
-                : next == -1 && IsDirectionUnsafe(
-                    field.Grid, index, field.BaseDirections[index], DirectionAxisThreshold, in cells);
+                    || turned && IsDirectionUnsafe(field.Grid, index, direction, turnedThreshold, in cells)
+                : next == -1 && (turned
+                    ? IsDirectionUnsafe(field.Grid, index, direction, turnedThreshold, in cells)
+                    : IsDirectionUnsafe(field.Grid, index, baseDirection, DirectionAxisThreshold, in cells));
             if (!unsafeMove)
                 return false;
             sample = Stop(published);
