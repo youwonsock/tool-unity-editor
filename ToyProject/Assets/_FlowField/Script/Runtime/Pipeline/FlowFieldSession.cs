@@ -644,7 +644,8 @@ namespace Common.FlowField
             AbandonWork();
             DetachRuntimeScheduler();
             _builder.DropComputedState();
-            // The restart builds everything again, so the sweep starts over too.
+            // The restart reads the whole scene again wherever the sweep runs
+            // (FlowFieldObstacleSweep), so the sweep starts over too.
             _sweep.Clear();
             SetLifecycle(FlowFieldSessionLifecycle.Suspended);
         }

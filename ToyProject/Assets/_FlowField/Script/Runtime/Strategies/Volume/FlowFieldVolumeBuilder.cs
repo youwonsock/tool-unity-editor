@@ -234,7 +234,13 @@ namespace Common.FlowField
                 {
                     _build.QueryOnlyChangedRegions(_committed.Blocked);
                 }
-                else if (request.BakeMode == FlowFieldBakeMode.BakedBase && !queryEveryCell)
+                // While the sweep runs, a reload queries every cell instead,
+                // as Surface2D's swept mask scans every obstacle: the sweep's
+                // first pass after Init or a restart only records, so a
+                // Collider moved before it would never be seen.
+                else if (request.BakeMode == FlowFieldBakeMode.BakedBase
+                    && !queryEveryCell
+                    && !_session.SweepsObstacles)
                 {
                     // BakedBase starts again from the bake. With nothing that
                     // changed since, its obstacle results stand as baked.

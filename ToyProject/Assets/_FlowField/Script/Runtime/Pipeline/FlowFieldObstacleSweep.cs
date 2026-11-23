@@ -11,7 +11,9 @@ namespace Common.FlowField
     /// pass, a few at a time; a Collider that appeared, moved or disappeared
     /// reports where it was and where it is. Disappearing is judged at the end
     /// of a pass. The first pass only records what is there, because the build
-    /// that follows it reads the whole scene anyway.
+    /// that follows it reads the whole scene anyway, BakedBase included: while
+    /// the sweep runs, Surface2D's swept mask scans every obstacle and a
+    /// Volume3D reload queries every cell instead of trusting the bake.
     /// </summary>
     internal sealed class FlowFieldObstacleSweep
     {
