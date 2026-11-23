@@ -17,7 +17,7 @@ namespace Common.FlowField
         }
 
         private void MarkGoalDirty()
-            => SubmitConfig(FlowFieldConfigChange.Goal);
+            => SubmitCheckedConfig(FlowFieldConfigChange.Goal);
 
         public FlowFieldSample Sample(Vector3 worldPosition)
         {
@@ -149,7 +149,7 @@ namespace Common.FlowField
             // Both modes that load a bake keep its cells.
             if (FlowFieldBakeModes.UsesBakeAsset(BakeMode))
                 throw FlowFieldFailures.NotAllowedIn("Cell regeneration", BakeMode);
-            SubmitConfig(FlowFieldConfigChange.Cells);
+            SubmitCheckedConfig(FlowFieldConfigChange.Cells);
         }
 
         public bool RegisterVectorModifier(IFlowFieldVectorModifier modifier)

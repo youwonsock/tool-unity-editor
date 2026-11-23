@@ -77,7 +77,7 @@ public sealed class FlowFieldReadmeMover : MonoBehaviour
 | 상황 | 호출 |
 | --- | --- |
 | Goal 변경 | `SetGoal()` 또는 `FlowFieldGoalTarget`. 장애물 결과를 재사용합니다 |
-| Fault 재시도, Play 중 Manager 이동, 알리지 않은 장애물 반영 | `RequestRebuild()`. 장애물을 모두 다시 조회하고 바닥은 그대로 둡니다. `BakedBase`는 Bake 막힘에서 다시 시작해 바뀐 영역만 다시 조회합니다 |
+| Fault 재시도, Play 중 Manager 이동, 알리지 않은 장애물 반영 | `RequestRebuild()`. 장애물을 모두 다시 조회하고 바닥은 그대로 둡니다. `BakedBase`는 Bake 막힘에서 다시 시작해 바뀐 영역만 다시 조회합니다(sweep이 돌면 Volume3D는 모든 셀). Bake를 쓰는 모드의 Manager는 Bake 자리에 묶이므로, 옮기면 다음 `SetGoal()`이 Fault를 내고 `RequestRebuild()`는 예외를 던집니다. 되돌린 뒤 `RequestRebuild()`로 재시도합니다 |
 | 바닥 형상 변경 (`RuntimeDynamic`) | `NotifyCellsDirty()`. 바닥과 장애물을 모두 다시 조회합니다. 진행 중인 빌드는 버리지 않고, 다음 빌드가 바닥을 다시 조회합니다 |
 | 장애물 영역 알림 (`RuntimeDynamic`, `BakedBase`) | `NotifyObstacleRegionDirty(bounds)`. 이전과 현재 Bounds의 합집합을 넘깁니다 |
 | 움직이는 장애물 | `RegisterDynamicObstacle(collider)` → 이동할 때마다 `NotifyDynamicObstacleMoved(collider)` → `UnregisterDynamicObstacle(collider)`. `FlowFieldDynamicObstacle`이 이 셋을 대신하고, Manager나 Collider를 바꾸면 옛 등록을 해제합니다 |
@@ -89,7 +89,7 @@ public sealed class FlowFieldReadmeMover : MonoBehaviour
 - **통지 방식:** 기본으로 FlowField는 씬을 폴링하지 않습니다. 변경은 위 API와 FlowField 컴포넌트(`FlowFieldDynamicObstacle`, `FlowFieldGoalTarget`, Modifier)의 통지로만 들어옵니다. 알리지 않은 이동은 반영되지 않습니다. 통지를 받은 그 프레임부터 영향 영역은 새 결과가 게시될 때까지 속도 0입니다. Auto Sync Transforms가 꺼져 있어도 Transform을 옮긴 그 프레임에 알리면 됩니다. FlowField 컴포넌트도 프레임당 한 번 sync한 뒤 자기 Collider를 확인하므로, LateUpdate 전에 옮긴 이동은 그 프레임에 알립니다(다른 스크립트가 LateUpdate에서 옮기면 다음 프레임). 격자에 닿지 않는 변경(Bounds를 셀 크기와 Clearance만큼 넓혀도 격자 밖)은 아무것도 다시 빌드하지 않고, 등록은 그대로 유지합니다. 장애물 조회는 Trigger를 무시합니다.
 - **미등록 장애물 sweep:** Obstacle 설정의 `Sweep Unregistered`를 켜면 Session이 `Sweep Interval`(unscaled 초, 0은 프레임마다 한 번)마다 Obstacle Layer를 조회해, 등록하지 않은 Collider가 생기거나 움직이거나 사라진 영역을 `NotifyObstacleRegionDirty`처럼 다시 빌드합니다. 간격마다 Bounds 전체의 `OverlapBox`와 `Physics.SyncTransforms`가 들고, 켜거나 끄면 Surface2D는 장애물 전체를 다시 scan하고(그동안 필드 전체가 속도 0), Volume3D는 지금 필드를 그대로 쓰면서 다음 빌드에서 모든 셀을 다시 조회합니다. 첫 조회는 기록만 합니다. 그래서 sweep이 도는 동안 `BakedBase` Volume3D는 Bake를 다시 읽는 빌드(첫 빌드, 다시 켠 뒤, `RequestRebuild`)마다 Bake의 장애물 대신 모든 셀을 Physics로 조회하고, Surface2D는 이때 장애물 전체를 scan합니다. 꺼져 있던 동안 옮긴 Collider도 이렇게 반영됩니다. Collider가 65,536개에 이르면 그 세션의 sweep을 끄고 경고를 한 번 남깁니다. `StaticBaked`에서는 켤 수 없고(Init이 거부), Bake와 Edit Mode 미리보기는 sweep을 돌리지 않으므로 지금처럼 정적 장애물을 담습니다.
 - **Goal Transform:** Manager의 Goal Transform은 Init과 Bake 때 한 번 읽는 초기 Goal입니다. 이후 이동은 `SetGoal()`이나 `FlowFieldGoalTarget`으로 알립니다.
-- **설정 변경:** Play 중 Inspector에서 설정을 바꾸면 바로 다시 빌드합니다. 값이 잘못되면 두 모드 모두 Fault가 됩니다.
+- **설정 변경:** Play 중 Inspector에서 설정을 바꾸면 바로 다시 빌드합니다. 값이 잘못되면 두 모드 모두 Fault가 됩니다. `SetGoal()`과 `NotifyCellsDirty()`도 지금 설정을 같은 방식으로 검사하므로, 그사이 Manager를 옮기거나 회전·확대해 설정이 잘못되었으면 예외를 던지지 않고 Fault가 됩니다. 새 Goal은 남아 재시도가 그 Goal로 빌드합니다.
 - **설정 검사:** Init과 Inspector·Scene View는 같은 검사를 같은 문구로 합니다. 잘못된 설정이면 `Init()`은 처음 걸린 이유를 메시지로 담은 `InvalidOperationException`을 던지고, Inspector는 그 문구를 그대로 보여 줍니다.
 - **Modifier:** 영향 영역 Collider(Trigger, MeshCollider는 Convex)에 `FlowFieldSpeedModifier`나 `FlowFieldNoiseModifier`를 두고 Manager를 지정합니다. 같은 Manager 안에서는 Priority를 서로 다르게 두며, 낮은 값부터 합성합니다. 같은 Priority는 등록에서 거부되므로, Manager와 Modifier Inspector가 같은 씬의 중복을 비활성 Modifier까지 찾아 경고합니다.
 - **계약 interface:** `IFlowFieldProvider`(조회)와 `IFlowFieldController`(입력)는 Manager가 구현하는 계약입니다. 직접 구현하는 타입은 계약의 모든 멤버를 구현해야 합니다.

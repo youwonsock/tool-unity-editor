@@ -148,10 +148,24 @@ namespace Common.FlowField
             if (!IsInitialized || _spaceMode != SpaceMode)
                 return;
             using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
+            SubmitCheckedConfig(FlowFieldConfigChange.Settings);
+        }
+
+        /// <summary>
+        /// An Inspector edit, SetGoal and NotifyCellsDirty submit the live
+        /// settings, which can stop being valid without an edit: a moved
+        /// BakedBase Manager no longer matches its bake. Invalid settings fault
+        /// the session the same way for all three instead of throwing to the
+        /// caller. A Space Mode edit waits for Release, so it is not checked;
+        /// the builder still rejects a bake that does not match.
+        /// </summary>
+        private void SubmitCheckedConfig(FlowFieldConfigChange change)
+        {
             try
             {
-                ValidateConfiguration(validateStaticGoal: false);
-                SubmitConfig(FlowFieldConfigChange.Settings);
+                if (_spaceMode == SpaceMode)
+                    ValidateConfiguration(validateStaticGoal: false);
+                SubmitConfig(change);
             }
             catch (Exception exception)
             {
