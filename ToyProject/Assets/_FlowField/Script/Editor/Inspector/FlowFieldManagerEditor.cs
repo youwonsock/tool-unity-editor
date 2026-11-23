@@ -14,8 +14,16 @@ namespace Common.FlowField.Editor
         private static readonly List<FlowFieldManagerEditor> Open = new List<FlowFieldManagerEditor>();
 
         private readonly BoxBoundsHandle _boundsHandle = new BoxBoundsHandle();
+        // This Manager's bake owner id, read once: GetGlobalObjectIdSlow is slow.
+        // Null until the scene is saved.
+        private string _ownerId;
 
-        private void OnEnable() => Open.Add(this);
+        private void OnEnable()
+        {
+            Open.Add(this);
+            GlobalObjectId id = GlobalObjectId.GetGlobalObjectIdSlow(target);
+            _ownerId = id.targetObjectId != 0 ? id.ToString() : null;
+        }
 
         private void OnDisable() => Open.Remove(this);
 
@@ -49,9 +57,17 @@ namespace Common.FlowField.Editor
                 EditorGUILayout.PropertyField(mode);
             if (mode != null && FlowFieldBakeModes.UsesBakeAsset((FlowFieldBakeMode)mode.enumValueIndex))
             {
-                EditorGUILayout.PropertyField(serializedObject.FindProperty(isVolume
+                SerializedProperty bakeAsset = serializedObject.FindProperty(isVolume
                     ? FlowFieldManager.PropertyNames.VolumeBakeData
-                    : FlowFieldManager.PropertyNames.SurfaceBakeData));
+                    : FlowFieldManager.PropertyNames.SurfaceBakeData);
+                EditorGUILayout.PropertyField(bakeAsset);
+                if (_ownerId != null
+                    && bakeAsset.objectReferenceValue is FlowFieldBakeAsset assigned
+                    && assigned.OwnerId != _ownerId)
+                    EditorGUILayout.HelpBox(
+                        "This Bake Asset was not baked by this Manager, for example after duplicating a Manager. "
+                        + "Bake writes this Manager's own asset and assigns it; the assigned one stays as it is.",
+                        MessageType.Info);
             }
             serializedObject.ApplyModifiedProperties();
             DrawDisplaySettingsNotice(manager);

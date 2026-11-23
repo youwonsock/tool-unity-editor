@@ -10,10 +10,11 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f0fe3de3355f642409e82b0b8bc89eab, type: 3}
-  m_Name: 2d61c3aeada20074ba232f6398c7c342_1569603542928883877_FlowFieldManager_SurfaceBake
+  m_Name: 2d61c3aeada20074ba232f6398c7c342_1569603542928883877_5129881909066175170_FlowFieldManager_SurfaceBake
   m_EditorClassIdentifier: 
   _formatVersion: 6
-  _revision: 9
+  _revision: 2
+  _ownerId: GlobalObjectId_V1-2-2d61c3aeada20074ba232f6398c7c342-1569603542928883877-5129881909066175170
   _gridOriginWorld: {x: -50, y: 2, z: -50}
   _width: 100
   _depth: 100

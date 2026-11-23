@@ -220,6 +220,8 @@ MonoBehaviour:
       serializedVersion: 2
       m_Bits: 512
     Clearance: 0.1
+    SweepUnregistered: 0
+    SweepInterval: 0.2
   _flow:
     DefaultDirection: {x: 0, y: 0, z: 1}
     GoalInfluenceRadius: 0
@@ -228,8 +230,25 @@ MonoBehaviour:
   _bakeMode: 1
   _bakeAssets:
     Surface: {fileID: 0}
-    Volume: {fileID: 11400000, guid: a2847e880553f22468388c0fd624691d,
-      type: 2}
+    Volume: {fileID: 11400000, guid: fd85a41e439b74c15ad7ac9df4b5a12f, type: 2}
+--- !u!114 &1100004
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1100001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e42bd85ea9db494aa75ebb51e2a23bdb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _showField: 1
+  _volumeGizmoMode: 0
+  _showVolumeCells: 0
+  _showVolumeVectors: 1
+  _volumeGizmoSliceAxis: 1
+  _volumeGizmoSlice: -1
 --- !u!1 &1200001
 GameObject:
   m_ObjectHideFlags: 0
@@ -1260,21 +1279,3 @@ SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
   - {fileID: 1000002}
---- !u!114 &1100004
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1100001}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e42bd85ea9db494aa75ebb51e2a23bdb, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _showField: 1
-  _volumeGizmoMode: 0
-  _showVolumeCells: 0
-  _showVolumeVectors: 1
-  _volumeGizmoSliceAxis: 1
-  _volumeGizmoSlice: -1

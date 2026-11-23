@@ -282,7 +282,7 @@ PrefabInstance:
         type: 3}
       propertyPath: _bakeAssets.Surface
       value: 
-      objectReference: {fileID: 11400000, guid: e144fe4642c6e4e8b9c73398f7caba55,
+      objectReference: {fileID: 11400000, guid: 6912e60d0f0f74ed996093792dbbec82,
         type: 2}
     - target: {fileID: 1888116987211774303, guid: ea9473f2a5a61c044828d7e078c86447,
         type: 3}

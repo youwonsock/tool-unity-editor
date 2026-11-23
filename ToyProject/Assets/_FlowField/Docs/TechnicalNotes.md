@@ -134,7 +134,7 @@
 - 저장에 실패하면 기존 Asset의 내용, Revision, GUID를 유지합니다.
 - `StaticBaked` Volume3D 빌드는 `StaticData` 단계에서 Bake 필드를 4,096셀씩 배열째 복사하고(`CopyCellsToBuild`), Default Direction 칸에 지금의 Default Direction을 씁니다.
 - `StaticBaked` 런타임은 Asset에 구운 Goal을 그대로 씁니다. Init은 Goal Transform 위치가 구운 Goal과 같은지 검사합니다. `BakedBase`는 구운 Goal을 쓰지 않으므로 검사하지 않습니다.
-- Bake는 연결된 Asset이 있으면 그 경로에 씁니다. 참조가 빈 Manager의 Bake 대상은 씬 옆, 씬 이름의 폴더에 씬 GUID와 Manager ID로 만든 고정 경로(`<씬 폴더>/<씬 이름>/<씬GUID>_<ManagerID>_<이름>_<SurfaceBake|VolumeBake>.asset`)이며, 그 경로의 같은 형식 Asset은 이 Manager의 것으로 보고 덮어씁니다. Asset을 새로 만든 Bake가 실패하면 그때 만든 Asset과 폴더를 지웁니다. 고정 경로는 씬의 위치·이름과 Manager 이름을 따르므로, 씬을 옮기거나 이름을 바꾼 뒤 참조가 빈 채로 Bake하면 새 Asset을 만들고 예전 Asset은 그대로 둡니다.
+- Bake Asset은 자기를 Bake한 Manager(`GlobalObjectId`)를 기록합니다(`FlowFieldBakeAsset.OwnerId`, 런타임은 읽지 않습니다). Bake는 연결된 Asset이 이 Manager가 Bake한 것이면 그 경로에 씁니다. 참조가 비었거나, 연결된 Asset을 다른 Manager가 Bake했으면(Manager를 복제하면 참조도 복사됩니다) 씬 옆, 씬 이름의 폴더에 씬 GUID와 Manager ID로 만든 고정 경로(`<씬 폴더>/<씬 이름>/<씬GUID>_<ObjectID>_<PrefabInstanceID>_<이름>_<SurfaceBake|VolumeBake>.asset`)에 쓰고 참조를 그 Asset으로 바꿉니다. 연결돼 있던 Asset은 그대로 두고 Console에 "was not baked by this Manager"로 알립니다. Prefab 인스턴스 ID가 경로에 들어가므로 같은 Prefab의 두 인스턴스도 경로가 겹치지 않습니다. 고정 경로에 다른 Manager가 Bake한 Asset이 있으면 덮어쓰지 않고 실패합니다. 소유자가 비어 있는 같은 형식 Asset은 이 Manager의 것으로 보고 덮어씁니다. Project 창에서 Asset을 복제하면 소유자도 복사되므로, 그 복제본을 다른 Manager에 연결해 Bake하면 복제본 대신 그 Manager의 고정 경로에 씁니다. 다른 Asset으로 옮긴 Bake를 Undo하면 참조는 되돌아가지만 새로 만든 Asset 파일은 남습니다(새 Asset을 만든 첫 Bake의 Undo도 같습니다). Asset을 새로 만든 Bake가 실패하면 그때 만든 Asset과 폴더를 지웁니다. 고정 경로는 씬의 위치·이름과 Manager 이름을 따르므로, 씬을 옮기거나 이름을 바꾼 뒤 참조가 빈 채로 Bake하면 새 Asset을 만들고 예전 Asset은 그대로 둡니다.
 
 ## Editor 표시
 

@@ -11,9 +11,13 @@ namespace Common.FlowField
     /// </summary>
     public abstract class FlowFieldBakeAsset : ScriptableObject
     {
-        // Both bake assets store these two here.
+        // Both bake assets store these here.
         [SerializeField] private int _formatVersion;
         [SerializeField] private int _revision;
+        // The Manager that baked it, as its GlobalObjectId string. Only the
+        // Editor bake reads and writes it, so a duplicated Manager bakes into
+        // its own asset instead of this one.
+        [SerializeField] private string _ownerId = string.Empty;
         [NonSerialized] private int _contentGeneration;
 
         private protected FlowFieldBakeAsset()
@@ -23,6 +27,9 @@ namespace Common.FlowField
         public int FormatVersion => _formatVersion;
         public int Revision => _revision;
         public int ContentGeneration => _contentGeneration;
+        internal string OwnerId => _ownerId ?? string.Empty;
+
+        internal void SetOwner(string ownerId) => _ownerId = ownerId ?? string.Empty;
 
         private protected abstract int CurrentFormatVersion { get; }
 

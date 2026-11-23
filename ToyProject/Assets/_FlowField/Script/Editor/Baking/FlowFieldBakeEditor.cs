@@ -470,13 +470,15 @@ namespace Common.FlowField.Editor
 
         /// <summary>
         /// Writes a bake into this Manager's asset as one Undo step and assigns it.
-        /// A failure reverts that step and removes an asset it created.
+        /// An assigned asset another Manager baked stays as it is: this Manager
+        /// bakes into its own asset instead. A failure reverts that step and
+        /// removes an asset it created.
         /// </summary>
         private static void SaveBakeAsset<TAsset>(
             FlowFieldManager manager,
             BakeTarget target,
             Func<Action<TAsset>> export)
-            where TAsset : ScriptableObject
+            where TAsset : FlowFieldBakeAsset
         {
             int undoGroup = -1;
             string assetPath = null;
@@ -486,10 +488,11 @@ namespace Common.FlowField.Editor
             {
                 // Read the published field before any asset changes.
                 Action<TAsset> apply = export();
-                assetPath = FlowFieldBakeAssetUtility.ResolveAssetPath(
-                    manager,
-                    target.Assigned(manager.CaptureConfig()),
-                    target.FileSuffix);
+                string ownerId = FlowFieldBakeAssetUtility.OwnerId(manager);
+                var assigned = target.Assigned(manager.CaptureConfig()) as FlowFieldBakeAsset;
+                assetPath = FlowFieldBakeAssetUtility.ResolveAssetPath(manager, assigned, ownerId, target.FileSuffix);
+                string assignedPath = assigned != null ? AssetDatabase.GetAssetPath(assigned) : null;
+                bool redirected = !string.IsNullOrEmpty(assignedPath) && assignedPath != assetPath;
                 createdFolder = FlowFieldBakeAssetUtility.CreateBakeFolder(assetPath);
                 // A failed bake reverts down to this group, so it must hold nothing older.
                 Undo.IncrementCurrentGroup();
@@ -497,11 +500,11 @@ namespace Common.FlowField.Editor
                 Undo.SetCurrentGroupName($"Bake FlowField {target.Snapshot} Snapshot");
                 TAsset asset = AssetDatabase.LoadAssetAtPath<TAsset>(assetPath);
                 FlowFieldBakeAssetUtility.ValidateTargetOwnership(
-                    target.Assigned(manager.CaptureConfig()),
                     asset,
                     AssetDatabase.LoadMainAssetAtPath(assetPath),
                     assetPath,
-                    target.ModeName);
+                    target.ModeName,
+                    ownerId);
                 if (asset == null)
                 {
                     asset = ScriptableObject.CreateInstance<TAsset>();
@@ -512,6 +515,7 @@ namespace Common.FlowField.Editor
                 }
                 Undo.RecordObject(asset, $"Bake FlowField {target.Snapshot} Snapshot");
                 apply(asset);
+                asset.SetOwner(ownerId);
                 // Apply writes the fields directly, and Undo marks the asset
                 // dirty only when it flushes the record, after the save below.
                 EditorUtility.SetDirty(asset);
@@ -524,6 +528,11 @@ namespace Common.FlowField.Editor
                     EditorSceneManager.MarkSceneDirty(manager.gameObject.scene);
                 FlowFieldBakeAssetUtility.Save(asset);
                 Undo.CollapseUndoOperations(undoGroup);
+                if (redirected)
+                    Debug.Log(
+                        $"[{nameof(FlowFieldManager)}] {target.Label}: '{assignedPath}' was not baked by this Manager, "
+                        + $"so this Manager now bakes into '{assetPath}'.",
+                        manager);
                 Debug.Log($"[{nameof(FlowFieldManager)}] {target.Label} finished: {assetPath}", manager);
             }
             catch (Exception exception)

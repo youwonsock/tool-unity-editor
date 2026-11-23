@@ -18,24 +18,42 @@ namespace Common.FlowField.Editor
         }
 
         /// <summary>
-        /// Where a bake writes: the assigned asset, or else this Manager's
-        /// stable path next to its scene.
+        /// The Manager's identity in its saved scene, which a bake records as
+        /// the owner of the asset it writes. A duplicated Manager has its own.
         /// </summary>
-        internal static string ResolveAssetPath(FlowFieldManager manager, UnityEngine.Object assigned, string suffix)
+        internal static string OwnerId(FlowFieldManager manager)
         {
             if (!manager.gameObject.scene.IsValid() || string.IsNullOrEmpty(manager.gameObject.scene.path))
                 throw new InvalidOperationException("Save the scene before baking.");
-            string assignedPath = assigned != null ? AssetDatabase.GetAssetPath(assigned) : null;
-            return string.IsNullOrEmpty(assignedPath) ? ResolveStablePath(manager, suffix) : assignedPath;
+            GlobalObjectId id = GlobalObjectId.GetGlobalObjectIdSlow(manager);
+            if (id.targetObjectId == 0)
+                throw new InvalidOperationException("Save the scene before baking.");
+            return id.ToString();
         }
 
+        /// <summary>
+        /// Where a bake writes: the assigned asset when this Manager baked it,
+        /// or else this Manager's stable path next to its scene. An asset that
+        /// another Manager baked (a duplicated Manager keeps the reference) is
+        /// never written.
+        /// </summary>
+        internal static string ResolveAssetPath(
+            FlowFieldManager manager,
+            FlowFieldBakeAsset assigned,
+            string ownerId,
+            string suffix)
+        {
+            string assignedPath = assigned != null ? AssetDatabase.GetAssetPath(assigned) : null;
+            return !string.IsNullOrEmpty(assignedPath) && assigned.OwnerId == ownerId
+                ? assignedPath
+                : ResolveStablePath(manager, suffix);
+        }
+
+        // The object and prefab-instance ids keep two instances of one prefab apart.
         private static string ResolveStablePath(FlowFieldManager manager, string suffix)
         {
             ValidateFileName(manager.name);
             GlobalObjectId id = GlobalObjectId.GetGlobalObjectIdSlow(manager);
-            string managerId = id.targetObjectId != 0
-                ? id.targetObjectId.ToString()
-                : manager.GetInstanceID().ToString();
             string scenePath = manager.gameObject.scene.path;
             string sceneGuid = AssetDatabase.AssetPathToGUID(scenePath);
             if (string.IsNullOrEmpty(sceneGuid))
@@ -43,7 +61,7 @@ namespace Common.FlowField.Editor
             // Next to the scene, in a folder named after it, as Unity keeps lightmaps.
             string sceneFolder = Path.GetDirectoryName(scenePath)?.Replace('\\', '/');
             string bakeFolder = $"{sceneFolder}/{Path.GetFileNameWithoutExtension(scenePath)}";
-            return $"{bakeFolder}/{sceneGuid}_{managerId}_{manager.name}_{suffix}.asset";
+            return $"{bakeFolder}/{sceneGuid}_{id.targetObjectId}_{id.targetPrefabId}_{manager.name}_{suffix}.asset";
         }
 
         /// <summary>
@@ -94,22 +112,26 @@ namespace Common.FlowField.Editor
             AssetDatabase.DeleteAsset(folder);
         }
 
+        /// <summary>
+        /// Throws when the target path holds something this Manager must not
+        /// overwrite: an object of another type, or a bake another Manager
+        /// owns. An unowned bake at this Manager's own stable path is its own.
+        /// </summary>
         internal static void ValidateTargetOwnership(
-            UnityEngine.Object assignedAsset,
-            UnityEngine.Object typedAsset,
+            FlowFieldBakeAsset typedAsset,
             UnityEngine.Object existingAsset,
             string assetPath,
-            string modeName)
+            string modeName,
+            string ownerId)
         {
             if (existingAsset != null && typedAsset == null)
                 throw new InvalidOperationException(
                     $"{modeName} Bake target '{assetPath}' already exists and is not assigned to this Manager. "
                     + "Choose a new asset or explicitly assign the existing asset before baking.");
-            // With no reference, the path is this Manager's own, as after Clear Bake.
-            if (typedAsset != null && assignedAsset != null && assignedAsset != typedAsset)
+            if (typedAsset != null && typedAsset.OwnerId.Length > 0 && typedAsset.OwnerId != ownerId)
                 throw new InvalidOperationException(
-                    $"{modeName} Bake target '{assetPath}' is shared by another reference. "
-                    + "Create a separate Bake Asset before overwriting it.");
+                    $"{modeName} Bake target '{assetPath}' belongs to another Manager. "
+                    + "Move or delete that asset before baking.");
         }
 
         private static void ValidateFileName(string value)
