@@ -9,6 +9,10 @@ namespace Common.FlowField
         internal FlowFieldBakeMode BakeMode { get; }
         internal LayerMask ObstacleLayer { get; }
         internal float ObstacleClearance { get; }
+        // Whether the session sweeps unregistered obstacles. The obstacle
+        // query reads every Collider of the layer either way, so it is not an
+        // obstacle input; turning it on re-queries every cell once.
+        internal bool SweepUnregistered { get; }
         internal bool HasGoal { get; }
         internal Vector3 GoalWorld { get; }
         internal float GoalInfluenceRadius { get; }
@@ -23,6 +27,7 @@ namespace Common.FlowField
             FlowFieldBakeMode bakeMode,
             LayerMask obstacleLayer,
             float obstacleClearance,
+            bool sweepUnregistered,
             bool hasGoal,
             Vector3 goalWorld,
             float goalInfluenceRadius,
@@ -34,6 +39,7 @@ namespace Common.FlowField
             BakeMode = bakeMode;
             ObstacleLayer = obstacleLayer;
             ObstacleClearance = obstacleClearance;
+            SweepUnregistered = sweepUnregistered;
             HasGoal = hasGoal;
             GoalWorld = goalWorld;
             GoalInfluenceRadius = goalInfluenceRadius;
@@ -74,7 +80,7 @@ namespace Common.FlowField
             if (BakeMode != FlowFieldBakeMode.StaticBaked && !HasSameGoal(other))
                 return false;
 
-            return HasSameFlowSettings(other);
+            return SweepUnregistered == other.SweepUnregistered && HasSameFlowSettings(other);
         }
 
         /// <summary>

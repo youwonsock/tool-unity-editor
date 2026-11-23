@@ -142,6 +142,10 @@ namespace Common.FlowField
         // RequestRebuild or NotifyCellsDirty asked this build to query every
         // obstacle; if it is discarded, the build that replaces it still must.
         internal bool RequiresFullQuery;
+        // The sweep was turned on or off: this build queries every cell from
+        // Physics, BakedBase included, since nothing swept the unregistered
+        // obstacles before. If it is discarded, the replacement still must.
+        internal bool QueriesEveryCell;
         // Blocked, Topology and EscapeDirections follow only from the obstacles,
         // so they are shared read-only with the published field.
         internal bool ReusesObstacleQueries;

@@ -69,6 +69,7 @@ namespace Common.FlowField
                 bakeMode,
                 config.Obstacles.Layer,
                 config.Obstacles.Clearance,
+                config.Obstacles.SweepUnregistered,
                 config.HasGoal,
                 config.GoalWorld,
                 config.Flow.GoalInfluenceRadius,

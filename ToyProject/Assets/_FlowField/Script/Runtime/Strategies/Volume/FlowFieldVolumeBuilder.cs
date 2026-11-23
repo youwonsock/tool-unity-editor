@@ -33,6 +33,8 @@ namespace Common.FlowField
         private bool _hasPendingModifierRecompose;
         // An explicit rebuild re-queries obstacles even when only the Goal changed.
         private bool _obstacleQueryRequired;
+        // The sweep was turned on or off since the last build began.
+        private bool _queryEveryCell;
         // Whoever pumps directly (a bake, the Editor preview) waits for the
         // BakedBase: every region an obstacle change reached since Initialize.
         // A reloaded bake queries it again, because the bake still holds what
@@ -86,6 +88,7 @@ namespace Common.FlowField
             _requests.Clear();
             _hasPendingModifierRecompose = false;
             _obstacleQueryRequired = false;
+            _queryEveryCell = false;
             _bakedBaseTouched = null;
         }
 
@@ -101,6 +104,15 @@ namespace Common.FlowField
             ValidateRequest(request);
             if (requeryObstacles)
                 _obstacleQueryRequired = true;
+            // Turning the sweep on or off says nothing changed, so the field
+            // stays readable; the next build still queries every cell from
+            // Physics, BakedBase included, so it takes in unregistered changes
+            // made while nothing swept them, as Surface2D does.
+            if (_requests.HasLatest && _requests.Latest.SweepUnregistered != request.SweepUnregistered)
+            {
+                _obstacleQueryRequired = true;
+                _queryEveryCell = true;
+            }
             // A new grid or source drops the published field for good: readers
             // wait for a build on this grid, even if the grid later returns to
             // the old one. Obstacle changes that reached no cell of the new
@@ -205,9 +217,12 @@ namespace Common.FlowField
                 bool reuseObstacles = CanReuseObstacleQueries(request);
                 bool requeryChangedCells = !reuseObstacles && CanRequeryChangedCells(request);
                 bool requiresFullQuery = _obstacleQueryRequired;
+                bool queryEveryCell = _queryEveryCell;
                 _obstacleQueryRequired = false;
+                _queryEveryCell = false;
                 _build = new BuildContext(request, modifierSnapshots);
                 _build.RequiresFullQuery = requiresFullQuery;
+                _build.QueriesEveryCell = queryEveryCell;
                 if (reuseObstacles)
                 {
                     _build.ReusesObstacleQueries = true;
@@ -219,7 +234,7 @@ namespace Common.FlowField
                 {
                     _build.QueryOnlyChangedRegions(_committed.Blocked);
                 }
-                else if (request.BakeMode == FlowFieldBakeMode.BakedBase)
+                else if (request.BakeMode == FlowFieldBakeMode.BakedBase && !queryEveryCell)
                 {
                     // BakedBase starts again from the bake. With nothing that
                     // changed since, its obstacle results stand as baked.
@@ -291,6 +306,8 @@ namespace Common.FlowField
             // The build that replaces it still owes the full query it was asked for.
             if (previous != null && previous.RequiresFullQuery)
                 _obstacleQueryRequired = true;
+            if (previous != null && previous.QueriesEveryCell)
+                _queryEveryCell = true;
             previous?.Dispose();
         }
 
