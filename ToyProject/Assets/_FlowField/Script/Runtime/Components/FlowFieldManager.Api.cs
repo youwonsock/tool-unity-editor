@@ -111,7 +111,15 @@ namespace Common.FlowField
             ActiveSession.NotifyObstacleRegionDirtyCommand(worldBounds);
         }
 
-        public void SetGoal(in FlowFieldGoalRequest request)
+        public void SetGoal(in FlowFieldGoalRequest request) => SetGoalAndGetVersion(in request);
+
+        /// <summary>
+        /// SetGoal for FlowFieldGoalTarget: returns the <see cref="GoalVersion"/>
+        /// this request left, read before the submit. A handler that changes
+        /// the Goal during the submit moves the version on, so the target does
+        /// not take that Goal for its own.
+        /// </summary>
+        internal int SetGoalAndGetVersion(in FlowFieldGoalRequest request)
         {
             _boundary.ThrowIfInUserCode(nameof(SetGoal));
             ThrowIfLifecycleUnavailable();
@@ -121,35 +129,39 @@ namespace Common.FlowField
             if (!request.HasGoal)
             {
                 if (!_hasExplicitGoal)
-                    return;
-                _hasExplicitGoal = false;
-                _explicitGoalWorld = default;
-                MarkGoalDirty();
-                return;
+                    return GoalVersion;
+                ChangeExplicitGoal(false, default);
+            }
+            else
+            {
+                if (_hasExplicitGoal
+                    && FlowFieldGridSpace.Approximately(
+                        _explicitGoalWorld,
+                        request.WorldPosition,
+                        0.00000001d)
+                    && Mathf.Abs(_flow.GoalInfluenceRadius - request.InfluenceRadius) <= FlowFieldManagerConfig.ValueEpsilon)
+                {
+                    // Nothing to build, but the caller now holds this Goal:
+                    // a target that set it earlier no longer clears it.
+                    unchecked { GoalVersion++; }
+                    return GoalVersion;
+                }
+                ChangeExplicitGoal(true, request.WorldPosition);
+                _flow.GoalInfluenceRadius = request.InfluenceRadius;
             }
 
-            if (_hasExplicitGoal
-                && FlowFieldGridSpace.Approximately(
-                    _explicitGoalWorld,
-                    request.WorldPosition,
-                    0.00000001d)
-                && Mathf.Abs(_flow.GoalInfluenceRadius - request.InfluenceRadius) <= FlowFieldManagerConfig.ValueEpsilon)
-                return;
-
-            _hasExplicitGoal = true;
-            _explicitGoalWorld = request.WorldPosition;
-            _flow.GoalInfluenceRadius = request.InfluenceRadius;
+            int version = GoalVersion;
             MarkGoalDirty();
+            return version;
         }
 
         // FlowFieldGoalTarget clears the Goal it set while the Manager is
         // faulted, as Unregister calls are taken then, so a retry leaves it out.
         internal void ClearGoalWhileFaulted()
         {
-            if (!IsFaulted)
+            if (!IsFaulted || !_hasExplicitGoal)
                 return;
-            _hasExplicitGoal = false;
-            _explicitGoalWorld = default;
+            ChangeExplicitGoal(false, default);
         }
 
         public void NotifyCellsDirty()

@@ -76,7 +76,7 @@ public sealed class FlowFieldReadmeMover : MonoBehaviour
 
 | 상황 | 호출 |
 | --- | --- |
-| Goal 변경 | `SetGoal()` 또는 `FlowFieldGoalTarget`. 장애물 결과를 재사용합니다 |
+| Goal 변경 | `SetGoal()` 또는 `FlowFieldGoalTarget`. 장애물 결과를 재사용합니다. 마지막에 정한 Goal이 쓰이고, 끈 `FlowFieldGoalTarget`은 자기 Goal이 아직 Manager의 Goal일 때만 지웁니다 |
 | Fault 재시도, Play 중 Manager 이동, 알리지 않은 장애물 반영 | `RequestRebuild()`. 장애물을 모두 다시 조회하고 바닥은 그대로 둡니다. `BakedBase`는 Bake 막힘에서 다시 시작해 바뀐 영역만 다시 조회합니다(sweep이 돌면 Volume3D는 모든 셀). Bake를 쓰는 모드의 Manager는 Bake 자리에 묶이므로, 옮기면 다음 `SetGoal()`이 Fault를 내고 `RequestRebuild()`는 예외를 던집니다. 되돌린 뒤 `RequestRebuild()`로 재시도합니다 |
 | 바닥 형상 변경 (`RuntimeDynamic`) | `NotifyCellsDirty()`. 바닥과 장애물을 모두 다시 조회합니다. 진행 중인 빌드는 버리지 않고, 다음 빌드가 바닥을 다시 조회합니다 |
 | 장애물 영역 알림 (`RuntimeDynamic`, `BakedBase`) | `NotifyObstacleRegionDirty(bounds)`. 이전과 현재 Bounds의 합집합을 넘깁니다 |

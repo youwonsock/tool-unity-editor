@@ -64,6 +64,11 @@ namespace Common.FlowField
         // Advances each time Release drops the Goal, so FlowFieldGoalTarget
         // can tell its Goal is gone even when Release and Init run in one frame.
         internal int GoalLifetime { get; private set; }
+        // Advances each time the Goal is set or dropped (SetGoal, also with an
+        // equal Goal; the Goal Transform at Init; Release; a clear while
+        // faulted), so FlowFieldGoalTarget clears only a Goal it set itself,
+        // not one a script or another target set after it.
+        internal int GoalVersion { get; private set; }
         [NonSerialized] private FlowFieldModifierAttachment _modifiers;
 
         // The session the façade answers from. The accepted session keeps
@@ -302,8 +307,14 @@ namespace Common.FlowField
         {
             if (_goalTransform == null || _hasExplicitGoal)
                 return;
-            _hasExplicitGoal = true;
-            _explicitGoalWorld = _goalTransform.position;
+            ChangeExplicitGoal(true, _goalTransform.position);
+        }
+
+        private void ChangeExplicitGoal(bool hasGoal, Vector3 worldPosition)
+        {
+            _hasExplicitGoal = hasGoal;
+            _explicitGoalWorld = worldPosition;
+            unchecked { GoalVersion++; }
         }
 
         // The builder turns the current settings into its request. A full
@@ -333,8 +344,7 @@ namespace Common.FlowField
             Modifiers.Detach();
             owner.Release();
             // The Goal is input like the registrations Release clears.
-            _hasExplicitGoal = false;
-            _explicitGoalWorld = default;
+            ChangeExplicitGoal(false, default);
             unchecked { GoalLifetime++; }
         }
 
