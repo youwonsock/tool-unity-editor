@@ -160,7 +160,7 @@ namespace Common.FlowField
                 rebuildDynamic,
                 rebuildGoal);
 
-            ApplyPreparedBase(prepared, rebuildStatic, rebuildDynamic, rebuildGoal, hadObstacleMask, ref pending);
+            ApplyPreparedBase(prepared, rebuildStatic, rebuildDynamic, rebuildGoal, hadObstacleMask, surfaceChanged, ref pending);
         }
 
         private void ApplyPreparedBase(
@@ -169,6 +169,7 @@ namespace Common.FlowField
             bool rebuildDynamic,
             bool rebuildGoal,
             bool hadObstacleMask,
+            bool surfaceChanged,
             ref FlowFieldSurfaceDirtyFlags pending)
         {
             _state.DirtyObstacleRegion = FlowFieldCellRect.Invalid;
@@ -193,7 +194,10 @@ namespace Common.FlowField
                     _state.DirtyFinalRegion = FlowFieldCellRect.Invalid;
                 }
             }
-            if (prepared.ObstacleMaskChanged || !hadObstacleMask)
+            // Escape directions read the ground as well as the mask (which
+            // cells are valid, their links and heights), so a new Surface
+            // rebuilds them even when the mask comes out the same.
+            if (prepared.ObstacleMaskChanged || !hadObstacleMask || surfaceChanged)
             {
                 if (!prepared.ObstacleMaskChanged)
                     _obstacleMasks.CommitCombinedAndBuildEscape(
