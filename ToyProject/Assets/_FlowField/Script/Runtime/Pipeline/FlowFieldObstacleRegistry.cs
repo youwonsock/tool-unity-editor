@@ -118,7 +118,12 @@ namespace Common.FlowField
             return true;
         }
 
-        /// <summary>False when it is not registered. A destroyed Collider can still be removed.</summary>
+        /// <summary>
+        /// False when it is not registered. A destroyed Collider can still be
+        /// removed. A Collider still in the scene also reports where it is
+        /// now (synced), so a move made in the same frame as the unregister
+        /// is scanned again there instead of being lost.
+        /// </summary>
         internal bool Unregister(Collider collider, out FlowFieldObstacleChange change)
         {
             change = default;
@@ -128,8 +133,10 @@ namespace Common.FlowField
                 return false;
             Bounds previous = _bounds[index];
             RemoveAt(index);
+            bool inScene = collider != null && collider.enabled && collider.gameObject.activeInHierarchy;
+            Bounds current = inScene ? FlowFieldPhysicsSync.SyncedBounds(collider) : default;
             change = new FlowFieldObstacleChange(
-                FlowFieldObstacleChangeKind.Unregistered, collider, true, previous, false, default);
+                FlowFieldObstacleChangeKind.Unregistered, collider, true, previous, inScene, current);
             return true;
         }
 
