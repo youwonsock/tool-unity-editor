@@ -289,7 +289,8 @@ namespace Common.FlowField
         }
 
         // The Goal Transform is an initial Goal: Init reads it once, and from
-        // then on only SetGoal changes the Goal.
+        // then on only SetGoal changes the Goal. Release drops that Goal, so
+        // the next Init reads the Goal Transform again.
         private void AdoptGoalTransform()
         {
             if (_goalTransform == null || _hasExplicitGoal)
@@ -324,6 +325,9 @@ namespace Common.FlowField
             using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
             Modifiers.Detach();
             owner.Release();
+            // The Goal is input like the registrations Release clears.
+            _hasExplicitGoal = false;
+            _explicitGoalWorld = default;
         }
 
         // Subscribed for the Manager's whole life: a queued Released must still
