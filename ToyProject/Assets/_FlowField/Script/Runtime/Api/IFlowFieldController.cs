@@ -8,6 +8,7 @@ namespace Common.FlowField
     /// </summary>
     public interface IFlowFieldController : IFlowFieldProvider
     {
+        /// <summary>Starts a session. Play Mode only; Edit Mode uses Bake and the preview.</summary>
         void Init();
         void RequestRebuild();
         void Release();

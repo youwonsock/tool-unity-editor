@@ -225,6 +225,11 @@ namespace Common.FlowField
         public void Init()
         {
             _boundary.ThrowIfInUserCode(nameof(Init));
+            // Edit Mode does not call OnDestroy for this component, so a
+            // session started there would stay in the runtime scheduler after
+            // the Manager is gone and build in every later Play session.
+            if (!Application.isPlaying)
+                throw FlowFieldFailures.InitOutsidePlayMode();
             if (IsInitialized && _spaceMode != SpaceMode)
                 throw new InvalidOperationException(FlowFieldManagerConfig.SpaceModeLockedMessage);
             if (IsFaulted)

@@ -11,6 +11,10 @@ namespace Common.FlowField
         internal static InvalidOperationException NotInitialized()
             => new InvalidOperationException($"{nameof(FlowFieldManager)} is not initialized.");
 
+        internal static InvalidOperationException InitOutsidePlayMode()
+            => new InvalidOperationException(
+                $"{nameof(FlowFieldManager)}.Init runs only in Play Mode. In Edit Mode, use Bake and the Scene View preview.");
+
         internal static InvalidOperationException Faulted(Exception fault)
             => new InvalidOperationException(
                 $"{nameof(FlowFieldManager)} is faulted. Call RequestRebuild() to retry.",

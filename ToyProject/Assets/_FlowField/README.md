@@ -113,6 +113,7 @@ public sealed class FlowFieldReadmeMover : MonoBehaviour
 - `Revision`과 `FieldChanged`는 두 모드 모두 게시 내용이 실제로 바뀔 때만 바뀝니다. Space Mode를 바꿔도 `Revision`은 처음부터 다시 세지 않고 이어서 셉니다.
 - Surface2D의 `ClampPositionToGrid()`·`TryClampPositionToGrid()`는 X·Z만 맞춥니다.
 - 좌표가 NaN·무한대이면 `Sample()`과 `ClampPositionToGrid()` 모두 같은 메시지(`Position must be finite.`)의 `ArgumentOutOfRangeException`입니다.
+- `Init()`은 Play Mode에서만 씁니다. Edit Mode에서 부르면 `InvalidOperationException`을 던집니다. Edit Mode는 컴포넌트의 OnDestroy를 부르지 않아, 거기서 만든 세션이 Manager가 사라진 뒤에도 남기 때문입니다. Edit Mode에서는 Bake와 Scene View 미리보기를 씁니다.
 - 비활성 상태에서 `Init()`하면 빌드는 활성화될 때 시작하지만 요청은 바로 제출합니다. 그래서 두 모드 모두 그 사이에도 최신 Grid로 `ClampPositionToGrid()`하고 장애물 통지를 받습니다.
 - Faulted 상태에서도 `UnregisterDynamicObstacle()`은 Modifier 해제처럼 받고 bool을 돌려줍니다. `FlowFieldDynamicObstacle`을 그동안 끄면 재시도한 결과에 그 장애물이 남지 않습니다. `FlowFieldGoalTarget`도 그동안 끄면 그 Goal을 지우므로, 재시도는 Goal 없이 빌드합니다. Modifier 코드 안에서 미룬 해제는 그 작업이 Fault로 끝나도 실행됩니다.
 - 샘플을 덮어쓰는 안전 규칙은 두 모드와 모든 Bake 모드에서 같습니다(TechnicalNotes "샘플 안전 규칙"). Surface2D도 샘플 방향(Modifier가 돌린 방향 포함)이 막힌 칸이나 격자 밖, 또는 Max Step Height·Max Slope를 넘는 턱이나 경사로 가는 칸에서 멈추고, 막힌 칸에서 빠져나갈 곳이 격자 밖이거나 통지된 영역이면 멈춥니다. Volume3D도 Surface2D처럼 장애물 깊은 곳(탈출 방향 다음 칸도 막힌 칸)에서 멈추지 않고 탈출 방향으로 빠져나옵니다. StaticBaked도 구운 막힘을 기준으로 같은 검사를 합니다.
