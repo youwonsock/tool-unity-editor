@@ -255,14 +255,15 @@ namespace Common.FlowField
 
         /// <summary>
         /// Enabling and a fault retry start the session again from nothing,
-        /// keeping registered obstacles and Modifiers. A failure faults it,
-        /// so it keeps a LastError to diagnose.
+        /// keeping registered obstacles and Modifiers, whose settings are read
+        /// again. A failure faults it, so it keeps a LastError to diagnose.
         /// </summary>
         private void RestartSession(FlowFieldSession owner)
         {
             owner.Restart();
             try
             {
+                owner.ObserveModifiers();
                 ValidateConfiguration(validateStaticGoal: false);
                 StartBuilding();
             }

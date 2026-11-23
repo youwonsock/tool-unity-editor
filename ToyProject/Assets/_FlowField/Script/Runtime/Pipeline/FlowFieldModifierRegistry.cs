@@ -160,6 +160,30 @@ namespace Common.FlowField
             return new FlowFieldModifierChangeResult(priorityChanged, valueChanged);
         }
 
+        /// <summary>
+        /// Reads every Modifier again, as ApplyChange does for one. A restart
+        /// calls it: an edit made while the session was faulted or stopped
+        /// sent no notification, and a Priority is kept only here. Throws for
+        /// an invalid configuration or a Priority two Modifiers share.
+        /// </summary>
+        internal void ObserveAll()
+        {
+            for (int i = 0; i < _entries.Count; i++)
+            {
+                FlowFieldModifierEntry entry = _entries[i];
+                FlowFieldModifierObservation observation = entry.Modifier.Observe();
+                ValidateCollider(observation.InfluenceCollider);
+                entry.Priority = observation.Priority;
+                entry.Revision = observation.Revision;
+            }
+            _entries.Sort(CompareEntries);
+            for (int i = 1; i < _entries.Count; i++)
+            {
+                if (_entries[i - 1].Priority == _entries[i].Priority)
+                    throw new InvalidOperationException(DuplicatePriorityMessage(_entries[i].Priority));
+            }
+        }
+
         /// <summary>The values a build applies, fixed when it starts.</summary>
         internal static IFlowFieldModifierSnapshot CaptureSnapshot(IFlowFieldVectorModifier modifier)
             => modifier.CaptureSnapshot()

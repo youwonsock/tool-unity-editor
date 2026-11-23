@@ -660,6 +660,17 @@ namespace Common.FlowField
             SetLifecycle(FlowFieldSessionLifecycle.Building);
         }
 
+        /// <summary>
+        /// After a restart, reads every registered Modifier again: Priority
+        /// edits made while the session was faulted or stopped never arrived.
+        /// Throws for an invalid Modifier; the caller reports the fault.
+        /// </summary>
+        internal void ObserveModifiers()
+        {
+            using (Boundary.EnterUserCode())
+                Modifiers.ObserveAll();
+        }
+
         /// <summary>Clears everything, registrations included. Initialize may follow.</summary>
         internal void Release()
         {

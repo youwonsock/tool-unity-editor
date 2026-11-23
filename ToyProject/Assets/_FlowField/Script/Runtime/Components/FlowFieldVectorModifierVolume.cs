@@ -166,7 +166,8 @@ namespace Common.FlowField
                     ReattachToConfiguredManager();
                 return;
             }
-            // A Manager that stopped or faulted has nothing to rebuild.
+            // A Manager that stopped or faulted has nothing to rebuild; its
+            // restart reads every Modifier again, this edit included.
             if ((valueChanged || priorityChanged || areaChanged)
                 && _registeredManager != null
                 && _registeredManager.IsInitialized
