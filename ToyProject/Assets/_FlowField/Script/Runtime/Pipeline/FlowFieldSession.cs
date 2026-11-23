@@ -593,11 +593,15 @@ namespace Common.FlowField
             => ApplyObstacleChange(new FlowFieldObstacleChange(
                 FlowFieldObstacleChangeKind.RegionDirty, null, hasPrevious, previous, hasCurrent, current));
 
+        // The scheduler holds only sessions that can build. A stopped session
+        // leaves it (Stop) and joins again when its restart submits; one that
+        // never runs, such as Init on an inactive Manager whose OnDestroy
+        // Unity never calls, is never held.
         internal void AttachRuntimeScheduler()
         {
             if (Disposed)
                 throw new ObjectDisposedException(GetType().Name);
-            if (_runtimeScheduled)
+            if (_runtimeScheduled || !CanPump)
                 return;
             FlowFieldBuildScheduler.Register(this);
             _runtimeScheduled = true;
@@ -638,6 +642,7 @@ namespace Common.FlowField
             if (!CanPump)
                 return;
             AbandonWork();
+            DetachRuntimeScheduler();
             _builder.DropComputedState();
             // The restart builds everything again, so the sweep starts over too.
             _sweep.Clear();

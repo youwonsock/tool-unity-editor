@@ -28,8 +28,9 @@ namespace Common.FlowField
         /// <summary>
         /// Clears the round-robin position and the probe reading at the start of
         /// a Play session. With domain reload disabled, static fields otherwise
-        /// carry over from the previous one. Registered operations stay: each
-        /// session tracks its own registration and unregisters when it stops.
+        /// carry over from the previous one. Registered sessions stay: each one
+        /// leaves when it stops, is released or is disposed, and a session that
+        /// never runs never joins.
         /// </summary>
         internal static void ResetForNewPlaySession()
         {
