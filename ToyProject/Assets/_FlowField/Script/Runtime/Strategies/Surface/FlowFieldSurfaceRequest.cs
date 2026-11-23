@@ -163,6 +163,9 @@ namespace Common.FlowField
                 flags |= FlowFieldSurfaceDirtyFlags.StaticObstacles
                     | FlowFieldSurfaceDirtyFlags.DynamicObstacles
                     | FlowFieldSurfaceDirtyFlags.Escape;
+                // Modifier influence masks use the same check box.
+                if (!Signature.CheckVolumeMatches(other.Signature))
+                    flags |= FlowFieldSurfaceDirtyFlags.ModifierArea | FlowFieldSurfaceDirtyFlags.FinalRegion;
             }
 
             if (!GoalMatch(Goal, other.Goal))

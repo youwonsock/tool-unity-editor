@@ -267,6 +267,11 @@ namespace Common.FlowField
                 DropPublishedField();
             FlowFieldSurfaceDirtyFlags inputFlags = InputDirtyFlags(request);
             Bounds? invalidated = ObstacleSettingsInvalidation(request);
+            // A new check box moves every Modifier's cells. Marked here, with
+            // the request that has it, so an owed change is never rebuilt with
+            // the old one.
+            if ((inputFlags & FlowFieldSurfaceDirtyFlags.ModifierArea) != 0)
+                _modifierComposition?.MarkAllAreasDirty();
 
             FlowFieldSurfaceDirtyFlags combinedFlags = inputFlags | request.DirtyFlags;
             _state.DirtyFlags |= combinedFlags;

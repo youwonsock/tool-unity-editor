@@ -42,6 +42,11 @@ namespace Common.FlowField
                 && FlowFieldLayoutUtility.Approximately(ObstacleCheckCenterOffset, other.ObstacleCheckCenterOffset)
                 && FlowFieldLayoutUtility.Approximately(ObstacleClearance, other.ObstacleClearance);
 
+        // The vertical check box, which Modifier influence masks use as well as obstacles.
+        internal bool CheckVolumeMatches(in FlowFieldSurfaceSignature other)
+            => FlowFieldLayoutUtility.Approximately(ObstacleCheckHeight, other.ObstacleCheckHeight)
+                && FlowFieldLayoutUtility.Approximately(ObstacleCheckCenterOffset, other.ObstacleCheckCenterOffset);
+
         /// <summary>The surface part alone, for data that has no obstacle settings.</summary>
         internal static bool SurfaceMatches(
             in FlowFieldSurfaceBakeSettings left,
