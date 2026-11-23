@@ -74,7 +74,7 @@
 - **격자 밖 변경:** 이전·현재 Bounds 어느 쪽도 셀 크기와 Clearance만큼 넓혀서 격자에 닿지 않는 장애물 변화(등록·해제·이동·영역 알림, 파괴 정리)는 Session이 건너뜁니다. 불확실 영역도 다시 빌드도 없고, BakedBase의 변화 영역도 넓히지 않습니다. 등록부는 이미 그 Bounds를 기록했으므로, 나중에 격자 안으로 옮기면 이전·현재가 모두 알려집니다. 건너뛰는 기준은 마지막 요청의 격자입니다. 격자를 바꾸면 이전 격자의 게시 필드를 버리고 새 격자는 장애물을 전부 조회하므로, 이전 격자에만 닿는 변화를 건너뛰어도 옛 필드에 남지 않습니다.
 - `SetGoal()`은 장애물 결과를 재사용합니다. 같이 `RequestRebuild()`를 부르면 이 이점을 잃습니다.
 - `RequestRebuild()`는 두 모드 모두 장애물을 전체 다시 조회합니다. `BakedBase`는 Bake 막힘에서 다시 시작해 Init 뒤 바뀐 영역과 등록 장애물 영역만 다시 조회합니다. Surface의 `RequestRebuild()`는 바닥 Raycast를 다시 하지 않으므로, 바닥 형상이 바뀌면 `NotifyCellsDirty()`를 씁니다. `NotifyCellsDirty()`는 두 모드 모두 바닥(Volume은 모든 셀)과 장애물을 다시 계산합니다. 진행 중인 빌드는 버리지 않고, 불확실 영역도 표시하지 않습니다(`RequestRebuild()`와 같습니다).
-- 풀이 중에 바뀐 Goal과 설정은 Builder가 보관했다가 다음 빌드를 시작할 때 제출합니다.
+- 풀이 중에 바뀐 Goal과 설정은 Builder가 보관했다가 다음 빌드를 시작할 때 제출합니다. Surface2D의 Default Direction은 예외로, 풀이가 끝나면 보관한 새 방향으로 바로 합성하고 다음 빌드에서 다시 합성하지 않습니다. Default Direction을 다시 합성할지는 요청끼리가 아니라 마지막으로 합성한 방향과 비교해 정하므로, 합성이 진행되는 동안 설정을 되돌려도 되돌린 방향으로 다시 합성합니다.
 - Surface2D의 정적 장애물은 Obstacle Layer에서 Rigidbody가 없고 등록하지 않은 Collider입니다. 장애물 변화는 그 변화가 닿는 셀(Bounds + 셀 크기 + Clearance)만 정적 마스크를 다시 scan합니다. 대상은 Rigidbody 없는 Collider의 등록·해제와 `NotifyObstacleRegionDirty`이고, `BakedBase`에서는 모든 장애물 변화입니다. 영역 없이 들어온 장애물 작업(첫 빌드, 장애물 설정 변경)은 전체를 scan합니다.
 - `StaticBaked`는 동적 장애물 등록을 거부하고, 형식이 다른 Bake Asset도 거부하므로 다시 Bake해야 합니다.
 

@@ -167,8 +167,8 @@ namespace Common.FlowField
 
             if (!GoalMatch(Goal, other.Goal))
                 flags |= FlowFieldSurfaceDirtyFlags.Goal | FlowFieldSurfaceDirtyFlags.FinalRegion;
-            if (!HasSameFinalInputs(other))
-                flags |= FlowFieldSurfaceDirtyFlags.DefaultDirection | FlowFieldSurfaceDirtyFlags.FinalRegion;
+            // The Default Direction is compared with the one last composed
+            // (FlowFieldSurfaceBuilder.InputDirtyFlags), not with a request.
             return flags;
         }
 

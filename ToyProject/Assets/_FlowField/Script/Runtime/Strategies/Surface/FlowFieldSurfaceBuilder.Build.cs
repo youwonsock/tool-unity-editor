@@ -312,10 +312,11 @@ namespace Common.FlowField
             // and dirty flags through Commit; the next owner boundary handles it.
             _requests.Pending = IsBaseDirty(_state.DirtyFlags);
 
-            // Default Direction is final-only: apply its newest value to the freshly
-            // solved base rather than solving again.
+            // Default Direction is final-only: apply its newest value, owed
+            // settings included, to the freshly solved base rather than solving
+            // again. The owed Submit then finds it composed.
             if (FlowFieldVectorUtility.TryNormalizeDefaultDirection(
-                    _latestDefaultDirection ?? finalRequest.DefaultDirection,
+                    _configOwed ? _owedConfig.Flow.DefaultDirection : finalRequest.DefaultDirection,
                     out Vector3 resolvedDefault)
                 && !FlowFieldVectorUtility.SameDefaultDirection(_state.ResolvedDefaultDirection, resolvedDefault))
                 _state.ResolvedDefaultDirection = resolvedDefault;

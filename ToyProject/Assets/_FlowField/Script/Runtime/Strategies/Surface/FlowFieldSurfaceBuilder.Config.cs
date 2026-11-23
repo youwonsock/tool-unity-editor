@@ -59,27 +59,19 @@ namespace Common.FlowField
         private Bounds? SubmitSettings(in FlowFieldManagerConfig config)
         {
             FlowFieldSurfaceRequest current = CreateCurrentRequest(in config);
-            if (HasSubmittedRequest && HasSameBaseInputs(current) && HasSameFinalInputs(current))
+            FlowFieldSurfaceDirtyFlags flags = InputDirtyFlags(current);
+            MarkDirty(flags, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
+            if (_requests.HasLatest && current.HasSameInputs(_requests.Latest))
             {
                 // The settings are back to the submitted request, Goal
                 // included, so a change owed during this build was reverted
-                // before it began: drop it, and compose with this direction.
-                ObserveDefaultDirection(current.DefaultDirection);
+                // before it began: drop it. A direction a solve already
+                // composed is composed again (the flags above).
                 _configOwed = false;
                 return null;
             }
-
-            // Visible to a solve callback even before the next Submit.
-            ObserveDefaultDirection(current.DefaultDirection);
-            FlowFieldSurfaceDirtyFlags flags = GetInputDirtyFlags(current);
-            bool gridChanged = (flags & FlowFieldSurfaceDirtyFlags.Grid) != 0;
-            if (!FlowFieldVectorUtility.SameDefaultDirection(
-                    _state.ResolvedDefaultDirection,
-                    FlowFieldVectorUtility.NormalizeDefaultDirection(config.Flow.DefaultDirection)))
-                flags |= FlowFieldSurfaceDirtyFlags.DefaultDirection | FlowFieldSurfaceDirtyFlags.FinalRegion;
-            MarkDirty(flags, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
-            // A new grid hides the published field at once.
-            return SubmitOrOwe(in config, immediately: gridChanged);
+            // A new grid drops the published field at once.
+            return SubmitOrOwe(in config, immediately: (flags & FlowFieldSurfaceDirtyFlags.Grid) != 0);
         }
 
         // A running build keeps the request it started with; the next build

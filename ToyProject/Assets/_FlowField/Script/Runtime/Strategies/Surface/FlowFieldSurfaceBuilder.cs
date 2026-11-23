@@ -25,7 +25,6 @@ namespace Common.FlowField
         private readonly FlowFieldSurfaceComposeStage _composeStage = new FlowFieldSurfaceComposeStage();
         private FlowFieldSurfaceModifierComposition _modifierComposition;
         private FlowFieldSurfaceRequest? _committedRequest;
-        private Vector3? _latestDefaultDirection;
         private FlowFieldSurfaceSourceKind _sourceKind;
         // Configuration input that arrived while a build ran. The next build
         // submits it before it begins.
@@ -44,7 +43,6 @@ namespace Common.FlowField
         public FlowFieldGridSpace LatestGrid
             => _requests.HasLatest ? _requests.Latest.SurfaceSettings.Grid : _state.Grid;
 
-        internal bool HasSubmittedRequest => _requests.HasLatest;
         public bool HasPendingRequest => _requests.Pending;
 
         // Where the active build stands. A build begins with the synchronous
@@ -175,32 +173,6 @@ namespace Common.FlowField
             _phase = BuildPhase.Publish;
         }
 
-
-        /// <summary>
-        /// Records the Default Direction, which only the final field uses, as
-        /// soon as the settings report it. An Inspector change can arrive after
-        /// a solve starts but before its callback, and the callback must compose
-        /// the freshly solved base with the newest default even before a
-        /// replacement request is submitted.
-        /// </summary>
-        internal void ObserveDefaultDirection(Vector3 direction)
-        {
-            if (FlowFieldVectorUtility.TryNormalizeDefaultDirection(direction, out Vector3 normalized))
-                _latestDefaultDirection = normalized;
-        }
-
-        internal bool HasSameBaseInputs(in FlowFieldSurfaceRequest request)
-            => _requests.HasLatest && _requests.Latest.HasSameBaseInputs(request);
-
-        internal bool HasSameFinalInputs(in FlowFieldSurfaceRequest request)
-            => _requests.HasLatest && _requests.Latest.HasSameFinalInputs(request);
-
-        internal FlowFieldSurfaceDirtyFlags GetInputDirtyFlags(in FlowFieldSurfaceRequest request)
-            => !_requests.HasLatest
-                ? FlowFieldSurfaceDirtyFlags.All
-                : _requests.Latest.GetInputDirtyFlags(request);
-
-
         // The session that runs this builder. Lifecycle, events and the build
         // loop live there.
         private readonly FlowFieldSession _session;
@@ -294,7 +266,6 @@ namespace Common.FlowField
             if (_committedRequest.HasValue && !_committedRequest.Value.HasSameSource(request))
                 DropPublishedField();
             FlowFieldSurfaceDirtyFlags inputFlags = InputDirtyFlags(request);
-            ObserveDefaultDirection(request.DefaultDirection);
             Bounds? invalidated = ObstacleSettingsInvalidation(request);
 
             FlowFieldSurfaceDirtyFlags combinedFlags = inputFlags | request.DirtyFlags;
@@ -322,11 +293,27 @@ namespace Common.FlowField
             return invalidated;
         }
 
-        // What differs from the latest accepted request.
+        /// <summary>
+        /// What differs from the latest accepted request, and the Default
+        /// Direction when it differs from the one last composed. Every base
+        /// rebuild composes with ResolvedDefaultDirection, so comparing with
+        /// it catches an edit reverted after a solve applied it and skips one
+        /// a solve already applied. With no request yet, Initialize or a drop
+        /// has already marked everything.
+        /// </summary>
         private FlowFieldSurfaceDirtyFlags InputDirtyFlags(in FlowFieldSurfaceRequest request)
-            => _requests.HasLatest && !request.HasSameInputs(_requests.Latest)
-                ? _requests.Latest.GetInputDirtyFlags(request)
-                : FlowFieldSurfaceDirtyFlags.None;
+        {
+            if (!_requests.HasLatest)
+                return FlowFieldSurfaceDirtyFlags.None;
+            FlowFieldSurfaceDirtyFlags flags = request.HasSameInputs(_requests.Latest)
+                ? FlowFieldSurfaceDirtyFlags.None
+                : _requests.Latest.GetInputDirtyFlags(request);
+            if (!FlowFieldVectorUtility.SameDefaultDirection(
+                    _state.ResolvedDefaultDirection,
+                    FlowFieldVectorUtility.NormalizeDefaultDirection(request.DefaultDirection)))
+                flags |= FlowFieldSurfaceDirtyFlags.DefaultDirection | FlowFieldSurfaceDirtyFlags.FinalRegion;
+            return flags;
+        }
 
         /// <summary>
         /// New obstacle settings make every cell uncertain from the moment they
@@ -457,7 +444,6 @@ namespace Common.FlowField
             _state.GoalRemoved = false;
             _state.BakedBaseTouched = null;
             _masksSweep = false;
-            _latestDefaultDirection = null;
         }
 
         private void PrepareSolveBackend()
