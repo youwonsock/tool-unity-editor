@@ -170,6 +170,10 @@ namespace Common.FlowField.Editor
                 throw new InvalidOperationException("Static Flow Bake is unavailable while the Editor is in Play mode.");
             if (!FlowFieldBakeModes.UsesBakeAsset(manager.BakeMode))
                 return;
+            // Init loads what the bake writes, so settings Init rejects never
+            // replace a working asset.
+            if (!manager.TryValidateBakeSettings(out string reason))
+                throw new InvalidOperationException($"Static Flow Bake did not start: {reason}");
 
             if (manager.SpaceMode == FlowFieldSpaceMode.Volume3D)
             {

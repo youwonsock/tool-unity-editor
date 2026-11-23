@@ -121,7 +121,7 @@ public sealed class FlowFieldReadmeMover : MonoBehaviour
 
 ## 기능
 
-**베이킹:** 씬을 미리 계산해 v6 Asset으로 저장하고, `StaticBaked` 런타임은 Physics와 BFS 없이 로드합니다. Default Direction과 Modifier는 로드 뒤 합성합니다. `BakedBase`는 같은 Asset에서 바닥과 장애물 막힘만 가져오고 Goal은 BFS로 다시 풉니다. 장애물이 바뀌면(등록·해제·이동·영역 알림) 그 영역만 Physics로 다시 조회하므로, Bake 때 막혔던 자리도 옮긴 장애물이면 풀립니다. Bake 뒤 아무도 지켜보지 않을 때 옮긴 장면 장애물(등록하기 전이나 알리지 않은 이동)은 모르므로, 그 Bake 때 자리는 막힌 채 남습니다. `Sweep Unregistered`를 켜면 새 자리는 반영되고, Volume3D는 Bake 때 자리도 풉니다. 장면 장애물을 Editor에서 옮겼다면 다시 Bake합니다. Clear Bake는 참조만 지우며, 다시 Bake하면 이 Manager의 기존 Asset(씬 옆 고정 경로)을 덮어씁니다. 씬을 옮기거나 씬·Manager 이름을 바꾼 뒤 Clear Bake하고 다시 Bake하면 새 경로에 Asset을 만들고 예전 Asset은 남으므로, 필요 없으면 직접 지웁니다. Asset이 연결된 동안에는 그 Asset에 그대로 씁니다.
+**베이킹:** 씬을 미리 계산해 v6 Asset으로 저장하고, `StaticBaked` 런타임은 Physics와 BFS 없이 로드합니다. Default Direction과 Modifier는 로드 뒤 합성합니다. `BakedBase`는 같은 Asset에서 바닥과 장애물 막힘만 가져오고 Goal은 BFS로 다시 풉니다. 장애물이 바뀌면(등록·해제·이동·영역 알림) 그 영역만 Physics로 다시 조회하므로, Bake 때 막혔던 자리도 옮긴 장애물이면 풀립니다. Bake 뒤 아무도 지켜보지 않을 때 옮긴 장면 장애물(등록하기 전이나 알리지 않은 이동)은 모르므로, 그 Bake 때 자리는 막힌 채 남습니다. `Sweep Unregistered`를 켜면 새 자리는 반영되고, Volume3D는 Bake 때 자리도 풉니다. 장면 장애물을 Editor에서 옮겼다면 다시 Bake합니다. Bake는 Init과 같은 설정 검사를 먼저 하고(Bake Asset과, Asset에 들어가지 않는 StaticBaked의 `Sweep Unregistered` 금지는 제외), 통과하지 못하면 Asset을 쓰지 않습니다. Clear Bake는 참조만 지우며, 다시 Bake하면 이 Manager의 기존 Asset(씬 옆 고정 경로)을 덮어씁니다. 씬을 옮기거나 씬·Manager 이름을 바꾼 뒤 Clear Bake하고 다시 Bake하면 새 경로에 Asset을 만들고 예전 Asset은 남으므로, 필요 없으면 직접 지웁니다. Asset이 연결된 동안에는 그 Asset에 그대로 씁니다.
 
 <p align="center">
   <img src="Docs/Images/feature-staticbaked-surface.png" alt="Surface2D StaticBaked 로드 결과" width="48%">

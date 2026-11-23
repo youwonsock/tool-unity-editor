@@ -36,6 +36,18 @@ namespace Common.FlowField.Editor
         }
 
         /// <summary>
+        /// The checks Init makes on the settings a bake reads, leaving out the
+        /// Bake Asset the bake is about to write. A bake that passes them saves
+        /// an asset Init can load.
+        /// </summary>
+        internal static bool TryValidateBakeSettings(this FlowFieldManager manager, out string reason)
+        {
+            FlowFieldManagerConfig config = manager.CaptureConfig(FlowFieldBakeMode.RuntimeDynamic);
+            return FlowFieldSpaceStrategy.For(manager.SpaceMode)
+                .TryValidate(in config, spaceModeLocked: false, bakeModeLocked: false, validateStaticGoal: false, out reason);
+        }
+
+        /// <summary>
         /// The Volume3D checks Init makes before the bake payload, with its
         /// reasons. The Volume display validates the payload in steps, then
         /// runs <see cref="TryValidateConfig"/> on the validated payload.

@@ -78,6 +78,8 @@ namespace Common.FlowField.Editor
             DrawBakeStatus(manager);
             // Bakes change Assets and the scene, so Play Mode keeps them off.
             bool disableBakeActions = FlowFieldBakeEditor.IsBaking || exceedsCellLimit || Application.isPlaying;
+            // The status above already shows why these settings cannot bake.
+            bool disableBake = disableBakeActions || !manager.TryValidateBakeSettings(out _);
             if (FlowFieldBakeModes.UsesBakeAsset(manager.BakeMode))
             {
                 if (Application.isPlaying)
@@ -102,8 +104,11 @@ namespace Common.FlowField.Editor
                 {
                     using (new EditorGUILayout.HorizontalScope())
                     {
-                        if (GUILayout.Button("Bake / ReBake Static Flow Field"))
-                            FlowFieldBakeEditor.ScheduleBake(manager);
+                        using (new EditorGUI.DisabledScope(disableBake))
+                        {
+                            if (GUILayout.Button("Bake / ReBake Static Flow Field"))
+                                FlowFieldBakeEditor.ScheduleBake(manager);
+                        }
 
                         using (new EditorGUI.DisabledScope(!FlowFieldBakeEditor.HasBakeAsset(manager)))
                         {
