@@ -51,16 +51,12 @@ namespace Common.FlowField
         public FlowFieldSpaceMode SpaceMode => FlowFieldSpaceMode.Volume3D;
         public bool IsWaitingForExternalCompletion
             => _build != null && _build.SolveRunning && !_build.SolveHandle.IsCompleted;
-        // The published field, until a newer grid or source replaces it.
-        public FlowFieldField PublishedField
-            => _committed != null && (!_requests.HasLatest || _committed.Request.HasSameGrid(_requests.Latest))
-                ? _committed
-                : null;
+        // The published field. A request on another grid or source drops it
+        // (Submit), so it is always on the latest request's grid.
+        public FlowFieldField PublishedField => _committed;
 
         // The latest request's grid, which the next build uses, as in Surface2D.
-        public FlowFieldGridSpace LatestGrid => _requests.HasLatest ? _requests.Latest.Grid : Grid;
-        internal FlowFieldGridSpace Grid
-            => _committed?.Grid ?? _build?.Request.Grid ?? (_requests.HasLatest ? _requests.Latest.Grid : default);
+        public FlowFieldGridSpace LatestGrid => _requests.HasLatest ? _requests.Latest.Grid : default;
         public bool HasPendingRequest => _requests.Pending || _hasPendingModifierRecompose || _build != null;
         internal bool TryGetLatestRequestedInput(out FlowFieldVolumeRequest request)
         {
@@ -105,19 +101,21 @@ namespace Common.FlowField
             ValidateRequest(request);
             if (requeryObstacles)
                 _obstacleQueryRequired = true;
+            // A new grid or source drops the published field for good: readers
+            // wait for a build on this grid, even if the grid later returns to
+            // the old one. Obstacle changes that reached no cell of the new
+            // grid were never applied to the old field (the session skips
+            // them), so it can never be shown again.
+            if (_committed != null && !_committed.Request.HasSameGrid(request))
+                _committed = null;
             bool goalMovedWithinCell = IsGoalMoveWithinCell(request);
             // New obstacle settings make every cell uncertain from now. The
             // comparison is with the latest accepted request on the same grid:
             // a build that began with the previous settings, the first build
-            // included, may still publish. When the latest is on another grid,
-            // the published field shows again once this request returns to
-            // its grid, so it is compared with that one. A new grid hides the
-            // field instead.
-            bool obstacleSettingsChanged = _requests.HasLatest && _requests.Latest.HasSameGrid(request)
-                ? !_requests.Latest.HasSameObstacleInputs(request)
-                : _committed != null
-                    && _committed.Request.HasSameGrid(request)
-                    && !_committed.Request.HasSameObstacleInputs(request);
+            // included, may still publish.
+            bool obstacleSettingsChanged = _requests.HasLatest
+                && _requests.Latest.HasSameGrid(request)
+                && !_requests.Latest.HasSameObstacleInputs(request);
             Bounds? invalidated = obstacleSettingsChanged ? request.WorldBounds : (Bounds?)null;
             // Keep the last accepted request independently of the committed
             // field.  A dirty notification that arrives while another Goal is

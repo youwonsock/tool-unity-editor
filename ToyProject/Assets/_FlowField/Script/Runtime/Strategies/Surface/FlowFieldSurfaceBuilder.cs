@@ -35,19 +35,14 @@ namespace Common.FlowField
         private bool _masksSweep;
 
         public FlowFieldSpaceMode SpaceMode => FlowFieldSpaceMode.Surface2D;
+        // The published field. A request on another grid or source drops it
+        // (Submit), so it always comes from the latest request's source.
         public FlowFieldField PublishedField
-            => _state.SurfaceReady && _fieldStore.IsValid && HasCompatibleCommittedSource()
-                ? _fieldStore.Field
-                : null;
+            => _state.SurfaceReady && _fieldStore.IsValid ? _fieldStore.Field : null;
 
         // The latest request's grid, which the next build uses, as in Volume3D.
         public FlowFieldGridSpace LatestGrid
             => _requests.HasLatest ? _requests.Latest.SurfaceSettings.Grid : _state.Grid;
-
-        private bool HasCompatibleCommittedSource()
-            => !_committedRequest.HasValue
-                || !_requests.HasLatest
-                || _requests.Latest.HasSameSource(_committedRequest.Value);
 
         internal bool HasSubmittedRequest => _requests.HasLatest;
         public bool HasPendingRequest => _requests.Pending;
@@ -291,6 +286,13 @@ namespace Common.FlowField
             if (request.SourceKind != _sourceKind)
                 throw new InvalidOperationException("FlowField request source does not match the active session.");
 
+            // A new grid or source drops the published field for good: readers
+            // wait for a build on this source, even if the settings later
+            // return to the old one. Obstacle changes that reached no cell of
+            // the new grid were never applied to the old field (the session
+            // skips them), so it can never be shown again.
+            if (_committedRequest.HasValue && !_committedRequest.Value.HasSameSource(request))
+                DropPublishedField();
             FlowFieldSurfaceDirtyFlags inputFlags = InputDirtyFlags(request);
             ObserveDefaultDirection(request.DefaultDirection);
             Bounds? invalidated = ObstacleSettingsInvalidation(request);
@@ -330,19 +332,21 @@ namespace Common.FlowField
         /// New obstacle settings make every cell uncertain from the moment they
         /// are notified: a build that began with the previous settings may still
         /// publish, and the first build may be one of them. The comparison is
-        /// with the latest accepted request on the same source; when the latest
-        /// is on another grid or source, the published field shows again once
-        /// this request returns to its source, so it is compared with that one.
-        /// A new grid hides the field instead.
+        /// with the latest accepted request on the same source; a new source
+        /// has already dropped the published field.
         /// </summary>
         internal Bounds? ObstacleSettingsInvalidation(in FlowFieldSurfaceRequest request)
         {
-            bool changed = _requests.HasLatest && _requests.Latest.HasSameSource(request)
-                ? !_requests.Latest.HasSameObstacleInputs(request)
-                : _committedRequest.HasValue
-                    && _committedRequest.Value.HasSameSource(request)
-                    && !_committedRequest.Value.HasSameObstacleInputs(request);
+            bool changed = _requests.HasLatest
+                && _requests.Latest.HasSameSource(request)
+                && !_requests.Latest.HasSameObstacleInputs(request);
             return changed ? request.SurfaceSettings.BakeBounds : (Bounds?)null;
+        }
+
+        private void DropPublishedField()
+        {
+            _committedRequest = null;
+            _fieldStore.Clear();
         }
 
         public IFlowFieldModifierArea CreateModifierArea() => new FlowFieldSurfaceModifierArea();
@@ -412,9 +416,7 @@ namespace Common.FlowField
         {
             DetachSolveBackend();
             _baseStage.LoadedSnapshot = null;
-
-            _committedRequest = null;
-            _fieldStore.Clear();
+            DropPublishedField();
 
             _state.BaseComposed = false;
             _state.LastComposedRegion = FlowFieldCellRect.Invalid;

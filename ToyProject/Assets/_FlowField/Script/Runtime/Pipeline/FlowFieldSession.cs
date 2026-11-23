@@ -412,8 +412,10 @@ namespace Common.FlowField
 
         // Cells a change can reach stop from this frame until a build that
         // queried them is published; the builder then rebuilds them. A change
-        // that reaches no cell of the grid is left out: the registry already
-        // holds its bounds, and a later move into the grid reports both sides.
+        // that reaches no cell of the latest grid is left out: the registry
+        // already holds its bounds, and a later move into the grid reports
+        // both sides. A field on an older grid never shows again (a new grid
+        // drops it), so it cannot miss the change either.
         private void ApplyObstacleChange(in FlowFieldObstacleChange change)
         {
             FlowFieldGridSpace grid = _builder.LatestGrid;
