@@ -5,7 +5,8 @@ namespace Common.FlowField
 {
     /// <summary>
     /// A moving Goal. While enabled it sets the Manager's Goal to its position
-    /// and, at most once a frame, sets it again when it moves; disabling it
+    /// and, at most once a frame, sets it again when it moves or its Influence
+    /// Radius changes; disabling it
     /// clears the Goal it set. FlowField never polls the scene, so a Goal that
     /// moves without this component must call
     /// <see cref="IFlowFieldController.SetGoal"/>. StaticBaked Managers keep
@@ -20,6 +21,7 @@ namespace Common.FlowField
 
         [NonSerialized] private bool _reported;
         [NonSerialized] private Vector3 _reportedPosition;
+        [NonSerialized] private float _reportedRadius;
 
         public FlowFieldManager Manager => _manager;
         public float InfluenceRadius => _influenceRadius;
@@ -41,10 +43,13 @@ namespace Common.FlowField
                 return;
             }
             Vector3 position = transform.position;
-            if (_reported && (position - _reportedPosition).sqrMagnitude <= 0.00000001f)
+            if (_reported
+                && (position - _reportedPosition).sqrMagnitude <= 0.00000001f
+                && _influenceRadius == _reportedRadius)
                 return;
             _reported = true;
             _reportedPosition = position;
+            _reportedRadius = _influenceRadius;
             _manager.SetGoal(FlowFieldGoalRequest.Position(position, _influenceRadius));
         }
 
