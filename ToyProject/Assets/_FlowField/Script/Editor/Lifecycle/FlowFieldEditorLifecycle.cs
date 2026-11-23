@@ -104,6 +104,10 @@ namespace Common.FlowField.Editor
                 }
                 stream.GetChangeGameObjectOrComponentPropertiesEvent(i, out var change);
                 Object changed = EditorUtility.InstanceIDToObject(change.instanceId);
+                // A Modifier reassigned to another Manager also changes the
+                // previews that still hold it.
+                if (changed is FlowFieldVectorModifierVolume changedVolume)
+                    FlowFieldEditorPreview.InvalidateModifier(changedVolume);
                 FlowFieldManager manager = changed switch
                 {
                     FlowFieldManager m => m,

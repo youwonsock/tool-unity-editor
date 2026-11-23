@@ -30,6 +30,10 @@ namespace Common.FlowField.Editor
             internal bool Viewed;
             // Modifiers already reported as rejected, so a rebuild logs each once.
             internal HashSet<string> Rejections = new HashSet<string>();
+            // The Modifiers this preview registered: reassigning one to another
+            // Manager must solve this preview again too.
+            internal readonly HashSet<FlowFieldVectorModifierVolume> Modifiers
+                = new HashSet<FlowFieldVectorModifierVolume>();
 
             internal void DisposeSession()
             {
@@ -87,6 +91,24 @@ namespace Common.FlowField.Editor
                 return;
             entry.Stale = true;
             entry.StaleSince = EditorApplication.timeSinceStartup;
+        }
+
+        /// <summary>
+        /// A Modifier changed: solve again every preview that holds it, such as
+        /// the Manager it was reassigned away from.
+        /// </summary>
+        internal static void InvalidateModifier(FlowFieldVectorModifierVolume volume)
+        {
+            if (volume is null)
+                return;
+            double now = EditorApplication.timeSinceStartup;
+            foreach (Entry entry in Entries.Values)
+            {
+                if (!entry.Modifiers.Contains(volume))
+                    continue;
+                entry.Stale = true;
+                entry.StaleSince = now;
+            }
         }
 
         internal static void InvalidateAll()
@@ -177,6 +199,7 @@ namespace Common.FlowField.Editor
         private static void RegisterModifiers(FlowFieldManager manager, FlowFieldSession session, Entry entry)
         {
             var rejected = new HashSet<string>();
+            entry.Modifiers.Clear();
             FlowFieldVectorModifierVolume[] volumes = UnityEngine.Object.FindObjectsByType<FlowFieldVectorModifierVolume>(
                 FindObjectsInactive.Exclude,
                 FindObjectsSortMode.None);
@@ -200,7 +223,8 @@ namespace Common.FlowField.Editor
                 // The Inspector shows the reason, so the Console gets it once.
                 try
                 {
-                    session.RegisterModifierCommand(volume);
+                    if (session.RegisterModifierCommand(volume))
+                        entry.Modifiers.Add(volume);
                 }
                 catch (Exception exception)
                 {
