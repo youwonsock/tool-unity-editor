@@ -50,7 +50,8 @@ namespace Common.FlowField.Editor
             EditorGUILayout.PropertyField(serializedObject.FindProperty(FlowFieldManager.PropertyNames.GoalTransform));
 
             // The Mode header comes from the field's [Header] attribute.
-            using (new EditorGUI.DisabledScope(Application.isPlaying && manager.IsInitialized))
+            // SetSpaceMode refuses the same states: Release first.
+            using (new EditorGUI.DisabledScope(Application.isPlaying && (manager.IsInitialized || manager.IsFaulted)))
                 EditorGUILayout.PropertyField(spaceMode);
             SerializedProperty mode = serializedObject.FindProperty(FlowFieldManager.PropertyNames.BakeMode);
             using (new EditorGUI.DisabledScope(Application.isPlaying))

@@ -255,6 +255,11 @@ namespace Common.FlowField
             FlowFieldSession owner = ActiveSession;
             if (owner != null && owner.IsFaulted)
             {
+                // A retry keeps the session's Space Mode, as a running session
+                // does: an edit waits for Release, so it is refused here before
+                // anything changes and the fault keeps its cause.
+                if (_spaceMode != owner.SpaceMode)
+                    throw new InvalidOperationException(FlowFieldManagerConfig.SpaceModeLockedMessage);
                 // A retry starts again from nothing. A disabled Manager only
                 // leaves the fault, and starts when it is enabled.
                 if (isActiveAndEnabled)
