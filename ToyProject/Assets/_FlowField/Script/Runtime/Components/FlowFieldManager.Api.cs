@@ -142,6 +142,16 @@ namespace Common.FlowField
             MarkGoalDirty();
         }
 
+        // FlowFieldGoalTarget clears the Goal it set while the Manager is
+        // faulted, as Unregister calls are taken then, so a retry leaves it out.
+        internal void ClearGoalWhileFaulted()
+        {
+            if (!IsFaulted)
+                return;
+            _hasExplicitGoal = false;
+            _explicitGoalWorld = default;
+        }
+
         public void NotifyCellsDirty()
         {
             _boundary.ThrowIfInUserCode(nameof(NotifyCellsDirty));

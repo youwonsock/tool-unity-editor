@@ -61,6 +61,9 @@ namespace Common.FlowField
         private FlowFieldSession _session;
         private bool _hasExplicitGoal;
         private Vector3 _explicitGoalWorld;
+        // Advances each time Release drops the Goal, so FlowFieldGoalTarget
+        // can tell its Goal is gone even when Release and Init run in one frame.
+        internal int GoalLifetime { get; private set; }
         [NonSerialized] private FlowFieldModifierAttachment _modifiers;
 
         // The session the façade answers from. The accepted session keeps
@@ -328,6 +331,7 @@ namespace Common.FlowField
             // The Goal is input like the registrations Release clears.
             _hasExplicitGoal = false;
             _explicitGoalWorld = default;
+            unchecked { GoalLifetime++; }
         }
 
         // Subscribed for the Manager's whole life: a queued Released must still
