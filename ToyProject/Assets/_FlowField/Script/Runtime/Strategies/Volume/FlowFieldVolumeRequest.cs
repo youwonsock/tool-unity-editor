@@ -11,7 +11,7 @@ namespace Common.FlowField
         internal float ObstacleClearance { get; }
         // Whether the session sweeps unregistered obstacles. The obstacle
         // query reads every Collider of the layer either way, so it is not an
-        // obstacle input; turning it on re-queries every cell once.
+        // obstacle input; turning it on or off re-queries every cell once.
         internal bool SweepUnregistered { get; }
         internal bool HasGoal { get; }
         internal Vector3 GoalWorld { get; }

@@ -539,9 +539,14 @@ namespace Common.FlowField.Editor
             state.Code = manager.IsRebuilding
                 ? FlowFieldVolumeVisualizationStatusCode.Rebuilding
                 : FlowFieldVolumeVisualizationStatusCode.Unavailable;
-            state.Message = hasRequestedSource && hasView
-                ? "A new Volume3D grid is being prepared, so the previous vectors are hidden."
-                : "No Volume3D result is published.";
+            // A published field for another source while nothing builds: the
+            // Manager moved without telling the session, or an edit waits for
+            // the Release a Space Mode change needs.
+            state.Message = !hasRequestedSource || !hasView
+                ? "No Volume3D result is published."
+                : manager.IsRebuilding
+                    ? "A new Volume3D grid is being prepared, so the previous vectors are hidden."
+                    : "The published field no longer matches the Manager's place or settings (an unreported move, or an edit waiting for Release), so its vectors are hidden.";
             state.ValidationProgress = 0f;
             state.RefreshRequested = false;
             return refreshRequested || state.Code != previousCode;
@@ -749,7 +754,9 @@ namespace Common.FlowField.Editor
 
         // What the Manager is configured to show. A running Manager submits
         // each settings change when it is made (OnValidate and the API), so
-        // this matches the latest accepted request.
+        // this matches the latest accepted request, except after a Transform
+        // move (sent with the next SetGoal, NotifyCellsDirty or RequestRebuild)
+        // and while an edited Space Mode waits for Release.
         private static bool TryGetConfiguredSource(
             FlowFieldManager manager,
             out FlowFieldVolumeVisualizationSource source)

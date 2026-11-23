@@ -267,7 +267,7 @@ namespace Common.FlowField
             ThrowIfLifecycleUnavailable();
             // Static navigation is immutable for the lifetime of a Session.
             // Init validates the baked Goal signature; a rebuild validates
-            // only the loaded snapshot settings and recomposes it.
+            // only the loaded snapshot's settings, as the baked Goal stays.
             ValidateConfiguration(validateStaticGoal: false);
             if (State == FlowFieldRuntimeState.Suspended)
                 return;

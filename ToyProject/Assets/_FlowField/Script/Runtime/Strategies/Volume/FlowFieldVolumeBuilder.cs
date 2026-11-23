@@ -35,7 +35,6 @@ namespace Common.FlowField
         private bool _obstacleQueryRequired;
         // The sweep was turned on or off since the last build began.
         private bool _queryEveryCell;
-        // Whoever pumps directly (a bake, the Editor preview) waits for the
         // BakedBase: every region an obstacle change reached since Initialize.
         // A reloaded bake queries it again, because the bake still holds what
         // was there before the changes.
@@ -256,9 +255,10 @@ namespace Common.FlowField
         /// <summary>
         /// Tracked obstacle changes report their regions, so the rest of the published
         /// mask stays correct. Only an explicit rebuild (RequestRebuild,
-        /// NotifyCellsDirty) or new obstacle settings query every cell, which picks up
-        /// a collider that moved without being tracked; in BakedBase it starts again
-        /// from the bake.
+        /// NotifyCellsDirty), new obstacle settings or turning the sweep on or off
+        /// query every cell, which picks up a collider that moved without being
+        /// tracked; in BakedBase an explicit rebuild starts again from the bake
+        /// unless the sweep runs.
         /// </summary>
         private bool CanRequeryChangedCells(in FlowFieldVolumeRequest request)
             => !_obstacleQueryRequired

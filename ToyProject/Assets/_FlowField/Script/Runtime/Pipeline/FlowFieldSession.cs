@@ -599,10 +599,11 @@ namespace Common.FlowField
             => ApplyObstacleChange(new FlowFieldObstacleChange(
                 FlowFieldObstacleChangeKind.RegionDirty, null, hasPrevious, previous, hasCurrent, current));
 
-        // The scheduler holds only sessions that can build. A stopped session
-        // leaves it (Stop) and joins again when its restart submits; one that
-        // never runs, such as Init on an inactive Manager whose OnDestroy
-        // Unity never calls, is never held.
+        // The scheduler holds sessions that build or wait for a retry. A
+        // stopped session leaves it (Stop) and joins again when its restart
+        // submits; a faulted one stays, idle, until its retry, Release or
+        // Dispose. One that never runs, such as Init on an inactive Manager
+        // whose OnDestroy Unity never calls, is never held.
         internal void AttachRuntimeScheduler()
         {
             if (Disposed)

@@ -139,8 +139,10 @@ namespace Common.FlowField
         private int[] _solveCancel;
         private int[] _solveGoal;
         internal readonly bool IsModifierRecompose;
-        // RequestRebuild or NotifyCellsDirty asked this build to query every
-        // obstacle; if it is discarded, the build that replaces it still must.
+        // A Rebuild change (Init, a restart, RequestRebuild) or NotifyCellsDirty
+        // asked this build to query the obstacles again: every cell, or in
+        // BakedBase the bake and the regions changed since. If it is
+        // discarded, the build that replaces it still must.
         internal bool RequiresFullQuery;
         // The sweep was turned on or off: this build queries every cell from
         // Physics, BakedBase included, since nothing swept the unregistered
