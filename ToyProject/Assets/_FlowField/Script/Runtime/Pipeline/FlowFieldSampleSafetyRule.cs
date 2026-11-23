@@ -28,9 +28,8 @@ namespace Common.FlowField
     {
         private const float EscapeAxisThreshold = 0.001f;
         private const float DirectionAxisThreshold = 0.000001f;
-        // sin 22.5°: the share of a direction an axis needs to point to the
-        // neighbour on that axis rather than the one beside it.
-        private const float TurnedAxisFraction = 0.38268343f;
+        // The unit vector of each neighbour step; Surface2D uses the first 8.
+        private static readonly Vector3[] StepDirections = CreateStepDirections();
 
         /// <summary>Returns true and the sample to use when the rule overrides the published one.</summary>
         internal static bool Apply(
@@ -56,28 +55,33 @@ namespace Common.FlowField
             }
 
             // The sample follows the final direction. Where a Modifier turned
-            // it, the neighbour it now heads for is checked too: an axis counts
-            // only when the direction leans into it as far as a step to that
-            // neighbour would, so a small turn along a wall keeps moving.
+            // it, the step it now heads for is checked too: the nearest of the
+            // neighbour steps (8 in Surface2D, 26 in Volume3D), the step a
+            // path would take that way, so a small turn along a wall keeps
+            // moving. An unturned Default Direction also checks every cell
+            // its axes can step into, but the ground link only on the step it
+            // heads for: a Surface projection leaves tiny side components,
+            // and a ledge beside the way is no reason to stop.
             int next = field.NextCells[index];
             Vector3 baseDirection = field.BaseDirections[index];
             Vector3 direction = field.FinalDirections[index];
             bool turned = direction != baseDirection;
-            float turnedThreshold = TurnedAxisFraction * direction.magnitude;
             bool unsafeMove = next >= 0 && next != index
-                ? IsStepUnsafe(field.Grid, index, next, in cells)
-                    || turned && IsDirectionUnsafe(field.Grid, index, direction, turnedThreshold, in cells)
+                ? IsStepUnsafe(field.Grid, index, next, pathLink: true, in cells)
+                    || turned && IsHeadingUnsafe(field.Grid, index, direction, in cells)
                 : next == -1 && (turned
-                    ? IsDirectionUnsafe(field.Grid, index, direction, turnedThreshold, in cells)
-                    : IsDirectionUnsafe(field.Grid, index, baseDirection, DirectionAxisThreshold, in cells));
+                    ? IsHeadingUnsafe(field.Grid, index, direction, in cells)
+                    : IsDirectionUnsafe(field.Grid, index, baseDirection, in cells)
+                        || IsHeadingUnsafe(field.Grid, index, baseDirection, in cells));
             if (!unsafeMove)
                 return false;
             sample = Stop(published);
             return true;
         }
 
-        // Every cell of the box from this cell to the next, and the link itself.
-        private static bool IsStepUnsafe(FlowFieldGridSpace grid, int index, int next, in Cells cells)
+        // Every cell of the box from this cell to the next, and the link
+        // itself: the path's link for a path step, the ground's otherwise.
+        private static bool IsStepUnsafe(FlowFieldGridSpace grid, int index, int next, bool pathLink, in Cells cells)
         {
             if (next >= grid.CellCount)
                 return true;
@@ -86,7 +90,8 @@ namespace Common.FlowField
             int direction = grid.SpaceMode == FlowFieldSpaceMode.Volume3D
                 ? FlowFieldNeighborUtility.FindDirectionIndex(x1 - x0, y1 - y0, z1 - z0)
                 : FlowFieldNeighborUtility.FindDirectionIndex(x1 - x0, z1 - z0);
-            if (direction < 0 || !cells.HasLink(index, direction))
+            if (direction < 0
+                || !(pathLink ? cells.HasLink(index, direction) : cells.HasGroundLink(index, direction)))
                 return true;
             for (int x = Mathf.Min(x0, x1); x <= Mathf.Max(x0, x1); x++)
             for (int y = Mathf.Min(y0, y1); y <= Mathf.Max(y0, y1); y++)
@@ -104,13 +109,12 @@ namespace Common.FlowField
             FlowFieldGridSpace grid,
             int index,
             Vector3 direction,
-            float threshold,
             in Cells cells)
         {
             bool volume = grid.SpaceMode == FlowFieldSpaceMode.Volume3D;
-            int sx = Sign(direction.x, threshold);
-            int sy = volume ? Sign(direction.y, threshold) : 0;
-            int sz = Sign(direction.z, threshold);
+            int sx = Sign(direction.x, DirectionAxisThreshold);
+            int sy = volume ? Sign(direction.y, DirectionAxisThreshold) : 0;
+            int sz = Sign(direction.z, DirectionAxisThreshold);
             if (sx == 0 && sy == 0 && sz == 0)
                 return true;
             grid.Locate(index, out int x, out int y, out int z);
@@ -125,6 +129,48 @@ namespace Common.FlowField
                     return true;
             }
             return false;
+        }
+
+        // The nearest neighbour step to the direction, checked as a step. A
+        // direction with no heading (none, or straight up or down on a
+        // Surface) has nowhere to go.
+        private static bool IsHeadingUnsafe(FlowFieldGridSpace grid, int index, Vector3 direction, in Cells cells)
+        {
+            bool volume = grid.SpaceMode == FlowFieldSpaceMode.Volume3D;
+            if (!volume)
+                direction.y = 0f;
+            int count = volume ? FlowFieldNeighborUtility.VolumeCount : FlowFieldNeighborUtility.SurfaceCount;
+            int nearest = -1;
+            float best = DirectionAxisThreshold;
+            for (int i = 0; i < count; i++)
+            {
+                float alignment = Vector3.Dot(direction, StepDirections[i]);
+                if (alignment > best)
+                {
+                    best = alignment;
+                    nearest = i;
+                }
+            }
+            if (nearest < 0)
+                return true;
+            grid.Locate(index, out int x, out int y, out int z);
+            return !grid.TryLocal(
+                    x + FlowFieldNeighborUtility.DeltaX[nearest],
+                    y + FlowFieldNeighborUtility.DeltaY[nearest],
+                    z + FlowFieldNeighborUtility.DeltaZ[nearest],
+                    out int target)
+                || IsStepUnsafe(grid, index, target, pathLink: false, in cells);
+        }
+
+        private static Vector3[] CreateStepDirections()
+        {
+            var steps = new Vector3[FlowFieldNeighborUtility.VolumeCount];
+            for (int i = 0; i < steps.Length; i++)
+                steps[i] = new Vector3(
+                    FlowFieldNeighborUtility.DeltaX[i],
+                    FlowFieldNeighborUtility.DeltaY[i],
+                    FlowFieldNeighborUtility.DeltaZ[i]).normalized;
+            return steps;
         }
 
         // Only the cell the escape steps into. A mover leaving an obstacle may
@@ -198,6 +244,25 @@ namespace Common.FlowField
             // the cell checks around it.
             internal bool HasLink(int index, int direction)
                 => (_field.Topology[index] & (1u << direction)) != 0u;
+
+            // The link the ground allows whatever the Goal. A Surface2D path
+            // links only cells inside the Goal's influence, so other steps
+            // read the published Surface's step and slope links, both sides of
+            // a diagonal as the path does. A Volume3D path links every open
+            // cell, so its links serve.
+            internal bool HasGroundLink(int index, int direction)
+            {
+                FlowFieldSurfaceData surface = _field.Surface;
+                if (surface == null)
+                    return HasLink(index, direction);
+                int mask = surface.NeighborMasks[index];
+                if ((mask & (1 << direction)) == 0)
+                    return false;
+                int dx = FlowFieldNeighborUtility.DeltaX[direction];
+                int dz = FlowFieldNeighborUtility.DeltaZ[direction];
+                return dx == 0 || dz == 0
+                    || (mask & (1 << (dx > 0 ? 0 : 1))) != 0 && (mask & (1 << (dz > 0 ? 2 : 3))) != 0;
+            }
 
             internal Vector3 EscapeDirection(int index)
                 => _latest != null
