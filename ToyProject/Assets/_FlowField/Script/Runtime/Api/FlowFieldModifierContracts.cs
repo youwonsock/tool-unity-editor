@@ -59,7 +59,11 @@ namespace Common.FlowField
 
     }
 
-    /// <summary>What a Modifier reports each time the session polls it.</summary>
+    /// <summary>
+    /// What a Modifier reports when the session reads it: at registration, at
+    /// each NotifyModifierChanged, when a build captures snapshots and when a
+    /// restart reads every Modifier again. FlowField never polls a Modifier.
+    /// </summary>
     public readonly struct FlowFieldModifierObservation
     {
         public Collider InfluenceCollider { get; }
@@ -84,7 +88,10 @@ namespace Common.FlowField
     /// </summary>
     public interface IFlowFieldVectorModifier
     {
-        /// <summary>Called often while polling, so it should not allocate.</summary>
+        /// <summary>
+        /// Called at registration, at each notification, at every build start
+        /// and at a restart, so it should not allocate.
+        /// </summary>
         FlowFieldModifierObservation Observe();
 
         /// <summary>

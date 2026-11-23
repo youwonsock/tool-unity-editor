@@ -747,8 +747,9 @@ namespace Common.FlowField.Editor
             return true;
         }
 
-        // What the Manager is configured to show. The Manager submits its
-        // settings every frame, so this matches the latest accepted request.
+        // What the Manager is configured to show. A running Manager submits
+        // each settings change when it is made (OnValidate and the API), so
+        // this matches the latest accepted request.
         private static bool TryGetConfiguredSource(
             FlowFieldManager manager,
             out FlowFieldVolumeVisualizationSource source)
