@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   EventName: 
   Lifecycle: 2
-  UseSpeedChange: 1
+  UseSpeedChange: 0
   SpeedTarget: 2
   SpeedBlendTime: 0
   SpeedBlendCurve:
@@ -41,7 +41,7 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  UseDurationChange: 1
+  UseDurationChange: 0
   DurationTarget: 5
   DurationBlendTime: 0
   DurationBlendCurve:

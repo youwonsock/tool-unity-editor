@@ -33,7 +33,13 @@ namespace Common.TransformPath.Samples
             Renderer[] renderers = laneRoot.GetComponentsInChildren<Renderer>(true);
             for (int i = 0; i < renderers.Length; i++)
             {
-                if (renderers[i] != null)
+                if (renderers[i] == null)
+                    continue;
+                // A path line follows its drawer, which redraws it when the path
+                // changes: hide it there, or a rebuild would show it again.
+                if (renderers[i].TryGetComponent(out PathDataLineRenderer drawer))
+                    drawer.SetVisible(visible);
+                else
                     renderers[i].enabled = visible;
             }
         }

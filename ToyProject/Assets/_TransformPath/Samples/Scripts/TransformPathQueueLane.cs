@@ -59,12 +59,21 @@ namespace Common.TransformPath.Samples
                 _members[i]?.Follower.Stop();
         }
 
-        /// <summary>Pauses every member and remembers which ones were moving.</summary>
+        /// <summary>
+        /// Whether a follower plays: moving, or paused by one of the sample's
+        /// Pause events, which all resume on their own. Pause turns an event's
+        /// pause into one only Resume ends, so the lane resumes it when shown.
+        /// </summary>
+        public static bool IsRunning(PathFollower follower) =>
+            follower != null
+            && (follower.State == EPathFollowerState.Moving || follower.State == EPathFollowerState.Paused);
+
+        /// <summary>Pauses every member and remembers which ones were playing.</summary>
         public void PauseAndRemember()
         {
             for (int i = 0; i < _members.Length; i++)
             {
-                _wasMoving[i] = _members[i] != null && _members[i].Follower.IsMoving;
+                _wasMoving[i] = _members[i] != null && IsRunning(_members[i].Follower);
                 _members[i]?.Follower.Pause();
             }
         }
@@ -79,8 +88,6 @@ namespace Common.TransformPath.Samples
                 _wasMoving[i] = false;
             }
         }
-
-        public void ForgetRemembered() => Array.Clear(_wasMoving, 0, _wasMoving.Length);
 
         public void SubscribeRestarts()
         {

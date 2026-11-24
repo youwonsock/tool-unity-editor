@@ -9,9 +9,9 @@ namespace Common.TransformPath.Samples
         public static string Normal(PathData path, PathFollower follower)
         {
             return $"NORMAL  ready={path.IsReady}  curve={path.CurveType}\n"
-                + $"length={path.PathLength:F2}m  progress={follower.Progress:F2}  "
+                + $"length={Length(path)}  progress={follower.Progress:F2}  "
                 + $"{DescribeMovement(follower)}\n"
-                + $"samples={path.SamplePointCount}  state={follower.State}\n"
+                + $"samples={(path.IsReady ? path.SamplePointCount.ToString() : "n/a")}  state={follower.State}\n"
                 + $"events={DescribeEvents(path, follower.MoveType)}";
         }
 
@@ -22,7 +22,7 @@ namespace Common.TransformPath.Samples
             return $"MULTI  ready={sequence.IsReady}  segment={index}/{count}\n"
                 + $"global={follower.Progress:F2}  local={follower.SegmentProgress:F2}  "
                 + $"{DescribeMovement(follower)}\n"
-                + $"length={sequence.PathLength:F2}m  state={follower.State}\n"
+                + $"length={Length(sequence)}  state={follower.State}\n"
                 + $"events={DescribeSequenceEvents(sequence)}";
         }
 
@@ -48,7 +48,7 @@ namespace Common.TransformPath.Samples
                 + $"leader={leaderText}  state={(paused ? "paused" : "running")}\n"
                 + $"spacing={manager.DefaultSpacing:F2}m  policy={policy}\n"
                 + $"behind leader={behindLeader}  speed x{multiplier}  routeRev={manager.RouteRevision}\n"
-                + $"length={lane.Path.PathLength:F2}m  "
+                + $"length={Length(lane.Path)}  "
                 + $"{(leader == null ? "movement=none" : DescribeMovement(leader.Follower))}\n"
                 + $"events={DescribeSequenceEvents(lane.Path)}";
         }
@@ -56,11 +56,15 @@ namespace Common.TransformPath.Samples
         public static string Shape(TransformPathCircleShape circle, PathFollower follower)
         {
             return $"SHAPE  ready={circle.IsReady}  circle radius={circle.Radius:F2}m\n"
-                + $"length={circle.PathLength:F2}m  progress={follower.Progress:F2}  "
+                + $"length={Length(circle)}  progress={follower.Progress:F2}  "
                 + $"{DescribeMovement(follower)}\n"
                 + $"state={follower.State}  loop  started by Play On Start\n"
                 + "events=none (a shape has no events)";
         }
+
+        // A provider that is not ready has no length; the board says so instead of throwing.
+        private static string Length(PathProviderBehaviour provider) =>
+            provider != null && provider.IsReady ? $"{provider.PathLength:F2}m" : "n/a";
 
         private static string DescribeMovement(PathFollower follower)
         {

@@ -199,14 +199,14 @@ namespace Common.TransformPath.Samples
                 PauseAll();
         }
 
+        // Hidden lanes are paused already and remember whether they ran; only
+        // the lane on show pauses here, so their memory survives Pause All.
         public void PauseAll()
         {
             if (!_isInitialized || _isPaused)
                 return;
-            PauseLane(ETransformPathShowcaseLane.Normal);
-            PauseLane(ETransformPathShowcaseLane.MultiPath);
-            PauseLane(ETransformPathShowcaseLane.Queue);
-            PauseLane(ETransformPathShowcaseLane.Shape);
+            if (_activeLane != ETransformPathShowcaseLane.Queue || _queueVisible)
+                PauseLane(_activeLane);
             _isPaused = true;
         }
 
@@ -216,10 +216,6 @@ namespace Common.TransformPath.Samples
                 return;
             _isPaused = false;
             ResumeActiveLane();
-            _normalWasMovingWhenHidden = false;
-            _multiWasMovingWhenHidden = false;
-            _shapeWasMovingWhenHidden = false;
-            _queue.ForgetRemembered();
         }
 
         public void ResetAll()
@@ -375,18 +371,18 @@ namespace Common.TransformPath.Samples
             switch (lane)
             {
                 case ETransformPathShowcaseLane.Normal:
-                    _normalWasMovingWhenHidden = _pathFollower != null && _pathFollower.IsMoving;
+                    _normalWasMovingWhenHidden = TransformPathQueueLane.IsRunning(_pathFollower);
                     _pathFollower?.Pause();
                     break;
                 case ETransformPathShowcaseLane.MultiPath:
-                    _multiWasMovingWhenHidden = _multiPathFollower != null && _multiPathFollower.IsMoving;
+                    _multiWasMovingWhenHidden = TransformPathQueueLane.IsRunning(_multiPathFollower);
                     _multiPathFollower?.Pause();
                     break;
                 case ETransformPathShowcaseLane.Queue:
                     _queue.PauseAndRemember();
                     break;
                 case ETransformPathShowcaseLane.Shape:
-                    _shapeWasMovingWhenHidden = _shapeFollower != null && _shapeFollower.IsMoving;
+                    _shapeWasMovingWhenHidden = TransformPathQueueLane.IsRunning(_shapeFollower);
                     _shapeFollower?.Pause();
                     break;
             }
