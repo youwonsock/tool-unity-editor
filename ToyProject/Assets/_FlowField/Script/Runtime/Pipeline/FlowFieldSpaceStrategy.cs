@@ -20,21 +20,20 @@ namespace Common.FlowField
 
         /// <summary>
         /// False with the reason for the first invalid setting, the check Init
-        /// and the Inspector share. <paramref name="spaceModeLocked"/> and
-        /// <paramref name="bakeModeLocked"/> say a running session accepted a
-        /// different Space Mode or Bake Mode.
+        /// and the Inspector share. <paramref name="bakeModeLocked"/> says a
+        /// running session accepted a different Bake Mode. A Space Mode edit
+        /// is never checked: it waits for Release.
         /// </summary>
         internal abstract bool TryValidate(
             in FlowFieldManagerConfig config,
-            bool spaceModeLocked,
             bool bakeModeLocked,
             bool validateStaticGoal,
             out string reason);
 
         /// <summary>Throws the reason <see cref="TryValidate"/> gives.</summary>
-        internal void Validate(in FlowFieldManagerConfig config, bool spaceModeLocked, bool bakeModeLocked, bool validateStaticGoal)
+        internal void Validate(in FlowFieldManagerConfig config, bool bakeModeLocked, bool validateStaticGoal)
         {
-            if (!TryValidate(in config, spaceModeLocked, bakeModeLocked, validateStaticGoal, out string reason))
+            if (!TryValidate(in config, bakeModeLocked, validateStaticGoal, out string reason))
                 throw new InvalidOperationException(reason);
         }
 
@@ -60,11 +59,10 @@ namespace Common.FlowField
 
             internal override bool TryValidate(
                 in FlowFieldManagerConfig config,
-                bool spaceModeLocked,
                 bool bakeModeLocked,
                 bool validateStaticGoal,
                 out string reason)
-                => FlowFieldSurfaceBuilder.TryValidate(in config, spaceModeLocked, bakeModeLocked, validateStaticGoal, out reason);
+                => FlowFieldSurfaceBuilder.TryValidate(in config, bakeModeLocked, validateStaticGoal, out reason);
 
             internal override int MaxCellCount => FlowFieldLayoutUtility.MaxSurfaceCellCount;
 
@@ -103,11 +101,10 @@ namespace Common.FlowField
 
             internal override bool TryValidate(
                 in FlowFieldManagerConfig config,
-                bool spaceModeLocked,
                 bool bakeModeLocked,
                 bool validateStaticGoal,
                 out string reason)
-                => FlowFieldVolumeBuilder.TryValidate(in config, spaceModeLocked, bakeModeLocked, validateStaticGoal, out reason);
+                => FlowFieldVolumeBuilder.TryValidate(in config, bakeModeLocked, validateStaticGoal, out reason);
 
             internal override int MaxCellCount => FlowFieldLayoutUtility.MaxVolumeCellCount;
 

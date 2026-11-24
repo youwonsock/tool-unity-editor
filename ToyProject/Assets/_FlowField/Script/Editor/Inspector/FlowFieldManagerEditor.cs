@@ -37,11 +37,12 @@ namespace Common.FlowField.Editor
         {
             serializedObject.Update();
             var manager = (FlowFieldManager)target;
-            // The mode stays fixed while a play-mode Init session is active.
-            // Settings only the other mode reads are hidden.
+            // The mode stays fixed while a play-mode Init session is active,
+            // so the settings shown are the ones that mode reads, even while
+            // a Space Mode edit waits for Release. Settings only the other
+            // mode reads are hidden.
             SerializedProperty spaceMode = serializedObject.FindProperty(FlowFieldManager.PropertyNames.SpaceMode);
-            bool isVolume = spaceMode != null
-                && spaceMode.enumValueIndex == (int)FlowFieldSpaceMode.Volume3D;
+            bool isVolume = manager.SpaceMode == FlowFieldSpaceMode.Volume3D;
             DrawSettings(FlowFieldManager.PropertyNames.Grid, "Grid");
             if (!isVolume)
                 DrawSettings(FlowFieldManager.PropertyNames.Surface, "Surface");
@@ -51,8 +52,15 @@ namespace Common.FlowField.Editor
 
             // The Mode header comes from the field's [Header] attribute.
             // SetSpaceMode refuses the same states: Release first.
-            using (new EditorGUI.DisabledScope(Application.isPlaying && (manager.IsInitialized || manager.IsFaulted)))
+            bool sessionHoldsMode = Application.isPlaying && (manager.IsInitialized || manager.IsFaulted);
+            using (new EditorGUI.DisabledScope(sessionHoldsMode))
                 EditorGUILayout.PropertyField(spaceMode);
+            if (sessionHoldsMode && spaceMode != null && spaceMode.enumValueIndex != (int)manager.SpaceMode)
+                EditorGUILayout.HelpBox(
+                    manager.IsFaulted
+                        ? $"The session keeps {manager.SpaceMode} until Release, and a retry refuses the edited Space Mode; Release, then Init to apply it."
+                        : $"The session keeps {manager.SpaceMode} until Release; the edited Space Mode applies at the next Init.",
+                    MessageType.Info);
             SerializedProperty mode = serializedObject.FindProperty(FlowFieldManager.PropertyNames.BakeMode);
             using (new EditorGUI.DisabledScope(Application.isPlaying))
                 EditorGUILayout.PropertyField(mode);

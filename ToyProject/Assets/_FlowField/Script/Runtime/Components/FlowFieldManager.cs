@@ -287,7 +287,10 @@ namespace Common.FlowField
             // Static navigation is immutable for the lifetime of a Session.
             // Init validates the baked Goal signature; a rebuild validates
             // only the loaded snapshot's settings, as the baked Goal stays.
-            ValidateConfiguration(validateStaticGoal: false);
+            // A Space Mode edit waits for Release, so the rebuild keeps the
+            // session's mode like every other input. Invalid settings still
+            // throw here, before anything changes.
+            ValidateSessionConfiguration();
             if (State == FlowFieldRuntimeState.Suspended)
                 return;
             SubmitConfig(FlowFieldConfigChange.Rebuild);

@@ -197,17 +197,16 @@ namespace Common.FlowField
 
         /// <summary>
         /// False with the reason for the first invalid setting.
-        /// <paramref name="spaceModeLocked"/> and <paramref name="bakeModeLocked"/>
-        /// say a running session accepted a different Space Mode or Bake Mode.
+        /// <paramref name="bakeModeLocked"/> says a running session accepted a
+        /// different Bake Mode.
         /// </summary>
         internal static bool TryValidate(
             in FlowFieldManagerConfig config,
-            bool spaceModeLocked,
             bool bakeModeLocked,
             bool validateStaticGoal,
             out string reason)
         {
-            if (!config.TryValidateShared(spaceModeLocked, bakeModeLocked, out reason))
+            if (!config.TryValidateShared(bakeModeLocked, out reason))
                 return false;
             FlowFieldSurfaceSettings surface = config.Surface;
             if (surface.GroundLayer.value == 0)

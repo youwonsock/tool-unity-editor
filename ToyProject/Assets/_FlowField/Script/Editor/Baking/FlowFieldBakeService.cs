@@ -32,7 +32,7 @@ namespace Common.FlowField.Editor
         {
             FlowFieldManagerConfig config = manager.CaptureConfig(manager.BakeMode);
             return FlowFieldSpaceStrategy.For(manager.SpaceMode)
-                .TryValidate(in config, spaceModeLocked: false, bakeModeLocked: false, includeStaticGoal, out reason);
+                .TryValidate(in config, bakeModeLocked: false, includeStaticGoal, out reason);
         }
 
         /// <summary>
@@ -44,7 +44,7 @@ namespace Common.FlowField.Editor
         {
             FlowFieldManagerConfig config = manager.CaptureConfig(FlowFieldBakeMode.RuntimeDynamic);
             return FlowFieldSpaceStrategy.For(manager.SpaceMode)
-                .TryValidate(in config, spaceModeLocked: false, bakeModeLocked: false, validateStaticGoal: false, out reason);
+                .TryValidate(in config, bakeModeLocked: false, validateStaticGoal: false, out reason);
         }
 
         /// <summary>
@@ -56,7 +56,7 @@ namespace Common.FlowField.Editor
         {
             FlowFieldManagerConfig config = manager.CaptureConfig(manager.BakeMode);
             return FlowFieldVolumeBuilder.TryValidateBeforePayload(
-                in config, spaceModeLocked: false, bakeModeLocked: false, out reason);
+                in config, bakeModeLocked: false, out reason);
         }
 
         // ----- Surface2D -----------------------------------------------------

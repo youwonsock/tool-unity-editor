@@ -32,12 +32,16 @@ namespace Common.FlowField
             }
         }
 
-        /// <summary>The serialized settings now, with the serialized Bake Mode.</summary>
+        /// <summary>
+        /// The serialized settings now, with the serialized Bake Mode. The
+        /// Space Mode is the session's while one holds it (an edit waits for
+        /// Release), so the Editor shows and checks what the session reads.
+        /// </summary>
         internal FlowFieldManagerConfig CaptureConfig() => CaptureConfig(_bakeMode);
 
-        /// <summary>The serialized settings now, with the given Bake Mode.</summary>
+        /// <summary>The settings <see cref="CaptureConfig()"/> takes, with the given Bake Mode.</summary>
         internal FlowFieldManagerConfig CaptureConfig(FlowFieldBakeMode bakeMode)
-            => CaptureConfig(_spaceMode, bakeMode);
+            => CaptureConfig(SpaceMode, bakeMode);
 
         private FlowFieldManagerConfig CaptureConfig(FlowFieldSpaceMode spaceMode, FlowFieldBakeMode bakeMode)
         {
@@ -56,12 +60,11 @@ namespace Common.FlowField
                 ConfiguredGoalWorld);
         }
 
-        private void ValidateConfiguration(bool validateStaticGoal = true)
+        // Init's check: no session holds a mode yet, so this is the serialized one.
+        private void ValidateConfiguration()
         {
             FlowFieldManagerConfig config = CaptureConfig();
-            bool spaceModeLocked = IsInitialized && SpaceMode != _spaceMode;
-            bool bakeModeLocked = IsInitialized && BakeMode != _bakeMode;
-            FlowFieldSpaceStrategy.For(_spaceMode).Validate(in config, spaceModeLocked, bakeModeLocked, validateStaticGoal);
+            FlowFieldSpaceStrategy.For(_spaceMode).Validate(in config, bakeModeLocked: false, validateStaticGoal: true);
         }
 
         /// <summary>
@@ -75,7 +78,7 @@ namespace Common.FlowField
             FlowFieldSpaceMode spaceMode = SpaceMode;
             FlowFieldManagerConfig config = CaptureConfig(spaceMode, _bakeMode);
             bool bakeModeLocked = IsInitialized && BakeMode != _bakeMode;
-            FlowFieldSpaceStrategy.For(spaceMode).Validate(in config, spaceModeLocked: false, bakeModeLocked, validateStaticGoal: false);
+            FlowFieldSpaceStrategy.For(spaceMode).Validate(in config, bakeModeLocked, validateStaticGoal: false);
         }
     }
 }

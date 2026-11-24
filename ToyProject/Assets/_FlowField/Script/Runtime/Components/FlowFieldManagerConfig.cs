@@ -60,16 +60,14 @@ namespace Common.FlowField
 
         /// <summary>
         /// The checks both space modes make first, in one order and with one
-        /// message each. <paramref name="spaceModeLocked"/> and
-        /// <paramref name="bakeModeLocked"/> say a running session accepted a
-        /// different Space Mode or Bake Mode.
+        /// message each. <paramref name="bakeModeLocked"/> says a
+        /// running session accepted a different Bake Mode. A Space Mode edit
+        /// is never checked: it waits for Release.
         /// </summary>
-        internal bool TryValidateShared(bool spaceModeLocked, bool bakeModeLocked, out string reason)
+        internal bool TryValidateShared(bool bakeModeLocked, out string reason)
         {
             if (!Enum.IsDefined(typeof(FlowFieldSpaceMode), SpaceMode))
                 return Fail(out reason, "Space Mode must be Surface2D or Volume3D.");
-            if (spaceModeLocked)
-                return Fail(out reason, SpaceModeLockedMessage);
             if (!FlowFieldGridSpace.IsFinite(Grid.CellSize) || Grid.CellSize < FlowFieldLayoutUtility.MinCellSize)
                 return Fail(out reason, "Cell Size must be finite and positive.");
             Bounds bounds = Grid.BakeBoundsLocal;

@@ -11,7 +11,7 @@ namespace Common.FlowField.Editor
             var settings = (FlowFieldDisplaySettings)target;
             var manager = settings.GetComponent<FlowFieldManager>();
             EditorGUILayout.PropertyField(serializedObject.FindProperty(FlowFieldDisplaySettings.PropertyNames.ShowField));
-            if (manager != null && manager.CaptureConfig().SpaceMode == FlowFieldSpaceMode.Volume3D)
+            if (manager != null && manager.SpaceMode == FlowFieldSpaceMode.Volume3D)
             {
                 SerializedProperty gizmoMode = serializedObject.FindProperty(FlowFieldDisplaySettings.PropertyNames.VolumeGizmoMode);
                 EditorGUILayout.PropertyField(gizmoMode);
