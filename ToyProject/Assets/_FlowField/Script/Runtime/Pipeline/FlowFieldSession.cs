@@ -395,15 +395,14 @@ namespace Common.FlowField
             return true;
         }
 
-        // A faulted session still takes removals; its retry builds everything again.
+        // A faulted session still takes removals (see ApplyObstacleChange).
         private bool UnregisterObstacleNow(Collider collider)
         {
             if (!IsInitialized && !IsFaulted)
                 throw FlowFieldFailures.NotInitialized();
             if (!Obstacles.Unregister(collider, out FlowFieldObstacleChange change))
                 return false;
-            if (!IsFaulted)
-                ApplyObstacleChange(in change);
+            ApplyObstacleChange(in change);
             return true;
         }
 
@@ -433,6 +432,15 @@ namespace Common.FlowField
                 && !Reaches(grid, change.HasPrevious, change.Previous, reach)
                 && !Reaches(grid, change.HasCurrent, change.Current, reach))
                 return;
+            // A faulted session builds nothing, and its retry starts from
+            // nothing. A BakedBase retry still reloads the bake and queries
+            // only what changed since Initialize, so the builder records
+            // where the change reached.
+            if (IsFaulted)
+            {
+                _builder.ApplyObstacleChange(in change);
+                return;
+            }
             if (BakeMode != FlowFieldBakeMode.StaticBaked && grid.IsValid)
             {
                 if (change.HasPrevious)
