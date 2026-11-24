@@ -43,9 +43,9 @@ namespace Common.TransformPath
         private readonly List<Entry> _joined = new List<Entry>(100);
         private readonly List<Entry> _leaving = new List<Entry>(100);
         private readonly List<Entry> _pool = new List<Entry>(100);
-        // By reference: a destroyed member must still find and remove its own entry.
-        private readonly Dictionary<PathQueueMember, Entry> _entries =
-            new Dictionary<PathQueueMember, Entry>(100, PathReferenceComparer<PathQueueMember>.Instance);
+        private readonly Dictionary<PathQueueMember, Entry> _entries = new Dictionary<PathQueueMember, Entry>(100);
+        // Members disabled or destroyed while the spacing policy runs leave once the line is walked.
+        private readonly List<PathQueueMember> _removedWhileCalculating = new List<PathQueueMember>();
 
         private PathProviderBehaviour _routeProvider;
         private bool _isInitialized;
@@ -166,13 +166,12 @@ namespace Common.TransformPath
 
         /// <summary>
         /// The route a member's start plays on: the configured route, else the
-        /// Inspector's route, else the request's provider. A destroyed route is
-        /// let go first, its members leaving as ProviderInvalid.
+        /// Inspector's route, else the request's provider. A destroyed route counts
+        /// as none; configuring the new one lets it go, its members leaving as ProviderInvalid.
         /// </summary>
         internal PathProviderBehaviour RouteForStart(PathProviderBehaviour requested)
         {
-            ForgetDestroyedRoute();
-            if (!ReferenceEquals(_routeProvider, null))
+            if (_routeProvider != null)
                 return _routeProvider;
             return _routeProviderObject != null ? _routeProviderObject : requested;
         }
@@ -306,10 +305,18 @@ namespace Common.TransformPath
             _joined.Add(entry);
         }
 
-        /// <summary>Removes a member without telling it. The member calls this when it leaves.</summary>
+        /// <summary>
+        /// Removes a member without telling it. The member calls this when it leaves.
+        /// While the spacing policy runs, a disabled or destroyed member leaves after it.
+        /// </summary>
         internal void Remove(PathQueueMember member)
         {
-            ThrowIfCalculating();
+            if (_calculating)
+            {
+                if (!ReferenceEquals(member, null))
+                    _removedWhileCalculating.Add(member);
+                return;
+            }
             if (ReferenceEquals(member, null) || !_entries.TryGetValue(member, out Entry entry))
                 return;
             _entries.Remove(member);
@@ -439,6 +446,9 @@ namespace Common.TransformPath
             finally
             {
                 _calculating = false;
+                for (int i = 0; i < _removedWhileCalculating.Count; i++)
+                    Remove(_removedWhileCalculating[i]);
+                _removedWhileCalculating.Clear();
             }
         }
 

@@ -183,6 +183,9 @@ namespace Common.TransformPath
             ThrowIfQueueCalculating(manager);
             PathValueUtility.ThrowIfNotFinite(maxProgress, nameof(maxProgress));
             PathFollower follower = RequireFollower();
+            // A disabled follower never moves, so it would hold the members behind it for good.
+            if (!follower.isActiveAndEnabled)
+                throw new InvalidOperationException($"PathQueueMember '{name}' needs an enabled PathFollower to join a queue.");
             using var operation = PathExecutionBoundary.Enter();
             // Validate before configuring or leaving, so an invalid request changes nothing.
             request.CreateRoute();

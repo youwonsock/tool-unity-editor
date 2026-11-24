@@ -732,6 +732,84 @@ namespace Common.TransformPath.Tests
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 
+        [Test]
+        public void DisabledFollower_CannotJoin()
+        {
+            PathData path = Line(30f, 4f);
+            QueuedPathManager manager = CreateManager(path);
+            PathQueueMember member = CreateMember();
+            member.Follower.enabled = false;
+
+            Assert.Throws<System.InvalidOperationException>(
+                () => member.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path)));
+            Assert.AreEqual(0, manager.MemberCount);
+            Assert.AreEqual(EPathFollowerState.Ready, member.Follower.State);
+        }
+
+        [Test]
+        public void PolicyThatDisablesAMember_RemovesItAfterTheLine()
+        {
+            PathData path = Line(30f, 4f);
+            QueuedPathManager manager = CreateManager(path);
+            PathQueueMember leader = CreateMember();
+            PathQueueMember disabled = CreateMember();
+            PathQueueMember behind = CreateMember();
+            leader.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            leader.Follower.Seek(0.6f);
+            disabled.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            disabled.Follower.Seek(0.4f);
+            behind.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            behind.Follower.Seek(0.2f);
+            bool done = false;
+            manager.SpacingPolicy = CreatePolicy("Disabler", (member, ahead, spacing) =>
+            {
+                if (!done && ReferenceEquals(member, disabled))
+                {
+                    done = true;
+                    DisableMember(disabled);
+                }
+                return spacing;
+            });
+
+            Frames(2);
+
+            Assert.IsTrue(done);
+            Assert.IsFalse(disabled.IsInQueue);
+            Assert.AreEqual(2, manager.MemberCount);
+            Assert.AreSame(leader, manager.GetMember(0));
+            Assert.AreSame(behind, manager.GetMember(1));
+            Assert.IsTrue(manager.TryGetMemberStatus(behind, out PathQueueStatus status));
+            Assert.AreSame(leader, status.Ahead);
+        }
+
+        [Test]
+        public void StartOnAnotherRoute_AfterTheRouteIsDestroyed_ThrowsBeforeReleasingMembers()
+        {
+            PathData inspectorRoute = Line(30f, 4f);
+            PathData runtimeRoute = Line(30f, 4f);
+            PathData other = Line(30f, 4f);
+            QueuedPathManager manager = CreateManager(runtimeRoute);
+            typeof(QueuedPathManager)
+                .GetField("_routeProviderObject", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                .SetValue(manager, inspectorRoute);
+            PathQueueMember queued = CreateMember();
+            var reasons = new List<EPathQueueLeaveReason>();
+            queued.QueueInvalidated += (member, reason) => reasons.Add(reason);
+            queued.StartQueuedPlayback(manager, PathPlaybackRequest.Single(runtimeRoute));
+            Frames(5);
+            DestroyProvider(runtimeRoute);
+            PathQueueMember starter = CreateMember();
+
+            Assert.Throws<System.InvalidOperationException>(
+                () => starter.StartQueuedPlayback(manager, PathPlaybackRequest.Single(other)));
+            Assert.AreEqual(1, manager.MemberCount);
+            Assert.IsEmpty(reasons);
+
+            Frames(1);
+            Assert.AreEqual(0, manager.MemberCount);
+            CollectionAssert.AreEqual(new[] { EPathQueueLeaveReason.ProviderInvalid }, reasons);
+        }
+
         private TestSpacingPolicy CreatePolicy(string name,
             System.Func<PathQueueMember, PathQueueMember, float, float> rule)
         {
@@ -758,6 +836,15 @@ namespace Common.TransformPath.Tests
                 .GetMethod("OnDestroy", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
                 .Invoke(member, null);
             Object.DestroyImmediate(member);
+        }
+
+        // Edit Mode does not call OnDisable for a component that never woke; Play Mode does.
+        private static void DisableMember(PathQueueMember member)
+        {
+            member.enabled = false;
+            typeof(PathQueueMember)
+                .GetMethod("OnDisable", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                .Invoke(member, null);
         }
 
         private static IReadOnlyList<Transform> GetPoints(PathData path) => path.PathPoints;
