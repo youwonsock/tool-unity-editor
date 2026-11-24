@@ -125,6 +125,16 @@ namespace Common.TransformPath
         public PathValueChange DurationChange { get; }
         public IReadOnlyList<PathDelayedEventDefinition> DelayedEvents => _delayedEvents;
 
+        /// <summary>
+        /// Whether the authoring asks for anything but the name: a lifecycle, a
+        /// value change or delayed events. Only such an event cancels the delayed
+        /// events earlier ones left waiting.
+        /// </summary>
+        public bool ChangesPlayback => Lifecycle != EPathEventLifecycle.None
+            || SpeedChange.Enabled
+            || DurationChange.Enabled
+            || _delayedEvents.Length > 0;
+
         private PathEventDefinition(string eventName, EPathEventLifecycle lifecycle,
             PathValueChange speedChange, PathValueChange durationChange, PathDelayedEventDefinition[] delayedEvents)
         {

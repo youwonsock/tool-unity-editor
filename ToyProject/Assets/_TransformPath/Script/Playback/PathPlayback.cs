@@ -14,12 +14,22 @@ namespace Common.TransformPath
     {
         private const float EPSILON = PathConstants.EPSILON;
 
+        // Who paused the playback. Only the Resume command undoes a Pause command;
+        // an event's Resume undoes only what an event paused.
+        private enum EPauseOwner
+        {
+            None,
+            Command,
+            Event,
+        }
+
         private readonly PathPlaybackListeners _listeners;
         private readonly PathPlaybackCursor _cursor = new PathPlaybackCursor();
         private readonly PathEventEffects _effects;
         private PathRoute _route;
         private ulong _nextPlaybackId;
         private bool _positionDirty;
+        private EPauseOwner _pauseOwner;
 
         public PathPlayback(PathPlaybackListeners listeners)
         {
@@ -112,26 +122,27 @@ namespace Common.TransformPath
             return true;
         }
 
-        /// <summary>Cancels a value blend even when not moving, then pauses a moving playback.</summary>
+        /// <summary>
+        /// Cancels a value blend even when not moving, then pauses a moving
+        /// playback. A playback an event paused stays paused but now waits for
+        /// Resume: an event's Resume no longer wakes it.
+        /// </summary>
         public bool Pause()
         {
             _effects.CancelBlend();
-            if (!IsMoving)
+            if (State == EPathFollowerState.Paused)
+            {
+                _pauseOwner = EPauseOwner.Command;
                 return false;
-            IsMoving = false;
-            _cursor.PendingTime = 0f;
-            SetState(EPathFollowerState.Paused);
+            }
+            if (!PauseMovement())
+                return false;
+            _pauseOwner = EPauseOwner.Command;
             return true;
         }
 
-        public bool Resume()
-        {
-            if (_route == null || State != EPathFollowerState.Paused)
-                return false;
-            IsMoving = true;
-            SetState(EPathFollowerState.Moving);
-            return true;
-        }
+        /// <summary>Resumes a paused playback, whoever paused it.</summary>
+        public bool Resume() => ResumeMovement();
 
         #endregion
 
@@ -166,6 +177,7 @@ namespace Common.TransformPath
             return SeekTo(segmentIndex, local);
         }
 
+        /// <summary>Sets the Speed and cancels an event's Speed blend, which would overwrite it.</summary>
         public bool SetSpeed(float speed)
         {
             EnsureInitialized();
@@ -174,6 +186,7 @@ namespace Common.TransformPath
                 throw new InvalidOperationException("Speed can only be changed during playback.");
             if (_cursor.MoveType != EPathMoveType.SpeedBased)
                 throw new InvalidOperationException("Speed can only be changed in SpeedBased mode.");
+            _effects.CancelBlend(EPathEffectChannel.Speed);
             return _cursor.TrySetValue(EPathEffectChannel.Speed, speed);
         }
 
@@ -185,6 +198,7 @@ namespace Common.TransformPath
                 throw new InvalidOperationException("Duration can only be changed during playback.");
             if (_cursor.MoveType != EPathMoveType.TimeBased)
                 throw new InvalidOperationException("Duration can only be changed in TimeBased mode.");
+            _effects.CancelBlend(EPathEffectChannel.Duration);
             return _cursor.TrySetValue(EPathEffectChannel.Duration, duration);
         }
 
@@ -197,7 +211,11 @@ namespace Common.TransformPath
             return true;
         }
 
-        /// <summary>Runs an event now, as if the follower reached it. Pending delayed events are dropped.</summary>
+        /// <summary>
+        /// Runs an event now, as if the follower reached it: an event that changes
+        /// the playback drops the delayed events waiting, and its Resume only wakes
+        /// a playback an event paused.
+        /// </summary>
         public void TriggerEvent(PathEventDefinition definition)
         {
             if (definition == null)
@@ -366,6 +384,27 @@ namespace Common.TransformPath
         {
             IsMoving = false;
             _cursor.PendingTime = 0f;
+            _pauseOwner = EPauseOwner.None;
+        }
+
+        private bool PauseMovement()
+        {
+            if (!IsMoving)
+                return false;
+            IsMoving = false;
+            _cursor.PendingTime = 0f;
+            SetState(EPathFollowerState.Paused);
+            return true;
+        }
+
+        private bool ResumeMovement()
+        {
+            if (_route == null || State != EPathFollowerState.Paused)
+                return false;
+            _pauseOwner = EPauseOwner.None;
+            IsMoving = true;
+            SetState(EPathFollowerState.Moving);
+            return true;
         }
 
         private void EndPlayback()
@@ -391,6 +430,18 @@ namespace Common.TransformPath
         #region Effect target
 
         bool IPathEffectTarget.HasRoute => _route != null;
+
+        // Pause cancels the blend itself, moving or not.
+        bool IPathEffectTarget.Pause()
+        {
+            _effects.CancelBlend();
+            if (!PauseMovement())
+                return false;
+            _pauseOwner = EPauseOwner.Event;
+            return true;
+        }
+
+        bool IPathEffectTarget.Resume() => _pauseOwner == EPauseOwner.Event && ResumeMovement();
 
         bool IPathEffectTarget.ApplyValue(EPathEffectChannel channel, float value) => _cursor.TrySetValue(channel, value);
 

@@ -37,7 +37,7 @@ namespace Common.TransformPath
         public float DurationBlendTime;
         public AnimationCurve DurationBlendCurve = AnimationCurve.EaseInOut(0, 0, 1, 1);
 
-        [Header("Delayed Events (game time, canceled when the next path event runs)")]
+        [Header("Delayed Events (game time, canceled when a later event changes the playback)")]
         public List<DelayedEventEntry> DelayedEvents = new List<DelayedEventEntry>();
     }
 }

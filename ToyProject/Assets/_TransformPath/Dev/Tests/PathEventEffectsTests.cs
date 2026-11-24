@@ -83,17 +83,37 @@ namespace Common.TransformPath.Tests
             CollectionAssert.AreEqual(new[] { "a", "b" }, _target.Log);
         }
 
+        [TestCase("lifecycle")]
+        [TestCase("speed")]
+        [TestCase("duration")]
+        [TestCase("delayed")]
+        public void NextEventThatChangesThePlayback_CancelsWhatEarlierEventsLeftWaiting(string kind)
+        {
+            Run(Event("a", (2f * STEP, Event("b"))));
+            Tick();
+
+            PathEventSettingSO next = kind == "delayed" ? Event("c", (10f, Event("later"))) : Event("c");
+            if (kind == "lifecycle")
+                next.Lifecycle = EPathEventLifecycle.Resume;
+            next.UseSpeedChange = kind == "speed";
+            next.UseDurationChange = kind == "duration";
+            Run(next);
+            Tick();
+            Tick();
+
+            CollectionAssert.DoesNotContain(_target.Log, "b");
+        }
+
         [Test]
-        public void NextEvent_CancelsWhatEarlierEventsLeftWaiting()
+        public void NextEventWithOnlyAName_KeepsWhatEarlierEventsLeftWaiting()
         {
             Run(Event("a", (2f * STEP, Event("b"))));
             Tick();
 
             Run(Event("c"));
             Tick();
-            Tick();
 
-            CollectionAssert.AreEqual(new[] { "a", "c" }, _target.Log);
+            CollectionAssert.AreEqual(new[] { "a", "c", "b" }, _target.Log);
         }
 
         [Test]

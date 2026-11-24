@@ -110,6 +110,7 @@ namespace Common.TransformPath
             return changed;
         }
 
+        /// <summary>Pauses until Resume. An event's delayed Resume does not wake it.</summary>
         public bool Pause()
         {
             using var operation = PathExecutionBoundary.Enter();
@@ -118,6 +119,7 @@ namespace Common.TransformPath
             return changed;
         }
 
+        /// <summary>Resumes a playback paused by Pause or by an event.</summary>
         public bool Resume()
         {
             using var operation = PathExecutionBoundary.Enter();
@@ -144,19 +146,24 @@ namespace Common.TransformPath
             return changed;
         }
 
+        /// <summary>Sets the Speed and cancels an event's Speed blend.</summary>
         public bool SetSpeed(float speed)
         {
             using var operation = PathExecutionBoundary.Enter();
             return Playback.SetSpeed(speed);
         }
 
+        /// <summary>Sets the Duration and cancels an event's Duration blend.</summary>
         public bool SetDuration(float duration)
         {
             using var operation = PathExecutionBoundary.Enter();
             return Playback.SetDuration(duration);
         }
 
-        /// <summary>Runs an event asset now with its current values, as if the follower reached it.</summary>
+        /// <summary>
+        /// Runs an event asset now with its current values, as if the follower
+        /// reached it. Its Resume wakes only a playback an event paused.
+        /// </summary>
         public void TriggerEvent(PathEventSettingSO setting)
         {
             PathEventDefinition definition = PathEventDefinition.FromAuthoring(setting);

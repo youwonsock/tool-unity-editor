@@ -485,5 +485,97 @@ namespace Common.TransformPath.Tests
             Assert.AreEqual(PathConstants.MAX_MOVE_VALUE, recorder.Playback.Speed);
             Assert.DoesNotThrow(() => recorder.Playback.SetSpeed(recorder.Playback.Speed));
         }
+
+        private PathEventSettingSO PauseWithDelayedResume(float delay)
+        {
+            PathEventSettingSO resume = _scene.CreateEvent("resume");
+            resume.Lifecycle = EPathEventLifecycle.Resume;
+            PathEventSettingSO pause = _scene.CreateEvent("pause");
+            pause.Lifecycle = EPathEventLifecycle.Pause;
+            pause.DelayedEvents.Add(new PathEventSettingSO.DelayedEventEntry { Delay = delay, EventSetting = resume });
+            return pause;
+        }
+
+        [Test]
+        public void CommandPause_IsNotUndoneByAnEventsDelayedResume()
+        {
+            PathData path = Line(PathMovementSettings.Speed(10f));
+            PathEventSettingSO pause = PauseWithDelayedResume(0.5f);
+            _scene.SetEvents(path, (0.2f, pause));
+            var recorder = new RecordingPlayback();
+            recorder.Playback.Play(PathPlaybackRequest.Single(path));
+            recorder.Frames(15);
+            Assert.AreEqual(EPathFollowerState.Paused, recorder.Playback.State);
+
+            // The user pauses the event-paused playback: it now waits for Resume.
+            Assert.IsFalse(recorder.Playback.Pause());
+            recorder.Frames(60);
+            Assert.AreEqual(EPathFollowerState.Paused, recorder.Playback.State);
+
+            Assert.IsTrue(recorder.Playback.Resume());
+            Assert.AreEqual(EPathFollowerState.Moving, recorder.Playback.State);
+        }
+
+        [Test]
+        public void CommandPause_IsNotUndoneByATriggeredResume()
+        {
+            var recorder = new RecordingPlayback();
+            recorder.Playback.Play(PathPlaybackRequest.Single(Line(PathMovementSettings.Speed(1f))));
+            recorder.Frame();
+            PathEventSettingSO resume = _scene.CreateEvent("resume");
+            resume.Lifecycle = EPathEventLifecycle.Resume;
+
+            Assert.IsTrue(recorder.Playback.Pause());
+            recorder.Playback.TriggerEvent(PathEventDefinition.FromAuthoring(resume));
+
+            Assert.AreEqual(EPathFollowerState.Paused, recorder.Playback.State);
+        }
+
+        [Test]
+        public void EventPause_IsUndoneByAnEventResumeOrTheCommand()
+        {
+            PathData path = Line(PathMovementSettings.Speed(10f));
+            _scene.SetEvents(path, (0.2f, PauseWithDelayedResume(0.5f)));
+            var recorder = new RecordingPlayback();
+            recorder.Playback.Play(PathPlaybackRequest.Single(path));
+            recorder.Frames(15);
+            Assert.AreEqual(EPathFollowerState.Paused, recorder.Playback.State);
+            recorder.Frames(40);
+            Assert.AreEqual(EPathFollowerState.Moving, recorder.Playback.State);
+
+            recorder.Playback.Seek(0f);
+            recorder.Frames(15);
+            Assert.AreEqual(EPathFollowerState.Paused, recorder.Playback.State);
+            Assert.IsTrue(recorder.Playback.Resume());
+        }
+
+        [TestCase(EPathMoveType.SpeedBased)]
+        [TestCase(EPathMoveType.TimeBased)]
+        public void SetCommand_CancelsAnEventBlendOfItsChannel(EPathMoveType moveType)
+        {
+            bool speed = moveType == EPathMoveType.SpeedBased;
+            PathData path = Line(speed ? PathMovementSettings.Speed(1f) : PathMovementSettings.Time(10f));
+            PathEventSettingSO change = _scene.CreateEvent("change");
+            change.UseSpeedChange = speed;
+            change.SpeedTarget = 4f;
+            change.SpeedBlendTime = 2f;
+            change.UseDurationChange = !speed;
+            change.DurationTarget = 4f;
+            change.DurationBlendTime = 2f;
+            _scene.SetEvents(path, (0f, change));
+            var recorder = new RecordingPlayback();
+            recorder.Playback.Play(PathPlaybackRequest.Single(path));
+            recorder.Frames(10);
+            Assert.IsTrue(recorder.Playback.HasPendingEffects);
+
+            if (speed)
+                recorder.Playback.SetSpeed(2f);
+            else
+                recorder.Playback.SetDuration(7f);
+            recorder.Frames(60);
+
+            Assert.IsFalse(recorder.Playback.HasPendingEffects);
+            Assert.AreEqual(speed ? 2f : 7f, speed ? recorder.Playback.Speed : recorder.Playback.Duration, 1e-5f);
+        }
     }
 }

@@ -19,7 +19,8 @@ namespace Common.TransformPath
         bool HasRoute { get; }
         float Speed { get; }
         float Duration { get; }
-        // Each returns whether it changed the state or the value.
+        // Each returns whether it changed the state or the value. These are an
+        // event's Pause and Resume: the Resume wakes only what an event paused.
         bool Pause();
         bool Resume();
         bool ApplyValue(EPathEffectChannel channel, float value);
@@ -66,10 +67,15 @@ namespace Common.TransformPath
         /// <summary>Whether a blend or a delayed event waits for the effects tick.</summary>
         public bool HasPending => _blend.Channel != EPathEffectChannel.None || _delayed.Count > 0;
 
-        /// <summary>Runs an event the follower reached or that was triggered. It cancels what earlier events left waiting.</summary>
+        /// <summary>
+        /// Runs an event the follower reached or that was triggered. An event that
+        /// changes the playback cancels the delayed events earlier ones left waiting;
+        /// one that only announces its name keeps them.
+        /// </summary>
         public void Run(PathEventDefinition definition)
         {
-            _delayed.Clear();
+            if (definition.ChangesPlayback)
+                _delayed.Clear();
             Process(definition);
         }
 
@@ -101,6 +107,13 @@ namespace Common.TransformPath
         }
 
         public void CancelBlend() => _blend = default(Blend);
+
+        /// <summary>Cancels the blend only when it drives this channel.</summary>
+        public void CancelBlend(EPathEffectChannel channel)
+        {
+            if (_blend.Channel == channel)
+                CancelBlend();
+        }
 
         /// <summary>The playback ended: nothing waiting belongs to the next one.</summary>
         public void Clear()
