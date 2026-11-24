@@ -39,6 +39,14 @@ namespace Common.TransformPath
             }
         }
 
+        // A script reload in Play Mode resets the static but keeps this host; it
+        // takes the role back instead of a second host being made.
+        private void OnEnable()
+        {
+            if (_instance == null)
+                _instance = this;
+        }
+
         public void Register(IPathRuntimeTickable item)
         {
             _driver.Register(item);

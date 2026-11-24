@@ -168,11 +168,15 @@ namespace Common.TransformPath
             }
 
             consumedTime = step.ConsumedTime;
+            float before = Normalized;
             if (step.Reached)
                 Normalized = reason == EPathStep.End ? 1f : Mathf.Max(Normalized, limit);
             else
                 Normalized = Mathf.Min(progress, limit);
-            Global = Mathf.Min(cap, session.GetGlobalProgress(Segment, Normalized));
+            // A limit already behind the position (a cap passed by a Seek, an event
+            // left from a Pause) moves nothing, so the progress stays where it is.
+            if (Normalized != before)
+                Global = Mathf.Min(cap, session.GetGlobalProgress(Segment, Normalized));
             return step.Reached ? reason : EPathStep.TimeUsed;
         }
 

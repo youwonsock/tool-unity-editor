@@ -138,6 +138,7 @@ namespace Common.TransformPath
             if (ReferenceEquals(_routeProvider, provider))
                 return;
             using var operation = PathExecutionBoundary.Enter();
+            ForgetDestroyedRoute();
             LeaveAll(EPathQueueLeaveReason.ManagerReleased);
             _routeProvider = provider;
             _routeRevision = provider.Revision;
@@ -164,11 +165,28 @@ namespace Common.TransformPath
         }
 
         /// <summary>
-        /// The route a member's start configures when none is set: the Inspector's
-        /// route if there is one, otherwise the request's provider.
+        /// The route a member's start plays on: the configured route, else the
+        /// Inspector's route, else the request's provider. A destroyed route is
+        /// let go first, its members leaving as ProviderInvalid.
         /// </summary>
-        internal PathProviderBehaviour RouteForFirstStart(PathProviderBehaviour requested) =>
-            _routeProviderObject != null ? _routeProviderObject : requested;
+        internal PathProviderBehaviour RouteForStart(PathProviderBehaviour requested)
+        {
+            ForgetDestroyedRoute();
+            if (!ReferenceEquals(_routeProvider, null))
+                return _routeProvider;
+            return _routeProviderObject != null ? _routeProviderObject : requested;
+        }
+
+        // A destroyed route is Unity-null before the next Queue phase sees it.
+        // Whoever notices first lets it go, so its members always leave as ProviderInvalid.
+        private void ForgetDestroyedRoute()
+        {
+            if (ReferenceEquals(_routeProvider, null) || _routeProvider != null)
+                return;
+            LeaveAll(EPathQueueLeaveReason.ProviderInvalid);
+            _routeProvider = null;
+            _routeRevision = -1;
+        }
 
         // Configures the Inspector's route on the first frame if no member did.
         private void ConfigureInspectorRouteIfReady()
@@ -204,15 +222,14 @@ namespace Common.TransformPath
                 return;
             }
             // A destroyed route is Unity-null; a failed one is not ready.
-            if (_routeProvider == null || !_routeProvider.IsReady)
+            if (_routeProvider == null)
             {
-                bool destroyed = _routeProvider == null;
+                ForgetDestroyedRoute();
+                return;
+            }
+            if (!_routeProvider.IsReady)
+            {
                 LeaveAll(EPathQueueLeaveReason.ProviderInvalid);
-                if (destroyed)
-                {
-                    _routeProvider = null;
-                    _routeRevision = -1;
-                }
                 return;
             }
             _routeRevision = _routeProvider.Revision;

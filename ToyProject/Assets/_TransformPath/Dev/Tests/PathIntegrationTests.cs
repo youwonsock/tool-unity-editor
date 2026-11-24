@@ -509,6 +509,57 @@ namespace Common.TransformPath.Tests
         }
 
         [Test]
+        public void StartRightAfterTheRouteIsDestroyed_StillReleasesTheOldMembersAsProviderInvalid()
+        {
+            PathData path = Line(30f, 4f);
+            PathData next = Line(20f, 4f);
+            QueuedPathManager manager = CreateManager(path);
+            PathQueueMember old = CreateMember();
+            var reasons = new List<EPathQueueLeaveReason>();
+            old.QueueInvalidated += (_, reason) => reasons.Add(reason);
+            old.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            Frames(5);
+
+            DestroyProvider(path);
+            // Before the manager's next Queue phase.
+            PathQueueMember newcomer = CreateMember();
+            newcomer.StartQueuedPlayback(manager, PathPlaybackRequest.Single(next));
+
+            CollectionAssert.AreEqual(new[] { EPathQueueLeaveReason.ProviderInvalid }, reasons);
+            Assert.AreSame(next, manager.RouteProvider);
+            Assert.IsTrue(newcomer.IsInQueue);
+        }
+
+        [Test]
+        public void StartOnAnotherProviderThanTheInspectorRoute_ThrowsAndChangesNothing()
+        {
+            PathData template = Line(30f, 4f);
+            Transform[] points = { template.transform.GetChild(0), template.transform.GetChild(1) };
+            PathData other = Line(20f, 4f);
+            var pathHost = new GameObject("Unbuilt Route");
+            _objects.Add(pathHost);
+            PathData inspectorRoute = pathHost.AddComponent<PathData>();
+            var host = new GameObject("Queue");
+            _objects.Add(host);
+            QueuedPathManager manager = host.AddComponent<QueuedPathManager>();
+            var serialized = new UnityEditor.SerializedObject(manager);
+            serialized.FindProperty("_routeProviderObject").objectReferenceValue = inspectorRoute;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            manager.Initialize();
+            _driver.Register(manager);
+            // Points arrive later and nothing has asked the route to build yet.
+            inspectorRoute.SetPathPoints(points);
+            Assert.IsTrue(ReferenceEquals(manager.RouteProvider, null));
+            PathQueueMember member = CreateMember();
+
+            Assert.Throws<System.InvalidOperationException>(
+                () => member.StartQueuedPlayback(manager, PathPlaybackRequest.Single(other)));
+
+            Assert.IsTrue(ReferenceEquals(manager.RouteProvider, null));
+            Assert.AreEqual(EPathFollowerState.Ready, member.Follower.State);
+        }
+
+        [Test]
         public void DestroyedRoute_StopsEveryMember_AndForgetsTheRoute()
         {
             PathData path = Line(30f, 4f);

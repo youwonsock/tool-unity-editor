@@ -186,10 +186,11 @@ namespace Common.TransformPath
             using var operation = PathExecutionBoundary.Enter();
             // Validate before configuring or leaving, so an invalid request changes nothing.
             request.CreateRoute();
-            if (manager.RouteProvider == null)
-                manager.ConfigureRoute(manager.RouteForFirstStart(request.Provider));
-            if (!ReferenceEquals(manager.RouteProvider, request.Provider))
+            PathProviderBehaviour route = manager.RouteForStart(request.Provider);
+            if (!ReferenceEquals(route, request.Provider))
                 throw new InvalidOperationException("Queue member and manager must use the same route provider instance.");
+            if (!ReferenceEquals(manager.RouteProvider, route))
+                manager.ConfigureRoute(route);
 
             if (!ReferenceEquals(_activeManager, manager))
                 RemoveFromManager();

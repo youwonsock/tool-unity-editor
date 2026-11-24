@@ -647,5 +647,19 @@ namespace Common.TransformPath.Tests
             Assert.AreEqual(EPathPlaybackEnd.RouteUnavailable, recorder.Playback.LastEnd);
             UnityEngine.TestTools.LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex("could not build"));
         }
+
+        [Test]
+        public void SeekPastTheCap_HoldsThere_AndKeepsItsProgress()
+        {
+            var recorder = new RecordingPlayback();
+            recorder.Playback.Play(PathPlaybackRequest.Single(Line(PathMovementSettings.Speed(2f))));
+            recorder.Playback.Limit = new PathMotionLimit(false, 1f, 0.5f, false);
+
+            recorder.Playback.Seek(0.8f);
+            recorder.Frames(10);
+
+            Assert.AreEqual(0.8f, recorder.Playback.Progress, 1e-6f);
+            Assert.AreEqual(0.8f, recorder.Playback.SegmentProgress, 1e-6f);
+        }
     }
 }

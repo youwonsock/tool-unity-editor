@@ -258,13 +258,9 @@ namespace Common.TransformPath.Samples
             if (!_isInitialized)
                 return;
             _queueVisible = !_queueVisible;
-            if (_activeLane == ETransformPathShowcaseLane.Queue)
-            {
-                if (_queueVisible)
-                    _queue.ResumeRemembered();
-                else
-                    _queue.PauseAndRemember();
-            }
+            if (_activeLane == ETransformPathShowcaseLane.Queue && !_queueVisible)
+                _queue.PauseAndRemember();
+            // Showing the queue resumes it there, but not while Pause All holds every lane.
             ApplyLanePresentation();
         }
 
