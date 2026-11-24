@@ -71,7 +71,8 @@ namespace Common.FlowField
             for (int i = 0; i < _registry.Entries.Count; i++)
             {
                 FlowFieldModifierEntry entry = _registry.Entries[i];
-                if (!AreaOf(entry).AreaDirty)
+                // Destroyed while this build ran: the session removes it.
+                if (!AreaOf(entry).AreaDirty || FlowFieldVectorUtility.IsMissingModifier(entry.Modifier))
                     continue;
 
                 FlowFieldCellRect previousRect = AreaOf(entry).InfluenceRect;
@@ -218,10 +219,11 @@ namespace Common.FlowField
             {
                 FlowFieldModifierEntry entry = _registry.Entries[i];
                 // The session removes destroyed Modifiers before a build
-                // begins; this one was destroyed while the build ran.
+                // begins and again when it ends. One destroyed while this build
+                // ran is gone, so the build leaves it out, as Volume3D does,
+                // and its removal recomposes the cells outside this build.
                 if (FlowFieldVectorUtility.IsMissingModifier(entry.Modifier))
-                    throw new InvalidOperationException(
-                        "A registered Modifier was destroyed without UnregisterVectorModifier while a build used it. Call RequestRebuild.");
+                    continue;
                 if (AreaOf(entry).InfluenceMask == null
                     || AreaOf(entry).InfluenceMask.Length != cellCount)
                     throw new InvalidOperationException("Registered modifier data is inconsistent.");

@@ -615,10 +615,12 @@ namespace Common.FlowField
                                 NotifyFieldCommitted();
                             }
                             PublishRuntimeState();
+                            PruneDestroyedModifiers();
                             if (!_builder.HasOwedInput)
                                 SetLifecycle(FlowFieldSessionLifecycle.Active);
                             continue;
                         case FlowFieldBuildStep.Rejected:
+                            PruneDestroyedModifiers();
                             // Owed input builds next without leaving Building.
                             if (!_builder.HasOwedInput)
                                 SetLifecycle(FlowFieldSessionLifecycle.Active);
@@ -762,8 +764,9 @@ namespace Common.FlowField
 
         // A registered Modifier destroyed without being unregistered leaves the
         // registry like a destroyed obstacle: before the build that is owed
-        // begins, and before a restart reads every Modifier again. Its
-        // influence leaves with it. Nothing is polled while no build is owed.
+        // begins, when a build ends (it may have been destroyed while the build
+        // ran), and before a restart reads every Modifier again. Its influence
+        // leaves with it. Nothing is polled while no build runs or is owed.
         private void PruneDestroyedModifiers()
         {
             if (_modifiers == null)
