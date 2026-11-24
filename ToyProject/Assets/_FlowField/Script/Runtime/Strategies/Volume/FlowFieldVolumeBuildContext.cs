@@ -127,7 +127,8 @@ namespace Common.FlowField
         internal int[] Costs;
         internal int[] Queue;
         internal bool[] Influence;
-        internal readonly FlowFieldModifierWorkItem[] Modifiers;
+        // A Modifier destroyed during the build leaves this list (StepModifiers).
+        internal FlowFieldModifierWorkItem[] Modifiers;
         internal FlowFieldVolumeBuildPhase Phase;
         internal int Cursor;
         internal int GoalIndex = -1;

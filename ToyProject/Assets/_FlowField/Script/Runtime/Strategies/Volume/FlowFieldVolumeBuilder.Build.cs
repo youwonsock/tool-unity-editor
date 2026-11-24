@@ -62,7 +62,13 @@ namespace Common.FlowField
                             build.Phase = BuildPhase.Complete;
                         break;
                     case BuildPhase.Complete:
-                        return true;
+                        // The budget can end between the last Modifier step
+                        // and the publish; one destroyed meanwhile sends the
+                        // build back to compose without it.
+                        if (!HasDestroyedModifier(build))
+                            return true;
+                        build.Phase = BuildPhase.Modifiers;
+                        break;
                 }
             }
             return false;
@@ -234,6 +240,16 @@ namespace Common.FlowField
         private bool StepModifiers(BuildContext build)
         {
             AssertSolveIdle(build, nameof(StepModifiers));
+            // A Modifier destroyed without being unregistered is gone, so this
+            // build leaves it out: the final field starts again from the base
+            // without it. The session removes it when the build ends. One that
+            // unregistered first already owes a recompose, so this build
+            // finishes with it. Each step and the publish make this check.
+            if (DropDestroyedModifiers(build))
+            {
+                build.ModifierCells = null;
+                build.Cursor = 0;
+            }
             // The final field starts as the base field, so only cells a Modifier
             // can reach need to be walked. They are rarely more than a small part.
             if (build.ModifierCells == null)
@@ -309,6 +325,34 @@ namespace Common.FlowField
                 build.FinalSpeeds[index] = current.SpeedMultiplier;
             }
             return false;
+        }
+
+        // Destroyed while still registered: never unregistered.
+        private bool IsGone(in FlowFieldModifierWorkItem modifier)
+            => modifier.IsDestroyed && _session.Modifiers.Contains(modifier.Modifier);
+
+        private bool HasDestroyedModifier(BuildContext build)
+        {
+            foreach (FlowFieldModifierWorkItem modifier in build.Modifiers)
+            {
+                if (IsGone(in modifier))
+                    return true;
+            }
+            return false;
+        }
+
+        private bool DropDestroyedModifiers(BuildContext build)
+        {
+            if (!HasDestroyedModifier(build))
+                return false;
+            var kept = new List<FlowFieldModifierWorkItem>(build.Modifiers.Length);
+            foreach (FlowFieldModifierWorkItem modifier in build.Modifiers)
+            {
+                if (!IsGone(in modifier))
+                    kept.Add(modifier);
+            }
+            build.Modifiers = kept.ToArray();
+            return true;
         }
 
         // One cell box per Modifier, joined where boxes overlap: a cell walked

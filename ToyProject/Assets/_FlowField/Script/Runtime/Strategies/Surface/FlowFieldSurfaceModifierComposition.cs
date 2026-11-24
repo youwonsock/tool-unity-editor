@@ -34,7 +34,6 @@ namespace Common.FlowField
         private readonly FlowFieldSurfaceComposeRun _composeRun = new FlowFieldSurfaceComposeRun();
         private Collider[] _overlapBuffer;
 
-
         // The cells a Modifier touches, which this composition created for it.
         internal static FlowFieldSurfaceModifierArea AreaOf(FlowFieldModifierEntry entry)
             => (FlowFieldSurfaceModifierArea)entry.Area;
@@ -196,7 +195,30 @@ namespace Common.FlowField
                 rebuildBase);
         }
 
-        internal bool StepFinalField(in FlowFieldBuildBudget budget) => _composeRun.Step(in budget);
+        /// <summary>
+        /// A Modifier destroyed without being unregistered is gone, so this
+        /// composition leaves it out and starts again without it; the session
+        /// removes it when the build ends. One that unregistered first already
+        /// owes a recompose, so this composition finishes with it. The commit
+        /// follows the last step in the same pump, so each step's check covers
+        /// the publish.
+        /// </summary>
+        internal bool StepFinalField(in FlowFieldBuildBudget budget)
+        {
+            for (int i = 0; i < _runtimeLayers.Count; i++)
+            {
+                if (!IsGone(_runtimeLayers[i]))
+                    continue;
+                _runtimeLayers.RemoveAll(IsGone);
+                _composeRun.Restart();
+                break;
+            }
+            return _composeRun.Step(in budget);
+        }
+
+        // Destroyed while still registered: never unregistered.
+        private bool IsGone(FlowFieldSurfaceModifierLayer layer)
+            => FlowFieldVectorUtility.IsMissingModifier(layer.Modifier) && _registry.Contains(layer.Modifier);
 
         // The session clears its registry before the builder releases this.
         internal void Clear()
@@ -224,23 +246,16 @@ namespace Common.FlowField
                 // and its removal recomposes the cells outside this build.
                 if (FlowFieldVectorUtility.IsMissingModifier(entry.Modifier))
                     continue;
+                // The area stage builds the mask and its indices together.
                 if (AreaOf(entry).InfluenceMask == null
-                    || AreaOf(entry).InfluenceMask.Length != cellCount)
+                    || AreaOf(entry).InfluenceMask.Length != cellCount
+                    || !AreaOf(entry).InfluenceIndicesBuilt)
                     throw new InvalidOperationException("Registered modifier data is inconsistent.");
-
-                if (!AreaOf(entry).InfluenceIndicesBuilt)
-                {
-                    for (int index = 0; index < AreaOf(entry).InfluenceMask.Length; index++)
-                    {
-                        if (AreaOf(entry).InfluenceMask[index])
-                            AreaOf(entry).InfluenceIndices.Add(index);
-                    }
-                    AreaOf(entry).InfluenceIndicesBuilt = true;
-                }
 
                 IFlowFieldModifierSnapshot snapshot = FlowFieldModifierRegistry.CaptureSnapshot(entry.Modifier);
 
                 _runtimeLayers.Add(new FlowFieldSurfaceModifierLayer(
+                    entry.Modifier,
                     snapshot,
                     AreaOf(entry).InfluenceMask,
                     AreaOf(entry).InfluenceIndices));

@@ -26,6 +26,7 @@ namespace Common.FlowField
         private Vector3 _defaultDirection;
         private IReadOnlyList<FlowFieldSurfaceModifierLayer> _layers;
         private FlowFieldCellRect _region;
+        private bool _rebuildBase;
         private Stage _stage;
         private int _cursor;
         private int _layerIndex;
@@ -46,16 +47,26 @@ namespace Common.FlowField
             _defaultDirection = defaultDirection;
             _layers = layers ?? throw new ArgumentNullException(nameof(layers));
             _region = region.IsValid ? region : FlowFieldCellRect.Full(grid);
-            _stage = rebuildBase ? Stage.BaseField : Stage.ClearRegion;
+            _rebuildBase = rebuildBase;
+            if (rebuildBase
+                && (!FlowFieldGridSpace.IsFinite(defaultDirection)
+                    || defaultDirection.sqrMagnitude <= FlowFieldVectorUtility.DirectionEpsilonSqr))
+                throw new ArgumentOutOfRangeException(nameof(defaultDirection));
+            Restart();
+        }
+
+        /// <summary>
+        /// Composes again from the start with the same inputs. The layers may
+        /// have lost entries: what earlier steps applied is undone, because
+        /// the base or the region is rebuilt first.
+        /// </summary>
+        internal void Restart()
+        {
+            _stage = _rebuildBase ? Stage.BaseField : Stage.ClearRegion;
             _cursor = 0;
             _layerIndex = 0;
-            if (rebuildBase)
-            {
-                if (!FlowFieldGridSpace.IsFinite(defaultDirection)
-                    || defaultDirection.sqrMagnitude <= FlowFieldVectorUtility.DirectionEpsilonSqr)
-                    throw new ArgumentOutOfRangeException(nameof(defaultDirection));
-                Array.Clear(workspace.ModifierInfluence, 0, grid.CellCount);
-            }
+            if (_rebuildBase)
+                Array.Clear(_workspace.ModifierInfluence, 0, _grid.CellCount);
         }
 
         /// <summary>Returns true once the whole field is composed.</summary>
@@ -275,15 +286,18 @@ namespace Common.FlowField
 
     internal readonly struct FlowFieldSurfaceModifierLayer
     {
+        public IFlowFieldVectorModifier Modifier { get; }
         public IFlowFieldModifierSnapshot Snapshot { get; }
         public bool[] InfluenceMask { get; }
         public IReadOnlyList<int> InfluenceIndices { get; }
 
         public FlowFieldSurfaceModifierLayer(
+            IFlowFieldVectorModifier modifier,
             IFlowFieldModifierSnapshot snapshot,
             bool[] influenceMask,
             IReadOnlyList<int> influenceIndices)
         {
+            Modifier = modifier;
             Snapshot = snapshot;
             InfluenceMask = influenceMask;
             InfluenceIndices = influenceIndices;

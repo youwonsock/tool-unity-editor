@@ -199,7 +199,7 @@ namespace Common.FlowField
             for (int i = 0; i < _entries.Count; i++)
             {
                 IFlowFieldVectorModifier modifier = _entries[i].Modifier;
-                snapshots[i] = new FlowFieldModifierWorkItem(CaptureSnapshot(modifier), modifier.Observe().InfluenceCollider);
+                snapshots[i] = new FlowFieldModifierWorkItem(modifier, CaptureSnapshot(modifier), modifier.Observe().InfluenceCollider);
             }
             return snapshots;
         }
