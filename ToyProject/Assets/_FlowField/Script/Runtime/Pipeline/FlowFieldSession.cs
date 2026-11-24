@@ -422,9 +422,9 @@ namespace Common.FlowField
             if (!Obstacles.Unregister(collider, out FlowFieldObstacleChange change))
                 return false;
             ApplyObstacleChange(in change);
-            // A stopped session builds everything again when it starts, after
-            // any Destroy of this frame. A faulted one may retry in this frame.
-            if (change.HasCurrent && Lifecycle != FlowFieldSessionLifecycle.Suspended)
+            // A faulted or stopped session may retry or start again in this
+            // frame, before the Destroy, so it is rechecked as well.
+            if (change.HasCurrent)
                 RememberReleased(new ReleasedCollider(collider, change.Current, Time.frameCount));
             return true;
         }
