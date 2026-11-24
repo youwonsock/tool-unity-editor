@@ -661,5 +661,74 @@ namespace Common.TransformPath.Tests
             Assert.AreEqual(0.8f, recorder.Playback.Progress, 1e-6f);
             Assert.AreEqual(0.8f, recorder.Playback.SegmentProgress, 1e-6f);
         }
+
+        [Test]
+        public void StopAfterCompletion_KeepsTheCompletedEnd()
+        {
+            var recorder = new RecordingPlayback();
+            recorder.Playback.Play(PathPlaybackRequest.Single(Line(PathMovementSettings.Speed(10f))));
+            recorder.Frames(70);
+
+            Assert.IsTrue(recorder.Playback.Stop());
+
+            Assert.AreEqual(EPathFollowerState.Ready, recorder.Playback.State);
+            Assert.AreEqual(EPathPlaybackEnd.Completed, recorder.Playback.LastEnd);
+        }
+
+        [Test]
+        public void SeekWhilePaused_ReportsTheNewGeometryAsAChange()
+        {
+            PathData path = Line(PathMovementSettings.Speed(2f));
+            var recorder = new RecordingPlayback();
+            recorder.Playback.Play(PathPlaybackRequest.Single(path));
+            recorder.Frames(60);
+            recorder.Playback.Pause();
+            path.transform.GetChild(1).position += new Vector3(0f, 0f, 4f);
+            path.Rebuild();
+
+            Assert.IsTrue(recorder.Playback.Seek(recorder.Playback.Progress));
+            Assert.IsFalse(recorder.Playback.Seek(recorder.Playback.Progress));
+        }
+
+        [Test]
+        public void GeometryChangingEveryFrame_KeepsASlowFollowerMoving()
+        {
+            PathData path = _scene.CreatePath(PathMovementSettings.Speed(0.003f), EPathCurveType.Linear,
+                Vector3.zero, new Vector3(2000f, 0f, 0f));
+            Transform end = path.transform.GetChild(1);
+            var recorder = new RecordingPlayback();
+            recorder.Playback.Play(PathPlaybackRequest.Single(path));
+            recorder.Playback.Seek(0.6f);
+            float before = recorder.Playback.Progress;
+
+            for (int i = 0; i < 600; i++)
+            {
+                end.position += new Vector3(i % 2 == 0 ? 0.001f : -0.001f, 0f, 0f);
+                path.Rebuild();
+                recorder.Frame();
+            }
+
+            // Ten seconds at 0.003 m/s.
+            Assert.AreEqual(0.03f, (recorder.Playback.Progress - before) * 2000f, 0.002f);
+        }
+
+        [Test]
+        public void FramesAtTheTransitionLimit_CarryAtMostOneFrame()
+        {
+            PathData path = _scene.CreatePath(PathMovementSettings.Speed(9999f), EPathCurveType.Linear,
+                Vector3.zero, new Vector3(0.1f, 0f, 0f));
+            var recorder = new RecordingPlayback();
+            recorder.Playback.Play(PathPlaybackRequest.Single(path, true));
+            // Each frame covers about 1600 laps, far past the limit.
+            recorder.Frames(120);
+            recorder.Playback.SetSpeed(0.01f);
+            float before = recorder.Playback.Progress;
+
+            recorder.Frame();
+
+            float moved = Mathf.Repeat(recorder.Playback.Progress - before, 1f) * 0.1f;
+            // This frame and at most one carried frame.
+            Assert.LessOrEqual(moved, 0.01f * 2f / 60f + 1e-5f);
+        }
     }
 }

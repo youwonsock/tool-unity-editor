@@ -162,10 +162,10 @@ namespace Common.TransformPath
             if (_route == null)
                 throw new InvalidOperationException("PathFollower has no active provider.");
             PathValueUtility.ThrowIfNotFinite(progress, nameof(progress));
-            RefreshRouteForSeek();
+            bool refreshed = RefreshRouteForSeek();
             float target = Mathf.Clamp01(progress);
             int segment = _route.FindSegment(target);
-            return SeekTo(segment, _route.GetLocalProgress(segment, target));
+            return SeekTo(segment, _route.GetLocalProgress(segment, target)) || refreshed;
         }
 
         public bool SeekSegment(int segmentIndex, float localProgress)
@@ -176,7 +176,7 @@ namespace Common.TransformPath
             if (segmentIndex < 0 || segmentIndex >= _route.SegmentCount)
                 throw new ArgumentOutOfRangeException(nameof(segmentIndex));
             PathValueUtility.ThrowIfNotFinite(localProgress, nameof(localProgress));
-            RefreshRouteForSeek();
+            bool refreshed = RefreshRouteForSeek();
 
             float local = Mathf.Clamp01(localProgress);
             if (local >= 1f && segmentIndex < _route.SegmentCount - 1)
@@ -184,7 +184,7 @@ namespace Common.TransformPath
                 segmentIndex++;
                 local = 0f;
             }
-            return SeekTo(segmentIndex, local);
+            return SeekTo(segmentIndex, local) || refreshed;
         }
 
         /// <summary>Sets the Speed and cancels an event's Speed blend, which would overwrite it.</summary>
@@ -284,8 +284,10 @@ namespace Common.TransformPath
                     break;
             }
 
+            // At most one frame's time waits, so a follower that crosses the limit
+            // every frame does not build up time it would rush through later.
             if (remaining > 0f && transitions >= PathConstants.MAX_SEGMENT_TRANSITIONS_PER_TICK)
-                _cursor.PendingTime = remaining;
+                _cursor.PendingTime = Mathf.Min(remaining, deltaTime);
             // A follower held in place writes nothing.
             if (_cursor.Segment != segmentBefore || _cursor.Normalized != progressBefore)
                 _positionDirty = true;
@@ -296,16 +298,21 @@ namespace Common.TransformPath
         /// keeping the local progress on the new shape. Returns false when the
         /// route can no longer play: its provider is not ready or its definition changed.
         /// </summary>
-        public bool TryRefreshRoute()
+        public bool TryRefreshRoute() => TryRefreshRoute(out _);
+
+        private bool TryRefreshRoute(out bool refreshed)
         {
+            refreshed = false;
             IPathProvider provider = _route.Provider;
             if (!provider.IsReady || provider.DefinitionRevision != _route.DefinitionRevision)
                 return false;
             if (provider.Revision == _route.Revision)
                 return true;
+            PathRoute previous = _route;
             _route = _route.Refresh();
-            _cursor.SyncToProvider(_route);
+            _cursor.SyncToProvider(previous, _route);
             _positionDirty = true;
+            refreshed = true;
             return true;
         }
 
@@ -314,11 +321,12 @@ namespace Common.TransformPath
         #region Movement
 
         // A paused playback has not seen what changed since it stopped moving.
-        // Nothing changes when the route can no longer play.
-        private void RefreshRouteForSeek()
+        // Nothing changes when the route can no longer play. Returns whether
+        // the new geometry moved the playback.
+        private bool RefreshRouteForSeek()
         {
-            if (TryRefreshRoute())
-                return;
+            if (TryRefreshRoute(out bool refreshed))
+                return refreshed;
             throw new InvalidOperationException(_route.Provider.IsReady
                 ? "Seek requires the route this playback started with; its movement, events or segments changed. Start a new playback."
                 : "Seek requires a ready path provider.");
@@ -404,9 +412,12 @@ namespace Common.TransformPath
         {
             if (State == EPathFollowerState.Uninitialized || State == EPathFollowerState.Ready)
                 return false;
+            // A completed playback keeps its end; Stop only leaves the Completed state.
+            bool running = State != EPathFollowerState.Completed;
             HaltMovement();
             EndPlayback();
-            LastEnd = reason;
+            if (running)
+                LastEnd = reason;
             SetState(EPathFollowerState.Ready);
             return true;
         }

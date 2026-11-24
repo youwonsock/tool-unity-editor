@@ -203,10 +203,18 @@ namespace Common.TransformPath
         /// The geometry changed. Time-based progress does not depend on it, so the
         /// elapsed time stays; a speed-based one keeps its local progress on the new length.
         /// </summary>
-        public void SyncToProvider(PathRoute session)
+        public void SyncToProvider(PathRoute previous, PathRoute session)
         {
             if (MoveType == EPathMoveType.SpeedBased)
-                _distance = session.GetLength(Segment) * (double)Normalized;
+            {
+                // Scaled in double: rebuilt from the float progress, a slow
+                // follower on a long path would lose its movement every frame.
+                double previousLength = previous.GetLength(Segment);
+                double length = session.GetLength(Segment);
+                _distance = previousLength > 0d
+                    ? _distance * (length / previousLength)
+                    : length * Normalized;
+            }
             Global = session.GetGlobalProgress(Segment, Normalized);
         }
 
