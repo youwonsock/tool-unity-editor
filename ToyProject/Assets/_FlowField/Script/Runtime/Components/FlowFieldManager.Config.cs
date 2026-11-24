@@ -32,17 +32,19 @@ namespace Common.FlowField
             }
         }
 
-
         /// <summary>The serialized settings now, with the serialized Bake Mode.</summary>
         internal FlowFieldManagerConfig CaptureConfig() => CaptureConfig(_bakeMode);
 
         /// <summary>The serialized settings now, with the given Bake Mode.</summary>
         internal FlowFieldManagerConfig CaptureConfig(FlowFieldBakeMode bakeMode)
+            => CaptureConfig(_spaceMode, bakeMode);
+
+        private FlowFieldManagerConfig CaptureConfig(FlowFieldSpaceMode spaceMode, FlowFieldBakeMode bakeMode)
         {
             FlowFieldFlowSettings flow = _flow;
             flow.GoalInfluenceRadius = ConfiguredGoalRadius;
             return new FlowFieldManagerConfig(
-                _spaceMode,
+                spaceMode,
                 bakeMode,
                 in _grid,
                 in _surface,
@@ -60,6 +62,20 @@ namespace Common.FlowField
             bool spaceModeLocked = IsInitialized && SpaceMode != _spaceMode;
             bool bakeModeLocked = IsInitialized && BakeMode != _bakeMode;
             FlowFieldSpaceStrategy.For(_spaceMode).Validate(in config, spaceModeLocked, bakeModeLocked, validateStaticGoal);
+        }
+
+        /// <summary>
+        /// The checks a running session's submits and restarts make. A Space
+        /// Mode edit waits for Release, so the settings are checked in the mode
+        /// the session accepted; every other check, the Bake Mode lock
+        /// included, stays.
+        /// </summary>
+        private void ValidateSessionConfiguration()
+        {
+            FlowFieldSpaceMode spaceMode = SpaceMode;
+            FlowFieldManagerConfig config = CaptureConfig(spaceMode, _bakeMode);
+            bool bakeModeLocked = IsInitialized && BakeMode != _bakeMode;
+            FlowFieldSpaceStrategy.For(spaceMode).Validate(in config, spaceModeLocked: false, bakeModeLocked, validateStaticGoal: false);
         }
     }
 }

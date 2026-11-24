@@ -170,15 +170,14 @@ namespace Common.FlowField
         /// settings, which can stop being valid without an edit: a moved
         /// BakedBase Manager no longer matches its bake. Invalid settings fault
         /// the session the same way for all three instead of throwing to the
-        /// caller. A Space Mode edit waits for Release, so it is not checked;
-        /// the builder still rejects a bake that does not match.
+        /// caller. A Space Mode edit waits for Release, so the settings are
+        /// checked in the session's mode.
         /// </summary>
         private void SubmitCheckedConfig(FlowFieldConfigChange change)
         {
             try
             {
-                if (_spaceMode == SpaceMode)
-                    ValidateConfiguration(validateStaticGoal: false);
+                ValidateSessionConfiguration();
                 SubmitConfig(change);
             }
             catch (Exception exception)
@@ -297,6 +296,10 @@ namespace Common.FlowField
         /// Enabling and a fault retry start the session again from nothing,
         /// keeping registered obstacles and Modifiers, whose settings are read
         /// again. A failure faults it, so it keeps a LastError to diagnose.
+        /// A Space Mode edit waits for Release, as it does while the session
+        /// runs: enabling keeps the session's mode and, like a submit, checks
+        /// the settings in that mode. A fault retry refuses the edit before it
+        /// gets here.
         /// </summary>
         private void RestartSession(FlowFieldSession owner)
         {
@@ -304,7 +307,7 @@ namespace Common.FlowField
             try
             {
                 owner.ObserveModifiers();
-                ValidateConfiguration(validateStaticGoal: false);
+                ValidateSessionConfiguration();
                 StartBuilding();
             }
             catch (Exception exception)
