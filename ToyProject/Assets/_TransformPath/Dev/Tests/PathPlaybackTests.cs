@@ -77,14 +77,22 @@ namespace Common.TransformPath.Tests
         [Test]
         public void LongFrame_StopsAtTheTransitionLimit_AndKeepsMoving()
         {
+            PathData path = Line(PathMovementSettings.Speed(9999f));
+            _scene.SetEvents(path, (0.5f, _scene.CreateEvent("lap")));
             var recorder = new RecordingPlayback();
-            recorder.Playback.Play(PathPlaybackRequest.Single(Line(PathMovementSettings.Speed(9999f)), true));
+            recorder.Playback.Play(PathPlaybackRequest.Single(path, true));
 
             // One second covers about a thousand laps; a frame stops at the limit.
             recorder.Playback.TickMovement(1f);
 
             Assert.AreEqual(EPathFollowerState.Moving, recorder.Playback.State);
             Assert.AreEqual(0f, recorder.Playback.Progress, 1e-5f);
+            Assert.AreEqual(PathConstants.MAX_SEGMENT_TRANSITIONS_PER_TICK,
+                recorder.Log.FindAll(entry => entry == "event lap").Count);
+            // The rest of the second waits for the next frame.
+            recorder.Playback.TickMovement(0.0001f);
+            Assert.AreEqual(2 * PathConstants.MAX_SEGMENT_TRANSITIONS_PER_TICK,
+                recorder.Log.FindAll(entry => entry == "event lap").Count);
         }
 
         [Test]
