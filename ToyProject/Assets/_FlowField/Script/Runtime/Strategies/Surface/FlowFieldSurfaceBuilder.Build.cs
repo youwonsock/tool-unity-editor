@@ -357,7 +357,6 @@ namespace Common.FlowField
                 throw new InvalidOperationException("Cannot commit a FlowField without a valid staging surface.");
             bool actualChanged = false;
 
-
             if (resultChanged)
             {
                 actualChanged = _fieldStore.CommitFromWorkspace(

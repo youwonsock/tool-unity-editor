@@ -215,7 +215,6 @@ namespace Common.FlowField
                 _blocked,
                 _escapeDirections,
                 _topologyMasks,
-                _goalFlags,
                 _goalDirections,
                 _nextCells);
             _snapshotCacheRevision = Revision;

@@ -55,9 +55,8 @@ namespace Common.FlowField
             FlowFieldVolumeRequest request = _committed.Request;
             // A running build or a move within the Goal cell leaves the
             // published result behind the requested Goal, as on Surface2D.
-            FlowFieldVolumeRequest requested = _requests.HasLatest && request.BakeMode != FlowFieldBakeMode.StaticBaked
-                ? _requests.Latest
-                : request;
+            // StaticBaked requests all carry the baked Goal.
+            FlowFieldVolumeRequest requested = _requests.HasLatest ? _requests.Latest : request;
             Vector3 resolvedGoal = default;
             bool hasResolvedGoal = _committed.GoalIndex >= 0
                 && _committed.GoalIndex < _committed.Grid.CellCount;

@@ -185,7 +185,6 @@ namespace Common.FlowField
 
         public bool PublishBuild() => CommitBuild(_build);
 
-
         public bool HasOwedInput => _requests.Pending || _hasPendingModifierRecompose;
 
         private bool TryBeginPendingBuild()

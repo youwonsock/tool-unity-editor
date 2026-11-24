@@ -16,7 +16,6 @@ namespace Common.FlowField
         private readonly bool[] _blocked;
         private readonly Vector3[] _escapeDirections;
         private readonly byte[] _topologyMasks;
-        private readonly FlowFieldGoalFlags[] _goalFlags;
         private readonly Vector3[] _goalDirections;
         private readonly int[] _nextCells;
 
@@ -42,7 +41,6 @@ namespace Common.FlowField
             bool[] blocked,
             Vector3[] escapeDirections,
             byte[] topologyMasks,
-            FlowFieldGoalFlags[] goalFlags,
             Vector3[] goalDirections,
             int[] nextCells)
         {
@@ -52,7 +50,6 @@ namespace Common.FlowField
             if (!MatchesLength(blocked, count)
                 || !MatchesLength(escapeDirections, count)
                 || !MatchesLength(topologyMasks, count)
-                || !MatchesLength(goalFlags, count)
                 || !MatchesLength(goalDirections, count)
                 || !MatchesLength(nextCells, count))
                 throw new ArgumentException("Static bake snapshot arrays do not match the grid.");
@@ -79,7 +76,6 @@ namespace Common.FlowField
             _blocked = Clone(blocked);
             _escapeDirections = Clone(escapeDirections);
             _topologyMasks = Clone(topologyMasks);
-            _goalFlags = Clone(goalFlags);
             _goalDirections = Clone(goalDirections);
             _nextCells = Clone(nextCells);
         }
@@ -120,7 +116,7 @@ namespace Common.FlowField
             workspace.RebuildCombinedBlocked();
             Array.Copy(_escapeDirections, workspace.EscapeDirections, _escapeDirections.Length);
             Array.Copy(_topologyMasks, workspace.TopologyMasks, _topologyMasks.Length);
-            Array.Copy(_goalFlags, workspace.GoalFlags, _goalFlags.Length);
+            // The Goal flags follow from NextCells, which LoadBakedGoal reads.
             Array.Copy(_goalDirections, workspace.GoalDirections, _goalDirections.Length);
             Array.Copy(_nextCells, workspace.NextCells, _nextCells.Length);
             workspace.LoadBakedGoal(HasGoal, ResolvedGoalIndex, _nextCells);
