@@ -36,11 +36,17 @@ namespace Common.TransformPath.Editor
 
             EditorGUI.BeginChangeCheck();
             EditorGUILayout.PropertyField(moveType, new GUIContent("Mode"));
-            bool speedBased = moveType.enumValueIndex == (int)EPathMoveType.SpeedBased;
-            EditorGUILayout.PropertyField(moveValue, new GUIContent(speedBased ? "Speed" : "Duration"));
             bool changed = EditorGUI.EndChangeCheck();
-            if (changed)
+            bool speedBased = moveType.enumValueIndex == (int)EPathMoveType.SpeedBased;
+            // Clamped only when the value itself is edited: writing it on a Mode
+            // change would give every selected object the first one's value.
+            EditorGUI.BeginChangeCheck();
+            EditorGUILayout.PropertyField(moveValue, new GUIContent(speedBased ? "Speed" : "Duration"));
+            if (EditorGUI.EndChangeCheck())
+            {
                 moveValue.floatValue = Mathf.Clamp(moveValue.floatValue, PathConstants.MIN_MOVE_VALUE, PathConstants.MAX_MOVE_VALUE);
+                changed = true;
+            }
             if (speedBased)
                 return changed;
 

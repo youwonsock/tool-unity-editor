@@ -24,7 +24,7 @@ namespace Common.TransformPath
     public abstract class PathShapeProvider : PathProviderBehaviour
     {
         [SerializeField] private EPathMoveType _moveType = EPathMoveType.SpeedBased;
-        [SerializeField, Min(0.001f)] private float _moveValue = 5f;
+        [SerializeField, Min(PathConstants.MIN_MOVE_VALUE)] private float _moveValue = 5f;
         [SerializeField] private AnimationCurve _timeCurve = null;
 
         [NonSerialized] private float _length;

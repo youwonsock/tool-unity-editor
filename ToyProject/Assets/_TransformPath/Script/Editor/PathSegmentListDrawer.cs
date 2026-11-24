@@ -83,16 +83,15 @@ namespace Common.TransformPath.Editor
             list.index = segments.arraySize - 1;
         }
 
-        // An Override without a usable value, such as an unset 0, starts as the
-        // path's own movement. A value set before is kept.
+        // An Override starts as the movement the segment had a moment ago: its
+        // path's own. The hidden values from an earlier Override are replaced.
         private static void SeedOverride(SerializedProperty element, PathData path)
         {
-            SerializedProperty value = element.FindPropertyRelative(PathInspectorGUI.MOVE_VALUE);
-            if (path == null || value == null || value.floatValue >= PathConstants.MIN_MOVE_VALUE)
+            if (path == null)
                 return;
             var own = new SerializedObject(path);
             element.FindPropertyRelative(PathInspectorGUI.MOVE_TYPE).enumValueIndex = own.FindProperty(PathInspectorGUI.MOVE_TYPE).enumValueIndex;
-            value.floatValue = own.FindProperty(PathInspectorGUI.MOVE_VALUE).floatValue;
+            element.FindPropertyRelative(PathInspectorGUI.MOVE_VALUE).floatValue = own.FindProperty(PathInspectorGUI.MOVE_VALUE).floatValue;
             element.FindPropertyRelative(PathInspectorGUI.TIME_CURVE).animationCurveValue =
                 own.FindProperty(PathInspectorGUI.TIME_CURVE).animationCurveValue;
         }

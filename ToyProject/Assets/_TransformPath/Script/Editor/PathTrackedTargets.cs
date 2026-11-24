@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -78,8 +79,24 @@ namespace Common.TransformPath.Editor
 
         private void Refresh()
         {
-            TTarget[] targets = Object.FindObjectsByType<TTarget>(FindObjectsInactive.Include, FindObjectsSortMode.None);
             _liveIds.Clear();
+            Track(Object.FindObjectsByType<TTarget>(FindObjectsInactive.Include, FindObjectsSortMode.None));
+            // The open prefab's contents live in a preview scene the search above skips.
+            PrefabStage stage = PrefabStageUtility.GetCurrentPrefabStage();
+            if (stage != null && stage.prefabContentsRoot != null)
+                Track(stage.prefabContentsRoot.GetComponentsInChildren<TTarget>(true));
+            for (int i = _tracked.Count - 1; i >= 0; i--)
+            {
+                if (_liveIds.Contains(_tracked[i].Id))
+                    continue;
+                _byId.Remove(_tracked[i].Id);
+                _tracked.RemoveAt(i);
+            }
+            _dirty = false;
+        }
+
+        private void Track(TTarget[] targets)
+        {
             for (int i = 0; i < targets.Length; i++)
             {
                 TTarget target = targets[i];
@@ -95,14 +112,6 @@ namespace Common.TransformPath.Editor
                 }
                 tracked.RefreshReferences();
             }
-            for (int i = _tracked.Count - 1; i >= 0; i--)
-            {
-                if (_liveIds.Contains(_tracked[i].Id))
-                    continue;
-                _byId.Remove(_tracked[i].Id);
-                _tracked.RemoveAt(i);
-            }
-            _dirty = false;
         }
 
         private void HandleDefinitionChanged(Object changedObject)

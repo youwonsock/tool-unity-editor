@@ -18,7 +18,7 @@ namespace Common.TransformPath
         [SerializeField] private PathData _path;
         [SerializeField] private EPathSegmentMovementSource _movementSource;
         [SerializeField] private EPathMoveType _moveType;
-        [SerializeField, Min(0.001f)] private float _moveValue;
+        [SerializeField, Min(PathConstants.MIN_MOVE_VALUE)] private float _moveValue;
         [SerializeField] private AnimationCurve _timeCurve;
         [SerializeField] private bool _preservePreviousSpeed;
 
@@ -27,7 +27,8 @@ namespace Common.TransformPath
             _path = path;
             _movementSource = EPathSegmentMovementSource.Path;
             _moveType = EPathMoveType.TimeBased;
-            // Used only when the Inspector switches the segment to Override.
+            // Used only when the Inspector switches the segment to Override before it
+            // has a PathData; with one, the Override starts from the path's own movement.
             _moveValue = 5f;
             _timeCurve = null;
             _preservePreviousSpeed = preservePreviousSpeed;

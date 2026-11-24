@@ -28,7 +28,7 @@ namespace Common.TransformPath
 
         // The Inspector draws these three under its own Movement section.
         [SerializeField] private EPathMoveType _moveType = EPathMoveType.TimeBased;
-        [SerializeField, Min(0.001f)] private float _moveValue = 5f;
+        [SerializeField, Min(PathConstants.MIN_MOVE_VALUE)] private float _moveValue = 5f;
         [SerializeField] private AnimationCurve _timeCurve = null;
 
         [NonSerialized] private PathPolyline _polyline;

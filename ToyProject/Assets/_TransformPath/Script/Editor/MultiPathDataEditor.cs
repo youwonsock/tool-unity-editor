@@ -43,10 +43,13 @@ namespace Common.TransformPath.Editor
 
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Drawing Tools", EditorStyles.boldLabel);
+            // Play Mode would drop these edits when it ends.
+            EditorGUI.BeginDisabledGroup(!authoringToolsEnabled);
             if (GUILayout.Button("Apply Drawing Sizes To All Paths"))
                 sequences.ForEach(PathDrawingTools.ApplySharedSizes);
             if (GUILayout.Button("Assign Distinct Path Colors"))
                 sequences.ForEach(PathDrawingTools.AssignDistinctColors);
+            EditorGUI.EndDisabledGroup();
 
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Path Link Tools", EditorStyles.boldLabel);
