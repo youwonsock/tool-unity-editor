@@ -210,7 +210,7 @@ namespace Common.FlowField
             FlowFieldField field = _builder.PublishedField;
             FlowFieldSampleStatus status = FlowFieldSampler.Sample(field, worldPosition, out sample, out int index);
             if (status == FlowFieldSampleStatus.Sampled
-                && FlowFieldSampleSafetyRule.Apply(field, index, in sample, Safety, _builder.LatestCells, out FlowFieldSample safe))
+                && FlowFieldSampleSafetyRule.Apply(field, index, worldPosition, in sample, Safety, _builder.LatestCells, out FlowFieldSample safe))
                 sample = safe;
             return status;
         }

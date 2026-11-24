@@ -28,6 +28,9 @@ namespace Common.FlowField
     {
         private const float EscapeAxisThreshold = 0.001f;
         private const float DirectionAxisThreshold = 0.000001f;
+        // Faces of a cell this close together (a fraction of the cell size)
+        // count as reached at once.
+        private const float ExitTieFraction = 0.0001f;
         // The unit vector of each neighbour step; Surface2D uses the first 8.
         private static readonly Vector3[] StepDirections = CreateStepDirections();
 
@@ -35,6 +38,7 @@ namespace Common.FlowField
         internal static bool Apply(
             FlowFieldField field,
             int index,
+            Vector3 worldPosition,
             in FlowFieldSample published,
             FlowFieldSafety regions,
             IFlowFieldLatestCells latest,
@@ -66,13 +70,19 @@ namespace Common.FlowField
             Vector3 baseDirection = field.BaseDirections[index];
             Vector3 direction = field.FinalDirections[index];
             bool turned = direction != baseDirection;
-            bool unsafeMove = next >= 0 && next != index
+            bool pathStep = next >= 0 && next != index;
+            bool unsafeMove = pathStep
                 ? IsStepUnsafe(field.Grid, index, next, pathLink: true, in cells)
                     || turned && IsHeadingUnsafe(field.Grid, index, direction, in cells)
                 : next == -1 && (turned
                     ? IsHeadingUnsafe(field.Grid, index, direction, in cells)
                     : IsDirectionUnsafe(field.Grid, index, baseDirection, in cells)
                         || IsHeadingUnsafe(field.Grid, index, baseDirection, in cells));
+            // Off the path's own step, the step this mover crosses next along
+            // the sample's direction, from where it is in its cell: a mover
+            // drifting sideways reaches a ledge beside the way there.
+            if (!unsafeMove && (next == -1 || pathStep && turned))
+                unsafeMove = IsExitStepUnsafe(field.Grid, index, worldPosition, published.Direction, in cells);
             if (!unsafeMove)
                 return false;
             sample = Stop(published);
@@ -162,6 +172,63 @@ namespace Common.FlowField
                 || IsStepUnsafe(grid, index, target, pathLink: false, in cells);
         }
 
+        // The step a mover at this position takes next in a straight line:
+        // through the face, edge or corner of its cell the direction reaches
+        // first. Near the side of its cell even a slight sideways drift
+        // crosses there next. Only what a mover cannot come back from stops
+        // it: the grid edge, a notified change, no ground, or a Surface2D step
+        // the ground does not link. A blocked cell is fine, as the escape
+        // sends a mover back out, so a turn along a wall keeps moving.
+        private static bool IsExitStepUnsafe(
+            FlowFieldGridSpace grid,
+            int index,
+            Vector3 worldPosition,
+            Vector3 direction,
+            in Cells cells)
+        {
+            bool volume = grid.SpaceMode == FlowFieldSpaceMode.Volume3D;
+            if (!volume)
+                direction.y = 0f;
+            Vector3 offset = worldPosition - grid.CellCenter(index);
+            float half = 0.5f * grid.CellSize;
+            float toX = DistanceToFace(offset.x, direction.x, half);
+            float toY = volume ? DistanceToFace(offset.y, direction.y, half) : float.PositiveInfinity;
+            float toZ = DistanceToFace(offset.z, direction.z, half);
+            float first = Mathf.Min(toX, Mathf.Min(toY, toZ));
+            if (float.IsPositiveInfinity(first))
+                return false;
+            // Faces reached together make a diagonal step.
+            float together = first + ExitTieFraction * grid.CellSize;
+            int dx = toX <= together ? (direction.x > 0f ? 1 : -1) : 0;
+            int dy = toY <= together ? (direction.y > 0f ? 1 : -1) : 0;
+            int dz = toZ <= together ? (direction.z > 0f ? 1 : -1) : 0;
+            grid.Locate(index, out int x, out int y, out int z);
+            if (!grid.TryLocal(x + dx, y + dy, z + dz, out _))
+                return true;
+            for (int cx = Mathf.Min(x, x + dx); cx <= Mathf.Max(x, x + dx); cx++)
+            for (int cy = Mathf.Min(y, y + dy); cy <= Mathf.Max(y, y + dy); cy++)
+            for (int cz = Mathf.Min(z, z + dz); cz <= Mathf.Max(z, z + dz); cz++)
+            {
+                if (grid.TryLocal(cx, cy, cz, out int cell) && (cells.IsUncertain(cell) || !cells.IsWalkable(cell)))
+                    return true;
+            }
+            // A Volume3D link is missing only next to a blocked cell.
+            if (volume)
+                return false;
+            int step = FlowFieldNeighborUtility.FindDirectionIndex(dx, dz);
+            return step < 0 || !cells.HasGroundLink(index, step);
+        }
+
+        // How far along the direction the face of one axis is.
+        private static float DistanceToFace(float offset, float component, float half)
+        {
+            if (component > DirectionAxisThreshold)
+                return Mathf.Max(0f, half - offset) / component;
+            if (component < -DirectionAxisThreshold)
+                return Mathf.Max(0f, half + offset) / -component;
+            return float.PositiveInfinity;
+        }
+
         private static Vector3[] CreateStepDirections()
         {
             var steps = new Vector3[FlowFieldNeighborUtility.VolumeCount];
@@ -247,9 +314,9 @@ namespace Common.FlowField
 
             // The link the ground allows whatever the Goal. A Surface2D path
             // links only cells inside the Goal's influence, so other steps
-            // read the published Surface's step and slope links, both sides of
-            // a diagonal as the path does. A Volume3D path links every open
-            // cell, so its links serve.
+            // read the published Surface's step links (Max Slope is a per-cell
+            // validity check), both sides of a diagonal as the path does. A
+            // Volume3D path links every open cell, so its links serve.
             internal bool HasGroundLink(int index, int direction)
             {
                 FlowFieldSurfaceData surface = _field.Surface;
