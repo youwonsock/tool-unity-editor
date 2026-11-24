@@ -140,56 +140,38 @@ namespace Common.TransformPath
 
         #region Private Methods
 
+        // Every control point is a vertex, so corners are kept exactly. Each
+        // edge gets a share of the samples by its length, at least one.
         private static void GenerateLinearPath(
             PathGeometryBuildBuffer buffer,
             int segmentCount)
         {
+            List<Vector3> points = buffer.ControlPoints;
             float totalDistance = 0f;
-            for (int i = 0; i < buffer.ControlPoints.Count - 1; i++)
+            for (int i = 0; i < points.Count - 1; i++)
             {
-                float distance = Vector3.Distance(
-                    buffer.ControlPoints[i],
-                    buffer.ControlPoints[i + 1]);
+                float distance = Vector3.Distance(points[i], points[i + 1]);
                 buffer.SegmentDistances.Add(distance);
                 totalDistance += distance;
             }
 
-            for (int i = 0; i <= segmentCount; i++)
+            buffer.BuildPoints.Add(points[0]);
+            if (totalDistance <= 0f)
             {
-                float targetDistance = (float)i / segmentCount * totalDistance;
-                buffer.BuildPoints.Add(GetLinearPointAtDistance(buffer, targetDistance, totalDistance));
+                // TryBuild reports the missing length.
+                buffer.BuildPoints.Add(points[points.Count - 1]);
+                return;
             }
-        }
-
-        private static Vector3 GetLinearPointAtDistance(
-            PathGeometryBuildBuffer buffer,
-            float targetDistance,
-            float totalDistance)
-        {
-            if (targetDistance <= 0f)
-                return buffer.ControlPoints[0];
-            if (targetDistance >= totalDistance)
-                return buffer.ControlPoints[buffer.ControlPoints.Count - 1];
-
-            float currentDistance = 0f;
             for (int i = 0; i < buffer.SegmentDistances.Count; i++)
             {
-                float segmentLength = buffer.SegmentDistances[i];
-                float endDistance = currentDistance + segmentLength;
-                if (targetDistance <= endDistance)
-                {
-                    if (segmentLength <= Mathf.Epsilon)
-                        return buffer.ControlPoints[i];
-                    return Vector3.Lerp(
-                        buffer.ControlPoints[i],
-                        buffer.ControlPoints[i + 1],
-                        (targetDistance - currentDistance) / segmentLength);
-                }
-
-                currentDistance = endDistance;
+                float edge = buffer.SegmentDistances[i];
+                if (edge <= Mathf.Epsilon)
+                    continue;
+                int steps = Mathf.Max(1, Mathf.RoundToInt(segmentCount * edge / totalDistance));
+                for (int step = 1; step < steps; step++)
+                    buffer.BuildPoints.Add(Vector3.Lerp(points[i], points[i + 1], step / (float)steps));
+                buffer.BuildPoints.Add(points[i + 1]);
             }
-
-            return buffer.ControlPoints[buffer.ControlPoints.Count - 1];
         }
 
         private static void GenerateSplinePath(

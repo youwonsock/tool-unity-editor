@@ -58,6 +58,18 @@ namespace Common.TransformPath.Tests
             Assert.AreEqual(3, PathGeometryUtility.FindSegmentStartIndex(starts, 9f));
         }
 
+        // 7 samples spread by distance alone would put none on the corner and cut it.
+        [Test]
+        public void Linear_KeepsEveryControlPointAsACorner()
+        {
+            PathPolyline polyline = Build(EPathCurveType.Linear, 7,
+                Vector3.zero, new Vector3(10f, 0f, 0f), new Vector3(10f, 0f, 10f));
+
+            Assert.AreEqual(20f, polyline.Length, 1e-4f);
+            Assert.AreEqual(new Vector3(10f, 0f, 0f), polyline.Sample(0.5f));
+            Assert.AreEqual(new Vector3(5f, 0f, 0f), polyline.Sample(0.25f));
+        }
+
         // Splines are sampled by parameter, then read by distance. More samples
         // make a constant progress rate closer to a constant speed.
         [TestCase(EPathCurveType.SplineApproximating)]
@@ -71,8 +83,6 @@ namespace Common.TransformPath.Tests
                 PathPolyline polyline = Build(curve, segments, points);
                 deviations.Add(MaxSpeedDeviation(polyline));
             }
-            Debug.Log($"{curve} max speed deviation for 20/100/500 samples: {string.Join(", ", deviations)}");
-
             Assert.LessOrEqual(deviations[1], deviations[0] + 1e-4f);
             Assert.LessOrEqual(deviations[2], deviations[1] + 1e-4f);
             Assert.Less(deviations[2], 0.01f);
