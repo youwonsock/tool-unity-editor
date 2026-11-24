@@ -148,16 +148,16 @@ namespace Common.FlowField
                         _explicitGoalWorld,
                         request.WorldPosition,
                         0.00000001d)
-                    && Mathf.Abs(_flow.GoalInfluenceRadius - request.InfluenceRadius) <= FlowFieldManagerConfig.ValueEpsilon)
+                    && Mathf.Abs(ConfiguredGoalRadius - request.InfluenceRadius) <= FlowFieldManagerConfig.ValueEpsilon)
                 {
                     // Nothing to build, but the caller now holds this Goal:
                     // a target that set it earlier no longer clears it.
+                    _explicitGoalRadius = request.InfluenceRadius;
                     unchecked { GoalVersion++; }
                     heldVersion = GoalVersion;
                     return;
                 }
-                ChangeExplicitGoal(true, request.WorldPosition);
-                _flow.GoalInfluenceRadius = request.InfluenceRadius;
+                ChangeExplicitGoal(true, request.WorldPosition, request.InfluenceRadius);
             }
 
             heldVersion = GoalVersion;

@@ -61,6 +61,10 @@ namespace Common.FlowField
         private FlowFieldSession _session;
         private bool _hasExplicitGoal;
         private Vector3 _explicitGoalWorld;
+        // SetGoal's Influence Radius belongs to its Goal. The serialized Goal
+        // Influence Radius stays as authored: the Goal Transform uses it, at
+        // every Init and Bake, and so does an Inspector edit of it in Play.
+        private float? _explicitGoalRadius;
         // Advances each time Release drops the Goal, so FlowFieldGoalTarget
         // can tell its Goal is gone even when Release and Init run in one frame.
         internal int GoalLifetime { get; private set; }
@@ -320,10 +324,13 @@ namespace Common.FlowField
             ChangeExplicitGoal(true, _goalTransform.position);
         }
 
-        private void ChangeExplicitGoal(bool hasGoal, Vector3 worldPosition)
+        // A Goal without its own radius (the Goal Transform's) uses the
+        // serialized one.
+        private void ChangeExplicitGoal(bool hasGoal, Vector3 worldPosition, float? radius = null)
         {
             _hasExplicitGoal = hasGoal;
             _explicitGoalWorld = worldPosition;
+            _explicitGoalRadius = hasGoal ? radius : null;
             unchecked { GoalVersion++; }
         }
 
