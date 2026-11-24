@@ -691,6 +691,23 @@ namespace Common.TransformPath.Tests
         }
 
         [Test]
+        public void GeometryChange_KeepsTheLocalProgress_AndTheSpeedInMetres()
+        {
+            PathData path = Line(PathMovementSettings.Speed(2f));
+            var recorder = new RecordingPlayback();
+            recorder.Playback.Play(PathPlaybackRequest.Single(path));
+            recorder.Frames(30);
+            Assert.AreEqual(0.1f, recorder.Playback.Progress, 1e-5f);
+
+            path.transform.GetChild(1).position = new Vector3(20f, 0f, 0f);
+            path.Rebuild();
+            recorder.Frame();
+
+            // Still a tenth of the way, now of 20 m, then one frame at 2 m/s.
+            Assert.AreEqual(0.1f + 2f / 60f / 20f, recorder.Playback.Progress, 1e-5f);
+        }
+
+        [Test]
         public void GeometryChangingEveryFrame_KeepsASlowFollowerMoving()
         {
             PathData path = _scene.CreatePath(PathMovementSettings.Speed(0.003f), EPathCurveType.Linear,
