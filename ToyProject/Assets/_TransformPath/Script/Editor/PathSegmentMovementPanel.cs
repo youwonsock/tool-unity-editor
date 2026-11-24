@@ -41,8 +41,9 @@ namespace Common.TransformPath.Editor
             EditorGUILayout.LabelField("Editor-only bulk settings for every unique PathData in this MultiPath.", EditorStyles.miniLabel);
             EditorGUI.BeginDisabledGroup(!enabled);
             _presetMoveType = (EPathMoveType)EditorGUILayout.EnumPopup("Mode", _presetMoveType);
-            _presetMoveValue = EditorGUILayout.FloatField(
-                _presetMoveType == EPathMoveType.SpeedBased ? "Speed" : "Duration", _presetMoveValue);
+            _presetMoveValue = Mathf.Clamp(EditorGUILayout.FloatField(
+                    _presetMoveType == EPathMoveType.SpeedBased ? "Speed" : "Duration", _presetMoveValue),
+                PathConstants.MIN_MOVE_VALUE, PathConstants.MAX_MOVE_VALUE);
             if (_presetMoveType == EPathMoveType.TimeBased)
             {
                 if (_presetTimeCurve == null)

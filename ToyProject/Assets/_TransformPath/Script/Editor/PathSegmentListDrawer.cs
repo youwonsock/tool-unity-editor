@@ -83,6 +83,20 @@ namespace Common.TransformPath.Editor
             list.index = segments.arraySize - 1;
         }
 
+        // An Override without a usable value, such as an unset 0, starts as the
+        // path's own movement. A value set before is kept.
+        private static void SeedOverride(SerializedProperty element, PathData path)
+        {
+            SerializedProperty value = element.FindPropertyRelative(PathInspectorGUI.MOVE_VALUE);
+            if (path == null || value == null || value.floatValue >= PathConstants.MIN_MOVE_VALUE)
+                return;
+            var own = new SerializedObject(path);
+            element.FindPropertyRelative(PathInspectorGUI.MOVE_TYPE).enumValueIndex = own.FindProperty(PathInspectorGUI.MOVE_TYPE).enumValueIndex;
+            value.floatValue = own.FindProperty(PathInspectorGUI.MOVE_VALUE).floatValue;
+            element.FindPropertyRelative(PathInspectorGUI.TIME_CURVE).animationCurveValue =
+                own.FindProperty(PathInspectorGUI.TIME_CURVE).animationCurveValue;
+        }
+
         private void DrawElement(Rect rect, int index, bool isActive, bool isFocused)
         {
             if (index < 0 || index >= Property.arraySize)
@@ -94,7 +108,11 @@ namespace Common.TransformPath.Editor
             Rect Row(int row) => new Rect(rect.x, rect.y + row * step, rect.width, EditorGUIUtility.singleLineHeight);
 
             EditorGUI.PropertyField(Row(0), path, new GUIContent($"Path {index}"));
-            EditorGUI.PropertyField(Row(1), element.FindPropertyRelative(MOVEMENT_SOURCE_PROPERTY), new GUIContent("Movement Source"));
+            SerializedProperty source = element.FindPropertyRelative(MOVEMENT_SOURCE_PROPERTY);
+            EditorGUI.BeginChangeCheck();
+            EditorGUI.PropertyField(Row(1), source, new GUIContent("Movement Source"));
+            if (EditorGUI.EndChangeCheck() && source.enumValueIndex == (int)EPathSegmentMovementSource.Override)
+                SeedOverride(element, path.objectReferenceValue as PathData);
             EditorGUI.PropertyField(Row(2), element.FindPropertyRelative(PRESERVE_PROPERTY), new GUIContent("Preserve Previous Speed"));
         }
     }

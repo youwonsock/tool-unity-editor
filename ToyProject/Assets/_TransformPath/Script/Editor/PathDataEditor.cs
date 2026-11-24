@@ -49,7 +49,7 @@ namespace Common.TransformPath.Editor
                     MessageType.Info);
 
             if (GUILayout.Button("Rebuild Runtime Path"))
-                PathInspectorGUI.Rebuild(paths, "Rebuild Runtime Path");
+                PathInspectorGUI.Rebuild(paths);
 
             EditorGUI.BeginDisabledGroup(!authoringToolsEnabled);
             if (GUILayout.Button("Sort Path Events"))

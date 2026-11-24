@@ -1372,7 +1372,7 @@ MonoBehaviour:
   - _path: {fileID: 830505861753064085}
     _movementSource: 0
     _moveType: 0
-    _moveValue: 0
+    _moveValue: 5
     _timeCurve:
       serializedVersion: 2
       m_Curve: []
@@ -1383,7 +1383,7 @@ MonoBehaviour:
   - _path: {fileID: 3101732148213765793}
     _movementSource: 0
     _moveType: 0
-    _moveValue: 0
+    _moveValue: 5
     _timeCurve:
       serializedVersion: 2
       m_Curve: []
@@ -2491,7 +2491,7 @@ MonoBehaviour:
   - _path: {fileID: 5616179923128869812}
     _movementSource: 0
     _moveType: 0
-    _moveValue: 0
+    _moveValue: 5
     _timeCurve:
       serializedVersion: 2
       m_Curve: []

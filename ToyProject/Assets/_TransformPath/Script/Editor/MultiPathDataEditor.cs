@@ -61,8 +61,13 @@ namespace Common.TransformPath.Editor
 
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Sequence Tools", EditorStyles.boldLabel);
+            // The segment panel edits the paths' own movement; their builds come
+            // first so the sequence reads what the panel shows.
             if (GUILayout.Button("Rebuild Sequence"))
-                PathInspectorGUI.Rebuild(sequences, "Rebuild Sequence");
+            {
+                PathInspectorGUI.Rebuild(CollectPaths(sequences));
+                PathInspectorGUI.Rebuild(sequences);
+            }
 
             inspectorChanged |= serializedObject.ApplyModifiedProperties();
             if (inspectorChanged)

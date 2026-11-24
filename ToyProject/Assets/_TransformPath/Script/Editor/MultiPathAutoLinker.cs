@@ -89,7 +89,12 @@ namespace Common.TransformPath.Editor
                     _needsInitialSync = true;
                 }
                 else if (autoLinkTurnedOn)
+                {
+                    // Points moved while linking was off are not movements to
+                    // follow: compare from now, and let the first sync align.
+                    _snapshot.Capture(_pathPoints);
                     _needsInitialSync = true;
+                }
 
                 _wasAutoLinkEnabled = _autoLinkEnabled;
             }

@@ -61,6 +61,8 @@ namespace Common.TransformPath.Editor
                 if (GUILayout.Button("Validate"))
                     PathWaypointSyncEditorUtility.LogValidation(registry);
 
+                // Aligning moves scene points, which Play Mode would throw away.
+                EditorGUI.BeginDisabledGroup(Application.isPlaying);
                 if (GUILayout.Button("Align All Groups"))
                 {
                     PathEditorUndoUtility.Record(registry, "Align All Waypoint Groups");
@@ -71,9 +73,15 @@ namespace Common.TransformPath.Editor
                         $"PathWaypointSyncRegistry: aligned {count} group(s).",
                         registry);
                 }
+                EditorGUI.EndDisabledGroup();
             }
 
-            if (GUILayout.Button("Align First Group") && registry.Groups.Count > 0)
+            EditorGUI.BeginDisabledGroup(Application.isPlaying);
+            bool alignFirst = GUILayout.Button("Align First Group");
+            EditorGUI.EndDisabledGroup();
+            if (Application.isPlaying)
+                EditorGUILayout.HelpBox("Path authoring tools are disabled in Play Mode.", MessageType.Info);
+            if (alignFirst && registry.Groups.Count > 0)
             {
                 MultiPathData multiPathData = registry.GetComponent<MultiPathData>();
                 PathEditorUndoUtility.Record(registry, "Align Waypoint Group");

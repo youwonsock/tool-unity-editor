@@ -39,6 +39,8 @@ namespace Common.TransformPath.Editor
             bool speedBased = moveType.enumValueIndex == (int)EPathMoveType.SpeedBased;
             EditorGUILayout.PropertyField(moveValue, new GUIContent(speedBased ? "Speed" : "Duration"));
             bool changed = EditorGUI.EndChangeCheck();
+            if (changed)
+                moveValue.floatValue = Mathf.Clamp(moveValue.floatValue, PathConstants.MIN_MOVE_VALUE, PathConstants.MAX_MOVE_VALUE);
             if (speedBased)
                 return changed;
 
@@ -48,16 +50,16 @@ namespace Common.TransformPath.Editor
             return EditorGUI.EndChangeCheck() || changed;
         }
 
-        /// <summary>Rebuilds every provider with one undo step each.</summary>
-        public static void Rebuild(IEnumerable<PathProviderBehaviour> providers, string undoName)
+        /// <summary>
+        /// Rebuilds every provider. A build writes no serialized data, so this
+        /// records no undo step and leaves the scene clean.
+        /// </summary>
+        public static void Rebuild(IEnumerable<PathProviderBehaviour> providers)
         {
             foreach (PathProviderBehaviour provider in providers)
             {
-                if (provider == null)
-                    continue;
-                PathEditorUndoUtility.Record(provider, undoName);
-                provider.Rebuild();
-                PathEditorUndoUtility.MarkDirty(provider);
+                if (provider != null)
+                    provider.Rebuild();
             }
             PathEditorUndoUtility.RepaintScene();
         }

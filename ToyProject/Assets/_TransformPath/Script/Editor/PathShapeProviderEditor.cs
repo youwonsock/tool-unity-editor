@@ -26,7 +26,7 @@ namespace Common.TransformPath.Editor
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Shape Tools", EditorStyles.boldLabel);
             if (GUILayout.Button("Rebuild Runtime Path"))
-                PathInspectorGUI.Rebuild(PathInspectorGUI.TargetsOf<PathShapeProvider>(targets), "Rebuild Runtime Path");
+                PathInspectorGUI.Rebuild(PathInspectorGUI.TargetsOf<PathShapeProvider>(targets));
             EditorGUILayout.HelpBox(
                 "The Scene View previews the current settings in Edit Mode. "
                 + "In Play Mode it shows the published shape: rebuild after changing what the shape reads.",

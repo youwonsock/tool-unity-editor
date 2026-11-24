@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
@@ -12,6 +13,8 @@ namespace Common.TransformPath.Editor
         private static readonly Color SELECTED_COLOR = new Color(0.2f, 0.9f, 1f, 1f);
         private static readonly Color UNSELECTED_COLOR = new Color(0.2f, 0.9f, 1f, 0.5f);
         private static readonly Vector3[] POINTS = new Vector3[SAMPLE_COUNT + 1];
+        // Shapes whose sampling threw. Each logs once until it draws again, not on every repaint.
+        private static readonly HashSet<int> FAILED = new HashSet<int>();
 
         [DrawGizmo(GizmoType.Selected | GizmoType.NonSelected)]
         private static void DrawShape(PathShapeProvider shape, GizmoType gizmoType)
@@ -32,9 +35,11 @@ namespace Common.TransformPath.Editor
             }
             catch (System.Exception exception)
             {
-                Debug.LogException(exception, shape);
+                if (FAILED.Add(shape.GetInstanceID()))
+                    Debug.LogException(exception, shape);
                 return;
             }
+            FAILED.Remove(shape.GetInstanceID());
             Color color = (gizmoType & GizmoType.Selected) != 0 ? SELECTED_COLOR : UNSELECTED_COLOR;
             Handles.color = color;
             Handles.DrawAAPolyLine(LINE_WIDTH, POINTS);
