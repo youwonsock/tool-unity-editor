@@ -119,17 +119,23 @@ namespace Common.FlowField
                 Collider collider = _hits[_cursor];
                 if (collider == null)
                     continue;
+                Bounds current = collider.bounds;
                 if (registry.Contains(collider))
                 {
-                    _observed.Remove(collider);
+                    // Its registration reports only where it is now, so the
+                    // spot this sweep last saw it at is reported if it moved.
+                    if (_observed.TryGetValue(collider, out Bounds seen))
+                    {
+                        _observed.Remove(collider);
+                        if (_recorded && HasMoved(seen, current))
+                            _report(true, seen, false, default);
+                    }
                     continue;
                 }
                 _seen.Add(collider);
-                Bounds current = collider.bounds;
                 if (_observed.TryGetValue(collider, out Bounds previous))
                 {
-                    if ((current.center - previous.center).sqrMagnitude <= MoveEpsilonSqr
-                        && (current.size - previous.size).sqrMagnitude <= MoveEpsilonSqr)
+                    if (!HasMoved(previous, current))
                         continue;
                     _observed[collider] = current;
                     if (_recorded)
@@ -146,6 +152,10 @@ namespace Common.FlowField
                 EndPass();
             return true;
         }
+
+        private static bool HasMoved(Bounds previous, Bounds current)
+            => (current.center - previous.center).sqrMagnitude > MoveEpsilonSqr
+                || (current.size - previous.size).sqrMagnitude > MoveEpsilonSqr;
 
         private bool BeginPass(double now)
         {
