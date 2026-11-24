@@ -17,7 +17,6 @@ namespace Common.TransformPath
         // The built segments; each one's sampler is the PathData it plays.
         [NonSerialized] private PathRoute.Segment[] _built;
         [NonSerialized] private int[] _childRevisions;
-        [NonSerialized] private int[] _childDefinitionRevisions;
         [NonSerialized] private float _pathLength;
         [NonSerialized] private bool _failed;
         [NonSerialized] private bool _building;
@@ -124,7 +123,6 @@ namespace Common.TransformPath
 
             var built = new PathRoute.Segment[count];
             var revisions = new int[count];
-            var definitionRevisions = new int[count];
             float total = 0f;
             for (int i = 0; i < count; i++)
             {
@@ -150,7 +148,6 @@ namespace Common.TransformPath
                 built[i] = new PathRoute.Segment(path, total, length, movement, segment.PreservePreviousSpeed,
                     path.RuntimeEvents);
                 revisions[i] = path.Revision;
-                definitionRevisions[i] = path.DefinitionRevision;
                 total += length;
             }
             if (!PathValueUtility.IsFinite(total) || total <= 0f)
@@ -160,12 +157,9 @@ namespace Common.TransformPath
             }
 
             geometryChanged = !HasSame(_childRevisions, revisions) || !Mathf.Approximately(_pathLength, total);
-            definitionChanged = _built == null
-                || !HasSameStructure(built)
-                || !HasSame(_childDefinitionRevisions, definitionRevisions);
+            definitionChanged = _built == null || !HasSameStructure(built);
             _built = built;
             _childRevisions = revisions;
-            _childDefinitionRevisions = definitionRevisions;
             _pathLength = total;
             _failed = false;
             error = null;
@@ -180,6 +174,9 @@ namespace Common.TransformPath
         // The route never changes the array, and each build makes a new one.
         private protected override PathRoute CreateRoute() => PathRoute.FromProvider(this, _built, true);
 
+        // What a sequence plays: each segment's path, its resolved movement and
+        // its events. A path's own movement counts only through a segment that
+        // takes it, so an Override segment keeps playing when it changes.
         private bool HasSameStructure(PathRoute.Segment[] built)
         {
             if (_built.Length != built.Length)
@@ -188,7 +185,8 @@ namespace Common.TransformPath
             {
                 if (!ReferenceEquals(_built[i].Sampler, built[i].Sampler)
                     || _built[i].PreservePreviousSpeed != built[i].PreservePreviousSpeed
-                    || !_built[i].Movement.IsSameAs(built[i].Movement))
+                    || !_built[i].Movement.IsSameAs(built[i].Movement)
+                    || !PathRuntimeEvent.AreSame(_built[i].Events, built[i].Events))
                     return false;
             }
             return true;

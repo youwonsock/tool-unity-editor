@@ -138,14 +138,15 @@ namespace Common.TransformPath
             }
 
             _hasValidPath = true;
-            _lineRenderer.positionCount = samplePointCount;
-            for (int i = 0; i < samplePointCount; i++)
-                _lineRenderer.SetPosition(i, _pathData.GetSamplePoint(i));
+            Vector3[] points = _pathData.SamplePoints;
+            _lineRenderer.positionCount = points.Length;
+            _lineRenderer.SetPositions(points);
             ApplyVisibility();
         }
 
         /// <summary>
-        /// Shows or hides the line. A shown line still stays hidden while the path is not ready.
+        /// Shows or hides the line. A shown line still stays hidden while the path
+        /// is not ready or this component is disabled.
         /// </summary>
         public void SetVisible(bool visible)
         {
@@ -185,9 +186,10 @@ namespace Common.TransformPath
             _lineRenderer.endColor = _lineColor;
         }
 
+        // A disabled component draws nothing, whatever SetVisible asked.
         private void ApplyVisibility()
         {
-            SetLineRendererEnabled(_visible && _hasValidPath);
+            SetLineRendererEnabled(_visible && _hasValidPath && isActiveAndEnabled);
         }
 
         private void SetLineRendererEnabled(bool enabled)

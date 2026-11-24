@@ -108,6 +108,8 @@ namespace Common.TransformPath
 
         public int AuthoringEventCount => _pathEvents == null ? 0 : _pathEvents.Count;
         internal PathRuntimeEvent[] RuntimeEvents => _events;
+        /// <summary>The published samples. Callers only read them.</summary>
+        internal Vector3[] SamplePoints => _polyline.Points;
         /// <summary>The authored control points, for the Editor. Never modify the list.</summary>
         internal IReadOnlyList<Transform> PathPoints => _pathPoints;
         /// <summary>The positions from <see cref="SetControlPoints"/>, or null while the Transforms are used.</summary>

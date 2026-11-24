@@ -460,6 +460,55 @@ namespace Common.TransformPath.Tests
         }
 
         [Test]
+        public void OverrideSegment_KeepsPlaying_WhenItsPathsOwnMovementChanges()
+        {
+            PathData first = Line(5f, 2f);
+            PathData second = _scene.CreatePath(PathMovementSettings.Speed(2f), EPathCurveType.Linear,
+                new Vector3(5f, 0f, 0f), new Vector3(9f, 0f, 0f));
+            MultiPathData sequence = _scene.CreateSequence();
+            sequence.SetSegments(new[]
+            {
+                new PathSegmentAuthoring(first, PathMovementSettings.Speed(3f)),
+                new PathSegmentAuthoring(second),
+            });
+            PathFollower follower = CreateFollower();
+            follower.Play(PathPlaybackRequest.Sequence(sequence));
+            Frames(10);
+
+            first.MovementSettings = PathMovementSettings.Speed(8f);
+            Frames(1);
+            Assert.AreEqual(EPathFollowerState.Moving, follower.State);
+
+            // The second segment takes its path's movement, so a change there stops the playback.
+            second.MovementSettings = PathMovementSettings.Speed(8f);
+            Frames(1);
+            Assert.AreEqual(EPathFollowerState.Ready, follower.State);
+        }
+
+        [Test]
+        public void DisabledLineRenderer_DrawsNothing()
+        {
+            PathData path = Line(10f, 2f);
+            var host = new GameObject("Line");
+            _objects.Add(host);
+            LineRenderer line = host.AddComponent<LineRenderer>();
+            PathDataLineRenderer drawer = host.AddComponent<PathDataLineRenderer>();
+            var serialized = new UnityEditor.SerializedObject(drawer);
+            serialized.FindProperty("_pathData").objectReferenceValue = path;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            drawer.Init();
+            drawer.SetVisible(true);
+            Assert.IsTrue(line.enabled);
+            Assert.AreEqual(path.SamplePointCount, line.positionCount);
+
+            drawer.enabled = false;
+            drawer.SetVisible(true);
+            drawer.Refresh();
+
+            Assert.IsFalse(line.enabled);
+        }
+
+        [Test]
         public void DestroyedRoute_StopsEveryMember_AndForgetsTheRoute()
         {
             PathData path = Line(30f, 4f);
