@@ -343,12 +343,14 @@ namespace Common.FlowField
             return true;
         }
 
-        // A faulted session still takes removals; its retry builds everything again.
+        // A faulted session still takes removals; its retry builds everything
+        // again. A destroyed Modifier is found by its reference, so a caller
+        // that unregisters it late still removes it.
         private bool UnregisterModifierNow(IFlowFieldVectorModifier modifier)
         {
             if (!IsInitialized && !IsFaulted)
                 throw FlowFieldFailures.NotInitialized();
-            if (FlowFieldVectorUtility.IsMissingModifier(modifier))
+            if (ReferenceEquals(modifier, null))
                 return false;
             bool removed = Modifiers.Unregister(modifier, entry =>
             {
@@ -511,7 +513,10 @@ namespace Common.FlowField
                             || !policy.BeginsAfterBudget && budget.IsExpired)
                             return;
                         if (_builder.HasPendingRequest || _builder.HasOwedInput)
+                        {
                             PruneDestroyedObstacles();
+                            PruneDestroyedModifiers();
+                        }
                         bool started = _builder.TryBeginBuild(out FlowFieldBuildStart start);
                         if (start.InvalidatedRegion.HasValue)
                             Safety.InvalidateRegion(start.InvalidatedRegion.Value);
@@ -680,8 +685,25 @@ namespace Common.FlowField
         /// </summary>
         internal void ObserveModifiers()
         {
+            PruneDestroyedModifiers();
             using (Boundary.EnterUserCode())
                 Modifiers.ObserveAll();
+        }
+
+        // A registered Modifier destroyed without being unregistered leaves the
+        // registry like a destroyed obstacle: before the build that is owed
+        // begins, and before a restart reads every Modifier again. Its
+        // influence leaves with it. Nothing is polled while no build is owed.
+        private void PruneDestroyedModifiers()
+        {
+            if (_modifiers == null)
+                return;
+            for (int index = _modifiers.Count - 1; index >= 0; index--)
+            {
+                IFlowFieldVectorModifier modifier = _modifiers.Entries[index].Modifier;
+                if (FlowFieldVectorUtility.IsMissingModifier(modifier))
+                    UnregisterModifierNow(modifier);
+            }
         }
 
         /// <summary>Clears everything, registrations included. Initialize may follow.</summary>

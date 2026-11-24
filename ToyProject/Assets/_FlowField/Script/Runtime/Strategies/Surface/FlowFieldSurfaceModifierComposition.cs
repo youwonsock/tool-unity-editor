@@ -217,8 +217,12 @@ namespace Common.FlowField
             for (int i = 0; i < _registry.Entries.Count; i++)
             {
                 FlowFieldModifierEntry entry = _registry.Entries[i];
-                if (FlowFieldVectorUtility.IsMissingModifier(entry.Modifier)
-                    || AreaOf(entry).InfluenceMask == null
+                // The session removes destroyed Modifiers before a build
+                // begins; this one was destroyed while the build ran.
+                if (FlowFieldVectorUtility.IsMissingModifier(entry.Modifier))
+                    throw new InvalidOperationException(
+                        "A registered Modifier was destroyed without UnregisterVectorModifier while a build used it. Call RequestRebuild.");
+                if (AreaOf(entry).InfluenceMask == null
                     || AreaOf(entry).InfluenceMask.Length != cellCount)
                     throw new InvalidOperationException("Registered modifier data is inconsistent.");
 
