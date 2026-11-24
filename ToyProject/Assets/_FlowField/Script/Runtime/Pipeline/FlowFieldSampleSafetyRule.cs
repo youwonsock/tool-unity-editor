@@ -28,8 +28,13 @@ namespace Common.FlowField
     {
         private const float EscapeAxisThreshold = 0.001f;
         private const float DirectionAxisThreshold = 0.000001f;
-        // Faces of a cell this close together (a fraction of the cell size)
-        // count as reached at once.
+        // How far from a mover (a fraction of the cell size) the exit check
+        // also follows the faces after the first. A mover moves a fraction of
+        // a cell between samples, so near a corner it crosses both faces
+        // before it samples again; one moving farther than this between
+        // samples can still cut a corner.
+        private const float ExitLookAheadFraction = 0.25f;
+        // Faces this close together are reached at once: an edge or corner.
         private const float ExitTieFraction = 0.0001f;
         // The unit vector of each neighbour step; Surface2D uses the first 8.
         private static readonly Vector3[] StepDirections = CreateStepDirections();
@@ -172,13 +177,17 @@ namespace Common.FlowField
                 || IsStepUnsafe(grid, index, target, pathLink: false, in cells);
         }
 
-        // The step a mover at this position takes next in a straight line:
+        // The steps a mover at this position takes next in a straight line:
         // through the face, edge or corner of its cell the direction reaches
-        // first. Near the side of its cell even a slight sideways drift
-        // crosses there next. Only what a mover cannot come back from stops
-        // it: the grid edge, a notified change, no ground, or a Surface2D step
-        // the ground does not link. A blocked cell is fine, as the escape
-        // sends a mover back out, so a turn along a wall keeps moving.
+        // first, and on through every face it reaches within a quarter cell of
+        // where it is, in the order it crosses them (a corner it is about to
+        // cut before it samples again). Near the side of its cell even a slight
+        // sideways drift crosses there next. Only what a mover cannot come back
+        // from stops it: the grid edge, a notified change, no ground, or a
+        // Surface2D drop over Max Step Height. A blocked cell that is no drop is
+        // fine, as the escape sends a mover back out, and so is a step up over
+        // Max Step Height, which the mover meets like a wall: the check ends
+        // there, and a turn along either keeps moving.
         private static bool IsExitStepUnsafe(
             FlowFieldGridSpace grid,
             int index,
@@ -197,13 +206,60 @@ namespace Common.FlowField
             float first = Mathf.Min(toX, Mathf.Min(toY, toZ));
             if (float.IsPositiveInfinity(first))
                 return false;
-            // Faces reached together make a diagonal step.
-            float together = first + ExitTieFraction * grid.CellSize;
-            int dx = toX <= together ? (direction.x > 0f ? 1 : -1) : 0;
-            int dy = toY <= together ? (direction.y > 0f ? 1 : -1) : 0;
-            int dz = toZ <= together ? (direction.z > 0f ? 1 : -1) : 0;
+            // The first crossing is always checked, the ones after it only
+            // within the look-ahead.
+            float reach = Mathf.Max(first, ExitLookAheadFraction * grid.CellSize);
+            float tie = ExitTieFraction * grid.CellSize;
+            int sx = direction.x > 0f ? 1 : -1;
+            int sy = direction.y > 0f ? 1 : -1;
+            int sz = direction.z > 0f ? 1 : -1;
             grid.Locate(index, out int x, out int y, out int z);
-            if (!grid.TryLocal(x + dx, y + dy, z + dz, out _))
+            // Each crossing is one face, or the faces reached together (an edge
+            // or corner) as one diagonal step.
+            float crossed = float.NegativeInfinity;
+            while (true)
+            {
+                float next = float.PositiveInfinity;
+                if (toX > crossed && toX <= reach) next = Mathf.Min(next, toX);
+                if (toY > crossed && toY <= reach) next = Mathf.Min(next, toY);
+                if (toZ > crossed && toZ <= reach) next = Mathf.Min(next, toZ);
+                if (float.IsPositiveInfinity(next))
+                    return false;
+                float upTo = next + tie;
+                int dx = toX > crossed && toX <= upTo ? sx : 0;
+                int dy = toY > crossed && toY <= upTo ? sy : 0;
+                int dz = toZ > crossed && toZ <= upTo ? sz : 0;
+                if (IsCrossingUnsafe(grid, volume, x, y, z, dx, dy, dz, in cells, out bool walled))
+                    return true;
+                // A blocked cell or a step up stops the mover like a wall, so
+                // it slides on from here instead.
+                if (walled)
+                    return false;
+                x += dx;
+                y += dy;
+                z += dz;
+                crossed = upTo;
+            }
+        }
+
+        // One crossing from cell (x, y, z): the cells it passes and, on a
+        // Surface2D, whether it drops. A diagonal may slip into either cell
+        // beside it, and on through one the mover can step into. Walled when
+        // the mover cannot enter the cell it crosses into.
+        private static bool IsCrossingUnsafe(
+            FlowFieldGridSpace grid,
+            bool volume,
+            int x,
+            int y,
+            int z,
+            int dx,
+            int dy,
+            int dz,
+            in Cells cells,
+            out bool walled)
+        {
+            walled = false;
+            if (!grid.TryLocal(x + dx, y + dy, z + dz, out int target))
                 return true;
             for (int cx = Mathf.Min(x, x + dx); cx <= Mathf.Max(x, x + dx); cx++)
             for (int cy = Mathf.Min(y, y + dy); cy <= Mathf.Max(y, y + dy); cy++)
@@ -214,9 +270,18 @@ namespace Common.FlowField
             }
             // A Volume3D link is missing only next to a blocked cell.
             if (volume)
+            {
+                walled = cells.IsBlocked(target);
                 return false;
-            int step = FlowFieldNeighborUtility.FindDirectionIndex(dx, dz);
-            return step < 0 || !cells.HasGroundLink(index, step);
+            }
+            int from = grid.ToFlatIndex(x, z);
+            if (cells.IsDrop(from, target)
+                || dx != 0 && dz != 0
+                    && (cells.IsDropThrough(from, grid.ToFlatIndex(x + dx, z), target)
+                        || cells.IsDropThrough(from, grid.ToFlatIndex(x, z + dz), target)))
+                return true;
+            walled = cells.IsBlocked(target) || cells.IsStepUp(from, target);
+            return false;
         }
 
         // How far along the direction the face of one axis is.
@@ -330,6 +395,27 @@ namespace Common.FlowField
                 return dx == 0 || dz == 0
                     || (mask & (1 << (dx > 0 ? 0 : 1))) != 0 && (mask & (1 << (dz > 0 ? 2 : 3))) != 0;
             }
+
+            // A Surface2D step down by more than Max Step Height, which the
+            // ground does not link: a ledge a mover cannot come back from.
+            internal bool IsDrop(int from, int to)
+            {
+                FlowFieldSurfaceData surface = _field.Surface;
+                return surface != null && surface.Heights[to] < surface.Heights[from] - surface.MaxStepHeight;
+            }
+
+            // A Surface2D step up by more than Max Step Height: the mover meets
+            // it like a wall.
+            internal bool IsStepUp(int from, int to)
+            {
+                FlowFieldSurfaceData surface = _field.Surface;
+                return surface != null && surface.Heights[to] > surface.Heights[from] + surface.MaxStepHeight;
+            }
+
+            // A diagonal's drop into the cell beside it, or beyond it when the
+            // mover can step into that cell.
+            internal bool IsDropThrough(int from, int beside, int to)
+                => IsDrop(from, beside) || !IsBlocked(beside) && !IsStepUp(from, beside) && IsDrop(beside, to);
 
             internal Vector3 EscapeDirection(int index)
                 => _latest != null
