@@ -356,12 +356,15 @@ namespace Common.FlowField
                         FlowFieldCellRect.Invalid);
                     return;
                 case FlowFieldModifierUpdateKind.Unregistered:
-                    // The cells it touched are composed again without it.
-                    MarkDirty(
-                        FlowFieldSurfaceDirtyFlags.ModifierStack,
-                        FlowFieldSurfaceModifierComposition.AreaOf(update.Entry).InfluenceRect,
-                        FlowFieldCellRect.Invalid);
+                {
+                    // The cells it touched are composed again without it. One
+                    // that touched no cell leaves nothing to compose: an
+                    // invalid region would mean the whole grid.
+                    FlowFieldCellRect touched = FlowFieldSurfaceModifierComposition.AreaOf(update.Entry).InfluenceRect;
+                    if (touched.IsValid)
+                        MarkDirty(FlowFieldSurfaceDirtyFlags.ModifierStack, touched, FlowFieldCellRect.Invalid);
                     return;
+                }
             }
             bool area = (update.Requested & FlowFieldModifierChange.Area) != 0;
             FlowFieldModifierChangeResult result = update.Result;
@@ -381,7 +384,9 @@ namespace Common.FlowField
             FlowFieldSurfaceDirtyFlags flags = FlowFieldSurfaceDirtyFlags.None;
             if (area)
                 flags |= FlowFieldSurfaceDirtyFlags.ModifierArea;
-            if (result.Any)
+            // New values on no touched cell change nothing. A moved area
+            // composes what its new mask reaches with the latest values.
+            if (result.Any && dirty.IsValid)
                 flags |= FlowFieldSurfaceDirtyFlags.ModifierStack;
             MarkDirty(flags, dirty, FlowFieldCellRect.Invalid);
         }
