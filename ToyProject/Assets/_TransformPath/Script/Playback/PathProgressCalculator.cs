@@ -1,60 +1,42 @@
-using UnityEngine;
+using System;
 
 namespace Common.TransformPath
 {
     internal readonly struct PathProgressStep
     {
-        public float Position { get; }
-        public float Progress { get; }
+        /// <summary>The position after the step: elapsed time or distance.</summary>
+        public double Position { get; }
         public float ConsumedTime { get; }
+        /// <summary>Whether the step got to its limit. It then sits on the limit exactly.</summary>
+        public bool Reached { get; }
 
-        public PathProgressStep(float position, float progress, float consumedTime)
+        public PathProgressStep(double position, float consumedTime, bool reached)
         {
             Position = position;
-            Progress = progress;
             ConsumedTime = consumedTime;
+            Reached = reached;
         }
     }
 
     /// <summary>
-    /// How far one segment advances in a slice of time, by Duration or by Speed,
-    /// without passing a progress cap. The caller handles segment ends.
+    /// How far a position moves toward a limit in a slice of time. The position
+    /// never moves back, and a step that gets to the limit lands on it exactly,
+    /// so no caller has to decide later from a rounded value whether it arrived.
     /// </summary>
     internal static class PathProgressCalculator
     {
-        private const float EPSILON = PathConstants.EPSILON;
-
-        public static PathProgressStep AdvanceTime(float elapsed, float duration,
-            in PathMovementSettings movement, float availableTime, float multiplier, float maxProgress)
+        /// <param name="position">Elapsed time or distance so far.</param>
+        /// <param name="limit">The elapsed time or distance the step may not pass.</param>
+        /// <param name="rate">Position units per second; positive.</param>
+        public static PathProgressStep AdvanceToward(double position, double limit, double rate, float availableTime)
         {
-            duration = Mathf.Max(duration, PathConstants.MIN_MOVE_VALUE);
-            if (multiplier <= EPSILON)
-                return new PathProgressStep(elapsed, movement.EvaluateProgress(elapsed / duration), availableTime);
-            maxProgress = Mathf.Clamp01(maxProgress);
-            float maximumElapsed = movement.InverseProgress(maxProgress) * duration;
-            float targetElapsed = Mathf.Min(elapsed + availableTime * multiplier, maximumElapsed);
-            float consumed = Mathf.Min(availableTime, Mathf.Max(0f, targetElapsed - elapsed) / multiplier);
-            float next = elapsed + consumed * multiplier;
-            return new PathProgressStep(next,
-                Mathf.Min(maxProgress, movement.EvaluateProgress(next / duration)), consumed);
-        }
-
-        public static PathProgressStep AdvanceDistance(float distance, float length,
-            float speed, float availableTime, float multiplier, float maxProgress)
-        {
-            length = Mathf.Max(length, PathConstants.MIN_MOVE_VALUE);
-            if (multiplier <= EPSILON)
-                return new PathProgressStep(distance, Mathf.Clamp01(distance / length), availableTime);
-            float effectiveSpeed = Mathf.Max(speed, PathConstants.MIN_MOVE_VALUE) * multiplier;
-            float remaining = Mathf.Max(0f, length - distance);
-            float consumed = Mathf.Min(availableTime,
-                remaining / Mathf.Max(effectiveSpeed, PathConstants.MIN_MOVE_VALUE));
-            float maximumDistance = Mathf.Clamp01(maxProgress) * length;
-            consumed = Mathf.Min(consumed,
-                Mathf.Max(0f, maximumDistance - distance) / Mathf.Max(effectiveSpeed, EPSILON));
-            float next = distance + consumed * effectiveSpeed;
-            return new PathProgressStep(next,
-                Mathf.Min(Mathf.Clamp01(maxProgress), Mathf.Clamp01(next / length)), consumed);
+            if (limit <= position)
+                return new PathProgressStep(position, 0f, true);
+            double needed = (limit - position) / rate;
+            double next = position + availableTime * rate;
+            if (needed <= availableTime || next >= limit)
+                return new PathProgressStep(limit, (float)Math.Min(needed, availableTime), true);
+            return new PathProgressStep(next, availableTime, false);
         }
     }
 }

@@ -213,5 +213,277 @@ namespace Common.TransformPath.Tests
                 UnityEngine.Object.DestroyImmediate(host);
             }
         }
+
+        private MultiPathData Sequence(PathMovementSettings first, PathMovementSettings second, float a, float b)
+        {
+            PathData pa = _scene.CreatePath(first, EPathCurveType.Linear, Vector3.zero, new Vector3(a, 0f, 0f));
+            PathData pb = _scene.CreatePath(second, EPathCurveType.Linear, new Vector3(a, 0f, 0f), new Vector3(a, 0f, b));
+            MultiPathData sequence = _scene.CreateSequence();
+            sequence.SetSegments(new[] { new PathSegmentAuthoring(pa), new PathSegmentAuthoring(pb) });
+            return sequence;
+        }
+
+        private static AnimationCurve Curve(params (float time, float value)[] keys)
+        {
+            var curve = new AnimationCurve();
+            foreach (var (time, value) in keys)
+                curve.AddKey(new Keyframe(time, value, 0f, 0f));
+            for (int i = 0; i < curve.length; i++)
+                UnityEditor.AnimationUtility.SetKeyLeftTangentMode(curve, i, UnityEditor.AnimationUtility.TangentMode.Linear);
+            for (int i = 0; i < curve.length; i++)
+                UnityEditor.AnimationUtility.SetKeyRightTangentMode(curve, i, UnityEditor.AnimationUtility.TangentMode.Linear);
+            return curve;
+        }
+
+        // 599.6 + 31.1 used to stop at a local 0.9999992 of the last segment for good.
+        [TestCase(EPathMoveType.SpeedBased)]
+        [TestCase(EPathMoveType.TimeBased)]
+        public void LongSequence_Completes(EPathMoveType moveType)
+        {
+            MultiPathData sequence = moveType == EPathMoveType.SpeedBased
+                ? Sequence(PathMovementSettings.Speed(10f), PathMovementSettings.Speed(10f), 599.6f, 31.1f)
+                : Sequence(PathMovementSettings.Time(60f), PathMovementSettings.Time(15f), 383.275f, 12.227f);
+            var recorder = new RecordingPlayback();
+            recorder.Playback.Play(PathPlaybackRequest.Sequence(sequence));
+
+            recorder.Frames(200, 0.5f);
+
+            Assert.AreEqual(EPathFollowerState.Completed, recorder.Playback.State);
+            Assert.AreEqual(1f, recorder.Playback.Progress);
+        }
+
+        [Test]
+        public void LongSequence_SeekToTheEnd_CompletesOnTheNextMove()
+        {
+            MultiPathData sequence = Sequence(PathMovementSettings.Speed(10f), PathMovementSettings.Speed(10f), 599.6f, 31.1f);
+            var recorder = new RecordingPlayback();
+            recorder.Playback.Play(PathPlaybackRequest.Sequence(sequence));
+
+            recorder.Playback.Seek(1f);
+            Assert.AreEqual(EPathFollowerState.Moving, recorder.Playback.State);
+            recorder.Frame();
+
+            Assert.AreEqual(EPathFollowerState.Completed, recorder.Playback.State);
+        }
+
+        [Test]
+        public void LongSequence_Loop_WrapsAround()
+        {
+            MultiPathData sequence = Sequence(PathMovementSettings.Speed(10f), PathMovementSettings.Speed(10f), 599.6f, 31.1f);
+            var recorder = new RecordingPlayback();
+            recorder.Playback.Play(PathPlaybackRequest.Sequence(sequence, loop: true));
+
+            recorder.Frames(140, 0.5f);
+
+            Assert.AreEqual(0, recorder.Playback.SegmentIndex);
+            Assert.Greater(recorder.Playback.Progress, 0f);
+        }
+
+        [Test]
+        public void LongPath_AtTheLowestSpeed_StillMoves()
+        {
+            PathData path = _scene.CreatePath(PathMovementSettings.Speed(PathConstants.MIN_MOVE_VALUE), EPathCurveType.Linear,
+                Vector3.zero, new Vector3(10000f, 0f, 0f));
+            var recorder = new RecordingPlayback();
+            recorder.Playback.Play(PathPlaybackRequest.Single(path));
+            recorder.Frames(3);
+            float before = recorder.Playback.Progress;
+
+            recorder.Frames(600);
+
+            Assert.Greater(recorder.Playback.Progress, before);
+        }
+
+        [TestCase(EPathMoveType.SpeedBased)]
+        [TestCase(EPathMoveType.TimeBased)]
+        public void PauseEvent_StopsExactlyAtItsPosition(EPathMoveType moveType)
+        {
+            PathData path = Line(moveType == EPathMoveType.SpeedBased
+                ? PathMovementSettings.Speed(10f)
+                : PathMovementSettings.Time(1f, AnimationCurve.EaseInOut(0f, 0f, 1f, 1f)));
+            PathEventSettingSO pause = _scene.CreateEvent("pause");
+            pause.Lifecycle = EPathEventLifecycle.Pause;
+            _scene.SetEvents(path, (0.47f, pause));
+            var recorder = new RecordingPlayback();
+            recorder.Playback.Play(PathPlaybackRequest.Single(path));
+
+            recorder.Frames(20, 0.05f);
+
+            Assert.AreEqual(EPathFollowerState.Paused, recorder.Playback.State);
+            Assert.AreEqual(0.47f, recorder.Playback.Progress);
+        }
+
+        [Test]
+        public void PauseEvent_OnAHold_StopsAtTheHoldStart_AndTheHoldContinuesAfterResume()
+        {
+            // Progress holds at 0.5 from 30% to 70% of the duration.
+            PathData path = Line(PathMovementSettings.Time(10f, Curve((0f, 0f), (0.3f, 0.5f), (0.7f, 0.5f), (1f, 1f))));
+            PathEventSettingSO pause = _scene.CreateEvent("pause");
+            pause.Lifecycle = EPathEventLifecycle.Pause;
+            _scene.SetEvents(path, (0.5f, pause));
+            var recorder = new RecordingPlayback();
+            recorder.Playback.Play(PathPlaybackRequest.Single(path));
+
+            recorder.Frames(40, 0.1f);
+            Assert.AreEqual(EPathFollowerState.Paused, recorder.Playback.State);
+            Assert.AreEqual(0.5f, recorder.Playback.Progress, 1e-4f);
+
+            recorder.Playback.Resume();
+            recorder.Frames(39, 0.1f);
+            Assert.AreEqual(0.5f, recorder.Playback.Progress, 1e-4f);
+            recorder.Frames(3, 0.1f);
+            Assert.Greater(recorder.Playback.Progress, 0.5f);
+        }
+
+        [Test]
+        public void ValueChange_AppliesFromItsPosition_ForTheRestOfTheFrame()
+        {
+            PathData path = Line(PathMovementSettings.Speed(1f));
+            PathEventSettingSO faster = _scene.CreateEvent("faster");
+            faster.UseSpeedChange = true;
+            faster.SpeedTarget = 3f;
+            _scene.SetEvents(path, (0.5f, faster));
+            var recorder = new RecordingPlayback();
+            recorder.Playback.Play(PathPlaybackRequest.Single(path));
+
+            // 5 m at 1 m/s reach the event, the last second runs at 3 m/s.
+            recorder.Frame(6f);
+
+            Assert.AreEqual(0.8f, recorder.Playback.Progress, 1e-4f);
+        }
+
+        [Test]
+        public void EventAtZero_RunsOnTheFirstMove()
+        {
+            PathData path = Line(PathMovementSettings.Speed(1f));
+            _scene.SetEvents(path, (0f, _scene.CreateEvent("start")));
+            var recorder = new RecordingPlayback();
+            recorder.Playback.Play(PathPlaybackRequest.Single(path));
+            CollectionAssert.DoesNotContain(recorder.Log, "event start");
+
+            recorder.Frame();
+
+            CollectionAssert.Contains(recorder.Log, "event start");
+        }
+
+        [Test]
+        public void EventsAtOnePosition_RunInAuthoringOrder_APauseHoldsTheRest()
+        {
+            PathData path = Line(PathMovementSettings.Speed(10f));
+            PathEventSettingSO pause = _scene.CreateEvent("pause");
+            pause.Lifecycle = EPathEventLifecycle.Pause;
+            _scene.SetEvents(path, (0.3f, _scene.CreateEvent("a")), (0.3f, pause), (0.3f, _scene.CreateEvent("b")));
+            var recorder = new RecordingPlayback();
+            recorder.Playback.Play(PathPlaybackRequest.Single(path));
+
+            recorder.Frames(30);
+            CollectionAssert.Contains(recorder.Log, "event pause");
+            CollectionAssert.DoesNotContain(recorder.Log, "event b");
+            Assert.AreEqual(0.3f, recorder.Playback.Progress);
+
+            recorder.Playback.Resume();
+            recorder.Frame();
+
+            int a = recorder.Log.IndexOf("event a"), p = recorder.Log.IndexOf("event pause"), b = recorder.Log.IndexOf("event b");
+            Assert.That(a < p && p < b);
+        }
+
+        [Test]
+        public void CapBeforeAnEvent_HoldsThere_TheEventRunsOnceTheCapPasses()
+        {
+            PathData path = Line(PathMovementSettings.Speed(10f));
+            _scene.SetEvents(path, (0.3f, _scene.CreateEvent("e")));
+            var recorder = new RecordingPlayback();
+            recorder.Playback.Play(PathPlaybackRequest.Single(path));
+            recorder.Playback.Limit = new PathMotionLimit(false, 1f, 0.2f, false);
+
+            recorder.Frames(30);
+            Assert.AreEqual(0.2f, recorder.Playback.Progress, 1e-6f);
+            CollectionAssert.DoesNotContain(recorder.Log, "event e");
+
+            recorder.Playback.Limit = PathMotionLimit.None;
+            recorder.Frames(10);
+            CollectionAssert.Contains(recorder.Log, "event e");
+        }
+
+        [Test]
+        public void Loop_RunsAnEventOnEveryLap()
+        {
+            PathData path = Line(PathMovementSettings.Speed(10f));
+            _scene.SetEvents(path, (0.5f, _scene.CreateEvent("half")));
+            var recorder = new RecordingPlayback();
+            recorder.Playback.Play(PathPlaybackRequest.Single(path, true));
+
+            // Passes 0.5 at 0.5 s, 1.5 s and 2.5 s.
+            recorder.Frame(3.2f);
+
+            Assert.AreEqual(3, recorder.Log.FindAll(entry => entry == "event half").Count);
+        }
+
+        [Test]
+        public void LastEvent_RunsBeforeCompletion()
+        {
+            PathData path = Line(PathMovementSettings.Speed(10f));
+            _scene.SetEvents(path, (PathConstants.MAX_EVENT_POSITION, _scene.CreateEvent("end")));
+            var recorder = new RecordingPlayback();
+            recorder.Playback.Play(PathPlaybackRequest.Single(path));
+
+            recorder.Frame(5f);
+
+            Assert.Less(recorder.Log.IndexOf("event end"), recorder.Log.IndexOf("state Completed"));
+        }
+
+        [Test]
+        public void TimeBased_GeometryChangingEveryFrame_StillLeavesAHold()
+        {
+            // Holds at 0 for the first half of the duration.
+            PathData path = Line(PathMovementSettings.Time(2f, Curve((0f, 0f), (0.5f, 0f), (1f, 1f))));
+            var recorder = new RecordingPlayback();
+            recorder.Playback.Play(PathPlaybackRequest.Single(path));
+
+            for (int i = 0; i < 90; i++)
+            {
+                path.transform.GetChild(1).position = new Vector3(10f + (i % 2) * 0.01f, 0f, 0f);
+                path.Rebuild();
+                recorder.Frame();
+            }
+
+            Assert.Greater(recorder.Playback.Progress, 0f);
+        }
+
+        [Test]
+        public void TimeBased_SetDurationDuringAHold_KeepsTheTimeFraction()
+        {
+            PathData path = Line(PathMovementSettings.Time(10f, Curve((0f, 0f), (0.3f, 0.5f), (0.7f, 0.5f), (1f, 1f))));
+            var recorder = new RecordingPlayback();
+            recorder.Playback.Play(PathPlaybackRequest.Single(path));
+            recorder.Frames(50, 0.1f);
+
+            Assert.IsTrue(recorder.Playback.SetDuration(20f));
+            Assert.AreEqual(0.5f, recorder.Playback.Progress, 1e-4f);
+
+            // Half the time passed; the hold ends at 70%, 4 s later at the new duration.
+            recorder.Frames(45, 0.1f);
+            Assert.Greater(recorder.Playback.Progress, 0.5f);
+        }
+
+        [Test]
+        public void PreservedSpeed_StaysWithinTheMaximum()
+        {
+            MultiPathData sequence = _scene.CreateSequence();
+            PathData quick = _scene.CreatePath(PathMovementSettings.Time(PathConstants.MIN_MOVE_VALUE), EPathCurveType.Linear,
+                Vector3.zero, new Vector3(20f, 0f, 0f));
+            PathData next = _scene.CreatePath(PathMovementSettings.Speed(5f), EPathCurveType.Linear,
+                new Vector3(20f, 0f, 0f), new Vector3(40f, 0f, 0f));
+            sequence.SetSegments(new[] { new PathSegmentAuthoring(quick), new PathSegmentAuthoring(next, true) });
+            var recorder = new RecordingPlayback();
+            recorder.Playback.Play(PathPlaybackRequest.Sequence(sequence));
+
+            recorder.Playback.TickMovement(0.0011f);
+
+            Assert.AreEqual(1, recorder.Playback.SegmentIndex);
+            Assert.AreEqual(PathConstants.MAX_MOVE_VALUE, recorder.Playback.Speed);
+            Assert.DoesNotThrow(() => recorder.Playback.SetSpeed(recorder.Playback.Speed));
+        }
     }
 }

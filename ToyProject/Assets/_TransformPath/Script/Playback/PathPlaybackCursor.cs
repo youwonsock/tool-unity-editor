@@ -1,7 +1,23 @@
+using System;
 using UnityEngine;
 
 namespace Common.TransformPath
 {
+    /// <summary>Why one step of movement stopped.</summary>
+    internal enum EPathStep
+    {
+        /// <summary>Nothing moved: the queue's multiplier is zero.</summary>
+        NoMove,
+        /// <summary>The whole slice of time was used before any limit.</summary>
+        TimeUsed,
+        /// <summary>The next event's position was reached; it is due now.</summary>
+        Event,
+        /// <summary>The queue's progress cap was reached.</summary>
+        Cap,
+        /// <summary>The end of the segment was reached; every event of it was due before.</summary>
+        End,
+    }
+
     /// <summary>
     /// Where a playback is on its route and how it advances: the current segment,
     /// its progress, the movement values of that segment and the next event to
@@ -13,8 +29,9 @@ namespace Common.TransformPath
         private const float MIN_DIRECTION_LOOK_AHEAD = 0.001f;
         private const float MIN_DIRECTION_LOOK_AHEAD_DISTANCE = 0.01f;
 
-        private float _elapsed;
-        private float _distance;
+        // Double, so a long path at a low speed still moves every frame.
+        private double _elapsed;
+        private double _distance;
         private int _nextEvent;
 
         public EPathMoveType MoveType { get; private set; }
@@ -51,7 +68,7 @@ namespace Common.TransformPath
                 && PathValueUtility.IsFinite(previousNominalSpeed))
             {
                 if (settings.MoveType == EPathMoveType.SpeedBased)
-                    Speed = previousNominalSpeed;
+                    Speed = Mathf.Min(previousNominalSpeed, PathConstants.MAX_MOVE_VALUE);
                 else
                 {
                     Duration = Mathf.Clamp(
@@ -70,21 +87,20 @@ namespace Common.TransformPath
         public void EnterSegment(PathRoute session, int index)
         {
             Segment = index;
-            _elapsed = 0f;
-            _distance = 0f;
+            _elapsed = 0d;
+            _distance = 0d;
             Normalized = 0f;
             Global = session.GetGlobalProgress(index, 0f);
             _nextEvent = 0;
         }
 
-        /// <summary>The next event of the segment at or before the progress, in position order.</summary>
-        public bool TryTakeEvent(PathRuntimeEvent[] events, float progress, out PathEventDefinition definition)
+        /// <summary>Takes the next event of the segment when it is at or before the progress.</summary>
+        public bool TryTakeEventAt(PathRuntimeEvent[] events, float progress, out PathEventDefinition definition)
         {
-            while (_nextEvent < events.Length && events[_nextEvent].NormalizedTime <= progress + EPSILON)
+            if (TryPeekEvent(events, out float position) && position <= progress)
             {
                 definition = events[_nextEvent++].Definition;
-                if (definition != null)
-                    return true;
+                return true;
             }
             definition = null;
             return false;
@@ -99,54 +115,65 @@ namespace Common.TransformPath
         }
 
         /// <summary>
-        /// Moves for up to the available time and returns how much of it was used.
-        /// The global progress never passes the cap.
+        /// Moves for up to the available time toward the nearest limit: the next
+        /// event, the queue's cap or the segment end. The global progress never
+        /// passes the cap. A step that gets to its limit sits on it exactly, and an
+        /// event already behind the position is due at once.
         /// </summary>
-        public float Advance(
+        public EPathStep Advance(
             PathRoute session,
             float availableTime,
             float multiplier,
             float cap,
-            out bool moved)
+            PathRuntimeEvent[] events,
+            out float consumedTime)
         {
-            moved = false;
             if (multiplier <= EPSILON)
-                return availableTime;
+            {
+                consumedTime = availableTime;
+                return EPathStep.NoMove;
+            }
 
-            float maxLocal = session.GetLocalProgress(Segment, cap);
             bool capped = session.GetGlobalProgress(Segment, 1f) > cap;
+            EPathStep reason = capped ? EPathStep.Cap : EPathStep.End;
+            float limit = capped ? session.GetLocalProgress(Segment, cap) : 1f;
+            // The limit is chosen in progress space and only then turned into time
+            // or distance, so an event the conversion rounds short is still reached.
+            if (TryPeekEvent(events, out float eventPosition) && eventPosition <= limit)
+            {
+                reason = EPathStep.Event;
+                limit = eventPosition;
+            }
+
             PathProgressStep step;
+            float progress;
             if (MoveType == EPathMoveType.TimeBased)
             {
-                float duration = Mathf.Max(Duration, PathConstants.MIN_MOVE_VALUE);
-                float current = _movement.EvaluateProgress(_elapsed / duration);
-                if (capped && maxLocal <= current + EPSILON)
-                    return 0f;
-                step = PathProgressCalculator.AdvanceTime(_elapsed, duration, _movement, availableTime, multiplier, maxLocal);
+                double duration = Math.Max(Duration, PathConstants.MIN_MOVE_VALUE);
+                double target = reason == EPathStep.End
+                    ? duration
+                    : _movement.InverseProgress(limit) * duration;
+                step = PathProgressCalculator.AdvanceToward(_elapsed, target, multiplier, availableTime);
                 _elapsed = step.Position;
+                progress = _movement.EvaluateProgress((float)(_elapsed / duration));
             }
             else
             {
-                float length = Mathf.Max(session.GetLength(Segment), PathConstants.MIN_MOVE_VALUE);
-                if (capped && maxLocal * length <= _distance + EPSILON)
-                    return 0f;
-                step = PathProgressCalculator.AdvanceDistance(_distance, length, Speed, availableTime, multiplier, maxLocal);
+                double length = Math.Max(session.GetLength(Segment), PathConstants.MIN_MOVE_VALUE);
+                double target = reason == EPathStep.End ? length : limit * length;
+                step = PathProgressCalculator.AdvanceToward(_distance, target,
+                    Math.Max(Speed, PathConstants.MIN_MOVE_VALUE) * (double)multiplier, availableTime);
                 _distance = step.Position;
+                progress = (float)Math.Min(1d, _distance / length);
             }
 
-            Normalized = Mathf.Min(step.Progress, maxLocal);
+            consumedTime = step.ConsumedTime;
+            if (step.Reached)
+                Normalized = reason == EPathStep.End ? 1f : Mathf.Max(Normalized, limit);
+            else
+                Normalized = Mathf.Min(progress, limit);
             Global = Mathf.Min(cap, session.GetGlobalProgress(Segment, Normalized));
-            moved = true;
-            return step.ConsumedTime;
-        }
-
-        // SetDuration preserves progress by rescaling elapsed time, so this
-        // compares with the current duration, after event callbacks.
-        public bool HasReachedSegmentEnd(PathRoute session)
-        {
-            return MoveType == EPathMoveType.TimeBased
-                ? _elapsed >= Duration - EPSILON
-                : _distance >= session.GetLength(Segment) - EPSILON;
+            return step.Reached ? reason : EPathStep.TimeUsed;
         }
 
         public void MoveToSegmentEnd(PathRoute session)
@@ -160,18 +187,23 @@ namespace Common.TransformPath
             Segment = index;
             Normalized = Mathf.Clamp01(local);
             _elapsed = MoveType == EPathMoveType.TimeBased
-                ? _movement.InverseProgress(Normalized) * Duration
-                : 0f;
+                ? _movement.InverseProgress(Normalized) * (double)Duration
+                : 0d;
             _distance = MoveType == EPathMoveType.SpeedBased
-                ? session.GetLength(index) * Normalized
-                : 0f;
+                ? session.GetLength(index) * (double)Normalized
+                : 0d;
             Global = session.GetGlobalProgress(index, Normalized);
         }
 
-        // The geometry changed: keep the local progress.
+        /// <summary>
+        /// The geometry changed. Time-based progress does not depend on it, so the
+        /// elapsed time stays; a speed-based one keeps its local progress on the new length.
+        /// </summary>
         public void SyncToProvider(PathRoute session)
         {
-            MoveTo(session, Segment, Normalized);
+            if (MoveType == EPathMoveType.SpeedBased)
+                _distance = session.GetLength(Segment) * (double)Normalized;
+            Global = session.GetGlobalProgress(Segment, Normalized);
         }
 
         /// <summary>Sets Speed or Duration. Returns false when the value is already that.</summary>
@@ -190,14 +222,12 @@ namespace Common.TransformPath
             return true;
         }
 
-        // Keeps the progress by rescaling the elapsed time.
+        // Keeps the fraction of the duration that has passed, so the progress stays exactly.
         private void SetDuration(float duration)
         {
-            float normalized = Duration >= PathConstants.MIN_MOVE_VALUE
-                ? _movement.EvaluateProgress(_elapsed / Duration)
-                : 0f;
+            double fraction = Duration >= PathConstants.MIN_MOVE_VALUE ? _elapsed / Duration : 0d;
             Duration = duration;
-            _elapsed = _movement.InverseProgress(normalized) * duration;
+            _elapsed = fraction * duration;
         }
 
         public float GetNominalSpeed(PathRoute session)
@@ -238,6 +268,20 @@ namespace Common.TransformPath
             // Vector3.normalized returns zero below a fixed magnitude.
             direction = delta / Mathf.Sqrt(sqrDistance);
             return true;
+        }
+
+        // The next event that has a definition, without taking it.
+        private bool TryPeekEvent(PathRuntimeEvent[] events, out float position)
+        {
+            while (_nextEvent < events.Length && events[_nextEvent].Definition == null)
+                _nextEvent++;
+            if (_nextEvent < events.Length)
+            {
+                position = events[_nextEvent].NormalizedTime;
+                return true;
+            }
+            position = 1f;
+            return false;
         }
     }
 }

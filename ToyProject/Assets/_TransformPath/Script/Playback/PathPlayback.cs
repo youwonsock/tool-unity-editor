@@ -228,7 +228,6 @@ namespace Common.TransformPath
             if (Limit.Blocked)
             {
                 _cursor.PendingTime = 0f;
-                _positionDirty = true;
                 return;
             }
 
@@ -237,10 +236,14 @@ namespace Common.TransformPath
             if (remaining <= 0f)
                 return;
 
+            int segmentBefore = _cursor.Segment;
+            float progressBefore = _cursor.Normalized;
             int transitions = 0;
-            while (remaining > EPSILON && transitions < PathConstants.MAX_SEGMENT_TRANSITIONS_PER_TICK)
+            // Each step ends on a limit or uses the time up, so the loop always ends:
+            // an event step takes an event, an end step changes segment or completes.
+            while (remaining > 0f && transitions < PathConstants.MAX_SEGMENT_TRANSITIONS_PER_TICK)
             {
-                float consumed = AdvanceOnce(remaining, out bool transitioned);
+                EPathStep step = AdvanceOnce(ref remaining, out bool transitioned);
                 // A Pause event or the end of the path stops the tick here.
                 if (!IsMoving)
                 {
@@ -249,14 +252,15 @@ namespace Common.TransformPath
                 }
                 if (transitioned)
                     transitions++;
-                if (consumed <= EPSILON && !transitioned)
+                else if (step != EPathStep.Event)
                     break;
-                remaining -= consumed;
             }
 
-            if (remaining > EPSILON && transitions >= PathConstants.MAX_SEGMENT_TRANSITIONS_PER_TICK)
+            if (remaining > 0f && transitions >= PathConstants.MAX_SEGMENT_TRANSITIONS_PER_TICK)
                 _cursor.PendingTime = remaining;
-            _positionDirty = true;
+            // A follower held in place writes nothing.
+            if (_cursor.Segment != segmentBefore || _cursor.Normalized != progressBefore)
+                _positionDirty = true;
         }
 
         /// <summary>
@@ -298,37 +302,32 @@ namespace Common.TransformPath
             return true;
         }
 
-        private float AdvanceOnce(float availableTime, out bool transitioned)
-        {
-            transitioned = false;
-            float cap = Limit.MaxProgress;
-            float consumed = _cursor.Advance(_route, availableTime, Limit.SpeedMultiplier, cap, out bool moved);
-            if (!moved)
-                return consumed;
-
-            DispatchEvents(_route.GetEvents(_cursor.Segment), _cursor.Normalized);
-            if (State == EPathFollowerState.Moving
-                && _route.GetGlobalProgress(_cursor.Segment, 1f) <= cap
-                && _cursor.HasReachedSegmentEnd(_route))
-                ProcessSegmentEnd(out transitioned);
-            return Mathf.Max(consumed, EPSILON);
-        }
-
-        private void ProcessSegmentEnd(out bool transitioned)
+        private EPathStep AdvanceOnce(ref float remaining, out bool transitioned)
         {
             transitioned = false;
             PathRuntimeEvent[] events = _route.GetEvents(_cursor.Segment);
+            EPathStep step = _cursor.Advance(_route, remaining, Limit.SpeedMultiplier, Limit.MaxProgress,
+                events, out float consumed);
+            remaining = consumed >= remaining ? 0f : remaining - consumed;
+            if (step == EPathStep.Event)
+                DispatchEvents(events, _cursor.Normalized);
+            else if (step == EPathStep.End)
+                ProcessSegmentEnd(out transitioned);
+            return step;
+        }
+
+        // Every event of the segment was due before its end, so none is left here.
+        private void ProcessSegmentEnd(out bool transitioned)
+        {
+            transitioned = false;
             _cursor.MoveToSegmentEnd(_route);
             bool hasNext = _cursor.Segment + 1 < _route.SegmentCount;
             if (!hasNext && !_cursor.Loop)
             {
-                Complete(events);
+                Complete();
                 return;
             }
 
-            DispatchEvents(events, 1f);
-            if (State != EPathFollowerState.Moving)
-                return;
             EnterSegment(hasNext ? _cursor.Segment + 1 : 0);
             transitioned = true;
             if (hasNext)
@@ -355,13 +354,9 @@ namespace Common.TransformPath
                 _effects.CancelBlend();
         }
 
-        private void Complete(PathRuntimeEvent[] events)
+        private void Complete()
         {
-            IsMoving = false;
-            _cursor.PendingTime = 0f;
-            DispatchEvents(events, 1f);
-            if (State != EPathFollowerState.Moving)
-                return;
+            HaltMovement();
             EndPlayback();
             SetState(EPathFollowerState.Completed);
             _listeners.Completed.Publish();
@@ -383,10 +378,11 @@ namespace Common.TransformPath
 
         #region Events
 
-        // An event that pauses or ends the playback stops the rest.
+        // Runs the due events in authoring order. Each is taken before it runs, so
+        // a Pause event counts as passed; the events after it wait for the resume.
         private void DispatchEvents(PathRuntimeEvent[] events, float progress)
         {
-            while (State == EPathFollowerState.Moving && _cursor.TryTakeEvent(events, progress, out PathEventDefinition definition))
+            while (State == EPathFollowerState.Moving && _cursor.TryTakeEventAt(events, progress, out PathEventDefinition definition))
                 _effects.Run(definition);
         }
 

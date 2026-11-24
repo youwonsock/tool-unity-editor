@@ -93,9 +93,6 @@ namespace Common.TransformPath
 
         public float GetLength(int segment) => _segments[segment].Length;
 
-        /// <summary>The provider that draws a segment: a sequence's own path, or the provider itself.</summary>
-        public IPathProvider GetSampler(int segment) => _segments[segment].Sampler;
-
         public PathMovementSettings GetMovementSettings(int segment) => _segments[segment].Movement;
 
         public PathRuntimeEvent[] GetEvents(int segment) => _segments[segment].Events;
@@ -112,17 +109,19 @@ namespace Common.TransformPath
             return Sample(segment, GetLocalProgress(segment, globalProgress));
         }
 
+        /// <summary>The end of the last segment is exactly 1, whatever the float sums of the lengths give.</summary>
         public float GetGlobalProgress(int segment, float localProgress)
         {
-            if (_segments.Length == 1)
+            if (_segments.Length == 1 || (segment == _segments.Length - 1 && localProgress >= 1f))
                 return Mathf.Clamp01(localProgress);
             return Mathf.Clamp01(
                 (_starts[segment] + _segments[segment].Length * Mathf.Clamp01(localProgress)) / TotalLength);
         }
 
+        /// <summary>A global progress of 1 is exactly the end of the last segment.</summary>
         public float GetLocalProgress(int segment, float globalProgress)
         {
-            if (_segments.Length == 1)
+            if (_segments.Length == 1 || (segment == _segments.Length - 1 && globalProgress >= 1f))
                 return Mathf.Clamp01(globalProgress);
             float length = _segments[segment].Length;
             return length <= Mathf.Epsilon

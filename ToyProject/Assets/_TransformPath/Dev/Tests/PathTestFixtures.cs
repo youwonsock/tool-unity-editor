@@ -52,6 +52,13 @@ namespace Common.TransformPath.Tests
             return path;
         }
 
+        public MultiPathData CreateSequence()
+        {
+            var host = new GameObject("Sequence");
+            _objects.Add(host);
+            return host.AddComponent<MultiPathData>();
+        }
+
         public PathEventSettingSO CreateEvent(string name)
         {
             var setting = ScriptableObject.CreateInstance<PathEventSettingSO>();

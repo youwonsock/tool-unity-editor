@@ -82,5 +82,23 @@ namespace Common.TransformPath.Tests
             Assert.AreEqual(1f, movement.EvaluateProgress(1f), 1e-5f);
             Assert.IsTrue(movement.TryValidate(out _));
         }
+
+        [Test]
+        public void LastSegmentEnd_IsExactlyOne_WhateverTheLengthSums()
+        {
+            // Running float sums of these lengths put the last start where
+            // (total - start) / length rounds below 1.
+            float a = 250f, b = 10.1f, c = 3.3f;
+            var movement = PathMovementSettings.Speed(1f);
+            PathRoute route = PathRoute.FromProvider(new LineProvider(a + b + c), new[]
+            {
+                new PathRoute.Segment(new LineProvider(a), 0f, a, movement, false, null),
+                new PathRoute.Segment(new LineProvider(b), a, b, movement, false, null),
+                new PathRoute.Segment(new LineProvider(c), a + b, c, movement, false, null),
+            }, true);
+
+            Assert.AreEqual(1f, route.GetLocalProgress(2, 1f));
+            Assert.AreEqual(1f, route.GetGlobalProgress(2, 1f));
+        }
     }
 }
