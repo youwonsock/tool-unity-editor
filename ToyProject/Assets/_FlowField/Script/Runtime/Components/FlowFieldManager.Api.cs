@@ -111,15 +111,21 @@ namespace Common.FlowField
             ActiveSession.NotifyObstacleRegionDirtyCommand(worldBounds);
         }
 
-        public void SetGoal(in FlowFieldGoalRequest request) => SetGoalAndGetVersion(in request);
+        public void SetGoal(in FlowFieldGoalRequest request)
+        {
+            int heldVersion = 0;
+            SetGoal(in request, ref heldVersion);
+        }
 
         /// <summary>
-        /// SetGoal for FlowFieldGoalTarget: returns the <see cref="GoalVersion"/>
-        /// this request left, read before the submit. A handler that changes
-        /// the Goal during the submit moves the version on, so the target does
-        /// not take that Goal for its own.
+        /// SetGoal for FlowFieldGoalTarget: writes the <see cref="GoalVersion"/>
+        /// this request leaves into <paramref name="heldVersion"/> before the
+        /// submit. Handlers run during the submit, so one that disables the
+        /// target already finds it holding this Goal, and one that changes the
+        /// Goal moves the version on, so the target does not take that Goal for
+        /// its own.
         /// </summary>
-        internal int SetGoalAndGetVersion(in FlowFieldGoalRequest request)
+        internal void SetGoal(in FlowFieldGoalRequest request, ref int heldVersion)
         {
             _boundary.ThrowIfInUserCode(nameof(SetGoal));
             ThrowIfLifecycleUnavailable();
@@ -129,7 +135,10 @@ namespace Common.FlowField
             if (!request.HasGoal)
             {
                 if (!_hasExplicitGoal)
-                    return GoalVersion;
+                {
+                    heldVersion = GoalVersion;
+                    return;
+                }
                 ChangeExplicitGoal(false, default);
             }
             else
@@ -144,15 +153,15 @@ namespace Common.FlowField
                     // Nothing to build, but the caller now holds this Goal:
                     // a target that set it earlier no longer clears it.
                     unchecked { GoalVersion++; }
-                    return GoalVersion;
+                    heldVersion = GoalVersion;
+                    return;
                 }
                 ChangeExplicitGoal(true, request.WorldPosition);
                 _flow.GoalInfluenceRadius = request.InfluenceRadius;
             }
 
-            int version = GoalVersion;
+            heldVersion = GoalVersion;
             MarkGoalDirty();
-            return version;
         }
 
         // FlowFieldGoalTarget clears the Goal it set while the Manager is

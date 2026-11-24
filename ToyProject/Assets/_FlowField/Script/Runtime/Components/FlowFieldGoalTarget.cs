@@ -48,13 +48,15 @@ namespace Common.FlowField
                 return;
             // Recorded first: a handler that releases the Manager during
             // SetGoal advances its Goal lifetime, so the next frame sets the
-            // Goal again.
+            // Goal again. SetGoal writes the held version before its submit,
+            // so a handler that disables this target there clears the Goal.
             _reportedTo = _manager;
             _reportedGoalLifetime = _manager.GoalLifetime;
             _reportedPosition = position;
             _reportedRadius = _influenceRadius;
-            _reportedGoalVersion = _manager.SetGoalAndGetVersion(
-                FlowFieldGoalRequest.Position(position, _influenceRadius));
+            _manager.SetGoal(
+                FlowFieldGoalRequest.Position(position, _influenceRadius),
+                ref _reportedGoalVersion);
         }
 
         // Clears the Goal this target set, unless it is no longer the
