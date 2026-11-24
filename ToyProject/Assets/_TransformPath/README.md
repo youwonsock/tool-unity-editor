@@ -70,7 +70,7 @@ public sealed class TransformPathReadmeExample : MonoBehaviour
 | 명령 | 조건 |
 | --- | --- |
 | `Play`, `Stop`, `Pause`, `Resume` | `Play`는 준비된 Provider가 필요. `Pause`로 멈춘 재생은 `Resume`으로만 재개(이벤트의 Resume은 이벤트가 멈춘 재생만 깨움) |
-| `Seek(0..1)`, `SeekSegment(index, local)` | `SeekSegment`는 Sequence 전용. 건너뛴 이벤트는 실행하지 않음. 일시정지 중 바뀐 기하를 먼저 받고(받으면 같은 위치여도 `true`), 이동 설정·이벤트·구간 구성이 바뀌었으면 던짐 |
+| `Seek(0..1)`, `SeekSegment(index, local)` | `SeekSegment`는 Sequence 전용. 건너뛴 이벤트는 실행하지 않음. 일시정지 중 바뀐 기하를 먼저 받고(새 기하를 받으면 같은 위치여도 `true`), 이동 설정·이벤트·구간 구성이 바뀌었으면 던짐 |
 | `SetSpeed(value)`, `SetDuration(value)` | 현재 구간의 이동 방식과 맞을 때, `0.001..9999`. 같은 채널의 이벤트 값 보간을 취소 |
 | `TriggerEvent(setting)` | 이벤트 에셋을 지금 실행 |
 | `CancelEventEffects()` | 이벤트가 남긴 값 보간과 지연 이벤트를 취소. 현재 Speed·Duration과 상태는 그대로이고 알림도 없음 |

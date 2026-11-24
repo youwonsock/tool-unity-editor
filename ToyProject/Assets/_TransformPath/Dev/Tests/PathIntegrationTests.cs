@@ -783,6 +783,41 @@ namespace Common.TransformPath.Tests
         }
 
         [Test]
+        public void PolicyThatReleasesTheManager_ReleasesTheMembersAfterTheLine()
+        {
+            PathData path = Line(30f, 4f);
+            QueuedPathManager manager = CreateManager(path);
+            PathQueueMember leader = CreateMember();
+            PathQueueMember behind = CreateMember();
+            var reasons = new List<EPathQueueLeaveReason>();
+            leader.QueueInvalidated += (member, reason) => reasons.Add(reason);
+            behind.QueueInvalidated += (member, reason) => reasons.Add(reason);
+            leader.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            leader.Follower.Seek(0.5f);
+            behind.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            bool released = false;
+            // What a disable or destroy from inside the policy runs.
+            manager.SpacingPolicy = CreatePolicy("Releaser", (member, ahead, spacing) =>
+            {
+                if (!released)
+                {
+                    released = true;
+                    manager.Release();
+                }
+                return spacing;
+            });
+
+            Frames(2);
+
+            Assert.IsTrue(released);
+            Assert.IsFalse(manager.IsInitialized);
+            Assert.AreEqual(0, manager.MemberCount);
+            Assert.IsFalse(leader.IsInQueue || behind.IsInQueue);
+            CollectionAssert.AreEqual(
+                new[] { EPathQueueLeaveReason.ManagerReleased, EPathQueueLeaveReason.ManagerReleased }, reasons);
+        }
+
+        [Test]
         public void StartOnAnotherRoute_AfterTheRouteIsDestroyed_ThrowsBeforeReleasingMembers()
         {
             PathData inspectorRoute = Line(30f, 4f);

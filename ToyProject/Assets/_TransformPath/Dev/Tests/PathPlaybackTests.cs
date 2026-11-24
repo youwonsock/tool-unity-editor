@@ -708,6 +708,24 @@ namespace Common.TransformPath.Tests
         }
 
         [Test]
+        public void SubMillimetreSegment_KeepsItsProgressThroughSeekAndGrowth()
+        {
+            PathData path = _scene.CreatePath(PathMovementSettings.Speed(0.001f), EPathCurveType.Linear,
+                Vector3.zero, new Vector3(0.0005f, 0f, 0f));
+            var recorder = new RecordingPlayback();
+            recorder.Playback.Play(PathPlaybackRequest.Single(path));
+            recorder.Playback.Pause();
+            recorder.Playback.Seek(0.5f);
+            recorder.Playback.Resume();
+
+            path.transform.GetChild(1).position = new Vector3(1f, 0f, 0f);
+            path.Rebuild();
+            recorder.Frame();
+
+            Assert.AreEqual(0.5f, recorder.Playback.Progress, 1e-4f);
+        }
+
+        [Test]
         public void GeometryChangingEveryFrame_KeepsASlowFollowerMoving()
         {
             PathData path = _scene.CreatePath(PathMovementSettings.Speed(0.003f), EPathCurveType.Linear,

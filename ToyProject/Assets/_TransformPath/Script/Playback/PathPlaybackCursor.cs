@@ -193,8 +193,9 @@ namespace Common.TransformPath
             _elapsed = MoveType == EPathMoveType.TimeBased
                 ? _movement.InverseProgress(Normalized) * (double)Duration
                 : 0d;
+            // Measured on the same floored length as Advance.
             _distance = MoveType == EPathMoveType.SpeedBased
-                ? session.GetLength(index) * (double)Normalized
+                ? Math.Max(session.GetLength(index), PathConstants.MIN_MOVE_VALUE) * (double)Normalized
                 : 0d;
             Global = session.GetGlobalProgress(index, Normalized);
         }
@@ -209,11 +210,10 @@ namespace Common.TransformPath
             {
                 // Scaled in double: rebuilt from the float progress, a slow
                 // follower on a long path would lose its movement every frame.
-                double previousLength = previous.GetLength(Segment);
-                double length = session.GetLength(Segment);
-                _distance = previousLength > 0d
-                    ? _distance * (length / previousLength)
-                    : length * Normalized;
+                // The same floor as Advance, so a sub-millimetre segment keeps its progress too.
+                double previousLength = Math.Max(previous.GetLength(Segment), PathConstants.MIN_MOVE_VALUE);
+                double length = Math.Max(session.GetLength(Segment), PathConstants.MIN_MOVE_VALUE);
+                _distance *= length / previousLength;
             }
             Global = session.GetGlobalProgress(Segment, Normalized);
         }

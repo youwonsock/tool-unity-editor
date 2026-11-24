@@ -46,6 +46,7 @@ namespace Common.TransformPath
         private readonly Dictionary<PathQueueMember, Entry> _entries = new Dictionary<PathQueueMember, Entry>(100);
         // Members disabled or destroyed while the spacing policy runs leave once the line is walked.
         private readonly List<PathQueueMember> _removedWhileCalculating = new List<PathQueueMember>();
+        private bool _releaseAfterCalculating;
 
         private PathProviderBehaviour _routeProvider;
         private bool _isInitialized;
@@ -199,6 +200,12 @@ namespace Common.TransformPath
 
         internal override void Release()
         {
+            // Disabled or destroyed by its own spacing policy: let go once the line is walked.
+            if (_calculating)
+            {
+                _releaseAfterCalculating = true;
+                return;
+            }
             using var operation = PathExecutionBoundary.Enter();
             LeaveAll(EPathQueueLeaveReason.ManagerReleased);
             _routeProvider = null;
@@ -449,6 +456,11 @@ namespace Common.TransformPath
                 for (int i = 0; i < _removedWhileCalculating.Count; i++)
                     Remove(_removedWhileCalculating[i]);
                 _removedWhileCalculating.Clear();
+                if (_releaseAfterCalculating)
+                {
+                    _releaseAfterCalculating = false;
+                    Release();
+                }
             }
         }
 
