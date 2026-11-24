@@ -57,24 +57,29 @@ namespace Common.FlowField
                 FlowFieldBakeModes.UsesBakeAsset(config.BakeMode) ? config.BakeAssets.Volume : null);
         }
 
+        // StaticBaked keeps the baked Goal, as Surface2D does, so the field
+        // info reports the Goal the loaded field was solved for.
         internal static FlowFieldVolumeRequest CreateRequest(
             in FlowFieldManagerConfig config,
             FlowFieldGridSpace grid,
             Bounds worldBounds,
             FlowFieldBakeMode bakeMode,
             FlowFieldVolumeBakeData bakeData)
-            => new FlowFieldVolumeRequest(
+        {
+            bool baked = bakeMode == FlowFieldBakeMode.StaticBaked && bakeData != null;
+            return new FlowFieldVolumeRequest(
                 grid,
                 worldBounds,
                 bakeMode,
                 config.Obstacles.Layer,
                 config.Obstacles.Clearance,
                 config.Obstacles.SweepUnregistered,
-                config.HasGoal,
-                config.GoalWorld,
-                config.Flow.GoalInfluenceRadius,
+                baked ? bakeData.HasGoal : config.HasGoal,
+                baked ? bakeData.RequestedGoalWorld : config.GoalWorld,
+                baked ? bakeData.GoalInfluenceRadius : config.Flow.GoalInfluenceRadius,
                 config.Flow.DefaultDirection,
                 bakeData);
+        }
 
         /// <summary>
         /// False with the reason for the first invalid setting.
