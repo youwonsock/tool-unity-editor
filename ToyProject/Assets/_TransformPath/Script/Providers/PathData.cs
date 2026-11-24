@@ -14,8 +14,8 @@ namespace Common.TransformPath
 
     /// <summary>
     /// A path through Transform control points, or through positions given at
-    /// runtime, sampled by distance. Changing a setting rebuilds it at once;
-    /// moving a control point needs <see cref="PathProviderBehaviour.Rebuild"/>.
+    /// runtime, sampled by distance. Changing a setting rebuilds it when it was
+    /// built before; moving a control point needs <see cref="PathProviderBehaviour.Rebuild"/>.
     /// Events are copied at build time, so playback never reads the authoring assets.
     /// </summary>
     public sealed class PathData : PathProviderBehaviour
@@ -82,7 +82,7 @@ namespace Common.TransformPath
 
         /// <summary>
         /// The published movement once built, the authored one before. Setting
-        /// it validates the value and rebuilds.
+        /// it validates the value and rebuilds when the path was built before.
         /// </summary>
         public PathMovementSettings MovementSettings
         {

@@ -10,7 +10,7 @@ namespace Common.TransformPath
     /// <see cref="PathPlaybackRequest.Shape"/> or give it to a queue. It builds
     /// in Awake in Play Mode. After changing what the shape reads, call
     /// <see cref="PathProviderBehaviour.Rebuild"/>; setting
-    /// <see cref="MovementSettings"/> rebuilds at once.
+    /// <see cref="MovementSettings"/> rebuilds when the shape was built before.
     /// <para>
     /// Contract: <see cref="Evaluate"/> reads only what <see cref="TryPrepare"/>
     /// kept, so each build is published whole. The distance is arc length,
@@ -50,7 +50,7 @@ namespace Common.TransformPath
 
         /// <summary>
         /// The published movement once built, the authored one before. Setting
-        /// it validates the value and rebuilds.
+        /// it validates the value and rebuilds when the shape was built before.
         /// </summary>
         public PathMovementSettings MovementSettings
         {
