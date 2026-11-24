@@ -9,7 +9,7 @@ namespace Common.TransformPath
     {
         None = 0,
         Pause = 1,
-        /// <summary>Resumes a paused playback. A moving playback ignores it.</summary>
+        /// <summary>Resumes a playback that an event paused. A command Pause and a moving playback ignore it.</summary>
         Resume = 2,
     }
 

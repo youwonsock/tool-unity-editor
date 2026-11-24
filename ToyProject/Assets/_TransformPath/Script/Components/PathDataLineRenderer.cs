@@ -30,6 +30,7 @@ namespace Common.TransformPath
         [SerializeField] private Color _lineColor = Color.cyan;
 
         [Header("Visibility")]
+        [Tooltip("Shows the line each time the component is enabled. SetVisible changes it until then.")]
         [SerializeField] private bool _showOnEnable = true;
 
         private LineRenderer _lineRenderer = null;
@@ -146,7 +147,8 @@ namespace Common.TransformPath
 
         /// <summary>
         /// Shows or hides the line. A shown line still stays hidden while the path
-        /// is not ready or this component is disabled.
+        /// is not ready or this component is disabled. Enabling the component
+        /// again applies Show On Enable.
         /// </summary>
         public void SetVisible(bool visible)
         {

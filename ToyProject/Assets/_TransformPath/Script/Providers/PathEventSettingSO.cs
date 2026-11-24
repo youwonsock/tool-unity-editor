@@ -22,7 +22,7 @@ namespace Common.TransformPath
         public string EventName;
 
         [Header("Playback State")]
-        [Tooltip("Pause stops the playback without changing values. Resume continues a paused playback.")]
+        [Tooltip("Pause stops the playback without changing values. Resume continues a playback that an event paused; a command Pause stays.")]
         public EPathEventLifecycle Lifecycle;
 
         [Header("Speed Change (SpeedBased segments only)")]
@@ -37,7 +37,7 @@ namespace Common.TransformPath
         public float DurationBlendTime;
         public AnimationCurve DurationBlendCurve = AnimationCurve.EaseInOut(0, 0, 1, 1);
 
-        [Header("Delayed Events (game time, canceled when a later event changes the playback)")]
+        [Header("Delayed Events (game time, canceled by a later event with a lifecycle, a value change or delayed events)")]
         public List<DelayedEventEntry> DelayedEvents = new List<DelayedEventEntry>();
     }
 }

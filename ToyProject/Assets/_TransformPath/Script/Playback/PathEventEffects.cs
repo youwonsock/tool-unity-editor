@@ -68,9 +68,10 @@ namespace Common.TransformPath
         public bool HasPending => _blend.Channel != EPathEffectChannel.None || _delayed.Count > 0;
 
         /// <summary>
-        /// Runs an event the follower reached or that was triggered. An event that
-        /// changes the playback cancels the delayed events earlier ones left waiting;
-        /// one that only announces its name keeps them.
+        /// Runs an event the follower reached or that was triggered. An event with a
+        /// lifecycle, a value change or delayed events cancels the delayed events
+        /// earlier ones left waiting, even when it changes nothing now; one that
+        /// only announces its name keeps them.
         /// </summary>
         public void Run(PathEventDefinition definition)
         {

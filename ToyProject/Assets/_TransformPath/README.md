@@ -70,7 +70,7 @@ public sealed class TransformPathReadmeExample : MonoBehaviour
 | 명령 | 조건 |
 | --- | --- |
 | `Play`, `Stop`, `Pause`, `Resume` | `Play`는 준비된 Provider가 필요. `Pause`로 멈춘 재생은 `Resume`으로만 재개(이벤트의 Resume은 이벤트가 멈춘 재생만 깨움) |
-| `Seek(0..1)`, `SeekSegment(index, local)` | `SeekSegment`는 Sequence 전용. 건너뛴 이벤트는 실행하지 않음. 일시정지 중 바뀐 기하를 먼저 받고, 이동 설정·이벤트·구간 구성이 바뀌었으면 던짐 |
+| `Seek(0..1)`, `SeekSegment(index, local)` | `SeekSegment`는 Sequence 전용. 건너뛴 이벤트는 실행하지 않음. 일시정지 중 바뀐 기하를 먼저 받고(받으면 같은 위치여도 `true`), 이동 설정·이벤트·구간 구성이 바뀌었으면 던짐 |
 | `SetSpeed(value)`, `SetDuration(value)` | 현재 구간의 이동 방식과 맞을 때, `0.001..9999`. 같은 채널의 이벤트 값 보간을 취소 |
 | `TriggerEvent(setting)` | 이벤트 에셋을 지금 실행 |
 | `CancelEventEffects()` | 이벤트가 남긴 값 보간과 지연 이벤트를 취소. 현재 Speed·Duration과 상태는 그대로이고 알림도 없음 |
@@ -105,7 +105,7 @@ Play Mode에서는 Awake에서 스스로 빌드하고, 모양이 읽는 값을 �
 _member.StartQueuedPlayback(_manager, PathPlaybackRequest.Single(_path));
 ```
 
-`PathQueueMember`는 `PathFollower`와 같은 GameObject에 하나만 두고 그 Follower만 씁니다. 그래서 Follower 하나가 두 Queue에 들어가지 않습니다. 멤버는 켜져 있을 때만 참여하고, 꺼지거나 파괴되면 Queue를 떠납니다(Follower는 제한 없이 계속 재생). 멤버와 Manager는 같은 Provider 인스턴스를 씁니다. Manager의 **Route**에 지정한 경로는 첫 `StartQueuedPlayback`이나 첫 프레임에 빌드해 구성하므로, 런타임에 제어점을 받는 경로도 쓸 수 있습니다. 세 번째 인자로 최대 진행률을 지정하면 그 지점에서 멈추며 완료되지 않습니다. 재생 제어(Pause, Seek, Stop)는 `member.Follower`로 합니다. Seek한 멤버는 새로 출발할 때처럼 재출발 지연을 기다립니다.
+`PathQueueMember`는 `PathFollower`와 같은 GameObject에 하나만 두고 그 Follower만 씁니다. 그래서 Follower 하나가 두 Queue에 들어가지 않습니다. 멤버와 그 Follower가 켜져 있을 때만 참여하고(꺼져 있으면 `StartQueuedPlayback`이 던짐), 멤버가 꺼지거나 파괴되면 Queue를 떠납니다(Follower는 제한 없이 계속 재생). Follower가 꺼지면 재생이 멈추고 다음 프레임에 `Stopped`로 빠집니다. 멤버와 Manager는 같은 Provider 인스턴스를 씁니다. Manager의 **Route**에 지정한 경로는 첫 `StartQueuedPlayback`이나 첫 프레임에 빌드해 구성하므로, 런타임에 제어점을 받는 경로도 쓸 수 있습니다. 세 번째 인자로 최대 진행률을 지정하면 그 지점에서 멈추며 완료되지 않습니다. 재생 제어(Pause, Seek, Stop)는 `member.Follower`로 합니다. Seek한 멤버는 새로 출발할 때처럼 재출발 지연을 기다립니다.
 
 | 명령 | 의미 |
 | --- | --- |
@@ -119,7 +119,7 @@ _member.StartQueuedPlayback(_manager, PathPlaybackRequest.Single(_path));
 | `PathQueueMember` | `Follower`, `Manager`, `ActiveManager`(참여 중인 Manager), `IsInQueue`, `IsBlocked`, `IsHeld`, `CurrentSpeedMultiplier`, `ActorSpacing`, `UseManagerSpacing`, `EnableGradualSlowdown`, `EnableOvertakeProtection` |
 | `QueuedPathManager` | `IsInitialized`, `ConfigureRoute(provider)`, `RouteProvider`, `RouteRevision`, `MemberCount`, `GetMember(index)`(앞에서부터), `TryGetMemberStatus`(`Spacing` 포함), `DefaultSpacing`, `SpacingPolicy`, `EnableGradualSlowdown`, `SlowdownRange`(간격 너머 감속 거리), `MinSpeedMultiplier` |
 
-**간격 정책:** `PathQueueSpacingPolicy`(ScriptableObject)를 상속해 `GetSpacing(member, ahead, resolvedSpacing)`을 구현하고 Manager의 **Spacing Policy**에 지정하면, 멤버마다 앞 멤버와의 간격을 정합니다. `resolvedSpacing`은 정책이 없을 때의 간격(`DefaultSpacing`, 또는 `UseManagerSpacing`을 끈 멤버의 `ActorSpacing`)입니다. Manager는 매 프레임 멤버마다 한 번 묻고, 감속·대기·추월 방지에 같은 값을 씁니다. 감속은 그 간격 너머 **Slowdown Range** 동안 일어나므로, 정책이 간격을 넓혀도 감속이 함께 뒤로 옮겨 갑니다. 여러 Manager가 한 정책을 함께 쓸 수 있습니다. 샘플의 Queue 레인은 `TransformPathGapPolicy` 에셋(`Samples/Settings/Queue/TransformPathLeaderGap.asset`)으로 선두 바로 뒤의 간격만 두 배로 넓힙니다. 유한하지 않거나 음수인 값은 정책 이름을 담은 예외로 그 프레임의 Manager 실행을 멈추고, 정책 안에서 `Leave`나 `StartQueuedPlayback`처럼 줄을 바꾸면 `InvalidOperationException`입니다.
+**간격 정책:** `PathQueueSpacingPolicy`(ScriptableObject)를 상속해 `GetSpacing(member, ahead, resolvedSpacing)`을 구현하고 Manager의 **Spacing Policy**에 지정하면, 멤버마다 앞 멤버와의 간격을 정합니다. `resolvedSpacing`은 정책이 없을 때의 간격(`DefaultSpacing`, 또는 `UseManagerSpacing`을 끈 멤버의 `ActorSpacing`)입니다. Manager는 매 프레임 멤버마다 한 번 묻고, 감속·대기·추월 방지에 같은 값을 씁니다. 감속은 그 간격 너머 **Slowdown Range** 동안 일어나므로, 정책이 간격을 넓혀도 감속이 함께 뒤로 옮겨 갑니다. 여러 Manager가 한 정책을 함께 쓸 수 있습니다. 샘플의 Queue 레인은 `TransformPathGapPolicy` 에셋(`Samples/Settings/Queue/TransformPathLeaderGap.asset`)으로 선두 바로 뒤의 간격만 두 배로 넓힙니다. 유한하지 않거나 음수인 값은 정책 이름을 담은 예외로 그 프레임의 Manager 실행을 멈추고, 정책 안에서 `Leave`나 `StartQueuedPlayback`처럼 줄을 바꾸면 `InvalidOperationException`입니다. 정책이 멤버를 끄거나 파괴하면 그 멤버는 그 프레임의 계산이 끝난 뒤 빠집니다.
 
 `Blocked`·`Resumed`·`SpeedChanged`로 대기 상태를, `QueueInvalidated`로 경로 무효와 Manager 해제를 알립니다. `QueueInvalidated`가 오면 그 경로의 재생은 일시정지 중이어도 멈추고, 이미 다른 경로를 재생하는 Follower는 그대로 둡니다. 경로의 이동 설정·이벤트·구간 구성이 바뀌면 이전 설정으로 재생 중인 멤버만 `ManagerReleased`로 빠지고, 새 설정으로 다시 시작한 멤버는 남습니다. 변경이 콜백 안에서 일어나 일부 Follower가 먼저 스스로 멈춰도 같은 이유로 빠집니다. 경로가 파괴되면 모든 멤버가 `ProviderInvalid`로 빠지고 Manager는 그 경로를 잊습니다. 기하만 바뀌면 멤버가 Queue 단계에서 새 기하를 먼저 받으므로, 경로가 매 프레임 바뀌어도 Queue가 움직입니다. 재생이 끝나거나 멈춘 멤버는 다음 프레임에 Queue에서 빠집니다. Queue는 같은 경로 위의 진행 거리만 봅니다. Loop 이음매의 간격, 물리 충돌, 교차 경로 회피는 처리하지 않습니다.
 
@@ -161,7 +161,7 @@ _member.StartQueuedPlayback(_manager, PathPlaybackRequest.Single(_path));
   <img src="Docs/Images/feature-multipath-seek.png" alt="MultiPath Seek 화면" width="48%">
 </p>
 
-**Editor 작성:** 제어점은 Scene View에서, 이벤트는 Inspector에서 편집합니다. 연결점과 그룹 동기화는 Undo/Redo를 지원합니다. `MultiPathData` Inspector의 **Apply Drawing Sizes To All Paths**와 **Assign Distinct Path Colors**로 구간 경로의 미리보기 모양을 맞춥니다. `PathShapeProvider`는 샘플한 모양을 Scene View에 그립니다(오른쪽 화면 가장자리의 원).
+**Editor 작성:** 제어점은 Scene View에서, 이벤트는 Inspector에서 편집합니다. 연결점과 그룹 동기화는 Undo/Redo를 지원하고 Prefab Mode에서도 동작합니다. `MultiPathData` Inspector의 **Apply Drawing Sizes To All Paths**와 **Assign Distinct Path Colors**로 구간 경로의 미리보기 모양을 맞춥니다. `PathShapeProvider`는 샘플한 모양을 Scene View에 그립니다(오른쪽 화면 가장자리의 원).
 
 <p align="center">
   <img src="Docs/Images/feature-editor-authoring.png" alt="Scene View의 경로 작성 화면" width="48%">
