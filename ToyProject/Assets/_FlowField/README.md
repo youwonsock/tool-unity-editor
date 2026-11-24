@@ -69,7 +69,7 @@ public sealed class FlowFieldReadmeMover : MonoBehaviour
 - **Manager**는 직렬화 설정과 Unity 콜백을 맡고, 설정 스냅샷(`FlowFieldManagerConfig`)과 공개 API 호출을 Session에 넘깁니다. 호출이 계산 완료를 뜻하지는 않습니다.
 - **Session**은 두 공간 모드가 같이 쓰는 파이프라인입니다. 수명, 이벤트, 빌드 루프, 실패 규칙이 한 벌이고, 모드마다 다른 계산만 Builder(`Surface`·`Volume`)가 맡습니다.
 - 완성된 결과만 게시하고, 다음 계산 중에도 이전 결과를 읽게 합니다. Manager를 다시 켜거나 Fault를 재시도한 뒤, 또는 Grid가 바뀐 뒤에는 새 결과가 나올 때까지 읽을 수 없습니다.
-- **Scheduler**는 프로젝트 전체에서 프레임당 하나의 예산(기본 2ms)으로 작업을 나눕니다. Volume3D의 모든 단계와 Surface2D의 합성은 예산에 맞춰 나뉩니다. Surface2D의 바닥·장애물·Goal·Modifier 영역 단계는 Physics 결과를 한 스냅샷으로 얻으려고 예산과 상관없이 한 프레임에 돕니다(Editor에서 100×100 샘플의 첫 빌드가 약 10ms). 풀이는 워커 스레드에서 돕니다.
+- **Scheduler**는 프로젝트 전체에서 프레임당 하나의 예산(기본 2ms)으로 작업을 나눕니다. Volume3D의 모든 단계와 Surface2D의 합성은 예산에 맞춰 나뉩니다. Surface2D의 바닥·장애물·Goal·Modifier 영역 단계는 Physics 결과를 한 스냅샷으로 얻으려고 예산과 상관없이 한 프레임에 돕니다(Editor에서 100×100 샘플의 첫 빌드가 약 10ms). 단, 풀이 중에 알린 Modifier 영역은 풀이가 끝나는 프레임에 다시 만듭니다. 풀이는 워커 스레드에서 돕니다.
 - **Execution Boundary**는 이벤트와 Modifier 코드를 작업이 끝난 뒤로 미룹니다.
 
 ## 주요 API
@@ -77,10 +77,10 @@ public sealed class FlowFieldReadmeMover : MonoBehaviour
 | 상황 | 호출 |
 | --- | --- |
 | Goal 변경 | `SetGoal()` 또는 `FlowFieldGoalTarget`. 장애물 결과를 재사용합니다. 마지막에 정한 Goal이 쓰이고, 끈 `FlowFieldGoalTarget`은 자기 Goal이 아직 Manager의 Goal일 때만 지웁니다 |
-| Fault 재시도, Play 중 Manager 이동, 알리지 않은 장애물 반영 | `RequestRebuild()`. 장애물을 모두 다시 조회하고 바닥은 그대로 둡니다. `BakedBase`는 Bake 막힘에서 다시 시작해 바뀐 영역만 다시 조회합니다(sweep이 돌면 Volume3D는 모든 셀). Bake를 쓰는 모드의 Manager는 Bake 자리에 묶이므로, 옮기면 다음 `SetGoal()`이 Fault를 내고 `RequestRebuild()`는 예외를 던집니다. 되돌린 뒤 `RequestRebuild()`로 재시도합니다 |
+| Fault 재시도, Play 중 Manager 이동, 알리지 않은 장애물 반영 | `RequestRebuild()`. 장애물을 모두 다시 조회하고 바닥은 그대로 둡니다. `BakedBase`는 Bake 막힘에서 다시 시작해 바뀐 영역만 다시 조회합니다(sweep이 돌면 Volume3D는 모든 셀). Bake를 쓰는 모드의 Manager는 Bake 자리에 묶이므로, 옮기면 두 모드 모두 `RequestRebuild()`가 예외를 던지고, `BakedBase`는 다음 `SetGoal()`도 Fault를 냅니다(`StaticBaked`는 `SetGoal()`을 받지 않습니다). 되돌린 뒤 `RequestRebuild()`로 재시도합니다 |
 | 바닥 형상 변경 (`RuntimeDynamic`) | `NotifyCellsDirty()`. 바닥과 장애물을 모두 다시 조회합니다. 진행 중인 빌드는 버리지 않고, 다음 빌드가 바닥을 다시 조회합니다 |
 | 장애물 영역 알림 (`RuntimeDynamic`, `BakedBase`) | `NotifyObstacleRegionDirty(bounds)`. 이전과 현재 Bounds의 합집합을 넘깁니다 |
-| 움직이는 장애물 | `RegisterDynamicObstacle(collider)` → 이동할 때마다 `NotifyDynamicObstacleMoved(collider)` → `UnregisterDynamicObstacle(collider)`. `FlowFieldDynamicObstacle`이 이 셋을 대신하고, Manager나 Collider를 바꾸면 옛 등록을 해제합니다 |
+| 움직이는 장애물 | `RegisterDynamicObstacle(collider)` → 이동할 때마다 `NotifyDynamicObstacleMoved(collider)` → `UnregisterDynamicObstacle(collider)`. `FlowFieldDynamicObstacle`이 이 셋을 대신하고, Manager나 Collider를 바꾸거나 Collider만 파괴되면 옛 등록을 해제합니다 |
 | 모드 변경 | `Release()` → `SetSpaceMode()` → `Init()`. `FlowFieldDynamicObstacle`은 스스로 다시 등록하고, API로 직접 등록한 장애물은 다시 등록합니다. `SetGoal()`로 정한 Goal도 Release가 지우므로 다시 정합니다(`FlowFieldGoalTarget`은 스스로 다시 정합니다) |
 | 결과 변화 알림 | `FieldChanged`, `StateChanged` 이벤트. 핸들러 안에서 모든 명령을 쓸 수 있습니다 |
 | 격자 안 위치 | `ClampPositionToGrid()`. 예외 없이 쓰려면 `TryClampPositionToGrid()` |
@@ -93,7 +93,7 @@ public sealed class FlowFieldReadmeMover : MonoBehaviour
 - **설정 검사:** Init과 Inspector·Scene View는 같은 검사를 같은 문구로 합니다. 잘못된 설정이면 `Init()`은 처음 걸린 이유를 메시지로 담은 `InvalidOperationException`을 던지고, Inspector는 그 문구를 그대로 보여 줍니다.
 - **Modifier:** 영향 영역 Collider(Trigger, MeshCollider는 Convex)에 `FlowFieldSpeedModifier`나 `FlowFieldNoiseModifier`를 두고 Manager를 지정합니다. 같은 Manager 안에서는 Priority를 서로 다르게 두며, 낮은 값부터 합성합니다. 같은 Priority는 등록에서 거부되므로, Manager와 Modifier Inspector가 같은 씬의 중복을 비활성 Modifier까지 찾아 경고합니다.
 - **계약 interface:** `IFlowFieldProvider`(조회)와 `IFlowFieldController`(입력)는 Manager가 구현하는 계약입니다. 직접 구현하는 타입은 계약의 모든 멤버를 구현해야 합니다.
-- **Fault 복구:** 원인을 고친 뒤 `RequestRebuild()`를 부릅니다. 재시도는 세션의 Space Mode를 그대로 쓰므로, Fault 중에는 Inspector의 Space Mode도 잠기고(`SetSpaceMode()`도 거부) SerializedObject나 Undo로 바꿔 둔 Space Mode가 있으면 `RequestRebuild()`가 세션을 건드리지 않고 거부합니다. 모드를 바꾸려면 `Release()` 뒤에 바꿉니다. 꺼 둔 Manager에서 바꾼 Space Mode도 실행 중처럼 Release까지 기다리므로, 다시 켜면 세션의 모드로 이어서 빌드합니다. Modifier 자체의 Fault는 Modifier를 껐다가 `Release()` → 값 수정 → `Init()` 순서로 풉니다. 해제하지 않고 파괴한 직접 구현 Modifier는 Session이 할 일이 있는 빌드 전, 빌드가 끝날 때, 재시도 전에 등록부에서 지우므로 Fault 없이 그 영향이 사라집니다. 빌드 도중 파괴되면 그 빌드는 그 Modifier를 빼고 합성합니다. 직접 구현한 Modifier 안에서 쓸 수 있는 호출은 TechnicalNotes에 있습니다.
+- **Fault 복구:** 원인을 고친 뒤 `RequestRebuild()`를 부릅니다. 재시도는 세션의 Space Mode를 그대로 쓰므로, Fault 중에는 Inspector의 Space Mode도 잠기고(`SetSpaceMode()`도 거부) SerializedObject나 Undo로 바꿔 둔 Space Mode가 있으면 `RequestRebuild()`가 세션을 건드리지 않고 거부합니다. 모드를 바꾸려면 `Release()` 뒤에 바꿉니다. 꺼 둔 Manager에서 바꾼 Space Mode도 실행 중처럼 Release까지 기다리므로, 다시 켜면 세션의 모드로 이어서 빌드합니다. 실행 중인(Fault가 아닌) 세션의 `RequestRebuild()`도 그 편집과 상관없이 세션의 모드로 검사하고 다시 빌드합니다(꺼 둔 Manager는 검사만 하고 켤 때 빌드합니다). Modifier 자체의 Fault는 Modifier를 껐다가 `Release()` → 값 수정 → `Init()` 순서로 풉니다. 해제하지 않고 파괴한 직접 구현 Modifier는 Session이 할 일이 있는 빌드 전, 빌드가 끝날 때, 재시도 전에 등록부에서 지우므로 Fault 없이 그 영향이 사라집니다. 빌드 도중 파괴되면 그 빌드는 그 Modifier를 빼고 합성합니다(합성 중이면 처음부터 다시 합성합니다). 직접 구현한 Modifier 안에서 쓸 수 있는 호출은 TechnicalNotes에 있습니다.
 
 ### 실패 규칙
 
