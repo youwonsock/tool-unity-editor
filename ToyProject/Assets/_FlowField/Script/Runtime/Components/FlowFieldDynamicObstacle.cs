@@ -32,10 +32,12 @@ namespace Common.FlowField
         // Registers on the first frame the Manager can take it, and again
         // whenever its registration is gone: the Manager's Init order and a
         // later Release and Init, in one frame or two, need no care. A new
-        // Manager or Collider replaces the registration.
+        // Manager or Collider replaces the registration, and a destroyed
+        // Collider ends it, so the cells it blocked are rebuilt.
         private void LateUpdate()
         {
-            if (_registered != null && (_registered != _manager || _registeredCollider != _collider))
+            if (_registered != null
+                && (_registered != _manager || _registeredCollider == null || _registeredCollider != _collider))
                 Unregister();
             if (_manager == null || _collider == null || !CanTakeInput(_manager))
                 return;
