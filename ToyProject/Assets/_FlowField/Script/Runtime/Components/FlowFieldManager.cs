@@ -155,11 +155,12 @@ namespace Common.FlowField
         /// <summary>
         /// A serialized setting changed while a session runs. Valid settings
         /// rebuild what they change; invalid ones fault the session, the same
-        /// in both modes.
+        /// in both modes. While a Space Mode edit waits for Release, the other
+        /// settings still apply in the session's mode.
         /// </summary>
         private void OnSettingsChanged()
         {
-            if (!IsInitialized || _spaceMode != SpaceMode)
+            if (!IsInitialized)
                 return;
             using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
             SubmitCheckedConfig(FlowFieldConfigChange.Settings);
@@ -339,9 +340,10 @@ namespace Common.FlowField
 
         // The builder turns the current settings into its request. A full
         // request is what the runtime scheduler builds from, so it starts here.
+        // The session's Space Mode: a Space Mode edit waits for Release.
         private void SubmitConfig(FlowFieldConfigChange change)
         {
-            FlowFieldManagerConfig config = CaptureConfig();
+            FlowFieldManagerConfig config = CaptureConfig(SpaceMode, _bakeMode);
             if (_session.SubmitConfig(in config, change) && change == FlowFieldConfigChange.Rebuild)
                 _session.AttachRuntimeScheduler();
         }
