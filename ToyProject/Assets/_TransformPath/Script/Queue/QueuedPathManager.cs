@@ -169,13 +169,6 @@ namespace Common.TransformPath
             _isInitialized = false;
         }
 
-        private protected override void OnEnable()
-        {
-            if (Application.isPlaying && !_isInitialized)
-                Initialize();
-            base.OnEnable();
-        }
-
         private protected override void OnDisabled() => Release();
 
         internal override EPathTickPhases TickPhases => EPathTickPhases.Queue;

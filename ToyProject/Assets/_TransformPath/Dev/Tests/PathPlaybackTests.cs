@@ -577,5 +577,67 @@ namespace Common.TransformPath.Tests
             Assert.IsFalse(recorder.Playback.HasPendingEffects);
             Assert.AreEqual(speed ? 2f : 7f, speed ? recorder.Playback.Speed : recorder.Playback.Duration, 1e-5f);
         }
+
+        [Test]
+        public void SeekWhilePaused_UsesTheCurrentGeometry()
+        {
+            PathData path = Line(PathMovementSettings.Speed(2f));
+            var recorder = new RecordingPlayback();
+            recorder.Playback.Play(PathPlaybackRequest.Single(path));
+            recorder.Frame();
+            recorder.Playback.Pause();
+
+            path.transform.GetChild(1).position = new Vector3(20f, 0f, 0f);
+            path.Rebuild();
+            recorder.Playback.Seek(0.5f);
+
+            Assert.AreEqual(new Vector3(10f, 0f, 0f), recorder.Playback.SamplePosition());
+        }
+
+        [Test]
+        public void SeekAfterADefinitionChange_ThrowsAndChangesNothing()
+        {
+            MultiPathData sequence = Sequence(PathMovementSettings.Speed(2f), PathMovementSettings.Speed(2f), 4f, 4f);
+            var recorder = new RecordingPlayback();
+            recorder.Playback.Play(PathPlaybackRequest.Sequence(sequence));
+            recorder.Frames(30);
+            recorder.Playback.Pause();
+            float progress = recorder.Playback.Progress;
+            int epoch = recorder.Playback.MotionEpoch;
+
+            sequence.GetSegmentPath(0).MovementSettings = PathMovementSettings.Speed(3f);
+
+            Assert.Throws<InvalidOperationException>(() => recorder.Playback.Seek(0.8f));
+            Assert.Throws<InvalidOperationException>(() => recorder.Playback.SeekSegment(1, 0.5f));
+            Assert.AreEqual(progress, recorder.Playback.Progress);
+            Assert.AreEqual(epoch, recorder.Playback.MotionEpoch);
+            Assert.AreEqual(EPathFollowerState.Paused, recorder.Playback.State);
+        }
+
+        [Test]
+        public void LastEnd_TellsWhyThePlaybackEnded()
+        {
+            PathData path = Line(PathMovementSettings.Speed(10f));
+            var recorder = new RecordingPlayback();
+            recorder.Playback.Play(PathPlaybackRequest.Single(path));
+            Assert.AreEqual(EPathPlaybackEnd.None, recorder.Playback.LastEnd);
+            recorder.Frames(70);
+            Assert.AreEqual(EPathPlaybackEnd.Completed, recorder.Playback.LastEnd);
+
+            recorder.Playback.Play(PathPlaybackRequest.Single(path));
+            recorder.Playback.Stop();
+            Assert.AreEqual(EPathPlaybackEnd.Stopped, recorder.Playback.LastEnd);
+
+            recorder.Playback.Play(PathPlaybackRequest.Single(path));
+            path.MovementSettings = PathMovementSettings.Speed(3f);
+            recorder.Frame();
+            Assert.AreEqual(EPathPlaybackEnd.RouteChanged, recorder.Playback.LastEnd);
+
+            recorder.Playback.Play(PathPlaybackRequest.Single(path));
+            path.SetPathPoints(new Transform[0]);
+            recorder.Frame();
+            Assert.AreEqual(EPathPlaybackEnd.RouteUnavailable, recorder.Playback.LastEnd);
+            UnityEngine.TestTools.LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex("could not build"));
+        }
     }
 }

@@ -23,10 +23,14 @@ namespace Common.TransformPath
                 Initialize();
         }
 
+        // Initialize again here: a script reload in Play Mode keeps the component
+        // but not its runtime state, and calls OnEnable but not Awake.
         private protected virtual void OnEnable()
         {
-            if (Application.isPlaying)
-                PathRuntimeDriverBehaviour.Instance.Register(this);
+            if (!Application.isPlaying)
+                return;
+            Initialize();
+            PathRuntimeDriverBehaviour.Instance.Register(this);
         }
 
         private protected virtual void OnDisable()
@@ -45,7 +49,7 @@ namespace Common.TransformPath
             Release();
         }
 
-        /// <summary>Prepares the component. Awake calls it in Play Mode.</summary>
+        /// <summary>Prepares the component. Awake and OnEnable call it in Play Mode, so it must do nothing a second time.</summary>
         internal abstract void Initialize();
 
         /// <summary>Stops what the component runs. OnDestroy calls it.</summary>

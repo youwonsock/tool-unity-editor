@@ -31,7 +31,8 @@ namespace Common.TransformPath
                 if (_instance != null)
                     return _instance;
                 GameObject host = new GameObject("TransformPath Runtime Driver");
-                host.hideFlags = HideFlags.HideAndDontSave;
+                // Hidden but still a scene object, so leaving Play Mode destroys it.
+                host.hideFlags = HideFlags.HideInHierarchy | HideFlags.NotEditable;
                 DontDestroyOnLoad(host);
                 _instance = host.AddComponent<PathRuntimeDriverBehaviour>();
                 return _instance;

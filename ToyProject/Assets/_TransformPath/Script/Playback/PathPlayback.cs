@@ -3,6 +3,19 @@ using UnityEngine;
 
 namespace Common.TransformPath
 {
+    /// <summary>Why the last playback ended.</summary>
+    internal enum EPathPlaybackEnd
+    {
+        None,
+        /// <summary>Stop, Release or a fault.</summary>
+        Stopped,
+        Completed,
+        /// <summary>The route's movement, events or segments changed.</summary>
+        RouteChanged,
+        /// <summary>The route's provider failed to build or was destroyed.</summary>
+        RouteUnavailable,
+    }
+
     /// <summary>
     /// One follower's playback without Unity: the route, the position on it,
     /// which path events it passes, and the queue's limit. What an event does
@@ -40,6 +53,8 @@ namespace Common.TransformPath
         public EPathFollowerState State { get; private set; } = EPathFollowerState.Uninitialized;
         public bool IsMoving { get; private set; }
         public ulong PlaybackId { get; private set; }
+        /// <summary>Why the last playback ended; None while one runs.</summary>
+        public EPathPlaybackEnd LastEnd { get; private set; }
         public PathMotionLimit Limit { get; set; } = PathMotionLimit.None;
         /// <summary>
         /// Rises whenever the position jumps instead of moving on: Play, a Seek
@@ -103,6 +118,7 @@ namespace Common.TransformPath
                 EndPlayback();
             _route = route;
             _cursor.Begin(route, request.Loop);
+            LastEnd = EPathPlaybackEnd.None;
             IsMoving = true;
             PlaybackId = ++_nextPlaybackId;
             MotionEpoch++;
@@ -112,15 +128,7 @@ namespace Common.TransformPath
             return true;
         }
 
-        public bool Stop()
-        {
-            if (State == EPathFollowerState.Uninitialized || State == EPathFollowerState.Ready)
-                return false;
-            HaltMovement();
-            EndPlayback();
-            SetState(EPathFollowerState.Ready);
-            return true;
-        }
+        public bool Stop() => Stop(EPathPlaybackEnd.Stopped);
 
         /// <summary>
         /// Cancels a value blend even when not moving, then pauses a moving
@@ -154,6 +162,7 @@ namespace Common.TransformPath
             if (_route == null)
                 throw new InvalidOperationException("PathFollower has no active provider.");
             PathValueUtility.ThrowIfNotFinite(progress, nameof(progress));
+            RefreshRouteForSeek();
             float target = Mathf.Clamp01(progress);
             int segment = _route.FindSegment(target);
             return SeekTo(segment, _route.GetLocalProgress(segment, target));
@@ -167,6 +176,7 @@ namespace Common.TransformPath
             if (segmentIndex < 0 || segmentIndex >= _route.SegmentCount)
                 throw new ArgumentOutOfRangeException(nameof(segmentIndex));
             PathValueUtility.ThrowIfNotFinite(localProgress, nameof(localProgress));
+            RefreshRouteForSeek();
 
             float local = Mathf.Clamp01(localProgress);
             if (local >= 1f && segmentIndex < _route.SegmentCount - 1)
@@ -238,7 +248,7 @@ namespace Common.TransformPath
                 return;
             if (!TryRefreshRoute())
             {
-                Stop();
+                Stop(_route.Provider.IsReady ? EPathPlaybackEnd.RouteChanged : EPathPlaybackEnd.RouteUnavailable);
                 return;
             }
             if (deltaTime <= 0f)
@@ -303,10 +313,19 @@ namespace Common.TransformPath
 
         #region Movement
 
+        // A paused playback has not seen what changed since it stopped moving.
+        // Nothing changes when the route can no longer play.
+        private void RefreshRouteForSeek()
+        {
+            if (TryRefreshRoute())
+                return;
+            throw new InvalidOperationException(_route.Provider.IsReady
+                ? "Seek requires the route this playback started with; its movement, events or segments changed. Start a new playback."
+                : "Seek requires a ready path provider.");
+        }
+
         private bool SeekTo(int segment, float local)
         {
-            if (!_route.Provider.IsReady)
-                throw new InvalidOperationException("Seek requires a ready path provider.");
             if (_cursor.Segment == segment && Mathf.Abs(_cursor.Normalized - local) <= EPSILON)
                 return false;
 
@@ -376,8 +395,20 @@ namespace Common.TransformPath
         {
             HaltMovement();
             EndPlayback();
+            LastEnd = EPathPlaybackEnd.Completed;
             SetState(EPathFollowerState.Completed);
             _listeners.Completed.Publish();
+        }
+
+        private bool Stop(EPathPlaybackEnd reason)
+        {
+            if (State == EPathFollowerState.Uninitialized || State == EPathFollowerState.Ready)
+                return false;
+            HaltMovement();
+            EndPlayback();
+            LastEnd = reason;
+            SetState(EPathFollowerState.Ready);
+            return true;
         }
 
         private void HaltMovement()

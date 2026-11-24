@@ -61,6 +61,8 @@ namespace Common.TransformPath
 
         internal override ulong TickPlaybackId => Playback.PlaybackId;
         internal int MotionEpoch => Playback.MotionEpoch;
+        /// <summary>Why the last playback ended; None while one runs.</summary>
+        internal EPathPlaybackEnd LastPlaybackEnd => Playback.LastEnd;
         /// <summary>The definition revision of the route this follower plays, or -1 without one.</summary>
         internal int RouteDefinitionRevision => Playback.Route?.DefinitionRevision ?? -1;
 
@@ -246,8 +248,11 @@ namespace Common.TransformPath
             return Play(PathPlaybackRequest.Own(_playOnStartProvider, _playOnStartLoop));
         }
 
+        // Awake and OnEnable both call it; it prepares a follower only once until Release.
         internal override void Initialize()
         {
+            if (Playback.State != EPathFollowerState.Uninitialized)
+                return;
             if (_characterController == null)
                 TryGetComponent(out _characterController);
             if (_eventReceiver is IPathEventReceiver receiver)
@@ -262,6 +267,8 @@ namespace Common.TransformPath
         {
             using var operation = PathExecutionBoundary.Enter();
             Playback.Release();
+            if (_eventReceiver is IPathEventReceiver receiver)
+                _listeners.Receiver.Remove(receiver.OnPathEvent);
             TryRestoreCharacterController();
         }
 

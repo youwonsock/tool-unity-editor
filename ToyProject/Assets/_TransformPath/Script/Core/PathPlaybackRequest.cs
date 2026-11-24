@@ -9,9 +9,9 @@ namespace Common.TransformPath
     /// </summary>
     public readonly struct PathPlaybackRequest
     {
+        // A default request is a Provider request without a provider, which CreateRoute rejects.
         private enum EKind
         {
-            None,
             Provider,
             Aggregate,
         }
@@ -58,16 +58,10 @@ namespace Common.TransformPath
             if (Provider != null)
                 Provider.EnsureBuilt();
             PathProviderUtility.ThrowIfNotReady(Provider, nameof(Provider));
-            switch (_kind)
-            {
-                case EKind.Provider:
-                    return Provider.GetRoute();
-                case EKind.Aggregate:
-                    _movement.Validate("movement");
-                    return PathRoute.Aggregate(Provider, _movement);
-                default:
-                    throw new InvalidOperationException("The playback request is empty.");
-            }
+            if (_kind == EKind.Provider)
+                return Provider.GetRoute();
+            _movement.Validate("movement");
+            return PathRoute.Aggregate(Provider, _movement);
         }
     }
 }
