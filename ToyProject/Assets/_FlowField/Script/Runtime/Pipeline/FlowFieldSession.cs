@@ -79,6 +79,25 @@ namespace Common.FlowField
         /// <summary>The registered dynamic obstacles, the same in both modes.</summary>
         internal FlowFieldObstacleRegistry Obstacles { get; } = new FlowFieldObstacleRegistry();
 
+        // Colliders unregistered while still in the scene, where they were and
+        // in which frame (see RecheckReleasedColliders).
+        private readonly System.Collections.Generic.List<ReleasedCollider> _releasedInScene
+            = new System.Collections.Generic.List<ReleasedCollider>(4);
+
+        private readonly struct ReleasedCollider
+        {
+            internal readonly Collider Collider;
+            internal readonly Bounds Bounds;
+            internal readonly int Frame;
+
+            internal ReleasedCollider(Collider collider, Bounds bounds, int frame)
+            {
+                Collider = collider;
+                Bounds = bounds;
+                Frame = frame;
+            }
+        }
+
         /// <summary>
         /// Whether the unregistered obstacle sweep runs in this session: the
         /// settings enable it, the runtime scheduler pumps the session and too
@@ -403,7 +422,48 @@ namespace Common.FlowField
             if (!Obstacles.Unregister(collider, out FlowFieldObstacleChange change))
                 return false;
             ApplyObstacleChange(in change);
+            // A stopped session builds everything again when it starts, after
+            // any Destroy of this frame. A faulted one may retry in this frame.
+            if (change.HasCurrent && Lifecycle != FlowFieldSessionLifecycle.Suspended)
+                RememberReleased(new ReleasedCollider(collider, change.Current, Time.frameCount));
             return true;
+        }
+
+        private void RememberReleased(ReleasedCollider released)
+        {
+            for (int index = 0; index < _releasedInScene.Count; index++)
+            {
+                if (ReferenceEquals(_releasedInScene[index].Collider, released.Collider))
+                {
+                    _releasedInScene[index] = released;
+                    return;
+                }
+            }
+            _releasedInScene.Add(released);
+        }
+
+        // A Collider unregistered while still in the scene can count as a
+        // static obstacle, and the build that starts next scans it so. Destroy
+        // removes it only at the end of a frame, after that scan, and nothing
+        // would report its spot again. So for the next two frames its spot is
+        // reported once more as soon as it has left the scene.
+        private void RecheckReleasedColliders()
+        {
+            for (int index = _releasedInScene.Count - 1; index >= 0; index--)
+            {
+                ReleasedCollider released = _releasedInScene[index];
+                int age = Time.frameCount - released.Frame;
+                if (age <= 0)
+                    continue;
+                Collider collider = released.Collider;
+                bool inScene = collider != null && collider.enabled && collider.gameObject.activeInHierarchy;
+                if (inScene && age < 2)
+                    continue;
+                _releasedInScene.RemoveAt(index);
+                if (!inScene)
+                    ApplyObstacleChange(new FlowFieldObstacleChange(
+                        FlowFieldObstacleChangeKind.RegionDirty, null, true, released.Bounds, false, default));
+            }
         }
 
         // The Manager refuses it inside Modifier code, so it never waits.
@@ -509,6 +569,8 @@ namespace Common.FlowField
             try
             {
                 // Inside the try, so a failing sweep faults this session only.
+                if (_releasedInScene.Count > 0)
+                    RecheckReleasedColliders();
                 if (sweep)
                     RunObstacleSweep();
                 int begun = 0;
@@ -766,6 +828,7 @@ namespace Common.FlowField
             AbandonWork();
             DetachRuntimeScheduler();
             Obstacles.Clear();
+            _releasedInScene.Clear();
             _modifiers?.Clear();
             _builder.ReleaseResources();
             Safety.ClearRegions();
