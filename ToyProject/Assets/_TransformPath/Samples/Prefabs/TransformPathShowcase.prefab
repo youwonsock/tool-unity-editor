@@ -173,7 +173,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b023eb02d6169e74ea81daa09d537c1a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _pathFollower: {fileID: 1301779831207230542}
   _manager: {fileID: 2829862075460814987}
   _actorSpacing: 1.5
   _useManagerSpacing: 1
@@ -324,7 +323,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b023eb02d6169e74ea81daa09d537c1a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _pathFollower: {fileID: 4353847057457427061}
   _manager: {fileID: 2829862075460814987}
   _actorSpacing: 1.5
   _useManagerSpacing: 1
@@ -475,7 +473,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b023eb02d6169e74ea81daa09d537c1a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _pathFollower: {fileID: 3183566923898804999}
   _manager: {fileID: 2829862075460814987}
   _actorSpacing: 1.5
   _useManagerSpacing: 1
@@ -688,7 +685,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b023eb02d6169e74ea81daa09d537c1a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _pathFollower: {fileID: 8762277040011480645}
   _manager: {fileID: 2829862075460814987}
   _actorSpacing: 1.5
   _useManagerSpacing: 1
@@ -780,7 +776,7 @@ MonoBehaviour:
   _defaultSpacing: 1.5
   _spacingPolicy: {fileID: 11400000, guid: d14757ebad87f4a1aba3fe548a2f45bf, type: 2}
   _enableGradualSlowdown: 1
-  _slowdownStartDistance: 3
+  _slowdownRange: 1.5
   _minSpeedMultiplier: 0.1
   _slowdownCurve:
     serializedVersion: 2
@@ -2383,7 +2379,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b023eb02d6169e74ea81daa09d537c1a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _pathFollower: {fileID: 904426417887082623}
   _manager: {fileID: 2829862075460814987}
   _actorSpacing: 1.5
   _useManagerSpacing: 1
@@ -3315,7 +3310,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b023eb02d6169e74ea81daa09d537c1a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _pathFollower: {fileID: 1929806189517271856}
   _manager: {fileID: 2829862075460814987}
   _actorSpacing: 1.5
   _useManagerSpacing: 1

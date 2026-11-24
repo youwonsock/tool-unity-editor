@@ -13,11 +13,11 @@ namespace Common.TransformPath.Tests
         {
             AnimationCurve linear = AnimationCurve.Linear(0f, 0f, 1f, 1f);
 
-            Assert.AreEqual(1f, PathQueueCoordinator.CalculateSpeedMultiplier(true, null, 1.5f, 3f, 0.1f, linear));
-            Assert.AreEqual(0f, PathQueueCoordinator.CalculateSpeedMultiplier(true, 1.5f, 1.5f, 3f, 0.1f, linear));
-            Assert.AreEqual(0.55f, PathQueueCoordinator.CalculateSpeedMultiplier(true, 2.25f, 1.5f, 3f, 0.1f, linear), 1e-5f);
-            Assert.AreEqual(1f, PathQueueCoordinator.CalculateSpeedMultiplier(true, 3f, 1.5f, 3f, 0.1f, linear));
-            Assert.AreEqual(1f, PathQueueCoordinator.CalculateSpeedMultiplier(false, 1f, 1.5f, 3f, 0.1f, linear));
+            Assert.AreEqual(1f, PathQueueCoordinator.CalculateSpeedMultiplier(true, null, 1.5f, 1.5f, 0.1f, linear));
+            Assert.AreEqual(0f, PathQueueCoordinator.CalculateSpeedMultiplier(true, 1.5f, 1.5f, 1.5f, 0.1f, linear));
+            Assert.AreEqual(0.55f, PathQueueCoordinator.CalculateSpeedMultiplier(true, 2.25f, 1.5f, 1.5f, 0.1f, linear), 1e-5f);
+            Assert.AreEqual(1f, PathQueueCoordinator.CalculateSpeedMultiplier(true, 3f, 1.5f, 1.5f, 0.1f, linear));
+            Assert.AreEqual(1f, PathQueueCoordinator.CalculateSpeedMultiplier(false, 1f, 1.5f, 1.5f, 0.1f, linear));
         }
 
         [Test]
@@ -81,6 +81,53 @@ namespace Common.TransformPath.Tests
 
             Assert.IsTrue(moved);
             CollectionAssert.AreEqual(new[] { "b", "d", "a", "c" }, items.ConvertAll(i => i.name));
+        }
+
+        [Test]
+        public void SpeedMultiplier_TreatsAnEmptyCurveAsLinear()
+        {
+            Assert.AreEqual(0.55f, PathQueueCoordinator.CalculateSpeedMultiplier(true, 2.25f, 1.5f, 1.5f, 0.1f, new AnimationCurve()), 1e-5f);
+            Assert.AreEqual(0.55f, PathQueueCoordinator.CalculateSpeedMultiplier(true, 2.25f, 1.5f, 1.5f, 0.1f, null), 1e-5f);
+        }
+
+        [Test]
+        public void SpeedMultiplier_SlowdownMovesWithAWiderSpacing()
+        {
+            AnimationCurve linear = AnimationCurve.Linear(0f, 0f, 1f, 1f);
+
+            // A policy doubled the spacing to 3: the slowdown runs from 3 to 4.5.
+            Assert.AreEqual(0f, PathQueueCoordinator.CalculateSpeedMultiplier(true, 3f, 3f, 1.5f, 0.1f, linear));
+            Assert.AreEqual(0.55f, PathQueueCoordinator.CalculateSpeedMultiplier(true, 3.75f, 3f, 1.5f, 0.1f, linear), 1e-5f);
+            Assert.AreEqual(1f, PathQueueCoordinator.CalculateSpeedMultiplier(true, 4.5f, 3f, 1.5f, 0.1f, linear));
+            // No range: full speed until the spacing.
+            Assert.AreEqual(1f, PathQueueCoordinator.CalculateSpeedMultiplier(true, 3.1f, 3f, 0f, 0.1f, linear));
+        }
+
+        [Test]
+        public void SerializedManager_KeepsAUsableSlowdownCurve()
+        {
+            var source = new GameObject("Queue Source");
+            source.SetActive(false);
+            try
+            {
+                source.AddComponent<QueuedPathManager>();
+                GameObject copy = Object.Instantiate(source);
+                try
+                {
+                    var curve = (AnimationCurve)typeof(QueuedPathManager)
+                        .GetField("_slowdownCurve", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                        .GetValue(copy.GetComponent<QueuedPathManager>());
+                    Assert.IsTrue(PathValueUtility.IsUsableCurve(curve));
+                }
+                finally
+                {
+                    Object.DestroyImmediate(copy);
+                }
+            }
+            finally
+            {
+                Object.DestroyImmediate(source);
+            }
         }
     }
 }

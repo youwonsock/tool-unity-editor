@@ -13,6 +13,8 @@ namespace Common.TransformPath.Tests
         public float Radius = 2f;
         public bool BreakEvaluate;
         public bool BreakLength;
+        /// <summary>Evaluate throws for distances strictly inside this range, while both ends still build.</summary>
+        public Vector2 BreakBetween = new Vector2(-1f, -1f);
 
         private Vector3 _center;
         private float _radius;
@@ -30,7 +32,7 @@ namespace Common.TransformPath.Tests
 
         protected override Vector3 Evaluate(float distance)
         {
-            if (BreakEvaluate)
+            if (BreakEvaluate || (distance > BreakBetween.x && distance < BreakBetween.y))
                 throw new InvalidOperationException("The test broke this shape.");
             float angle = distance / _radius;
             return _center + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * _radius;

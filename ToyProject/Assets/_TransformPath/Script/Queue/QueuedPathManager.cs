@@ -31,9 +31,11 @@ namespace Common.TransformPath
 
         [Header("Slowdown")]
         [SerializeField] private bool _enableGradualSlowdown = true;
-        [SerializeField, Min(0f)] private float _slowdownStartDistance = PathConstants.DEFAULT_SLOWDOWN_START_DISTANCE;
+        [Tooltip("Distance beyond the spacing over which a member slows down. 0 stops it at the spacing without slowing.")]
+        [SerializeField, Min(0f)] private float _slowdownRange = PathConstants.DEFAULT_SLOWDOWN_RANGE;
         [SerializeField, Range(0f, 1f)] private float _minSpeedMultiplier = PathConstants.DEFAULT_MIN_SPEED_MULTIPLIER;
-        [SerializeField] private AnimationCurve _slowdownCurve = null;
+        [Tooltip("Speed multiplier weight over the slowdown range, 0 at the spacing and 1 at its end. Empty means linear.")]
+        [SerializeField] private AnimationCurve _slowdownCurve = AnimationCurve.Linear(0f, 0f, 1f, 1f);
 
         // _ordered is sorted by progress, leaders first; _joined keeps join order,
         // which is the order members hear their results in.
@@ -41,7 +43,9 @@ namespace Common.TransformPath
         private readonly List<Entry> _joined = new List<Entry>(100);
         private readonly List<Entry> _leaving = new List<Entry>(100);
         private readonly List<Entry> _pool = new List<Entry>(100);
-        private readonly Dictionary<PathQueueMember, Entry> _entries = new Dictionary<PathQueueMember, Entry>(100);
+        // By reference: a destroyed member must still find and remove its own entry.
+        private readonly Dictionary<PathQueueMember, Entry> _entries =
+            new Dictionary<PathQueueMember, Entry>(100, PathReferenceComparer<PathQueueMember>.Instance);
 
         private PathProviderBehaviour _routeProvider;
         private bool _isInitialized;
@@ -86,13 +90,14 @@ namespace Common.TransformPath
             set => _enableGradualSlowdown = value;
         }
 
-        public float SlowdownStartDistance
+        /// <summary>Distance beyond the spacing over which a member slows down; 0 for none.</summary>
+        public float SlowdownRange
         {
-            get => _slowdownStartDistance;
+            get => _slowdownRange;
             set
             {
                 PathValueUtility.ThrowIfNegative(value, nameof(value));
-                _slowdownStartDistance = value;
+                _slowdownRange = value;
             }
         }
 
@@ -116,7 +121,7 @@ namespace Common.TransformPath
 
         public bool TryGetMemberStatus(PathQueueMember member, out PathQueueStatus status)
         {
-            PathQueueStatus? current = member != null && _entries.TryGetValue(member, out Entry entry)
+            PathQueueStatus? current = !ReferenceEquals(member, null) && _entries.TryGetValue(member, out Entry entry)
                 ? entry.Status
                 : null;
             status = current.GetValueOrDefault();
@@ -149,10 +154,25 @@ namespace Common.TransformPath
                 _errors.Report(this, $"QueuedPathManager '{name}': {error}");
                 return;
             }
-            if (_slowdownCurve == null)
-                _slowdownCurve = AnimationCurve.Linear(0f, 0f, 1f, 1f);
             _isInitialized = true;
             _errors.Reset();
+            // A route that is built already is used now. One that is not builds
+            // when the first member starts or the first frame runs, after every
+            // Awake and Start, instead of failing here.
+            if (_routeProviderObject != null && _routeProviderObject.IsReady)
+                ConfigureRoute(_routeProviderObject);
+        }
+
+        /// <summary>
+        /// The route a member's start configures when none is set: the Inspector's
+        /// route if there is one, otherwise the request's provider.
+        /// </summary>
+        internal PathProviderBehaviour RouteForFirstStart(PathProviderBehaviour requested) =>
+            _routeProviderObject != null ? _routeProviderObject : requested;
+
+        // Configures the Inspector's route on the first frame if no member did.
+        private void ConfigureInspectorRouteIfReady()
+        {
             if (_routeProviderObject == null)
                 return;
             _routeProviderObject.EnsureBuilt();
@@ -175,12 +195,24 @@ namespace Common.TransformPath
 
         internal override void Tick(EPathTickPhase phase, float deltaTime, int frameId)
         {
-            if (!_isInitialized || _routeProvider == null)
+            if (!_isInitialized)
                 return;
             using var operation = PathExecutionBoundary.Enter();
-            if (!_routeProvider.IsReady)
+            if (ReferenceEquals(_routeProvider, null))
             {
+                ConfigureInspectorRouteIfReady();
+                return;
+            }
+            // A destroyed route is Unity-null; a failed one is not ready.
+            if (_routeProvider == null || !_routeProvider.IsReady)
+            {
+                bool destroyed = _routeProvider == null;
                 LeaveAll(EPathQueueLeaveReason.ProviderInvalid);
+                if (destroyed)
+                {
+                    _routeProvider = null;
+                    _routeRevision = -1;
+                }
                 return;
             }
             _routeRevision = _routeProvider.Revision;
@@ -192,7 +224,17 @@ namespace Common.TransformPath
                 PathFollower follower = entry.Member.Follower;
                 // The member takes a new geometry before its progress is read,
                 // so a path that changes every frame still lets the queue move.
-                follower.RefreshRouteGeometry();
+                try
+                {
+                    follower.RefreshRouteGeometry();
+                }
+                catch (Exception exception)
+                {
+                    // A shape that throws at one member's position stops only that
+                    // member; it leaves as Stopped on the next frame.
+                    Debug.LogException(exception, follower);
+                    follower.OnTickFault();
+                }
                 entry.Progress = Mathf.Clamp01(follower.Progress);
                 // A jump (Seek, loop seam) joins the back of the line at its new
                 // progress before this frame's order, as a new start would.
@@ -251,7 +293,7 @@ namespace Common.TransformPath
         internal void Remove(PathQueueMember member)
         {
             ThrowIfCalculating();
-            if (member == null || !_entries.TryGetValue(member, out Entry entry))
+            if (ReferenceEquals(member, null) || !_entries.TryGetValue(member, out Entry entry))
                 return;
             _entries.Remove(member);
             _ordered.Remove(entry);
@@ -261,7 +303,7 @@ namespace Common.TransformPath
             _pool.Add(entry);
         }
 
-        internal bool Contains(PathQueueMember member) => member != null && _entries.ContainsKey(member);
+        internal bool Contains(PathQueueMember member) => !ReferenceEquals(member, null) && _entries.ContainsKey(member);
 
         /// <summary>A spacing policy runs while the line is walked, so nothing may change the line then.</summary>
         internal void ThrowIfCalculating()
@@ -308,10 +350,12 @@ namespace Common.TransformPath
 
         private bool TryGetLeaveReason(PathFollower follower, out EPathQueueLeaveReason reason)
         {
-            if (follower == null || follower.PlaybackId == 0)
-                reason = follower != null && follower.State == EPathFollowerState.Completed
-                    ? EPathQueueLeaveReason.Completed
-                    : EPathQueueLeaveReason.Stopped;
+            if (follower == null)
+                reason = EPathQueueLeaveReason.Stopped;
+            // A playback that stopped itself on this route's change reports it as
+            // the manager would, whichever phase saw the change first.
+            else if (follower.PlaybackId == 0)
+                reason = LeaveReasonOf(follower.LastPlaybackEnd);
             else if (!ReferenceEquals(follower.CurrentProvider, _routeProvider))
                 reason = EPathQueueLeaveReason.ProviderInvalid;
             // A moving playback would stop at its next move, a paused one only
@@ -324,6 +368,21 @@ namespace Common.TransformPath
                 return false;
             }
             return true;
+        }
+
+        private static EPathQueueLeaveReason LeaveReasonOf(EPathPlaybackEnd end)
+        {
+            switch (end)
+            {
+                case EPathPlaybackEnd.Completed:
+                    return EPathQueueLeaveReason.Completed;
+                case EPathPlaybackEnd.RouteChanged:
+                    return EPathQueueLeaveReason.ManagerReleased;
+                case EPathPlaybackEnd.RouteUnavailable:
+                    return EPathQueueLeaveReason.ProviderInvalid;
+                default:
+                    return EPathQueueLeaveReason.Stopped;
+            }
         }
 
         #endregion
@@ -353,7 +412,7 @@ namespace Common.TransformPath
                     bool blocked = distance.HasValue && distance.Value <= spacing;
                     float multiplier = PathQueueCoordinator.CalculateSpeedMultiplier(
                         _enableGradualSlowdown && member.EnableGradualSlowdown,
-                        distance, spacing, _slowdownStartDistance, _minSpeedMultiplier, _slowdownCurve);
+                        distance, spacing, _slowdownRange, _minSpeedMultiplier, _slowdownCurve);
                     float maxProgress = PathQueueCoordinator.CalculateMaxProgress(
                         member.EnableOvertakeProtection, ahead?.Progress, spacing, routeLength);
                     entry.Status = new PathQueueStatus(ahead?.Member, distance, spacing, blocked, multiplier, maxProgress);
@@ -383,8 +442,8 @@ namespace Common.TransformPath
         {
             if (!PathValueUtility.IsNonNegativeFinite(_defaultSpacing))
                 error = "Default spacing must be finite and non-negative.";
-            else if (!PathValueUtility.IsNonNegativeFinite(_slowdownStartDistance))
-                error = "Slowdown start distance must be finite and non-negative.";
+            else if (!PathValueUtility.IsNonNegativeFinite(_slowdownRange))
+                error = "Slowdown range must be finite and non-negative.";
             else if (!PathValueUtility.IsInRange(_minSpeedMultiplier, 0f, 1f))
                 error = "Minimum speed multiplier must be within 0..1.";
             else

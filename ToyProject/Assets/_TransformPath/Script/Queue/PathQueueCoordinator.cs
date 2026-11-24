@@ -33,7 +33,7 @@ namespace Common.TransformPath
             bool enableGradualSlowdown,
             float? distance,
             float spacing,
-            float slowdownStartDistance,
+            float slowdownRange,
             float minSpeedMultiplier,
             AnimationCurve slowdownCurve)
         {
@@ -41,10 +41,13 @@ namespace Common.TransformPath
                 return 1f;
             if (distance.Value <= spacing)
                 return 0f;
-            if (distance.Value >= slowdownStartDistance || slowdownStartDistance <= spacing)
+            // The slowdown starts a range beyond the spacing, so a policy that
+            // widens the spacing moves the slowdown with it.
+            if (slowdownRange <= 0f || distance.Value >= spacing + slowdownRange)
                 return 1f;
-            float t = Mathf.Clamp01((distance.Value - spacing) / (slowdownStartDistance - spacing));
-            float curveValue = slowdownCurve == null ? t : Mathf.Clamp01(slowdownCurve.Evaluate(t));
+            float t = Mathf.Clamp01((distance.Value - spacing) / slowdownRange);
+            // An empty curve, as Unity loads an unset one, slows down linearly.
+            float curveValue = PathValueUtility.IsUsableCurve(slowdownCurve) ? Mathf.Clamp01(slowdownCurve.Evaluate(t)) : t;
             return Mathf.Lerp(minSpeedMultiplier, 1f, curveValue);
         }
 

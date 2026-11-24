@@ -243,7 +243,7 @@ namespace Common.TransformPath.PlayerProbe
                 new PathMovementSettings(EPathMoveType.SpeedBased, 30f, null));
             QueuedPathManager manager = CreateManager(root, path);
             manager.DefaultSpacing = spacing;
-            manager.SlowdownStartDistance = spacing * 2f;
+            manager.SlowdownRange = spacing;
             var agents = new PathQueueMember[count];
             int completed = 0;
             for (int i = 0; i < count; i++)

@@ -6,22 +6,20 @@ using UnityEngine.TestTools;
 
 namespace Common.TransformPath.Tests
 {
-    /// <summary>Components wired together and ticked in the driver's phase order.</summary>
+    /// <summary>Components wired together and ticked by the real runtime driver.</summary>
     public sealed class PathIntegrationTests : PathBoundaryIsolatedTest
     {
         private PathTestScene _scene;
         private readonly List<GameObject> _objects = new List<GameObject>();
         private readonly List<Object> _assets = new List<Object>();
-        private readonly List<PathFollower> _followers = new List<PathFollower>();
-        private QueuedPathManager _manager;
+        private PathRuntimeDriver _driver;
         private int _frame;
 
         [SetUp]
         public void SetUp()
         {
             _scene = new PathTestScene();
-            _followers.Clear();
-            _manager = null;
+            _driver = new PathRuntimeDriver();
             _frame = 0;
         }
 
@@ -45,7 +43,7 @@ namespace Common.TransformPath.Tests
             _objects.Add(host);
             PathFollower follower = host.AddComponent<PathFollower>();
             follower.Initialize();
-            _followers.Add(follower);
+            _driver.Register(follower);
             return follower;
         }
 
@@ -59,23 +57,21 @@ namespace Common.TransformPath.Tests
         {
             var host = new GameObject("Queue");
             _objects.Add(host);
-            _manager = host.AddComponent<QueuedPathManager>();
-            _manager.Initialize();
-            _manager.ConfigureRoute(route);
-            return _manager;
+            QueuedPathManager manager = host.AddComponent<QueuedPathManager>();
+            manager.Initialize();
+            manager.ConfigureRoute(route);
+            _driver.Register(manager);
+            return manager;
         }
 
-        // Effects, queue, movement: the driver's order.
+        // The driver's frame: effects, queue, movement, with its snapshot rules.
         private void Frames(int count, float deltaTime = 1f / 60f)
         {
             for (int n = 0; n < count; n++)
             {
-                _frame++;
-                foreach (PathFollower follower in _followers)
-                    follower.Tick(EPathTickPhase.Effects, deltaTime, _frame);
-                _manager?.Tick(EPathTickPhase.Queue, deltaTime, _frame);
-                foreach (PathFollower follower in _followers)
-                    follower.Tick(EPathTickPhase.Movement, deltaTime, _frame);
+                _driver.Tick(deltaTime, ++_frame);
+                if (_driver.Faults.Count > 0)
+                    Assert.Fail($"Frame {_frame} faulted: {_driver.Faults[0]}");
             }
         }
 
@@ -157,6 +153,7 @@ namespace Common.TransformPath.Tests
             _objects.Add(otherHost);
             QueuedPathManager other = otherHost.AddComponent<QueuedPathManager>();
             other.Initialize();
+            _driver.Register(other);
             PathQueueMember member = CreateMember();
             member.StartQueuedPlayback(first, PathPlaybackRequest.Single(path));
             Frames(30);
@@ -462,6 +459,171 @@ namespace Common.TransformPath.Tests
             Assert.AreEqual(EPathFollowerState.Ready, waiting.State);
         }
 
+        [Test]
+        public void DestroyedRoute_StopsEveryMember_AndForgetsTheRoute()
+        {
+            PathData path = Line(30f, 4f);
+            QueuedPathManager manager = CreateManager(path);
+            PathQueueMember moving = CreateMember();
+            PathQueueMember paused = CreateMember();
+            var reasons = new List<EPathQueueLeaveReason>();
+            moving.QueueInvalidated += (_, reason) => reasons.Add(reason);
+            paused.QueueInvalidated += (_, reason) => reasons.Add(reason);
+            moving.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            moving.Follower.Seek(0.4f);
+            paused.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            Frames(10);
+            paused.Follower.Pause();
+
+            DestroyProvider(path);
+            Frames(1);
+
+            Assert.AreEqual(0, manager.MemberCount);
+            Assert.IsFalse(moving.IsInQueue || paused.IsInQueue);
+            Assert.AreEqual(EPathFollowerState.Ready, paused.Follower.State);
+            Assert.IsTrue(ReferenceEquals(manager.RouteProvider, null));
+            Assert.AreEqual(2, reasons.Count);
+        }
+
+        [Test]
+        public void DisabledMember_CannotJoin()
+        {
+            PathData path = Line(30f, 4f);
+            QueuedPathManager manager = CreateManager(path);
+            PathQueueMember member = CreateMember();
+            member.enabled = false;
+
+            Assert.Throws<System.InvalidOperationException>(
+                () => member.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path)));
+            Assert.AreEqual(0, manager.MemberCount);
+            Assert.AreEqual(EPathFollowerState.Ready, member.Follower.State);
+        }
+
+        [Test]
+        public void DestroyedMember_LeavesAndFreesItsFollower()
+        {
+            PathData path = Line(30f, 4f);
+            QueuedPathManager manager = CreateManager(path);
+            PathQueueMember gone = CreateMember();
+            PathQueueMember behind = CreateMember();
+            gone.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            gone.Follower.Seek(0.5f);
+            behind.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            behind.Follower.Seek(0.4f);
+            PathFollower freed = gone.Follower;
+            gone.Hold();
+            Frames(30);
+
+            DestroyMember(gone);
+            Frames(30);
+
+            Assert.AreEqual(1, manager.MemberCount);
+            Assert.Greater(freed.Progress, 0.5f);
+        }
+
+        [Test]
+        public void DefinitionChangeInACallback_ReleasesEveryMemberTheSameWay()
+        {
+            PathData path = Line(30f, 4f);
+            PathEventSettingSO mark = _scene.CreateEvent("mark");
+            _scene.SetEvents(path, (0.3f, mark));
+            QueuedPathManager manager = CreateManager(path);
+            PathQueueMember first = CreateMember();
+            PathQueueMember second = CreateMember();
+            var reasons = new List<EPathQueueLeaveReason>();
+            first.QueueInvalidated += (_, reason) => reasons.Add(reason);
+            second.QueueInvalidated += (_, reason) => reasons.Add(reason);
+            first.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            first.Follower.Seek(0.29f);
+            second.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            Frames(10);
+            // Runs after the first follower's own move, before the second one moves.
+            first.Follower.EventReached += _ => path.MovementSettings = PathMovementSettings.Speed(7f);
+
+            Frames(30);
+
+            CollectionAssert.AreEqual(
+                new[] { EPathQueueLeaveReason.ManagerReleased, EPathQueueLeaveReason.ManagerReleased }, reasons);
+        }
+
+        [Test]
+        public void PausedMember_ReportsBlocked()
+        {
+            PathData path = Line(30f, 4f);
+            QueuedPathManager manager = CreateManager(path);
+            PathQueueMember member = CreateMember();
+            int blocked = 0;
+            member.Blocked += _ => blocked++;
+            member.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            Frames(30);
+            blocked = 0;
+
+            member.Follower.Pause();
+            Frames(2);
+
+            Assert.IsTrue(member.IsBlocked);
+            Assert.AreEqual(1, blocked);
+        }
+
+        [Test]
+        public void ShapeThatThrowsForOneMember_StopsOnlyThatMember()
+        {
+            var host = new GameObject("Shape");
+            _objects.Add(host);
+            TestCircleShape shape = host.AddComponent<TestCircleShape>();
+            shape.MovementSettings = PathMovementSettings.Speed(1f);
+            QueuedPathManager manager = CreateManager(shape);
+            PathQueueMember ahead = CreateMember();
+            PathQueueMember behind = CreateMember();
+            ahead.StartQueuedPlayback(manager, PathPlaybackRequest.Shape(shape));
+            ahead.Follower.Seek(0.5f);
+            behind.StartQueuedPlayback(manager, PathPlaybackRequest.Shape(shape));
+            behind.Follower.Seek(0.1f);
+            Frames(10);
+            float length = shape.PathLength;
+
+            // The new geometry throws only around the member ahead.
+            shape.BreakBetween = new Vector2(0.45f * length, 0.6f * length);
+            host.transform.position += Vector3.right;
+            shape.Rebuild();
+            LogAssert.Expect(LogType.Exception, new Regex("The test broke this shape"));
+            _driver.Tick(1f / 60f, ++_frame);
+            float progress = behind.Follower.Progress;
+            Frames(10);
+
+            Assert.AreEqual(EPathFollowerState.Ready, ahead.Follower.State);
+            Assert.AreEqual(EPathFollowerState.Moving, behind.Follower.State);
+            Assert.Greater(behind.Follower.Progress, progress);
+            Assert.IsTrue(behind.IsInQueue);
+        }
+
+        [Test]
+        public void InspectorRoute_BuildsOnTheFirstFrame_NotAtInitialize()
+        {
+            PathData path = _scene.CreatePath(PathMovementSettings.Speed(2f), EPathCurveType.Linear,
+                Vector3.zero, new Vector3(10f, 0f, 0f));
+            Transform[] points = { path.transform.GetChild(0), path.transform.GetChild(1) };
+            var host = new GameObject("Queue");
+            _objects.Add(host);
+            var pathHost = new GameObject("Unbuilt Path");
+            _objects.Add(pathHost);
+            PathData unbuilt = pathHost.AddComponent<PathData>();
+            QueuedPathManager manager = host.AddComponent<QueuedPathManager>();
+            var serialized = new UnityEditor.SerializedObject(manager);
+            serialized.FindProperty("_routeProviderObject").objectReferenceValue = unbuilt;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+
+            // No points yet: nothing is built or logged.
+            manager.Initialize();
+            _driver.Register(manager);
+            Assert.IsNull(manager.RouteProvider);
+
+            unbuilt.SetPathPoints(points);
+            Frames(1);
+
+            Assert.AreSame(unbuilt, manager.RouteProvider);
+        }
+
         private static void SetPlayOnStart(PathFollower follower, PathProviderBehaviour provider)
         {
             var serialized = new UnityEditor.SerializedObject(follower);
@@ -480,11 +642,23 @@ namespace Common.TransformPath.Tests
             return policy;
         }
 
-        // Edit Mode does not call OnDestroy for a component that never woke; Play Mode does.
-        private static void DestroyProvider(PathProviderBehaviour provider) =>
+        // Edit Mode does not call OnDestroy for a component that never woke; Play
+        // Mode does, and then the component is gone, so the test does both.
+        private static void DestroyProvider(PathProviderBehaviour provider)
+        {
             typeof(PathProviderBehaviour)
                 .GetMethod("OnDestroy", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
                 .Invoke(provider, null);
+            Object.DestroyImmediate(provider.gameObject);
+        }
+
+        private static void DestroyMember(PathQueueMember member)
+        {
+            typeof(PathQueueMember)
+                .GetMethod("OnDestroy", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                .Invoke(member, null);
+            Object.DestroyImmediate(member);
+        }
 
         private static IReadOnlyList<Transform> GetPoints(PathData path) => path.PathPoints;
     }

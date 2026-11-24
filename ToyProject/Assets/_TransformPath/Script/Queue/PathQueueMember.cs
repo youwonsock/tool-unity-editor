@@ -24,11 +24,15 @@ namespace Common.TransformPath
     /// and control the playback on the follower. The manager computes the
     /// spacing; this component eases its result and limits the follower.
     /// </summary>
+    /// <remarks>
+    /// One member per follower: it uses the PathFollower on its own GameObject,
+    /// so a follower can never sit in two queues.
+    /// </remarks>
     [RequireComponent(typeof(PathFollower))]
+    [DisallowMultipleComponent]
     public sealed class PathQueueMember : MonoBehaviour
     {
         [Header("Components")]
-        [SerializeField] private PathFollower _pathFollower;
         [SerializeField] private QueuedPathManager _manager;
 
         [Header("Queue")]
@@ -40,6 +44,7 @@ namespace Common.TransformPath
         [SerializeField, Min(0f)] private float _unblockHysteresis = PathConstants.DEFAULT_UNBLOCK_HYSTERESIS;
         [SerializeField, Min(0f)] private float _speedSmoothRate = PathConstants.DEFAULT_SPEED_SMOOTH_RATE;
 
+        [NonSerialized] private PathFollower _follower;
         private QueuedPathManager _activeManager;
         private PathQueueWait _wait = PathQueueWait.Free;
         private float _requestedMaxProgress = 1f;
@@ -53,13 +58,14 @@ namespace Common.TransformPath
         private readonly PathSignal<PathQueueMember, EPathQueueLeaveReason> _invalidated =
             new PathSignal<PathQueueMember, EPathQueueLeaveReason>();
 
+        /// <summary>The PathFollower on this GameObject.</summary>
         public PathFollower Follower
         {
             get
             {
-                if (_pathFollower == null)
-                    TryGetComponent(out _pathFollower);
-                return _pathFollower;
+                if (_follower == null)
+                    TryGetComponent(out _follower);
+                return _follower;
             }
         }
 
@@ -112,7 +118,7 @@ namespace Common.TransformPath
             remove => _blocked.Remove(value);
         }
 
-        /// <summary>The member moves again, or left the queue while waiting.</summary>
+        /// <summary>The member moves again, or <see cref="Leave"/> ended its wait.</summary>
         public event Action<PathQueueMember> Resumed
         {
             add => _resumed.Add(value);
@@ -136,19 +142,22 @@ namespace Common.TransformPath
             remove => _invalidated.Remove(value);
         }
 
-        private void Reset()
-        {
-            TryGetComponent(out _pathFollower);
-        }
-
         private void Awake()
         {
             if (_manager == null)
                 _manager = GetComponentInParent<QueuedPathManager>();
         }
 
-        // A disabled member leaves quietly; its follower stops on its own.
+        // A disabled member leaves the queue quietly. Its follower keeps playing,
+        // without the queue's limit and without a Resumed notification.
         private void OnDisable()
+        {
+            RemoveFromManager();
+            ResetWait(false);
+        }
+
+        // A member destroyed while disabled never ran OnDisable again.
+        private void OnDestroy()
         {
             RemoveFromManager();
             ResetWait(false);
@@ -168,6 +177,9 @@ namespace Common.TransformPath
         {
             if (manager == null || !manager.isActiveAndEnabled || !manager.IsInitialized)
                 throw new InvalidOperationException("QueuedPathManager must be initialized before starting a queued move.");
+            // A disabled member would never hear the queue or leave it.
+            if (!isActiveAndEnabled)
+                throw new InvalidOperationException($"PathQueueMember '{name}' must be active and enabled to join a queue.");
             ThrowIfQueueCalculating(manager);
             PathValueUtility.ThrowIfNotFinite(maxProgress, nameof(maxProgress));
             PathFollower follower = RequireFollower();
@@ -175,7 +187,7 @@ namespace Common.TransformPath
             // Validate before configuring or leaving, so an invalid request changes nothing.
             request.CreateRoute();
             if (manager.RouteProvider == null)
-                manager.ConfigureRoute(request.Provider);
+                manager.ConfigureRoute(manager.RouteForFirstStart(request.Provider));
             if (!ReferenceEquals(manager.RouteProvider, request.Provider))
                 throw new InvalidOperationException("Queue member and manager must use the same route provider instance.");
 
@@ -250,6 +262,8 @@ namespace Common.TransformPath
                     _wait.IsBlocked = true;
                     _wait.SpeedMultiplier = 0f;
                     ApplyLimit();
+                    // IsBlocked is true now, so listeners hear Blocked too.
+                    ReportChanges();
                 }
                 return;
             }

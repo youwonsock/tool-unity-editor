@@ -19,7 +19,8 @@ namespace Common.TransformPath
         public const int MAX_SEGMENT_TRANSITIONS_PER_TICK = 65;
 
         public const float DEFAULT_QUEUE_SPACING = 1.5f;
-        public const float DEFAULT_SLOWDOWN_START_DISTANCE = 3f;
+        /// <summary>Distance beyond the spacing over which a queue member slows down.</summary>
+        public const float DEFAULT_SLOWDOWN_RANGE = 1.5f;
         public const float DEFAULT_MIN_SPEED_MULTIPLIER = 0.1f;
         public const float DEFAULT_RESUME_DELAY = 0.1f;
         public const float DEFAULT_UNBLOCK_HYSTERESIS = 0.3f;
