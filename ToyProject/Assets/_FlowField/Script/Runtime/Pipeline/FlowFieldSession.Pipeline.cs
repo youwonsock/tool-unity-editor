@@ -42,8 +42,16 @@ namespace Common.FlowField
         {
             System.Diagnostics.Stopwatch timer = System.Diagnostics.Stopwatch.StartNew();
             var budget = new FlowFieldBuildBudget(budgetMilliseconds, () => timer.Elapsed.TotalMilliseconds);
-            RunPipeline(in budget, waitForWorker: true, sweep: false);
+            Pump(in budget, waitForWorker: true);
         }
+
+        /// <summary>
+        /// A direct pump with the caller's budget, never sweeping. The Editor-only
+        /// tests use a budget that expires after a set number of checks to stop a
+        /// build at a chosen point.
+        /// </summary>
+        internal void Pump(in FlowFieldBuildBudget budget, bool waitForWorker)
+            => RunPipeline(in budget, waitForWorker, sweep: false);
 
         private void RunPipeline(in FlowFieldBuildBudget budget, bool waitForWorker, bool sweep)
         {

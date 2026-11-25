@@ -157,6 +157,8 @@ namespace Common.FlowField
         // TrySample can succeed inside the grid.
         internal bool IsReady => CanPump && _builder.PublishedField != null;
         internal bool HasPendingRequest => _builder.HasPendingRequest;
+        internal bool HasActiveBuild => _builder.HasActiveBuild;
+        internal bool HasOwedInput => _builder.HasOwedInput;
         internal Exception Fault { get; private set; }
         internal string LastError => Fault?.Message;
         internal int Revision { get; private set; }

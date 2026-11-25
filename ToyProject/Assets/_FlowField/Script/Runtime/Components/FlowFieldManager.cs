@@ -59,6 +59,8 @@ namespace Common.FlowField
         // stays after Release so its final state remains readable, and is
         // replaced only when Init runs in the other mode.
         private FlowFieldSession _session;
+        // The current session, active or not, for the Editor-only tests.
+        internal FlowFieldSession Session => _session;
         private bool _hasExplicitGoal;
         private Vector3 _explicitGoalWorld;
         // SetGoal's Influence Radius belongs to its Goal. The serialized Goal

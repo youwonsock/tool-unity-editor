@@ -25,6 +25,10 @@ namespace Common.FlowField
 
         internal static void ResetLongestPump() => LongestPumpMilliseconds = 0d;
 
+        internal static int Count => Sessions.Count;
+
+        internal static bool Contains(FlowFieldSession session) => Sessions.Contains(session);
+
         /// <summary>
         /// Clears the round-robin position and the probe reading at the start of
         /// a Play session. With domain reload disabled, static fields otherwise
