@@ -10,9 +10,10 @@
 | `Common.FlowField.Editor` | `Script/Editor/` | Inspector, Bake, Scene View 표시 |
 | `Common.FlowField.Samples` | `Samples/Scripts/` | 샘플 씬의 에이전트·컨트롤러·UI(UGUI 참조) |
 | `Common.FlowField.PlayerProbe`, `.PlayerProbe.Editor` | `Dev/` | 이 저장소의 성능·회귀 측정 Player와 `-executeMethod` 빌드 진입점 |
+| `Common.FlowField.Tests`, `.Tests.Fixtures` | `Dev/Tests/` | Editor에서만 도는 회귀 테스트와 테스트용 Modifier([회귀 테스트](#회귀-테스트)) |
 
-- 시스템과 에디터 어셈블리는 `Script/` 폴더 하나에 있습니다. 샘플과 측정 도구는 시스템을 참조하고, 시스템은 둘을 모릅니다.
-- `Script/FlowFieldAssemblyInfo.cs`의 `InternalsVisibleTo`가 Editor 어셈블리와 두 측정 어셈블리에 내부를 엽니다. Editor가 쓰는 내부는 아래 "Editor 경계"에 있습니다.
+- 시스템과 에디터 어셈블리는 `Script/` 폴더 하나에 있습니다. 샘플, 측정 도구, 테스트는 시스템을 참조하고, 시스템은 그것들을 모릅니다.
+- `Script/FlowFieldAssemblyInfo.cs`의 `InternalsVisibleTo`가 Editor 어셈블리, 두 측정 어셈블리, 테스트 어셈블리에 내부를 엽니다. `Script/Editor/FlowFieldEditorAssemblyInfo.cs`는 Editor 어셈블리의 내부를 테스트에 엽니다. Editor가 쓰는 내부는 아래 "Editor 경계"에 있습니다.
 - 측정이 읽는 값(Scheduler의 `LongestPumpMilliseconds` 등)은 시스템에 있습니다. `Dev/`가 없어도 시스템은 그대로 컴파일됩니다.
 - 측정 어셈블리는 Editor와, `FLOWFIELD_PLAYER_PROBE`를 정의한 측정 빌드(`Tools/run-player-probe.sh`)에서만 컴파일합니다.
 
@@ -368,6 +369,27 @@
   <img src="Images/feature-surface2d-editor-detail.png" alt="Surface2D 통로 주변 상세 Scene View 방향장" width="48%">
   <img src="Images/feature-volume3d-editor-slice.png" alt="Volume3D 중앙 Y 단면 Scene View 방향장" width="48%">
 </p>
+
+## 회귀 테스트
+
+동작을 바꾸지 않는 변경이 정말 아무것도 바꾸지 않았는지, 고친 버그가 다시 생기지 않는지를 Editor에서 확인하는 테스트입니다. Player 빌드는 하지 않습니다.
+
+- **실행:** Unity Test Runner의 EditMode에서 `Common.FlowField.Tests`를 돌립니다. Play Mode가 필요한 시나리오는 테스트가 샘플 씬을 열고, Bake Mode를 저장하지 않고 바꾼 뒤 직접 Play Mode에 들어갑니다. 그래서 Enter Play Mode Options에서 도메인과 씬 다시 불러오기가 꺼져 있어야 합니다(이 프로젝트의 설정).
+- **결과 파일:** 마지막 실행의 모든 테스트 결과와 메시지가 `Library/FlowFieldTests/LastRun.txt`에 남습니다. 일부 실패만 알려 주는 도구로 돌렸을 때 전체를 읽는 용도입니다.
+- **분류(Category):**
+
+| 분류 | 내용 |
+| --- | --- |
+| `Gate` | 두 샘플 씬 × Bake Mode 셋의 게시 필드 해시가 기록한 기준값과 같은지, Edit Mode Bake 결과가 커밋된 Bake Asset과 같은지, 입력 storm과 수명 storm 뒤의 필드가 fresh Release·Init와 같은지 |
+| `Protocol` | 빌드 단계, 풀이 중 Stop·Release, 거부·폐기된 빌드, Default Direction 동기화, 증분 결과와 fresh 결과의 일치 |
+| `Safety` | 샘플 안전 규칙: 막힘·지면 없음·격자 밖·낙차로 향하는 움직이는 샘플이 없는지 |
+| `Obstacles` | 등록·해제·파괴·순간이동, 불확실 영역, 미등록 장애물 sweep, 격자 왕복 |
+| `Modifiers`, `SpaceMode` | 빌드 중 Modifier 파괴, Priority, Space Mode 편집, Fault와 재시도, scheduler 등록 |
+| `Goal`, `EditorBake` | `FlowFieldGoalTarget`, Goal 반경, Editor 미리보기와 Volume 표시, Bake 거부·대상·복제·다시 Bake |
+
+- **기록값:** 기대값을 규칙으로 정할 수 없는 시나리오(셀 개수 등)는 테스트를 만든 코드가 낸 값을 `FlowFieldRecorded`로 고정합니다. 값이 바뀌면 의도한 변화인지 확인한 뒤 갱신합니다.
+- **기다리는 방법:** 샘플 컨트롤러는 Manager가 처음 Ready가 되면 첫 Goal을 정합니다. 그래서 Play 진입 뒤 한 번 더 안정될 때까지(Ready → 1초 → Ready) 기다린 다음 시나리오를 시작합니다. 테스트가 직접 Pump할 때는 정해진 횟수만큼 확인하면 만료되는 예산(`FlowFieldTestBudget.AfterChecks`)으로 빌드를 정한 지점에서 멈춥니다.
+- **주의:** 테스트가 도는 동안 스크립트를 고치면 Play 진입 때 컴파일이 일어나 그 뒤 테스트가 Play Mode에 들어가지 못합니다.
 
 ## UML 갱신
 
