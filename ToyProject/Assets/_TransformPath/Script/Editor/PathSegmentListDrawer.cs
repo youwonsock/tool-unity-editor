@@ -17,7 +17,6 @@ namespace Common.TransformPath.Editor
         private const int ROWS = 3;
 
         // What one target's segments were before the plain field drew them.
-        // A target's segments as the plain field found them.
         private readonly struct Snapshot
         {
             public readonly MultiPathData Target;
@@ -25,6 +24,7 @@ namespace Common.TransformPath.Editor
             public readonly bool[] Overrides;
             // Preserve flag, move type and value: an append leaves them all as they were.
             public readonly (bool Preserve, int MoveType, float MoveValue)[] Values;
+            public readonly AnimationCurve[] Curves;
 
             public Snapshot(MultiPathData target)
             {
@@ -35,12 +35,14 @@ namespace Common.TransformPath.Editor
                 Paths = new PathData[count];
                 Overrides = new bool[count];
                 Values = new (bool, int, float)[count];
+                Curves = new AnimationCurve[count];
                 for (int i = 0; i < count; i++)
                 {
                     SerializedProperty element = segments.GetArrayElementAtIndex(i);
                     Paths[i] = element.FindPropertyRelative(PathEditorSerializationUtility.PATH_PROPERTY).objectReferenceValue as PathData;
                     Overrides[i] = IsOverride(element);
                     Values[i] = ValuesOf(element);
+                    Curves[i] = CurveOf(element);
                 }
             }
         }
@@ -75,7 +77,10 @@ namespace Common.TransformPath.Editor
                 _list?.DoLayoutList();
             else
             {
-                CaptureTargets();
+                // Layout and Repaint never edit, so the snapshot is taken only for the events that can.
+                EventType type = Event.current.type;
+                if (type != EventType.Layout && type != EventType.Repaint)
+                    CaptureTargets();
                 EditorGUILayout.PropertyField(Property, new GUIContent("Segments"), true);
             }
             bool changed = EditorGUI.EndChangeCheck();
@@ -142,7 +147,7 @@ namespace Common.TransformPath.Editor
                 SerializedProperty element = segments.GetArrayElementAtIndex(i);
                 if (element.FindPropertyRelative(PathEditorSerializationUtility.PATH_PROPERTY).objectReferenceValue != before.Paths[i])
                     return false;
-                values |= ValuesOf(element) != before.Values[i];
+                values |= ValuesOf(element) != before.Values[i] || !SameCurve(CurveOf(element), before.Curves[i]);
                 bool isOverride = IsOverride(element);
                 if (isOverride == before.Overrides[i])
                     continue;
@@ -157,6 +162,25 @@ namespace Common.TransformPath.Editor
 
         private static bool IsOverride(SerializedProperty element) =>
             element.FindPropertyRelative(MOVEMENT_SOURCE_PROPERTY).enumValueIndex == (int)EPathSegmentMovementSource.Override;
+
+        private static AnimationCurve CurveOf(SerializedProperty element) =>
+            element.FindPropertyRelative(PathInspectorGUI.TIME_CURVE).animationCurveValue;
+
+        private static bool SameCurve(AnimationCurve left, AnimationCurve right)
+        {
+            int count = left == null ? 0 : left.length;
+            if (count != (right == null ? 0 : right.length))
+                return false;
+            for (int i = 0; i < count; i++)
+            {
+                Keyframe a = left[i];
+                Keyframe b = right[i];
+                if (a.time != b.time || a.value != b.value || a.inTangent != b.inTangent || a.outTangent != b.outTangent
+                    || a.weightedMode != b.weightedMode || a.inWeight != b.inWeight || a.outWeight != b.outWeight)
+                    return false;
+            }
+            return true;
+        }
 
         private static (bool, int, float) ValuesOf(SerializedProperty element) => (
             element.FindPropertyRelative(PRESERVE_PROPERTY).boolValue,

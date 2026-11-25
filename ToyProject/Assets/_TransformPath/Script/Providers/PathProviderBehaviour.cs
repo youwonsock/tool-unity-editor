@@ -87,6 +87,15 @@ namespace Common.TransformPath
                 Rebuild();
         }
 
+        /// <summary>Whether anything asked this provider to build yet.</summary>
+        internal bool WasBuildRequested => _buildRequested;
+
+        /// <summary>
+        /// Whether it still waits for points it gets at runtime, so a build now would
+        /// only fail and log. It builds once they arrive.
+        /// </summary>
+        internal virtual bool WaitsForPoints => false;
+
         /// <summary>Whether the last build succeeded and nothing made it unavailable since.</summary>
         private protected abstract bool IsBuilt { get; }
 

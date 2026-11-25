@@ -363,5 +363,34 @@ namespace Common.TransformPath.Tests
                 }
             }
         }
+
+        [Test]
+        public void SeveralSequencesEditedTogether_ACopyInsertedBeforeAnotherCurveKeepsIt()
+        {
+            PathData lap = PathAt(Vector3.zero, new Vector3(5f, 0f, 0f));
+            var sequences = new[]
+            {
+                Track(new GameObject("Sequence A")).AddComponent<MultiPathData>(),
+                Track(new GameObject("Sequence B")).AddComponent<MultiPathData>(),
+            };
+            // Same source, mode and value: only the time curve tells the segments apart.
+            foreach (MultiPathData sequence in sequences)
+                sequence.SetSegments(new[]
+                {
+                    new PathSegmentAuthoring(lap, PathMovementSettings.Time(5f)),
+                    new PathSegmentAuthoring(lap, PathMovementSettings.Time(5f, AnimationCurve.EaseInOut(0f, 0f, 1f, 1f))),
+                });
+            var serialized = new SerializedObject(sequences);
+            var drawer = new PathSegmentListDrawer(serialized, false);
+
+            drawer.CaptureTargets();
+            serialized.FindProperty("_segments").InsertArrayElementAtIndex(0);
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            drawer.MarkTargetsEdited();
+            drawer.ApplyListDefaultsToTargets();
+
+            foreach (MultiPathData sequence in sequences)
+                Assert.AreEqual(EPathSegmentMovementSource.Override, sequence.GetAuthoringSegment(2).MovementSource);
+        }
     }
 }

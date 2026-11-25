@@ -21,6 +21,7 @@ namespace Common.TransformPath
         [NonSerialized] private float _pathLength;
         [NonSerialized] private bool _failed;
         [NonSerialized] private bool _building;
+        [NonSerialized] private bool _changedWhileBuilding;
         [NonSerialized] private readonly List<PathData> _subscribed = new List<PathData>();
         // Segment paths that had not woken at the last build. Usually none in Play Mode.
         [NonSerialized] private PathData[] _unwatched = Array.Empty<PathData>();
@@ -63,14 +64,14 @@ namespace Common.TransformPath
         {
             if (_segments == null || _segments.Count == 0)
                 return;
-            if (WaitsForSegmentPoints)
+            if (WaitsForPoints)
                 Subscribe();
             else
                 Rebuild();
         }
 
         /// <summary>Whether a segment path has no control points yet.</summary>
-        internal bool WaitsForSegmentPoints
+        internal override bool WaitsForPoints
         {
             get
             {
@@ -79,7 +80,7 @@ namespace Common.TransformPath
                 for (int i = 0; i < _segments.Count; i++)
                 {
                     PathData path = _segments[i].Path;
-                    if (path != null && !path.IsReady && !path.HasControlPoints)
+                    if (path != null && path.WaitsForPoints)
                         return true;
                 }
                 return false;
@@ -130,12 +131,27 @@ namespace Common.TransformPath
             return GetRoute().Sample(progress);
         }
 
+        // A build that reads its paths again: building a path for the first time
+        // publishes it, and a listener of that path can change one already read.
+        private const int MAX_BUILD_PASSES = 3;
+
         private protected override bool TryBuild(out bool geometryChanged, out bool definitionChanged, out string error)
         {
             _building = true;
+            geometryChanged = false;
+            definitionChanged = false;
             try
             {
-                return TryBuildSegments(out geometryChanged, out definitionChanged, out error);
+                for (int pass = 1; ; pass++)
+                {
+                    _changedWhileBuilding = false;
+                    bool built = TryBuildSegments(out bool geometry, out bool definition, out error);
+                    geometryChanged |= geometry;
+                    definitionChanged |= definition;
+                    // The notices of this build's own paths were ignored; read them again until none came.
+                    if (!built || !_changedWhileBuilding || pass == MAX_BUILD_PASSES)
+                        return built;
+                }
             }
             finally
             {
@@ -280,7 +296,10 @@ namespace Common.TransformPath
         private void HandlePathChanged()
         {
             if (_building)
+            {
+                _changedWhileBuilding = true;
                 return;
+            }
             // A path that failed or was destroyed reported it already, so this
             // sequence only goes out of use until the path is back.
             if (HasUnavailablePath())
@@ -317,6 +336,9 @@ namespace Common.TransformPath
             return unwatched == null ? Array.Empty<PathData>() : unwatched.ToArray();
         }
 
+        // A path that failed or went away reported it already, and one still waiting
+        // for its points would only fail: either keeps the sequence out of use quietly.
+        // A path with points that nothing asked to build yet builds with the sequence.
         private bool HasUnavailablePath()
         {
             if (_segments == null)
@@ -324,7 +346,7 @@ namespace Common.TransformPath
             for (int i = 0; i < _segments.Count; i++)
             {
                 PathData path = _segments[i].Path;
-                if (path == null || !path.IsReady)
+                if (path == null || (!path.IsReady && (path.WasBuildRequested || path.WaitsForPoints)))
                     return true;
             }
             return false;

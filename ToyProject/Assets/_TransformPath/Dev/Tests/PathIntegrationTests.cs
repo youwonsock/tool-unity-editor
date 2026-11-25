@@ -1612,21 +1612,8 @@ namespace Common.TransformPath.Tests
         {
             PathData first = Line(10f, 1f);
             WakePath(first);
-            // A path not built yet: the sequence's build builds it, and it publishes then.
-            var host = new GameObject("Unbuilt");
-            _objects.Add(host);
-            var start = new GameObject("Start").transform;
-            start.SetParent(host.transform);
-            start.position = new Vector3(10f, 0f, 0f);
-            var end = new GameObject("End").transform;
-            end.SetParent(host.transform);
-            end.position = new Vector3(20f, 0f, 0f);
-            PathData second = host.AddComponent<PathData>();
-            var points = new UnityEditor.SerializedObject(second);
-            UnityEditor.SerializedProperty list = SerializedPropertyArray(points, "_pathPoints", 2);
-            list.GetArrayElementAtIndex(0).objectReferenceValue = start;
-            list.GetArrayElementAtIndex(1).objectReferenceValue = end;
-            points.ApplyModifiedPropertiesWithoutUndo();
+            // Not built yet: the sequence's build builds it, and it publishes then.
+            PathData second = UnbuiltPath(new Vector3(10f, 0f, 0f), new Vector3(20f, 0f, 0f));
             second.PathChanged += () =>
             {
                 if (first != null)
@@ -1693,6 +1680,96 @@ namespace Common.TransformPath.Tests
 
             Assert.AreEqual(0.1f, sought);
             Assert.AreEqual(sought, member.Follower.Progress, 1e-6f);
+        }
+
+        [Test]
+        public void PathChangedByAListenerWhileTheSequenceBuilds_IsReadAgain()
+        {
+            PathData first = Line(10f, 1f);
+            PathData second = UnbuiltPath(new Vector3(10f, 0f, 0f), new Vector3(20f, 0f, 0f));
+            bool moved = false;
+            // A joint script: when the second path builds, it stretches the first one.
+            second.PathChanged += () =>
+            {
+                if (moved)
+                    return;
+                moved = true;
+                GetPoints(first)[1].position = new Vector3(15f, 0f, 0f);
+                first.Rebuild();
+            };
+            MultiPathData sequence = _scene.CreateSequence();
+
+            sequence.SetSegments(new[] { new PathSegmentAuthoring(first), new PathSegmentAuthoring(second) });
+
+            Assert.AreEqual(15f, sequence.GetSegmentLength(0), 1e-3f);
+            Assert.AreEqual(25f, sequence.PathLength, 1e-3f);
+        }
+
+        [Test]
+        public void WaitingSequence_AlsoBuildsAPathWithPointsThatNothingBuiltYet()
+        {
+            PathData unbuilt = UnbuiltPath(Vector3.zero, new Vector3(10f, 0f, 0f));
+            var host = new GameObject("Runtime Points");
+            _objects.Add(host);
+            PathData waiting = host.AddComponent<PathData>();
+            MultiPathData sequence = _scene.CreateSequence();
+            var serialized = new UnityEditor.SerializedObject(sequence);
+            UnityEditor.SerializedProperty segments = SerializedPropertyArray(serialized, "_segments", 2);
+            segments.GetArrayElementAtIndex(0).FindPropertyRelative("_path").objectReferenceValue = unbuilt;
+            segments.GetArrayElementAtIndex(1).FindPropertyRelative("_path").objectReferenceValue = waiting;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+
+            sequence.Wake();
+            LogAssert.NoUnexpectedReceived();
+            waiting.SetControlPoints(new[] { new Vector3(10f, 0f, 0f), new Vector3(15f, 0f, 0f) });
+
+            Assert.IsTrue(sequence.IsReady);
+            Assert.AreEqual(15f, sequence.PathLength, 1e-3f);
+        }
+
+        [Test]
+        public void InspectorRouteWaitingForRuntimePoints_LogsNothingUntilItHasThem()
+        {
+            var host = new GameObject("Queue");
+            _objects.Add(host);
+            var pathHost = new GameObject("Runtime Points");
+            _objects.Add(pathHost);
+            PathData waiting = pathHost.AddComponent<PathData>();
+            QueuedPathManager manager = host.AddComponent<QueuedPathManager>();
+            var serialized = new UnityEditor.SerializedObject(manager);
+            serialized.FindProperty("_routeProviderObject").objectReferenceValue = waiting;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            manager.Initialize();
+            _driver.Register(manager);
+
+            // Frames before the points arrive build nothing, so nothing fails or logs.
+            Frames(3);
+            LogAssert.NoUnexpectedReceived();
+            Assert.IsNull(manager.RouteProvider);
+
+            waiting.SetControlPoints(new[] { Vector3.zero, new Vector3(10f, 0f, 0f) });
+            Frames(1);
+            Assert.AreSame(waiting, manager.RouteProvider);
+        }
+
+        // A path with Transform points that nothing has built yet.
+        private PathData UnbuiltPath(Vector3 from, Vector3 to)
+        {
+            var host = new GameObject("Unbuilt");
+            _objects.Add(host);
+            var start = new GameObject("Start").transform;
+            start.SetParent(host.transform);
+            start.position = from;
+            var end = new GameObject("End").transform;
+            end.SetParent(host.transform);
+            end.position = to;
+            PathData path = host.AddComponent<PathData>();
+            var points = new UnityEditor.SerializedObject(path);
+            UnityEditor.SerializedProperty list = SerializedPropertyArray(points, "_pathPoints", 2);
+            list.GetArrayElementAtIndex(0).objectReferenceValue = start;
+            list.GetArrayElementAtIndex(1).objectReferenceValue = end;
+            points.ApplyModifiedPropertiesWithoutUndo();
+            return path;
         }
 
         // What Play Mode's Awake records; Edit Mode does not run it.

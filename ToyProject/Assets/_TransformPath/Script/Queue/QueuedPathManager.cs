@@ -227,7 +227,9 @@ namespace Common.TransformPath
         {
             if (_routeProviderObject == null)
                 return;
-            _routeProviderObject.EnsureBuilt();
+            // A route that gets its points at runtime would only fail and log now.
+            if (!_routeProviderObject.WaitsForPoints)
+                _routeProviderObject.EnsureBuilt();
             if (_routeProviderObject.IsReady)
                 ConfigureRoute(_routeProviderObject);
         }

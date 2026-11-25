@@ -125,6 +125,7 @@ namespace Common.TransformPath
         /// </summary>
         internal bool HasControlPoints =>
             _runtimePoints != null || (_pathPoints != null && _pathPoints.Count >= PathConstants.MIN_PATH_POINTS);
+        internal override bool WaitsForPoints => !IsReady && !HasControlPoints;
 
         private void Awake()
         {
