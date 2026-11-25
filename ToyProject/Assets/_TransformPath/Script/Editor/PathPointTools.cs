@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace Common.TransformPath.Editor
 {
@@ -28,6 +30,14 @@ namespace Common.TransformPath.Editor
                 PathEditorUndoUtility.RecordObjects(
                     pathPoints.ToArray(),
                     "Snap Path Points to Ground");
+                // The path's own scene: in Prefab Mode that is the prefab's preview
+                // scene, which has its own physics apart from the main scene. In Context
+                // the level around the prefab is searched when the prefab has no ground there.
+                // A prefab asset that is not open has no scene and searches the main one.
+                Scene scene = pathData.gameObject.scene;
+                PhysicsScene physics = scene.IsValid() ? scene.GetPhysicsScene() : Physics.defaultPhysicsScene;
+                PrefabStage stage = PrefabStageUtility.GetPrefabStage(pathData.gameObject);
+                bool searchContext = stage != null && stage.mode == PrefabStage.Mode.InContext;
                 int snappedCount = 0;
                 int failedCount = 0;
                 for (int pointIndex = 0; pointIndex < pathPoints.Count; pointIndex++)
@@ -35,11 +45,9 @@ namespace Common.TransformPath.Editor
                     Transform point = pathPoints[pointIndex];
                     if (point == null)
                         continue;
-                    if (Physics.Raycast(
-                            point.position,
-                            Vector3.down,
-                            out RaycastHit hit,
-                            MAX_RAYCAST_DISTANCE))
+                    if (physics.Raycast(point.position, Vector3.down, out RaycastHit hit, MAX_RAYCAST_DISTANCE)
+                        || (searchContext && Physics.defaultPhysicsScene.Raycast(
+                            point.position, Vector3.down, out hit, MAX_RAYCAST_DISTANCE)))
                     {
                         point.position = hit.point;
                         PathEditorUndoUtility.RecordPrefabOverride(point);

@@ -74,6 +74,11 @@ namespace Common.TransformPath.Editor
                     SerializedProperty path = element.FindPropertyRelative(PathEditorSerializationUtility.PATH_PROPERTY);
                     if (path != null)
                         path.objectReferenceValue = null;
+                    // A first element is zeroed rather than built, and a zero Override value
+                    // would fail the build once the segment switches to Override.
+                    SerializedProperty value = element.FindPropertyRelative(PathInspectorGUI.MOVE_VALUE);
+                    if (value != null)
+                        value.floatValue = PathSegmentAuthoring.DEFAULT_OVERRIDE_VALUE;
                 }
                 SerializedProperty source = element.FindPropertyRelative(MOVEMENT_SOURCE_PROPERTY);
                 if (source != null)

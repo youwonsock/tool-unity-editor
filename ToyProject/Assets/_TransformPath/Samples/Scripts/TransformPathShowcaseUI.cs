@@ -320,6 +320,9 @@ namespace Common.TransformPath.Samples
 
             buttonObject.TryGetComponent(out Button button);
             button.targetGraphic = image;
+            // The sample's keys drive the controller. A button a click selected would
+            // also take Space as Submit and the arrows as navigation.
+            button.navigation = new Navigation { mode = Navigation.Mode.None };
             ColorBlock colors = button.colors;
             colors.normalColor = color;
             colors.highlightedColor = Color.Lerp(color, Color.white, 0.22f);

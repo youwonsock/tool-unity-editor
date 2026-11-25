@@ -15,6 +15,9 @@ namespace Common.TransformPath
     [Serializable]
     public struct PathSegmentAuthoring
     {
+        /// <summary>The Override Duration a segment starts with before it has a PathData to copy from.</summary>
+        internal const float DEFAULT_OVERRIDE_VALUE = 5f;
+
         [SerializeField] private PathData _path;
         [SerializeField] private EPathSegmentMovementSource _movementSource;
         [SerializeField] private EPathMoveType _moveType;
@@ -27,9 +30,10 @@ namespace Common.TransformPath
             _path = path;
             _movementSource = EPathSegmentMovementSource.Path;
             _moveType = EPathMoveType.TimeBased;
-            // Used only when the Inspector switches the segment to Override before it
-            // has a PathData; with one, the Override starts from the path's own movement.
-            _moveValue = 5f;
+            // Used only when the segment switches to Override before it has a PathData;
+            // with one, the Override starts from the path's own movement. The Inspector
+            // gives its first new segment the same value.
+            _moveValue = DEFAULT_OVERRIDE_VALUE;
             _timeCurve = null;
             _preservePreviousSpeed = preservePreviousSpeed;
         }

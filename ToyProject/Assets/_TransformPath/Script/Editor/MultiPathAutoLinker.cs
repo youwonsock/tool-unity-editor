@@ -47,9 +47,12 @@ namespace Common.TransformPath.Editor
                 _followMovement = FollowMovement;
             }
 
-            public void RequestInitialSync()
+            // The undo restored the positions it recorded. Read as a drag, they would
+            // move the joint's other point and clear the redo stack, so compare from here.
+            public void ResetAfterUndoRedo()
             {
-                _needsInitialSync = true;
+                _snapshot.Capture(_pathPoints);
+                _needsInitialSync = false;
             }
 
             public void RefreshReferences()
@@ -75,7 +78,8 @@ namespace Common.TransformPath.Editor
 
                 string currentSignature = PathEditorSerializationUtility.BuildPathConfigsSignature(
                     Target);
-                bool structureChanged = string.IsNullOrEmpty(_structureSignature)
+                bool firstLook = string.IsNullOrEmpty(_structureSignature);
+                bool structureChanged = firstLook
                     || !string.Equals(
                         _structureSignature,
                         currentSignature,
@@ -86,7 +90,9 @@ namespace Common.TransformPath.Editor
                 {
                     _structureSignature = currentSignature;
                     _snapshot.Capture(_pathPoints);
-                    _needsInitialSync = true;
+                    // Opening a scene or prefab, or a script reload, is not an edit:
+                    // the joints stay as saved. A segment list an edit changed aligns them.
+                    _needsInitialSync = !firstLook;
                 }
                 else if (autoLinkTurnedOn)
                 {
@@ -184,7 +190,8 @@ namespace Common.TransformPath.Editor
             TARGETS.Cleared += PathLinkEditorUtility.ClearDuplicateWarnings;
         }
 
-        // An undo that kept every segment only needs the joints aligned again.
+        // An undo that kept every segment only needs a new snapshot; one that
+        // changed a segment list finds the targets again.
         private static void HandleUndoRedo(PathTrackedTargets<MultiPathData, TrackedMultiPath> targets)
         {
             IReadOnlyList<TrackedMultiPath> tracked = targets.Tracked;
@@ -207,7 +214,7 @@ namespace Common.TransformPath.Editor
             for (int i = 0; i < tracked.Count; i++)
             {
                 if (tracked[i].Target != null)
-                    tracked[i].RequestInitialSync();
+                    tracked[i].ResetAfterUndoRedo();
             }
         }
 
