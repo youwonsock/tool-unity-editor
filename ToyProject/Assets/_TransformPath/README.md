@@ -69,7 +69,7 @@ public sealed class TransformPathReadmeExample : MonoBehaviour
 
 | 명령 | 조건 |
 | --- | --- |
-| `Play`, `Stop`, `Pause`, `Resume` | `Play`는 준비된 Provider와 켜진 Follower가 필요(꺼진 Follower는 움직이지 않으므로 던짐). `Pause`로 멈춘 재생은 `Resume`으로만 재개(이벤트의 Resume은 이벤트가 멈춘 재생만 깨움) |
+| `Play`, `Stop`, `Pause`, `Resume` | `Play`는 준비된 Provider와 켜진 Follower가 필요(꺼진 Follower는 움직이지 않으므로 던짐. Follower의 Awake 전에 불러도 됨). `Pause`로 멈춘 재생은 `Resume`으로만 재개(이벤트의 Resume은 이벤트가 멈춘 재생만 깨움) |
 | `Seek(0..1)`, `SeekSegment(index, local)` | `SeekSegment`는 Sequence 전용. 건너뛴 이벤트는 실행하지 않음. 진행률 `1e-5` 안이면 같은 위치. 다른 구간으로 가면 그 구간에 들어간 것처럼 이동 값을 정함(속도 보존 구간은 현재 속도를 이어받음). 일시정지 중 바뀐 기하를 먼저 받고(새 기하를 받으면 같은 위치여도 `true`), 이동 설정·이벤트·구간 구성이 바뀌었으면 던짐 |
 | `SetSpeed(value)`, `SetDuration(value)` | 현재 구간의 이동 방식과 맞을 때, `0.001..9999`. 같은 채널의 이벤트 값 보간을 취소 |
 | `TriggerEvent(setting)` | 이벤트 에셋을 지금 실행 |
@@ -134,7 +134,7 @@ _member.StartQueuedPlayback(_manager, PathPlaybackRequest.Single(_path));
 
 - **Lifecycle**: `Pause`는 재생을 멈추고, `Resume`은 이벤트가 멈춘 재생을 재개합니다. `PathFollower.Pause()`로 멈춘 재생은 이벤트의 Resume으로 풀리지 않고 `Resume()`으로만 풀립니다.
 - **속도 변경, Duration 변경**: 현재 구간이 SpeedBased면 속도 변경만, TimeBased면 Duration 변경만 적용합니다. 보간 시간과 곡선을 지정할 수 있습니다.
-- **지연 이벤트**: 게임 시간으로 지연한 뒤 다른 이벤트 에셋을 실행합니다. Pause 뒤 자동 재개는 지연된 Resume 이벤트로 만듭니다. Lifecycle, 값 변경, 지연 이벤트 중 하나를 가진 이벤트가 실행되면 앞 이벤트가 남긴 지연 이벤트가 취소되고, 이름만 알리는 이벤트는 취소하지 않습니다.
+- **지연 이벤트**: 게임 시간으로 지연한 뒤 다른 이벤트 에셋을 실행합니다. Pause 뒤 자동 재개는 지연된 Resume 이벤트로 만듭니다. 경로에서 닿거나 `TriggerEvent`로 실행한 이벤트가 Lifecycle, 값 변경, 지연 이벤트 중 하나를 가지면 앞 이벤트가 남긴 지연 이벤트가 취소되고, 이름만 알리는 이벤트는 취소하지 않습니다. 지연 이벤트끼리는 취소하지 않으므로 지연 목록 하나에 Pause와 Resume을 함께 둘 수 있습니다.
 
 이벤트는 자기 위치에서 실행됩니다. 이동은 그 위치에서 멈춰 이벤트를 실행한 뒤 남은 시간으로 이어지므로, Pause 이벤트는 정확히 그 위치에서 멈추고 값 변경은 그 지점부터 적용됩니다. 같은 위치의 이벤트는 작성 순서대로 실행하고, Pause가 멈추면 나머지는 재개한 뒤 실행합니다.
 
@@ -161,7 +161,7 @@ _member.StartQueuedPlayback(_manager, PathPlaybackRequest.Single(_path));
   <img src="Docs/Images/feature-multipath-seek.png" alt="MultiPath Seek 화면" width="48%">
 </p>
 
-**Editor 작성:** 제어점은 Scene View에서, 이벤트는 Inspector에서 편집합니다. 연결점과 그룹 동기화는 Undo/Redo를 지원하고 Prefab Mode에서도 동작하며, 씬이나 Prefab을 여는 것만으로는 점을 옮기지 않습니다. **Snap to Ground**는 경로가 있는 씬의 콜라이더에 붙습니다(Prefab Mode에서는 Prefab 내용, In Context면 그다음 주변 씬). `MultiPathData` Inspector의 **Apply Drawing Sizes To All Paths**와 **Assign Distinct Path Colors**로 구간 경로의 미리보기 모양을 맞춥니다. `PathShapeProvider`는 샘플한 모양을 Scene View에 그립니다(오른쪽 화면 가장자리의 원).
+**Editor 작성:** 제어점은 Scene View에서, 이벤트는 Inspector에서 편집합니다. 연결점과 그룹 동기화는 Undo/Redo를 지원하고 Prefab Mode에서도 동작하며, 씬이나 Prefab을 여는 것만으로는 점을 옮기지 않습니다. **Snap to Ground**는 경로가 있는 씬의 콜라이더에 붙습니다(Trigger 제외. Prefab Mode에서는 Prefab 내용, In Context면 그다음 주변 씬). `MultiPathData` Inspector의 **Apply Drawing Sizes To All Paths**와 **Assign Distinct Path Colors**로 구간 경로의 미리보기 모양을 맞춥니다. `PathShapeProvider`는 샘플한 모양을 Scene View에 그립니다(오른쪽 화면 가장자리의 원).
 
 <p align="center">
   <img src="Docs/Images/feature-editor-authoring.png" alt="Scene View의 경로 작성 화면" width="48%">

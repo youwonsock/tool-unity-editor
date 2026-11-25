@@ -6,8 +6,9 @@ namespace Common.TransformPath
 {
     /// <summary>
     /// Keeps followers on one route apart. Every frame, before anyone moves, it
-    /// orders its members by progress and gives each one a limit from the
-    /// member ahead. It is the only place the queue's order and limits change.
+    /// orders its members by progress and gives each one a result from the
+    /// member ahead. It is the only place the queue's order changes; each member
+    /// turns its result, a Hold or a loop seam into its follower's limit.
     /// </summary>
     public sealed class QueuedPathManager : PathRuntimeBehaviour
     {
@@ -114,7 +115,10 @@ namespace Common.TransformPath
             }
         }
 
-        /// <summary>The member at a position in the queue, leaders first.</summary>
+        /// <summary>
+        /// The member at a position in the queue, leaders first, as the last Queue
+        /// phase ordered them. A member restarted in place moves behind at once.
+        /// </summary>
         public PathQueueMember GetMember(int orderedIndex)
         {
             if (orderedIndex < 0 || orderedIndex >= _ordered.Count)

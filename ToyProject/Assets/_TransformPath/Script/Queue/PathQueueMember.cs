@@ -69,7 +69,7 @@ namespace Common.TransformPath
             }
         }
 
-        /// <summary>The manager <see cref="StartQueuedPlayback(PathPlaybackRequest)"/> uses.</summary>
+        /// <summary>The manager <see cref="StartQueuedPlayback(PathPlaybackRequest)"/> uses; unset, the one on a parent.</summary>
         public QueuedPathManager Manager
         {
             get => _manager;
