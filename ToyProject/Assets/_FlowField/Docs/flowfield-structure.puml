@@ -22,29 +22,29 @@ class FlowFieldSpaceStrategy {
   모드별 Session 생성·검증·격자·Bounds 맞춤
 }
 class "FlowFieldSession\n(공통 파이프라인)" as Session {
-  수명·상태·이벤트·빌드 루프
-  장애물·Modifier 등록부
-  {field} 불확실 영역(FlowFieldSafety)
-  샘플 안전 규칙
+  {field} 수명·상태·이벤트 (본체)
+  {field} 설정·장애물·Modifier 입력, 불확실 영역 (.Inputs)
+  {field} 빌드 루프 (.Pipeline)
+  {field} 조회·샘플 안전 규칙 (.Reads)
 }
 interface IFlowFieldSpaceBuilder {
-  빌드 단계·게시 필드
-  최신 셀 정보·수명 훅
+  요청·빌드 단계·게시 필드
+  입력 반영·수명 훅
 }
 class FlowFieldSurfaceBuilder {
-  Surface2D 계산
+  Surface2D 계산 (8방향)
 }
 class FlowFieldVolumeBuilder {
-  Volume3D 계산
+  Volume3D 계산 (26방향)
 }
 class FlowFieldBuildScheduler {
   모든 Session에 프레임당 공통 예산
 }
 class FlowFieldExecutionBoundary {
-  이벤트·Modifier 명령을 작업 뒤로
+  이벤트와 Modifier 코드의 명령을 작업 뒤로
 }
-class "Editor\n(BakeService·BakeEditor)" as Editor {
-  Bake·미리보기
+class "Editor\n(BakeService·BakeEditor·미리보기)" as Editor {
+  Bake·Scene View 표시
 }
 
 Components ..> API : 통지
@@ -55,9 +55,9 @@ FlowFieldManager --> Session
 Session --> IFlowFieldSpaceBuilder
 FlowFieldSurfaceBuilder ..|> IFlowFieldSpaceBuilder
 FlowFieldVolumeBuilder ..|> IFlowFieldSpaceBuilder
-FlowFieldBuildScheduler --> Session : Pump(예산)
+FlowFieldBuildScheduler --> Session : PumpScheduled(budget)
 Session --> FlowFieldExecutionBoundary
 Editor ..> FlowFieldManager : CaptureConfig
 Editor ..> FlowFieldSpaceStrategy : 검증·격자
-Editor ..> Session : 직접 Pump
+Editor ..> Session : Bake 세션 생성·SubmitPrepared·Pump
 @enduml
