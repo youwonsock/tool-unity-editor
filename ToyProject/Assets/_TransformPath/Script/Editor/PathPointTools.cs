@@ -10,6 +10,10 @@ namespace Common.TransformPath.Editor
     internal static class PathPointTools
     {
         private const float MAX_RAYCAST_DISTANCE = 1000f;
+        // The ray starts this far above each point, so a point a little under the
+        // ground, or exactly on it, still finds it. A surface closer above a point
+        // than this counts as its ground.
+        private const float GROUND_SEARCH_LIFT = 0.5f;
         private const string PATH_POINT_NAME_PREFIX = "PathPoint";
 
         public static void SnapToGround(IReadOnlyList<PathData> paths)
@@ -27,6 +31,9 @@ namespace Common.TransformPath.Editor
                     continue;
                 }
 
+                // A closed outline lists its first point again; it moves once.
+                var unique = new HashSet<Transform>();
+                pathPoints.RemoveAll(point => point != null && !unique.Add(point));
                 PathEditorUndoUtility.RecordObjects(
                     pathPoints.ToArray(),
                     "Snap Path Points to Ground");
@@ -45,11 +52,13 @@ namespace Common.TransformPath.Editor
                     Transform point = pathPoints[pointIndex];
                     if (point == null)
                         continue;
+                    Vector3 origin = point.position + Vector3.up * GROUND_SEARCH_LIFT;
+                    float distance = MAX_RAYCAST_DISTANCE + GROUND_SEARCH_LIFT;
                     // Triggers are volumes, not ground.
-                    if (physics.Raycast(point.position, Vector3.down, out RaycastHit hit, MAX_RAYCAST_DISTANCE,
+                    if (physics.Raycast(origin, Vector3.down, out RaycastHit hit, distance,
                             Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)
                         || (searchContext && Physics.defaultPhysicsScene.Raycast(
-                            point.position, Vector3.down, out hit, MAX_RAYCAST_DISTANCE,
+                            origin, Vector3.down, out hit, distance,
                             Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)))
                     {
                         point.position = hit.point;

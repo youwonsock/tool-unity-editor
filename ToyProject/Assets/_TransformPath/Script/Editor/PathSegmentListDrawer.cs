@@ -99,14 +99,15 @@ namespace Common.TransformPath.Editor
                 SerializedProperty segments = serialized.FindProperty(PathEditorSerializationUtility.SEGMENTS_PROPERTY);
                 int count = segments.arraySize;
                 int known = before.Paths.Length;
-                // Appended segments only: a duplicate in the middle shifts the old ones down.
-                if (count > known && Matches(segments, before, known, out _))
+                // Appended segments only: a duplicate in the middle shifts the old ones
+                // down, so one of them would read as a changed source.
+                if (count > known && Matches(segments, before, known, 0, out _))
                 {
                     for (int i = known; i < count; i++)
                         StartNewSegment(segments.GetArrayElementAtIndex(i), zeroed: known == 0);
                 }
                 // One segment switching over. A reorder or a delete moves an Override; it does not choose one.
-                else if (count == known && Matches(segments, before, count, out int switched) && switched >= 0)
+                else if (count == known && Matches(segments, before, count, 1, out int switched) && switched >= 0)
                 {
                     SerializedProperty element = segments.GetArrayElementAtIndex(switched);
                     SeedOverride(element, element.FindPropertyRelative(PathEditorSerializationUtility.PATH_PROPERTY).objectReferenceValue as PathData);
@@ -116,9 +117,10 @@ namespace Common.TransformPath.Editor
             _snapshots.Clear();
         }
 
-        // Whether the first count segments keep their paths, and at most one of them
-        // changed its source. switched is that one when it turned to Override, else -1.
-        private static bool Matches(SerializedProperty segments, Snapshot before, int count, out int switched)
+        // Whether the first count segments keep their paths, and at most maxChanged of
+        // them changed their source. switched is the one that turned to Override when
+        // only one changed, else -1.
+        private static bool Matches(SerializedProperty segments, Snapshot before, int count, int maxChanged, out int switched)
         {
             switched = -1;
             int changed = 0;
@@ -137,7 +139,7 @@ namespace Common.TransformPath.Editor
             }
             if (changed > 1)
                 switched = -1;
-            return changed <= 1;
+            return changed <= maxChanged;
         }
 
         /// <summary>Remembers each target's segments before the plain field edits them.</summary>

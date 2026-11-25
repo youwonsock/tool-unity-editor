@@ -227,6 +227,8 @@ namespace Common.TransformPath.Samples
             _pathFollower?.Stop();
             _multiPathFollower?.Stop();
             _shapeFollower?.Stop();
+            // RESET starts the lane over, so BLOCK LEADER's hold goes with it.
+            _queue.ReleaseHeldLeader();
             _queue.StopAll();
 
             StartShapePath();
