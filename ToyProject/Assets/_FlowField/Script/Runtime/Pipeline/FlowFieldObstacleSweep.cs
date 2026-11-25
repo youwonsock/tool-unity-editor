@@ -161,30 +161,22 @@ namespace Common.FlowField
         {
             _nextPassTime = now + _interval;
             Physics.SyncTransforms();
-            while (true)
+            int count = FlowFieldOverlapUtility.OverlapBox(
+                _bounds.center,
+                _bounds.extents,
+                _layer,
+                ref _hits,
+                InitialCapacity,
+                MaxColliders);
+            if (count < 0)
             {
-                int count = Physics.OverlapBoxNonAlloc(
-                    _bounds.center,
-                    _bounds.extents,
-                    _hits,
-                    Quaternion.identity,
-                    _layer,
-                    QueryTriggerInteraction.Ignore);
-                if (count < _hits.Length)
-                {
-                    _hitCount = count;
-                    break;
-                }
-                if (_hits.Length >= MaxColliders)
-                {
-                    _overflowed = true;
-                    Clear();
-                    Debug.LogWarning(
-                        $"[FlowField] The unregistered obstacle sweep found {MaxColliders} or more Colliders, so it stopped for this session.");
-                    return false;
-                }
-                _hits = new Collider[Math.Min(MaxColliders, _hits.Length * 2)];
+                _overflowed = true;
+                Clear();
+                Debug.LogWarning(
+                    $"[FlowField] The unregistered obstacle sweep found {MaxColliders} or more Colliders, so it stopped for this session.");
+                return false;
             }
+            _hitCount = count;
             _cursor = 0;
             _seen.Clear();
             _passOpen = true;

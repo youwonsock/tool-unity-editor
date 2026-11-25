@@ -294,19 +294,7 @@ namespace Common.FlowField
             public bool Accepts(Collider obstacle) => obstacle != null;
 
             public bool Overlaps(Vector3 center, Vector3 halfExtents, LayerMask queryLayer, Collider obstacle)
-                => Physics.CheckBox(
-                        center,
-                        halfExtents,
-                        Quaternion.identity,
-                        queryLayer,
-                        QueryTriggerInteraction.Ignore)
-                    && FlowFieldOverlapUtility.OverlapsTarget(
-                        center,
-                        halfExtents,
-                        queryLayer,
-                        obstacle,
-                        QueryTriggerInteraction.Ignore,
-                        ref TargetBuffer);
+                => FlowFieldOverlapUtility.OverlapsSolidTarget(center, halfExtents, queryLayer, obstacle, ref TargetBuffer);
         }
 
         public static bool AreEqual(bool[] left, bool[] right)
@@ -338,8 +326,6 @@ namespace Common.FlowField
             float clearance,
             ref Collider[] overlapBuffer)
         {
-            FlowFieldOverlapUtility.EnsureCapacity(
-                ref overlapBuffer, InitialOverlapCapacity, InitialOverlapCapacity, MaxOverlapHits);
             // The same arithmetic as the grid's world size, so the whole grid
             // queries exactly its own box.
             float sizeX = (float)((double)(region.MaxX - region.MinX + 1) * grid.CellSize);
@@ -354,29 +340,17 @@ namespace Common.FlowField
                 (maxCenterY - minCenterY) * 0.5f + halfHeight,
                 sizeZ * 0.5f + clearance);
 
-            while (true)
-            {
-                int count = Physics.OverlapBoxNonAlloc(
-                    center,
-                    halfExtents,
-                    overlapBuffer,
-                    Quaternion.identity,
-                    obstacleLayer,
-                    QueryTriggerInteraction.Ignore);
-                if (count < overlapBuffer.Length)
-                {
-                    return count;
-                }
-
-                if (overlapBuffer.Length >= MaxOverlapHits)
-                {
-                    throw new InvalidOperationException(
-                        $"Obstacle overlap count reached the configured capacity of {MaxOverlapHits}.");
-                }
-
-                FlowFieldOverlapUtility.EnsureCapacity(
-                    ref overlapBuffer, overlapBuffer.Length * 2, InitialOverlapCapacity, MaxOverlapHits);
-            }
+            int count = FlowFieldOverlapUtility.OverlapBox(
+                center,
+                halfExtents,
+                obstacleLayer,
+                ref overlapBuffer,
+                InitialOverlapCapacity,
+                MaxOverlapHits);
+            if (count < 0)
+                throw new InvalidOperationException(
+                    $"Obstacle overlap count reached the limit of {MaxOverlapHits}.");
+            return count;
         }
 
     }
@@ -545,6 +519,20 @@ namespace Common.FlowField
         internal static float CellHalfExtent(float cellSize, float clearance = 0f)
             => Mathf.Max(0.000001f, cellSize * 0.5f + clearance - CellQuerySkin);
 
+        /// <summary>
+        /// Whether a non-trigger <paramref name="target"/> overlaps the box. The
+        /// cheap CheckBox skips the boxes no Collider of the layer reaches.
+        /// </summary>
+        internal static bool OverlapsSolidTarget(
+            Vector3 center,
+            Vector3 halfExtents,
+            int layerMask,
+            Collider target,
+            ref Collider[] overlapBuffer)
+            => Physics.CheckBox(center, halfExtents, Quaternion.identity, layerMask, QueryTriggerInteraction.Ignore)
+                && OverlapsTarget(center, halfExtents, layerMask, target, QueryTriggerInteraction.Ignore, ref overlapBuffer);
+
+        // Unlike OverlapBox it stops as soon as the target is among the hits.
         public static bool OverlapsTarget(
             Vector3 center,
             Vector3 halfExtents,
@@ -575,9 +563,41 @@ namespace Common.FlowField
 
                 if (overlapBuffer.Length >= MaxOverlapHits)
                     throw new System.InvalidOperationException(
-                        $"Target overlap count reached the configured capacity of {MaxOverlapHits}.");
+                        $"Target overlap count reached the limit of {MaxOverlapHits}.");
 
                 EnsureCapacity(ref overlapBuffer, overlapBuffer.Length * 2, InitialOverlapCapacity, MaxOverlapHits);
+            }
+        }
+
+        /// <summary>
+        /// Overlaps an axis-aligned box into <paramref name="buffer"/>, ignoring
+        /// triggers, and doubles the buffer from <paramref name="initialCapacity"/>
+        /// until every hit fits. Returns the hit count, or -1 when
+        /// <paramref name="maxCapacity"/> hits still fill it: the list would be partial.
+        /// </summary>
+        internal static int OverlapBox(
+            Vector3 center,
+            Vector3 halfExtents,
+            int layerMask,
+            ref Collider[] buffer,
+            int initialCapacity,
+            int maxCapacity)
+        {
+            EnsureCapacity(ref buffer, initialCapacity, initialCapacity, maxCapacity);
+            while (true)
+            {
+                int count = Physics.OverlapBoxNonAlloc(
+                    center,
+                    halfExtents,
+                    buffer,
+                    Quaternion.identity,
+                    layerMask,
+                    QueryTriggerInteraction.Ignore);
+                if (count < buffer.Length)
+                    return count;
+                if (buffer.Length >= maxCapacity)
+                    return -1;
+                EnsureCapacity(ref buffer, buffer.Length * 2, initialCapacity, maxCapacity);
             }
         }
 

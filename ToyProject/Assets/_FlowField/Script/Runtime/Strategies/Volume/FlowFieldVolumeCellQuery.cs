@@ -17,7 +17,7 @@ namespace Common.FlowField
     internal sealed class FlowFieldVolumeCellQuery
     {
         private const int InitialCapacity = 32;
-        private const int MaxLayerCandidates = 4096;
+        private const int MaxLayerCandidates = FlowFieldOverlapUtility.MaxOverlapHits;
         private const float BoundsMargin = 0.001f;
 
         private Collider[] _layerHits;
@@ -133,20 +133,11 @@ namespace Common.FlowField
                 int index = _stepRegistered[step];
                 if (!_registeredBounds[index].Intersects(cellBox))
                     continue;
-                int layerMask = _registeredLayers[index];
-                if (!Physics.CheckBox(
+                if (FlowFieldOverlapUtility.OverlapsSolidTarget(
                         center,
                         halfExtents,
-                        Quaternion.identity,
-                        layerMask,
-                        QueryTriggerInteraction.Ignore))
-                    continue;
-                if (FlowFieldOverlapUtility.OverlapsTarget(
-                        center,
-                        halfExtents,
-                        layerMask,
+                        _registeredLayers[index],
                         _registered[index],
-                        QueryTriggerInteraction.Ignore,
                         ref overlapBuffer))
                     return true;
             }
@@ -194,31 +185,21 @@ namespace Common.FlowField
             _layerComplete = true;
             if (obstacleLayer.value == 0)
                 return;
-            FlowFieldOverlapUtility.EnsureCapacity(ref _layerHits, InitialCapacity, InitialCapacity, MaxLayerCandidates);
-            while (true)
+            int count = FlowFieldOverlapUtility.OverlapBox(
+                stepBox.center,
+                stepBox.extents,
+                obstacleLayer,
+                ref _layerHits,
+                InitialCapacity,
+                MaxLayerCandidates);
+            if (count < 0)
             {
-                int count = Physics.OverlapBoxNonAlloc(
-                    stepBox.center,
-                    stepBox.extents,
-                    _layerHits,
-                    Quaternion.identity,
-                    obstacleLayer,
-                    QueryTriggerInteraction.Ignore);
-                if (count < _layerHits.Length)
-                {
-                    _layerCount = count;
-                    break;
-                }
-                if (_layerHits.Length >= MaxLayerCandidates)
-                {
-                    // Too many candidates to list: every cell of this step
-                    // falls back to its own CheckBox.
-                    _layerComplete = false;
-                    return;
-                }
-                FlowFieldOverlapUtility.EnsureCapacity(
-                    ref _layerHits, _layerHits.Length * 2, InitialCapacity, MaxLayerCandidates);
+                // Too many candidates to list: every cell of this step
+                // falls back to its own CheckBox.
+                _layerComplete = false;
+                return;
             }
+            _layerCount = count;
             if (_layerBounds.Length < _layerCount)
                 _layerBounds = new Bounds[_layerHits.Length];
             for (int index = 0; index < _layerCount; index++)
