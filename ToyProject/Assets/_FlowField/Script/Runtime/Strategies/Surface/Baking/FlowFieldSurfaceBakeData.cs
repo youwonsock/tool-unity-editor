@@ -63,9 +63,16 @@ namespace Common.FlowField
         [NonSerialized] private string _validationReason = string.Empty;
 
         private protected override int CurrentFormatVersion => SupportedFormatVersion;
+        /// <summary>Whether the bake had a Goal.</summary>
         public bool HasGoal => _hasGoal;
+        /// <summary>The Goal position the bake requested, in world space.</summary>
         public Vector3 RequestedGoalWorld => _requestedGoalWorld;
+        /// <summary>The Goal Influence Radius of the bake, in world units; 0 reaches every cell.</summary>
         public float GoalInfluenceRadius => _goalInfluenceRadius;
+        /// <summary>
+        /// The flat index (<see cref="FlowFieldGridSpace.ToFlatIndex(int, int)"/>) of the baked Goal
+        /// cell; -1 without a Goal.
+        /// </summary>
         public int ResolvedGoalIndex => _resolvedGoalIndex;
 
         // Serialized inspector edits can change a valid snapshot without going
@@ -94,6 +101,11 @@ namespace Common.FlowField
             MarkContentChanged();
         }
 
+        /// <summary>
+        /// Whether the asset is in the current format and its header and arrays pass the full
+        /// check. It does not compare the bake with a Manager's settings. The result is kept until
+        /// the content changes.
+        /// </summary>
         public bool HasValidData
         {
             get

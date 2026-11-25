@@ -24,8 +24,14 @@ namespace Common.FlowField
         {
         }
 
+        /// <summary>The format version the asset was baked with; see <see cref="HasCurrentFormat"/>.</summary>
         public int FormatVersion => _formatVersion;
+        /// <summary>Advances with each bake written to the asset. Serialized.</summary>
         public int Revision => _revision;
+        /// <summary>
+        /// Advances whenever the serialized content may have changed: a bake, an Inspector edit or
+        /// a load. Not serialized.
+        /// </summary>
         public int ContentGeneration => _contentGeneration;
         internal string OwnerId => _ownerId ?? string.Empty;
 

@@ -19,30 +19,35 @@ namespace Common.FlowField
         private void MarkGoalDirty()
             => SubmitCheckedConfig(FlowFieldConfigChange.Goal);
 
+        /// <inheritdoc/>
         public FlowFieldSample Sample(Vector3 worldPosition)
         {
             ThrowIfLifecycleUnavailable();
             return ActiveSession.Sample(worldPosition);
         }
 
+        /// <inheritdoc/>
         public bool TrySample(Vector3 worldPosition, out FlowFieldSample sample)
         {
             sample = FlowFieldSample.Stopped;
             return ActiveSession?.TrySample(worldPosition, out sample) ?? false;
         }
 
+        /// <inheritdoc/>
         public FlowFieldClampResult ClampPositionToGrid(Vector3 worldPosition)
         {
             ThrowIfLifecycleUnavailable();
             return ActiveSession.ClampPositionToGrid(worldPosition);
         }
 
+        /// <inheritdoc/>
         public bool TryClampPositionToGrid(Vector3 worldPosition, out FlowFieldClampResult result)
         {
             result = default;
             return ActiveSession?.TryClampPositionToGrid(worldPosition, out result) ?? false;
         }
 
+        /// <inheritdoc/>
         public void SetSpaceMode(FlowFieldSpaceMode mode)
         {
             _boundary.ThrowIfInUserCode(nameof(SetSpaceMode));
@@ -53,6 +58,7 @@ namespace Common.FlowField
             _spaceMode = mode;
         }
 
+        /// <inheritdoc/>
         public bool RegisterDynamicObstacle(Collider collider)
         {
             ThrowIfLifecycleUnavailable();
@@ -65,6 +71,7 @@ namespace Common.FlowField
             return ActiveSession.RegisterObstacleCommand(collider);
         }
 
+        /// <inheritdoc/>
         public bool UnregisterDynamicObstacle(Collider collider)
         {
             // Removal needs no valid configuration, as with Modifiers. A faulted
@@ -84,10 +91,14 @@ namespace Common.FlowField
             => ActiveSession != null && ActiveSession.Obstacles.Contains(collider);
 
         /// <summary>
-        /// A registered obstacle moved. The cells of its last built bounds and of
+        /// A registered obstacle moved. The cells of its last reported bounds and of
         /// its bounds now are rebuilt; a destroyed one stops being registered.
         /// False when the Collider is not registered.
         /// </summary>
+        /// <exception cref="ArgumentNullException"><paramref name="collider"/> is null.</exception>
+        /// <exception cref="InvalidOperationException">
+        /// Not initialized, faulted, in StaticBaked mode, or called from Modifier code.
+        /// </exception>
         public bool NotifyDynamicObstacleMoved(Collider collider)
         {
             _boundary.ThrowIfInUserCode(nameof(NotifyDynamicObstacleMoved));
@@ -99,6 +110,7 @@ namespace Common.FlowField
             return ActiveSession.NotifyObstacleMovedCommand(collider);
         }
 
+        /// <inheritdoc/>
         public void NotifyObstacleRegionDirty(Bounds worldBounds)
         {
             _boundary.ThrowIfInUserCode(nameof(NotifyObstacleRegionDirty));
@@ -111,6 +123,7 @@ namespace Common.FlowField
             ActiveSession.NotifyObstacleRegionDirtyCommand(worldBounds);
         }
 
+        /// <inheritdoc/>
         public void SetGoal(in FlowFieldGoalRequest request)
         {
             int heldVersion = 0;
@@ -173,6 +186,7 @@ namespace Common.FlowField
             ChangeExplicitGoal(false, default);
         }
 
+        /// <inheritdoc/>
         public void NotifyCellsDirty()
         {
             _boundary.ThrowIfInUserCode(nameof(NotifyCellsDirty));
@@ -183,6 +197,7 @@ namespace Common.FlowField
             SubmitCheckedConfig(FlowFieldConfigChange.Cells);
         }
 
+        /// <inheritdoc/>
         public bool RegisterVectorModifier(IFlowFieldVectorModifier modifier)
         {
             if (modifier == null)
@@ -191,6 +206,7 @@ namespace Common.FlowField
             return ActiveSession.RegisterModifierCommand(modifier);
         }
 
+        /// <inheritdoc/>
         public bool UnregisterVectorModifier(IFlowFieldVectorModifier modifier)
         {
             if (modifier == null)
@@ -202,6 +218,7 @@ namespace Common.FlowField
             return ActiveSession.UnregisterModifierCommand(modifier);
         }
 
+        /// <inheritdoc/>
         public void NotifyModifierChanged(
             IFlowFieldVectorModifier modifier,
             FlowFieldModifierChange change)

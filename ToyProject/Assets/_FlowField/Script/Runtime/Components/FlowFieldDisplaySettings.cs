@@ -31,11 +31,25 @@ namespace Common.FlowField
             internal const string VolumeGizmoSlice = nameof(_volumeGizmoSlice);
         }
 
+        /// <summary>
+        /// Whether the Scene View draws the field: the baked surface, obstacles, the Goal, Modifier
+        /// cells and the final 3D vectors.
+        /// </summary>
         public bool ShowField => _showField;
+        /// <summary>Whether a Volume3D field is drawn whole or as one slice.</summary>
         public FlowFieldVolumeGizmoMode VolumeGizmoMode => _volumeGizmoMode;
+        /// <summary>Whether Volume3D cells are drawn as wire cubes, blocked ones in red.</summary>
         public bool ShowVolumeCells => _showVolumeCells;
+        /// <summary>
+        /// Whether Volume3D directions are drawn as arrows, with a marker where the field stops.
+        /// </summary>
         public bool ShowVolumeVectors => _showVolumeVectors;
+        /// <summary>The axis the slice is taken across in Slice mode.</summary>
         public FlowFieldVolumeSliceAxis VolumeGizmoSliceAxis => _volumeGizmoSliceAxis;
+        /// <summary>
+        /// The cell index along <see cref="VolumeGizmoSliceAxis"/> that Slice mode draws. A negative
+        /// value, such as the default -1, uses the middle slice; one past the grid is clamped.
+        /// </summary>
         public int VolumeGizmoSlice => _volumeGizmoSlice;
     }
 }

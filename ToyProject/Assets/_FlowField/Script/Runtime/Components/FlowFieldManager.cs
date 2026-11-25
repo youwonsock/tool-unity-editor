@@ -86,28 +86,49 @@ namespace Common.FlowField
 
         private FlowFieldModifierAttachment Modifiers => _modifiers ??= new FlowFieldModifierAttachment(this);
 
+        /// <inheritdoc/>
         public bool IsInitialized => ActiveSession?.IsInitialized ?? false;
+        /// <inheritdoc/>
         public FlowFieldRuntimeState State => ActiveSession?.State ?? FlowFieldRuntimeState.Uninitialized;
+        /// <inheritdoc/>
         public bool IsFaulted => ActiveSession?.IsFaulted ?? false;
+        /// <inheritdoc/>
         public bool IsReady => ActiveSession?.IsReady ?? false;
+        /// <inheritdoc/>
         public bool IsRebuilding => ActiveSession?.IsRebuilding ?? false;
+        /// <inheritdoc/>
         public string LastError => ActiveSession?.LastError;
+        /// <summary>
+        /// The Bake Mode the session accepted while it is initialized or faulted; otherwise the
+        /// serialized one. Editing the serialized Bake Mode while a session runs faults it.
+        /// </summary>
         public FlowFieldBakeMode BakeMode => IsInitialized || IsFaulted
             ? ActiveSession.BakeMode
             : _bakeMode;
-        // Once a session has accepted a mode, expose that accepted mode until
-        // Release.  Inspector edits made while initialized are authoring
-        // input only and must not make Provider queries describe a session
-        // that is still running in the previous space.
+        /// <summary>
+        /// The Space Mode the session accepted while it is initialized or faulted; otherwise the
+        /// serialized one. Inspector edits made while initialized are authoring input only: they
+        /// wait for Release, and Provider queries keep describing the session's space.
+        /// </summary>
         public FlowFieldSpaceMode SpaceMode => IsInitialized || IsFaulted
             ? ActiveSession.SpaceMode
             : _spaceMode;
-        // The count goes on across sessions, so it never goes back, even
-        // while an edited Space Mode leaves no active session.
+        /// <summary>
+        /// Advances each time a build publishes a field that reads differently. The count goes on
+        /// across sessions, so it never goes back, even while an edited Space Mode leaves no active
+        /// session; 0 before the first field.
+        /// </summary>
         public int Revision => _session?.Revision ?? 0;
+        /// <inheritdoc/>
         public event Action FieldChanged;
+        /// <summary>
+        /// Raised with the new <see cref="State"/> when it changes, delivered as
+        /// <see cref="FieldChanged"/> is; a queued Released is never dropped. Before Faulted reaches the
+        /// handlers, the Manager logs <see cref="LastError"/> as an error.
+        /// </summary>
         public event Action<FlowFieldRuntimeState> StateChanged;
 
+        /// <inheritdoc/>
         public bool TryGetFieldInfo(out FlowFieldFieldInfo info)
         {
             info = default;
@@ -226,6 +247,17 @@ namespace Common.FlowField
             ForwardSessionEvents(_session);
         }
 
+        /// <summary>
+        /// Starts a session in the serialized Space Mode and Bake Mode. Awake calls it in Play Mode;
+        /// after Release, call it again. It reads the Goal Transform when no Goal is set. A disabled
+        /// Manager submits its request at once, so ClampPositionToGrid and obstacle input work, and
+        /// builds when it is enabled. Does nothing when already initialized. Builds run in the
+        /// frame pump afterwards, so no field is ready when Init returns.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">
+        /// Called in Edit Mode or from Modifier code, while faulted, while initialized with an
+        /// edited Space Mode, or with invalid settings (the message names the first).
+        /// </exception>
         public void Init()
         {
             _boundary.ThrowIfInUserCode(nameof(Init));
@@ -257,6 +289,7 @@ namespace Common.FlowField
             StartBuilding();
         }
 
+        /// <inheritdoc/>
         public void RequestRebuild()
         {
             _boundary.ThrowIfInUserCode(nameof(RequestRebuild));
@@ -359,6 +392,14 @@ namespace Common.FlowField
             SubmitConfig(FlowFieldConfigChange.Rebuild);
         }
 
+        /// <summary>
+        /// Ends the session, a faulted one too, and clears its input: registered obstacles and
+        /// Modifiers and the Goal, so the next Init reads the Goal Transform again. The State
+        /// becomes Released. Enabled Modifier Volumes, FlowFieldDynamicObstacle and
+        /// FlowFieldGoalTarget components report themselves again after the next Init. Does
+        /// nothing when no session is initialized or faulted.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">Called from Modifier code.</exception>
         public void Release()
         {
             _boundary.ThrowIfInUserCode(nameof(Release));

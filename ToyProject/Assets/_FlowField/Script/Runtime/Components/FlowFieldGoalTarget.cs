@@ -28,7 +28,12 @@ namespace Common.FlowField
         [NonSerialized] private Vector3 _reportedPosition;
         [NonSerialized] private float _reportedRadius;
 
+        /// <summary>The Manager whose Goal it sets.</summary>
         public FlowFieldManager Manager => _manager;
+        /// <summary>
+        /// The Influence Radius of the Goal it sets, in world units: 0 reaches every cell, a positive
+        /// value only cells within that distance (XYZ) of the Goal.
+        /// </summary>
         public float InfluenceRadius => _influenceRadius;
 
         private void OnDisable() => ClearReportedGoal();

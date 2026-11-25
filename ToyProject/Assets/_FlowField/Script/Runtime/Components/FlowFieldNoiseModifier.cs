@@ -2,14 +2,23 @@ using UnityEngine;
 
 namespace Common.FlowField
 {
+    /// <summary>
+    /// A Modifier that turns the direction of each cell inside its Influence Collider by a fixed
+    /// angle from Perlin noise over the cell center, so neighboring cells turn alike. Surface2D
+    /// cells turn about their surface normal, Volume3D cells about an axis that varies per cell.
+    /// Speeds stay.
+    /// </summary>
     public sealed class FlowFieldNoiseModifier : FlowFieldVectorModifierVolume
     {
         [SerializeField] private float _maxAngleDegrees = 15f;
         [SerializeField] private float _spatialFrequency = 0.3f;
         [SerializeField] private int _seed;
 
+        /// <summary>The largest turn in degrees, 0 to 180; 0 leaves directions unchanged.</summary>
         public float MaxAngleDegrees => _maxAngleDegrees;
+        /// <summary>How fast the angle changes across space, per world unit; 0 or more.</summary>
         public float SpatialFrequency => _spatialFrequency;
+        /// <summary>Selects the noise pattern.</summary>
         public int Seed => _seed;
 
         protected override int DefaultPriority => 200;
@@ -32,6 +41,18 @@ namespace Common.FlowField
                 _spatialFrequency,
                 _seed);
 
+        /// <summary>
+        /// Sets all three values and reports a value change; equal values change nothing. On
+        /// failure the previous values stay.
+        /// </summary>
+        /// <exception cref="System.ArgumentOutOfRangeException">
+        /// <paramref name="maxAngleDegrees"/> is not finite or outside 0 to 180, or
+        /// <paramref name="spatialFrequency"/> is not finite or negative.
+        /// </exception>
+        /// <exception cref="System.InvalidOperationException">
+        /// The Modifier is faulted, or in Play Mode while enabled its Manager is faulted or runs
+        /// without it registered.
+        /// </exception>
         public void SetNoise(float maxAngleDegrees, float spatialFrequency, int seed)
         {
             ValidateNoiseSettings(maxAngleDegrees, spatialFrequency);

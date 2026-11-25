@@ -20,7 +20,9 @@ namespace Common.FlowField
         [NonSerialized] private Collider _registeredCollider;
         [NonSerialized] private Bounds _reportedBounds;
 
+        /// <summary>The Manager it registers with.</summary>
         public FlowFieldManager Manager => _manager;
+        /// <summary>The Collider it registers as an obstacle.</summary>
         public Collider Collider => _collider;
 
         private void Reset() => _collider = GetComponent<Collider>();

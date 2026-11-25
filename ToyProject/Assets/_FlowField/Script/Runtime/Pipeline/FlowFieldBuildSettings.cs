@@ -16,6 +16,13 @@ namespace Common.FlowField
         // when domain reload is disabled.
         internal static void ResetToDefault() => _budgetMilliseconds = DefaultBudgetMilliseconds;
 
+        /// <summary>
+        /// The budget in milliseconds, 2 by default and again at the start of every Play session.
+        /// The runtime scheduler spends it once a frame, in LateUpdate, across every Manager.
+        /// </summary>
+        /// <exception cref="ArgumentOutOfRangeException">
+        /// The value set is not finite or not positive.
+        /// </exception>
         public static double BudgetMilliseconds
         {
             get => _budgetMilliseconds;

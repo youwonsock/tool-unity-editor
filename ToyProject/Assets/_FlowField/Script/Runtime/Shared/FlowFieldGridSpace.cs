@@ -3,21 +3,40 @@ using UnityEngine;
 
 namespace Common.FlowField
 {
+    /// <summary>
+    /// The cell layout of a field: an axis-aligned grid of cells of one size from
+    /// <see cref="Origin"/>. A Surface2D grid is one cell high and indexes cells by X and Z; its
+    /// two-coordinate members throw on a Volume3D grid. Methods without a bounds check say so.
+    /// </summary>
     public readonly struct FlowFieldGridSpace
     {
         private const float MinClampEpsilon = 0.00001f;
 
+        /// <summary>The world position of the grid's minimum corner.</summary>
         public Vector3 Origin { get; }
+        /// <summary>The extent along X in world units: Width × CellSize.</summary>
         public float WorldSizeX { get; }
+        /// <summary>The extent along Y in world units: Height × CellSize, one cell on Surface2D.</summary>
         public float WorldSizeY { get; }
+        /// <summary>The extent along Z in world units: Depth × CellSize.</summary>
         public float WorldSizeZ { get; }
+        /// <summary>The number of cells along X.</summary>
         public int Width { get; }
+        /// <summary>The number of cells along Y; 1 on Surface2D.</summary>
         public int Height { get; }
+        /// <summary>The number of cells along Z.</summary>
         public int Depth { get; }
+        /// <summary>The edge length of a cell in world units.</summary>
         public float CellSize { get; }
+        /// <summary>The space mode the grid was made for.</summary>
         public FlowFieldSpaceMode SpaceMode { get; }
         // Stored because the field loops read both on every cell.
+        /// <summary>Width × Height × Depth; 0 for an invalid grid.</summary>
         public int CellCount { get; }
+        /// <summary>
+        /// Whether the grid has cells: positive counts within the mode's cell limit, a finite origin
+        /// and a cell size of at least 0.01 world units. A default value is invalid.
+        /// </summary>
         public bool IsValid { get; }
 
         private FlowFieldGridSpace(
@@ -52,6 +71,13 @@ namespace Common.FlowField
             CellCount = IsValid ? (int)((long)Width * Height * Depth) : 0;
         }
 
+        /// <summary>
+        /// A Surface2D grid of <paramref name="width"/> × <paramref name="depth"/> cells, one cell high.
+        /// </summary>
+        /// <exception cref="System.ArgumentOutOfRangeException">
+        /// <paramref name="origin"/> is not finite, the counts are not positive or exceed 100,000
+        /// cells, <paramref name="cellSize"/> is not finite or below 0.01, or the world size overflows.
+        /// </exception>
         public static FlowFieldGridSpace FromCellGrid(Vector3 origin, int width, int depth, float cellSize)
         {
             if (!IsFinite(origin))
@@ -75,6 +101,14 @@ namespace Common.FlowField
                 FlowFieldSpaceMode.Surface2D);
         }
 
+        /// <summary>
+        /// A Volume3D grid of <paramref name="width"/> × <paramref name="height"/> × <paramref name="depth"/>
+        /// cubic cells.
+        /// </summary>
+        /// <exception cref="ArgumentOutOfRangeException">
+        /// <paramref name="origin"/> is not finite, the counts are not positive or exceed 1,000,000
+        /// cells, <paramref name="cellSize"/> is not finite or below 0.01, or the world size overflows.
+        /// </exception>
         public static FlowFieldGridSpace FromVolumeCellGrid(
             Vector3 origin,
             int width,
@@ -104,6 +138,10 @@ namespace Common.FlowField
                 FlowFieldSpaceMode.Volume3D);
         }
 
+        /// <summary>
+        /// Whether the position lies in the grid: from <see cref="Origin"/> inclusive to the far edge
+        /// exclusive on each axis; Surface2D ignores Y. False for an invalid grid or a non-finite position.
+        /// </summary>
         public bool ContainsWorldPosition(Vector3 world)
         {
             if (!IsValid || !IsFinite(world.x) || !IsFinite(world.y) || !IsFinite(world.z))
@@ -125,6 +163,7 @@ namespace Common.FlowField
         /// the grid is an ordinary miss and returns false, not an exception.
         /// </summary>
         /// <returns>True inside the grid, false outside.</returns>
+        /// <exception cref="InvalidOperationException">The grid is Volume3D; use the XYZ overload.</exception>
         public bool TryWorldToLocal(Vector3 world, out int localX, out int localZ)
         {
             ThrowIfVolumeForSurfaceApi();
@@ -138,6 +177,11 @@ namespace Common.FlowField
             return IsLocalInBounds(localX, localZ);
         }
 
+        /// <summary>
+        /// Converts a world position to local cell coordinates in either mode; localY is 0 on
+        /// Surface2D. A position outside the grid returns false, not an exception.
+        /// </summary>
+        /// <returns>True inside the grid, false outside.</returns>
         public bool TryWorldToLocal(
             Vector3 world,
             out int localX,
@@ -163,6 +207,7 @@ namespace Common.FlowField
         /// A non-finite position or an uninitialized grid returns false.
         /// </summary>
         /// <returns>True when the grid can clamp, otherwise false.</returns>
+        /// <exception cref="InvalidOperationException">The grid is Volume3D; use the XYZ overload.</exception>
         public bool TryWorldToLocalClamped(Vector3 world, out int localX, out int localZ)
         {
             ThrowIfVolumeForSurfaceApi();
@@ -176,6 +221,11 @@ namespace Common.FlowField
             return true;
         }
 
+        /// <summary>
+        /// Converts a world position to the nearest cell in either mode, clamping each axis; localY
+        /// is 0 on Surface2D.
+        /// </summary>
+        /// <returns>False for a non-finite position or an invalid grid.</returns>
         public bool TryWorldToLocalClamped(
             Vector3 world,
             out int localX,
@@ -196,6 +246,8 @@ namespace Common.FlowField
             return true;
         }
 
+        /// <summary>The world center of a cell, at the origin's height. No bounds check.</summary>
+        /// <exception cref="InvalidOperationException">The grid is Volume3D; use the XYZ overload.</exception>
         public Vector3 LocalToWorldCenter(int localX, int localZ)
         {
             ThrowIfVolumeForSurfaceApi();
@@ -203,6 +255,10 @@ namespace Common.FlowField
             return Origin + new Vector3(localX * CellSize + halfCell, 0f, localZ * CellSize + halfCell);
         }
 
+        /// <summary>
+        /// The world center of a cell; on Surface2D at the origin's height, ignoring
+        /// <paramref name="localY"/>. No bounds check.
+        /// </summary>
         public Vector3 LocalToWorldCenter(int localX, int localY, int localZ)
         {
             float halfCell = CellSize * 0.5f;
@@ -214,15 +270,25 @@ namespace Common.FlowField
                 localZ * CellSize + halfCell);
         }
 
+        /// <summary>The flat index localZ × Width + localX. No bounds check.</summary>
+        /// <exception cref="InvalidOperationException">The grid is Volume3D; use the XYZ overload.</exception>
         public int ToFlatIndex(int localX, int localZ)
         {
             ThrowIfVolumeForSurfaceApi();
             return localZ * Width + localX;
         }
 
+        /// <summary>
+        /// The flat index localX + Width × (localZ + Depth × localY); with localY 0 it matches the
+        /// two-coordinate overload. No bounds check.
+        /// </summary>
         public int ToFlatIndex(int localX, int localY, int localZ)
             => localX + Width * (localZ + Depth * localY);
 
+        /// <summary>
+        /// The cell of a flat index; the inverse of the two-coordinate ToFlatIndex. No bounds check.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">The grid is Volume3D; use the XYZ overload.</exception>
         public void FromFlatIndex(int index, out int localX, out int localZ)
         {
             ThrowIfVolumeForSurfaceApi();
@@ -230,6 +296,7 @@ namespace Common.FlowField
             localX = index - localZ * Width;
         }
 
+        /// <summary>The cell of a flat index; the inverse of the XYZ ToFlatIndex. No bounds check.</summary>
         public void FromFlatIndex(int index, out int localX, out int localY, out int localZ)
             => FromFlatIndex(index, Width, Depth, out localX, out localY, out localZ);
 
@@ -288,17 +355,26 @@ namespace Common.FlowField
                 : LocalToWorldCenter(localX, localZ);
         }
 
+        /// <summary>Whether the coordinates name a cell of this grid.</summary>
+        /// <exception cref="InvalidOperationException">The grid is Volume3D; use the XYZ overload.</exception>
         public bool IsLocalInBounds(int localX, int localZ)
         {
             ThrowIfVolumeForSurfaceApi();
             return IsLocalInBounds(localX, localZ, Width, Depth);
         }
 
+        /// <summary>Whether the coordinates name a cell of this grid; localY must be 0 on Surface2D.</summary>
         public bool IsLocalInBounds(int localX, int localY, int localZ)
             => localX >= 0 && localX < Width
                 && localY >= 0 && localY < Height
                 && localZ >= 0 && localZ < Depth;
 
+        /// <summary>
+        /// Clamps X and Z into the grid and keeps Y. The far edge belongs to no cell, so a clamped
+        /// axis stops just short of it and the result lies inside the grid.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">The grid is Volume3D or invalid.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">X or Z is not finite.</exception>
         public Vector3 ClampWorldXZ(Vector3 world)
         {
             ThrowIfVolumeForSurfaceApi();
@@ -313,6 +389,12 @@ namespace Common.FlowField
             return world;
         }
 
+        /// <summary>
+        /// Clamps all three axes into the grid, as <see cref="ClampWorldXZ"/> does; on Surface2D Y is
+        /// clamped into the one-cell height.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">The grid is invalid.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">The position is not finite.</exception>
         public Vector3 ClampWorldXYZ(Vector3 world)
         {
             if (!IsValid)
@@ -341,6 +423,10 @@ namespace Common.FlowField
             return Unity.Mathematics.math.asfloat(clamped > 0f ? bits - 1 : bits + 1);
         }
 
+        /// <summary>
+        /// Whether both grids are valid with the same mode, cell counts, cell size (within 0.0001)
+        /// and origin (within 0.001 world units).
+        /// </summary>
         public bool MatchesBounds(FlowFieldGridSpace other)
         {
             return IsValid
@@ -358,6 +444,7 @@ namespace Common.FlowField
         /// have no range and return false.
         /// </summary>
         /// <returns>True when some cells overlap, otherwise false.</returns>
+        /// <exception cref="InvalidOperationException">The grid is Volume3D; use the XYZ overload.</exception>
         public bool TryGetOverlappingCells(
             Bounds worldBounds,
             out int minX,
@@ -402,6 +489,13 @@ namespace Common.FlowField
             return minX <= maxX && minZ <= maxZ;
         }
 
+        /// <summary>
+        /// Computes the inclusive cell range the Bounds overlap on all three axes, clamped to the grid.
+        /// </summary>
+        /// <returns>
+        /// True when some cells overlap; false on a Surface2D or invalid grid, for non-finite Bounds
+        /// and for Bounds that miss the grid.
+        /// </returns>
         public bool TryGetOverlappingCells(
             Bounds worldBounds,
             out int minX,
@@ -436,9 +530,16 @@ namespace Common.FlowField
             return minX <= maxX && minY <= maxY && minZ <= maxZ;
         }
 
+        /// <summary>
+        /// Whether the coordinates lie in a <paramref name="width"/> × <paramref name="depth"/> layout.
+        /// </summary>
         public static bool IsLocalInBounds(int localX, int localZ, int width, int depth)
             => localX >= 0 && localX < width && localZ >= 0 && localZ < depth;
 
+        /// <summary>
+        /// Whether the coordinates lie in a <paramref name="width"/> × <paramref name="height"/> ×
+        /// <paramref name="depth"/> layout.
+        /// </summary>
         public static bool IsLocalInBounds(int localX, int localY, int localZ, int width, int height, int depth)
             => localX >= 0 && localX < width
                 && localY >= 0 && localY < height

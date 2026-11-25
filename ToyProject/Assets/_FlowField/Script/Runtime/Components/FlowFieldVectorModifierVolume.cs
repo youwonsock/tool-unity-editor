@@ -3,6 +3,13 @@ using UnityEngine;
 
 namespace Common.FlowField
 {
+    /// <summary>
+    /// The base of the Modifier components: a trigger Influence Collider whose cells a derived
+    /// class changes in direction or speed. In Play Mode Awake calls Init, and while initialized
+    /// and enabled it registers with its Manager once that Manager runs; disabling unregisters it.
+    /// It reports its own edits, and in LateUpdate, at most once a frame, an Influence Collider
+    /// that moved or was destroyed.
+    /// </summary>
     [DefaultExecutionOrder(-100)]
     public abstract class FlowFieldVectorModifierVolume : MonoBehaviour, IFlowFieldVectorModifier
     {
@@ -23,16 +30,35 @@ namespace Common.FlowField
         [System.NonSerialized] private Bounds _reportedBounds;
         [System.NonSerialized] private bool _reportedMissingCollider;
 
+        /// <summary>
+        /// The Manager it registers with, as serialized; see <see cref="SetFlowFieldManager"/>.
+        /// </summary>
         public FlowFieldManager FlowFieldManager => _flowFieldManager;
+        /// <summary>The trigger Collider whose cells it changes.</summary>
         public Collider InfluenceCollider => _influenceCollider;
+        /// <summary>
+        /// Its composition order, lowest first; no two Modifiers of one Manager may share it.
+        /// </summary>
         public int Priority => _priority;
+        /// <summary>Advances on every value, Priority or Influence Collider change. Not serialized.</summary>
         public int Revision => _revision;
+        /// <inheritdoc/>
         public FlowFieldModifierObservation Observe()
             => new FlowFieldModifierObservation(_influenceCollider, _priority, _revision);
+        /// <summary>Whether Init succeeded and Release has not run since.</summary>
         public bool IsInitialized => _isInitialized;
+        /// <summary>
+        /// Whether Init failed. The setters and <see cref="CaptureSnapshot"/> then throw
+        /// <see cref="InvalidOperationException"/>; Release clears it.
+        /// </summary>
         public bool IsFaulted => _fault != null;
 
+        /// <summary>The Priority Reset assigns.</summary>
         protected abstract int DefaultPriority { get; }
+        /// <summary>
+        /// A hash of the derived class's serialized values. OnValidate compares it to tell a value
+        /// edit, which advances <see cref="Revision"/> and notifies the Manager in Play Mode.
+        /// </summary>
         protected abstract int ModifierValueHash { get; }
 
         protected virtual void Reset()
@@ -187,6 +213,18 @@ namespace Common.FlowField
             }
         }
 
+        /// <summary>
+        /// Moves the Modifier to another Manager. In Play Mode, while enabled, it registers with an
+        /// initialized <paramref name="manager"/> before it leaves the previous one, and the
+        /// exceptions of <see cref="IFlowFieldController.RegisterVectorModifier"/> pass through; on
+        /// any failure the previous Manager and registration stay. A Manager that is not
+        /// initialized takes it when it starts.
+        /// </summary>
+        /// <exception cref="ArgumentNullException"><paramref name="manager"/> is null.</exception>
+        /// <exception cref="InvalidOperationException">
+        /// The Modifier is faulted, or in Play Mode while enabled <paramref name="manager"/> is
+        /// faulted or already holds it.
+        /// </exception>
         public void SetFlowFieldManager(FlowFieldManager manager)
         {
             ThrowIfFaulted();
@@ -245,6 +283,18 @@ namespace Common.FlowField
             }
         }
 
+        /// <summary>
+        /// Replaces the Influence Collider, advances <see cref="Revision"/> and, while registered,
+        /// reports an Area change. On failure the previous Collider and Revision stay.
+        /// </summary>
+        /// <exception cref="ArgumentNullException"><paramref name="influenceCollider"/> is null.</exception>
+        /// <exception cref="ArgumentException">
+        /// <paramref name="influenceCollider"/> is not a trigger, or is a non-convex MeshCollider.
+        /// </exception>
+        /// <exception cref="InvalidOperationException">
+        /// The Modifier is faulted, or in Play Mode while enabled its Manager is faulted or runs
+        /// without it registered.
+        /// </exception>
         public void SetInfluenceCollider(Collider influenceCollider)
         {
             ThrowIfFaulted();
@@ -278,6 +328,15 @@ namespace Common.FlowField
             }
         }
 
+        /// <summary>
+        /// Changes the Priority, advances <see cref="Revision"/> and, while registered, reports a
+        /// Priority change. A Priority another Modifier of the running Manager has faults that
+        /// Manager rather than throwing here.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">
+        /// The Modifier is faulted, or in Play Mode while enabled its Manager is faulted or runs
+        /// without it registered.
+        /// </exception>
         public void SetPriority(int priority)
         {
             ThrowIfFaulted();
@@ -352,12 +411,30 @@ namespace Common.FlowField
             return snapshot;
         }
 
+        /// <summary>
+        /// Creates the snapshot of the current values for one build. <see cref="CaptureSnapshot"/>
+        /// calls it after its checks; it must not return null.
+        /// </summary>
         protected abstract IFlowFieldModifierSnapshot CreateSnapshot();
 
+        /// <summary>
+        /// Throws for invalid serialized values. Init and <see cref="CaptureSnapshot"/> call it.
+        /// </summary>
         protected virtual void ValidateModifierSettings()
         {
         }
 
+        /// <summary>
+        /// Checks the values and, in Play Mode while enabled, registers with the configured Manager
+        /// when it runs; otherwise that Manager takes it when it starts. Awake calls it in Play Mode.
+        /// A failed check or registration faults the Modifier and is rethrown: the exceptions of
+        /// <see cref="ValidateModifierSettings"/> and of
+        /// <see cref="IFlowFieldController.RegisterVectorModifier"/> pass through.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">
+        /// Already initialized or faulted (Release first), or in Play Mode while enabled no Manager
+        /// is set or it already holds the Modifier.
+        /// </exception>
         public void Init()
         {
             if (_isInitialized)
@@ -382,6 +459,10 @@ namespace Common.FlowField
             }
         }
 
+        /// <summary>
+        /// Unregisters from its Manager, a faulted one too, and clears the initialized and faulted
+        /// states. Does nothing when neither is set. OnDestroy calls it.
+        /// </summary>
         public void Release()
         {
             if (!_isInitialized && !IsFaulted)

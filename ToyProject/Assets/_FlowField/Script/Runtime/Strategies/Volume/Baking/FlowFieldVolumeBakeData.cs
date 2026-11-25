@@ -3,6 +3,11 @@ using UnityEngine;
 
 namespace Common.FlowField
 {
+    /// <summary>
+    /// The Volume3D bake StaticBaked and BakedBase Managers load. It stores the blocked cells and
+    /// the base navigation; Default Direction and Modifiers stay runtime inputs and are composed
+    /// after loading, and BakedBase solves its own Goal on the baked obstacles.
+    /// </summary>
     public sealed class FlowFieldVolumeBakeData : FlowFieldBakeAsset, ISerializationCallbackReceiver
     {
         /// <summary>
@@ -48,9 +53,16 @@ namespace Common.FlowField
         [NonSerialized] private Vector3[] _escapeDirections = Array.Empty<Vector3>();
 
         private protected override int CurrentFormatVersion => SupportedFormatVersion;
+        /// <summary>Whether the bake had a Goal.</summary>
         public bool HasGoal => _hasGoal;
+        /// <summary>The Goal position the bake requested, in world space.</summary>
         public Vector3 RequestedGoalWorld => _requestedGoalWorld;
+        /// <summary>The Goal Influence Radius of the bake, in world units; 0 reaches every cell.</summary>
         public float GoalInfluenceRadius => _goalInfluenceRadius;
+        /// <summary>
+        /// The flat index (<see cref="FlowFieldGridSpace.ToFlatIndex(int, int, int)"/>) of the baked Goal
+        /// cell; -1 without a Goal.
+        /// </summary>
         public int ResolvedGoalIndex => _resolvedGoalIndex;
 
         private protected override void OnContentChanged()
