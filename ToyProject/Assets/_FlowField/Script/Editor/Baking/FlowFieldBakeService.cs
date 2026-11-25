@@ -76,13 +76,14 @@ namespace Common.FlowField.Editor
         /// <summary>
         /// Creates an isolated Surface2D bake session on a finished ground scan
         /// made with <paramref name="signature"/>, and submits the whole grid.
-        /// The caller owns and must dispose it, and pumps it from the Editor
-        /// update loop.
+        /// The caller owns and must dispose it, pumps it from the Editor update
+        /// loop and exports the result from <paramref name="builder"/>.
         /// </summary>
         internal static FlowFieldSession CreateSurfaceBakeSession(
             FlowFieldManager manager,
             in FlowFieldSurfaceSignature signature,
-            FlowFieldSurfaceBakeResult ground)
+            FlowFieldSurfaceBakeResult ground,
+            out FlowFieldSurfaceBuilder builder)
         {
             FlowFieldManagerConfig config = manager.CaptureConfig();
             if (config.SpaceMode != FlowFieldSpaceMode.Surface2D)
@@ -97,11 +98,12 @@ namespace Common.FlowField.Editor
                 FlowFieldCellRect.Full(grid),
                 FlowFieldCellRect.Full(grid));
 
-            var session = FlowFieldSession.CreateSurface(surfaceSource: new FlowFieldFixedSurfaceSource(surface));
+            var session = FlowFieldSession.CreateSurfaceBake(new FlowFieldFixedSurfaceSource(surface), out builder);
             try
             {
+                FlowFieldSurfaceBuilder target = builder;
                 session.Initialize(FlowFieldBakeMode.RuntimeDynamic);
-                session.Surface.Submit(request);
+                session.SubmitPrepared(() => target.Submit(request));
                 return session;
             }
             catch
@@ -203,13 +205,14 @@ namespace Common.FlowField.Editor
 
         /// <summary>
         /// Creates an isolated Volume3D bake session. The caller owns and must
-        /// dispose it, and pumps it from the Editor update loop.
+        /// dispose it, pumps it from the Editor update loop and exports the
+        /// result from <paramref name="builder"/>.
         /// </summary>
-        internal static FlowFieldSession CreateVolumeBakeSession(FlowFieldManager manager)
+        internal static FlowFieldSession CreateVolumeBakeSession(FlowFieldManager manager, out FlowFieldVolumeBuilder builder)
         {
             FlowFieldManagerConfig config = manager.CaptureConfig();
             if (config.SpaceMode != FlowFieldSpaceMode.Volume3D)
-                throw new InvalidOperationException("Volume bake requires Volume3D mode.");
+                throw new InvalidOperationException("A Volume3D Bake session requires Volume3D mode.");
             if (!FlowFieldVolumeBuilder.TryCreateLayout(in config, out Bounds worldBounds, out FlowFieldGridSpace grid))
                 throw new InvalidOperationException(FlowFieldManagerConfig.InvalidGridMessage);
 
@@ -220,11 +223,12 @@ namespace Common.FlowField.Editor
                 FlowFieldBakeMode.RuntimeDynamic,
                 null);
 
-            var session = FlowFieldSession.CreateVolume();
+            var session = FlowFieldSession.CreateVolumeBake(out builder);
             try
             {
+                FlowFieldVolumeBuilder target = builder;
                 session.Initialize(FlowFieldBakeMode.RuntimeDynamic);
-                session.Volume.Submit(request);
+                session.SubmitPrepared(() => target.Submit(request));
                 return session;
             }
             catch

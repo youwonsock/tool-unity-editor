@@ -36,7 +36,7 @@ namespace Common.FlowField
 
         private Bounds? SubmitConfigRequest(in FlowFieldManagerConfig config, bool force, bool requeryObstacles)
         {
-            FlowFieldVolumeRequest request = CreateRequest(in config);
+            FlowFieldVolumeRequest request = CreateCurrentRequest(in config);
             if (!force
                 && TryGetLatestRequestedInput(out FlowFieldVolumeRequest latest)
                 && latest.HasSameInputs(request))
@@ -44,17 +44,19 @@ namespace Common.FlowField
             return Submit(request, requeryObstacles);
         }
 
-        /// <summary>The request for the configured grid, Bake Mode and asset.</summary>
-        internal static FlowFieldVolumeRequest CreateRequest(in FlowFieldManagerConfig config)
+        // The request for the configured grid in the session's Bake Mode, as
+        // Surface2D builds its own.
+        private FlowFieldVolumeRequest CreateCurrentRequest(in FlowFieldManagerConfig config)
         {
             if (!TryCreateLayout(in config, out Bounds worldBounds, out FlowFieldGridSpace grid))
                 throw new InvalidOperationException(FlowFieldManagerConfig.InvalidGridMessage);
+            FlowFieldBakeMode bakeMode = _session.BakeMode;
             return CreateRequest(
                 in config,
                 grid,
                 worldBounds,
-                config.BakeMode,
-                FlowFieldBakeModes.UsesBakeAsset(config.BakeMode) ? config.BakeAssets.Volume : null);
+                bakeMode,
+                FlowFieldBakeModes.UsesBakeAsset(bakeMode) ? config.BakeAssets.Volume : null);
         }
 
         // StaticBaked keeps the baked Goal, as Surface2D does, so the field

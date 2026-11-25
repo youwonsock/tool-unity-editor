@@ -58,17 +58,33 @@ namespace Common.FlowField
             _sweep = new FlowFieldObstacleSweep(ApplySweptChange);
         }
 
-        /// <summary>A Surface2D session. A bake passes the surface it scanned as <paramref name="surfaceSource"/>.</summary>
-        internal static FlowFieldSession CreateSurface(
-            FlowFieldExecutionBoundary boundary = null,
-            IFlowFieldSurfaceSource surfaceSource = null)
-            => new FlowFieldSession(boundary, session => new FlowFieldSurfaceBuilder(session, surfaceSource));
+        internal static FlowFieldSession CreateSurface(FlowFieldExecutionBoundary boundary = null)
+            => new FlowFieldSession(boundary, session => new FlowFieldSurfaceBuilder(session, null));
 
         internal static FlowFieldSession CreateVolume(FlowFieldExecutionBoundary boundary = null)
             => new FlowFieldSession(boundary, session => new FlowFieldVolumeBuilder(session));
 
-        internal FlowFieldSurfaceBuilder Surface => _builder as FlowFieldSurfaceBuilder;
-        internal FlowFieldVolumeBuilder Volume => _builder as FlowFieldVolumeBuilder;
+        /// <summary>
+        /// An isolated Surface2D bake session on the ground the bake scanned.
+        /// The bake reads its export from <paramref name="builder"/>; its
+        /// input still goes through the session (<see cref="SubmitPrepared"/>).
+        /// </summary>
+        internal static FlowFieldSession CreateSurfaceBake(IFlowFieldSurfaceSource ground, out FlowFieldSurfaceBuilder builder)
+        {
+            FlowFieldSurfaceBuilder created = null;
+            var session = new FlowFieldSession(null, owner => created = new FlowFieldSurfaceBuilder(owner, ground));
+            builder = created;
+            return session;
+        }
+
+        /// <summary>An isolated Volume3D bake session; see <see cref="CreateSurfaceBake"/>.</summary>
+        internal static FlowFieldSession CreateVolumeBake(out FlowFieldVolumeBuilder builder)
+        {
+            FlowFieldVolumeBuilder created = null;
+            var session = new FlowFieldSession(null, owner => created = new FlowFieldVolumeBuilder(owner));
+            builder = created;
+            return session;
+        }
 
         private FlowFieldModifierRegistry _modifiers;
 
@@ -133,6 +149,22 @@ namespace Common.FlowField
             // A new Grid can hide the published field without a lifecycle change.
             PublishRuntimeState();
             return true;
+        }
+
+        /// <summary>
+        /// A bake submits the request it prepared itself (RuntimeDynamic on a
+        /// fixed ground scan, every cell) through the same input rules as
+        /// <see cref="SubmitConfig"/>: the uncertain region, Building and the
+        /// runtime state. A bake runs no sweep, so there is nothing to configure.
+        /// </summary>
+        internal void SubmitPrepared(Func<Bounds?> submitToBuilder)
+        {
+            ThrowIfInputUnavailable();
+            Bounds? invalidated = submitToBuilder();
+            if (invalidated.HasValue)
+                Safety.InvalidateRegion(invalidated.Value);
+            EnterBuildingIfOwed();
+            PublishRuntimeState();
         }
 
         // Accepted input is owed work: from that moment the session is Building,

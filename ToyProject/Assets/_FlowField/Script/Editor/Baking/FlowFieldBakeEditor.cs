@@ -186,15 +186,16 @@ namespace Common.FlowField.Editor
             var groundScan = new FlowFieldSurfaceGroundScan(
                 signature.Surface,
                 ReportSurfaceProgress);
+            FlowFieldSurfaceBuilder builder = null;
             var run = new BakeRun(
                 manager,
                 SurfaceTarget.Label,
                 () => IsCurrentInput(manager, inputGeneration),
                 session => session.Pump(),
-                session => SaveSurfaceBake(manager, signature, session),
+                session => SaveSurfaceBake(manager, signature, builder),
                 groundScan.Cancel);
             // The ground scan runs first; the session starts on its result.
-            run.Prepare = () => StepSurfaceGroundScan(run, manager, signature, groundScan);
+            run.Prepare = () => StepSurfaceGroundScan(run, manager, signature, groundScan, started => builder = started);
             run.Start("Baking Surface");
         }
 
@@ -203,7 +204,8 @@ namespace Common.FlowField.Editor
             BakeRun run,
             FlowFieldManager manager,
             FlowFieldSurfaceSignature signature,
-            FlowFieldSurfaceGroundScan groundScan)
+            FlowFieldSurfaceGroundScan groundScan,
+            Action<FlowFieldSurfaceBuilder> started)
         {
             groundScan.Step(2.0);
             _progressLabel = $"Baking Surface {groundScan.Progress:P0}";
@@ -223,7 +225,8 @@ namespace Common.FlowField.Editor
 
             // The inputs are those the bake started with: a change stops it first.
             FlowFieldSession session = FlowFieldBakeService.CreateSurfaceBakeSession(
-                manager, in signature, groundScan.Result);
+                manager, in signature, groundScan.Result, out FlowFieldSurfaceBuilder builder);
+            started(builder);
             run.Attach(session);
             session.Pump();
             return true;
@@ -231,7 +234,7 @@ namespace Common.FlowField.Editor
 
         private static void BakeVolumeAndAssign(FlowFieldManager manager)
         {
-            FlowFieldSession session = FlowFieldBakeService.CreateVolumeBakeSession(manager);
+            FlowFieldSession session = FlowFieldBakeService.CreateVolumeBakeSession(manager, out FlowFieldVolumeBuilder builder);
             int inputGeneration = FlowFieldBakeService.CaptureInputGeneration(manager);
             var run = new BakeRun(
                 manager,
@@ -239,11 +242,11 @@ namespace Common.FlowField.Editor
                 () => IsCurrentInput(manager, inputGeneration),
                 current =>
                 {
-                    if (!ReportVolumeProgress(current.Volume.BuildProgress))
+                    if (!ReportVolumeProgress(builder.BuildProgress))
                         throw new OperationCanceledException();
                     current.Pump(2.0);
                 },
-                current => SaveVolumeBake(manager, current),
+                current => SaveVolumeBake(manager, builder),
                 null);
             run.Attach(session);
             run.Start(null);
@@ -441,13 +444,13 @@ namespace Common.FlowField.Editor
         private static void SaveSurfaceBake(
             FlowFieldManager manager,
             FlowFieldSurfaceSignature signature,
-            FlowFieldSession session)
+            FlowFieldSurfaceBuilder builder)
             => SaveBakeAsset<FlowFieldSurfaceBakeData>(
                 manager,
                 SurfaceTarget,
                 () =>
                 {
-                    if (!session.Surface.TryExportBakeData(out FlowFieldSurfaceData committedSurface, out FlowFieldSurfaceWorkspace workspace))
+                    if (!builder.TryExportBakeData(out FlowFieldSurfaceData committedSurface, out FlowFieldSurfaceWorkspace workspace))
                         throw new InvalidOperationException("Surface2D Bake produced no committed field.");
                     if (manager.CaptureConfig().HasGoal && (!workspace.HasActiveGoal || workspace.ResolvedGoalIndex < 0))
                         throw new InvalidOperationException(
@@ -461,13 +464,13 @@ namespace Common.FlowField.Editor
                     };
                 });
 
-        private static void SaveVolumeBake(FlowFieldManager manager, FlowFieldSession session)
+        private static void SaveVolumeBake(FlowFieldManager manager, FlowFieldVolumeBuilder builder)
             => SaveBakeAsset<FlowFieldVolumeBakeData>(
                 manager,
                 VolumeTarget,
                 () =>
                 {
-                    if (!session.Volume.TryExportBakeData(out FlowFieldVolumeBakePayload payload))
+                    if (!builder.TryExportBakeData(out FlowFieldVolumeBakePayload payload))
                         throw new InvalidOperationException("Volume3D Bake produced no committed field.");
                     return asset => asset.Apply(in payload);
                 });

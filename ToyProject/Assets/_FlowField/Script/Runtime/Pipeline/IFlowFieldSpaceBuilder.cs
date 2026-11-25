@@ -59,6 +59,8 @@ namespace Common.FlowField
     internal interface IFlowFieldSpaceBuilder
     {
         FlowFieldSpaceMode SpaceMode { get; }
+        // Whether the scheduler has work here: an accepted request not built
+        // yet (Volume3D also counts a running build and a Modifier recompose).
         bool HasPendingRequest { get; }
         bool IsWaitingForExternalCompletion { get; }
 
@@ -73,8 +75,9 @@ namespace Common.FlowField
         // Publishes the completed build; true when the field now reads differently.
         bool PublishBuild();
         FlowFieldBuildPolicy BuildPolicy { get; }
-        // Input that arrived during a build is built next; the session stays
-        // Building until nothing is owed.
+        // Input no running build includes: it is built next, and the session
+        // stays Building until nothing is owed (Surface2D also owes settings
+        // it held back during a solve, Volume3D a Modifier recompose).
         bool HasOwedInput { get; }
 
         // ----- Reads ---------------------------------------------------------
