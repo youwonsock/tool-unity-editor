@@ -145,7 +145,7 @@ namespace Common.FlowField
         {
             FlowFieldSurfaceBakeData bakeData = config.BakeAssets.Surface;
             if (bakeData == null)
-                throw new InvalidOperationException("StaticBaked and BakedBase modes require a FlowFieldSurfaceBakeData asset.");
+                throw new InvalidOperationException($"Surface2D {config.BakeMode} mode requires a FlowFieldSurfaceBakeData asset.");
             return bakeData.CreateSnapshot(in signature);
         }
 

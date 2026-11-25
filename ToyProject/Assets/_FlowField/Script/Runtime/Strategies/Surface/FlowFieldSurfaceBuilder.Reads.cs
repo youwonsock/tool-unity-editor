@@ -72,7 +72,7 @@ namespace Common.FlowField
 
         Vector3 IFlowFieldLatestCells.EscapeDirection(int index)
             => _state.Workspace.EscapeDirections != null ? _state.Workspace.EscapeDirections[index] : Vector3.zero;
-    
+
 
         // The published field. A request on another grid or source drops it
         // (Submit), so it always comes from the latest request's source.
@@ -94,5 +94,5 @@ namespace Common.FlowField
             workspace = surface != null ? _fieldStore.CreateWorkspaceSnapshot() : null;
             return workspace != null;
         }
-}
+    }
 }

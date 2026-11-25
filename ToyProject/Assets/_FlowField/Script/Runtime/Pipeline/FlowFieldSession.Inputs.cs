@@ -315,5 +315,5 @@ namespace Common.FlowField
             if (!IsInitialized)
                 throw FlowFieldFailures.NotInitialized();
         }
-}
+    }
 }

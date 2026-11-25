@@ -97,7 +97,7 @@ Inspector는 그룹마다 제목을 달고, 지금 Space Mode가 읽지 않는 �
 
 1. 씬을 저장합니다. 저장하지 않은 씬에서는 "Save the scene before baking."으로 실패합니다.
 2. Manager의 Bake Mode를 `StaticBaked`나 `BakedBase`로 둡니다. `RuntimeDynamic`에는 Bake 버튼이 없습니다.
-3. Edit Mode에서 Manager Inspector의 "Bake / ReBake FlowField"를 누릅니다. 메뉴 "Tools/FlowField/Bake All Managers In Open Scenes"는 열린 씬에서 Bake Asset을 쓰는 Manager를 차례로 모두 Bake합니다. 진행 중에는 Inspector의 "Cancel Static Bake"나 진행 창으로 취소합니다.
+3. Edit Mode에서 Manager Inspector의 "Bake / ReBake FlowField"를 누릅니다. 메뉴 "Tools/FlowField/Bake All Managers In Open Scenes"는 열린 씬에서 Bake Asset을 쓰는 Manager를 차례로 모두 Bake합니다. 진행 중에는 Inspector의 "Cancel Bake"나 진행 창으로 취소합니다.
 4. Bake는 Asset을 씬 옆, 씬 이름의 폴더(`<씬 폴더>/<씬 이름>/`)에 만들고 Manager의 Surface 또는 Volume 칸에 연결합니다. 이 Manager가 Bake한 Asset이 이미 연결돼 있으면 그 Asset을 덮어씁니다.
 
 - Bake는 시작 전에 Init과 같은 설정 검사를 합니다. Bake Asset 자체와 `StaticBaked`의 `Sweep Unregistered` 금지만 빼고 검사하며, 통과하지 못하면 버튼이 꺼지고 Asset을 쓰지 않습니다.

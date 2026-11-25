@@ -106,7 +106,7 @@ namespace Common.FlowField.Editor
                             ? "FlowField Bake is running."
                             : FlowFieldBakeEditor.ProgressLabel,
                         MessageType.Info);
-                    if (GUILayout.Button("Cancel Static Bake"))
+                    if (GUILayout.Button("Cancel Bake"))
                         FlowFieldBakeEditor.CancelBake();
                 }
                 using (new EditorGUI.DisabledScope(disableBakeActions))
@@ -130,7 +130,7 @@ namespace Common.FlowField.Editor
             else
             {
                 EditorGUILayout.HelpBox(
-                    "RuntimeDynamic: the session computes the Surface and obstacles at runtime. No Static Bake Asset is used.",
+                    "RuntimeDynamic computes the field at runtime and uses no Bake Asset.",
                     MessageType.Info);
             }
         }

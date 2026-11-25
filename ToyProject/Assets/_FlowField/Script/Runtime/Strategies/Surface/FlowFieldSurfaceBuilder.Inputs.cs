@@ -51,7 +51,7 @@ namespace Common.FlowField
                 _state.BakedBaseTouched = FlowFieldObstacleReach.Encapsulate(_state.BakedBaseTouched, reach);
             return FlowFieldCellRect.FromBounds(grid, reach);
         }
-    
+
 
         public IFlowFieldModifierArea CreateModifierArea() => new FlowFieldSurfaceModifierArea();
 
@@ -108,5 +108,5 @@ namespace Common.FlowField
             if (_modifierComposition == null)
                 throw new InvalidOperationException("FlowField modifier services are not initialized.");
         }
-}
+    }
 }

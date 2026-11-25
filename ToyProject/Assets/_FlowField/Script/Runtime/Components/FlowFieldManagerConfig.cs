@@ -93,7 +93,7 @@ namespace Common.FlowField
             if (Obstacles.SweepUnregistered && BakeMode == FlowFieldBakeMode.StaticBaked)
                 return Fail(out reason, "Sweep Unregistered is not allowed in StaticBaked mode, whose obstacles stay as baked.");
             if (bakeModeLocked)
-                return Fail(out reason, "FlowField Bake Mode cannot change during an active Init session. Release and Init again.");
+                return Fail(out reason, "FlowField Bake Mode can only change after Release and before Init.");
             reason = string.Empty;
             return true;
         }

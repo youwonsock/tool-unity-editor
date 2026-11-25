@@ -351,7 +351,7 @@ namespace Common.FlowField
             if (!grid.IsValid)
                 throw new ArgumentException("Obstacle commit requires a valid grid.", nameof(grid));
             if (!surface.IsValid)
-                throw new ArgumentException("Obstacle commit requires a valid surface bake.", nameof(surface));
+                throw new ArgumentException("Obstacle commit requires valid Surface data.", nameof(surface));
             if (workspace == null)
                 throw new ArgumentNullException(nameof(workspace));
             if (workspace.Capacity != grid.CellCount)
@@ -364,7 +364,7 @@ namespace Common.FlowField
             if (!request.Grid.IsValid)
                 throw new ArgumentException("Obstacle rebuild requires a valid grid.", nameof(request));
             if (request.Surface == null || !request.Surface.IsValid)
-                throw new ArgumentException("Obstacle rebuild requires a valid surface bake.", nameof(request.Surface));
+                throw new ArgumentException("Obstacle rebuild requires valid Surface data.", nameof(request.Surface));
             if (request.Workspace == null)
                 throw new ArgumentNullException(nameof(request.Workspace));
             if (request.Workspace.Capacity != request.Grid.CellCount)

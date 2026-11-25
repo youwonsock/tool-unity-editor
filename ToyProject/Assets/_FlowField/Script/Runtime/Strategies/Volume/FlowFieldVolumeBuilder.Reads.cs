@@ -83,7 +83,7 @@ namespace Common.FlowField
                 resolvedGoal);
             return info.IsValid;
         }
-    
+
 
         // The published field. A request on another grid or source drops it
         // (Submit), so it is always on the latest request's grid.
@@ -95,5 +95,5 @@ namespace Common.FlowField
         // Volume3D knows nothing newer than its published field; the shared
         // rule reads that field and the notified uncertain regions.
         public IFlowFieldLatestCells LatestCells => null;
-}
+    }
 }

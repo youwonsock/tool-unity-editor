@@ -431,7 +431,7 @@ namespace Common.FlowField
         private void OnSessionStateChanged(FlowFieldRuntimeState state)
         {
             if (state == FlowFieldRuntimeState.Faulted && !string.IsNullOrEmpty(LastError))
-                Debug.LogError($"[FlowField] FlowField build failed: {LastError}", this);
+                Debug.LogError($"[FlowField] Build failed: {LastError}", this);
             StateChanged?.Invoke(state);
         }
 

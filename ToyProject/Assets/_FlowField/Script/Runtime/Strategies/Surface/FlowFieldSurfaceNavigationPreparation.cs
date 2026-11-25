@@ -159,7 +159,7 @@ namespace Common.FlowField
             if (!grid.IsValid)
                 throw new ArgumentException("Surface navigation preparation requires a valid grid.", nameof(grid));
             if (surface == null || !surface.IsValid)
-                throw new ArgumentException("Surface navigation preparation requires a valid surface bake.", nameof(surface));
+                throw new ArgumentException("Surface navigation preparation requires valid Surface data.", nameof(surface));
             if (workspace == null)
                 throw new ArgumentNullException(nameof(workspace));
             if (workspace.Capacity != grid.CellCount)

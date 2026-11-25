@@ -383,7 +383,7 @@ namespace Common.FlowField
                 || left != null
                 && right != null
                 && left.ContentEquals(right);
-    
+
 
         // A solve is running on a worker thread.
         public bool IsWaitingForExternalCompletion => _phase == BuildPhase.WaitingSolve;
@@ -481,5 +481,5 @@ namespace Common.FlowField
             _commitRegion = finalRegion;
             _phase = BuildPhase.Publish;
         }
-}
+    }
 }

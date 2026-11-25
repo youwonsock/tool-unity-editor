@@ -266,7 +266,7 @@ namespace Common.FlowField
             if (!grid.IsValid)
                 throw new ArgumentException("FlowField compose requires a valid grid.", nameof(grid));
             if (!surface.IsValid)
-                throw new ArgumentException("FlowField compose requires a valid surface bake.", nameof(surface));
+                throw new ArgumentException("FlowField compose requires valid Surface data.", nameof(surface));
             if (workspace == null)
                 throw new ArgumentNullException(nameof(workspace));
             if (workspace.Capacity != grid.CellCount)

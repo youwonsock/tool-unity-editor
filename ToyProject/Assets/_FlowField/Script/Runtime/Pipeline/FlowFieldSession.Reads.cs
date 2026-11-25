@@ -83,5 +83,5 @@ namespace Common.FlowField
             field = IsReady ? _builder.PublishedField : null;
             return field != null;
         }
-}
+    }
 }

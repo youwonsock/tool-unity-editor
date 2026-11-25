@@ -116,7 +116,7 @@ namespace Common.FlowField
             if (!request.Grid.IsValid)
                 throw new ArgumentException("Modifier rebuild requires a valid grid.", nameof(request));
             if (request.Surface == null || !request.Surface.IsValid)
-                throw new ArgumentException("Modifier rebuild requires a valid surface bake.", nameof(request.Surface));
+                throw new ArgumentException("Modifier rebuild requires valid Surface data.", nameof(request.Surface));
             if (request.Workspace == null)
                 throw new ArgumentNullException(nameof(request.Workspace));
             if (request.Workspace.Capacity != request.Grid.CellCount)
@@ -174,7 +174,7 @@ namespace Common.FlowField
             if (!request.Grid.IsValid)
                 throw new ArgumentException("Modifier compose requires a valid grid.", nameof(request));
             if (request.Surface == null || !request.Surface.IsValid)
-                throw new ArgumentException("Modifier compose requires a valid surface bake.", nameof(request.Surface));
+                throw new ArgumentException("Modifier compose requires valid Surface data.", nameof(request.Surface));
             if (request.Workspace == null)
                 throw new ArgumentNullException(nameof(request.Workspace));
             if (request.Workspace.Capacity != request.Grid.CellCount)

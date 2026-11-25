@@ -126,7 +126,7 @@
 - 세대가 바뀌면(Release, Stop, Restart, Fault) 그 앞의 이벤트는 버리고, `Released`만 항상 전달합니다.
 - 핸들러가 서로를 계속 깨우면 100,000건에서 오류를 남기고 남은 일을 버립니다. 이때도 `Released`와 해제 이벤트는 순서대로 한 번 전달하고, 그 핸들러가 새로 만든 일은 버립니다.
 - 핸들러가 던진 예외는 Manager가 Console에 남기고, 세션을 Fault로 만들지 않습니다.
-- Fault로 바뀌면 Manager는 `StateChanged`를 전달하기 전에 "[FlowField] FlowField build failed: ..."를 오류로 남깁니다. 핸들러가 바로 재시도해도 원인이 Console에 남습니다.
+- Fault로 바뀌면 Manager는 `StateChanged`를 전달하기 전에 "[FlowField] Build failed: ..."를 오류로 남깁니다. 핸들러가 바로 재시도해도 원인이 Console에 남습니다.
 - `StateChanged` 핸들러는 `OnValidate` 안에서 실행될 수 있습니다.
 
 ### 정지, 재시작, 수명 종료

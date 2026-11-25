@@ -429,7 +429,7 @@ namespace Common.FlowField
             _build = null;
             return changed;
         }
-    
+
 
         public bool IsWaitingForExternalCompletion
             => _build != null && _build.SolveRunning && !_build.SolveHandle.IsCompleted;
@@ -581,5 +581,5 @@ namespace Common.FlowField
                 _queryEveryCell = true;
             previous?.Dispose();
         }
-}
+    }
 }

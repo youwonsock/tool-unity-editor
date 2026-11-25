@@ -20,7 +20,7 @@ namespace Common.FlowField
             if (!grid.IsValid)
                 throw new System.ArgumentException("Topology mask requires a valid grid.", nameof(grid));
             if (surface == null || !surface.IsValid)
-                throw new System.ArgumentException("Topology mask requires a valid surface bake.", nameof(surface));
+                throw new System.ArgumentException("Topology mask requires valid Surface data.", nameof(surface));
             if (workspace == null)
                 throw new System.ArgumentNullException(nameof(workspace));
             if (workspace.Capacity != grid.CellCount

@@ -182,5 +182,5 @@ namespace Common.FlowField
             FlowFieldBuildScheduler.Unregister(this);
             _runtimeScheduled = false;
         }
-}
+    }
 }

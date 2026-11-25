@@ -60,5 +60,5 @@ namespace Common.FlowField
             if (_requests.HasLatest)
                 _requests.Pending = true;
         }
-}
+    }
 }

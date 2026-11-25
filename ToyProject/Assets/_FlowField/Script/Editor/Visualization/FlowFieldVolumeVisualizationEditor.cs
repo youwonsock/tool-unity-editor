@@ -401,7 +401,7 @@ namespace Common.FlowField.Editor
             if (!manager.TryGetLayout(out Bounds worldBounds, out FlowFieldGridSpace grid)
                 || !grid.IsValid)
             {
-                SetUnavailable(state, "Volume Bounds or Cell Size is invalid.");
+                SetUnavailable(state, "Bake Bounds or Cell Size is invalid.");
                 return false;
             }
 

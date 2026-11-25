@@ -4,14 +4,16 @@ using UnityEngine;
 namespace Common.FlowField
 {
     /// <summary>
-    /// Non-allocating overlap queries against one target collider.
-    /// A full buffer grows up to MaxOverlapHits; more hits than that throw, because a partial result would miss colliders.
+    /// Non-allocating overlap queries both space modes share. A full buffer
+    /// grows up to its cap; a query that still fills it reports that its list
+    /// would be partial, and the caller decides what that means.
     /// </summary>
     internal static class FlowFieldOverlapUtility
     {
         private const int InitialOverlapCapacity = 8;
-        // One cap for every overlap query: a cell box overlapping more
-        // Colliders than this faults the session.
+        // The cap of the cell and step queries. A Surface2D obstacle query
+        // that reaches it faults the session; a Volume3D step falls back to
+        // per-cell checks; a single target query throws.
         internal const int MaxOverlapHits = 4096;
         private const float CellQuerySkin = 0.0001f;
 
