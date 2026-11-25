@@ -10,6 +10,7 @@ namespace Common.TransformPath
         public float? DistanceToAhead { get; }
         /// <summary>The gap this member keeps behind the one ahead, after the manager's spacing policy.</summary>
         public float Spacing { get; }
+        /// <summary>At its gap behind the member ahead, or closer, judged as the progress cap is.</summary>
         public bool IsBlocked { get; }
         public float SpeedMultiplier { get; }
         public float MaxProgress { get; }
@@ -29,6 +30,10 @@ namespace Common.TransformPath
     /// <summary>Queue math without Unity objects.</summary>
     internal static class PathQueueCoordinator
     {
+        // A few float steps of progress near 1. A member capped at the gap lands
+        // exactly on the cap, and the progress it reads back can be that far off.
+        private const float GAP_PROGRESS_TOLERANCE = 1e-6f;
+
         public static float CalculateSpeedMultiplier(
             bool enableGradualSlowdown,
             float? distance,
@@ -49,6 +54,17 @@ namespace Common.TransformPath
             // An empty curve, as Unity loads an unset one, slows down linearly.
             float curveValue = PathValueUtility.IsUsableCurve(slowdownCurve) ? Mathf.Clamp01(slowdownCurve.Evaluate(t)) : t;
             return Mathf.Lerp(minSpeedMultiplier, 1f, curveValue);
+        }
+
+        /// <summary>
+        /// Whether a member is at its gap behind the one ahead, or closer. It is
+        /// judged in progress, as <see cref="CalculateMaxProgress"/> sets the cap:
+        /// a member stopped on the cap would otherwise read a distance a hair past
+        /// the spacing on some route lengths and never count as blocked.
+        /// </summary>
+        public static bool IsAtGap(float progress, float aheadProgress, float spacing, float routeLength)
+        {
+            return aheadProgress - progress <= spacing / routeLength + GAP_PROGRESS_TOLERANCE;
         }
 
         /// <summary>The furthest progress a member may reach behind the one ahead.</summary>

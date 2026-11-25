@@ -233,7 +233,11 @@ namespace Common.TransformPath
                 return;
             }
             using var operation = PathExecutionBoundary.Enter();
-            LeaveAll(EPathQueueLeaveReason.ManagerReleased);
+            // A route destroyed or failed since the last Queue phase, such as one
+            // destroyed in the same frame before this manager, is what the members
+            // leave for, as that phase would have reported it.
+            bool routeUnavailable = !ReferenceEquals(_routeProvider, null) && !_routeProvider.IsReady;
+            LeaveAll(routeUnavailable ? EPathQueueLeaveReason.ProviderInvalid : EPathQueueLeaveReason.ManagerReleased);
             _routeProvider = null;
             _routeRevision = -1;
             _isInitialized = false;
@@ -480,7 +484,8 @@ namespace Common.TransformPath
                     float spacing = SpacingFor(member);
                     if (hasPolicy)
                         spacing = AskPolicy(policy, member, ahead?.Member, spacing);
-                    bool blocked = distance.HasValue && distance.Value <= spacing;
+                    bool blocked = ahead != null
+                        && PathQueueCoordinator.IsAtGap(entry.Progress, ahead.Progress, spacing, routeLength);
                     float multiplier = PathQueueCoordinator.CalculateSpeedMultiplier(
                         _enableGradualSlowdown && member.EnableGradualSlowdown,
                         distance, spacing, _slowdownRange, _minSpeedMultiplier, _slowdownCurve);

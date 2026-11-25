@@ -159,6 +159,7 @@ namespace Common.TransformPath
         {
             RemoveFromManager();
             ResetWait(false);
+            ForgetReportedWait();
         }
 
         // A member destroyed while disabled never ran OnDisable again.
@@ -166,6 +167,7 @@ namespace Common.TransformPath
         {
             RemoveFromManager();
             ResetWait(false);
+            ForgetReportedWait();
         }
 
         #region Commands
@@ -301,7 +303,7 @@ namespace Common.TransformPath
             // A Hold stays for the next queued start, as outside a queue: a held member
             // cannot complete, so a Hold here was asked for after it did.
             ResetWait(false);
-            _reportedBlocked = false;
+            ForgetReportedWait();
             if (!invalidated)
                 return;
             PathFollower follower = Follower;
@@ -356,6 +358,14 @@ namespace Common.TransformPath
             _wait.ManualBlock = hold;
             _showingPause = false;
             Follower?.SetMotionLimit(PathMotionLimit.None);
+        }
+
+        // A wait that ended without notifications: a later Leave or a new wait
+        // reports from the free state, not the end of this one.
+        private void ForgetReportedWait()
+        {
+            _reportedBlocked = false;
+            _reportedSpeedMultiplier = 1f;
         }
 
         private void ApplyLimit()
