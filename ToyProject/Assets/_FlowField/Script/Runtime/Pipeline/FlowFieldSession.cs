@@ -514,7 +514,7 @@ namespace Common.FlowField
 
         // A change reaches the cell size and the Obstacle Clearance beyond its bounds.
         private float ObstacleReach(FlowFieldGridSpace grid)
-            => grid.CellSize + (_hasConfig ? _config.Obstacles.Clearance : 0f);
+            => FlowFieldObstacleReach.Margin(grid.CellSize, _hasConfig ? _config.Obstacles.Clearance : 0f);
 
         // Bounds that are not finite count as reaching, so marking them reports the fault.
         private static bool Reaches(FlowFieldGridSpace grid, bool has, Bounds bounds, float reach)
@@ -523,8 +523,7 @@ namespace Common.FlowField
                 return false;
             if (!FlowFieldGridSpace.IsFinite(bounds.center) || !FlowFieldGridSpace.IsFinite(bounds.size))
                 return true;
-            bounds.Expand(2f * reach);
-            return FlowFieldCellRect.FromBounds(grid, bounds).IsValid;
+            return FlowFieldCellRect.FromBounds(grid, FlowFieldObstacleReach.Expand(bounds, reach)).IsValid;
         }
 
         private void ThrowIfInputUnavailable()

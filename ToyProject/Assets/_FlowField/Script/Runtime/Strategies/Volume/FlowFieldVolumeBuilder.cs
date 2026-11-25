@@ -286,22 +286,16 @@ namespace Common.FlowField
             var regions = new System.Collections.Generic.List<Bounds>(_safety.ObservedRegions());
             if (_bakedBaseTouched.HasValue)
                 regions.Add(_bakedBaseTouched.Value);
-            float margin = build.Request.Grid.CellSize + build.Request.ObstacleClearance;
+            float margin = FlowFieldObstacleReach.Margin(build.Request.Grid.CellSize, build.Request.ObstacleClearance);
             FlowFieldObstacleRegistry registry = _session.Obstacles;
             for (int i = 0; i < registry.Count; i++)
             {
-                regions.Add(Reach(registry.GetBounds(i), margin));
+                regions.Add(FlowFieldObstacleReach.Expand(registry.GetBounds(i), margin));
                 Collider collider = registry.GetCollider(i);
                 if (collider != null)
-                    regions.Add(Reach(collider.bounds, margin));
+                    regions.Add(FlowFieldObstacleReach.Expand(collider.bounds, margin));
             }
             return regions.ToArray();
-        }
-
-        private static Bounds Reach(Bounds bounds, float margin)
-        {
-            bounds.Expand(Vector3.one * (margin * 2f));
-            return bounds;
         }
 
         private void DiscardBuild()
@@ -330,11 +324,11 @@ namespace Common.FlowField
         {
             if (_session.BakeMode == FlowFieldBakeMode.BakedBase && _requests.HasLatest)
             {
-                float margin = _requests.Latest.Grid.CellSize + _requests.Latest.ObstacleClearance;
+                float margin = FlowFieldObstacleReach.Margin(_requests.Latest.Grid.CellSize, _requests.Latest.ObstacleClearance);
                 if (change.HasPrevious)
-                    TouchBakedBase(Reach(change.Previous, margin));
+                    TouchBakedBase(FlowFieldObstacleReach.Expand(change.Previous, margin));
                 if (change.HasCurrent)
-                    TouchBakedBase(Reach(change.Current, margin));
+                    TouchBakedBase(FlowFieldObstacleReach.Expand(change.Current, margin));
             }
             if (_requests.Pending)
                 return;
@@ -342,11 +336,7 @@ namespace Common.FlowField
         }
 
         private void TouchBakedBase(Bounds reach)
-        {
-            Bounds touched = _bakedBaseTouched ?? reach;
-            touched.Encapsulate(reach);
-            _bakedBaseTouched = touched;
-        }
+            => _bakedBaseTouched = FlowFieldObstacleReach.Encapsulate(_bakedBaseTouched, reach);
 
         // Volume3D finds a Modifier's cells per build, so it keeps no area data.
         public IFlowFieldModifierArea CreateModifierArea() => null;

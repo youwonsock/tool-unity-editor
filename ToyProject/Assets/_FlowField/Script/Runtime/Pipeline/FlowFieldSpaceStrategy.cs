@@ -121,8 +121,7 @@ namespace Common.FlowField
             internal override Bounds ObstacleSweepBounds(in FlowFieldManagerConfig config)
             {
                 FlowFieldVolumeBuilder.TryCreateLayout(in config, out Bounds world, out FlowFieldGridSpace grid);
-                world.Expand(2f * (grid.CellSize + config.Obstacles.Clearance));
-                return world;
+                return FlowFieldObstacleReach.Expand(world, grid.CellSize, config.Obstacles.Clearance);
             }
         }
     }

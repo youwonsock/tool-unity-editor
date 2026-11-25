@@ -274,16 +274,6 @@ namespace Common.FlowField
             return false;
         }
 
-        /// <summary>
-        /// The world box whose cells an obstacle with these bounds can block:
-        /// a cell's query box reaches half a cell and the clearance beyond it.
-        /// </summary>
-        internal static Bounds Reach(Bounds bounds, float cellSize, float clearance)
-        {
-            bounds.Expand(2f * (cellSize + clearance));
-            return bounds;
-        }
-
         // A dirty region rescans only its cells on top of the current mask.
         // Otherwise the mask starts again: from a full scan, or in BakedBase
         // from the bake, with every region a change reached scanned again.
@@ -344,11 +334,11 @@ namespace Common.FlowField
             for (int i = 0; i < _registry.Count; i++)
             {
                 region = FlowFieldCellRect.Union(region, FlowFieldCellRect.FromBounds(
-                    grid, Reach(_registry.GetBounds(i), grid.CellSize, request.Clearance)));
+                    grid, FlowFieldObstacleReach.Expand(_registry.GetBounds(i), grid.CellSize, request.Clearance)));
                 Collider collider = _registry.GetCollider(i);
                 if (collider != null)
                     region = FlowFieldCellRect.Union(region, FlowFieldCellRect.FromBounds(
-                        grid, Reach(collider.bounds, grid.CellSize, request.Clearance)));
+                        grid, FlowFieldObstacleReach.Expand(collider.bounds, grid.CellSize, request.Clearance)));
             }
             return region;
         }

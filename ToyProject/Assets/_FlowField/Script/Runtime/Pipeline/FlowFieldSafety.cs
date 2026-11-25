@@ -81,9 +81,7 @@ namespace Common.FlowField
         {
             if (!FlowFieldGridSpace.IsFinite(bounds.center) || !FlowFieldGridSpace.IsFinite(bounds.size))
                 throw new ArgumentOutOfRangeException(nameof(bounds));
-            Bounds expanded = bounds;
-            expanded.Expand(Vector3.one * (margin * 2f));
-            AddBounds(_uncertainBounds, expanded);
+            AddBounds(_uncertainBounds, FlowFieldObstacleReach.Expand(bounds, margin));
         }
 
         /// <summary>Whether a cell centred at <paramref name="center"/> lies in an uncertain region.</summary>

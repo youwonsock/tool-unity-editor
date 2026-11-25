@@ -45,13 +45,9 @@ namespace Common.FlowField
         // The cells the bounds can block, recorded for a BakedBase reload.
         private FlowFieldCellRect Touch(FlowFieldGridSpace grid, Bounds bounds, float clearance)
         {
-            Bounds reach = FlowFieldSurfaceObstacleMasks.Reach(bounds, grid.CellSize, clearance);
+            Bounds reach = FlowFieldObstacleReach.Expand(bounds, grid.CellSize, clearance);
             if (_sourceKind == FlowFieldSurfaceSourceKind.BakedBase)
-            {
-                Bounds touched = _state.BakedBaseTouched ?? reach;
-                touched.Encapsulate(reach);
-                _state.BakedBaseTouched = touched;
-            }
+                _state.BakedBaseTouched = FlowFieldObstacleReach.Encapsulate(_state.BakedBaseTouched, reach);
             return FlowFieldCellRect.FromBounds(grid, reach);
         }
     }
