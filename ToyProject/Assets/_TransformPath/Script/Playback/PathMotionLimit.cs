@@ -11,8 +11,8 @@ namespace Common.TransformPath
         public readonly float SpeedMultiplier;
         public readonly float MaxProgress;
         /// <summary>
-        /// A jump while moving (a loop seam) drops the rest of that frame's time
-        /// and blocks, so the queue answers for the new position first.
+        /// A jump (a loop seam, or a Seek) drops the rest of that frame's time and
+        /// blocks, so the queue answers for the new position first.
         /// </summary>
         public readonly bool WaitOnDiscontinuity;
 

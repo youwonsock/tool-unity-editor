@@ -147,6 +147,7 @@ namespace Common.TransformPath
         /// <summary>Moves to a progress of 0..1. Events at and before it are skipped.</summary>
         public bool Seek(float progress)
         {
+            InitializeBeforeAwake();
             using var operation = PathExecutionBoundary.Enter();
             bool changed = Playback.Seek(progress);
             ApplyPositionIfChanged();
@@ -156,6 +157,7 @@ namespace Common.TransformPath
         /// <summary>Moves to a progress within one segment of a sequence.</summary>
         public bool SeekSegment(int segmentIndex, float localProgress)
         {
+            InitializeBeforeAwake();
             using var operation = PathExecutionBoundary.Enter();
             bool changed = Playback.SeekSegment(segmentIndex, localProgress);
             ApplyPositionIfChanged();
@@ -165,6 +167,7 @@ namespace Common.TransformPath
         /// <summary>Sets the Speed and cancels an event's Speed blend.</summary>
         public bool SetSpeed(float speed)
         {
+            InitializeBeforeAwake();
             using var operation = PathExecutionBoundary.Enter();
             return Playback.SetSpeed(speed);
         }
@@ -172,6 +175,7 @@ namespace Common.TransformPath
         /// <summary>Sets the Duration and cancels an event's Duration blend.</summary>
         public bool SetDuration(float duration)
         {
+            InitializeBeforeAwake();
             using var operation = PathExecutionBoundary.Enter();
             return Playback.SetDuration(duration);
         }
@@ -183,6 +187,7 @@ namespace Common.TransformPath
         public void TriggerEvent(PathEventSettingSO setting)
         {
             PathEventDefinition definition = PathEventDefinition.FromAuthoring(setting);
+            InitializeBeforeAwake();
             using var operation = PathExecutionBoundary.Enter();
             Playback.TriggerEvent(definition);
             AfterPlaybackWork();
@@ -286,9 +291,9 @@ namespace Common.TransformPath
 
         /// <summary>
         /// Unity runs Awake and OnEnable one component at a time, so a component
-        /// above this one, or another object's Awake, can start a playback first.
-        /// An enabled follower in Play Mode prepares itself then; its own Awake
-        /// and OnEnable find it prepared.
+        /// above this one, or another object's Awake, can reach this follower first.
+        /// An enabled follower in Play Mode prepares itself on any command that
+        /// needs it; its own Awake and OnEnable find it prepared.
         /// </summary>
         internal void InitializeBeforeAwake()
         {

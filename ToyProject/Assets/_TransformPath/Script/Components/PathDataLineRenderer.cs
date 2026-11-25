@@ -37,6 +37,8 @@ namespace Common.TransformPath
         private bool _visible = true;
         private bool _hasValidPath = false;
         private bool _isInitialized;
+        // Awake, Refresh and SetVisible all try Init; a missing reference is reported once.
+        private PathConfigurationErrorReporter _errors;
 
         #endregion
 
@@ -59,9 +61,10 @@ namespace Common.TransformPath
                 TryGetComponent(out _lineRenderer);
             if (_lineRenderer == null || _pathData == null)
             {
-                Debug.LogError("PathDataLineRenderer requires LineRenderer and PathData references.", this);
+                _errors.Report(this, "PathDataLineRenderer requires LineRenderer and PathData references.");
                 return;
             }
+            _errors.Reset();
             ConfigureLineRenderer();
             _isInitialized = true;
             if (isActiveAndEnabled)

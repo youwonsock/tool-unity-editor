@@ -34,11 +34,29 @@ namespace Common.TransformPath
         /// <summary>Drops the oldest waiting notification without delivering it.</summary>
         internal abstract void DropNext();
 
-        // A listener that unsubscribed while the notification waited is skipped.
-        protected bool StillHas(Delegate[] snapshot, Delegate listener)
+        // A listener that unsubscribed while the notification waited is skipped,
+        // one copy per removal: added twice and removed once, it still runs once.
+        protected bool StillHas(Delegate[] snapshot, int index)
         {
-            return ReferenceEquals(snapshot, Invocations)
-                || (Invocations != null && Array.IndexOf(Invocations, listener) >= 0);
+            Delegate[] current = Invocations;
+            if (ReferenceEquals(snapshot, current))
+                return true;
+            if (current == null)
+                return false;
+            Delegate listener = snapshot[index];
+            int copy = 0;
+            for (int i = 0; i <= index; i++)
+            {
+                if (snapshot[i].Equals(listener))
+                    copy++;
+            }
+            int remaining = 0;
+            for (int i = 0; i < current.Length; i++)
+            {
+                if (current[i].Equals(listener))
+                    remaining++;
+            }
+            return copy <= remaining;
         }
 
         protected static void Report(Exception exception) => Debug.LogException(exception);
@@ -64,7 +82,7 @@ namespace Common.TransformPath
             Delegate[] snapshot = _pending.Dequeue();
             for (int i = 0; i < snapshot.Length; i++)
             {
-                if (!StillHas(snapshot, snapshot[i]))
+                if (!StillHas(snapshot, i))
                     continue;
                 try { ((Action)snapshot[i])(); }
                 catch (Exception exception) { Report(exception); }
@@ -94,7 +112,7 @@ namespace Common.TransformPath
             (Delegate[] snapshot, T argument) = _pending.Dequeue();
             for (int i = 0; i < snapshot.Length; i++)
             {
-                if (!StillHas(snapshot, snapshot[i]))
+                if (!StillHas(snapshot, i))
                     continue;
                 try { ((Action<T>)snapshot[i])(argument); }
                 catch (Exception exception) { Report(exception); }
@@ -125,7 +143,7 @@ namespace Common.TransformPath
             (Delegate[] snapshot, T1 first, T2 second) = _pending.Dequeue();
             for (int i = 0; i < snapshot.Length; i++)
             {
-                if (!StillHas(snapshot, snapshot[i]))
+                if (!StillHas(snapshot, i))
                     continue;
                 try { ((Action<T1, T2>)snapshot[i])(first, second); }
                 catch (Exception exception) { Report(exception); }

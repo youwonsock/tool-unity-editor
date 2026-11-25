@@ -340,6 +340,9 @@ namespace Common.TransformPath
 
             _cursor.PendingTime = 0f;
             MotionEpoch++;
+            // A Seek can come from a listener after this frame's Queue phase, so
+            // the queue's last limit no longer fits; it waits for the next one.
+            WaitForQueueAfterJump();
             // Another segment starts as if the playback had moved into it, so one
             // that preserves the previous speed takes the speed the playback has now.
             if (segment != _cursor.Segment)
@@ -381,6 +384,13 @@ namespace Common.TransformPath
             if (hasNext)
                 return;
             MotionEpoch++;
+            WaitForQueueAfterJump();
+        }
+
+        // A queue limit holds for the position it was computed at; after a jump
+        // the member stands still until the next Queue phase sees it.
+        private void WaitForQueueAfterJump()
+        {
             if (Limit.WaitOnDiscontinuity)
                 Limit = new PathMotionLimit(true, 0f, 0f, true);
         }
