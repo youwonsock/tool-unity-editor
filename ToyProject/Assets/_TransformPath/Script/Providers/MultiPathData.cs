@@ -6,7 +6,8 @@ namespace Common.TransformPath
 {
     /// <summary>
     /// PathData segments played one after another. It rebuilds whenever one of
-    /// its paths publishes a change, so it never needs to poll them.
+    /// its paths publishes a change. Only a path that never woke is checked on
+    /// each read, since Unity destroys it without calling its OnDestroy.
     /// </summary>
     public sealed class MultiPathData : PathProviderBehaviour
     {
@@ -21,8 +22,10 @@ namespace Common.TransformPath
         [NonSerialized] private bool _failed;
         [NonSerialized] private bool _building;
         [NonSerialized] private readonly List<PathData> _subscribed = new List<PathData>();
+        // Segment paths that had not woken at the last build. Usually none in Play Mode.
+        [NonSerialized] private PathData[] _unwatched = Array.Empty<PathData>();
 
-        private protected override bool IsBuilt => _built != null && !_failed && SegmentPathsAlive();
+        private protected override bool IsBuilt => _built != null && !_failed && UnwatchedPathsAlive();
 
         public override float PathLength
         {
@@ -46,8 +49,29 @@ namespace Common.TransformPath
 
         private void Awake()
         {
-            if (Application.isPlaying && _segments != null && _segments.Count > 0)
+            if (Application.isPlaying && _segments != null && _segments.Count > 0 && !WaitsForSegmentPoints)
                 Rebuild();
+        }
+
+        /// <summary>
+        /// Whether a segment path has no control points yet, such as one that gets
+        /// them at runtime. Awake leaves the build to the first use then, as such a
+        /// PathData does for itself.
+        /// </summary>
+        internal bool WaitsForSegmentPoints
+        {
+            get
+            {
+                if (_segments == null)
+                    return false;
+                for (int i = 0; i < _segments.Count; i++)
+                {
+                    PathData path = _segments[i].Path;
+                    if (path != null && !path.IsReady && !path.HasControlPoints)
+                        return true;
+                }
+                return false;
+            }
         }
 
         protected override void OnDestroy()
@@ -158,6 +182,7 @@ namespace Common.TransformPath
 
             geometryChanged = !HasSame(_childRevisions, revisions) || !Mathf.Approximately(_pathLength, total);
             definitionChanged = _built == null || !HasSameStructure(built);
+            _unwatched = FindUnwatched(built);
             _built = built;
             _childRevisions = revisions;
             _pathLength = total;
@@ -243,15 +268,31 @@ namespace Common.TransformPath
         }
 
         // A segment's path destroyed while it was never active tells no one: Unity
-        // skips its OnDestroy. The sequence, played whole or by segment, is out of use.
-        private bool SegmentPathsAlive()
+        // skips its OnDestroy. The sequence, played whole or by segment, is out of
+        // use then. A path that woke since will report it, so it is not checked.
+        private bool UnwatchedPathsAlive()
         {
-            for (int i = 0; i < _built.Length; i++)
+            for (int i = 0; i < _unwatched.Length; i++)
             {
-                if (_built[i].Sampler is PathData path && path == null)
+                PathData path = _unwatched[i];
+                if (!path.HasAwoken && path == null)
                     return false;
             }
             return true;
+        }
+
+        private static PathData[] FindUnwatched(PathRoute.Segment[] built)
+        {
+            List<PathData> unwatched = null;
+            for (int i = 0; i < built.Length; i++)
+            {
+                var path = (PathData)built[i].Sampler;
+                if (path.HasAwoken || (unwatched != null && unwatched.Contains(path)))
+                    continue;
+                unwatched ??= new List<PathData>();
+                unwatched.Add(path);
+            }
+            return unwatched == null ? Array.Empty<PathData>() : unwatched.ToArray();
         }
 
         private bool HasUnavailablePath()

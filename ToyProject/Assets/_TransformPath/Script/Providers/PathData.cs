@@ -37,6 +37,9 @@ namespace Common.TransformPath
         [NonSerialized] private bool _failed;
         // Positions from SetControlPoints take the place of _pathPoints until SetPathPoints.
         [NonSerialized] private List<Vector3> _runtimePoints;
+        // Unity calls OnDestroy only for an object that woke, so a path that woke
+        // reports its own destruction and a sequence need not check it.
+        [NonSerialized] private bool _awoken;
 
         private readonly List<Vector3> _pointScratch = new List<Vector3>();
         private readonly PathGeometryBuildBuffer _buildBuffer = new PathGeometryBuildBuffer();
@@ -114,10 +117,19 @@ namespace Common.TransformPath
         internal IReadOnlyList<Transform> PathPoints => _pathPoints;
         /// <summary>The positions from <see cref="SetControlPoints"/>, or null while the Transforms are used.</summary>
         internal IReadOnlyList<Vector3> RuntimeControlPoints => _runtimePoints;
+        /// <summary>Whether Awake ran, so OnDestroy will tell the path's listeners it went away.</summary>
+        internal bool HasAwoken => _awoken;
+        /// <summary>
+        /// Whether there are points to build from. A path without them waits for
+        /// <see cref="SetControlPoints"/> or <see cref="SetPathPoints"/> instead of failing at Awake.
+        /// </summary>
+        internal bool HasControlPoints =>
+            _runtimePoints != null || (_pathPoints != null && _pathPoints.Count >= PathConstants.MIN_PATH_POINTS);
 
         private void Awake()
         {
-            if (Application.isPlaying && _pathPoints != null && _pathPoints.Count >= PathConstants.MIN_PATH_POINTS)
+            _awoken = true;
+            if (Application.isPlaying && HasControlPoints)
                 Rebuild();
         }
 
@@ -271,7 +283,10 @@ namespace Common.TransformPath
             definitionChanged = _polyline == null
                 || !movement.IsSameAs(_movement)
                 || !PathRuntimeEvent.AreSame(_events, events);
-            _polyline = polyline;
+            // A build that counts as the same keeps the published samples, so moves
+            // too small to count add up against them and are published once they do.
+            if (geometryChanged)
+                _polyline = polyline;
             _movement = movement;
             _events = events;
             _failed = false;
