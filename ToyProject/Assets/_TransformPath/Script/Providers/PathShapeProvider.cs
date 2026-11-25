@@ -37,7 +37,7 @@ namespace Common.TransformPath
 
         protected PathShapeProvider() { }
 
-        public override bool IsReady => _built && !_failed;
+        private protected override bool IsBuilt => _built && !_failed;
 
         public override float PathLength
         {

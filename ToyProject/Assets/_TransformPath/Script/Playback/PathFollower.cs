@@ -110,6 +110,7 @@ namespace Common.TransformPath
         {
             if (!IsEnabledInHierarchy)
                 throw new InvalidOperationException($"PathFollower '{name}' must be active and enabled to play.");
+            InitializeBeforeAwake();
             using var operation = PathExecutionBoundary.Enter();
             bool changed = Playback.Play(request);
             TrySuppressCharacterController();
@@ -281,6 +282,18 @@ namespace Common.TransformPath
                 && (_characterController == null || !_characterController.transform.IsChildOf(transform)))
                 _characterControllerDisabledByFollower = false;
             TryRestoreCharacterController();
+        }
+
+        /// <summary>
+        /// Unity runs Awake and OnEnable one component at a time, so a component
+        /// above this one, or another object's Awake, can start a playback first.
+        /// An enabled follower in Play Mode prepares itself then; its own Awake
+        /// and OnEnable find it prepared.
+        /// </summary>
+        internal void InitializeBeforeAwake()
+        {
+            if (Application.isPlaying && IsEnabledInHierarchy && Playback.State == EPathFollowerState.Uninitialized)
+                Initialize();
         }
 
         internal override void Release()

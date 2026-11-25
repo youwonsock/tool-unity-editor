@@ -173,6 +173,19 @@ namespace Common.TransformPath
                 ConfigureRoute(_routeProviderObject);
         }
 
+        // Enabled on an active GameObject, already true while an earlier component's OnEnable runs.
+        internal bool IsEnabledInHierarchy => enabled && gameObject.activeInHierarchy;
+
+        /// <summary>
+        /// A member can start before this manager's Awake: in a sibling's OnEnable
+        /// or another object's Awake. An enabled manager in Play Mode prepares itself then.
+        /// </summary>
+        internal void InitializeBeforeAwake()
+        {
+            if (Application.isPlaying && !_isInitialized && !_calculating && IsEnabledInHierarchy)
+                Initialize();
+        }
+
         /// <summary>
         /// The route a member's start plays on: the configured route, else the
         /// Inspector's route, else the request's provider. A destroyed route counts

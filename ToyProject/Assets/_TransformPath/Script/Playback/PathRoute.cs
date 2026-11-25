@@ -136,9 +136,19 @@ namespace Common.TransformPath
         /// <summary>The segment holding a global progress. Segment ends are [start, end), the last one includes 1.</summary>
         public int FindSegment(float globalProgress)
         {
+            int last = _segments.Length - 1;
             if (globalProgress >= 1f)
-                return _segments.Length - 1;
-            return PathGeometryUtility.FindSegmentStartIndex(_starts, Mathf.Clamp01(globalProgress) * TotalLength);
+                return last;
+            float progress = Mathf.Clamp01(globalProgress);
+            int segment = PathGeometryUtility.FindSegmentStartIndex(_starts, progress * TotalLength);
+            // The search runs in distance, but callers hold progress: a segment start's
+            // own progress (start / total) can come back a hair short of the start and
+            // land at the end of the segment before. The boundary is decided in progress.
+            while (segment < last && GetGlobalProgress(segment + 1, 0f) <= progress)
+                segment++;
+            while (segment > 0 && GetGlobalProgress(segment, 0f) > progress)
+                segment--;
+            return segment;
         }
     }
 }

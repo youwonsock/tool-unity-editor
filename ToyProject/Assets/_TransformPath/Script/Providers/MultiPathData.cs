@@ -22,7 +22,7 @@ namespace Common.TransformPath
         [NonSerialized] private bool _building;
         [NonSerialized] private readonly List<PathData> _subscribed = new List<PathData>();
 
-        public override bool IsReady => _built != null && !_failed;
+        private protected override bool IsBuilt => _built != null && !_failed;
 
         public override float PathLength
         {

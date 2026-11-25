@@ -41,7 +41,7 @@ namespace Common.TransformPath
         private readonly List<Vector3> _pointScratch = new List<Vector3>();
         private readonly PathGeometryBuildBuffer _buildBuffer = new PathGeometryBuildBuffer();
 
-        public override bool IsReady => _polyline != null && !_failed;
+        private protected override bool IsBuilt => _polyline != null && !_failed;
 
         public override float PathLength
         {

@@ -27,7 +27,11 @@ namespace Common.TransformPath
         [NonSerialized] private PathRoute _route;
         [NonSerialized] private PathConfigurationErrorReporter _errors;
 
-        public abstract bool IsReady { get; }
+        /// <summary>
+        /// Built and still alive. Unity skips OnDestroy for an object that was never
+        /// active, so a destroyed provider is also found by Unity's null check.
+        /// </summary>
+        public bool IsReady => IsBuilt && this != null;
         public int Revision => _revision;
         /// <summary>Rises only when the movement, the events or the segment structure change.</summary>
         internal int DefinitionRevision => _definitionRevision;
@@ -82,6 +86,9 @@ namespace Common.TransformPath
             if (!_buildRequested)
                 Rebuild();
         }
+
+        /// <summary>Whether the last build succeeded and nothing made it unavailable since.</summary>
+        private protected abstract bool IsBuilt { get; }
 
         /// <summary>Builds into fields of the subclass only when every check passed.</summary>
         private protected abstract bool TryBuild(out bool geometryChanged, out bool definitionChanged, out string error);

@@ -44,6 +44,10 @@ namespace Common.TransformPath
         public float PendingTime { get; set; }
 
         private PathMovementSettings _movement;
+        // The next event or a held cap stays the limit for many frames, and on a
+        // curved time curve each inverse is a search over the curve.
+        private float _inverseLimit = float.NaN;
+        private double _inverseFraction;
 
         public void Begin(PathRoute session, bool loop)
         {
@@ -66,6 +70,7 @@ namespace Common.TransformPath
             PathMovementSettings settings = session.GetMovementSettings(index);
             MoveType = settings.MoveType;
             _movement = settings;
+            _inverseLimit = float.NaN;
             if (preserveSpeed
                 && previousNominalSpeed >= PathConstants.MIN_MOVE_VALUE
                 && PathValueUtility.IsFinite(previousNominalSpeed))
@@ -154,7 +159,7 @@ namespace Common.TransformPath
                 double duration = Math.Max(Duration, PathConstants.MIN_MOVE_VALUE);
                 double target = reason == EPathStep.End
                     ? duration
-                    : _movement.InverseProgress(limit) * duration;
+                    : InverseTimeFraction(limit) * duration;
                 step = PathProgressCalculator.AdvanceToward(_elapsed, target, multiplier, availableTime);
                 _elapsed = step.Position;
                 progress = _movement.EvaluateProgress((float)(_elapsed / duration));
@@ -180,6 +185,16 @@ namespace Common.TransformPath
             if (Normalized != before)
                 Global = Mathf.Min(cap, session.GetGlobalProgress(Segment, Normalized));
             return step.Reached ? reason : EPathStep.TimeUsed;
+        }
+
+        private double InverseTimeFraction(float progress)
+        {
+            if (progress != _inverseLimit)
+            {
+                _inverseLimit = progress;
+                _inverseFraction = _movement.InverseProgress(progress);
+            }
+            return _inverseFraction;
         }
 
         public void MoveToSegmentEnd(PathRoute session)

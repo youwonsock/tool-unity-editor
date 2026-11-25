@@ -11,6 +11,9 @@ namespace Common.TransformPath
     public readonly struct PathMovementSettings
     {
         private readonly AnimationCurve _timeCurve;
+        // The default curve and its copies map time to progress one to one, so
+        // neither direction needs the curve.
+        private readonly bool _linearTime;
 
         public EPathMoveType MoveType { get; }
 
@@ -30,6 +33,7 @@ namespace Common.TransformPath
                 : timeCurve == null || timeCurve.length == 0
                     ? AnimationCurve.Linear(0f, 0f, 1f, 1f)
                     : PathValueUtility.CloneCurve(timeCurve);
+            _linearTime = _timeCurve != null && IsIdentity(_timeCurve);
         }
 
         public static PathMovementSettings Time(float duration, AnimationCurve curve = null)
@@ -49,14 +53,14 @@ namespace Common.TransformPath
         internal float EvaluateProgress(float rawProgress)
         {
             float raw = Mathf.Clamp01(rawProgress);
-            return Mathf.Clamp01(_timeCurve == null ? raw : _timeCurve.Evaluate(raw));
+            return Mathf.Clamp01(_timeCurve == null || _linearTime ? raw : _timeCurve.Evaluate(raw));
         }
 
         /// <summary>The raw time fraction at which the time curve reaches a progress.</summary>
         internal float InverseProgress(float progress)
         {
             float target = Mathf.Clamp01(progress);
-            if (target <= 0f || target >= 1f || _timeCurve == null)
+            if (target <= 0f || target >= 1f || _timeCurve == null || _linearTime)
                 return target;
             float low = 0f;
             float high = 1f;
@@ -67,6 +71,19 @@ namespace Common.TransformPath
                 else low = middle;
             }
             return high;
+        }
+
+        // (0, 0) to (1, 1) with unit tangents and no weights: the Hermite curve is the line itself.
+        private static bool IsIdentity(AnimationCurve curve)
+        {
+            if (curve.length != 2)
+                return false;
+            Keyframe start = curve[0];
+            Keyframe end = curve[1];
+            return start.time == 0f && start.value == 0f && end.time == 1f && end.value == 1f
+                && Mathf.Approximately(start.outTangent, 1f) && Mathf.Approximately(end.inTangent, 1f)
+                && (start.weightedMode & WeightedMode.Out) == 0
+                && (end.weightedMode & WeightedMode.In) == 0;
         }
 
         internal bool IsSameAs(PathMovementSettings other)

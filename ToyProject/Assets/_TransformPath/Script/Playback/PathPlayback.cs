@@ -194,7 +194,7 @@ namespace Common.TransformPath
             EnsureInitialized();
             PathValueUtility.ThrowIfNotMoveValue(speed, nameof(speed));
             if (_route == null)
-                throw new InvalidOperationException("Speed can only be changed during playback.");
+                throw new InvalidOperationException("Speed can only be changed after Play.");
             if (_cursor.MoveType != EPathMoveType.SpeedBased)
                 throw new InvalidOperationException("Speed can only be changed in SpeedBased mode.");
             _effects.CancelBlend(EPathEffectChannel.Speed);
@@ -206,7 +206,7 @@ namespace Common.TransformPath
             EnsureInitialized();
             PathValueUtility.ThrowIfNotMoveValue(duration, nameof(duration));
             if (_route == null)
-                throw new InvalidOperationException("Duration can only be changed during playback.");
+                throw new InvalidOperationException("Duration can only be changed after Play.");
             if (_cursor.MoveType != EPathMoveType.TimeBased)
                 throw new InvalidOperationException("Duration can only be changed in TimeBased mode.");
             _effects.CancelBlend(EPathEffectChannel.Duration);
@@ -250,6 +250,12 @@ namespace Common.TransformPath
             if (!TryRefreshRoute())
             {
                 Stop(_route.Provider.IsReady ? EPathPlaybackEnd.RouteChanged : EPathPlaybackEnd.RouteUnavailable);
+                return;
+            }
+            // A sequence's path destroyed while it was never active tells no one.
+            if (!_route.IsSegmentReady(_cursor.Segment))
+            {
+                Stop(EPathPlaybackEnd.RouteUnavailable);
                 return;
             }
             if (deltaTime <= 0f)

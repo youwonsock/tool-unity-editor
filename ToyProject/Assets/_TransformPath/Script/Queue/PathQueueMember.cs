@@ -142,10 +142,15 @@ namespace Common.TransformPath
             remove => _invalidated.Remove(value);
         }
 
-        private void Awake()
+        private void Awake() => ResolveManager();
+
+        // Without an assigned manager, the one on a parent. A sibling's OnEnable or
+        // another object's Awake can start this member before its own Awake.
+        private QueuedPathManager ResolveManager()
         {
             if (_manager == null)
                 _manager = GetComponentInParent<QueuedPathManager>();
+            return _manager;
         }
 
         // A disabled member leaves the queue quietly. Its follower keeps playing,
@@ -166,7 +171,7 @@ namespace Common.TransformPath
         #region Commands
 
         /// <summary>Plays in the Inspector's manager.</summary>
-        public bool StartQueuedPlayback(PathPlaybackRequest request) => StartQueuedPlayback(_manager, request);
+        public bool StartQueuedPlayback(PathPlaybackRequest request) => StartQueuedPlayback(ResolveManager(), request);
 
         /// <summary>
         /// Plays the request and joins the manager. The manager and the request
@@ -175,7 +180,9 @@ namespace Common.TransformPath
         /// </summary>
         public bool StartQueuedPlayback(QueuedPathManager manager, PathPlaybackRequest request, float maxProgress = 1f)
         {
-            if (manager == null || !manager.isActiveAndEnabled || !manager.IsInitialized)
+            if (manager != null)
+                manager.InitializeBeforeAwake();
+            if (manager == null || !manager.IsEnabledInHierarchy || !manager.IsInitialized)
                 throw new InvalidOperationException("QueuedPathManager must be initialized before starting a queued move.");
             // A disabled member would never hear the queue or leave it. Not isActiveAndEnabled:
             // that is still false while an earlier component's OnEnable runs on reactivation.
