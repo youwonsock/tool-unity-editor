@@ -845,6 +845,244 @@ namespace Common.TransformPath.Tests
             CollectionAssert.AreEqual(new[] { EPathQueueLeaveReason.ProviderInvalid }, reasons);
         }
 
+        [Test]
+        public void PolicyThatDisablesAndEnablesTheManager_ReleasesTheMembers_AndStaysUsable()
+        {
+            PathData path = Line(30f, 4f);
+            QueuedPathManager manager = CreateManager(path);
+            PathQueueMember first = CreateMember();
+            var reasons = new List<EPathQueueLeaveReason>();
+            first.QueueInvalidated += (member, reason) => reasons.Add(reason);
+            first.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            bool toggled = false;
+            // What SetActive(false) then SetActive(true) from inside the policy runs.
+            manager.SpacingPolicy = CreatePolicy("Toggler", (member, ahead, spacing) =>
+            {
+                if (!toggled)
+                {
+                    toggled = true;
+                    manager.Release();
+                    manager.Initialize();
+                }
+                return spacing;
+            });
+
+            Frames(2);
+
+            Assert.IsTrue(toggled);
+            Assert.IsTrue(manager.IsInitialized);
+            Assert.AreEqual(0, manager.MemberCount);
+            CollectionAssert.AreEqual(new[] { EPathQueueLeaveReason.ManagerReleased }, reasons);
+            PathQueueMember next = CreateMember();
+            Assert.IsTrue(next.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path)));
+            Frames(1);
+            Assert.IsTrue(next.IsInQueue);
+        }
+
+        [Test]
+        public void MembersRestartedFromCompleted_TakeTurnsWithThoseWaitingAtTheStart()
+        {
+            // Six members with 1.5 m spacing do not fit on 6 m, so some wait at the start.
+            PathData path = Line(6f, 4f);
+            QueuedPathManager manager = CreateManager(path);
+            var members = new PathQueueMember[6];
+            var laps = new int[members.Length];
+            for (int i = 0; i < members.Length; i++)
+            {
+                PathQueueMember member = CreateMember();
+                int index = i;
+                member.Follower.Completed += () =>
+                {
+                    laps[index]++;
+                    member.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+                };
+                members[i] = member;
+            }
+            foreach (PathQueueMember member in members)
+                member.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+
+            Frames(1800);
+
+            // A restart goes behind the members already waiting instead of passing them again.
+            foreach (int lap in laps)
+                Assert.GreaterOrEqual(lap, 3);
+        }
+
+        [Test]
+        public void ManagerReleasedOrRouteDestroyedInACompletedListener_LetsTheMemberLeaveAsCompleted()
+        {
+            PathData released = Line(3f, 4f);
+            QueuedPathManager releasedManager = CreateManager(released);
+            PathQueueMember first = CreateMember();
+            PathData destroyed = Line(3f, 4f);
+            QueuedPathManager destroyedManager = CreateManager(destroyed);
+            PathQueueMember second = CreateMember();
+            var reasons = new List<EPathQueueLeaveReason>();
+            first.QueueInvalidated += (member, reason) => reasons.Add(reason);
+            second.QueueInvalidated += (member, reason) => reasons.Add(reason);
+            first.Follower.Completed += () => releasedManager.Release();
+            second.Follower.Completed += () => DestroyProvider(destroyed);
+            first.StartQueuedPlayback(releasedManager, PathPlaybackRequest.Single(released));
+            second.StartQueuedPlayback(destroyedManager, PathPlaybackRequest.Single(destroyed));
+
+            Frames(90);
+
+            Assert.AreEqual(EPathPlaybackEnd.Completed, first.Follower.LastPlaybackEnd);
+            Assert.AreEqual(EPathPlaybackEnd.Completed, second.Follower.LastPlaybackEnd);
+            Assert.IsFalse(first.IsInQueue || second.IsInQueue);
+            Assert.IsEmpty(reasons);
+        }
+
+        [Test]
+        public void ValueBlend_EndsAtTheSegmentEnd_SoTheNextSegmentKeepsItsOwnDuration()
+        {
+            PathData first = _scene.CreatePath(PathMovementSettings.Time(10f), EPathCurveType.Linear,
+                Vector3.zero, new Vector3(10f, 0f, 0f));
+            PathData second = _scene.CreatePath(PathMovementSettings.Time(1f), EPathCurveType.Linear,
+                new Vector3(10f, 0f, 0f), new Vector3(20f, 0f, 0f));
+            PathEventSettingSO slow = _scene.CreateEvent("Slow");
+            slow.UseDurationChange = true;
+            slow.DurationTarget = 20f;
+            slow.DurationBlendTime = 5f;
+            _scene.SetEvents(first, (0.9f, slow));
+            MultiPathData sequence = _scene.CreateSequence();
+            sequence.SetSegments(new[] { new PathSegmentAuthoring(first), new PathSegmentAuthoring(second) });
+            PathFollower follower = CreateFollower();
+            follower.Play(PathPlaybackRequest.Sequence(sequence));
+
+            for (int i = 0; i < 2000 && follower.SegmentIndex == 0; i++)
+                Frames(1);
+            Frames(1);
+
+            Assert.AreEqual(1, follower.SegmentIndex);
+            Assert.AreEqual(1f, follower.Duration, 1e-5f);
+            Assert.IsFalse(follower.HasPendingEventEffects);
+        }
+
+        [Test]
+        public void SeekIntoASegmentThatPreservesSpeed_TakesTheSpeedItHasNow()
+        {
+            PathData first = _scene.CreatePath(PathMovementSettings.Speed(2f), EPathCurveType.Linear,
+                Vector3.zero, new Vector3(10f, 0f, 0f));
+            PathData second = _scene.CreatePath(PathMovementSettings.Speed(5f), EPathCurveType.Linear,
+                new Vector3(10f, 0f, 0f), new Vector3(20f, 0f, 0f));
+            PathData third = _scene.CreatePath(PathMovementSettings.Speed(3f), EPathCurveType.Linear,
+                new Vector3(20f, 0f, 0f), new Vector3(30f, 0f, 0f));
+            MultiPathData sequence = _scene.CreateSequence();
+            sequence.SetSegments(new[]
+            {
+                new PathSegmentAuthoring(first), new PathSegmentAuthoring(second, true), new PathSegmentAuthoring(third),
+            });
+            PathFollower follower = CreateFollower();
+            follower.Play(PathPlaybackRequest.Sequence(sequence));
+
+            follower.SeekSegment(1, 0.1f);
+            Assert.AreEqual(2f, follower.Speed, 1e-5f);
+            follower.SeekSegment(2, 0.1f);
+            Assert.AreEqual(3f, follower.Speed, 1e-5f);
+        }
+
+        [Test]
+        public void PausedFollower_DoesNotSampleASegmentWhosePathLeftAndFailed()
+        {
+            PathData first = Line(10f, 2f);
+            PathData second = _scene.CreatePath(PathMovementSettings.Speed(2f), EPathCurveType.Linear,
+                new Vector3(10f, 0f, 0f), new Vector3(20f, 0f, 0f));
+            PathData replacement = _scene.CreatePath(PathMovementSettings.Speed(2f), EPathCurveType.Linear,
+                new Vector3(10f, 0f, 0f), new Vector3(10f, 0f, 10f));
+            MultiPathData sequence = _scene.CreateSequence();
+            sequence.SetSegments(new[] { new PathSegmentAuthoring(first), new PathSegmentAuthoring(second) });
+            PathFollower follower = CreateFollower();
+            follower.Play(PathPlaybackRequest.Sequence(sequence));
+            follower.SeekSegment(1, 0.5f);
+            follower.Pause();
+            sequence.SetSegments(new[] { new PathSegmentAuthoring(first), new PathSegmentAuthoring(replacement) });
+
+            LogAssert.Expect(LogType.Error, new Regex("could not build"));
+            second.SetPathPoints(new Transform[0]);
+
+            Assert.IsFalse(follower.AlignRotationToPathDirection());
+        }
+
+        [Test]
+        public void DisabledFollower_CannotPlay()
+        {
+            PathData path = Line(10f, 2f);
+            PathFollower follower = CreateFollower();
+            follower.enabled = false;
+
+            Assert.Throws<System.InvalidOperationException>(() => follower.Play(PathPlaybackRequest.Single(path)));
+            Assert.AreEqual(EPathFollowerState.Ready, follower.State);
+        }
+
+        [Test]
+        public void CopyOfAMovingFollower_TurnsItsCharacterControllerBackOn()
+        {
+            PathData path = Line(2f, 4f);
+            var host = new GameObject("Controlled");
+            _objects.Add(host);
+            CharacterController controller = host.AddComponent<CharacterController>();
+            PathFollower follower = host.AddComponent<PathFollower>();
+            follower.Initialize();
+            _driver.Register(follower);
+            follower.Play(PathPlaybackRequest.Single(path));
+            Assert.IsFalse(controller.enabled);
+
+            GameObject copy = Object.Instantiate(host);
+            _objects.Add(copy);
+            // Play Mode's Awake; Edit Mode does not wake a copy.
+            copy.GetComponent<PathFollower>().Initialize();
+
+            Assert.IsTrue(copy.GetComponent<CharacterController>().enabled);
+            Assert.IsFalse(controller.enabled);
+            Frames(60);
+            Assert.AreEqual(EPathFollowerState.Completed, follower.State);
+            Assert.IsTrue(controller.enabled);
+        }
+
+        [Test]
+        public void FreePlaybackWithADisabledFollower_ThrowsAndKeepsTheMemberInTheQueue()
+        {
+            PathData path = Line(30f, 4f);
+            QueuedPathManager manager = CreateManager(path);
+            PathQueueMember member = CreateMember();
+            member.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            Frames(5);
+            member.Follower.enabled = false;
+
+            Assert.Throws<System.InvalidOperationException>(
+                () => member.StartFreePlayback(PathPlaybackRequest.Single(path)));
+            Assert.IsTrue(member.IsInQueue);
+        }
+
+        [Test]
+        public void CopyOfAMovingFollower_LeavesAControllerOutsideItAlone()
+        {
+            PathData path = Line(2f, 4f);
+            var parent = new GameObject("Controlled Parent");
+            _objects.Add(parent);
+            CharacterController controller = parent.AddComponent<CharacterController>();
+            var child = new GameObject("Follower");
+            child.transform.SetParent(parent.transform, false);
+            PathFollower follower = child.AddComponent<PathFollower>();
+            typeof(PathFollower)
+                .GetField("_characterController", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                .SetValue(follower, controller);
+            follower.Initialize();
+            _driver.Register(follower);
+            follower.Play(PathPlaybackRequest.Single(path));
+            Assert.IsFalse(controller.enabled);
+
+            GameObject copy = Object.Instantiate(child);
+            _objects.Add(copy);
+            copy.GetComponent<PathFollower>().Initialize();
+
+            // The original still moves and still holds its controller off.
+            Assert.IsFalse(controller.enabled);
+            Frames(60);
+            Assert.IsTrue(controller.enabled);
+        }
+
         private TestSpacingPolicy CreatePolicy(string name,
             System.Func<PathQueueMember, PathQueueMember, float, float> rule)
         {
