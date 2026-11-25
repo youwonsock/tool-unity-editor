@@ -40,7 +40,9 @@ namespace Common.TransformPath.Editor
                 "Edit-mode only: moving one member syncs the group. "
                 + "Use PathData's \"Refresh Path Points from Children\" to collect child points.",
                 MessageType.Info);
+            int groupsBefore = _groupsProperty.arraySize;
             EditorGUILayout.PropertyField(_groupsProperty, true);
+            EnableFirstGroups(groupsBefore);
 
             EditorGUILayout.Space(8f);
             DrawActionButtons();
@@ -65,7 +67,6 @@ namespace Common.TransformPath.Editor
                 EditorGUI.BeginDisabledGroup(Application.isPlaying);
                 if (GUILayout.Button("Align All Groups"))
                 {
-                    PathEditorUndoUtility.Record(registry, "Align All Waypoint Groups");
                     int count = PathWaypointSyncEditorUtility.AlignAllGroups(
                         registry,
                         POSITION_SYNC_EPSILON_SQR);
@@ -83,15 +84,27 @@ namespace Common.TransformPath.Editor
                 EditorGUILayout.HelpBox("Path authoring tools are disabled in Play Mode.", MessageType.Info);
             if (alignFirst && registry.Groups.Count > 0)
             {
-                MultiPathData multiPathData = registry.GetComponent<MultiPathData>();
-                PathEditorUndoUtility.Record(registry, "Align Waypoint Group");
-                PathWaypointSyncEditorUtility.AlignGroupToFirstMember(
-                    registry.Groups[0],
-                    POSITION_SYNC_EPSILON_SQR,
-                    PathWaypointSyncEditorUtility.BuildTransformToPathDataMap(multiPathData),
-                    multiPathData);
+                PathWaypointSyncGroup first = registry.Groups[0];
+                if (first == null || !first.Enabled)
+                    Debug.LogWarning("PathWaypointSyncRegistry: the first group is disabled.", registry);
+                else
+                    PathWaypointSyncEditorUtility.AlignGroupToFirstMember(
+                        first,
+                        POSITION_SYNC_EPSILON_SQR,
+                        PathWaypointSyncEditorUtility.BuildTransformToPathDataMap(registry.GetComponent<MultiPathData>()));
                 PathEditorUndoUtility.RepaintScene();
             }
+        }
+
+        // The list's "+" zeroes the first element it adds to an empty list, which
+        // would leave that group off. A group starts enabled, as its class declares;
+        // later elements copy the one before them.
+        private void EnableFirstGroups(int countBefore)
+        {
+            if (countBefore != 0)
+                return;
+            for (int i = 0; i < _groupsProperty.arraySize; i++)
+                _groupsProperty.GetArrayElementAtIndex(i).FindPropertyRelative("_enabled").boolValue = true;
         }
 
         #endregion

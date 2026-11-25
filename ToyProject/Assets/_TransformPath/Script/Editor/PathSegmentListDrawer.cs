@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
@@ -15,8 +16,32 @@ namespace Common.TransformPath.Editor
         private const float ROW_PADDING = 4f;
         private const int ROWS = 3;
 
+        // What one target's segments were before the plain field drew them.
+        private readonly struct Snapshot
+        {
+            public readonly MultiPathData Target;
+            public readonly PathData[] Paths;
+            public readonly bool[] Overrides;
+
+            public Snapshot(MultiPathData target)
+            {
+                Target = target;
+                int count = target.AuthoringSegmentCount;
+                Paths = new PathData[count];
+                Overrides = new bool[count];
+                for (int i = 0; i < count; i++)
+                {
+                    PathSegmentAuthoring segment = target.GetAuthoringSegment(i);
+                    Paths[i] = segment.Path;
+                    Overrides[i] = segment.MovementSource == EPathSegmentMovementSource.Override;
+                }
+            }
+        }
+
         private readonly SerializedObject _serializedObject;
         private readonly bool _singleTarget;
+        private readonly List<Snapshot> _snapshots = new List<Snapshot>();
+        private bool _fixUpTargets;
         private ReorderableList _list;
 
         public PathSegmentListDrawer(SerializedObject serializedObject, bool singleTarget)
@@ -42,8 +67,59 @@ namespace Common.TransformPath.Editor
             if (_singleTarget)
                 _list?.DoLayoutList();
             else
+            {
+                CaptureTargets();
                 EditorGUILayout.PropertyField(Property, new GUIContent("Segments"), true);
-            return EditorGUI.EndChangeCheck();
+            }
+            bool changed = EditorGUI.EndChangeCheck();
+            _fixUpTargets |= changed && !_singleTarget;
+            return changed;
+        }
+
+        /// <summary>
+        /// Several targets get Unity's plain field, which neither starts new segments
+        /// nor seeds an Override as the single-target list does. After the Inspector
+        /// applied the field's change, each target gets what the list would have done.
+        /// </summary>
+        public void ApplyListDefaultsToTargets()
+        {
+            if (!_fixUpTargets)
+                return;
+            _fixUpTargets = false;
+            for (int t = 0; t < _snapshots.Count; t++)
+            {
+                Snapshot before = _snapshots[t];
+                if (before.Target == null)
+                    continue;
+                var serialized = new SerializedObject(before.Target);
+                SerializedProperty segments = serialized.FindProperty(PathEditorSerializationUtility.SEGMENTS_PROPERTY);
+                for (int i = 0; i < segments.arraySize; i++)
+                {
+                    SerializedProperty element = segments.GetArrayElementAtIndex(i);
+                    SerializedProperty path = element.FindPropertyRelative(PathEditorSerializationUtility.PATH_PROPERTY);
+                    SerializedProperty source = element.FindPropertyRelative(MOVEMENT_SOURCE_PROPERTY);
+                    if (i >= before.Paths.Length)
+                        StartNewSegment(element, zeroed: before.Paths.Length == 0);
+                    // Only the same segment switching over: a reorder moves an Override, it does not choose one.
+                    else if (!before.Overrides[i]
+                        && source.enumValueIndex == (int)EPathSegmentMovementSource.Override
+                        && path.objectReferenceValue == before.Paths[i])
+                        SeedOverride(element, path.objectReferenceValue as PathData);
+                }
+                serialized.ApplyModifiedProperties();
+            }
+            _snapshots.Clear();
+        }
+
+        private void CaptureTargets()
+        {
+            _snapshots.Clear();
+            Object[] targets = _serializedObject.targetObjects;
+            for (int i = 0; i < targets.Length; i++)
+            {
+                if (targets[i] is MultiPathData target)
+                    _snapshots.Add(new Snapshot(target));
+            }
         }
 
         private ReorderableList CreateList()
@@ -68,24 +144,22 @@ namespace Common.TransformPath.Editor
             segments.InsertArrayElementAtIndex(Mathf.Max(0, index - 1));
             SerializedProperty element = segments.GetArrayElementAtIndex(segments.arraySize - 1);
             if (element != null)
-            {
-                if (index == 0)
-                {
-                    SerializedProperty path = element.FindPropertyRelative(PathEditorSerializationUtility.PATH_PROPERTY);
-                    if (path != null)
-                        path.objectReferenceValue = null;
-                    // A first element is zeroed rather than built, and a zero Override value
-                    // would fail the build once the segment switches to Override.
-                    SerializedProperty value = element.FindPropertyRelative(PathInspectorGUI.MOVE_VALUE);
-                    if (value != null)
-                        value.floatValue = PathSegmentAuthoring.DEFAULT_OVERRIDE_VALUE;
-                }
-                SerializedProperty source = element.FindPropertyRelative(MOVEMENT_SOURCE_PROPERTY);
-                if (source != null)
-                    source.enumValueIndex = (int)EPathSegmentMovementSource.Path;
-                element.FindPropertyRelative(PRESERVE_PROPERTY).boolValue = false;
-            }
+                StartNewSegment(element, zeroed: index == 0);
             list.index = segments.arraySize - 1;
+        }
+
+        // A first element is zeroed rather than built, and a zero Override value
+        // would fail the build once the segment switches to Override. A later one
+        // copies the segment before it but starts with its PathData's own movement.
+        private static void StartNewSegment(SerializedProperty element, bool zeroed)
+        {
+            if (zeroed)
+            {
+                element.FindPropertyRelative(PathEditorSerializationUtility.PATH_PROPERTY).objectReferenceValue = null;
+                element.FindPropertyRelative(PathInspectorGUI.MOVE_VALUE).floatValue = PathSegmentAuthoring.DEFAULT_OVERRIDE_VALUE;
+            }
+            element.FindPropertyRelative(MOVEMENT_SOURCE_PROPERTY).enumValueIndex = (int)EPathSegmentMovementSource.Path;
+            element.FindPropertyRelative(PRESERVE_PROPERTY).boolValue = false;
         }
 
         // An Override starts as the movement the segment had a moment ago: its

@@ -35,8 +35,11 @@ namespace Common.TransformPath.Editor
             EditorGUI.BeginDisabledGroup(!authoringToolsEnabled);
             if (GUILayout.Button("Snap to Ground"))
                 PathPointTools.SnapToGround(paths);
+            bool canCreatePoints = paths.TrueForAll(PathPointTools.CanCreatePoints);
+            EditorGUI.BeginDisabledGroup(!canCreatePoints);
             if (GUILayout.Button("Create Path Points"))
                 PathPointTools.CreateDefaultPoints(paths);
+            EditorGUI.EndDisabledGroup();
             if (GUILayout.Button(new GUIContent(
                     "Refresh Path Points from Children",
                     "Sets _pathPoints to the descendants whose names start with PathPoint, in hierarchy order.")))
@@ -46,6 +49,10 @@ namespace Common.TransformPath.Editor
             if (!authoringToolsEnabled)
                 EditorGUILayout.HelpBox(
                     "Path authoring tools are disabled in Play Mode.",
+                    MessageType.Info);
+            else if (!canCreatePoints)
+                EditorGUILayout.HelpBox(
+                    "Open the prefab to create path points.",
                     MessageType.Info);
 
             if (GUILayout.Button("Rebuild Runtime Path"))

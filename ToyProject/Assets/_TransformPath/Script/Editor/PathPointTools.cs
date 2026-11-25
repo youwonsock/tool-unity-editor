@@ -45,9 +45,12 @@ namespace Common.TransformPath.Editor
                     Transform point = pathPoints[pointIndex];
                     if (point == null)
                         continue;
-                    if (physics.Raycast(point.position, Vector3.down, out RaycastHit hit, MAX_RAYCAST_DISTANCE)
+                    // Triggers are volumes, not ground.
+                    if (physics.Raycast(point.position, Vector3.down, out RaycastHit hit, MAX_RAYCAST_DISTANCE,
+                            Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)
                         || (searchContext && Physics.defaultPhysicsScene.Raycast(
-                            point.position, Vector3.down, out hit, MAX_RAYCAST_DISTANCE)))
+                            point.position, Vector3.down, out hit, MAX_RAYCAST_DISTANCE,
+                            Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)))
                     {
                         point.position = hit.point;
                         PathEditorUndoUtility.RecordPrefabOverride(point);
@@ -80,6 +83,13 @@ namespace Common.TransformPath.Editor
                 PathData pathData = paths[i];
                 if (pathData == null)
                     continue;
+                if (!CanCreatePoints(pathData))
+                {
+                    Debug.LogWarning(
+                        "PathData: open the prefab to create path points; a prefab asset cannot take new children here.",
+                        pathData);
+                    continue;
+                }
 
                 int undoGroup = Undo.GetCurrentGroup();
                 Undo.SetCurrentGroupName("Create Path Points");
@@ -105,6 +115,14 @@ namespace Common.TransformPath.Editor
             }
             PathEditorUndoUtility.RepaintScene();
         }
+
+        /// <summary>
+        /// New points are scene objects parented under the path. A prefab asset that
+        /// is not open lives in no scene, so Unity refuses the parent and the points
+        /// would stay behind in the open scene.
+        /// </summary>
+        public static bool CanCreatePoints(PathData pathData) =>
+            pathData != null && !EditorUtility.IsPersistent(pathData);
 
         /// <summary>Uses the descendants whose names start with PathPoint, in hierarchy order.</summary>
         public static void RefreshFromChildren(IReadOnlyList<PathData> paths)

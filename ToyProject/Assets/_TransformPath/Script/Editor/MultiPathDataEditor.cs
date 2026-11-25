@@ -73,6 +73,7 @@ namespace Common.TransformPath.Editor
             }
 
             inspectorChanged |= serializedObject.ApplyModifiedProperties();
+            _segments.ApplyListDefaultsToTargets();
             if (inspectorChanged)
                 PathEditorUndoUtility.RepaintScene();
         }

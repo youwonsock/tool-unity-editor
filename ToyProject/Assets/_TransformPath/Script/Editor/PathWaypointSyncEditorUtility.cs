@@ -21,8 +21,7 @@ namespace Common.TransformPath.Editor
             PathWaypointSyncGroup group,
             Vector3[] memberSnapshots,
             float epsilonSqr,
-            Dictionary<Transform, PathData> transformToPathData,
-            MultiPathData multiPathData)
+            Dictionary<Transform, PathData> transformToPathData)
         {
             if (group == null || !group.Enabled || memberSnapshots == null)
                 return false;
@@ -32,14 +31,13 @@ namespace Common.TransformPath.Editor
 
             int source = PathPointSync.FindMovedSource(members, memberSnapshots, epsilonSqr);
             return source >= 0
-                && AlignGroupToSource(group, members[source], epsilonSqr, transformToPathData, multiPathData);
+                && AlignGroupToSource(group, members[source], epsilonSqr, transformToPathData);
         }
 
         public static bool AlignGroupToFirstMember(
             PathWaypointSyncGroup group,
             float epsilonSqr,
-            Dictionary<Transform, PathData> transformToPathData,
-            MultiPathData multiPathData)
+            Dictionary<Transform, PathData> transformToPathData)
         {
             if (group == null || !group.Enabled)
                 return false;
@@ -50,18 +48,17 @@ namespace Common.TransformPath.Editor
             for (int i = 0; i < members.Length; i++)
             {
                 if (members[i] != null)
-                    return AlignGroupToSource(group, members[i], epsilonSqr, transformToPathData, multiPathData);
+                    return AlignGroupToSource(group, members[i], epsilonSqr, transformToPathData);
             }
             return false;
         }
 
-        /// <summary>Moves every member onto the source and rebuilds the paths that changed.</summary>
+        /// <summary>Moves every member onto the source and marks the paths that changed.</summary>
         public static bool AlignGroupToSource(
             PathWaypointSyncGroup group,
             Transform source,
             float epsilonSqr,
-            Dictionary<Transform, PathData> transformToPathData,
-            MultiPathData multiPathData)
+            Dictionary<Transform, PathData> transformToPathData)
         {
             if (group == null || source == null || group.Members == null)
                 return false;
@@ -73,7 +70,8 @@ namespace Common.TransformPath.Editor
             for (int i = 0; i < Moved.Count; i++)
                 CollectPathData(Moved[i], transformToPathData, affectedPathDatas);
             CollectPathData(source, transformToPathData, affectedPathDatas);
-            RebuildAffected(affectedPathDatas, multiPathData);
+            foreach (PathData pathData in affectedPathDatas)
+                PathEditorUndoUtility.MarkDirty(pathData);
             return true;
         }
 
@@ -104,28 +102,6 @@ namespace Common.TransformPath.Editor
             return map;
         }
 
-        public static void RebuildAffected(
-            HashSet<PathData> affectedPathDatas,
-            MultiPathData multiPathData)
-        {
-            if (affectedPathDatas != null)
-            {
-                foreach (PathData pathData in affectedPathDatas)
-                {
-                    if (pathData == null)
-                        continue;
-                    pathData.Rebuild();
-                    PathEditorUndoUtility.MarkDirty(pathData);
-                }
-            }
-
-            if (multiPathData == null)
-                return;
-
-            multiPathData.Rebuild();
-            PathEditorUndoUtility.MarkDirty(multiPathData);
-        }
-
         public static int AlignAllGroups(
             PathWaypointSyncRegistry registry,
             float epsilonSqr)
@@ -145,11 +121,7 @@ namespace Common.TransformPath.Editor
                 if (group == null || !group.Enabled)
                     continue;
 
-                if (AlignGroupToFirstMember(
-                        group,
-                        epsilonSqr,
-                        transformToPathData,
-                        multiPathData))
+                if (AlignGroupToFirstMember(group, epsilonSqr, transformToPathData))
                     alignCount++;
             }
 

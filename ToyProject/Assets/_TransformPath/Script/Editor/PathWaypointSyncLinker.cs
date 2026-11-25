@@ -93,8 +93,7 @@ namespace Common.TransformPath.Editor
                             group,
                             snapshots,
                             POSITION_SYNC_EPSILON_SQR,
-                            _transformToPathData,
-                            MultiPathData))
+                            _transformToPathData))
                         syncedAny = true;
                 }
 
