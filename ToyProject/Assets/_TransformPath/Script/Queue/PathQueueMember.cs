@@ -298,7 +298,9 @@ namespace Common.TransformPath
             bool invalidated = reason == EPathQueueLeaveReason.ProviderInvalid
                 || reason == EPathQueueLeaveReason.ManagerReleased;
             // Waiting ends without a Resumed notification. Stop and Complete speak for themselves.
-            ResetWait(reason == EPathQueueLeaveReason.Completed);
+            // A Hold stays for the next queued start, as outside a queue: a held member
+            // cannot complete, so a Hold here was asked for after it did.
+            ResetWait(false);
             _reportedBlocked = false;
             if (!invalidated)
                 return;

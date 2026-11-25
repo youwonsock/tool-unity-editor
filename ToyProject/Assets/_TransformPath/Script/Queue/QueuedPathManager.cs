@@ -321,6 +321,10 @@ namespace Common.TransformPath
                 joined.MotionEpoch = member.Follower.MotionEpoch;
                 joined.Sequence = _nextSequence++;
                 joined.Status = null;
+                // The new place counts at once: GetMember lists it behind the
+                // others before the next Queue phase sorts the line again.
+                joined.Progress = Mathf.Clamp01(member.Follower.Progress);
+                PathSortUtility.StableInsertionSort(_ordered, CompareOrder);
                 return;
             }
             Entry entry = _pool.Count > 0 ? _pool[_pool.Count - 1] : new Entry();
@@ -376,11 +380,14 @@ namespace Common.TransformPath
             for (int i = 0; i < _leaving.Count; i++)
             {
                 PathQueueMember member = _leaving[i].Member;
-                // A playback that ended since the last Queue phase leaves for its own end.
+                // A playback that ended or moved to another route since the last Queue
+                // phase leaves as that phase would have reported it.
                 PathFollower follower = member.Follower;
                 EPathQueueLeaveReason own = follower == null
                     ? EPathQueueLeaveReason.Stopped
-                    : follower.PlaybackId == 0 ? LeaveReasonOf(follower.LastPlaybackEnd) : reason;
+                    : follower.PlaybackId == 0 ? LeaveReasonOf(follower.LastPlaybackEnd)
+                    : !ReferenceEquals(follower.CurrentProvider, _routeProvider) ? EPathQueueLeaveReason.ProviderInvalid
+                    : reason;
                 Remove(member);
                 member.OnRemovedByManager(own, _routeProvider);
             }

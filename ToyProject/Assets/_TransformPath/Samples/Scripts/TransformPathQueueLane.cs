@@ -15,6 +15,7 @@ namespace Common.TransformPath.Samples
         private readonly Action[] _restarts;
         private readonly Func<bool> _canRestart;
         private bool _subscribed;
+        private PathQueueMember _held;
 
         public TransformPathQueueLane(QueuedPathManager manager, MultiPathData path, PathQueueMember[] members, Func<bool> canRestart)
         {
@@ -30,6 +31,26 @@ namespace Common.TransformPath.Samples
         public MultiPathData Path { get; }
         public int MemberCount => _members.Length;
         public PathQueueMember Leader => Manager == null || Manager.MemberCount == 0 ? null : Manager.GetMember(0);
+
+        /// <summary>Holds the current leader; one member at a time.</summary>
+        public void HoldLeader()
+        {
+            PathQueueMember leader = Leader;
+            if (leader == null)
+                return;
+            if (_held != null && _held != leader)
+                _held.ReleaseHold();
+            _held = leader;
+            _held.Hold();
+        }
+
+        /// <summary>Releases the member HoldLeader held, even if the line changed since.</summary>
+        public void ReleaseHeldLeader()
+        {
+            PathQueueMember held = _held != null ? _held : Leader;
+            _held = null;
+            held?.ReleaseHold();
+        }
 
         /// <summary>Starts every idle member, then spreads the moving ones out from the start.</summary>
         public void Start()

@@ -250,8 +250,8 @@ namespace Common.TransformPath.Samples
                 _shapeFollower.Seek(Mathf.Repeat(_shapeFollower.Progress + delta, 1f));
         }
 
-        public void BlockQueueLeader() => _queue?.Leader?.Hold();
-        public void UnblockQueueLeader() => _queue?.Leader?.ReleaseHold();
+        public void BlockQueueLeader() => _queue?.HoldLeader();
+        public void UnblockQueueLeader() => _queue?.ReleaseHeldLeader();
 
         public void ToggleQueueVisibility()
         {
