@@ -299,7 +299,7 @@ namespace Common.FlowField
                         continue;
                     FlowFieldModifierWorkItem modifier = build.Modifiers[modifierIndex];
                     Collider collider = modifier.InfluenceCollider;
-                    if (!FlowFieldModifierMaskBuilder.IsUsableTrigger(collider))
+                    if (!FlowFieldModifierInfluence.IsUsableTrigger(collider))
                         continue;
                     int layerMask = 1 << collider.gameObject.layer;
                     if (!FlowFieldOverlapUtility.OverlapsTarget(
@@ -364,7 +364,7 @@ namespace Common.FlowField
             var rects = new List<FlowFieldCellRect>(build.Modifiers.Length);
             foreach (FlowFieldModifierWorkItem modifier in build.Modifiers)
             {
-                if (!FlowFieldModifierMaskBuilder.IsUsableTrigger(modifier.InfluenceCollider))
+                if (!FlowFieldModifierInfluence.IsUsableTrigger(modifier.InfluenceCollider))
                     continue;
                 Bounds bounds = modifier.InfluenceCollider.bounds;
                 bounds.Expand(grid.CellSize * 2f);
@@ -429,5 +429,157 @@ namespace Common.FlowField
             _build = null;
             return changed;
         }
-    }
+    
+
+        public bool IsWaitingForExternalCompletion
+            => _build != null && _build.SolveRunning && !_build.SolveHandle.IsCompleted;
+
+        public FlowFieldBuildPolicy BuildPolicy => new FlowFieldBuildPolicy(beginsAfterBudget: false, maxBuildsBegunPerPump: int.MaxValue);
+
+        public bool HasActiveBuild => _build != null;
+
+        // Every build but a Modifier recompose queries the obstacles.
+        public bool TryBeginBuild(out FlowFieldBuildStart start)
+        {
+            bool started = TryBeginPendingBuild();
+            start = new FlowFieldBuildStart(started && !_build.IsModifierRecompose, null);
+            return started;
+        }
+
+        public FlowFieldBuildStep StepBuild(in FlowFieldBuildBudget budget, bool waitForWorker)
+        {
+            if (IsWaitingForExternalCompletion && !waitForWorker)
+                return FlowFieldBuildStep.Waiting;
+            if (StepBuild(_build, budget, waitForWorker))
+                return FlowFieldBuildStep.Completed;
+            return _build.SolveRunning ? FlowFieldBuildStep.Waiting : FlowFieldBuildStep.Yield;
+        }
+
+        public bool PublishBuild() => CommitBuild(_build);
+
+        public bool HasOwedInput => _requests.Pending || _hasPendingModifierRecompose;
+
+        private bool TryBeginPendingBuild()
+        {
+            if (!_requests.Pending && !_hasPendingModifierRecompose)
+                return false;
+
+            // A Modifier change recomposes the published navigation. Before
+            // any field is published it builds in full like any request.
+            bool recompose = !_requests.Pending && _committed != null;
+            FlowFieldVolumeRequest request = recompose ? _committed.Request : _requests.Latest;
+            _requests.Pending = false;
+            _hasPendingModifierRecompose = false;
+            FlowFieldModifierWorkItem[] modifierSnapshots;
+            using (_session.Boundary.EnterUserCode())
+                modifierSnapshots = _session.Modifiers.CaptureSnapshots();
+            // A recompose queries no obstacles, so it resolves no safety region.
+            if (recompose)
+            {
+                _build = new BuildContext(
+                    _committed,
+                    modifierSnapshots,
+                    FlowFieldSpareArrays.Take(ref _spares.FinalDirections, request.Grid.CellCount),
+                    FlowFieldSpareArrays.Take(ref _spares.FinalSpeeds, request.Grid.CellCount));
+            }
+            else
+            {
+                bool reuseObstacles = CanReuseObstacleQueries(request);
+                bool requeryChangedCells = !reuseObstacles && CanRequeryChangedCells(request);
+                bool requiresFullQuery = _obstacleQueryRequired;
+                bool queryEveryCell = _queryEveryCell;
+                _obstacleQueryRequired = false;
+                _queryEveryCell = false;
+                _build = new BuildContext(request, modifierSnapshots);
+                _build.RequiresFullQuery = requiresFullQuery;
+                _build.QueriesEveryCell = queryEveryCell;
+                if (reuseObstacles)
+                {
+                    _build.ReusesObstacleQueries = true;
+                    _build.Blocked = _committed.Blocked;
+                    _build.Topology = _committed.Topology;
+                    _build.EscapeDirections = _committed.EscapeDirections;
+                }
+                else if (requeryChangedCells)
+                {
+                    _build.QueryOnlyChangedRegions(_committed.Blocked);
+                }
+                // While the sweep runs, a reload queries every cell instead,
+                // as Surface2D's swept mask scans every obstacle: the sweep's
+                // first pass after Init or a restart only records, so a
+                // Collider moved before it would never be seen.
+                else if (request.BakeMode == FlowFieldBakeMode.BakedBase
+                    && !queryEveryCell
+                    && !_session.SweepsObstacles)
+                {
+                    // BakedBase starts again from the bake. With nothing that
+                    // changed since, its obstacle results stand as baked.
+                    _build.LoadsBakedObstacles = true;
+                    _build.ReusesObstacleQueries = _safety.UncertainRegionCount == 0
+                        && _session.Obstacles.Count == 0
+                        && !_bakedBaseTouched.HasValue;
+                }
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Tracked obstacle changes report their regions, so the rest of the published
+        /// mask stays correct. Only an explicit rebuild (RequestRebuild,
+        /// NotifyCellsDirty), new obstacle settings or turning the sweep on or off
+        /// query every cell, which picks up a collider that moved without being
+        /// tracked; in BakedBase an explicit rebuild starts again from the bake
+        /// unless the sweep runs.
+        /// </summary>
+        private bool CanRequeryChangedCells(in FlowFieldVolumeRequest request)
+            => !_obstacleQueryRequired
+                && _committed != null
+                && request.BakeMode != FlowFieldBakeMode.StaticBaked
+                && _safety.UncertainRegionCount > 0
+                && _committed.Request.HasSameObstacleInputs(request);
+
+        /// <summary>
+        /// The obstacle result stands while nothing about the obstacles changed:
+        /// a Goal, Default Direction or Modifier change reuses it, an explicit
+        /// rebuild, a tracked change or new obstacle settings do not.
+        /// </summary>
+        private bool CanReuseObstacleQueries(in FlowFieldVolumeRequest request)
+            => !_obstacleQueryRequired
+                && _committed != null
+                && request.BakeMode != FlowFieldBakeMode.StaticBaked
+                && _safety.UncertainRegionCount == 0
+                && _committed.Request.HasSameObstacleInputs(request);
+
+        // A BakedBase build that starts again from the bake queries what the
+        // bake cannot know: the uncertain regions, every region a change
+        // reached since Initialize, and the registered obstacles.
+        private Bounds[] BakedBaseRegions(BuildContext build)
+        {
+            var regions = new System.Collections.Generic.List<Bounds>(_safety.ObservedRegions());
+            if (_bakedBaseTouched.HasValue)
+                regions.Add(_bakedBaseTouched.Value);
+            float margin = FlowFieldObstacleReach.Margin(build.Request.Grid.CellSize, build.Request.ObstacleClearance);
+            FlowFieldObstacleRegistry registry = _session.Obstacles;
+            for (int i = 0; i < registry.Count; i++)
+            {
+                regions.Add(FlowFieldObstacleReach.Expand(registry.GetBounds(i), margin));
+                Collider collider = registry.GetCollider(i);
+                if (collider != null)
+                    regions.Add(FlowFieldObstacleReach.Expand(collider.bounds, margin));
+            }
+            return regions.ToArray();
+        }
+
+        private void DiscardBuild()
+        {
+            BuildContext previous = _build;
+            _build = null;
+            // The build that replaces it still owes the full query it was asked for.
+            if (previous != null && previous.RequiresFullQuery)
+                _obstacleQueryRequired = true;
+            if (previous != null && previous.QueriesEveryCell)
+                _queryEveryCell = true;
+            previous?.Dispose();
+        }
+}
 }

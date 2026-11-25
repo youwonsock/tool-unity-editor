@@ -13,7 +13,7 @@ namespace Common.FlowField
         private const byte ValidSurface = 1 << 0;
         private const float NormalEpsilonSqr = 0.000001f;
 
-        private readonly FlowFieldSurfaceBakeSettings _settings;
+        private readonly FlowFieldSurfaceGroundScanSettings _settings;
         private readonly FlowFieldGridSpace _grid;
         private readonly float[] _surfaceHeights;
         private readonly Vector3[] _surfaceNormals;
@@ -34,7 +34,7 @@ namespace Common.FlowField
         internal bool IsValid { get; }
 
         private FlowFieldSurfaceData(
-            in FlowFieldSurfaceBakeSettings settings,
+            in FlowFieldSurfaceGroundScanSettings settings,
             float[] surfaceHeights,
             Vector3[] surfaceNormals,
             byte[] surfaceFlags,
@@ -67,8 +67,8 @@ namespace Common.FlowField
         }
 
         internal static FlowFieldSurfaceData FromRuntime(
-            in FlowFieldSurfaceBakeSettings settings,
-            FlowFieldSurfaceBakeResult result,
+            in FlowFieldSurfaceGroundScanSettings settings,
+            FlowFieldSurfaceGroundScanResult result,
             int revision)
         {
             if (result == null)
@@ -87,7 +87,7 @@ namespace Common.FlowField
         }
 
         internal static FlowFieldSurfaceData FromSnapshot(
-            in FlowFieldSurfaceBakeSettings settings,
+            in FlowFieldSurfaceGroundScanSettings settings,
             float[] surfaceHeights,
             Vector3[] surfaceNormals,
             byte[] surfaceFlags,
@@ -104,7 +104,7 @@ namespace Common.FlowField
                 revision,
                 copyArrays: true);
 
-        internal bool Matches(in FlowFieldSurfaceBakeSettings settings, out string reason)
+        internal bool Matches(in FlowFieldSurfaceGroundScanSettings settings, out string reason)
         {
             reason = string.Empty;
             if (!settings.IsValid)
@@ -237,7 +237,7 @@ namespace Common.FlowField
 
     internal interface IFlowFieldSurfaceSource
     {
-        FlowFieldSurfaceData Build(in FlowFieldSurfaceBakeSettings settings);
+        FlowFieldSurfaceData Build(in FlowFieldSurfaceGroundScanSettings settings);
     }
 
     internal sealed class FlowFieldRaycastSurfaceSource : IFlowFieldSurfaceSource
@@ -249,9 +249,9 @@ namespace Common.FlowField
         {
         }
 
-        public FlowFieldSurfaceData Build(in FlowFieldSurfaceBakeSettings settings)
+        public FlowFieldSurfaceData Build(in FlowFieldSurfaceGroundScanSettings settings)
         {
-            FlowFieldSurfaceBakeResult result = FlowFieldSurfaceBaker.Bake(settings);
+            FlowFieldSurfaceGroundScanResult result = FlowFieldSurfaceGroundScan.ScanAll(settings);
             return FlowFieldSurfaceData.FromRuntime(settings, result, ++_revision);
         }
     }
@@ -265,7 +265,7 @@ namespace Common.FlowField
             _surface = surface ?? throw new ArgumentNullException(nameof(surface));
         }
 
-        public FlowFieldSurfaceData Build(in FlowFieldSurfaceBakeSettings settings)
+        public FlowFieldSurfaceData Build(in FlowFieldSurfaceGroundScanSettings settings)
         {
             if (!_surface.Matches(settings, out string reason))
                 throw new InvalidOperationException(reason);

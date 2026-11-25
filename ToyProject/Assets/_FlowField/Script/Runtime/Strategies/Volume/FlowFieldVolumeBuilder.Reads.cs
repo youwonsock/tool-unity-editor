@@ -2,11 +2,11 @@ using UnityEngine;
 
 namespace Common.FlowField
 {
-    /// <summary>Exports and read views of the published Volume3D field for bakes and tools.</summary>
+    /// <summary>Reads of the published Volume3D field: the field, its grid and info, and the bake export.</summary>
     internal sealed partial class FlowFieldVolumeBuilder
     {
         /// <summary>
-        /// What a Static Bake stores: the published request as metadata and
+        /// What a bake stores: the published request as metadata and
         /// copies of the published base field. False while nothing is published.
         /// </summary>
         internal bool TryExportBakeData(out FlowFieldVolumeBakePayload payload)
@@ -83,5 +83,17 @@ namespace Common.FlowField
                 resolvedGoal);
             return info.IsValid;
         }
-    }
+    
+
+        // The published field. A request on another grid or source drops it
+        // (Submit), so it is always on the latest request's grid.
+        public FlowFieldField PublishedField => _committed;
+
+        // The latest request's grid, which the next build uses, as in Surface2D.
+        public FlowFieldGridSpace LatestGrid => _requests.HasLatest ? _requests.Latest.Grid : default;
+
+        // Volume3D knows nothing newer than its published field; the shared
+        // rule reads that field and the notified uncertain regions.
+        public IFlowFieldLatestCells LatestCells => null;
+}
 }

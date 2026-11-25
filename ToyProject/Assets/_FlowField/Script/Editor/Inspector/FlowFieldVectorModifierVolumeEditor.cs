@@ -21,7 +21,7 @@ namespace Common.FlowField.Editor
                 return;
             }
 
-            if (!FlowFieldModifierMaskBuilder.TryValidateInfluenceCollider(modifier.InfluenceCollider, out string reason))
+            if (!FlowFieldModifierInfluence.TryValidateInfluenceCollider(modifier.InfluenceCollider, out string reason))
                 DrawWarning(reason, MessageType.Error);
 
             DrawDuplicatePriority(modifier);

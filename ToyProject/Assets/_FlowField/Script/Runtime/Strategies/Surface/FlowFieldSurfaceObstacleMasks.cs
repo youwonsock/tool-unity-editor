@@ -182,7 +182,7 @@ namespace Common.FlowField
                 _overlayCenterOffset = request.CenterOffset;
                 _overlayClearance = request.Clearance;
             }
-            FlowFieldObstacleMaskBuilder.BuildRegistered(
+            FlowFieldSurfaceObstacleMaskBuilder.BuildRegistered(
                 grid,
                 request.Surface,
                 request.CheckHeight,
@@ -200,7 +200,7 @@ namespace Common.FlowField
         }
 
         private static FlowFieldCellRect Footprint(in FlowFieldSurfaceObstacleRequest request, Bounds bounds)
-            => FlowFieldObstacleMaskBuilder.Footprint(request.Grid, bounds, request.CheckHeight, request.Clearance);
+            => FlowFieldSurfaceObstacleMaskBuilder.Footprint(request.Grid, bounds, request.CheckHeight, request.Clearance);
 
         // Exact, unlike MatchesBounds: every cell centre follows from these.
         private static bool SameGrid(FlowFieldGridSpace left, FlowFieldGridSpace right)
@@ -232,7 +232,7 @@ namespace Common.FlowField
                 Array.Clear(workspace.SweptBlocked, 0, workspace.Capacity);
                 return;
             }
-            FlowFieldObstacleMaskBuilder.Build(
+            FlowFieldSurfaceObstacleMaskBuilder.Build(
                 request.Grid,
                 request.Surface,
                 request.ObstacleLayer,
@@ -250,7 +250,7 @@ namespace Common.FlowField
 
         private static bool CommitDynamicScratch(FlowFieldSurfaceWorkspace workspace)
         {
-            if (FlowFieldObstacleMaskBuilder.AreEqual(workspace.ObstacleScratch, workspace.DynamicBlocked))
+            if (FlowFieldSurfaceObstacleMaskBuilder.AreEqual(workspace.ObstacleScratch, workspace.DynamicBlocked))
                 return false;
             System.Array.Copy(workspace.ObstacleScratch, workspace.DynamicBlocked, workspace.Capacity);
             return true;
@@ -304,7 +304,7 @@ namespace Common.FlowField
             }
 
             if (region.IsValid)
-                FlowFieldObstacleMaskBuilder.BuildStatic(
+                FlowFieldSurfaceObstacleMaskBuilder.BuildStatic(
                     grid,
                     request.Surface,
                     request.ObstacleLayer,
@@ -316,7 +316,7 @@ namespace Common.FlowField
                     _registry,
                     ref _overlapBuffer,
                     ref _targetOverlapBuffer);
-            bool changed = !FlowFieldObstacleMaskBuilder.AreEqual(scratch, workspace.StaticBlocked);
+            bool changed = !FlowFieldSurfaceObstacleMaskBuilder.AreEqual(scratch, workspace.StaticBlocked);
             if (changed)
                 Array.Copy(scratch, workspace.StaticBlocked, workspace.Capacity);
             return changed;

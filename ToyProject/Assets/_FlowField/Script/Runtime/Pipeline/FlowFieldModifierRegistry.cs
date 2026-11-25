@@ -214,7 +214,7 @@ namespace Common.FlowField
         /// <summary>Throws the reason an Influence Collider breaks the rule.</summary>
         internal static void ValidateCollider(Collider collider)
         {
-            if (FlowFieldModifierMaskBuilder.TryValidateInfluenceCollider(collider, out string reason))
+            if (FlowFieldModifierInfluence.TryValidateInfluenceCollider(collider, out string reason))
                 return;
             if (collider == null)
                 throw new InvalidOperationException(reason);

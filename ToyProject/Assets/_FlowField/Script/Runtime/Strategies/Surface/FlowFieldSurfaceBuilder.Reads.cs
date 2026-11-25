@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace Common.FlowField
 {
-    /// <summary>Reads of the published Surface2D field.</summary>
+    /// <summary>Reads of the published Surface2D field: the field, its grid and info, and the bake export.</summary>
     internal sealed partial class FlowFieldSurfaceBuilder
     {
         public bool TryGetFieldInfo(out FlowFieldFieldInfo info)
@@ -72,5 +72,27 @@ namespace Common.FlowField
 
         Vector3 IFlowFieldLatestCells.EscapeDirection(int index)
             => _state.Workspace.EscapeDirections != null ? _state.Workspace.EscapeDirections[index] : Vector3.zero;
-    }
+    
+
+        // The published field. A request on another grid or source drops it
+        // (Submit), so it always comes from the latest request's source.
+        public FlowFieldField PublishedField
+            => _state.SurfaceReady && _fieldStore.IsValid ? _fieldStore.Field : null;
+
+        // The latest request's grid, which the next build uses, as in Volume3D.
+        public FlowFieldGridSpace LatestGrid
+            => _requests.HasLatest ? _requests.Latest.SurfaceSettings.Grid : _state.Grid;
+
+        /// <summary>
+        /// What a bake stores: the published Surface and a copy of its
+        /// arrays, taken at the bake's boundary (runtime sampling reads the
+        /// compact store directly). False while nothing is published.
+        /// </summary>
+        internal bool TryExportBakeData(out FlowFieldSurfaceData surface, out FlowFieldSurfaceWorkspace workspace)
+        {
+            surface = _fieldStore.Surface;
+            workspace = surface != null ? _fieldStore.CreateWorkspaceSnapshot() : null;
+            return workspace != null;
+        }
+}
 }

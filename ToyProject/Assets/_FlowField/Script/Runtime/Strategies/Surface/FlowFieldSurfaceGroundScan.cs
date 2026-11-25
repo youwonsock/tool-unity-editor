@@ -6,9 +6,9 @@ using UnityEngine;
 
 namespace Common.FlowField
 {
-    internal delegate bool FlowFieldSurfaceBakeProgress(int row, int rowCount);
+    internal delegate bool FlowFieldSurfaceGroundScanProgress(int row, int rowCount);
 
-    internal readonly struct FlowFieldSurfaceBakeSettings
+    internal readonly struct FlowFieldSurfaceGroundScanSettings
     {
         public FlowFieldGridSpace Grid { get; }
         public Bounds BakeBounds { get; }
@@ -16,7 +16,7 @@ namespace Common.FlowField
         public float MaxSurfaceSlope { get; }
         public float MaxStepHeight { get; }
 
-        public FlowFieldSurfaceBakeSettings(
+        public FlowFieldSurfaceGroundScanSettings(
             FlowFieldGridSpace grid,
             Bounds bakeBounds,
             LayerMask groundLayer,
@@ -49,7 +49,7 @@ namespace Common.FlowField
             && MaxStepHeight >= 0f;
     }
 
-    internal sealed class FlowFieldSurfaceBakeResult
+    internal sealed class FlowFieldSurfaceGroundScanResult
     {
         public float[] SurfaceHeights { get; }
         public Vector3[] SurfaceNormals { get; }
@@ -57,7 +57,7 @@ namespace Common.FlowField
         public byte[] NeighborMasks { get; }
         public int ValidCellCount { get; internal set; }
 
-        public FlowFieldSurfaceBakeResult(int cellCount)
+        public FlowFieldSurfaceGroundScanResult(int cellCount)
         {
             if (cellCount <= 0)
                 throw new System.ArgumentOutOfRangeException(nameof(cellCount));
@@ -84,14 +84,39 @@ namespace Common.FlowField
         }
     }
 
-    internal static class FlowFieldSurfaceBaker
+    internal enum FlowFieldSurfaceGroundScanStatus
     {
+        Pending = 0,
+        Complete = 1,
+        Failed = 2,
+        Cancelled = 3,
+    }
+
+    /// <summary>
+    /// The Surface2D ground scan in resumable steps: one downward ray per
+    /// cell, cast in RaycastCommand batches on worker threads, then the
+    /// neighbor masks in Burst chunks. Runtime builds run it at once
+    /// (<see cref="ScanAll"/>); the Editor bake advances it from its update,
+    /// so the raycast rows do not hold one callback. Its settings, result,
+    /// status and progress callback are declared beside it.
+    /// </summary>
+    internal sealed class FlowFieldSurfaceGroundScan
+    {
+        // Rays per batch and neighbor masks per chunk. Each is scheduled and
+        // completed inside one Step; a batch shrinks to what the rest of the
+        // step's budget allows at the last batch's cost per ray.
+        private const int RaysPerBatch = 1024;
+        private const int MinRaysPerBatch = 64;
+        private const int RaysPerJob = 64;
+        private const int MasksPerChunk = 16384;
+        private const int MasksPerJob = 1024;
         private const float NormalEpsilonSqr = 0.000001f;
         private const float BoundsQueryEpsilon = 0.001f;
 
-        public static FlowFieldSurfaceBakeResult Bake(
-            in FlowFieldSurfaceBakeSettings settings,
-            FlowFieldSurfaceBakeProgress progress = null)
+        /// <summary>The whole scan at once, as a runtime build runs it.</summary>
+        public static FlowFieldSurfaceGroundScanResult ScanAll(
+            in FlowFieldSurfaceGroundScanSettings settings,
+            FlowFieldSurfaceGroundScanProgress progress = null)
         {
             var scan = new FlowFieldSurfaceGroundScan(settings, progress);
             while (!scan.IsComplete)
@@ -108,7 +133,7 @@ namespace Common.FlowField
         /// below it. Its closest hit is the topmost ground under the cell.
         /// </summary>
         internal static RaycastCommand GroundRay(
-            in FlowFieldSurfaceBakeSettings settings,
+            in FlowFieldSurfaceGroundScanSettings settings,
             Vector3 cellCenter,
             QueryParameters query)
         {
@@ -125,7 +150,7 @@ namespace Common.FlowField
         }
 
         /// <summary>The ground rays' query: the Ground Layer, triggers ignored, back faces as Physics.Raycast.</summary>
-        internal static QueryParameters GroundQuery(in FlowFieldSurfaceBakeSettings settings)
+        internal static QueryParameters GroundQuery(in FlowFieldSurfaceGroundScanSettings settings)
             => new QueryParameters(
                 settings.GroundLayer,
                 false,
@@ -133,9 +158,9 @@ namespace Common.FlowField
                 Physics.queriesHitBackfaces);
 
         /// <summary>A cell's ground from the closest hit of its ray; no hit leaves it without ground.</summary>
-        internal static void BakeCell(
-            in FlowFieldSurfaceBakeSettings settings,
-            FlowFieldSurfaceBakeResult result,
+        internal static void ApplyHit(
+            in FlowFieldSurfaceGroundScanSettings settings,
+            FlowFieldSurfaceGroundScanResult result,
             int index,
             in RaycastHit hit)
         {
@@ -158,33 +183,6 @@ namespace Common.FlowField
 
             result.SetSurface(index, hit.point.y, normal);
         }
-    }
-
-    internal enum FlowFieldSurfaceGroundScanStatus
-    {
-        Pending = 0,
-        Complete = 1,
-        Failed = 2,
-        Cancelled = 3,
-    }
-
-    /// <summary>
-    /// The Surface2D ground scan in resumable steps: one downward ray per
-    /// cell, cast in RaycastCommand batches on worker threads, then the
-    /// neighbor masks in Burst chunks. Runtime builds run it at once through
-    /// <see cref="FlowFieldSurfaceBaker"/>; the Editor bake advances it from
-    /// its update, so the raycast rows do not hold one callback.
-    /// </summary>
-    internal sealed class FlowFieldSurfaceGroundScan
-    {
-        // Rays per batch and neighbor masks per chunk. Each is scheduled and
-        // completed inside one Step; a batch shrinks to what the rest of the
-        // step's budget allows at the last batch's cost per ray.
-        private const int RaysPerBatch = 1024;
-        private const int MinRaysPerBatch = 64;
-        private const int RaysPerJob = 64;
-        private const int MasksPerChunk = 16384;
-        private const int MasksPerJob = 1024;
 
         private enum Phase
         {
@@ -193,9 +191,9 @@ namespace Common.FlowField
             Complete,
         }
 
-        private readonly FlowFieldSurfaceBakeSettings _settings;
-        private readonly FlowFieldSurfaceBakeProgress _progress;
-        private readonly FlowFieldSurfaceBakeResult _result;
+        private readonly FlowFieldSurfaceGroundScanSettings _settings;
+        private readonly FlowFieldSurfaceGroundScanProgress _progress;
+        private readonly FlowFieldSurfaceGroundScanResult _result;
         private readonly int _cellCount;
         private Phase _phase;
         private FlowFieldSurfaceGroundScanStatus _status;
@@ -207,8 +205,8 @@ namespace Common.FlowField
         private double _millisecondsPerRay;
 
         internal FlowFieldSurfaceGroundScan(
-            in FlowFieldSurfaceBakeSettings settings,
-            FlowFieldSurfaceBakeProgress progress = null)
+            in FlowFieldSurfaceGroundScanSettings settings,
+            FlowFieldSurfaceGroundScanProgress progress = null)
         {
             if (!settings.IsValid)
                 throw new ArgumentException(
@@ -226,7 +224,7 @@ namespace Common.FlowField
 
             _settings = settings;
             _progress = progress;
-            _result = new FlowFieldSurfaceBakeResult(_cellCount);
+            _result = new FlowFieldSurfaceGroundScanResult(_cellCount);
             _phase = Phase.SurfaceCells;
             _status = FlowFieldSurfaceGroundScanStatus.Pending;
             _error = string.Empty;
@@ -239,7 +237,7 @@ namespace Common.FlowField
         internal bool IsValid => _status == FlowFieldSurfaceGroundScanStatus.Complete
             && _result.IsValidFor(_cellCount);
         internal string Error => _error;
-        internal FlowFieldSurfaceBakeResult Result => IsValid ? _result : null;
+        internal FlowFieldSurfaceGroundScanResult Result => IsValid ? _result : null;
         internal float Progress
         {
             get
@@ -335,11 +333,11 @@ namespace Common.FlowField
                 count = Math.Max(Math.Min(MinRaysPerBatch, count), (int)(remainingMilliseconds / _millisecondsPerRay));
             _commands ??= new RaycastCommand[RaysPerBatch];
             _hits ??= new RaycastHit[RaysPerBatch];
-            QueryParameters query = FlowFieldSurfaceBaker.GroundQuery(_settings);
+            QueryParameters query = GroundQuery(_settings);
             for (int i = 0; i < count; i++)
             {
                 grid.FromFlatIndex(start + i, out int x, out int z);
-                _commands[i] = FlowFieldSurfaceBaker.GroundRay(_settings, grid.LocalToWorldCenter(x, z), query);
+                _commands[i] = GroundRay(_settings, grid.LocalToWorldCenter(x, z), query);
             }
             // Whole-array copies in and out keep the per-ray work managed.
             var commands = new NativeArray<RaycastCommand>(count, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
@@ -364,7 +362,7 @@ namespace Common.FlowField
                     Cancel();
                     return false;
                 }
-                FlowFieldSurfaceBaker.BakeCell(_settings, _result, index, in _hits[i]);
+                ApplyHit(_settings, _result, index, in _hits[i]);
                 _cursor = index + 1;
             }
             _millisecondsPerRay = timer.Elapsed.TotalMilliseconds / count;

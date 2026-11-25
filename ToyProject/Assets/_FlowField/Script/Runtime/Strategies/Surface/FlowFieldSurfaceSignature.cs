@@ -13,14 +13,14 @@ namespace Common.FlowField
     /// </summary>
     internal readonly struct FlowFieldSurfaceSignature
     {
-        internal FlowFieldSurfaceBakeSettings Surface { get; }
+        internal FlowFieldSurfaceGroundScanSettings Surface { get; }
         internal LayerMask ObstacleLayer { get; }
         internal float ObstacleCheckHeight { get; }
         internal float ObstacleCheckCenterOffset { get; }
         internal float ObstacleClearance { get; }
 
         internal FlowFieldSurfaceSignature(
-            in FlowFieldSurfaceBakeSettings surface,
+            in FlowFieldSurfaceGroundScanSettings surface,
             LayerMask obstacleLayer,
             float obstacleCheckHeight,
             float obstacleCheckCenterOffset,
@@ -64,8 +64,8 @@ namespace Common.FlowField
 
         /// <summary>The surface part alone, for data that has no obstacle settings.</summary>
         internal static bool SurfaceMatches(
-            in FlowFieldSurfaceBakeSettings left,
-            in FlowFieldSurfaceBakeSettings right)
+            in FlowFieldSurfaceGroundScanSettings left,
+            in FlowFieldSurfaceGroundScanSettings right)
             => left.Grid.MatchesBounds(right.Grid)
                 && FlowFieldLayoutUtility.Approximately(left.BakeBounds, right.BakeBounds)
                 && left.GroundLayer.value == right.GroundLayer.value

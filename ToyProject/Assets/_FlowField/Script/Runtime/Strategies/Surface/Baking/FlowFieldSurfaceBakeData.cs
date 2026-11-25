@@ -437,7 +437,7 @@ namespace Common.FlowField
         // FromCellGrid throws on an invalid one.
         private FlowFieldSurfaceSignature BakedSignature()
             => new FlowFieldSurfaceSignature(
-                new FlowFieldSurfaceBakeSettings(
+                new FlowFieldSurfaceGroundScanSettings(
                     FlowFieldGridSpace.FromCellGrid(_gridOriginWorld, _width, _depth, _cellSize),
                     new Bounds(_bakeBoundsCenterWorld, _bakeBoundsSizeWorld),
                     _groundLayerMask,
@@ -459,7 +459,7 @@ namespace Common.FlowField
         }
 
         // Called once Matches accepted the settings.
-        private FlowFieldSurfaceData CreateSurfaceData(in FlowFieldSurfaceBakeSettings settings)
+        private FlowFieldSurfaceData CreateSurfaceData(in FlowFieldSurfaceGroundScanSettings settings)
         {
             int valid = 0;
             for (int i = 0; i < _surfaceFlags.Length; i++)
@@ -481,7 +481,7 @@ namespace Common.FlowField
             float goalInfluenceRadius,
             int resolvedGoalIndex)
         {
-            FlowFieldSurfaceBakeSettings settings = signature.Surface;
+            FlowFieldSurfaceGroundScanSettings settings = signature.Surface;
             _gridOriginWorld = settings.Grid.Origin;
             _width = settings.Grid.Width;
             _depth = settings.Grid.Depth;
@@ -510,7 +510,7 @@ namespace Common.FlowField
             int resolvedGoalIndex,
             FlowFieldSurfaceWorkspace workspace)
         {
-            FlowFieldSurfaceBakeSettings settings = signature.Surface;
+            FlowFieldSurfaceGroundScanSettings settings = signature.Surface;
             if (!settings.IsValid || surface == null || !surface.IsValid)
                 throw new ArgumentException("Surface2D Bake input is invalid.");
             if (workspace == null || workspace.Capacity != settings.Grid.CellCount)

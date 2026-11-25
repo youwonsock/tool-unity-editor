@@ -20,7 +20,7 @@ namespace Common.FlowField
         internal FlowFieldSurfaceBakeData BakeSource { get; }
         internal FlowFieldSurfaceBakeSnapshot BakeSnapshot { get; }
         private readonly int _bakeContentGeneration;
-        internal FlowFieldSurfaceBakeSettings SurfaceSettings => Signature.Surface;
+        internal FlowFieldSurfaceGroundScanSettings SurfaceSettings => Signature.Surface;
         internal LayerMask ObstacleLayer => Signature.ObstacleLayer;
         internal float ObstacleCheckHeight => Signature.ObstacleCheckHeight;
         internal float ObstacleCheckCenterOffset => Signature.ObstacleCheckCenterOffset;

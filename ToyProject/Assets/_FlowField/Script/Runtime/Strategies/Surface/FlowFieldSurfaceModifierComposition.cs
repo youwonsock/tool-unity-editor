@@ -78,7 +78,7 @@ namespace Common.FlowField
                 ResizeRuntimeMask(entry, request.Grid.CellCount);
                 Collider collider = entry.Modifier.Observe().InfluenceCollider;
 
-                FlowFieldCellRect queried = FlowFieldModifierMaskBuilder.Build(
+                FlowFieldCellRect queried = FlowFieldSurfaceModifierMaskBuilder.Build(
                     request.Grid,
                     request.Surface,
                     collider,
@@ -87,7 +87,7 @@ namespace Common.FlowField
                     AreaOf(entry).InfluenceScratch,
                     ref _overlapBuffer);
 
-                bool maskChanged = !FlowFieldObstacleMaskBuilder.AreEqual(
+                bool maskChanged = !FlowFieldSurfaceObstacleMaskBuilder.AreEqual(
                     AreaOf(entry).InfluenceMask,
                     AreaOf(entry).InfluenceScratch);
                 if (maskChanged)

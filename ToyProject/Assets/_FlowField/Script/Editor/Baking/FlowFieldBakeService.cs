@@ -82,7 +82,7 @@ namespace Common.FlowField.Editor
         internal static FlowFieldSession CreateSurfaceBakeSession(
             FlowFieldManager manager,
             in FlowFieldSurfaceSignature signature,
-            FlowFieldSurfaceBakeResult ground,
+            FlowFieldSurfaceGroundScanResult ground,
             out FlowFieldSurfaceBuilder builder)
         {
             FlowFieldManagerConfig config = manager.CaptureConfig();

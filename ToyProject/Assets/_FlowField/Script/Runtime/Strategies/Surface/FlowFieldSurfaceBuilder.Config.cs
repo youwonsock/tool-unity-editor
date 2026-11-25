@@ -109,11 +109,11 @@ namespace Common.FlowField
                 out worldBounds,
                 out grid);
 
-        internal static FlowFieldSurfaceBakeSettings CreateBakeSettings(in FlowFieldManagerConfig config)
+        internal static FlowFieldSurfaceGroundScanSettings CreateGroundScanSettings(in FlowFieldManagerConfig config)
         {
             if (!TryCreateLayout(in config, out Bounds worldBounds, out FlowFieldGridSpace grid))
                 throw new InvalidOperationException(FlowFieldManagerConfig.InvalidGridMessage);
-            return new FlowFieldSurfaceBakeSettings(
+            return new FlowFieldSurfaceGroundScanSettings(
                 grid,
                 worldBounds,
                 config.Surface.GroundLayer,
@@ -124,7 +124,7 @@ namespace Common.FlowField
         /// <summary>The surface and obstacle settings the configuration builds and bakes with.</summary>
         internal static FlowFieldSurfaceSignature CreateSignature(in FlowFieldManagerConfig config)
             => new FlowFieldSurfaceSignature(
-                CreateBakeSettings(in config),
+                CreateGroundScanSettings(in config),
                 config.Obstacles.Layer,
                 config.Surface.ObstacleCheckHeight,
                 config.Surface.ObstacleCheckCenterOffset,

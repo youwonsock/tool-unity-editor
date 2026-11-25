@@ -13,8 +13,9 @@ namespace Common.FlowField
     /// </summary>
     internal sealed partial class FlowFieldVolumeBuilder : IFlowFieldSpaceBuilder
     {
-        private const int CellsPerStep = FlowFieldVolumeSteps.CellsPerStep;
-        private const int ArrayElementsPerStep = FlowFieldVolumeSteps.ArrayElementsPerStep;
+        // Cells per obstacle or Modifier step, and array elements per copy step.
+        private const int CellsPerStep = 64;
+        private const int ArrayElementsPerStep = 4096;
         // Shared by the obstacle and Modifier steps: the cells of one step and
         // the Colliders one cell query found.
         private Collider[] _overlapBuffer;
@@ -50,14 +51,6 @@ namespace Common.FlowField
         }
 
         public FlowFieldSpaceMode SpaceMode => FlowFieldSpaceMode.Volume3D;
-        public bool IsWaitingForExternalCompletion
-            => _build != null && _build.SolveRunning && !_build.SolveHandle.IsCompleted;
-        // The published field. A request on another grid or source drops it
-        // (Submit), so it is always on the latest request's grid.
-        public FlowFieldField PublishedField => _committed;
-
-        // The latest request's grid, which the next build uses, as in Surface2D.
-        public FlowFieldGridSpace LatestGrid => _requests.HasLatest ? _requests.Latest.Grid : default;
         public bool HasPendingRequest => _requests.Pending || _hasPendingModifierRecompose || _build != null;
         internal bool TryGetLatestRequestedInput(out FlowFieldVolumeRequest request)
         {
@@ -158,194 +151,12 @@ namespace Common.FlowField
             return !current.HasSameGoal(request) && current.HasSameResult(request);
         }
 
-        public FlowFieldBuildPolicy BuildPolicy => new FlowFieldBuildPolicy(beginsAfterBudget: false, maxBuildsBegunPerPump: int.MaxValue);
-
-        public bool HasActiveBuild => _build != null;
-
-        // Volume3D knows nothing newer than its published field; the shared
-        // rule reads that field and the notified uncertain regions.
-        public IFlowFieldLatestCells LatestCells => null;
-
-        // Every build but a Modifier recompose queries the obstacles.
-        public bool TryBeginBuild(out FlowFieldBuildStart start)
-        {
-            bool started = TryBeginPendingBuild();
-            start = new FlowFieldBuildStart(started && !_build.IsModifierRecompose, null);
-            return started;
-        }
-
-        public FlowFieldBuildStep StepBuild(in FlowFieldBuildBudget budget, bool waitForWorker)
-        {
-            if (IsWaitingForExternalCompletion && !waitForWorker)
-                return FlowFieldBuildStep.Waiting;
-            if (StepBuild(_build, budget, waitForWorker))
-                return FlowFieldBuildStep.Completed;
-            return _build.SolveRunning ? FlowFieldBuildStep.Waiting : FlowFieldBuildStep.Yield;
-        }
-
-        public bool PublishBuild() => CommitBuild(_build);
-
-        public bool HasOwedInput => _requests.Pending || _hasPendingModifierRecompose;
-
-        private bool TryBeginPendingBuild()
-        {
-            if (!_requests.Pending && !_hasPendingModifierRecompose)
-                return false;
-
-            // A Modifier change recomposes the published navigation. Before
-            // any field is published it builds in full like any request.
-            bool recompose = !_requests.Pending && _committed != null;
-            FlowFieldVolumeRequest request = recompose ? _committed.Request : _requests.Latest;
-            _requests.Pending = false;
-            _hasPendingModifierRecompose = false;
-            FlowFieldModifierWorkItem[] modifierSnapshots;
-            using (_session.Boundary.EnterUserCode())
-                modifierSnapshots = _session.Modifiers.CaptureSnapshots();
-            // A recompose queries no obstacles, so it resolves no safety region.
-            if (recompose)
-            {
-                _build = new BuildContext(
-                    _committed,
-                    modifierSnapshots,
-                    FlowFieldSpareArrays.Take(ref _spares.FinalDirections, request.Grid.CellCount),
-                    FlowFieldSpareArrays.Take(ref _spares.FinalSpeeds, request.Grid.CellCount));
-            }
-            else
-            {
-                bool reuseObstacles = CanReuseObstacleQueries(request);
-                bool requeryChangedCells = !reuseObstacles && CanRequeryChangedCells(request);
-                bool requiresFullQuery = _obstacleQueryRequired;
-                bool queryEveryCell = _queryEveryCell;
-                _obstacleQueryRequired = false;
-                _queryEveryCell = false;
-                _build = new BuildContext(request, modifierSnapshots);
-                _build.RequiresFullQuery = requiresFullQuery;
-                _build.QueriesEveryCell = queryEveryCell;
-                if (reuseObstacles)
-                {
-                    _build.ReusesObstacleQueries = true;
-                    _build.Blocked = _committed.Blocked;
-                    _build.Topology = _committed.Topology;
-                    _build.EscapeDirections = _committed.EscapeDirections;
-                }
-                else if (requeryChangedCells)
-                {
-                    _build.QueryOnlyChangedRegions(_committed.Blocked);
-                }
-                // While the sweep runs, a reload queries every cell instead,
-                // as Surface2D's swept mask scans every obstacle: the sweep's
-                // first pass after Init or a restart only records, so a
-                // Collider moved before it would never be seen.
-                else if (request.BakeMode == FlowFieldBakeMode.BakedBase
-                    && !queryEveryCell
-                    && !_session.SweepsObstacles)
-                {
-                    // BakedBase starts again from the bake. With nothing that
-                    // changed since, its obstacle results stand as baked.
-                    _build.LoadsBakedObstacles = true;
-                    _build.ReusesObstacleQueries = _safety.UncertainRegionCount == 0
-                        && _session.Obstacles.Count == 0
-                        && !_bakedBaseTouched.HasValue;
-                }
-            }
-            return true;
-        }
-
-        /// <summary>
-        /// Tracked obstacle changes report their regions, so the rest of the published
-        /// mask stays correct. Only an explicit rebuild (RequestRebuild,
-        /// NotifyCellsDirty), new obstacle settings or turning the sweep on or off
-        /// query every cell, which picks up a collider that moved without being
-        /// tracked; in BakedBase an explicit rebuild starts again from the bake
-        /// unless the sweep runs.
-        /// </summary>
-        private bool CanRequeryChangedCells(in FlowFieldVolumeRequest request)
-            => !_obstacleQueryRequired
-                && _committed != null
-                && request.BakeMode != FlowFieldBakeMode.StaticBaked
-                && _safety.UncertainRegionCount > 0
-                && _committed.Request.HasSameObstacleInputs(request);
-
-        /// <summary>
-        /// The obstacle result stands while nothing about the obstacles changed:
-        /// a Goal, Default Direction or Modifier change reuses it, an explicit
-        /// rebuild, a tracked change or new obstacle settings do not.
-        /// </summary>
-        private bool CanReuseObstacleQueries(in FlowFieldVolumeRequest request)
-            => !_obstacleQueryRequired
-                && _committed != null
-                && request.BakeMode != FlowFieldBakeMode.StaticBaked
-                && _safety.UncertainRegionCount == 0
-                && _committed.Request.HasSameObstacleInputs(request);
-
-        // A BakedBase build that starts again from the bake queries what the
-        // bake cannot know: the uncertain regions, every region a change
-        // reached since Initialize, and the registered obstacles.
-        private Bounds[] BakedBaseRegions(BuildContext build)
-        {
-            var regions = new System.Collections.Generic.List<Bounds>(_safety.ObservedRegions());
-            if (_bakedBaseTouched.HasValue)
-                regions.Add(_bakedBaseTouched.Value);
-            float margin = FlowFieldObstacleReach.Margin(build.Request.Grid.CellSize, build.Request.ObstacleClearance);
-            FlowFieldObstacleRegistry registry = _session.Obstacles;
-            for (int i = 0; i < registry.Count; i++)
-            {
-                regions.Add(FlowFieldObstacleReach.Expand(registry.GetBounds(i), margin));
-                Collider collider = registry.GetCollider(i);
-                if (collider != null)
-                    regions.Add(FlowFieldObstacleReach.Expand(collider.bounds, margin));
-            }
-            return regions.ToArray();
-        }
-
-        private void DiscardBuild()
-        {
-            BuildContext previous = _build;
-            _build = null;
-            // The build that replaces it still owes the full query it was asked for.
-            if (previous != null && previous.RequiresFullQuery)
-                _obstacleQueryRequired = true;
-            if (previous != null && previous.QueriesEveryCell)
-                _queryEveryCell = true;
-            previous?.Dispose();
-        }
-
         // The session advanced its generation, so the discarded build cannot publish.
         public void CancelWork()
         {
             DiscardBuild();
             _requests.Pending = false;
             _hasPendingModifierRecompose = false;
-        }
-
-        // The session marked the uncertain regions; the next build queries them.
-        // BakedBase also keeps every region a change reached for a reloaded bake.
-        public void ApplyObstacleChange(in FlowFieldObstacleChange change)
-        {
-            if (_session.BakeMode == FlowFieldBakeMode.BakedBase && _requests.HasLatest)
-            {
-                float margin = FlowFieldObstacleReach.Margin(_requests.Latest.Grid.CellSize, _requests.Latest.ObstacleClearance);
-                if (change.HasPrevious)
-                    TouchBakedBase(FlowFieldObstacleReach.Expand(change.Previous, margin));
-                if (change.HasCurrent)
-                    TouchBakedBase(FlowFieldObstacleReach.Expand(change.Current, margin));
-            }
-            if (_requests.Pending)
-                return;
-            _requests.Pending = _requests.HasLatest && _requests.Latest.Grid.IsValid;
-        }
-
-        private void TouchBakedBase(Bounds reach)
-            => _bakedBaseTouched = FlowFieldObstacleReach.Encapsulate(_bakedBaseTouched, reach);
-
-        // Volume3D finds a Modifier's cells per build, so it keeps no area data.
-        public IFlowFieldModifierArea CreateModifierArea() => null;
-
-        public void ApplyModifierChange(in FlowFieldModifierUpdate update)
-        {
-            if (update.Kind == FlowFieldModifierUpdateKind.Changed && update.Requested == FlowFieldModifierChange.None)
-                return;
-            QueueModifierChange();
         }
 
         // The world may have changed while nothing observed it, so the session
@@ -365,32 +176,6 @@ namespace Common.FlowField
             _overlapBuffer = null;
             _cellQuery.Clear();
             _spares.Clear();
-        }
-
-        private void QueueModifierChange()
-        {
-            // Before the first BuildContext exists, interrupted capture owns
-            // the retry. Otherwise the latest input must win over the older
-            // active or published input, even after pending work was canceled.
-            if (!_requests.Pending && _committed == null && _build == null)
-                return;
-            // Modifiers only affect the final composition. Unobserved colliders
-            // wait for the next full build, as in Surface2D. When the running
-            // build or, with none, the published field answers the latest
-            // request, only the composition is owed, during the first build too.
-            if (!_requests.Pending && _requests.HasLatest)
-            {
-                FlowFieldVolumeRequest next = _build != null ? _build.Request : _committed.Request;
-                if (next.HasSameResult(_requests.Latest))
-                {
-                    _hasPendingModifierRecompose = true;
-                    return;
-                }
-            }
-            // The latest input was already accepted, and a Goal move within its
-            // cell must not make Submit skip this build.
-            if (_requests.HasLatest)
-                _requests.Pending = true;
         }
 
         private static Vector3 ObstacleHalfExtents(float cellSize, float clearance)
