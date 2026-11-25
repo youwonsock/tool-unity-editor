@@ -808,5 +808,24 @@ namespace Common.TransformPath.Tests
             // This frame and at most one carried frame.
             Assert.LessOrEqual(moved, 0.01f * 2f / 60f + 1e-5f);
         }
+
+        [Test]
+        public void PathMovedInStepsBelowTheTolerance_IsPublishedOnceTheStepsAddUp()
+        {
+            PathData path = Line(PathMovementSettings.Speed(2f));
+            Transform end = path.transform.GetChild(1);
+            int revision = path.Revision;
+
+            // Each step alone counts as the same path; together they move the end by 4.5 cm.
+            for (int i = 0; i < 5000; i++)
+            {
+                end.position += new Vector3(0.9e-5f, 0f, 0f);
+                path.Rebuild();
+            }
+
+            Assert.Greater(path.Revision, revision);
+            Assert.AreEqual(end.position.x, path.Sample(1f).x, 2e-5f);
+            Assert.AreEqual(end.position.x, path.PathLength, 2e-5f);
+        }
     }
 }

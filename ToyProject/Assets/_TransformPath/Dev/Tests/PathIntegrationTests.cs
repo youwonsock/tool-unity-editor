@@ -1393,6 +1393,199 @@ namespace Common.TransformPath.Tests
             return path;
         }
 
+        [Test]
+        public void MemberStoppedAtTheGap_IsBlocked_WhateverTheRouteLength()
+        {
+            var random = new System.Random(7);
+            foreach (float length in new[] { 30f, 75f, 500f, 1000f })
+            {
+                foreach (bool sequence in new[] { false, true })
+                {
+                    for (int trial = 0; trial < 5; trial++)
+                    {
+                        PathProviderBehaviour route;
+                        PathPlaybackRequest request;
+                        if (sequence)
+                        {
+                            PathData first = Line(length * 0.5f, 10f);
+                            PathData second = _scene.CreatePath(PathMovementSettings.Speed(10f), EPathCurveType.Linear,
+                                new Vector3(length * 0.5f, 0f, 0f), new Vector3(length, 0f, 0f));
+                            MultiPathData joined = _scene.CreateSequence();
+                            joined.SetSegments(new[] { new PathSegmentAuthoring(first), new PathSegmentAuthoring(second) });
+                            route = joined;
+                            request = PathPlaybackRequest.Sequence(joined);
+                        }
+                        else
+                        {
+                            PathData path = Line(length, 10f);
+                            route = path;
+                            request = PathPlaybackRequest.Single(path);
+                        }
+                        QueuedPathManager manager = CreateManager(route);
+                        PathQueueMember leader = CreateMember();
+                        PathQueueMember member = CreateMember();
+                        float at = 0.3f + (float)random.NextDouble() * 0.6f;
+                        leader.StartQueuedPlayback(manager, request);
+                        leader.Follower.Seek(at);
+                        leader.Hold();
+                        member.StartQueuedPlayback(manager, request);
+                        member.Follower.Seek(at - 5f / length);
+                        Frames(900);
+                        float settled = member.Follower.Progress;
+                        Frames(10);
+
+                        string label = $"length {length}, sequence {sequence}, leader at {at}";
+                        Assert.AreEqual(settled, member.Follower.Progress, 1e-7f, "Not stopped yet: " + label);
+                        Assert.IsTrue(manager.TryGetMemberStatus(member, out PathQueueStatus status), label);
+                        Assert.IsTrue(status.IsBlocked, "Status not blocked: " + label);
+                        Assert.IsTrue(member.IsBlocked, "Member not blocked: " + label);
+                    }
+                }
+            }
+        }
+
+        [Test]
+        public void RouteAndManagerGoneTogether_MembersLeaveAsProviderInvalid()
+        {
+            PathData path = Line(30f, 4f);
+            QueuedPathManager manager = CreateManager(path);
+            PathQueueMember member = CreateMember();
+            var reasons = new List<EPathQueueLeaveReason>();
+            member.QueueInvalidated += (_, reason) => reasons.Add(reason);
+            member.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            Frames(10);
+
+            // Destroyed in one frame, the route first: no Queue phase saw it go.
+            DestroyProvider(path);
+            manager.Release();
+
+            CollectionAssert.AreEqual(new[] { EPathQueueLeaveReason.ProviderInvalid }, reasons);
+        }
+
+        [Test]
+        public void MemberThatLeftQuietly_DoesNotReportItsOldWaitLater()
+        {
+            PathData path = Line(60f, 3f);
+            QueuedPathManager manager = CreateManager(path);
+            var log = new List<string>();
+            PathQueueMember Watched(string label, float at)
+            {
+                PathQueueMember created = CreateMember();
+                created.Blocked += _ => log.Add(label + " blocked");
+                created.Resumed += _ => log.Add(label + " resumed");
+                created.SpeedChanged += (_, value) => log.Add($"{label} speed {value:F2}");
+                created.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+                created.Follower.Seek(at);
+                return created;
+            }
+            PathQueueMember free = Watched("free", 0.5f);
+            PathQueueMember rejoined = Watched("rejoined", 0.3f);
+            PathQueueMember stopped = Watched("stopped", 0.1f);
+            Frames(240);
+            free.Hold();
+            rejoined.Hold();
+            stopped.Hold();
+            Frames(1);
+            CollectionAssert.IsSubsetOf(new[] { "free blocked", "rejoined blocked", "stopped blocked" }, log);
+            Assert.IsTrue(free.IsInQueue && rejoined.IsInQueue && stopped.IsInQueue);
+
+            // Disabled while waiting: each leaves without a Resumed. Stopped: it leaves as Stopped.
+            DisableMember(free);
+            free.enabled = true;
+            DisableMember(rejoined);
+            rejoined.enabled = true;
+            stopped.Follower.Stop();
+            Frames(1);
+            log.Clear();
+
+            free.StartFreePlayback(PathPlaybackRequest.Single(path));
+            stopped.Leave();
+            CollectionAssert.IsEmpty(log, "A wait that ended quietly is not reported later.");
+
+            // A new wait is reported as one.
+            rejoined.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            Frames(1);
+            CollectionAssert.Contains(log, "rejoined blocked");
+        }
+
+        [Test]
+        public void SeekInAQueueListener_WaitsBeforeMoving()
+        {
+            PathData path = Line(100f, 3f);
+            QueuedPathManager manager = CreateManager(path);
+            PathQueueMember ahead = CreateMember();
+            PathQueueMember member = CreateMember();
+            ahead.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            ahead.Follower.Seek(0.5f);
+            ahead.Hold();
+            member.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            member.Follower.Seek(0.2f);
+            Frames(120);
+            member.Hold();
+            Frames(30);
+            float sought = -1f;
+            member.Resumed += m =>
+            {
+                if (sought >= 0f)
+                    return;
+                sought = 0.1f;
+                m.Follower.Seek(sought);
+            };
+
+            member.ReleaseHold();
+            for (int i = 0; i < 180 && sought < 0f; i++)
+                Frames(1);
+
+            // Resumed runs after the Queue phase and before the move: the Seek waits as a start would.
+            Assert.AreEqual(0.1f, sought);
+            Assert.AreEqual(sought, member.Follower.Progress, 1e-6f);
+            Frames(1);
+            Assert.AreEqual(sought, member.Follower.Progress, 1e-6f);
+        }
+
+        [Test]
+        public void LineRendererWithoutAPath_ReportsItOnce()
+        {
+            var host = new GameObject("Line");
+            _objects.Add(host);
+            host.AddComponent<LineRenderer>();
+            PathDataLineRenderer drawer = host.AddComponent<PathDataLineRenderer>();
+
+            LogAssert.Expect(LogType.Error, new Regex("requires LineRenderer and PathData"));
+            // What its Awake does in Play Mode, then a caller showing it.
+            drawer.Init();
+            drawer.Refresh();
+            drawer.SetVisible(true);
+            LogAssert.NoUnexpectedReceived();
+        }
+
+        [Test]
+        public void SequenceWhosePathWaitsForRuntimePoints_WaitsToBuild()
+        {
+            var host = new GameObject("Runtime Points");
+            _objects.Add(host);
+            PathData waiting = host.AddComponent<PathData>();
+            MultiPathData sequence = _scene.CreateSequence();
+            var serialized = new UnityEditor.SerializedObject(sequence);
+            SerializedPropertyArray(serialized, "_segments", 1).GetArrayElementAtIndex(0)
+                .FindPropertyRelative("_path").objectReferenceValue = waiting;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+
+            // Awake skips the build, as a PathData without points does; the first use builds it.
+            Assert.IsTrue(sequence.WaitsForSegmentPoints);
+            waiting.SetControlPoints(new[] { Vector3.zero, new Vector3(5f, 0f, 0f) });
+            Assert.IsFalse(sequence.WaitsForSegmentPoints);
+            sequence.Rebuild();
+            Assert.IsTrue(sequence.IsReady);
+        }
+
+        private static UnityEditor.SerializedProperty SerializedPropertyArray(UnityEditor.SerializedObject serialized, string name, int size)
+        {
+            UnityEditor.SerializedProperty property = serialized.FindProperty(name);
+            property.arraySize = size;
+            return property;
+        }
+
         // Edit Mode does not call OnDestroy for a component that never woke; Play
         // Mode does, and then the component is gone, so the test does both.
         private static void DestroyProvider(PathProviderBehaviour provider)

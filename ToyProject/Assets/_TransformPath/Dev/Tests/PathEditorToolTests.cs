@@ -233,5 +233,75 @@ namespace Common.TransformPath.Tests
 
         private static SerializedProperty Segment(MultiPathData sequence) =>
             new SerializedObject(sequence).FindProperty("_segments").GetArrayElementAtIndex(0);
+
+        [Test]
+        public void SnapToGround_LiftsAPointJustUnderTheGround()
+        {
+            GameObject ground = Track(GameObject.CreatePrimitive(PrimitiveType.Cube));
+            ground.transform.position = Away + new Vector3(0f, -0.5f, 0f);
+            ground.transform.localScale = new Vector3(20f, 1f, 20f);
+            PathData path = PathAt(Away + new Vector3(0f, -0.05f, 0f), Away + new Vector3(5f, 3f, 0f));
+            Physics.SyncTransforms();
+
+            PathPointTools.SnapToGround(new List<PathData> { path });
+
+            foreach (Transform point in path.PathPoints)
+                Assert.AreEqual(0f, point.position.y, 1e-4f);
+        }
+
+        [Test]
+        public void SnapToGround_MovesAPointListedTwiceOnce()
+        {
+            GameObject upper = Track(GameObject.CreatePrimitive(PrimitiveType.Cube));
+            upper.transform.position = Away + new Vector3(0f, -0.5f, 0f);
+            upper.transform.localScale = new Vector3(20f, 1f, 20f);
+            GameObject lower = Track(GameObject.CreatePrimitive(PrimitiveType.Cube));
+            lower.transform.position = Away + new Vector3(0f, -10.5f, 0f);
+            lower.transform.localScale = new Vector3(20f, 1f, 20f);
+            PathData path = PathAt(Away + new Vector3(0f, 2f, 0f), Away + new Vector3(5f, 2f, 0f));
+            // A closed outline lists its first point again at the end.
+            var points = new List<Transform>(path.PathPoints) { path.PathPoints[0] };
+            path.SetPathPoints(points);
+            Physics.SyncTransforms();
+
+            LogAssert.Expect(LogType.Log, new Regex(@"snapped 2 point\(s\) to the ground \(0 failed\)"));
+            PathPointTools.SnapToGround(new List<PathData> { path });
+
+            foreach (Transform point in path.PathPoints)
+                Assert.AreEqual(0f, point.position.y, 1e-4f);
+        }
+
+        [Test]
+        public void SeveralSequencesEditedTogether_ADuplicateInTheMiddleKeepsTheOverride()
+        {
+            PathData lap = PathAt(Vector3.zero, new Vector3(5f, 0f, 0f));
+            var sequences = new[]
+            {
+                Track(new GameObject("Sequence A")).AddComponent<MultiPathData>(),
+                Track(new GameObject("Sequence B")).AddComponent<MultiPathData>(),
+            };
+            foreach (MultiPathData sequence in sequences)
+                sequence.SetSegments(new[]
+                {
+                    new PathSegmentAuthoring(lap),
+                    new PathSegmentAuthoring(lap, PathMovementSettings.Speed(10f)),
+                });
+            var serialized = new SerializedObject(sequences);
+            var drawer = new PathSegmentListDrawer(serialized, false);
+
+            // A copy of the first segment inserted after it shifts the Override down.
+            drawer.CaptureTargets();
+            serialized.FindProperty("_segments").InsertArrayElementAtIndex(0);
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            drawer.MarkTargetsEdited();
+            drawer.ApplyListDefaultsToTargets();
+
+            foreach (MultiPathData sequence in sequences)
+            {
+                Assert.AreEqual(3, sequence.AuthoringSegmentCount);
+                PathSegmentAuthoring moved = sequence.GetAuthoringSegment(2);
+                Assert.AreEqual(EPathSegmentMovementSource.Override, moved.MovementSource);
+            }
+        }
     }
 }

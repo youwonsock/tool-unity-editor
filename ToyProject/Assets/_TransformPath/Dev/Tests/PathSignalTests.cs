@@ -144,5 +144,23 @@ namespace Common.TransformPath.Tests
             other.Publish();
             Assert.AreEqual(1, heard);
         }
+
+        [Test]
+        public void ListenerAddedTwiceAndRemovedOnceWhileWaiting_RunsOnce()
+        {
+            var signal = new PathSignal();
+            int heard = 0;
+            void Listener() => heard++;
+            signal.Add(Listener);
+            signal.Add(Listener);
+
+            using (PathExecutionBoundary.Enter())
+            {
+                signal.Publish();
+                signal.Remove(Listener);
+            }
+
+            Assert.AreEqual(1, heard);
+        }
     }
 }
