@@ -100,7 +100,7 @@ namespace Common.FlowField
             if (!metadata.MatchesGrid(grid)
                 || metadata.ObstacleLayerMask != obstacleLayer.value
                 || Mathf.Abs(metadata.ObstacleClearance - obstacleClearance) > 0.0001f)
-                return Fail(out reason, "Static Volume3D Bake settings differ from the Manager settings.");
+                return Fail(out reason, "Volume3D Bake settings differ from the Manager settings.");
             return true;
         }
 
@@ -170,12 +170,12 @@ namespace Common.FlowField
         {
             reason = string.Empty;
             if (_hasGoal != hasGoal)
-                return Fail(out reason, "Whether the Static Volume3D Bake has a Goal differs from the Manager settings.");
+                return Fail(out reason, "Whether the Volume3D Bake has a Goal differs from the Manager settings.");
             if (!_hasGoal)
                 return true;
             if (!FlowFieldGridSpace.Approximately(requestedGoalWorld, _requestedGoalWorld, 0.00000001d)
                 || Mathf.Abs(influenceRadius - _goalInfluenceRadius) > 0.0001f)
-                return Fail(out reason, "Static Volume3D Bake Goal differs from the Manager settings. ReBake is required.");
+                return Fail(out reason, "Volume3D Bake Goal differs from the Manager settings. ReBake is required.");
             return true;
         }
 
@@ -398,7 +398,7 @@ namespace Common.FlowField
                     }
                 }
                 if (escapeFaces[index] == 0)
-                    return Fail(out reason, $"Volume3D bake escape direction at cell {index} is not a face direction.");
+                    return Fail(out reason, $"Volume3D Bake escape direction at cell {index} is not a face direction.");
             }
             for (int index = 0; index < count; index++)
             {
@@ -406,7 +406,7 @@ namespace Common.FlowField
                 if ((derived - directions[index]).sqrMagnitude > 1e-12f
                     || Mathf.Abs(speed - speeds[index]) > 0.0001f
                     || (DecodeEscape(escapeFaces[index]) - escapeDirections[index]).sqrMagnitude > 0.000001f)
-                    return Fail(out reason, $"Volume3D bake cell {index} cannot be stored in the v6 format.");
+                    return Fail(out reason, $"Volume3D Bake cell {index} cannot be stored in format {SupportedFormatVersion}.");
             }
             return true;
         }

@@ -89,7 +89,7 @@ namespace Common.FlowField
             _expectedGrid = expectedGrid;
             if (asset == null)
             {
-                Initialize(default, invalidReason: "Static Volume3D Bake arrays are missing.");
+                Initialize(default, invalidReason: "Volume3D Bake arrays are missing.");
                 return;
             }
             Initialize(asset.Payload);
@@ -146,7 +146,7 @@ namespace Common.FlowField
             {
                 _phase = Phase.Complete;
                 _status = FlowFieldVolumeBakeValidationStatus.Invalid;
-                _error = "Static Volume3D Bake arrays are missing.";
+                _error = "Volume3D Bake arrays are missing.";
                 return;
             }
 
@@ -154,7 +154,7 @@ namespace Common.FlowField
             {
                 _phase = Phase.Complete;
                 _status = FlowFieldVolumeBakeValidationStatus.Invalid;
-                _error = "Static Volume3D Bake contains more than 1,000,000 cells.";
+                _error = "Volume3D Bake contains more than 1,000,000 cells.";
                 return;
             }
 
@@ -169,7 +169,7 @@ namespace Common.FlowField
                 return;
             _phase = Phase.Complete;
             _status = FlowFieldVolumeBakeValidationStatus.Cancelled;
-            _error = "Static Volume3D Bake validation was cancelled.";
+            _error = "Volume3D Bake validation was cancelled.";
         }
 
         /// <summary>
@@ -269,12 +269,12 @@ namespace Common.FlowField
             _expectedTopology = null;
             if (_payload.Metadata.HasGoal && _anchorCount != 1)
             {
-                Fail($"Static Volume3D Bake must contain exactly one Goal anchor; found {_anchorCount}.");
+                Fail($"Volume3D Bake must contain exactly one Goal anchor; found {_anchorCount}.");
                 return false;
             }
             if (!_payload.Metadata.HasGoal && _anchorCount != 0)
             {
-                Fail("Static Volume3D Bake without a Goal contains an anchor.");
+                Fail("Volume3D Bake without a Goal contains an anchor.");
                 return false;
             }
             _phase = Phase.Graph;
@@ -360,13 +360,13 @@ namespace Common.FlowField
                 return false;
             if (!metadata.MatchesGrid(_expectedGrid))
             {
-                reason = "Static Volume3D Bake metadata does not match the grid.";
+                reason = "Volume3D Bake metadata does not match the grid.";
                 return false;
             }
             int count = _expectedGrid.CellCount;
             if (!_payload.HasCellCount(count))
             {
-                reason = "Static Volume3D Bake arrays do not match the grid.";
+                reason = "Volume3D Bake arrays do not match the grid.";
                 return false;
             }
             if (metadata.HasGoal && _payload.Blocked[metadata.ResolvedGoalIndex])
@@ -497,15 +497,15 @@ namespace Common.FlowField
             StopTopology();
             _phase = Phase.Complete;
             _status = FlowFieldVolumeBakeValidationStatus.Invalid;
-            _error = string.IsNullOrEmpty(reason) ? "Static Volume3D Bake is invalid." : reason;
+            _error = string.IsNullOrEmpty(reason) ? "Volume3D Bake is invalid." : reason;
         }
 
         private string DescribeCell(int index, string reason)
         {
             if (index < 0 || index >= _payload.Blocked.Length)
-                return $"Static Volume3D Bake cell index {index} is invalid: {reason}.";
+                return $"Volume3D Bake cell index {index} is invalid: {reason}.";
             _expectedGrid.FromFlatIndex(index, out int x, out int y, out int z);
-            return $"Static Volume3D Bake cell {index} ({x}, {y}, {z}) is invalid: {reason}.";
+            return $"Volume3D Bake cell {index} ({x}, {y}, {z}) is invalid: {reason}.";
         }
     }
 }

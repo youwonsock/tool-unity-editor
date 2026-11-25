@@ -98,7 +98,7 @@ namespace Common.FlowField
         private void BuildStaticSnapshot(in FlowFieldSurfaceRequest request, FlowFieldSurfaceDirtyFlags pending)
         {
             if (request.BakeSnapshot == null)
-                throw new InvalidOperationException("Static Flow Bake Asset is missing or invalid.");
+                throw new InvalidOperationException(MissingBakeMessage);
 
             bool reloadSnapshot = !_fieldStore.IsValid
                 || !_state.SurfaceReady
@@ -107,7 +107,7 @@ namespace Common.FlowField
             if (reloadSnapshot)
             {
                 if (!request.BakeSnapshot.HasValidData)
-                    throw new InvalidOperationException("Static Flow Bake Asset is missing or invalid.");
+                    throw new InvalidOperationException(MissingBakeMessage);
                 // Static runtime never runs a Physics obstacle query or a BFS
                 // backend. Loading the asset is the base-stage equivalent and
                 // is only needed for the first build or when the referenced

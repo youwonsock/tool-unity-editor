@@ -74,7 +74,7 @@ namespace Common.FlowField
             if (result == null)
                 throw new ArgumentNullException(nameof(result));
             if (!result.IsValidFor(settings.Grid.CellCount))
-                throw new ArgumentException("Surface bake result does not match the grid.", nameof(result));
+                throw new ArgumentException("Ground scan result does not match the grid.", nameof(result));
             return new FlowFieldSurfaceData(
                 settings,
                 result.SurfaceHeights,

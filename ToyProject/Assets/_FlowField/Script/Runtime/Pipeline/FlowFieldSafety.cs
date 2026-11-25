@@ -80,7 +80,7 @@ namespace Common.FlowField
         internal void MarkDirty(Bounds bounds, float margin)
         {
             if (!FlowFieldGridSpace.IsFinite(bounds.center) || !FlowFieldGridSpace.IsFinite(bounds.size))
-                throw new ArgumentOutOfRangeException(nameof(bounds));
+                throw FlowFieldFailures.BoundsNotFinite(nameof(bounds));
             AddBounds(_uncertainBounds, FlowFieldObstacleReach.Expand(bounds, margin));
         }
 

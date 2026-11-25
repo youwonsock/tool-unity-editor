@@ -432,7 +432,7 @@ namespace Common.FlowField.Editor
             if (!assetState.ValidationComplete && !assetState.Validator.IsComplete)
             {
                 // The views repaint when the shown percentage moves, not every step.
-                string message = $"Validating the Volume3D bake... {assetState.Validator.Progress:P0}";
+                string message = $"Validating the Volume3D Bake... {assetState.Validator.Progress:P0}";
                 bool shownChanged = state.Code != FlowFieldVolumeVisualizationStatusCode.Validating
                     || state.Message != message;
                 state.Code = FlowFieldVolumeVisualizationStatusCode.Validating;
@@ -487,7 +487,7 @@ namespace Common.FlowField.Editor
 
             if (!asset.TryGetView(grid, out bool[] blocked, out Vector3[] directions, out float[] speeds))
             {
-                SetUnavailable(state, "Cannot read the Static Volume3D Bake view.",
+                SetUnavailable(state, "Cannot read the Volume3D Bake view.",
                     FlowFieldVolumeVisualizationStatusCode.Invalid);
                 return false;
             }

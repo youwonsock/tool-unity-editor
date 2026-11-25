@@ -112,7 +112,7 @@ namespace Common.FlowField
         internal static FlowFieldSurfaceBakeSettings CreateBakeSettings(in FlowFieldManagerConfig config)
         {
             if (!TryCreateLayout(in config, out Bounds worldBounds, out FlowFieldGridSpace grid))
-                throw new InvalidOperationException("Bake Bounds and Cell Size do not produce a valid grid.");
+                throw new InvalidOperationException(FlowFieldManagerConfig.InvalidGridMessage);
             return new FlowFieldSurfaceBakeSettings(
                 grid,
                 worldBounds,
@@ -221,13 +221,13 @@ namespace Common.FlowField
                 return FlowFieldManagerConfig.Fail(out reason, "Obstacle Check Center Offset must be finite.");
 
             if (!TryCreateLayout(in config, out _, out FlowFieldGridSpace layout) || !layout.IsValid)
-                return FlowFieldManagerConfig.Fail(out reason, "Bake Bounds and Cell Size do not produce a valid grid.");
+                return FlowFieldManagerConfig.Fail(out reason, FlowFieldManagerConfig.InvalidGridMessage);
 
             if (!FlowFieldBakeModes.UsesBakeAsset(config.BakeMode))
                 return true;
             FlowFieldSurfaceBakeData bakeData = config.BakeAssets.Surface;
             if (bakeData == null)
-                return FlowFieldManagerConfig.Fail(out reason, $"{config.BakeMode} mode requires a FlowFieldSurfaceBakeData asset.");
+                return FlowFieldManagerConfig.Fail(out reason, $"Surface2D {config.BakeMode} mode requires a FlowFieldSurfaceBakeData asset.");
             if (!bakeData.Matches(CreateSignature(in config), out reason))
                 return false;
             // Only StaticBaked keeps the baked Goal; BakedBase solves its own.

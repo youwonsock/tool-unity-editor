@@ -11,8 +11,7 @@ namespace Common.FlowField
     internal readonly struct FlowFieldManagerConfig
     {
         internal const float ValueEpsilon = 0.0001f;
-        internal const string SpaceModeLockedMessage
-            = "FlowField Space Mode cannot change during an active Init session. Release and Init again.";
+        internal const string InvalidGridMessage = "Bake Bounds and Cell Size do not produce a valid grid.";
 
         internal readonly FlowFieldSpaceMode SpaceMode;
         internal readonly FlowFieldBakeMode BakeMode;

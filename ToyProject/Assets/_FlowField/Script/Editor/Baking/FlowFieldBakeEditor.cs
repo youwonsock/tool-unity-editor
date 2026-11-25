@@ -27,7 +27,7 @@ namespace Common.FlowField.Editor
         {
             if (!EditorApplication.isPlayingOrWillChangePlaymode)
                 return false;
-            Debug.LogWarning("FlowField bakes and Clear Bake run in Edit Mode only.", context);
+            Debug.LogWarning("[FlowField] Bake and Clear Bake run in Edit Mode only.", context);
             return true;
         }
 
@@ -92,7 +92,7 @@ namespace Common.FlowField.Editor
                 return;
             if (!FlowFieldBakeModes.UsesBakeAsset(manager.BakeMode))
             {
-                Debug.Log("RuntimeDynamic saves no bake asset. The runtime session builds the Surface again.", manager);
+                Debug.Log("[FlowField] RuntimeDynamic saves no Bake Asset; the runtime session builds the field.", manager);
                 return;
             }
             if (_isBaking)
@@ -125,7 +125,7 @@ namespace Common.FlowField.Editor
             _progressLabel = manager == null
                 ? "Resolving FlowField manager"
                 : $"Baking {manager.name}";
-            EditorUtility.DisplayProgressBar("FlowField Static Bake", _progressLabel, 0f);
+            EditorUtility.DisplayProgressBar("FlowField Bake", _progressLabel, 0f);
             try
             {
                 if (manager == null)
@@ -134,7 +134,7 @@ namespace Common.FlowField.Editor
             }
             catch (OperationCanceledException)
             {
-                Debug.Log("FlowField Static Bake was cancelled.");
+                Debug.Log("[FlowField] The bake was cancelled.");
             }
             catch (Exception exception)
             {
@@ -167,13 +167,13 @@ namespace Common.FlowField.Editor
             if (manager == null)
                 throw new ArgumentNullException(nameof(manager));
             if (Application.isPlaying)
-                throw new InvalidOperationException("Static Flow Bake is unavailable while the Editor is in Play mode.");
+                throw new InvalidOperationException("FlowField Bake is unavailable while the Editor is in Play Mode.");
             if (!FlowFieldBakeModes.UsesBakeAsset(manager.BakeMode))
                 return;
             // Init loads what the bake writes, so settings Init rejects never
             // replace a working asset.
             if (!manager.TryValidateBakeSettings(out string reason))
-                throw new InvalidOperationException($"Static Flow Bake did not start: {reason}");
+                throw new InvalidOperationException($"FlowField Bake did not start: {reason}");
 
             if (manager.SpaceMode == FlowFieldSpaceMode.Volume3D)
             {
@@ -208,7 +208,7 @@ namespace Common.FlowField.Editor
             groundScan.Step(2.0);
             _progressLabel = $"Baking Surface {groundScan.Progress:P0}";
             if (EditorUtility.DisplayCancelableProgressBar(
-                    "FlowField Static Bake",
+                    "FlowField Bake",
                     _progressLabel,
                     groundScan.Progress))
             {
@@ -299,7 +299,7 @@ namespace Common.FlowField.Editor
                 _asyncPending = true;
                 EditorApplication.update += Pump;
                 if (initialLabel != null)
-                    EditorUtility.DisplayProgressBar("FlowField Static Bake", initialLabel, 0f);
+                    EditorUtility.DisplayProgressBar("FlowField Bake", initialLabel, 0f);
             }
 
             internal void Stop()
@@ -329,7 +329,7 @@ namespace Common.FlowField.Editor
                     return true;
                 if (_inputIsCurrent())
                     return false;
-                Debug.LogWarning($"{_name}: the inputs changed, so the existing asset was kept.", _manager);
+                Debug.LogWarning($"[FlowField] {_name}: the inputs changed, so the existing asset was kept.", _manager);
                 return true;
             }
 
@@ -355,7 +355,7 @@ namespace Common.FlowField.Editor
                 }
                 catch (OperationCanceledException)
                 {
-                    Debug.Log($"{_name}: cancelled.");
+                    Debug.Log($"[FlowField] {_name}: cancelled.");
                     Stop();
                 }
                 catch (Exception exception)
@@ -382,7 +382,7 @@ namespace Common.FlowField.Editor
                 try
                 {
                     if (_generation == _callbackGeneration)
-                        Debug.LogError($"[{nameof(FlowFieldManager)}] {_name} failed: {exception?.Message}", _manager);
+                        Debug.LogError($"[FlowField] {_name} failed: {exception?.Message}", _manager);
                 }
                 finally
                 {
@@ -425,7 +425,7 @@ namespace Common.FlowField.Editor
         private static readonly BakeTarget SurfaceTarget = new BakeTarget(
             "Surface",
             "Surface2D",
-            "Static Flow Bake",
+            "Surface2D Bake",
             "SurfaceBake",
             FlowFieldManager.PropertyNames.SurfaceBakeData,
             config => config.BakeAssets.Surface);
@@ -433,7 +433,7 @@ namespace Common.FlowField.Editor
         private static readonly BakeTarget VolumeTarget = new BakeTarget(
             "Volume",
             "Volume3D",
-            "Volume3D Static Flow Bake",
+            "Volume3D Bake",
             "VolumeBake",
             FlowFieldManager.PropertyNames.VolumeBakeData,
             config => config.BakeAssets.Volume);
@@ -448,7 +448,7 @@ namespace Common.FlowField.Editor
                 () =>
                 {
                     if (!session.Surface.TryExportBakeData(out FlowFieldSurfaceData committedSurface, out FlowFieldSurfaceWorkspace workspace))
-                        throw new InvalidOperationException("Static Flow Bake produced no committed field.");
+                        throw new InvalidOperationException("Surface2D Bake produced no committed field.");
                     if (manager.CaptureConfig().HasGoal && (!workspace.HasActiveGoal || workspace.ResolvedGoalIndex < 0))
                         throw new InvalidOperationException(
                             "Cannot bake a Surface2D Goal without a walkable resolved Goal cell.");
@@ -468,7 +468,7 @@ namespace Common.FlowField.Editor
                 () =>
                 {
                     if (!session.Volume.TryExportBakeData(out FlowFieldVolumeBakePayload payload))
-                        throw new InvalidOperationException("Volume3D bake produced no committed field.");
+                        throw new InvalidOperationException("Volume3D Bake produced no committed field.");
                     return asset => asset.Apply(in payload);
                 });
 
@@ -534,10 +534,10 @@ namespace Common.FlowField.Editor
                 Undo.CollapseUndoOperations(undoGroup);
                 if (redirected)
                     Debug.Log(
-                        $"[{nameof(FlowFieldManager)}] {target.Label}: '{assignedPath}' was not baked by this Manager, "
+                        $"[FlowField] {target.Label}: '{assignedPath}' was not baked by this Manager, "
                         + $"so this Manager now bakes into '{assetPath}'.",
                         manager);
-                Debug.Log($"[{nameof(FlowFieldManager)}] {target.Label} finished: {assetPath}", manager);
+                Debug.Log($"[FlowField] {target.Label} finished: {assetPath}", manager);
             }
             catch (Exception exception)
             {
@@ -565,7 +565,7 @@ namespace Common.FlowField.Editor
             _progressLabel = $"Baking Surface row {row + 1}/{rowCount}";
             float progress = rowCount <= 0 ? 0f : (float)row / rowCount;
             return !EditorUtility.DisplayCancelableProgressBar(
-                "FlowField Static Bake",
+                "FlowField Bake",
                 _progressLabel,
                 progress);
         }
@@ -575,7 +575,7 @@ namespace Common.FlowField.Editor
             progress = Mathf.Clamp01(progress);
             _progressLabel = $"Baking Volume3D {progress:P0}";
             return !EditorUtility.DisplayCancelableProgressBar(
-                "FlowField Static Bake",
+                "FlowField Bake",
                 _progressLabel,
                 progress);
         }

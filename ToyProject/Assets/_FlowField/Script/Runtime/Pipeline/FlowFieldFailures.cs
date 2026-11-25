@@ -27,6 +27,19 @@ namespace Common.FlowField
         internal static ArgumentOutOfRangeException NotFinite(string paramName)
             => new ArgumentOutOfRangeException(paramName, "Position must be finite.");
 
+        internal static ArgumentOutOfRangeException BoundsNotFinite(string paramName)
+            => new ArgumentOutOfRangeException(paramName, "Bounds must be finite.");
+
+        /// <summary>A running or faulted session keeps its Space Mode until Release.</summary>
+        internal static InvalidOperationException SpaceModeLocked()
+            => new InvalidOperationException("FlowField Space Mode can only change after Release and before Init.");
+
+        internal static InvalidOperationException DestroyedCollider()
+            => new InvalidOperationException("Cannot register a destroyed Collider.");
+
+        internal static InvalidOperationException ModifierNotRegistered()
+            => new InvalidOperationException("Modifier is not registered.");
+
         internal static ArgumentOutOfRangeException OutsideGrid(string paramName)
             => new ArgumentOutOfRangeException(paramName, "Position is outside the FlowField grid.");
 

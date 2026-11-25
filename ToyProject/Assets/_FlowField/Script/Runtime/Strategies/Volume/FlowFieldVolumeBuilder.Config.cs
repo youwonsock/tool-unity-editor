@@ -48,7 +48,7 @@ namespace Common.FlowField
         internal static FlowFieldVolumeRequest CreateRequest(in FlowFieldManagerConfig config)
         {
             if (!TryCreateLayout(in config, out Bounds worldBounds, out FlowFieldGridSpace grid))
-                throw new InvalidOperationException("Volume Bounds and Cell Size do not produce a valid grid.");
+                throw new InvalidOperationException(FlowFieldManagerConfig.InvalidGridMessage);
             return CreateRequest(
                 in config,
                 grid,
@@ -120,7 +120,7 @@ namespace Common.FlowField
             if (!config.TryValidateShared(bakeModeLocked, out reason))
                 return false;
             if (!TryCreateLayout(in config, out _, out FlowFieldGridSpace volumeGrid) || !volumeGrid.IsValid)
-                return FlowFieldManagerConfig.Fail(out reason, "Volume Bounds and Cell Size do not produce a valid grid.");
+                return FlowFieldManagerConfig.Fail(out reason, FlowFieldManagerConfig.InvalidGridMessage);
             if (!FlowFieldBakeModes.UsesBakeAsset(config.BakeMode))
                 return true;
             FlowFieldVolumeBakeData bakeData = config.BakeAssets.Volume;

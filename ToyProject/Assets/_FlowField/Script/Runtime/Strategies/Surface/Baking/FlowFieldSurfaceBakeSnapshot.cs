@@ -45,14 +45,14 @@ namespace Common.FlowField
             int[] nextCells)
         {
             if (!signature.Surface.IsValid || surface == null || !surface.IsValid)
-                throw new ArgumentException("Static bake snapshot Surface is invalid.", nameof(surface));
+                throw new ArgumentException("Surface2D Bake snapshot Surface is invalid.", nameof(surface));
             int count = signature.Surface.Grid.CellCount;
             if (!MatchesLength(blocked, count)
                 || !MatchesLength(escapeDirections, count)
                 || !MatchesLength(topologyMasks, count)
                 || !MatchesLength(goalDirections, count)
                 || !MatchesLength(nextCells, count))
-                throw new ArgumentException("Static bake snapshot arrays do not match the grid.");
+                throw new ArgumentException("Surface2D Bake snapshot arrays do not match the grid.");
             if (!FlowFieldGridSpace.IsFinite(requestedGoalWorld)
                 || !FlowFieldGridSpace.IsFinite(goalInfluenceRadius)
                 || goalInfluenceRadius < 0f
@@ -64,7 +64,7 @@ namespace Common.FlowField
                 || signature.ObstacleClearance < 0f
                 || hasGoal && (resolvedGoalIndex < 0 || resolvedGoalIndex >= count)
                 || !hasGoal && resolvedGoalIndex != -1)
-                throw new ArgumentException("Static bake snapshot Goal data is invalid.");
+                throw new ArgumentException("Surface2D Bake snapshot Goal data is invalid.");
 
             _signature = signature;
             _surface = surface;
@@ -86,19 +86,10 @@ namespace Common.FlowField
         /// </summary>
         internal bool Matches(in FlowFieldSurfaceSignature signature, out string reason)
         {
-            reason = string.Empty;
-            if (!signature.Surface.IsValid || !_signature.SurfaceMatches(signature))
-            {
-                reason = "Static Flow Bake Surface settings differ from the Manager settings.";
+            if (!_signature.TryMatchBake(in signature, out reason))
                 return false;
-            }
-            if (!_signature.ObstaclesMatch(signature))
-            {
-                reason = "Static Flow Bake obstacle settings differ from the Manager settings.";
-                return false;
-            }
             if (!HasValidData)
-                reason = "Static Flow Bake data is missing or invalid.";
+                reason = "Surface2D Bake data is missing or invalid.";
             return HasValidData;
         }
 
@@ -109,7 +100,7 @@ namespace Common.FlowField
                 || !grid.IsValid
                 || !grid.MatchesBounds(_signature.Surface.Grid)
                 || workspace.Capacity != grid.CellCount)
-                throw new ArgumentException("Static bake snapshot workspace does not match the grid.", nameof(workspace));
+                throw new ArgumentException("Surface2D Bake snapshot workspace does not match the grid.", nameof(workspace));
 
             Array.Copy(_blocked, workspace.StaticBlocked, _blocked.Length);
             Array.Clear(workspace.DynamicBlocked, 0, workspace.DynamicBlocked.Length);

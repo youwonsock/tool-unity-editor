@@ -388,7 +388,7 @@ namespace Common.FlowField
         {
             ThrowIfInputUnavailable();
             if (!Modifiers.Contains(modifier))
-                throw new InvalidOperationException("Modifier is not registered.");
+                throw FlowFieldFailures.ModifierNotRegistered();
             FlowFieldModifierChangeResult result;
             try
             {

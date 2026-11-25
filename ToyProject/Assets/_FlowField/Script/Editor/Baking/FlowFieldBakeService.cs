@@ -86,7 +86,7 @@ namespace Common.FlowField.Editor
         {
             FlowFieldManagerConfig config = manager.CaptureConfig();
             if (config.SpaceMode != FlowFieldSpaceMode.Surface2D)
-                throw new InvalidOperationException("Surface bake requires Surface2D mode.");
+                throw new InvalidOperationException("A Surface2D Bake session requires Surface2D mode.");
             FlowFieldSurfaceData surface = FlowFieldSurfaceData.FromRuntime(signature.Surface, ground, 1);
             FlowFieldGridSpace grid = signature.Surface.Grid;
             FlowFieldSurfaceRequest request = FlowFieldSurfaceBuilder.CreateRequest(
@@ -211,7 +211,7 @@ namespace Common.FlowField.Editor
             if (config.SpaceMode != FlowFieldSpaceMode.Volume3D)
                 throw new InvalidOperationException("Volume bake requires Volume3D mode.");
             if (!FlowFieldVolumeBuilder.TryCreateLayout(in config, out Bounds worldBounds, out FlowFieldGridSpace grid))
-                throw new InvalidOperationException("Volume Bounds and Cell Size do not produce a valid grid.");
+                throw new InvalidOperationException(FlowFieldManagerConfig.InvalidGridMessage);
 
             FlowFieldVolumeRequest request = FlowFieldVolumeBuilder.CreateRequest(
                 in config,

@@ -631,7 +631,7 @@ namespace Common.FlowField
             if (!grid.IsValid)
                 throw new ArgumentException("Grid is invalid.", nameof(grid));
             if (!surface.IsValid)
-                throw new ArgumentException("Surface bake data is invalid.", nameof(surface));
+                throw new ArgumentException("Surface data is invalid.", nameof(surface));
             if (destination == null)
                 throw new ArgumentNullException(nameof(destination));
             if (destination.Length != grid.CellCount)

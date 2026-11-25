@@ -36,6 +36,21 @@ namespace Common.FlowField
         internal bool SurfaceMatches(in FlowFieldSurfaceSignature other)
             => SurfaceMatches(Surface, other.Surface);
 
+        /// <summary>
+        /// Whether a bake made with this signature serves <paramref name="current"/>;
+        /// otherwise the reason, the surface part first. The asset and its
+        /// snapshot give the same answer.
+        /// </summary>
+        internal bool TryMatchBake(in FlowFieldSurfaceSignature current, out string reason)
+        {
+            reason = string.Empty;
+            if (!current.Surface.IsValid || !SurfaceMatches(current))
+                reason = "Surface2D Bake Surface settings differ from the Manager settings.";
+            else if (!ObstaclesMatch(current))
+                reason = "Surface2D Bake obstacle settings differ from the Manager settings.";
+            return reason.Length == 0;
+        }
+
         internal bool ObstaclesMatch(in FlowFieldSurfaceSignature other)
             => ObstacleLayer.value == other.ObstacleLayer.value
                 && FlowFieldLayoutUtility.Approximately(ObstacleCheckHeight, other.ObstacleCheckHeight)

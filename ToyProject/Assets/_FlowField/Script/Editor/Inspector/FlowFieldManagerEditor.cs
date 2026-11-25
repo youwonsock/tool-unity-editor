@@ -103,7 +103,7 @@ namespace Common.FlowField.Editor
                 {
                     EditorGUILayout.HelpBox(
                         string.IsNullOrEmpty(FlowFieldBakeEditor.ProgressLabel)
-                            ? "Static Flow Bake is running."
+                            ? "FlowField Bake is running."
                             : FlowFieldBakeEditor.ProgressLabel,
                         MessageType.Info);
                     if (GUILayout.Button("Cancel Static Bake"))
@@ -115,7 +115,7 @@ namespace Common.FlowField.Editor
                     {
                         using (new EditorGUI.DisabledScope(disableBake))
                         {
-                            if (GUILayout.Button("Bake / ReBake Static Flow Field"))
+                            if (GUILayout.Button("Bake / ReBake FlowField"))
                                 FlowFieldBakeEditor.ScheduleBake(manager);
                         }
 
@@ -292,9 +292,9 @@ namespace Common.FlowField.Editor
             if (!manager.TryValidateConfig(out string reason))
                 EditorGUILayout.HelpBox(reason, MessageType.Error);
             else if (FlowFieldBakeModes.UsesBakeAsset(manager.BakeMode))
-                EditorGUILayout.HelpBox("Static Flow Bake is valid.", MessageType.Info);
+                EditorGUILayout.HelpBox("The Bake Asset matches the Manager settings.", MessageType.Info);
             else
-                EditorGUILayout.HelpBox("Runtime Dynamic uses a fresh downward raycast Surface bake.", MessageType.Info);
+                EditorGUILayout.HelpBox("RuntimeDynamic computes the field at runtime and uses no Bake Asset.", MessageType.Info);
             if (FlowFieldEditorPreview.TryGetFault(manager, out string previewFault))
                 EditorGUILayout.HelpBox($"The Edit Mode preview failed: {previewFault}", MessageType.Warning);
         }

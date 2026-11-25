@@ -120,7 +120,7 @@ namespace Common.FlowField
         {
             reason = string.Empty;
             if (!HasCurrentFormat)
-                return Fail(out reason, $"FlowField Static Bake format {FormatVersion} is unsupported; ReBake is required.");
+                return Fail(out reason, $"Surface2D Bake format {FormatVersion} is unsupported; ReBake is required.");
             if (!FlowFieldLayoutUtility.TryValidateCellCount(_width, _depth, out int count)
                 || !FlowFieldGridSpace.IsFinite(_gridOriginWorld)
                 || !FlowFieldGridSpace.IsFinite(_cellSize)
@@ -144,10 +144,10 @@ namespace Common.FlowField
                 || _hasGoal && (_resolvedGoalIndex < 0 || _resolvedGoalIndex >= count)
                 || !FlowFieldGridSpace.IsFinite(_requestedGoalWorld)
                 || !FlowFieldGridSpace.IsFinite(_goalInfluenceRadius) || _goalInfluenceRadius < 0f)
-                return Fail(out reason, "FlowField Static Bake header is invalid.");
+                return Fail(out reason, "Surface2D Bake header is invalid.");
 
             if (!ArrayMatches(count))
-                return Fail(out reason, "FlowField Static Bake arrays do not match the grid.");
+                return Fail(out reason, "Surface2D Bake arrays do not match the grid.");
 
             for (int i = 0; i < count; i++)
             {
@@ -155,21 +155,21 @@ namespace Common.FlowField
                     || !FlowFieldGridSpace.IsFinite(_surfaceNormals[i])
                     || !FlowFieldGridSpace.IsFinite(_escapeDirections[i])
                     || !FlowFieldGridSpace.IsFinite(_goalDirections[i]))
-                    return Fail(out reason, "FlowField Static Bake contains a non-finite value.");
+                    return Fail(out reason, "Surface2D Bake contains a non-finite value.");
                 bool valid = (_surfaceFlags[i] & 1) != 0;
                 if ((_surfaceFlags[i] & ~1) != 0
                     || (!valid && _surfaceNeighborMasks[i] != 0)
                     || valid && (_surfaceNormals[i].sqrMagnitude <= FlowFieldVectorUtility.DirectionEpsilonSqr
                         || !ApproximatelyUnit(_surfaceNormals[i])))
-                    return Fail(out reason, "FlowField Static Bake contains an invalid Surface cell.");
+                    return Fail(out reason, "Surface2D Bake contains an invalid Surface cell.");
                 if (!FlowFieldVectorUtility.IsUnitOrZero(_escapeDirections[i]) || !FlowFieldVectorUtility.IsUnitOrZero(_goalDirections[i]))
-                    return Fail(out reason, "FlowField Static Bake contains an invalid direction.");
+                    return Fail(out reason, "Surface2D Bake contains an invalid direction.");
                 if ((_goalFlags[i] & ~(FlowFieldGoalFlags.Directed
                     | FlowFieldGoalFlags.Anchor
                     | FlowFieldGoalFlags.Unreachable)) != 0)
-                    return Fail(out reason, "FlowField Static Bake contains invalid Goal flags.");
+                    return Fail(out reason, "Surface2D Bake contains invalid Goal flags.");
                 if (_nextCells[i] < FlowFieldNextCell.Min || _nextCells[i] >= count)
-                    return Fail(out reason, "FlowField Static Bake contains an invalid NextCell sentinel.");
+                    return Fail(out reason, "Surface2D Bake contains an invalid NextCell sentinel.");
                 if (!valid || _blocked[i])
                 {
                     if (_nextCells[i] != FlowFieldNextCell.Blocked || _topologyMasks[i] != 0
@@ -178,11 +178,11 @@ namespace Common.FlowField
                         return Fail(out reason, "Blocked or invalid cells must use the -2 sentinel.");
                 }
                 if (valid && !HasValidSurfaceMask(i))
-                    return Fail(out reason, "FlowField Static Bake Surface connectivity is inconsistent.");
+                    return Fail(out reason, "Surface2D Bake Surface connectivity is inconsistent.");
             }
 
             if (!IsConsistentSnapshot(count))
-                return Fail(out reason, "FlowField Static Bake topology and NextCell data are inconsistent.");
+                return Fail(out reason, "Surface2D Bake topology and NextCell data are inconsistent.");
             return true;
         }
 
@@ -430,12 +430,7 @@ namespace Common.FlowField
         {
             if (!Validate(out reason))
                 return false;
-            FlowFieldSurfaceSignature baked = BakedSignature();
-            if (!signature.Surface.IsValid || !baked.SurfaceMatches(signature))
-                return Fail(out reason, "Static Flow Bake Surface settings differ from the Manager settings.");
-            if (!baked.ObstaclesMatch(signature))
-                return Fail(out reason, "Static Flow Bake obstacle settings differ from the Manager settings.");
-            return true;
+            return BakedSignature().TryMatchBake(in signature, out reason);
         }
 
         // The settings the header records. Only a validated header has them:
@@ -460,7 +455,7 @@ namespace Common.FlowField
                     || (requestedGoalWorld - _requestedGoalWorld).sqrMagnitude <= Epsilon * Epsilon
                         && Mathf.Abs(influenceRadius - _goalInfluenceRadius) <= Epsilon))
                 return true;
-            return Fail(out reason, "Static Flow Bake Goal differs from the Manager settings. ReBake is required.");
+            return Fail(out reason, "Surface2D Bake Goal differs from the Manager settings. ReBake is required.");
         }
 
         // Called once Matches accepted the settings.
@@ -517,9 +512,9 @@ namespace Common.FlowField
         {
             FlowFieldSurfaceBakeSettings settings = signature.Surface;
             if (!settings.IsValid || surface == null || !surface.IsValid)
-                throw new ArgumentException("Static Flow Bake input is invalid.");
+                throw new ArgumentException("Surface2D Bake input is invalid.");
             if (workspace == null || workspace.Capacity != settings.Grid.CellCount)
-                throw new ArgumentException("Static Flow Bake workspace capacity does not match the grid.", nameof(workspace));
+                throw new ArgumentException("Surface2D Bake workspace capacity does not match the grid.", nameof(workspace));
             if (!FlowFieldGridSpace.IsFinite(requestedGoalWorld)
                 || !FlowFieldGridSpace.IsFinite(goalInfluenceRadius) || goalInfluenceRadius < 0f)
                 throw new ArgumentOutOfRangeException(nameof(goalInfluenceRadius));

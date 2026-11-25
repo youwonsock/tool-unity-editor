@@ -103,7 +103,7 @@ namespace Common.FlowField
             }
 
             if (request.BakeSnapshot == null || !request.BakeSnapshot.HasValidData)
-                throw new InvalidOperationException("Static Flow Bake Asset is missing or invalid.");
+                throw new InvalidOperationException(FlowFieldSurfaceBuilder.MissingBakeMessage);
             if (!request.BakeSnapshot.Matches(request.Signature, out string mismatch))
                 throw new InvalidOperationException(mismatch);
             return request.BakeSnapshot.Surface;

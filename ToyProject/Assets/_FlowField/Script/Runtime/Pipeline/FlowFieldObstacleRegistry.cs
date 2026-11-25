@@ -104,7 +104,7 @@ namespace Common.FlowField
             if (ReferenceEquals(collider, null))
                 throw new ArgumentNullException(nameof(collider));
             if (collider == null)
-                throw new InvalidOperationException("Cannot register a destroyed Collider.");
+                throw FlowFieldFailures.DestroyedCollider();
             if (_indices.ContainsKey(collider))
                 return false;
             // Synced, so a Collider moved and registered in one frame reports

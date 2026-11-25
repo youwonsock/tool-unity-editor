@@ -143,7 +143,7 @@ namespace Common.FlowField
         internal FlowFieldModifierChangeResult ApplyChange(IFlowFieldVectorModifier modifier, FlowFieldModifierChange change)
         {
             FlowFieldModifierEntry entry = Find(modifier)
-                ?? throw new InvalidOperationException("Modifier is not registered.");
+                ?? throw FlowFieldFailures.ModifierNotRegistered();
             FlowFieldModifierObservation observation = modifier.Observe();
             ValidateCollider(observation.InfluenceCollider);
             bool priorityChanged = entry.Priority != observation.Priority;

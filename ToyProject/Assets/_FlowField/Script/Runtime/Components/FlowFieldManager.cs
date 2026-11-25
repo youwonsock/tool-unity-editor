@@ -235,7 +235,7 @@ namespace Common.FlowField
             if (!Application.isPlaying)
                 throw FlowFieldFailures.InitOutsidePlayMode();
             if (IsInitialized && _spaceMode != SpaceMode)
-                throw new InvalidOperationException(FlowFieldManagerConfig.SpaceModeLockedMessage);
+                throw FlowFieldFailures.SpaceModeLocked();
             if (IsFaulted)
                 throw FlowFieldFailures.Faulted(ActiveSession.Fault);
             if (IsInitialized)
@@ -268,7 +268,7 @@ namespace Common.FlowField
                 // does: an edit waits for Release, so it is refused here before
                 // anything changes and the fault keeps its cause.
                 if (_spaceMode != owner.SpaceMode)
-                    throw new InvalidOperationException(FlowFieldManagerConfig.SpaceModeLockedMessage);
+                    throw FlowFieldFailures.SpaceModeLocked();
                 // A retry starts again from nothing. A disabled Manager only
                 // leaves the fault, and starts when it is enabled.
                 if (isActiveAndEnabled)
@@ -390,7 +390,7 @@ namespace Common.FlowField
         private void OnSessionStateChanged(FlowFieldRuntimeState state)
         {
             if (state == FlowFieldRuntimeState.Faulted && !string.IsNullOrEmpty(LastError))
-                Debug.LogError($"[{nameof(FlowFieldManager)}] FlowField build failed: {LastError}", this);
+                Debug.LogError($"[FlowField] FlowField build failed: {LastError}", this);
             StateChanged?.Invoke(state);
         }
 

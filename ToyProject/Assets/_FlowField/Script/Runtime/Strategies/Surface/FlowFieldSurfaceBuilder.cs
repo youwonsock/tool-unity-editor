@@ -11,6 +11,8 @@ namespace Common.FlowField
     /// </summary>
     internal sealed partial class FlowFieldSurfaceBuilder : IFlowFieldSpaceBuilder, IFlowFieldLatestCells
     {
+        internal const string MissingBakeMessage = "Surface2D Bake Asset is missing or invalid.";
+
         private readonly FlowFieldSurfaceState _state = new FlowFieldSurfaceState();
         private readonly FlowFieldSurfaceFieldStore _fieldStore = new FlowFieldSurfaceFieldStore();
         private readonly FlowFieldSurfaceObstacleMasks _obstacleMasks;

@@ -5,12 +5,14 @@ namespace Common.FlowField.Editor
     /// <summary>Inspector context menu items of <see cref="FlowFieldManager"/>.</summary>
     internal static class FlowFieldManagerContextMenu
     {
-        [MenuItem("CONTEXT/FlowFieldManager/Clear Goal")]
+        private const string ClearGoalPath = "CONTEXT/FlowFieldManager/Clear Goal";
+
+        [MenuItem(ClearGoalPath)]
         private static void ClearGoal(MenuCommand command)
             => ((FlowFieldManager)command.context).SetGoal(FlowFieldGoalRequest.None);
 
         // SetGoal needs a running session that takes runtime Goals.
-        [MenuItem("CONTEXT/FlowFieldManager/Clear Goal", true)]
+        [MenuItem(ClearGoalPath, true)]
         private static bool CanClearGoal(MenuCommand command)
             => command.context is FlowFieldManager manager
                 && manager.IsInitialized

@@ -49,7 +49,7 @@ namespace Common.FlowField
             if (!Enum.IsDefined(typeof(FlowFieldSpaceMode), mode))
                 throw new ArgumentOutOfRangeException(nameof(mode));
             if (IsInitialized || IsFaulted)
-                throw new InvalidOperationException("FlowField Space Mode can only change after Release and before Init.");
+                throw FlowFieldFailures.SpaceModeLocked();
             _spaceMode = mode;
         }
 
@@ -59,7 +59,7 @@ namespace Common.FlowField
             if (ReferenceEquals(collider, null))
                 throw new ArgumentNullException(nameof(collider));
             if (collider == null)
-                throw new InvalidOperationException("Cannot register a destroyed Collider.");
+                throw FlowFieldFailures.DestroyedCollider();
             if (BakeMode == FlowFieldBakeMode.StaticBaked)
                 throw FlowFieldFailures.NotAllowedIn("Dynamic obstacle registration", FlowFieldBakeMode.StaticBaked);
             return ActiveSession.RegisterObstacleCommand(collider);
@@ -105,7 +105,7 @@ namespace Common.FlowField
             ThrowIfLifecycleUnavailable();
             if (!FlowFieldGridSpace.IsFinite(worldBounds.center)
                 || !FlowFieldGridSpace.IsFinite(worldBounds.size))
-                throw new ArgumentOutOfRangeException(nameof(worldBounds));
+                throw FlowFieldFailures.BoundsNotFinite(nameof(worldBounds));
             if (BakeMode == FlowFieldBakeMode.StaticBaked)
                 throw FlowFieldFailures.NotAllowedIn("Obstacle changes", FlowFieldBakeMode.StaticBaked);
             ActiveSession.NotifyObstacleRegionDirtyCommand(worldBounds);
