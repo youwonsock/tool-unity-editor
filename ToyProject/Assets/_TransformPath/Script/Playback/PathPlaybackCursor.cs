@@ -52,15 +52,18 @@ namespace Common.TransformPath
             EnterSegment(session, 0);
         }
 
-        /// <summary>Returns whether the segment moves in another way than the one before it.</summary>
-        public bool ConfigureSegment(
+        /// <summary>
+        /// Takes the segment's movement. With preserveSpeed, a previous nominal
+        /// speed of at least the minimum carries over: as the Speed, or as the
+        /// Duration that speed needs, both kept within 0.001..9999.
+        /// </summary>
+        public void ConfigureSegment(
             PathRoute session,
             int index,
             float previousNominalSpeed,
             bool preserveSpeed)
         {
             PathMovementSettings settings = session.GetMovementSettings(index);
-            bool moveTypeChanged = settings.MoveType != MoveType;
             MoveType = settings.MoveType;
             _movement = settings;
             if (preserveSpeed
@@ -81,7 +84,6 @@ namespace Common.TransformPath
                 Speed = settings.Value;
             else
                 Duration = settings.Value;
-            return moveTypeChanged;
         }
 
         public void EnterSegment(PathRoute session, int index)

@@ -99,6 +99,10 @@ namespace Common.TransformPath
 
         public bool PreservesPreviousSpeed(int segment) => _segments[segment].PreservePreviousSpeed;
 
+        /// <summary>Whether the segment's own path can still be sampled.</summary>
+        public bool IsSegmentReady(int segment) =>
+            segment >= 0 && segment < _segments.Length && _segments[segment].Sampler.IsReady;
+
         public Vector3 Sample(int segment, float localProgress) =>
             _segments[segment].Sampler.Sample(Mathf.Clamp01(localProgress));
 

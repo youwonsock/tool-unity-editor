@@ -89,7 +89,10 @@ namespace Common.TransformPath
         /// <param name="error">Why the shape cannot build, when it returns false.</param>
         protected abstract bool TryPrepare(out float length, out bool shapeChanged, out string error);
 
-        /// <summary>The point at an arc length of 0..length, from what <see cref="TryPrepare"/> kept.</summary>
+        /// <summary>
+        /// The point at an arc length of 0..length, from what <see cref="TryPrepare"/> kept.
+        /// It must not throw for any distance in that range: the build checks only the ends.
+        /// </summary>
         protected abstract Vector3 Evaluate(float distance);
 
         private protected sealed override bool TryBuild(out bool geometryChanged, out bool definitionChanged, out string error)

@@ -69,7 +69,8 @@ namespace Common.TransformPath
         public EPathMoveType MoveType => _cursor.MoveType;
         public float Speed => _cursor.Speed;
         public float Duration => _cursor.Duration;
-        public bool CanSample => _route != null && _route.Provider.IsReady;
+        // A paused playback can still hold a segment whose path left the sequence and then failed.
+        public bool CanSample => _route != null && _route.Provider.IsReady && _route.IsSegmentReady(_cursor.Segment);
         /// <summary>Whether a blend or a delayed event waits for the effects tick.</summary>
         public bool HasPendingEffects => _effects.HasPending;
 
@@ -339,8 +340,10 @@ namespace Common.TransformPath
 
             _cursor.PendingTime = 0f;
             MotionEpoch++;
+            // Another segment starts as if the playback had moved into it, so one
+            // that preserves the previous speed takes the speed the playback has now.
             if (segment != _cursor.Segment)
-                ConfigureSegment(segment, 0f, false);
+                ConfigureSegment(segment, _cursor.GetNominalSpeed(_route), _route.PreservesPreviousSpeed(segment));
             _cursor.MoveTo(_route, segment, local);
             _cursor.SkipEventsToPosition(_route.GetEvents(segment));
             _positionDirty = true;
@@ -394,9 +397,10 @@ namespace Common.TransformPath
 
         private void ConfigureSegment(int index, float previousNominalSpeed, bool preserveSpeed)
         {
-            // A blend drives the channel of the segment that started it.
-            if (_cursor.ConfigureSegment(_route, index, previousNominalSpeed, preserveSpeed))
-                _effects.CancelBlend();
+            _cursor.ConfigureSegment(_route, index, previousNominalSpeed, preserveSpeed);
+            // A blend belongs to the segment that started it. The next segment starts
+            // from its own value, or the speed it inherits, as after an instant change.
+            _effects.CancelBlend();
         }
 
         private void Complete()

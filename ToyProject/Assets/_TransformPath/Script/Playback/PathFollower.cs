@@ -7,7 +7,8 @@ namespace Common.TransformPath
     /// Moves its Transform along a path. Playback, events and their effects run
     /// in <see cref="PathPlayback"/>; this component applies the result and
     /// turns the CharacterController off while it moves.
-    /// Callbacks run after the command or frame that raised them has finished.
+    /// Callbacks run after the command, or this follower's part of the frame,
+    /// that raised them has finished.
     /// </summary>
     public sealed class PathFollower : PathRuntimeBehaviour
     {
@@ -33,7 +34,9 @@ namespace Common.TransformPath
 
         private readonly PathPlaybackListeners _listeners = new PathPlaybackListeners();
         private PathPlayback _playback;
-        private bool _characterControllerDisabledByFollower;
+        // Serialized so a copy (Instantiate of a moving follower) or a script
+        // reload knows the controller is off because of a playback it no longer has.
+        [SerializeField, HideInInspector] private bool _characterControllerDisabledByFollower;
 
         private PathPlayback Playback => _playback ??= CreatePlayback();
 
@@ -61,6 +64,10 @@ namespace Common.TransformPath
 
         internal override ulong TickPlaybackId => Playback.PlaybackId;
         internal int MotionEpoch => Playback.MotionEpoch;
+
+        // Enabled on an active GameObject: what the driver ticks. Unlike isActiveAndEnabled
+        // it is already true while an earlier component's OnEnable runs on reactivation.
+        internal bool IsEnabledInHierarchy => enabled && gameObject.activeInHierarchy;
         /// <summary>Why the last playback ended; None while one runs.</summary>
         internal EPathPlaybackEnd LastPlaybackEnd => Playback.LastEnd;
         /// <summary>The definition revision of the route this follower plays, or -1 without one.</summary>
@@ -94,9 +101,15 @@ namespace Common.TransformPath
 
         #region Commands
 
-        /// <summary>Starts a playback from the start of the route. Throws before anything changes when the request is invalid.</summary>
+        /// <summary>
+        /// Starts a playback from the start of the route. Throws before anything
+        /// changes when the request is invalid or the follower is disabled, since
+        /// a disabled follower would never move.
+        /// </summary>
         public bool Play(PathPlaybackRequest request)
         {
+            if (!IsEnabledInHierarchy)
+                throw new InvalidOperationException($"PathFollower '{name}' must be active and enabled to play.");
             using var operation = PathExecutionBoundary.Enter();
             bool changed = Playback.Play(request);
             TrySuppressCharacterController();
@@ -261,6 +274,13 @@ namespace Common.TransformPath
                 Debug.LogError($"PathFollower '{name}' event receiver does not implement IPathEventReceiver.", this);
             using var operation = PathExecutionBoundary.Enter();
             Playback.Initialize();
+            // A copy or a reload has no playback, so a controller it shows off from one is
+            // turned back on. Only its own: a copy keeps references to controllers outside
+            // it, which the original may still hold off.
+            if (_characterControllerDisabledByFollower
+                && (_characterController == null || !_characterController.transform.IsChildOf(transform)))
+                _characterControllerDisabledByFollower = false;
+            TryRestoreCharacterController();
         }
 
         internal override void Release()
@@ -363,7 +383,7 @@ namespace Common.TransformPath
             if (!_characterControllerDisabledByFollower || _characterController == null)
                 return;
             // A paused playback still owns the suppression.
-            if (isActiveAndEnabled && Playback.PlaybackId != 0
+            if (IsEnabledInHierarchy && Playback.PlaybackId != 0
                 && (Playback.IsMoving || Playback.State == EPathFollowerState.Paused))
                 return;
             _characterController.enabled = true;
