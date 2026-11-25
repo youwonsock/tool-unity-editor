@@ -39,6 +39,43 @@ namespace Common.TransformPath.Tests
         }
 
         [Test]
+        public void FindSegment_PutsASegmentStartsOwnProgressInThatSegment()
+        {
+            // With these lengths start / total comes back a hair short of the start in float.
+            PathRoute route = Segments(27.529211f, 47.01831f, 19.679008f);
+            float start = route.GetGlobalProgress(1, 0f);
+            Assume.That(start * route.TotalLength, Is.LessThan(27.529211f));
+
+            Assert.AreEqual(1, route.FindSegment(start));
+            Assert.AreEqual(0f, route.GetLocalProgress(1, start));
+            Assert.AreEqual(0, route.FindSegment(start - 1e-4f));
+
+            var random = new System.Random(7);
+            for (int trial = 0; trial < 200; trial++)
+            {
+                PathRoute next = Segments(
+                    5f + (float)random.NextDouble() * 60f,
+                    5f + (float)random.NextDouble() * 60f,
+                    5f + (float)random.NextDouble() * 60f);
+                for (int segment = 1; segment < 3; segment++)
+                    Assert.AreEqual(segment, next.FindSegment(next.GetGlobalProgress(segment, 0f)), $"trial {trial}");
+            }
+        }
+
+        private static PathRoute Segments(params float[] lengths)
+        {
+            var movement = PathMovementSettings.Speed(1f);
+            var segments = new PathRoute.Segment[lengths.Length];
+            float start = 0f;
+            for (int i = 0; i < lengths.Length; i++)
+            {
+                segments[i] = new PathRoute.Segment(new LineProvider(lengths[i]), start, lengths[i], movement, false, null);
+                start += lengths[i];
+            }
+            return PathRoute.FromProvider(new LineProvider(start), segments, true);
+        }
+
+        [Test]
         public void SingleSegment_KeepsProgressExact()
         {
             var provider = new LineProvider(7f);

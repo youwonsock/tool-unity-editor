@@ -1093,6 +1093,282 @@ namespace Common.TransformPath.Tests
             return policy;
         }
 
+        [Test]
+        public void SeekToASegmentStart_LandsInThatSegment_AndSkipsItsEventAtZero()
+        {
+            // With these lengths start / total comes back a hair short of segment 1's start.
+            PathData first = ExactLine(27.529211f);
+            PathData second = ExactLine(47.01831f);
+            PathData third = ExactLine(19.679008f);
+            _scene.SetEvents(second, (0f, _scene.CreateEvent("AtStart")));
+            second.Rebuild();
+            MultiPathData sequence = _scene.CreateSequence();
+            sequence.SetSegments(new[]
+            {
+                new PathSegmentAuthoring(first), new PathSegmentAuthoring(second), new PathSegmentAuthoring(third),
+            });
+            sequence.Rebuild();
+            PathFollower follower = CreateFollower();
+            var log = new List<string>();
+            follower.SegmentChanged += segment => log.Add($"segment {segment}");
+            follower.EventReached += name => log.Add($"event {name}");
+            follower.Play(PathPlaybackRequest.Sequence(sequence));
+            follower.Pause();
+
+            Assert.IsTrue(follower.Seek(sequence.GetSegmentStartDistance(1) / sequence.PathLength));
+            Assert.AreEqual(1, follower.SegmentIndex);
+            Assert.AreEqual(0f, follower.SegmentProgress);
+            follower.Resume();
+            Frames(2);
+
+            // The event at the target counts as passed, and the follower never entered by moving.
+            CollectionAssert.IsEmpty(log);
+        }
+
+        [Test]
+        public void DestroyedPathThatNeverWoke_StopsItsFollower()
+        {
+            PathData path = Line(10f, 1f);
+            PathFollower follower = CreateFollower();
+            follower.Play(PathPlaybackRequest.Single(path));
+            Frames(5);
+
+            // Edit Mode calls no OnDestroy here, as Play Mode skips it for an object never active.
+            Object.DestroyImmediate(path.gameObject);
+            Frames(1);
+
+            Assert.AreEqual(EPathFollowerState.Ready, follower.State);
+            Assert.AreEqual(EPathPlaybackEnd.RouteUnavailable, follower.LastPlaybackEnd);
+        }
+
+        [Test]
+        public void SequencePathThatNeverWokeDestroyed_StopsAFollowerOnIt()
+        {
+            PathData first = Line(10f, 1f);
+            PathData second = Line(10f, 1f);
+            MultiPathData sequence = _scene.CreateSequence();
+            sequence.SetSegments(new[] { new PathSegmentAuthoring(first), new PathSegmentAuthoring(second) });
+            sequence.Rebuild();
+            PathFollower follower = CreateFollower();
+            follower.Play(PathPlaybackRequest.Sequence(sequence));
+            follower.SeekSegment(1, 0.5f);
+            Frames(1);
+
+            Object.DestroyImmediate(second.gameObject);
+            Frames(1);
+
+            Assert.AreEqual(EPathFollowerState.Ready, follower.State);
+            Assert.AreEqual(EPathPlaybackEnd.RouteUnavailable, follower.LastPlaybackEnd);
+        }
+
+        [Test]
+        public void HoldMadeInCompleted_WaitsAtTheNextQueuedStart()
+        {
+            PathData path = Line(3f, 4f);
+            QueuedPathManager manager = CreateManager(path);
+            PathQueueMember member = CreateMember();
+            member.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            bool held = false;
+            member.Follower.Completed += () =>
+            {
+                if (held)
+                    return;
+                held = true;
+                member.Hold();
+            };
+            for (int i = 0; i < 300 && !held; i++)
+                Frames(1);
+            Frames(2);
+
+            Assert.IsFalse(member.IsInQueue);
+            Assert.IsTrue(member.IsHeld);
+            member.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            Frames(30);
+            Assert.AreEqual(0f, member.Follower.Progress);
+            Assert.IsTrue(member.IsBlocked);
+
+            member.ReleaseHold();
+            Frames(60);
+            Assert.Greater(member.Follower.Progress, 0f);
+        }
+
+        [Test]
+        public void ReleasingTheManager_ReportsProviderInvalidForAMemberAlreadyOnAnotherRoute()
+        {
+            PathData route = Line(30f, 3f);
+            PathData other = Line(30f, 3f);
+            QueuedPathManager manager = CreateManager(route);
+            PathQueueMember member = CreateMember();
+            var reasons = new List<EPathQueueLeaveReason>();
+            member.QueueInvalidated += (m, reason) => reasons.Add(reason);
+            member.StartQueuedPlayback(manager, PathPlaybackRequest.Single(route));
+            Frames(20);
+
+            // No Queue phase between the two: the release reports what that phase would.
+            member.Follower.Play(PathPlaybackRequest.Single(other));
+            manager.Release();
+
+            CollectionAssert.AreEqual(new[] { EPathQueueLeaveReason.ProviderInvalid }, reasons);
+            Assert.AreSame(other, member.Follower.CurrentProvider);
+            Assert.AreEqual(EPathFollowerState.Moving, member.Follower.State);
+        }
+
+        [Test]
+        public void RestartInPlace_IsListedBehindTheOthersAtOnce()
+        {
+            PathData path = Line(3f, 4f);
+            QueuedPathManager manager = CreateManager(path);
+            PathQueueMember lapper = CreateMember();
+            PathQueueMember other = CreateMember();
+            lapper.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            other.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            Frames(5);
+            lapper.Follower.Seek(0.6f);
+            PathQueueMember leader = null;
+            lapper.Follower.Completed += () => lapper.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            lapper.Follower.Completed += () => leader ??= manager.GetMember(0);
+            for (int i = 0; i < 300 && leader == null; i++)
+                Frames(1);
+
+            Assert.AreSame(other, leader);
+            Assert.AreSame(lapper, manager.GetMember(1));
+        }
+
+        [Test]
+        public void QueueSignals_PairBlockedAndResumed_AndLeaveEndsAWaitAtOnce()
+        {
+            PathData path = Line(30f, 3f);
+            QueuedPathManager manager = CreateManager(path);
+            PathQueueMember member = CreateMember();
+            var log = new List<string>();
+            float speed = -1f;
+            member.Blocked += m => log.Add("blocked");
+            member.Resumed += m => log.Add("resumed");
+            member.SpeedChanged += (m, multiplier) => speed = multiplier;
+            member.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            Frames(240);
+
+            // A start waits for the first result and the restart delay, then eases up to full speed.
+            CollectionAssert.AreEqual(new[] { "blocked", "resumed" }, log);
+            Assert.AreEqual(1f, speed);
+
+            log.Clear();
+            member.Hold();
+            CollectionAssert.IsEmpty(log, "A Hold's notice comes with the next Tick.");
+            Frames(1);
+            CollectionAssert.AreEqual(new[] { "blocked" }, log);
+            Assert.AreEqual(0f, speed);
+            member.ReleaseHold();
+            Frames(240);
+            CollectionAssert.AreEqual(new[] { "blocked", "resumed" }, log);
+            Assert.AreEqual(1f, speed);
+
+            member.Hold();
+            Frames(1);
+            log.Clear();
+            member.Leave();
+            CollectionAssert.AreEqual(new[] { "resumed" }, log);
+            Assert.AreEqual(1f, speed);
+            Assert.IsFalse(member.IsHeld);
+        }
+
+        [Test]
+        public void EventReceiver_HearsAnEventBeforeEventReached()
+        {
+            PathData path = Line(10f, 5f);
+            _scene.SetEvents(path, (0.5f, _scene.CreateEvent("Named")));
+            path.Rebuild();
+            var host = new GameObject("Receiving Follower");
+            _objects.Add(host);
+            TestEventReceiver receiver = host.AddComponent<TestEventReceiver>();
+            PathFollower follower = host.AddComponent<PathFollower>();
+            var serialized = new UnityEditor.SerializedObject(follower);
+            serialized.FindProperty("_eventReceiver").objectReferenceValue = receiver;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            follower.Initialize();
+            _driver.Register(follower);
+            follower.EventReached += name => receiver.Log.Add("EventReached " + name);
+
+            follower.Play(PathPlaybackRequest.Single(path));
+            Frames(120);
+
+            CollectionAssert.AreEqual(new[] { "receiver Named", "EventReached Named" }, receiver.Log);
+        }
+
+        [Test]
+        public void Aggregate_RunsAPathsEvents_ButASequenceHasNone()
+        {
+            PathData path = Line(10f, 1f);
+            _scene.SetEvents(path, (0.5f, _scene.CreateEvent("OnPath")));
+            path.Rebuild();
+            MultiPathData sequence = _scene.CreateSequence();
+            sequence.SetSegments(new[] { new PathSegmentAuthoring(path) });
+            sequence.Rebuild();
+            PathFollower onPath = CreateFollower();
+            PathFollower onSequence = CreateFollower();
+            var heard = new List<string>();
+            onPath.EventReached += name => heard.Add("path " + name);
+            onSequence.EventReached += name => heard.Add("sequence " + name);
+
+            onPath.Play(PathPlaybackRequest.Aggregate(path, PathMovementSettings.Speed(10f), false));
+            onSequence.Play(PathPlaybackRequest.Aggregate(sequence, PathMovementSettings.Speed(10f), false));
+            Frames(120);
+
+            CollectionAssert.AreEqual(new[] { "path OnPath" }, heard);
+            Assert.AreEqual(EPathFollowerState.Completed, onPath.State);
+            Assert.AreEqual(EPathFollowerState.Completed, onSequence.State);
+        }
+
+        [Test]
+        public void SortPathEvents_IsStable_AndClampsToTheLastPosition()
+        {
+            PathData path = Line(10f, 1f);
+            PathEventSettingSO a = _scene.CreateEvent("a"), b = _scene.CreateEvent("b");
+            PathEventSettingSO c = _scene.CreateEvent("c"), d = _scene.CreateEvent("d");
+            // An event authored at 1 fails the build until the sort clamps it.
+            LogAssert.Expect(LogType.Error, new Regex("outside the valid range"));
+            _scene.SetEvents(path, (0.6f, a), (0.2f, b), (0.6f, c), (1f, d));
+
+            Assert.IsTrue(path.SortPathEventsByNormalizedTime());
+            var order = new List<string>();
+            for (int i = 0; i < path.AuthoringEventCount; i++)
+            {
+                PathEventEntry entry = path.GetAuthoringEvent(i);
+                order.Add($"{entry.EventSetting.EventName}@{entry.NormalizedTime:F3}");
+            }
+            CollectionAssert.AreEqual(new[] { "b@0.200", "a@0.600", "c@0.600", "d@0.995" }, order);
+            Assert.IsFalse(path.SortPathEventsByNormalizedTime());
+        }
+
+        [Test]
+        public void RotateToPathDirection_TurnsWhileMoving_AndOffKeepsTheRotation()
+        {
+            PathData path = _scene.CreatePath(PathMovementSettings.Speed(5f), EPathCurveType.Linear,
+                Vector3.zero, new Vector3(0f, 0f, 10f));
+            PathFollower turning = CreateFollower();
+            PathFollower fixedRotation = CreateFollower();
+            Quaternion start = Quaternion.Euler(0f, 90f, 0f);
+            turning.transform.rotation = start;
+            fixedRotation.transform.rotation = start;
+            fixedRotation.RotateToPathDirection = false;
+
+            turning.Play(PathPlaybackRequest.Single(path));
+            fixedRotation.Play(PathPlaybackRequest.Single(path));
+            Frames(5);
+
+            Assert.AreEqual(0f, Vector3.Angle(Vector3.forward, turning.transform.forward), 0.01f);
+            Assert.AreEqual(0f, Quaternion.Angle(start, fixedRotation.transform.rotation), 0.01f);
+        }
+
+        // A two-point line split into two edges, so its length is exactly the one given.
+        private PathData ExactLine(float length)
+        {
+            PathData path = Line(length, 1f);
+            path.SegmentCount = 2;
+            path.Rebuild();
+            return path;
+        }
+
         // Edit Mode does not call OnDestroy for a component that never woke; Play
         // Mode does, and then the component is gone, so the test does both.
         private static void DestroyProvider(PathProviderBehaviour provider)

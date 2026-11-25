@@ -72,9 +72,13 @@ namespace Common.TransformPath.Editor
                 EditorGUILayout.PropertyField(Property, new GUIContent("Segments"), true);
             }
             bool changed = EditorGUI.EndChangeCheck();
-            _fixUpTargets |= changed && !_singleTarget;
+            if (changed && !_singleTarget)
+                MarkTargetsEdited();
             return changed;
         }
+
+        /// <summary>The plain field changed the targets since <see cref="CaptureTargets"/>.</summary>
+        internal void MarkTargetsEdited() => _fixUpTargets = true;
 
         /// <summary>
         /// Several targets get Unity's plain field, which neither starts new segments
@@ -111,7 +115,8 @@ namespace Common.TransformPath.Editor
             _snapshots.Clear();
         }
 
-        private void CaptureTargets()
+        /// <summary>Remembers each target's segments before the plain field edits them.</summary>
+        internal void CaptureTargets()
         {
             _snapshots.Clear();
             Object[] targets = _serializedObject.targetObjects;

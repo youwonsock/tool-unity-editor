@@ -42,7 +42,7 @@ namespace Common.TransformPath.Editor
                 MessageType.Info);
             int groupsBefore = _groupsProperty.arraySize;
             EditorGUILayout.PropertyField(_groupsProperty, true);
-            EnableFirstGroups(groupsBefore);
+            EnableFirstGroups(_groupsProperty, groupsBefore);
 
             EditorGUILayout.Space(8f);
             DrawActionButtons();
@@ -99,12 +99,12 @@ namespace Common.TransformPath.Editor
         // The list's "+" zeroes the first element it adds to an empty list, which
         // would leave that group off. A group starts enabled, as its class declares;
         // later elements copy the one before them.
-        private void EnableFirstGroups(int countBefore)
+        internal static void EnableFirstGroups(SerializedProperty groups, int countBefore)
         {
             if (countBefore != 0)
                 return;
-            for (int i = 0; i < _groupsProperty.arraySize; i++)
-                _groupsProperty.GetArrayElementAtIndex(i).FindPropertyRelative("_enabled").boolValue = true;
+            for (int i = 0; i < groups.arraySize; i++)
+                groups.GetArrayElementAtIndex(i).FindPropertyRelative("_enabled").boolValue = true;
         }
 
         #endregion

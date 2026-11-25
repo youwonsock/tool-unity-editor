@@ -35,6 +35,49 @@ namespace Common.TransformPath.Tests
         }
 
         [Test]
+        public void DefaultTimeCurve_MapsTimeToProgressOneToOne()
+        {
+            PathMovementSettings linear = PathMovementSettings.Time(10f);
+            PathMovementSettings eased = PathMovementSettings.Time(10f, AnimationCurve.EaseInOut(0f, 0f, 1f, 1f));
+
+            Assert.AreEqual(0.37f, linear.EvaluateProgress(0.37f));
+            Assert.AreEqual(0.37f, linear.InverseProgress(0.37f));
+            Assert.AreNotEqual(0.37f, eased.EvaluateProgress(0.37f));
+            Assert.AreEqual(0.37f, eased.EvaluateProgress(eased.InverseProgress(0.37f)), 1e-5f);
+        }
+
+        [Test]
+        public void CurvedTimeCurve_StopsAtEachEvent_WhenTheCurveReachesIt()
+        {
+            var movement = PathMovementSettings.Time(10f, AnimationCurve.EaseInOut(0f, 0f, 1f, 1f));
+            PathData path = Line(movement);
+            PathEventSettingSO first = _scene.CreateEvent("First");
+            first.Lifecycle = EPathEventLifecycle.Pause;
+            PathEventSettingSO second = _scene.CreateEvent("Second");
+            second.Lifecycle = EPathEventLifecycle.Pause;
+            _scene.SetEvents(path, (0.3f, first), (0.6f, second));
+            path.Rebuild();
+            var recorder = new RecordingPlayback();
+            recorder.Playback.Play(PathPlaybackRequest.Single(path));
+
+            // Moving frames from the start, at 100 a second; the last one of each stop is partial.
+            int moving = 0;
+            foreach (float position in new[] { 0.3f, 0.6f })
+            {
+                while (recorder.Playback.State == EPathFollowerState.Moving && moving < 2000)
+                {
+                    recorder.Frame(0.01f);
+                    moving++;
+                }
+                Assert.AreEqual(EPathFollowerState.Paused, recorder.Playback.State);
+                Assert.AreEqual(position, recorder.Playback.Progress, 1e-6f);
+                Assert.AreEqual(movement.InverseProgress(position) * 10f, moving * 0.01f, 0.021f);
+                recorder.Playback.Resume();
+            }
+            Assert.AreEqual(EPathFollowerState.Moving, recorder.Playback.State);
+        }
+
+        [Test]
         public void TimeBased_SetDuration_KeepsProgress()
         {
             var recorder = new RecordingPlayback();

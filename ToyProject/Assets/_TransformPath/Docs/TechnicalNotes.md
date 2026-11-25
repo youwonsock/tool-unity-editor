@@ -9,8 +9,8 @@
 | `Common.TransformPath` | `Script/` | 계약, Provider, Route, 재생, 이벤트, Queue, 실행 기반, `PathDataLineRenderer`, 그룹 동기화 데이터 |
 | `Common.TransformPath.Editor` | `Script/Editor/` | Inspector, 연결점과 그룹 동기화, Scene View 미리보기 |
 | `Common.TransformPath.Samples` | `Samples/Scripts/` | 샘플 씬의 컨트롤러·UI·카메라·수신기, 원 모양(`TransformPathCircleShape`)과 간격 정책(`TransformPathGapPolicy`). UGUI 참조 |
-| `Common.TransformPath.Tests` | `Dev/Tests/` | EditMode 테스트 |
-| `Common.TransformPath.Tests.Fixtures` | `Dev/Tests/Fixtures/` | 테스트가 붙이는 컴포넌트(시험용 원 모양). Unity는 Editor 어셈블리의 컴포넌트를 붙이지 않으므로 런타임 어셈블리이며, `UNITY_INCLUDE_TESTS`일 때만 컴파일합니다 |
+| `Common.TransformPath.Tests` | `Dev/Tests/` | EditMode 테스트. 런타임과 Inspector 도구의 규칙(`PathEditorToolTests`)을 함께 확인하므로 두 어셈블리의 내부에 접근합니다 |
+| `Common.TransformPath.Tests.Fixtures` | `Dev/Tests/Fixtures/` | 테스트가 붙이는 컴포넌트(시험용 원 모양, 이벤트 수신기). Unity는 Editor 어셈블리의 컴포넌트를 붙이지 않으므로 런타임 어셈블리이며, `UNITY_INCLUDE_TESTS`일 때만 컴파일합니다 |
 | `Common.TransformPath.PlayerProbe`, `.PlayerProbe.Editor` | `Dev/` | 이 저장소의 성능 측정 Player(`Tools/run-transformpath-probe.sh`)와 `-executeMethod` 빌드 진입점 |
 
 시스템과 에디터는 `Script/` 폴더 하나입니다. 샘플, 테스트, 측정 도구는 시스템을 참조만 하고, 시스템은 이들을 모릅니다. 샘플과 테스트 고정 어셈블리에는 내부 접근을 주지 않으므로 공개 API만으로 만들어집니다. 샘플의 `TransformPathCircleShape`와 테스트 고정 어셈블리의 원은 이렇게 `PathShapeProvider`를 다른 어셈블리에서 상속할 수 있음을 컴파일로 보입니다. 측정 어셈블리는 Editor와 `TRANSFORMPATH_PLAYER_PROBE`를 정의한 측정 빌드에서만 컴파일합니다.
