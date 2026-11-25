@@ -69,7 +69,10 @@ namespace Common.TransformPath
             }
         }
 
-        /// <summary>The manager <see cref="StartQueuedPlayback(PathPlaybackRequest)"/> uses; unset, the one on a parent.</summary>
+        /// <summary>
+        /// The manager <see cref="StartQueuedPlayback(PathPlaybackRequest)"/> uses.
+        /// Unset, a start uses the one on a parent, which Awake assigns here.
+        /// </summary>
         public QueuedPathManager Manager
         {
             get => _manager;
@@ -142,16 +145,13 @@ namespace Common.TransformPath
             remove => _invalidated.Remove(value);
         }
 
-        private void Awake() => ResolveManager();
+        private void Awake() => _manager = ResolveManager();
 
         // Without an assigned manager, the one on a parent. A sibling's OnEnable or
-        // another object's Awake can start this member before its own Awake.
-        private QueuedPathManager ResolveManager()
-        {
-            if (_manager == null)
-                _manager = GetComponentInParent<QueuedPathManager>();
-            return _manager;
-        }
+        // another object's Awake can start this member before its own Awake, so a
+        // start looks it up too, without writing the serialized field.
+        private QueuedPathManager ResolveManager() =>
+            _manager != null ? _manager : GetComponentInParent<QueuedPathManager>();
 
         // A disabled member leaves the queue quietly. Its follower keeps playing,
         // without the queue's limit and without a Resumed notification.

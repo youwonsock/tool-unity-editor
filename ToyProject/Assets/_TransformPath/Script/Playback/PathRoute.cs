@@ -99,9 +99,18 @@ namespace Common.TransformPath
 
         public bool PreservesPreviousSpeed(int segment) => _segments[segment].PreservePreviousSpeed;
 
-        /// <summary>Whether the segment's own path can still be sampled.</summary>
-        public bool IsSegmentReady(int segment) =>
-            segment >= 0 && segment < _segments.Length && _segments[segment].Sampler.IsReady;
+        /// <summary>
+        /// Whether the segment's own path can still be sampled, for a caller that
+        /// checked the route's provider. A segment the provider samples itself is
+        /// not checked again: readiness costs a Unity null check.
+        /// </summary>
+        public bool IsSegmentReady(int segment)
+        {
+            if (segment < 0 || segment >= _segments.Length)
+                return false;
+            IPathProvider sampler = _segments[segment].Sampler;
+            return ReferenceEquals(sampler, Provider) || sampler.IsReady;
+        }
 
         public Vector3 Sample(int segment, float localProgress) =>
             _segments[segment].Sampler.Sample(Mathf.Clamp01(localProgress));

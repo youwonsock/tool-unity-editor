@@ -109,6 +109,26 @@ namespace Common.TransformPath.Tests
         }
 
         [Test]
+        public void GroupsPastedIntoAnEmptyList_KeepTheirState()
+        {
+            var registry = Track(new GameObject("Registry")).AddComponent<PathWaypointSyncRegistry>();
+            Transform member = Track(new GameObject("Member")).transform;
+            var serialized = new SerializedObject(registry);
+            SerializedProperty groups = serialized.FindProperty("_groups");
+
+            // What a paste writes: a whole group, switched off on purpose.
+            groups.arraySize = 1;
+            SerializedProperty pasted = groups.GetArrayElementAtIndex(0);
+            pasted.FindPropertyRelative("_displayName").stringValue = "Pasted";
+            pasted.FindPropertyRelative("_members").arraySize = 1;
+            pasted.FindPropertyRelative("_members").GetArrayElementAtIndex(0).objectReferenceValue = member;
+            PathWaypointSyncRegistryEditor.EnableFirstGroups(groups, 0);
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+
+            Assert.IsFalse(registry.Groups[0].Enabled);
+        }
+
+        [Test]
         public void SeveralSequencesEditedTogether_StartSegmentsAndOverridesAsOneDoes()
         {
             MultiPathData first = Track(new GameObject("Sequence A")).AddComponent<MultiPathData>();
@@ -145,6 +165,38 @@ namespace Common.TransformPath.Tests
                 Assert.AreEqual(3f, segment.FindPropertyRelative("_moveValue").floatValue);
                 sequence.Rebuild();
                 Assert.IsTrue(sequence.IsReady);
+            }
+        }
+
+        [Test]
+        public void SeveralSequencesEditedTogether_ADeleteKeepsAnOverridesValues()
+        {
+            PathData lap = PathAt(Vector3.zero, new Vector3(5f, 0f, 0f));
+            var sequences = new[]
+            {
+                Track(new GameObject("Sequence A")).AddComponent<MultiPathData>(),
+                Track(new GameObject("Sequence B")).AddComponent<MultiPathData>(),
+            };
+            // One lap at its own speed, then the same lap faster.
+            foreach (MultiPathData sequence in sequences)
+                sequence.SetSegments(new[]
+                {
+                    new PathSegmentAuthoring(lap),
+                    new PathSegmentAuthoring(lap, PathMovementSettings.Speed(10f)),
+                });
+            var serialized = new SerializedObject(sequences);
+            var drawer = new PathSegmentListDrawer(serialized, false);
+
+            drawer.CaptureTargets();
+            serialized.FindProperty("_segments").DeleteArrayElementAtIndex(0);
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            drawer.MarkTargetsEdited();
+            drawer.ApplyListDefaultsToTargets();
+
+            foreach (MultiPathData sequence in sequences)
+            {
+                Assert.AreEqual(1, sequence.AuthoringSegmentCount);
+                Assert.AreEqual(10f, Segment(sequence).FindPropertyRelative("_moveValue").floatValue);
             }
         }
 

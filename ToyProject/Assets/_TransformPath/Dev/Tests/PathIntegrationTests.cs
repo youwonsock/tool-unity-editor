@@ -1114,8 +1114,11 @@ namespace Common.TransformPath.Tests
             follower.EventReached += name => log.Add($"event {name}");
             follower.Play(PathPlaybackRequest.Sequence(sequence));
             follower.Pause();
+            float start = sequence.GetSegmentStartDistance(1);
+            float progress = start / sequence.PathLength;
+            Assume.That(progress * sequence.PathLength, Is.LessThan(start));
 
-            Assert.IsTrue(follower.Seek(sequence.GetSegmentStartDistance(1) / sequence.PathLength));
+            Assert.IsTrue(follower.Seek(progress));
             Assert.AreEqual(1, follower.SegmentIndex);
             Assert.AreEqual(0f, follower.SegmentProgress);
             follower.Resume();
@@ -1157,6 +1160,27 @@ namespace Common.TransformPath.Tests
             Object.DestroyImmediate(second.gameObject);
             Frames(1);
 
+            Assert.AreEqual(EPathFollowerState.Ready, follower.State);
+            Assert.AreEqual(EPathPlaybackEnd.RouteUnavailable, follower.LastPlaybackEnd);
+        }
+
+        [Test]
+        public void AggregateOfASequenceWhosePathNeverWokeDestroyed_StopsWithoutAFault()
+        {
+            PathData first = Line(10f, 1f);
+            PathData second = Line(10f, 1f);
+            MultiPathData sequence = _scene.CreateSequence();
+            sequence.SetSegments(new[] { new PathSegmentAuthoring(first), new PathSegmentAuthoring(second) });
+            sequence.Rebuild();
+            PathFollower follower = CreateFollower();
+            follower.Play(PathPlaybackRequest.Aggregate(sequence, PathMovementSettings.Speed(1f), false));
+            Frames(1);
+
+            Object.DestroyImmediate(second.gameObject);
+            // Frames fails the test on any tick fault, such as sampling the destroyed path.
+            Frames(1);
+
+            Assert.IsFalse(sequence.IsReady);
             Assert.AreEqual(EPathFollowerState.Ready, follower.State);
             Assert.AreEqual(EPathPlaybackEnd.RouteUnavailable, follower.LastPlaybackEnd);
         }

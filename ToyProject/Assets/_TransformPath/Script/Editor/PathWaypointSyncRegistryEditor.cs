@@ -98,13 +98,19 @@ namespace Common.TransformPath.Editor
 
         // The list's "+" zeroes the first element it adds to an empty list, which
         // would leave that group off. A group starts enabled, as its class declares;
-        // later elements copy the one before them.
+        // later elements copy the one before them. Only a zeroed group (no name, no
+        // members) is new: a pasted group keeps its own state.
         internal static void EnableFirstGroups(SerializedProperty groups, int countBefore)
         {
             if (countBefore != 0)
                 return;
             for (int i = 0; i < groups.arraySize; i++)
-                groups.GetArrayElementAtIndex(i).FindPropertyRelative("_enabled").boolValue = true;
+            {
+                SerializedProperty group = groups.GetArrayElementAtIndex(i);
+                if (group.FindPropertyRelative("_members").arraySize == 0
+                    && string.IsNullOrEmpty(group.FindPropertyRelative("_displayName").stringValue))
+                    group.FindPropertyRelative("_enabled").boolValue = true;
+            }
         }
 
         #endregion

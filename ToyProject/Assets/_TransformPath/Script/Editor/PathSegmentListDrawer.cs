@@ -95,24 +95,49 @@ namespace Common.TransformPath.Editor
                 Snapshot before = _snapshots[t];
                 if (before.Target == null)
                     continue;
-                var serialized = new SerializedObject(before.Target);
+                using var serialized = new SerializedObject(before.Target);
                 SerializedProperty segments = serialized.FindProperty(PathEditorSerializationUtility.SEGMENTS_PROPERTY);
-                for (int i = 0; i < segments.arraySize; i++)
+                int count = segments.arraySize;
+                int known = before.Paths.Length;
+                // Appended segments only: a duplicate in the middle shifts the old ones down.
+                if (count > known && Matches(segments, before, known, out _))
                 {
-                    SerializedProperty element = segments.GetArrayElementAtIndex(i);
-                    SerializedProperty path = element.FindPropertyRelative(PathEditorSerializationUtility.PATH_PROPERTY);
-                    SerializedProperty source = element.FindPropertyRelative(MOVEMENT_SOURCE_PROPERTY);
-                    if (i >= before.Paths.Length)
-                        StartNewSegment(element, zeroed: before.Paths.Length == 0);
-                    // Only the same segment switching over: a reorder moves an Override, it does not choose one.
-                    else if (!before.Overrides[i]
-                        && source.enumValueIndex == (int)EPathSegmentMovementSource.Override
-                        && path.objectReferenceValue == before.Paths[i])
-                        SeedOverride(element, path.objectReferenceValue as PathData);
+                    for (int i = known; i < count; i++)
+                        StartNewSegment(segments.GetArrayElementAtIndex(i), zeroed: known == 0);
+                }
+                // One segment switching over. A reorder or a delete moves an Override; it does not choose one.
+                else if (count == known && Matches(segments, before, count, out int switched) && switched >= 0)
+                {
+                    SerializedProperty element = segments.GetArrayElementAtIndex(switched);
+                    SeedOverride(element, element.FindPropertyRelative(PathEditorSerializationUtility.PATH_PROPERTY).objectReferenceValue as PathData);
                 }
                 serialized.ApplyModifiedProperties();
             }
             _snapshots.Clear();
+        }
+
+        // Whether the first count segments keep their paths, and at most one of them
+        // changed its source. switched is that one when it turned to Override, else -1.
+        private static bool Matches(SerializedProperty segments, Snapshot before, int count, out int switched)
+        {
+            switched = -1;
+            int changed = 0;
+            for (int i = 0; i < count; i++)
+            {
+                SerializedProperty element = segments.GetArrayElementAtIndex(i);
+                if (element.FindPropertyRelative(PathEditorSerializationUtility.PATH_PROPERTY).objectReferenceValue != before.Paths[i])
+                    return false;
+                bool isOverride = element.FindPropertyRelative(MOVEMENT_SOURCE_PROPERTY).enumValueIndex
+                    == (int)EPathSegmentMovementSource.Override;
+                if (isOverride == before.Overrides[i])
+                    continue;
+                changed++;
+                if (isOverride)
+                    switched = i;
+            }
+            if (changed > 1)
+                switched = -1;
+            return changed <= 1;
         }
 
         /// <summary>Remembers each target's segments before the plain field edits them.</summary>
@@ -173,7 +198,7 @@ namespace Common.TransformPath.Editor
         {
             if (path == null)
                 return;
-            var own = new SerializedObject(path);
+            using var own = new SerializedObject(path);
             element.FindPropertyRelative(PathInspectorGUI.MOVE_TYPE).enumValueIndex = own.FindProperty(PathInspectorGUI.MOVE_TYPE).enumValueIndex;
             element.FindPropertyRelative(PathInspectorGUI.MOVE_VALUE).floatValue = own.FindProperty(PathInspectorGUI.MOVE_VALUE).floatValue;
             element.FindPropertyRelative(PathInspectorGUI.TIME_CURVE).animationCurveValue =

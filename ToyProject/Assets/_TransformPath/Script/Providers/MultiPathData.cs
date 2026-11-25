@@ -22,7 +22,7 @@ namespace Common.TransformPath
         [NonSerialized] private bool _building;
         [NonSerialized] private readonly List<PathData> _subscribed = new List<PathData>();
 
-        private protected override bool IsBuilt => _built != null && !_failed;
+        private protected override bool IsBuilt => _built != null && !_failed && SegmentPathsAlive();
 
         public override float PathLength
         {
@@ -240,6 +240,18 @@ namespace Common.TransformPath
                 MarkUnavailable();
             else
                 Rebuild();
+        }
+
+        // A segment's path destroyed while it was never active tells no one: Unity
+        // skips its OnDestroy. The sequence, played whole or by segment, is out of use.
+        private bool SegmentPathsAlive()
+        {
+            for (int i = 0; i < _built.Length; i++)
+            {
+                if (_built[i].Sampler is PathData path && path == null)
+                    return false;
+            }
+            return true;
         }
 
         private bool HasUnavailablePath()

@@ -252,12 +252,6 @@ namespace Common.TransformPath
                 Stop(_route.Provider.IsReady ? EPathPlaybackEnd.RouteChanged : EPathPlaybackEnd.RouteUnavailable);
                 return;
             }
-            // A sequence's path destroyed while it was never active tells no one.
-            if (!_route.IsSegmentReady(_cursor.Segment))
-            {
-                Stop(EPathPlaybackEnd.RouteUnavailable);
-                return;
-            }
             if (deltaTime <= 0f)
                 return;
             if (Limit.Blocked)
