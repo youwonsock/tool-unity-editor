@@ -49,13 +49,7 @@ namespace Common.FlowField.Samples
         private bool _hasSample;
 
         public bool IsInitialized => _isInitialized;
-        public bool IsFaulted => _isFaulted;
         public bool DynamicObstacleEnabled => _dynamicObstacleEnabled;
-        public int ActiveGoalIndex => _sampleController != null ? _sampleController.ActiveGoalIndex : -1;
-        public int GoalCount => _sampleController != null ? _sampleController.GoalCount : 0;
-        public Vector3 ActiveGoalPosition => _sampleController != null && _sampleController.HasActiveGoal
-            ? _sampleController.ActiveGoalPosition
-            : throw new InvalidOperationException("FlowField sample has no active goal.");
 
         private void Awake()
         {

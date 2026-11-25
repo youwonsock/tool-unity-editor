@@ -1,6 +1,3 @@
-using System;
-using UnityEngine;
-
 namespace Common.FlowField
 {
     public enum FlowFieldSpaceMode

@@ -407,7 +407,7 @@ namespace Common.FlowField.Editor
             if (!grid.IsLocalInBounds(x, y, z))
                 return false;
             flatIndex = grid.ToFlatIndex(x, y, z);
-            return flatIndex >= 0 && flatIndex < grid.CellCount;
+            return true;
         }
 
         internal static int ComputeSampleCount(int dimension, int stride)

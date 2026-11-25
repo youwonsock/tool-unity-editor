@@ -96,7 +96,7 @@ namespace Common.FlowField
         {
             int end = Math.Min(_cursor + CellsPerCheck, _grid.CellCount);
             for (; _cursor < end; _cursor++)
-                FlowFieldSurfaceFinalFieldComposer.BuildBaseCell(_grid, _surface, _workspace, _defaultDirection, _cursor);
+                FlowFieldSurfaceFinalFieldComposer.BuildBaseCell(_surface, _workspace, _defaultDirection, _cursor);
             if (_cursor < _grid.CellCount)
                 return;
             _stage = Stage.Layers;
@@ -210,7 +210,6 @@ namespace Common.FlowField
         }
 
         internal static void BuildBaseCell(
-            FlowFieldGridSpace grid,
             FlowFieldSurfaceData surface,
             FlowFieldSurfaceWorkspace workspace,
             Vector3 defaultDirection,
@@ -250,16 +249,13 @@ namespace Common.FlowField
 
             // Same rule as Volume3D: a cell without a base direction is stopped.
             float speed = direction.sqrMagnitude > FlowFieldVectorUtility.DirectionEpsilonSqr ? 1f : 0f;
-            var baseState = new FlowFieldVectorState(direction, speed);
-            if (!FlowFieldGridSpace.IsFinite(baseState.Direction)
-                || !FlowFieldGridSpace.IsFinite(baseState.SpeedMultiplier)
-                || baseState.SpeedMultiplier < 0f)
+            if (!FlowFieldGridSpace.IsFinite(direction))
                 throw new ArgumentException("Base FlowField vector state is invalid.");
 
-            workspace.BaseDirections[index] = baseState.Direction;
-            workspace.BaseSpeedMultipliers[index] = baseState.SpeedMultiplier;
-            workspace.FinalDirections[index] = baseState.Direction;
-            workspace.FinalSpeedMultipliers[index] = baseState.SpeedMultiplier;
+            workspace.BaseDirections[index] = direction;
+            workspace.BaseSpeedMultipliers[index] = speed;
+            workspace.FinalDirections[index] = direction;
+            workspace.FinalSpeedMultipliers[index] = speed;
         }
 
         internal static void ValidateWorkspace(

@@ -1,6 +1,4 @@
 using System;
-using Unity.Jobs;
-using UnityEngine;
 
 namespace Common.FlowField
 {

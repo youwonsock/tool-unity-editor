@@ -22,12 +22,8 @@ namespace Common.FlowField.Samples
         private bool _isFaulted;
         private Exception _fault;
 
-        public Rigidbody Rigidbody => _rigidbody;
         public bool IsInitialized => _isInitialized;
         public bool IsFaulted => _isFaulted;
-        public Vector3 Position => _rigidbody != null
-            ? GetPosition()
-            : throw new InvalidOperationException("FlowFieldSampleAgent requires a Rigidbody.");
         public bool IsFlowReady => _provider != null && _provider.IsReady;
 
         private void Awake()
@@ -98,15 +94,6 @@ namespace Common.FlowField.Samples
             _provider = null;
         }
 
-        private Vector3 GetPosition()
-        {
-            if (_isFaulted)
-                throw new InvalidOperationException("FlowFieldSampleAgent is faulted; call Release before use.", _fault);
-            if (!_isInitialized)
-                throw new InvalidOperationException("FlowFieldSampleAgent is not initialized.");
-            return _rigidbody.position;
-        }
-
         internal void Simulate(float deltaTime)
         {
             if (_isFaulted)
@@ -119,7 +106,7 @@ namespace Common.FlowField.Samples
             Vector3 desiredVelocity = Vector3.zero;
             if (_provider != null
                 && _provider.IsReady
-                && _provider.TrySample(Position, out FlowFieldSample sample)
+                && _provider.TrySample(_rigidbody.position, out FlowFieldSample sample)
                 && sample.HasCell
                 && sample.Direction.sqrMagnitude > 0.0001f)
             {

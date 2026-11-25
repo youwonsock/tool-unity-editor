@@ -304,8 +304,7 @@ namespace Common.FlowField
     /// face neighbours from every walkable cell, each blocked cell it reaches
     /// pointing back at the cell it came from. With CombineBlocked the first
     /// pass also writes Blocked = StaticBlocked | DynamicBlocked. The vector
-    /// arithmetic is that of Vector3 and normalized, so the result is the same
-    /// as the managed search it replaced.
+    /// arithmetic is that of Vector3 and normalized.
     /// </summary>
     [BurstCompile(FloatMode = FloatMode.Strict, FloatPrecision = FloatPrecision.Standard)]
     internal unsafe struct FlowFieldSurfaceEscapeJob : IJob
