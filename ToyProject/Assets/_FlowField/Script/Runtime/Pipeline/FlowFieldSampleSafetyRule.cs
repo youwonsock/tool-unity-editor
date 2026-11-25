@@ -79,14 +79,14 @@ namespace Common.FlowField
             bool unsafeMove = pathStep
                 ? IsStepUnsafe(field.Grid, index, next, pathLink: true, in cells)
                     || turned && IsHeadingUnsafe(field.Grid, index, direction, in cells)
-                : next == -1 && (turned
+                : next == FlowFieldNextCell.DefaultDirection && (turned
                     ? IsHeadingUnsafe(field.Grid, index, direction, in cells)
                     : IsDirectionUnsafe(field.Grid, index, baseDirection, in cells)
                         || IsHeadingUnsafe(field.Grid, index, baseDirection, in cells));
             // Off the path's own step, the step this mover crosses next along
             // the sample's direction, from where it is in its cell: a mover
             // drifting sideways reaches a ledge beside the way there.
-            if (!unsafeMove && (next == -1 || pathStep && turned))
+            if (!unsafeMove && (next == FlowFieldNextCell.DefaultDirection || pathStep && turned))
                 unsafeMove = IsExitStepUnsafe(field.Grid, index, worldPosition, published.Direction, in cells);
             if (!unsafeMove)
                 return false;

@@ -330,9 +330,9 @@ namespace Common.FlowField
         {
             int target = next[index];
             speed = 0f;
-            if (blocked[index] || target == index || target < -1 || target >= next.Length)
+            if (blocked[index] || target == index || target < FlowFieldNextCell.DefaultDirection || target >= next.Length)
                 return Vector3.zero;
-            if (target == -1)
+            if (target == FlowFieldNextCell.DefaultDirection)
             {
                 speed = defaultDirection.sqrMagnitude > FlowFieldVectorUtility.DirectionEpsilonSqr ? 1f : 0f;
                 return defaultDirection;
@@ -378,7 +378,7 @@ namespace Common.FlowField
             reason = string.Empty;
             for (int index = 0; index < count; index++)
             {
-                if (!blocked[index] && next[index] == -1)
+                if (!blocked[index] && next[index] == FlowFieldNextCell.DefaultDirection)
                 {
                     defaultDirection = directions[index];
                     break;

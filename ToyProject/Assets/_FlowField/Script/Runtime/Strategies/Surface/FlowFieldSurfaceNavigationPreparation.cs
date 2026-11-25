@@ -239,8 +239,8 @@ namespace Common.FlowField
             {
                 workspace.NextCells[index] = !surface.IsSurfaceValid(index)
                     || workspace.Blocked[index]
-                    ? -2
-                    : -1;
+                    ? FlowFieldNextCell.Blocked
+                    : FlowFieldNextCell.DefaultDirection;
             }
         }
 

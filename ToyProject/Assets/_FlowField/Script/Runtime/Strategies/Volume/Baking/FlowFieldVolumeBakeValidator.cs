@@ -33,7 +33,6 @@ namespace Common.FlowField
             Complete,
         }
 
-        private const int MinSentinel = -3;
         private const float DirectionToleranceSqr = 0.00000001f;
 
         private readonly FlowFieldGridSpace _expectedGrid;
@@ -393,7 +392,7 @@ namespace Common.FlowField
                 || !FlowFieldGridSpace.IsFinite(escape)
                 || !FlowFieldGridSpace.IsFinite(speed)
                 || speed < 0f
-                || next < MinSentinel
+                || next < FlowFieldNextCell.Min
                 || next >= _payload.Blocked.Length
                 || (flags & ~(FlowFieldGoalFlags.Directed
                     | FlowFieldGoalFlags.Anchor
@@ -408,7 +407,7 @@ namespace Common.FlowField
             {
                 if (topology != 0u
                     || flags != FlowFieldGoalFlags.None
-                    || next != -2
+                    || next != FlowFieldNextCell.Blocked
                     || direction != Vector3.zero
                     || speed != 0f)
                     reason = DescribeCell(index, "blocked cell contains navigable output");
@@ -426,12 +425,12 @@ namespace Common.FlowField
                 return false;
             }
 
-            if (next == -2)
+            if (next == FlowFieldNextCell.Blocked)
             {
                 reason = DescribeCell(index, "open cell uses the blocked sentinel");
                 return false;
             }
-            if (next == -3)
+            if (next == FlowFieldNextCell.Unreachable)
             {
                 if (flags != FlowFieldGoalFlags.Unreachable
                     || direction != Vector3.zero
@@ -439,7 +438,7 @@ namespace Common.FlowField
                     reason = DescribeCell(index, "unreachable cell is not stopped");
                 return string.IsNullOrEmpty(reason);
             }
-            if (next == -1)
+            if (next == FlowFieldNextCell.DefaultDirection)
             {
                 if (flags != FlowFieldGoalFlags.None
                     || direction.sqrMagnitude <= FlowFieldVectorUtility.DirectionEpsilonSqr

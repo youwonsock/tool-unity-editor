@@ -80,7 +80,7 @@ namespace Common.FlowField
             NextCells = new int[cellCount];
             TopologyMasks = new byte[cellCount];
             for (int i = 0; i < cellCount; i++)
-                NextCells[i] = -1;
+                NextCells[i] = FlowFieldNextCell.DefaultDirection;
             ResolvedGoalIndex = -1;
             HasActiveGoal = false;
             return true;
@@ -130,7 +130,7 @@ namespace Common.FlowField
             Array.Clear(InfluenceMask, 0, InfluenceMask.Length);
             Array.Clear(Costs, 0, Costs.Length);
             for (int i = 0; i < NextCells.Length; i++)
-                NextCells[i] = -1;
+                NextCells[i] = FlowFieldNextCell.DefaultDirection;
             ResolvedGoalIndex = -1;
             HasActiveGoal = false;
         }
@@ -170,7 +170,7 @@ namespace Common.FlowField
                     if (next == index)
                         GoalFlags[index] |= FlowFieldGoalFlags.Anchor;
                 }
-                else if (next == -3)
+                else if (next == FlowFieldNextCell.Unreachable)
                 {
                     InfluenceMask[index] = true;
                     GoalFlags[index] = FlowFieldGoalFlags.Unreachable;

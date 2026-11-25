@@ -17,7 +17,6 @@ namespace Common.FlowField
         /// </summary>
         public static int SupportedFormatVersion => 6;
         private const float Epsilon = 0.0001f;
-        private const int MinSentinel = -3;
 
         [SerializeField] private Vector3 _gridOriginWorld;
         [SerializeField] private int _width;
@@ -169,11 +168,11 @@ namespace Common.FlowField
                     | FlowFieldGoalFlags.Anchor
                     | FlowFieldGoalFlags.Unreachable)) != 0)
                     return Fail(out reason, "FlowField Static Bake contains invalid Goal flags.");
-                if (_nextCells[i] < MinSentinel || _nextCells[i] >= count)
+                if (_nextCells[i] < FlowFieldNextCell.Min || _nextCells[i] >= count)
                     return Fail(out reason, "FlowField Static Bake contains an invalid NextCell sentinel.");
                 if (!valid || _blocked[i])
                 {
-                    if (_nextCells[i] != -2 || _topologyMasks[i] != 0
+                    if (_nextCells[i] != FlowFieldNextCell.Blocked || _topologyMasks[i] != 0
                         || _goalFlags[i] != FlowFieldGoalFlags.None
                         || _goalDirections[i] != Vector3.zero)
                         return Fail(out reason, "Blocked or invalid cells must use the -2 sentinel.");
@@ -261,20 +260,20 @@ namespace Common.FlowField
                 int next = _nextCells[i];
                 if (!_hasGoal)
                 {
-                    if (next != -1
+                    if (next != FlowFieldNextCell.DefaultDirection
                         || _goalFlags[i] != FlowFieldGoalFlags.None
                         || _goalDirections[i] != Vector3.zero)
                         return false;
                     continue;
                 }
-                if (next == -3)
+                if (next == FlowFieldNextCell.Unreachable)
                 {
                     if (_goalFlags[i] != FlowFieldGoalFlags.Unreachable
                         || _goalDirections[i] != Vector3.zero)
                         return false;
                     continue;
                 }
-                if (next == -1)
+                if (next == FlowFieldNextCell.DefaultDirection)
                 {
                     if (_goalFlags[i] != FlowFieldGoalFlags.None
                         || _goalDirections[i] != Vector3.zero)

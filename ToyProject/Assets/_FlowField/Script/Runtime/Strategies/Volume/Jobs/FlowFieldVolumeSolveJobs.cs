@@ -209,7 +209,7 @@ namespace Common.FlowField
             Data.ChunkRange(chunk, out int start, out int end);
             for (int index = start; index < end; index++)
             {
-                Data.Next[index] = -1;
+                Data.Next[index] = FlowFieldNextCell.DefaultDirection;
                 Data.Costs[index] = FlowFieldVolumeSolveData.Unreachable;
                 Data.Influence[index] = false;
             }
@@ -427,7 +427,7 @@ namespace Common.FlowField
             {
                 if (Data.Blocked[index])
                 {
-                    Data.Next[index] = -2;
+                    Data.Next[index] = FlowFieldNextCell.Blocked;
                     Data.GoalFlags[index] = FlowFieldGoalFlags.None;
                     Data.Directions[index] = Vector3.zero;
                     Data.Speeds[index] = 0f;
@@ -443,13 +443,13 @@ namespace Common.FlowField
                 }
 
                 Vector3 direction = Data.DefaultDirection;
-                int next = -1;
+                int next = FlowFieldNextCell.DefaultDirection;
                 bool influenced = goal >= 0 && Data.Influence[index];
                 if (influenced)
                 {
                     if (Data.Costs[index] == FlowFieldVolumeSolveData.Unreachable)
                     {
-                        next = -3;
+                        next = FlowFieldNextCell.Unreachable;
                     }
                     else
                     {
@@ -482,9 +482,9 @@ namespace Common.FlowField
                         if (next >= 0)
                             direction = Data.StepDirection(bestDirection);
                         else
-                            next = -3;
+                            next = FlowFieldNextCell.Unreachable;
                     }
-                    if (next == -3)
+                    if (next == FlowFieldNextCell.Unreachable)
                         direction = Vector3.zero;
                 }
 

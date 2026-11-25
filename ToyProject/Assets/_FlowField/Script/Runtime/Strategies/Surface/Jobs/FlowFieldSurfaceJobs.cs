@@ -102,17 +102,17 @@ namespace Common.FlowField
                     return;
                 bool valid = (SurfaceFlags[index] & ValidSurface) != 0;
                 NextCells[index] = !valid || Blocked[index]
-                    ? -2
+                    ? FlowFieldNextCell.Blocked
                     : !Influence[index]
-                        ? -1
-                        : -3;
+                        ? FlowFieldNextCell.DefaultDirection
+                        : FlowFieldNextCell.Unreachable;
                 bool traversable = Traversable(index);
                 if (!traversable || Costs[index] == Unreachable)
                 {
                     if (traversable)
                     {
                         GoalFlags[index] = FlowFieldGoalFlags.Unreachable;
-                        NextCells[index] = -3;
+                        NextCells[index] = FlowFieldNextCell.Unreachable;
                     }
                     continue;
                 }
@@ -154,7 +154,7 @@ namespace Common.FlowField
                 if (best < 0)
                 {
                     GoalFlags[index] = FlowFieldGoalFlags.Unreachable;
-                    NextCells[index] = -3;
+                    NextCells[index] = FlowFieldNextCell.Unreachable;
                     continue;
                 }
 

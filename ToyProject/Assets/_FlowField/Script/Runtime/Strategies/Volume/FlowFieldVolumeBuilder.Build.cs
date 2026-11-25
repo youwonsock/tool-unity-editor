@@ -116,7 +116,7 @@ namespace Common.FlowField
             Vector3 defaultDirection = FlowFieldVectorUtility.NormalizeDefaultDirection(build.Request.DefaultDirection);
             for (int index = build.Cursor; index < end; index++)
             {
-                if (!build.Blocked[index] && build.Next[index] == -1)
+                if (!build.Blocked[index] && build.Next[index] == FlowFieldNextCell.DefaultDirection)
                 {
                     build.Directions[index] = defaultDirection;
                     build.Speeds[index] = 1f;
