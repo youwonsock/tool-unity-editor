@@ -47,6 +47,8 @@ namespace Common.TransformPath
         // Members disabled or destroyed while the spacing policy runs leave once the line is walked.
         private readonly List<PathQueueMember> _removedWhileCalculating = new List<PathQueueMember>();
         private bool _releaseAfterCalculating;
+        // Enabled again by its own policy after that release: initialize once it ran.
+        private bool _initializeAfterRelease;
 
         private PathProviderBehaviour _routeProvider;
         private bool _isInitialized;
@@ -150,7 +152,13 @@ namespace Common.TransformPath
         internal override void Initialize()
         {
             if (_isInitialized)
+            {
+                // Disabled and enabled again by its own spacing policy: the release
+                // waits for the line to be walked, so this start waits for the release.
+                if (_releaseAfterCalculating)
+                    _initializeAfterRelease = true;
                 return;
+            }
             if (!TryValidateSettings(out string error))
             {
                 _errors.Report(this, $"QueuedPathManager '{name}': {error}");
@@ -204,6 +212,7 @@ namespace Common.TransformPath
             if (_calculating)
             {
                 _releaseAfterCalculating = true;
+                _initializeAfterRelease = false;
                 return;
             }
             using var operation = PathExecutionBoundary.Enter();
@@ -293,9 +302,11 @@ namespace Common.TransformPath
                 throw new InvalidOperationException("Queue member and manager must use the same route provider instance.");
             if (_entries.TryGetValue(member, out Entry joined))
             {
-                // Restarting in place keeps the member's place among equals and waits
-                // for this frame's result, as a new start does.
+                // A restart in place is a new start: it goes behind the members at the
+                // same progress and waits for this frame's result. Kept places would let
+                // members restarted from Completed pass those waiting at the start forever.
                 joined.MotionEpoch = member.Follower.MotionEpoch;
+                joined.Sequence = _nextSequence++;
                 joined.Status = null;
                 return;
             }
@@ -352,8 +363,13 @@ namespace Common.TransformPath
             for (int i = 0; i < _leaving.Count; i++)
             {
                 PathQueueMember member = _leaving[i].Member;
+                // A playback that ended since the last Queue phase leaves for its own end.
+                PathFollower follower = member.Follower;
+                EPathQueueLeaveReason own = follower == null
+                    ? EPathQueueLeaveReason.Stopped
+                    : follower.PlaybackId == 0 ? LeaveReasonOf(follower.LastPlaybackEnd) : reason;
                 Remove(member);
-                member.OnRemovedByManager(reason, _routeProvider);
+                member.OnRemovedByManager(own, _routeProvider);
             }
             _leaving.Clear();
         }
@@ -459,7 +475,11 @@ namespace Common.TransformPath
                 if (_releaseAfterCalculating)
                 {
                     _releaseAfterCalculating = false;
+                    bool initialize = _initializeAfterRelease;
+                    _initializeAfterRelease = false;
                     Release();
+                    if (initialize)
+                        Initialize();
                 }
             }
         }

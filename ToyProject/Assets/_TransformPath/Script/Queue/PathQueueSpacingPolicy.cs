@@ -13,7 +13,8 @@ namespace Common.TransformPath
     {
         /// <summary>
         /// The gap to keep, in world units. Return a finite, non-negative
-        /// value; anything else stops the manager's frame with an exception.
+        /// value; anything else faults the manager's frame, and the manager
+        /// releases every member as ManagerReleased, stopping its playback.
         /// Do not join, leave or restart queue members here: the manager is
         /// walking its line and refuses those calls.
         /// </summary>

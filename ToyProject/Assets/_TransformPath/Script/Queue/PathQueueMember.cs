@@ -177,14 +177,15 @@ namespace Common.TransformPath
         {
             if (manager == null || !manager.isActiveAndEnabled || !manager.IsInitialized)
                 throw new InvalidOperationException("QueuedPathManager must be initialized before starting a queued move.");
-            // A disabled member would never hear the queue or leave it.
-            if (!isActiveAndEnabled)
+            // A disabled member would never hear the queue or leave it. Not isActiveAndEnabled:
+            // that is still false while an earlier component's OnEnable runs on reactivation.
+            if (!enabled || !gameObject.activeInHierarchy)
                 throw new InvalidOperationException($"PathQueueMember '{name}' must be active and enabled to join a queue.");
             ThrowIfQueueCalculating(manager);
             PathValueUtility.ThrowIfNotFinite(maxProgress, nameof(maxProgress));
             PathFollower follower = RequireFollower();
             // A disabled follower never moves, so it would hold the members behind it for good.
-            if (!follower.isActiveAndEnabled)
+            if (!follower.IsEnabledInHierarchy)
                 throw new InvalidOperationException($"PathQueueMember '{name}' needs an enabled PathFollower to join a queue.");
             using var operation = PathExecutionBoundary.Enter();
             // Validate before configuring or leaving, so an invalid request changes nothing.
@@ -211,8 +212,10 @@ namespace Common.TransformPath
             ThrowIfQueueCalculating(null);
             PathFollower follower = RequireFollower();
             using var operation = PathExecutionBoundary.Enter();
-            // Validate before leaving, so an invalid request changes nothing.
+            // Validate before leaving, so an invalid request or a disabled follower changes nothing.
             request.CreateRoute();
+            if (!follower.IsEnabledInHierarchy)
+                throw new InvalidOperationException($"PathQueueMember '{name}' needs an enabled PathFollower to play.");
             Leave();
             return follower.Play(request);
         }
