@@ -31,7 +31,7 @@ namespace Common.FlowField.Editor
     internal static class FlowFieldGizmoDrawer
     {
         private const float SurfacePadding = 0.05f;
-        private const float DirectionEpsilonSqr = 0.0001f;
+        private const float MinDrawnDirectionSqr = 0.0001f;
         private const int LargeGridCellThreshold = 2500;
         // The Bounds colors the gizmo and the Inspector handles share.
         internal static readonly Color ValidBakeBoundsColor = new Color(0.15f, 0.85f, 1f, 0.9f);
@@ -166,7 +166,7 @@ namespace Common.FlowField.Editor
                         : (goalFlags & FlowFieldGoalFlags.Directed) != 0
                             ? new Color(0.2f, 1f, 0.4f, 0.95f)
                             : Color.yellow;
-                    if (direction.sqrMagnitude <= DirectionEpsilonSqr || speed <= 0f)
+                    if (direction.sqrMagnitude <= MinDrawnDirectionSqr || speed <= 0f)
                     {
                         DrawStop(position, request.CellSize * 0.14f);
                         continue;
@@ -182,12 +182,12 @@ namespace Common.FlowField.Editor
 
         private static void DrawArrow(Vector3 position, Vector3 direction, float length)
         {
-            if (direction.sqrMagnitude <= DirectionEpsilonSqr)
+            if (direction.sqrMagnitude <= MinDrawnDirectionSqr)
                 return;
 
             Vector3 body = direction.normalized * length;
             Vector3 side = Vector3.Cross(body.normalized, Vector3.up);
-            if (side.sqrMagnitude <= DirectionEpsilonSqr)
+            if (side.sqrMagnitude <= MinDrawnDirectionSqr)
                 return;
             side.Normalize();
             Vector3 back = -body.normalized * length * 0.35f;

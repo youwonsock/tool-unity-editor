@@ -92,7 +92,7 @@ namespace Common.FlowField
                     // no reason to give it another turn within this budget.
                     bool wasWaiting = session.IsWaitingForExternalCompletion;
                     bool wasBuilding = session.IsBuilding;
-                    session.PumpInternal(in budget);
+                    session.PumpScheduled(in budget);
                     bool isBuilding = session.IsBuilding;
                     if (wasWaiting || !wasBuilding || !isBuilding)
                         visitedWithoutWork++;

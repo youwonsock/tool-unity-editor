@@ -36,7 +36,7 @@ namespace Common.FlowField
         private const float ExitLookAheadFraction = 0.25f;
         // Faces this close together are reached at once: an edge or corner.
         private const float ExitTieFraction = 0.0001f;
-        // The unit vector of each neighbour step; Surface2D uses the first 8.
+        // The unit vector of each neighbor step; Surface2D uses the first 8.
         private static readonly Vector3[] StepDirections = CreateStepDirections();
 
         /// <summary>Returns true and the sample to use when the rule overrides the published one.</summary>
@@ -65,7 +65,7 @@ namespace Common.FlowField
 
             // The sample follows the final direction. Where a Modifier turned
             // it, the step it now heads for is checked too: the nearest of the
-            // neighbour steps (8 in Surface2D, 26 in Volume3D), the step a
+            // neighbor steps (8 in Surface2D, 26 in Volume3D), the step a
             // path would take that way, so a small turn along a wall keeps
             // moving. An unturned Default Direction also checks every cell
             // its axes can step into, but the ground link only on the step it
@@ -146,7 +146,7 @@ namespace Common.FlowField
             return false;
         }
 
-        // The nearest neighbour step to the direction, checked as a step. A
+        // The nearest neighbor step to the direction, checked as a step. A
         // direction with no heading (none, or straight up or down on a
         // Surface) has nowhere to go.
         private static bool IsHeadingUnsafe(FlowFieldGridSpace grid, int index, Vector3 direction, in Cells cells)

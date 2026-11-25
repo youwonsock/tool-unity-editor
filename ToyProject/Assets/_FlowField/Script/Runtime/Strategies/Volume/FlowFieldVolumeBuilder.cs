@@ -8,7 +8,7 @@ namespace Common.FlowField
 {
     /// <summary>
     /// The Volume3D strategy of a <see cref="FlowFieldSession"/>: cubic cells
-    /// filling the Bounds, 26-neighbour navigation on worker threads, and
+    /// filling the Bounds, 26-neighbor navigation on worker threads, and
     /// re-queries limited to the regions whose obstacles changed.
     /// </summary>
     internal sealed partial class FlowFieldVolumeBuilder : IFlowFieldSpaceBuilder

@@ -301,7 +301,7 @@ namespace Common.FlowField
 
     /// <summary>
     /// Escape directions out of blocked cells: a multi-source BFS over the four
-    /// face neighbours from every walkable cell, each blocked cell it reaches
+    /// face neighbors from every walkable cell, each blocked cell it reaches
     /// pointing back at the cell it came from. With CombineBlocked the first
     /// pass also writes Blocked = StaticBlocked | DynamicBlocked. The vector
     /// arithmetic is that of Vector3 and normalized.
@@ -410,13 +410,13 @@ namespace Common.FlowField
     }
 
     /// <summary>
-    /// The ground scan's neighbour masks for cells [Start, Start + count): a
-    /// step to an in-grid neighbour is open when both cells have ground within
+    /// The ground scan's neighbor masks for cells [Start, Start + count): a
+    /// step to an in-grid neighbor is open when both cells have ground within
     /// MaxStepHeight of each other, and a diagonal also needs both cells
     /// beside it connected to its ends. A cell without ground keeps mask 0.
     /// </summary>
     [BurstCompile(FloatMode = FloatMode.Strict, FloatPrecision = FloatPrecision.Standard)]
-    internal unsafe struct FlowFieldSurfaceNeighbourMaskJob : IJobParallelFor
+    internal unsafe struct FlowFieldSurfaceNeighborMaskJob : IJobParallelFor
     {
         private const int NeighborCount = FlowFieldNeighborUtility.SurfaceCount;
         private const byte ValidSurface = 1;

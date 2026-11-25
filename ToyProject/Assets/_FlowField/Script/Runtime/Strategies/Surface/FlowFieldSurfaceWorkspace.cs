@@ -29,7 +29,7 @@ namespace Common.FlowField
         internal int[] Costs { get; private set; }
         internal int[] Queue { get; private set; }
         internal int[] NextCells { get; private set; }
-        // Final eight-neighbour topology after Surface, obstacle, influence and
+        // Final eight-neighbor topology after Surface, obstacle, influence and
         // diagonal-corner checks. The solve job consumes this mask.
         internal byte[] TopologyMasks { get; private set; }
         internal int ResolvedGoalIndex { get; private set; } = -1;

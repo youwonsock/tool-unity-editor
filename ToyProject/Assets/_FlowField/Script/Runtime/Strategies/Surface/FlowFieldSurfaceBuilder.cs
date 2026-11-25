@@ -5,7 +5,7 @@ namespace Common.FlowField
 {
     /// <summary>
     /// The Surface2D strategy of a <see cref="FlowFieldSession"/>: a floor
-    /// surface from downward raycasts, 8-neighbour navigation and region
+    /// surface from downward raycasts, 8-neighbor navigation and region
     /// recomposition. Stage algorithms stay in their own files; this class owns
     /// the staging state, request coalescing and the solve backend boundary.
     /// </summary>

@@ -171,13 +171,13 @@ namespace Common.FlowField
     /// <summary>
     /// The Surface2D ground scan in resumable steps: one downward ray per
     /// cell, cast in RaycastCommand batches on worker threads, then the
-    /// neighbour masks in Burst chunks. Runtime builds run it at once through
+    /// neighbor masks in Burst chunks. Runtime builds run it at once through
     /// <see cref="FlowFieldSurfaceBaker"/>; the Editor bake advances it from
     /// its update, so the raycast rows do not hold one callback.
     /// </summary>
     internal sealed class FlowFieldSurfaceGroundScan
     {
-        // Rays per batch and neighbour masks per chunk. Each is scheduled and
+        // Rays per batch and neighbor masks per chunk. Each is scheduled and
         // completed inside one Step; a batch shrinks to what the rest of the
         // step's budget allows at the last batch's cost per ray.
         private const int RaysPerBatch = 1024;
@@ -189,7 +189,7 @@ namespace Common.FlowField
         private enum Phase
         {
             SurfaceCells,
-            NeighbourMasks,
+            NeighborMasks,
             Complete,
         }
 
@@ -250,7 +250,7 @@ namespace Common.FlowField
                     return 0f;
                 if (_phase == Phase.SurfaceCells)
                     return 0.05f + 0.7f * _cursor / Math.Max(1, _cellCount);
-                if (_phase == Phase.NeighbourMasks)
+                if (_phase == Phase.NeighborMasks)
                     return 0.75f + 0.25f * _cursor / Math.Max(1, _cellCount);
                 return 0f;
             }
@@ -293,7 +293,7 @@ namespace Common.FlowField
                                 return;
                             }
                             _cursor = 0;
-                            _phase = Phase.NeighbourMasks;
+                            _phase = Phase.NeighborMasks;
                             continue;
                         }
 
@@ -302,7 +302,7 @@ namespace Common.FlowField
                         continue;
                     }
 
-                    if (_phase == Phase.NeighbourMasks)
+                    if (_phase == Phase.NeighborMasks)
                     {
                         if (_cursor >= _cellCount)
                         {
@@ -312,7 +312,7 @@ namespace Common.FlowField
                             return;
                         }
 
-                        BuildNeighbourMaskChunk();
+                        BuildNeighborMaskChunk();
                     }
                 }
             }
@@ -371,16 +371,16 @@ namespace Common.FlowField
             return true;
         }
 
-        // One chunk of neighbour masks, in a Burst job over the scanned ground.
-        private unsafe void BuildNeighbourMaskChunk()
+        // One chunk of neighbor masks, in a Burst job over the scanned ground.
+        private unsafe void BuildNeighborMaskChunk()
         {
             int start = _cursor;
             int count = Math.Min(MasksPerChunk, _cellCount - start);
             FlowFieldGridSpace grid = _settings.Grid;
-            var pins = new FlowFieldPinnedArrays(FlowFieldSurfaceNeighbourMaskJob.PinnedArrayCount);
+            var pins = new FlowFieldPinnedArrays(FlowFieldSurfaceNeighborMaskJob.PinnedArrayCount);
             try
             {
-                var job = new FlowFieldSurfaceNeighbourMaskJob
+                var job = new FlowFieldSurfaceNeighborMaskJob
                 {
                     CellFlags = pins.Pin(_result.CellFlags),
                     Heights = pins.Pin(_result.SurfaceHeights),

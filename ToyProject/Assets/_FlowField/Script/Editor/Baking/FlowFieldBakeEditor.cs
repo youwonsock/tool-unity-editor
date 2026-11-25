@@ -18,7 +18,7 @@ namespace Common.FlowField.Editor
         private static bool _asyncPending;
         private static bool _processingQueue;
         private static int _callbackGeneration;
-        private static readonly Queue<int> _queue = new Queue<int>();
+        private static readonly Queue<int> BakeQueue = new Queue<int>();
         private static Action _cancel;
         private static string _progressLabel = string.Empty;
 
@@ -53,7 +53,7 @@ namespace Common.FlowField.Editor
         private static void StopBaking()
         {
             unchecked { _callbackGeneration++; }
-            _queue.Clear();
+            BakeQueue.Clear();
             _cancel?.Invoke();
             _cancel = null;
             _asyncPending = false;
@@ -78,7 +78,7 @@ namespace Common.FlowField.Editor
                     && manager.gameObject.scene.IsValid()
                     && !string.IsNullOrEmpty(manager.gameObject.scene.path)
                     && FlowFieldBakeModes.UsesBakeAsset(manager.BakeMode))
-                    _queue.Enqueue(manager.GetInstanceID());
+                    BakeQueue.Enqueue(manager.GetInstanceID());
             }
             _isBaking = true;
             EditorApplication.delayCall += ProcessQueue;
@@ -99,11 +99,11 @@ namespace Common.FlowField.Editor
             {
                 // latest-wins for a repeated request of the same Manager
                 int instanceId = manager.GetInstanceID();
-                if (!_queue.Contains(instanceId))
-                    _queue.Enqueue(instanceId);
+                if (!BakeQueue.Contains(instanceId))
+                    BakeQueue.Enqueue(instanceId);
                 return;
             }
-            _queue.Enqueue(manager.GetInstanceID());
+            BakeQueue.Enqueue(manager.GetInstanceID());
             _isBaking = true;
             EditorApplication.delayCall += ProcessQueue;
         }
@@ -113,14 +113,14 @@ namespace Common.FlowField.Editor
             if (_processingQueue || _asyncPending)
                 return;
             _processingQueue = true;
-            if (_queue.Count == 0)
+            if (BakeQueue.Count == 0)
             {
                 _isBaking = false;
                 _processingQueue = false;
                 return;
             }
 
-            int id = _queue.Dequeue();
+            int id = BakeQueue.Dequeue();
             FlowFieldManager manager = EditorUtility.InstanceIDToObject(id) as FlowFieldManager;
             _progressLabel = manager == null
                 ? "Resolving FlowField manager"
@@ -149,7 +149,7 @@ namespace Common.FlowField.Editor
 
         private static void ScheduleNextOrStop()
         {
-            if (_queue.Count > 0)
+            if (BakeQueue.Count > 0)
             {
                 _isBaking = true;
                 EditorApplication.delayCall += ProcessQueue;

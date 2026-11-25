@@ -129,8 +129,8 @@ namespace Common.FlowField
             => x >= 0 && x < Width && y >= 0 && y < Height && z >= 0 && z < Depth;
 
         /// <summary>
-        /// Flat offsets of each neighbour and of each corner cell, valid for a
-        /// cell whose 26 neighbours are all inside the grid.
+        /// Flat offsets of each neighbor and of each corner cell, valid for a
+        /// cell whose 26 neighbors are all inside the grid.
         /// </summary>
         internal void BuildInteriorOffsets(int* neighbor, int* corner)
         {
@@ -140,7 +140,7 @@ namespace Common.FlowField
                 corner[i] = neighbor[CornerDirections[i]];
         }
 
-        /// <summary>Whether the step is open: its neighbour and every corner cell are in the grid and open.</summary>
+        /// <summary>Whether the step is open: its neighbor and every corner cell are in the grid and open.</summary>
         internal bool CanTraverse(int x, int y, int z, int direction)
         {
             if (!IsOpen(x + DeltaX[direction], y + DeltaY[direction], z + DeltaZ[direction]))

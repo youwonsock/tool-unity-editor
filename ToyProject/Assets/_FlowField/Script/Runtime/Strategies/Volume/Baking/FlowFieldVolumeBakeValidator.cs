@@ -465,7 +465,7 @@ namespace Common.FlowField
             int directionIndex = FlowFieldNeighborUtility.FindDirectionIndex(nx - x, ny - y, nz - z);
             if (directionIndex < 0 || (topology & (1u << directionIndex)) == 0u)
             {
-                reason = DescribeCell(index, "NextCell is not a traversable neighbour or cuts through a blocked diagonal corner");
+                reason = DescribeCell(index, "NextCell is not a traversable neighbor or cuts through a blocked diagonal corner");
                 return false;
             }
             Vector3 expectedDirection = new Vector3(nx - x, ny - y, nz - z).normalized;

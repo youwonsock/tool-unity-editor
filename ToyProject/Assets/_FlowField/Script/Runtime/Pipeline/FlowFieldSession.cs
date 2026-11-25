@@ -544,7 +544,9 @@ namespace Common.FlowField
         // which uncertain regions it resolves. The builder only supplies the
         // steps and says what each build queries.
 
-        internal void PumpInternal(in FlowFieldBuildBudget budget)
+        // The scheduler's pump: it shares the frame budget, never waits for
+        // the worker thread and runs the unregistered-obstacle sweep.
+        internal void PumpScheduled(in FlowFieldBuildBudget budget)
             => RunPipeline(in budget, waitForWorker: false, sweep: true);
 
         /// <summary>
