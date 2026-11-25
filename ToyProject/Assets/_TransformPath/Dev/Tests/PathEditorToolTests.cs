@@ -303,5 +303,65 @@ namespace Common.TransformPath.Tests
                 Assert.AreEqual(EPathSegmentMovementSource.Override, moved.MovementSource);
             }
         }
+
+        [Test]
+        public void SnapToGround_IgnoresThePointsOwnCollider()
+        {
+            GameObject ground = Track(GameObject.CreatePrimitive(PrimitiveType.Cube));
+            ground.transform.position = Away + new Vector3(0f, -0.5f, 0f);
+            ground.transform.localScale = new Vector3(20f, 1f, 20f);
+            PathData path = PathAt(Away + new Vector3(0f, 1f, 0f), Away + new Vector3(5f, 1f, 0f));
+            // A marker collider whose top is closer above the point than the ray's start.
+            foreach (Transform point in path.PathPoints)
+                point.gameObject.AddComponent<SphereCollider>().radius = 0.15f;
+            Physics.SyncTransforms();
+
+            PathPointTools.SnapToGround(new List<PathData> { path });
+
+            foreach (Transform point in path.PathPoints)
+                Assert.AreEqual(0f, point.position.y, 1e-4f);
+        }
+
+        [Test]
+        public void SeveralSequencesEditedTogether_ACopyInsertedBeforeADifferentSegmentKeepsIt()
+        {
+            PathData lap = PathAt(Vector3.zero, new Vector3(5f, 0f, 0f));
+            var sequences = new[]
+            {
+                Track(new GameObject("Sequence A")).AddComponent<MultiPathData>(),
+                Track(new GameObject("Sequence B")).AddComponent<MultiPathData>(),
+            };
+            var layouts = new[]
+            {
+                // Same source, different values: only the values tell the segments apart.
+                new[] { new PathSegmentAuthoring(lap, PathMovementSettings.Speed(5f)), new PathSegmentAuthoring(lap, PathMovementSettings.Speed(10f)) },
+                new[] { new PathSegmentAuthoring(lap), new PathSegmentAuthoring(lap, true) },
+            };
+            foreach (PathSegmentAuthoring[] layout in layouts)
+            {
+                foreach (MultiPathData sequence in sequences)
+                    sequence.SetSegments(layout);
+                var serialized = new SerializedObject(sequences);
+                var drawer = new PathSegmentListDrawer(serialized, false);
+
+                drawer.CaptureTargets();
+                serialized.FindProperty("_segments").InsertArrayElementAtIndex(0);
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+                drawer.MarkTargetsEdited();
+                drawer.ApplyListDefaultsToTargets();
+
+                foreach (MultiPathData sequence in sequences)
+                {
+                    PathSegmentAuthoring kept = sequence.GetAuthoringSegment(2);
+                    Assert.AreEqual(layout[1].MovementSource, kept.MovementSource);
+                    Assert.AreEqual(layout[1].PreservePreviousSpeed, kept.PreservePreviousSpeed);
+                    float value = new SerializedObject(sequence).FindProperty("_segments")
+                        .GetArrayElementAtIndex(2).FindPropertyRelative("_moveValue").floatValue;
+                    Assert.AreEqual(
+                        layout[1].MovementSource == EPathSegmentMovementSource.Override ? 10f : PathSegmentAuthoring.DEFAULT_OVERRIDE_VALUE,
+                        value);
+                }
+            }
+        }
     }
 }

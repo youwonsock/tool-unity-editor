@@ -17,23 +17,30 @@ namespace Common.TransformPath.Editor
         private const int ROWS = 3;
 
         // What one target's segments were before the plain field drew them.
+        // A target's segments as the plain field found them.
         private readonly struct Snapshot
         {
             public readonly MultiPathData Target;
             public readonly PathData[] Paths;
             public readonly bool[] Overrides;
+            // Preserve flag, move type and value: an append leaves them all as they were.
+            public readonly (bool Preserve, int MoveType, float MoveValue)[] Values;
 
             public Snapshot(MultiPathData target)
             {
                 Target = target;
-                int count = target.AuthoringSegmentCount;
+                using var serialized = new SerializedObject(target);
+                SerializedProperty segments = serialized.FindProperty(PathEditorSerializationUtility.SEGMENTS_PROPERTY);
+                int count = segments.arraySize;
                 Paths = new PathData[count];
                 Overrides = new bool[count];
+                Values = new (bool, int, float)[count];
                 for (int i = 0; i < count; i++)
                 {
-                    PathSegmentAuthoring segment = target.GetAuthoringSegment(i);
-                    Paths[i] = segment.Path;
-                    Overrides[i] = segment.MovementSource == EPathSegmentMovementSource.Override;
+                    SerializedProperty element = segments.GetArrayElementAtIndex(i);
+                    Paths[i] = element.FindPropertyRelative(PathEditorSerializationUtility.PATH_PROPERTY).objectReferenceValue as PathData;
+                    Overrides[i] = IsOverride(element);
+                    Values[i] = ValuesOf(element);
                 }
             }
         }
@@ -100,14 +107,17 @@ namespace Common.TransformPath.Editor
                 int count = segments.arraySize;
                 int known = before.Paths.Length;
                 // Appended segments only: a duplicate in the middle shifts the old ones
-                // down, so one of them would read as a changed source.
-                if (count > known && Matches(segments, before, known, 0, out _))
+                // down, so one of them reads as changed. A copy inserted before an
+                // identical segment looks the same as an append.
+                if (count > known && Compare(segments, before, known, out int sources, out _, out bool values)
+                    && sources == 0 && !values)
                 {
                     for (int i = known; i < count; i++)
                         StartNewSegment(segments.GetArrayElementAtIndex(i), zeroed: known == 0);
                 }
                 // One segment switching over. A reorder or a delete moves an Override; it does not choose one.
-                else if (count == known && Matches(segments, before, count, 1, out int switched) && switched >= 0)
+                else if (count == known && Compare(segments, before, count, out sources, out int switched, out _)
+                         && sources == 1 && switched >= 0)
                 {
                     SerializedProperty element = segments.GetArrayElementAtIndex(switched);
                     SeedOverride(element, element.FindPropertyRelative(PathEditorSerializationUtility.PATH_PROPERTY).objectReferenceValue as PathData);
@@ -117,30 +127,41 @@ namespace Common.TransformPath.Editor
             _snapshots.Clear();
         }
 
-        // Whether the first count segments keep their paths, and at most maxChanged of
-        // them changed their source. switched is the one that turned to Override when
-        // only one changed, else -1.
-        private static bool Matches(SerializedProperty segments, Snapshot before, int count, int maxChanged, out int switched)
+        // Compares the first count segments with the snapshot. False if one of them
+        // has another path. Otherwise sources counts the segments whose movement source
+        // changed, switched is the one that turned to Override when exactly one did
+        // (else -1), and values tells whether a preserve flag, move type or value changed.
+        private static bool Compare(SerializedProperty segments, Snapshot before, int count,
+            out int sources, out int switched, out bool values)
         {
+            sources = 0;
             switched = -1;
-            int changed = 0;
+            values = false;
             for (int i = 0; i < count; i++)
             {
                 SerializedProperty element = segments.GetArrayElementAtIndex(i);
                 if (element.FindPropertyRelative(PathEditorSerializationUtility.PATH_PROPERTY).objectReferenceValue != before.Paths[i])
                     return false;
-                bool isOverride = element.FindPropertyRelative(MOVEMENT_SOURCE_PROPERTY).enumValueIndex
-                    == (int)EPathSegmentMovementSource.Override;
+                values |= ValuesOf(element) != before.Values[i];
+                bool isOverride = IsOverride(element);
                 if (isOverride == before.Overrides[i])
                     continue;
-                changed++;
+                sources++;
                 if (isOverride)
                     switched = i;
             }
-            if (changed > 1)
+            if (sources > 1)
                 switched = -1;
-            return changed <= maxChanged;
+            return true;
         }
+
+        private static bool IsOverride(SerializedProperty element) =>
+            element.FindPropertyRelative(MOVEMENT_SOURCE_PROPERTY).enumValueIndex == (int)EPathSegmentMovementSource.Override;
+
+        private static (bool, int, float) ValuesOf(SerializedProperty element) => (
+            element.FindPropertyRelative(PRESERVE_PROPERTY).boolValue,
+            element.FindPropertyRelative(PathInspectorGUI.MOVE_TYPE).enumValueIndex,
+            element.FindPropertyRelative(PathInspectorGUI.MOVE_VALUE).floatValue);
 
         /// <summary>Remembers each target's segments before the plain field edits them.</summary>
         internal void CaptureTargets()

@@ -146,7 +146,7 @@ namespace Common.TransformPath
                 return;
             using var operation = PathExecutionBoundary.Enter();
             ForgetDestroyedRoute();
-            LeaveAll(EPathQueueLeaveReason.ManagerReleased);
+            LeaveAll(ReasonToLetMembersGo());
             _routeProvider = provider;
             _routeRevision = provider.Revision;
         }
@@ -202,6 +202,15 @@ namespace Common.TransformPath
             return _routeProviderObject != null ? _routeProviderObject : requested;
         }
 
+        // Why the members leave when this manager lets them go. A route destroyed
+        // (DestroyImmediate, or Destroy in an earlier frame) or failed since the last
+        // Queue phase is the reason, as that phase would have reported it. A Destroy
+        // pending in this frame is not visible yet: the route is still ready until then.
+        private EPathQueueLeaveReason ReasonToLetMembersGo() =>
+            !ReferenceEquals(_routeProvider, null) && !_routeProvider.IsReady
+                ? EPathQueueLeaveReason.ProviderInvalid
+                : EPathQueueLeaveReason.ManagerReleased;
+
         // A destroyed route is Unity-null before the next Queue phase sees it.
         // Whoever notices first lets it go, so its members always leave as ProviderInvalid.
         private void ForgetDestroyedRoute()
@@ -233,11 +242,7 @@ namespace Common.TransformPath
                 return;
             }
             using var operation = PathExecutionBoundary.Enter();
-            // A route destroyed or failed since the last Queue phase, such as one
-            // destroyed in the same frame before this manager, is what the members
-            // leave for, as that phase would have reported it.
-            bool routeUnavailable = !ReferenceEquals(_routeProvider, null) && !_routeProvider.IsReady;
-            LeaveAll(routeUnavailable ? EPathQueueLeaveReason.ProviderInvalid : EPathQueueLeaveReason.ManagerReleased);
+            LeaveAll(ReasonToLetMembersGo());
             _routeProvider = null;
             _routeRevision = -1;
             _isInitialized = false;

@@ -16,6 +16,8 @@ namespace Common.TransformPath.Editor
         private const float GROUND_SEARCH_LIFT = 0.5f;
         private const string PATH_POINT_NAME_PREFIX = "PathPoint";
 
+        private static RaycastHit[] _hits = new RaycastHit[16];
+
         public static void SnapToGround(IReadOnlyList<PathData> paths)
         {
             for (int i = 0; i < paths.Count; i++)
@@ -52,16 +54,10 @@ namespace Common.TransformPath.Editor
                     Transform point = pathPoints[pointIndex];
                     if (point == null)
                         continue;
-                    Vector3 origin = point.position + Vector3.up * GROUND_SEARCH_LIFT;
-                    float distance = MAX_RAYCAST_DISTANCE + GROUND_SEARCH_LIFT;
-                    // Triggers are volumes, not ground.
-                    if (physics.Raycast(origin, Vector3.down, out RaycastHit hit, distance,
-                            Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)
-                        || (searchContext && Physics.defaultPhysicsScene.Raycast(
-                            origin, Vector3.down, out hit, distance,
-                            Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)))
+                    if (TryFindGround(physics, point, out Vector3 ground)
+                        || (searchContext && TryFindGround(Physics.defaultPhysicsScene, point, out ground)))
                     {
-                        point.position = hit.point;
+                        point.position = ground;
                         PathEditorUndoUtility.RecordPrefabOverride(point);
                         snappedCount++;
                     }
@@ -82,6 +78,31 @@ namespace Common.TransformPath.Editor
                         pathData);
             }
             PathEditorUndoUtility.RepaintScene();
+        }
+
+        // The nearest surface below the start of the ray. The ray starts above the
+        // point, so it can meet a collider on the point itself, which is not ground.
+        // Triggers are volumes, not ground.
+        private static bool TryFindGround(PhysicsScene physics, Transform point, out Vector3 ground)
+        {
+            Vector3 origin = point.position + Vector3.up * GROUND_SEARCH_LIFT;
+            float distance = MAX_RAYCAST_DISTANCE + GROUND_SEARCH_LIFT;
+            int count;
+            // A full buffer may have left out the nearest hit.
+            while ((count = physics.Raycast(origin, Vector3.down, _hits, distance,
+                       Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)) == _hits.Length)
+                _hits = new RaycastHit[_hits.Length * 2];
+            ground = default;
+            float nearest = float.PositiveInfinity;
+            for (int i = 0; i < count; i++)
+            {
+                RaycastHit hit = _hits[i];
+                if (hit.distance >= nearest || hit.collider.transform.IsChildOf(point))
+                    continue;
+                nearest = hit.distance;
+                ground = hit.point;
+            }
+            return nearest < float.PositiveInfinity;
         }
 
         /// <summary>Adds a start, a middle and an end point under each path and uses them.</summary>

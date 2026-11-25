@@ -86,7 +86,7 @@ public sealed class TransformPathReadmeExample : MonoBehaviour
 | `PathDataLineRenderer` | `Init`, `Release`, `IsInitialized`, `Refresh`, `SetVisible`. `PathData`가 발행한 샘플을 LineRenderer로 그리고, 경로가 바뀌면 다시 그림. 꺼진 컴포넌트는 그리지 않음 |
 | `PathShapeProvider` | `MovementSettings`. 하위 클래스가 `TryPrepare`, `Evaluate`를 구현 |
 | 공통 (`PathData`, `MultiPathData`, `PathShapeProvider`) | `IsReady`, `PathLength`, `Revision`, `PathChanged`, `Rebuild()`, `Sample(progress)` |
-- `SetControlPoints(positions)`는 Transform 목록 대신 월드 좌표로 경로를 만듭니다. 점이 2개 미만이거나 유한하지 않으면 아무것도 바꾸기 전에 예외를 던지고, 좌표는 직렬화하지 않으며, `SetPathPoints`를 부르면 Transform 목록으로 돌아갑니다. `CopyControlPoints`는 이 좌표를 먼저 돌려줍니다. 점이 없는 `PathData`는 Awake에서 빌드하지 않고 점을 받을 때 빌드하며, 그런 구간 경로를 가진 `MultiPathData`도 Awake 대신 첫 사용(재생, Manager의 Route 구성)에 빌드합니다.
+- `SetControlPoints(positions)`는 Transform 목록 대신 월드 좌표로 경로를 만듭니다. 점이 2개 미만이거나 유한하지 않으면 아무것도 바꾸기 전에 예외를 던지고, 좌표는 직렬화하지 않으며, `SetPathPoints`를 부르면 Transform 목록으로 돌아갑니다. `CopyControlPoints`는 이 좌표를 먼저 돌려줍니다. 점이 없는 `PathData`는 Awake에서 빌드하지 않고 점을 받을 때 빌드합니다. 그런 구간 경로를 가진 `MultiPathData`도 Awake에서 오류를 내지 않고 기다렸다가, 그 경로가 점을 받아 빌드되면 함께 빌드합니다.
 - 런타임에 제어점이나 `PathEventSettingSO`를 바꾸면 `path.Rebuild()`를 호출합니다. `MovementSettings`, `CurveType`, `SegmentCount` 속성은 한 번이라도 빌드된 경로라면 바꿀 때 다시 빌드합니다(빌드 전이면 첫 빌드에 반영). 기하만 바뀌면 재생이 이어지고, 이동 설정·이벤트·구간 구성이 바뀌면 멈춥니다.
 - 콜백(`StateChanged`, `SegmentChanged`, `Completed`, `EventReached`, Queue 알림, 이벤트 수신기)은 그것을 일으킨 작업이 끝난 뒤 순서대로 호출됩니다. 콜백 안에서 모든 명령을 쓸 수 있고, 예외는 Console에 기록만 됩니다.
 
@@ -121,7 +121,7 @@ _member.StartQueuedPlayback(_manager, PathPlaybackRequest.Single(_path));
 
 **간격 정책:** `PathQueueSpacingPolicy`(ScriptableObject)를 상속해 `GetSpacing(member, ahead, resolvedSpacing)`을 구현하고 Manager의 **Spacing Policy**에 지정하면, 멤버마다 앞 멤버와의 간격을 정합니다. `resolvedSpacing`은 정책이 없을 때의 간격(`DefaultSpacing`, 또는 `UseManagerSpacing`을 끈 멤버의 `ActorSpacing`)입니다. Manager는 매 프레임 멤버마다 한 번 묻고, 감속·대기·추월 방지에 같은 값을 씁니다. 감속은 그 간격 너머 **Slowdown Range** 동안 일어나므로, 정책이 간격을 넓혀도 감속이 함께 뒤로 옮겨 갑니다. 여러 Manager가 한 정책을 함께 쓸 수 있습니다. 샘플의 Queue 레인은 `TransformPathGapPolicy` 에셋(`Samples/Settings/Queue/TransformPathLeaderGap.asset`)으로 선두 바로 뒤의 간격만 두 배로 넓힙니다. 유한하지 않거나 음수인 값은 정책 이름을 담은 예외가 되어 Manager가 모든 멤버를 `ManagerReleased`로 내보내고 그 재생을 멈추며(실패 격리), 정책 안에서 `Leave`나 `StartQueuedPlayback`처럼 줄을 바꾸면 `InvalidOperationException`입니다. 정책이 멤버를 끄거나 파괴하면 그 멤버는 그 프레임의 계산이 끝난 뒤 빠집니다. 정책이 Manager를 끄고 다시 켜면 계산이 끝난 뒤 멤버를 내보내고 다시 초기화합니다.
 
-`Blocked`·`Resumed`·`SpeedChanged`로 대기 상태를, `QueueInvalidated`로 경로 무효와 Manager 해제를 알립니다. `QueueInvalidated`가 오면 그 경로의 재생은 일시정지 중이어도 멈추고, 이미 다른 경로를 재생하는 Follower는 그대로 둡니다. 경로의 이동 설정·이벤트·구간 구성이 바뀌면 이전 설정으로 재생 중인 멤버만 `ManagerReleased`로 빠지고, 새 설정으로 다시 시작한 멤버는 남습니다. 변경이 콜백 안에서 일어나 일부 Follower가 먼저 스스로 멈춰도 같은 이유로 빠집니다. 경로가 파괴되면 모든 멤버가 `ProviderInvalid`로 빠지고 Manager는 그 경로를 잊습니다. 같은 프레임에 경로를 파괴한 뒤 Manager를 해제해도 `ProviderInvalid`입니다. 기하만 바뀌면 멤버가 Queue 단계에서 새 기하를 먼저 받으므로, 경로가 매 프레임 바뀌어도 Queue가 움직입니다. 재생이 끝나거나 멈춘 멤버는 다음 프레임에 Queue에서 빠지고, 다시 시작한 멤버는 같은 진행률의 멤버 뒤로 갑니다. Queue는 같은 경로 위의 진행 거리만 봅니다. Loop 이음매의 간격, 물리 충돌, 교차 경로 회피는 처리하지 않습니다.
+`Blocked`·`Resumed`·`SpeedChanged`로 대기 상태를, `QueueInvalidated`로 경로 무효와 Manager 해제를 알립니다. `QueueInvalidated`가 오면 그 경로의 재생은 일시정지 중이어도 멈추고, 이미 다른 경로를 재생하는 Follower는 그대로 둡니다. 경로의 이동 설정·이벤트·구간 구성이 바뀌면 이전 설정으로 재생 중인 멤버만 `ManagerReleased`로 빠지고, 새 설정으로 다시 시작한 멤버는 남습니다. 변경이 콜백 안에서 일어나 일부 Follower가 먼저 스스로 멈춰도 같은 이유로 빠집니다. 경로가 파괴되면 모든 멤버가 `ProviderInvalid`로 빠지고 Manager는 그 경로를 잊습니다. Manager가 해제될 때 경로가 이미 파괴되었거나(`DestroyImmediate`, 지난 프레임의 `Destroy`) 무효면 `ProviderInvalid`입니다. `Destroy`는 프레임 끝에 처리되므로 같은 프레임에 경로와 Manager를 함께 `Destroy`하면 `ManagerReleased`입니다. 기하만 바뀌면 멤버가 Queue 단계에서 새 기하를 먼저 받으므로, 경로가 매 프레임 바뀌어도 Queue가 움직입니다. 재생이 끝나거나 멈춘 멤버는 다음 프레임에 Queue에서 빠지고, 다시 시작한 멤버는 같은 진행률의 멤버 뒤로 갑니다. Queue는 같은 경로 위의 진행 거리만 봅니다. Loop 이음매의 간격, 물리 충돌, 교차 경로 회피는 처리하지 않습니다.
 
 <p align="center">
   <img src="Docs/Images/feature-queue-running.png" alt="Queue 레인이 간격을 유지하며 이동하고 선두 바로 뒤만 간격 정책으로 두 배 떨어진 화면" width="48%">
@@ -161,7 +161,7 @@ _member.StartQueuedPlayback(_manager, PathPlaybackRequest.Single(_path));
   <img src="Docs/Images/feature-multipath-seek.png" alt="MultiPath Seek 화면" width="48%">
 </p>
 
-**Editor 작성:** 제어점은 Scene View에서, 이벤트는 Inspector에서 편집합니다. 연결점과 그룹 동기화는 Undo/Redo를 지원하고 Prefab Mode에서도 동작하며, 씬이나 Prefab을 여는 것만으로는 점을 옮기지 않습니다. **Snap to Ground**는 경로가 있는 씬의 콜라이더에 붙습니다(Trigger 제외. Prefab Mode에서는 Prefab 내용, In Context면 그다음 주변 씬). 각 점의 0.5 m 위에서 아래로 찾으므로 지면 바로 아래의 점도 올라오고, 같은 Transform이 두 번 있으면 한 번만 옮깁니다. `MultiPathData` Inspector의 **Apply Drawing Sizes To All Paths**와 **Assign Distinct Path Colors**로 구간 경로의 미리보기 모양을 맞춥니다. `PathShapeProvider`는 샘플한 모양을 Scene View에 그립니다(오른쪽 화면 가장자리의 원).
+**Editor 작성:** 제어점은 Scene View에서, 이벤트는 Inspector에서 편집합니다. 연결점과 그룹 동기화는 Undo/Redo를 지원하고 Prefab Mode에서도 동작하며, 씬이나 Prefab을 여는 것만으로는 점을 옮기지 않습니다. **Snap to Ground**는 경로가 있는 씬의 콜라이더에 붙습니다(Trigger 제외. Prefab Mode에서는 Prefab 내용, In Context면 그다음 주변 씬). 각 점의 0.5 m 위에서 아래로 찾으므로 지면 바로 아래의 점도 올라오고(점 자신의 콜라이더는 지면으로 보지 않음), 같은 Transform이 두 번 있으면 한 번만 옮깁니다. `MultiPathData` Inspector의 **Apply Drawing Sizes To All Paths**와 **Assign Distinct Path Colors**로 구간 경로의 미리보기 모양을 맞춥니다. `PathShapeProvider`는 샘플한 모양을 Scene View에 그립니다(오른쪽 화면 가장자리의 원).
 
 <p align="center">
   <img src="Docs/Images/feature-editor-authoring.png" alt="Scene View의 경로 작성 화면" width="48%">

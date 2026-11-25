@@ -375,7 +375,10 @@ namespace Common.TransformPath
             float maxProgress = _activeManager.TryGetMemberStatus(this, out PathQueueStatus status)
                 ? Mathf.Min(_requestedMaxProgress, status.MaxProgress)
                 : _requestedMaxProgress;
-            Follower.SetMotionLimit(new PathMotionLimit(_wait.IsBlocked, _wait.SpeedMultiplier, maxProgress, true));
+            // A Seek since the last result keeps the wait the engine set for it: this
+            // frame's result was computed at the old position.
+            bool blocked = _wait.IsBlocked || Follower.MotionEpoch != _motionEpoch;
+            Follower.SetMotionLimit(new PathMotionLimit(blocked, _wait.SpeedMultiplier, maxProgress, true));
         }
 
         private void ReportChanges()

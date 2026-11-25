@@ -49,15 +49,27 @@ namespace Common.TransformPath
 
         private void Awake()
         {
-            if (Application.isPlaying && _segments != null && _segments.Count > 0 && !WaitsForSegmentPoints)
-                Rebuild();
+            if (Application.isPlaying)
+                Wake();
         }
 
         /// <summary>
-        /// Whether a segment path has no control points yet, such as one that gets
-        /// them at runtime. Awake leaves the build to the first use then, as such a
-        /// PathData does for itself.
+        /// What Awake does in Play Mode. A segment path without control points yet,
+        /// such as one that gets them at runtime, would only fail the build, so the
+        /// sequence listens to its paths instead and builds when that path publishes
+        /// its first build, or at its own first use.
         /// </summary>
+        internal void Wake()
+        {
+            if (_segments == null || _segments.Count == 0)
+                return;
+            if (WaitsForSegmentPoints)
+                Subscribe();
+            else
+                Rebuild();
+        }
+
+        /// <summary>Whether a segment path has no control points yet.</summary>
         internal bool WaitsForSegmentPoints
         {
             get
@@ -178,6 +190,16 @@ namespace Common.TransformPath
             {
                 error = "MultiPathData requires a measurable total length.";
                 return false;
+            }
+            // Building a later path can publish a change whose listener breaks an
+            // earlier one; this build ignores its own paths' notices, so it looks again.
+            for (int i = 0; i < count; i++)
+            {
+                if (!built[i].Sampler.IsReady)
+                {
+                    error = $"Segment {i} path is not ready.";
+                    return false;
+                }
             }
 
             geometryChanged = !HasSame(_childRevisions, revisions) || !Mathf.Approximately(_pathLength, total);

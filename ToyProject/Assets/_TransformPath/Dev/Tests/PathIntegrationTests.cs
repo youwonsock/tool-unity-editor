@@ -1560,7 +1560,7 @@ namespace Common.TransformPath.Tests
         }
 
         [Test]
-        public void SequenceWhosePathWaitsForRuntimePoints_WaitsToBuild()
+        public void SequenceWhosePathWaitsForRuntimePoints_BuildsWhenThePathGetsThem()
         {
             var host = new GameObject("Runtime Points");
             _objects.Add(host);
@@ -1570,14 +1570,136 @@ namespace Common.TransformPath.Tests
             SerializedPropertyArray(serialized, "_segments", 1).GetArrayElementAtIndex(0)
                 .FindPropertyRelative("_path").objectReferenceValue = waiting;
             serialized.ApplyModifiedPropertiesWithoutUndo();
+            int published = 0;
+            sequence.PathChanged += () => published++;
 
-            // Awake skips the build, as a PathData without points does; the first use builds it.
-            Assert.IsTrue(sequence.WaitsForSegmentPoints);
+            // What Awake does in Play Mode: no build that would fail and log, only listening.
+            sequence.Wake();
+            Assert.IsFalse(sequence.IsReady);
+            LogAssert.NoUnexpectedReceived();
+
             waiting.SetControlPoints(new[] { Vector3.zero, new Vector3(5f, 0f, 0f) });
-            Assert.IsFalse(sequence.WaitsForSegmentPoints);
-            sequence.Rebuild();
             Assert.IsTrue(sequence.IsReady);
+            Assert.AreEqual(5f, sequence.PathLength, 1e-4f);
+            Assert.Greater(published, 0);
         }
+
+        [Test]
+        public void SequencePathThatWoke_StopsTheSequenceThroughItsOwnDestroy()
+        {
+            PathData first = Line(10f, 1f);
+            PathData second = Line(10f, 1f);
+            WakePath(first);
+            WakePath(second);
+            MultiPathData sequence = _scene.CreateSequence();
+            sequence.SetSegments(new[] { new PathSegmentAuthoring(first), new PathSegmentAuthoring(second) });
+            PathFollower follower = CreateFollower();
+            follower.Play(PathPlaybackRequest.Sequence(sequence));
+            follower.SeekSegment(1, 0.5f);
+            Frames(1);
+
+            // A path that woke is not checked on each read; its OnDestroy tells the sequence.
+            DestroyProvider(second);
+            Frames(1);
+
+            Assert.IsFalse(sequence.IsReady);
+            Assert.AreEqual(EPathFollowerState.Ready, follower.State);
+            Assert.AreEqual(EPathPlaybackEnd.RouteUnavailable, follower.LastPlaybackEnd);
+        }
+
+        [Test]
+        public void PathBrokenWhileTheSequenceBuilds_LeavesTheSequenceUnready()
+        {
+            PathData first = Line(10f, 1f);
+            WakePath(first);
+            // A path not built yet: the sequence's build builds it, and it publishes then.
+            var host = new GameObject("Unbuilt");
+            _objects.Add(host);
+            var start = new GameObject("Start").transform;
+            start.SetParent(host.transform);
+            start.position = new Vector3(10f, 0f, 0f);
+            var end = new GameObject("End").transform;
+            end.SetParent(host.transform);
+            end.position = new Vector3(20f, 0f, 0f);
+            PathData second = host.AddComponent<PathData>();
+            var points = new UnityEditor.SerializedObject(second);
+            UnityEditor.SerializedProperty list = SerializedPropertyArray(points, "_pathPoints", 2);
+            list.GetArrayElementAtIndex(0).objectReferenceValue = start;
+            list.GetArrayElementAtIndex(1).objectReferenceValue = end;
+            points.ApplyModifiedPropertiesWithoutUndo();
+            second.PathChanged += () =>
+            {
+                if (first != null)
+                    DestroyProvider(first);
+            };
+            MultiPathData sequence = _scene.CreateSequence();
+
+            LogAssert.Expect(LogType.Error, new Regex("Segment 0 path is not ready"));
+            sequence.SetSegments(new[] { new PathSegmentAuthoring(first), new PathSegmentAuthoring(second) });
+
+            Assert.IsFalse(sequence.IsReady);
+        }
+
+        [Test]
+        public void ConfigureRoute_AfterTheOldRouteFailed_MembersLeaveAsProviderInvalid()
+        {
+            PathData old = Line(30f, 4f);
+            PathData next = Line(30f, 4f);
+            QueuedPathManager manager = CreateManager(old);
+            PathQueueMember member = CreateMember();
+            var reasons = new List<EPathQueueLeaveReason>();
+            member.QueueInvalidated += (_, reason) => reasons.Add(reason);
+            member.StartQueuedPlayback(manager, PathPlaybackRequest.Single(old));
+            Frames(10);
+
+            // The old route fails with no Queue phase before the new one is set.
+            Object.DestroyImmediate(GetPoints(old)[1].gameObject);
+            LogAssert.Expect(LogType.Error, new Regex("could not build"));
+            old.Rebuild();
+            manager.ConfigureRoute(next);
+
+            CollectionAssert.AreEqual(new[] { EPathQueueLeaveReason.ProviderInvalid }, reasons);
+        }
+
+        [Test]
+        public void SeekAndReleaseHoldInAQueueListener_StillWaitBeforeMoving()
+        {
+            PathData path = Line(100f, 3f);
+            QueuedPathManager manager = CreateManager(path);
+            PathQueueMember ahead = CreateMember();
+            PathQueueMember member = CreateMember();
+            ahead.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            ahead.Follower.Seek(0.5f);
+            ahead.Hold();
+            member.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            member.Follower.Seek(0.2f);
+            Frames(120);
+            member.Hold();
+            Frames(30);
+            float sought = -1f;
+            member.Resumed += m =>
+            {
+                if (sought >= 0f)
+                    return;
+                sought = 0.1f;
+                m.Follower.Seek(sought);
+                // Writes the member's limit again; it must not undo the Seek's wait.
+                m.ReleaseHold();
+            };
+
+            member.ReleaseHold();
+            for (int i = 0; i < 180 && sought < 0f; i++)
+                Frames(1);
+
+            Assert.AreEqual(0.1f, sought);
+            Assert.AreEqual(sought, member.Follower.Progress, 1e-6f);
+        }
+
+        // What Play Mode's Awake records; Edit Mode does not run it.
+        private static void WakePath(PathData path) =>
+            typeof(PathData)
+                .GetMethod("Awake", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                .Invoke(path, null);
 
         private static UnityEditor.SerializedProperty SerializedPropertyArray(UnityEditor.SerializedObject serialized, string name, int size)
         {
