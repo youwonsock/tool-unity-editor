@@ -52,6 +52,12 @@ class "FlowFieldSurfaceBuild\nFlowFieldVolumeBuildContext" as Builds {
 class "FlowFieldSampler\n+ 샘플 안전 규칙" as Sampler {
   조회마다 모드별 cell view를 한 번 고름
 }
+class "FlowFieldField\n(게시 필드)" as Field {
+  {field} Grid
+  {field} Scene: 지면 (Surface2D)
+  {field} Agent: 막힘·지면 Topology·탈출
+  {field} Goal: Topology·다음 칸·방향·Modifier 영향
+}
 interface IFlowFieldCellView {
   {field} 축·이웃·막힘·연결·낙차·탈출
 }
@@ -81,6 +87,8 @@ FlowFieldVolumeBuilder ..> IFlowFieldBuildHost : 읽기
 FlowFieldSurfaceBuilder ..> Builds : 시작
 FlowFieldVolumeBuilder ..> Builds : 시작
 Builds ..|> IFlowFieldBuild
+Builds ..> Field : 게시
+Sampler ..> Field : 읽기
 FlowFieldBuildScheduler --> Session : PumpScheduled(budget)
 Session --> FlowFieldExecutionBoundary
 Editor ..> FlowFieldManager : CaptureConfig

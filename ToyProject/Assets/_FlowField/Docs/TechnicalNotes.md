@@ -52,7 +52,7 @@
 
 ### 공통 부품
 
-- 게시 필드 `FlowFieldField`, 조회 `FlowFieldSampler`(모드별 cell view `FlowFieldSurfaceCellView`·`FlowFieldVolumeCellView`를 조회마다 한 번 고름), 요청 보관 `FlowFieldRequestInbox`, 셀 합성 규칙 `FlowFieldVectorUtility.ApplyModifier`, 이벤트 경계 `FlowFieldExecutionBoundary`, 예산 `FlowFieldBuildScheduler`.
+- 게시 필드 `FlowFieldField`(격자와 씬·주체·Goal 층), 조회 `FlowFieldSampler`(모드별 cell view `FlowFieldSurfaceCellView`·`FlowFieldVolumeCellView`를 조회마다 한 번 고름), 요청 보관 `FlowFieldRequestInbox`, 셀 합성 규칙 `FlowFieldVectorUtility.ApplyModifier`, 이벤트 경계 `FlowFieldExecutionBoundary`, 예산 `FlowFieldBuildScheduler`.
 - `FlowFieldBuildDriver`가 Play Mode에서 프레임마다 한 번, 다른 LateUpdate 뒤(실행 순서 30000)에 scheduler를 돌립니다. Play 세션이 시작할 때 scheduler의 정적 상태와 `FlowFieldBuildSettings.BudgetMilliseconds`를 되돌립니다. Domain reload를 꺼도 이전 Play의 값이 남지 않게 하기 위해서입니다.
 - next 셀 표식 `FlowFieldNextCell`: Default Direction(-1), 막힘(-2), 도달 불가(-3). 다음 셀이 자기 자신이면 Goal anchor입니다. 두 모드의 풀이, Bake Asset 검증, 샘플 안전 규칙이 같이 씁니다.
 - 겹침 조회 `FlowFieldOverlapUtility`: 버퍼가 차면 두 배로 늘리고 `MaxOverlapHits`(4,096)에서 멈춥니다. 상한에 닿았을 때의 처리(Fault, 셀별 검사, sweep 중단)는 호출하는 쪽이 정합니다.
@@ -91,9 +91,13 @@
 ### 게시와 Revision
 
 - 완성된 결과만 게시하고, 조회는 게시 값을 읽은 뒤 아래 샘플 안전 규칙을 적용합니다.
+- 게시 필드는 격자와 세 층입니다. 층은 게시된 뒤 바뀌지 않으므로 다음 게시가 같은 층을 참조로 다시 쓸 수 있습니다.
+  - 씬 층(`FlowFieldSceneLayer`): Surface2D의 지면(`FlowFieldSurfaceData`, Max Slope와 Max Step Height 포함). Volume3D에는 없습니다.
+  - 주체 층(`FlowFieldAgentLayer`): 막힘, 지면 Topology(Goal 영향과 상관없는 연결), Volume3D의 탈출 방향.
+  - Goal 층(`FlowFieldGoalLayer`): Goal 범위 Topology, Goal 플래그, 다음 칸, 기본·최종 방향과 속도, Modifier 영향(Surface2D), Goal 활성 여부와 Goal 칸.
 - 끝난 풀이는 새 입력이 들어와 있어도 게시합니다. 계속 움직이는 Goal 때문에 결과가 끊기지 않게 하기 위해서입니다. Grid나 설정이 바뀌었거나 Goal이 사라진 경우만 거부합니다.
 - `NotifyCellsDirty`는 격자를 그대로 두므로 진행 중인 빌드를 거부하지 않고(Surface `Ground` flag), 바닥은 다음 빌드가 다시 scan합니다. 바닥이 실제로 바뀌었으면 그 빌드가 새 격자처럼 전체를 다시 만듭니다.
-- Revision은 두 모드 모두 게시 내용(셀 상태, 방향, 속도, Goal)이 실제로 바뀔 때만 늘고, 그때 `FieldChanged`를 보냅니다. Volume은 `FlowFieldField.HasSameContent`(memcmp)로 비교합니다.
+- Revision은 두 모드 모두 게시 내용(셀 상태, 방향, 속도, Goal)이 실제로 바뀔 때만 늘고, 그때 `FieldChanged`를 보냅니다. Volume은 `FlowFieldField.HasSameContent`로 층마다 비교하고(memcmp), Surface는 commit Job이 바뀐 칸을 찾습니다. 기본 방향·속도와 지면 Topology는 다른 값에서 정해지므로 비교하지 않습니다.
 - 내용이 같아도 요청 스냅샷 갱신, 불확실 영역 정리, Ready 전환은 그대로 합니다.
 - Revision은 Session이 세지만, Space Mode를 바꿔 Manager가 새 Session을 만들면 이전 Session의 값에서 이어 셉니다(`ContinueRevision`). 그래서 한 Manager는 두 필드에 같은 Revision을 보이지 않습니다.
 
@@ -231,6 +235,10 @@
 - 바닥·장애물·Goal·Modifier 영역 단계는 Physics 결과가 한 스냅샷이 되도록 한 프레임에 실행합니다. 그래서 `BuildPolicy`는 예산이 다 된 뒤에도 빌드 시작을 허락하고, 펌프마다 빌드를 하나만 시작합니다. 단, 풀이 중에 알린 Modifier 영역은 풀이가 끝나는 프레임에 다시 만듭니다.
 - 장애물 마스크를 다시 만들 때는 먼저 `Physics.SyncTransforms`를 한 번 합니다. 등록부도 Collider Bounds를 읽기 전에 sync하므로, Auto Sync Transforms가 꺼져 있어도 같은 프레임에 옮기고 알린 이동을 놓치지 않습니다.
 - BFS와 방향은 워커 스레드, Topology는 메인 스레드의 Burst입니다. 합성은 예산에 맞춰 나눕니다.
+- Topology는 두 벌을 같은 Job으로 만듭니다.
+  - Goal 범위 Topology는 Goal 영향 반경 안의 칸만 잇습니다. 방향 비트 d는 자기 칸, 이웃 칸, 대각선이면 양쪽 모서리 칸이 모두 영향 안일 때만 남습니다.
+  - 지면 Topology는 영향과 상관없이 지면이 있고 막히지 않은 칸을 모두 잇습니다. 주체 층에 게시하고, 바뀐 칸 판정에는 넣지 않습니다.
+  - `StaticBaked`는 Goal 범위 Topology를 Bake에서 읽고, 지면 Topology는 읽은 막힘으로 다시 만듭니다. Bake 형식은 그대로입니다.
 - 장애물 마스크가 바뀌면 막힘 합치기(정적 | 동적)와 탈출 방향 BFS(네 면 이웃)를 메인 스레드의 Burst Job 하나(`FlowFieldSurfaceEscapeJob`)로 합니다.
 - 지면 scan(`FlowFieldSurfaceGroundScan`)은 셀마다 아래로 쏘는 ray를 `RaycastCommand` 묶음(최대 1,024개)으로 워커 스레드에서 돌리고, 결과는 셀 순서대로 읽습니다. ray는 Ground Layer만 맞히고 trigger를 무시하며, 가장 가까운 hit 하나를 쓰고, back face는 `Physics.queriesHitBackfaces`를 따릅니다.
 - 이웃 마스크는 Burst Job이 16,384셀씩 만듭니다.
@@ -247,6 +255,7 @@
 - 등록 장애물은 빌드가 장애물 조회 전에 `Physics.SyncTransforms`한 직후 한 번(`CaptureRegistered`: Collider, 넓힌 Bounds, Layer) 읽고, 스텝마다 그 Bounds가 스텝 상자에 닿는 것만 고릅니다. 읽은 뒤 움직이거나 해제된 등록 장애물은 통지로 불확실 영역이 되고, 그 영역은 이 빌드가 게시된 뒤에도 남아 다음 빌드가 다시 조회합니다.
 - Modifier만 바뀌면 게시된 내비게이션에 다시 합성합니다. 첫 빌드 중 바뀐 Modifier도 그 빌드가 게시된 뒤 합성만 다시 합니다.
 - 장애물 입력과 불확실 영역이 그대로인 빌드(Goal이나 Default Direction 변경)는 장애물 결과와 Topology를 재사용합니다. 그래서 Play 중 Inspector에서 Default Direction이나 Goal Influence Radius를 바꾸면 장애물을 다시 조회하지 않습니다. Obstacle Layer·Clearance, Sweep Unregistered, Grid를 바꾸면 다시 조회합니다.
+- 장애물 결과를 재사용하는 빌드는 이전 필드의 주체 층을 그대로 게시합니다. Modifier만 다시 합성하는 빌드도 주체 층을 그대로 쓰고, 기본 배열을 공유하는 새 Goal 층을 만듭니다. Volume3D의 Topology는 모든 열린 칸을 이으므로 지면 Topology는 Goal 층의 Topology와 같은 배열입니다.
 - Goal이 같은 셀 안에서 움직이면 빌드하지 않습니다. Goal을 지우면 진행 중인 빌드를 버립니다.
 - 등록하지 않은 Collider는 `RequestRebuild()`나 `NotifyCellsDirty()`의 전체 조회, 또는 `NotifyObstacleRegionDirty()`와 sweep이 알린 영역의 조회에서 반영됩니다. `BakedBase`의 `RequestRebuild()`는 Bake를 다시 읽고 바뀐 영역만 다시 조회하므로(sweep이 돌면 모든 셀), 그 밖의 자리는 영역 알림이나 sweep으로 반영합니다.
 - 교체된 게시 배열은 다음 빌드에 다시 씁니다(`FlowFieldSpareArrays.Take`, Surface 게시도 같습니다). 가져온 배열은 지우지 않습니다. 빌드가 모든 칸을 읽기 전에 쓰기 때문입니다.
@@ -352,7 +361,7 @@
 
 - Volume3D 표시 상한은 FullVolume 8,192셀, Slice 4,096셀입니다. 넘으면 격자 칸을 고르게 골라 그리고, 계산 해상도는 바뀌지 않습니다.
 - Surface2D Scene View는 격자가 2,500셀을 넘으면 방향 화살표를 가로·세로 한 칸씩 건너 4칸 중 1칸만 그립니다. 막힌 칸과 Modifier 칸 표시는 줄이지 않습니다.
-- Play Mode의 Surface 표시는 합성을 거친 최종 결과이므로 Asset의 원본 방향과 다를 수 있습니다.
+- Play Mode의 Surface 표시는 합성을 거친 최종 결과이므로 Asset의 원본 방향과 다를 수 있습니다. 표시는 게시 필드의 층에서 읽습니다(씬 층의 지면, 주체 층의 막힘, Goal 층의 플래그·최종 방향·Modifier 영향).
 - 그릴 때 Display Settings는 칸마다가 아니라 한 번만 읽습니다.
 - Volume 표시는 갱신 요청이 있거나 상태가 바뀔 때만 Scene View와 열린 Manager Inspector를 repaint하고, Bake를 검증하는 동안에는 보여 주는 진행률(%)이 바뀔 때만 repaint합니다.
 - Volume 표시의 Bake 검증 결과는 Asset의 Revision이나 내용 세대가 바뀌거나 Asset 파일을 다시 가져올 때(`FlowFieldVolumeVisualizationAssetPostprocessor`)만 다시 만들고, Undo나 계층 변경 같은 에디터 변경은 표시만 새로 고칩니다.
@@ -382,7 +391,7 @@
 
 | 분류 | 내용 |
 | --- | --- |
-| `Gate` | 두 샘플 씬 × Bake Mode 셋의 게시 필드 해시가 기록한 기준값과 같은지, Edit Mode Bake 결과가 커밋된 Bake Asset과 같은지, 입력 storm과 수명 storm(Play Mode, 그리고 seed를 고정한 Edit Mode) 뒤의 필드가 fresh Release·Init와 같은지 |
+| `Gate` | 두 샘플 씬 × Bake Mode 셋의 게시 필드 해시가 기록한 기준값과 같은지와 필드 불변식(Topology가 Goal 범위 안에만 있고, Goal Topology가 지면 Topology를 Goal 영향으로 거른 것과 같음), Edit Mode Bake 결과가 커밋된 Bake Asset과 같은지, 입력 storm과 수명 storm(Play Mode, 그리고 seed를 고정한 Edit Mode) 뒤의 필드가 fresh Release·Init와 같은지 |
 | `Protocol` | 빌드 단계, 풀이 중 Stop·Release, 거부·폐기된 빌드, Default Direction 동기화, 증분 결과와 fresh 결과의 일치 |
 | `Safety` | 샘플 안전 규칙: 막힘·지면 없음·격자 밖·낙차로 향하는 움직이는 샘플이 없는지 |
 | `Obstacles` | 등록·해제·파괴·순간이동, 불확실 영역, 미등록 장애물 sweep, 격자 왕복 |
