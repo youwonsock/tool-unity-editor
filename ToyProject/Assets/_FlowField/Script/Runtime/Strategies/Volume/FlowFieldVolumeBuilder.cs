@@ -1,7 +1,6 @@
 using System;
 using UnityEngine;
 using BuildContext = Common.FlowField.FlowFieldVolumeBuildContext;
-using VolumeFieldData = Common.FlowField.FlowFieldField<Common.FlowField.FlowFieldVolumeRequest>;
 using BuildPhase = Common.FlowField.FlowFieldVolumeBuildPhase;
 
 namespace Common.FlowField
@@ -21,25 +20,14 @@ namespace Common.FlowField
         private Collider[] _overlapBuffer;
         private readonly int[] _stepCells = new int[CellsPerStep];
         private readonly FlowFieldVolumeCellQuery _cellQuery = new FlowFieldVolumeCellQuery();
-        private readonly FlowFieldSpareArrays _spares = new FlowFieldSpareArrays();
         // The uncertain regions, which the session owns and updates. The
         // builder only reads them to limit its obstacle queries.
         private IFlowFieldUncertainRegions _safety => _host.UncertainRegions;
 
-        private VolumeFieldData _committed;
+        // What input owes the next build, and the published field with its spares.
+        private readonly FlowFieldVolumeInputLedger _inputs = new FlowFieldVolumeInputLedger();
+        private readonly FlowFieldVolumeFieldStore _fields = new FlowFieldVolumeFieldStore();
         private BuildContext _build;
-        private readonly FlowFieldRequestInbox<FlowFieldVolumeRequest> _requests
-            = new FlowFieldRequestInbox<FlowFieldVolumeRequest>();
-        // Modifier changes reuse the published navigation unless a full build is pending.
-        private bool _hasPendingModifierRecompose;
-        // An explicit rebuild re-queries obstacles even when only the Goal changed.
-        private bool _obstacleQueryRequired;
-        // The sweep was turned on or off since the last build began.
-        private bool _queryEveryCell;
-        // BakedBase: every region an obstacle change reached since Initialize.
-        // A reloaded bake queries it again, because the bake still holds what
-        // was there before the changes.
-        private Bounds? _bakedBaseTouched;
         private FlowFieldBakeMode _bakeMode;
 
         // What this builder reads from the session that runs it. Lifecycle,
@@ -52,11 +40,11 @@ namespace Common.FlowField
         }
 
         public FlowFieldSpaceMode SpaceMode => FlowFieldSpaceMode.Volume3D;
-        public bool HasPendingRequest => _requests.Pending || _hasPendingModifierRecompose || _build != null;
+        public bool HasPendingRequest => _inputs.IsOwed || _build != null;
         internal bool TryGetLatestRequestedInput(out FlowFieldVolumeRequest request)
         {
-            request = _requests.Latest;
-            return _requests.HasLatest;
+            request = _inputs.Requests.Latest;
+            return _inputs.Requests.HasLatest;
         }
 
         internal float BuildProgress
@@ -64,7 +52,7 @@ namespace Common.FlowField
             get
             {
                 if (_build == null)
-                    return _requests.Pending || _hasPendingModifierRecompose ? 0f : 1f;
+                    return _inputs.IsOwed ? 0f : 1f;
                 if (_build.Phase == BuildPhase.Complete)
                     return 1f;
 
@@ -79,11 +67,7 @@ namespace Common.FlowField
         public void Initialize(FlowFieldBakeMode bakeMode)
         {
             _bakeMode = bakeMode;
-            _requests.Clear();
-            _hasPendingModifierRecompose = false;
-            _obstacleQueryRequired = false;
-            _queryEveryCell = false;
-            _bakedBaseTouched = null;
+            _inputs.Reset();
         }
 
         /// <summary>
@@ -94,44 +78,44 @@ namespace Common.FlowField
         {
             ValidateRequest(request);
             if (requeryObstacles)
-                _obstacleQueryRequired = true;
+                _inputs.ObstacleQueryRequired = true;
             // Turning the sweep on or off says nothing changed, so the field
             // stays readable; the next build still queries every cell from
             // Physics, BakedBase included, so it takes in unregistered changes
             // made while nothing swept them, as Surface2D does.
-            if (_requests.HasLatest && _requests.Latest.SweepUnregistered != request.SweepUnregistered)
+            if (_inputs.Requests.HasLatest && _inputs.Requests.Latest.SweepUnregistered != request.SweepUnregistered)
             {
-                _obstacleQueryRequired = true;
-                _queryEveryCell = true;
+                _inputs.ObstacleQueryRequired = true;
+                _inputs.QueryEveryCell = true;
             }
             // A new grid or source drops the published field for good: readers
             // wait for a build on this grid, even if the grid later returns to
             // the old one. Obstacle changes that reached no cell of the new
             // grid were never applied to the old field (the session skips
             // them), so it can never be shown again.
-            if (_committed != null && !_committed.Request.HasSameGrid(request))
-                _committed = null;
+            if (_fields.Committed != null && !_fields.Committed.Request.HasSameGrid(request))
+                _fields.Drop();
             bool goalMovedWithinCell = IsGoalMoveWithinCell(request);
             // New obstacle settings make every cell uncertain from now. The
             // comparison is with the latest accepted request on the same grid:
             // a build that began with the previous settings, the first build
             // included, may still publish.
-            bool obstacleSettingsChanged = _requests.HasLatest
-                && _requests.Latest.HasSameGrid(request)
-                && !_requests.Latest.HasSameObstacleInputs(request);
+            bool obstacleSettingsChanged = _inputs.Requests.HasLatest
+                && _inputs.Requests.Latest.HasSameGrid(request)
+                && !_inputs.Requests.Latest.HasSameObstacleInputs(request);
             Bounds? invalidated = obstacleSettingsChanged ? request.WorldBounds : (Bounds?)null;
             // Keep the last accepted request independently of the committed
             // field.  A dirty notification that arrives while another Goal is
             // building must never resurrect the older committed Goal.
-            _requests.Latest = request;
-            _requests.HasLatest = true;
+            _inputs.Requests.Latest = request;
+            _inputs.Requests.HasLatest = true;
             // A grid/signature change invalidates the private staging arrays
             // immediately, and a removed Goal must not publish once more.
             if (_build != null
                 && (!_build.Request.HasSameGrid(request) || _build.Request.HasGoal && !request.HasGoal))
                 DiscardBuild();
             if (!goalMovedWithinCell)
-                _requests.Pending = true;
+                _inputs.Requests.Pending = true;
             return invalidated;
         }
 
@@ -142,11 +126,11 @@ namespace Common.FlowField
         /// </summary>
         private bool IsGoalMoveWithinCell(in FlowFieldVolumeRequest request)
         {
-            if (_obstacleQueryRequired || _requests.Pending || request.BakeMode == FlowFieldBakeMode.StaticBaked)
+            if (_inputs.ObstacleQueryRequired || _inputs.Requests.Pending || request.BakeMode == FlowFieldBakeMode.StaticBaked)
                 return false;
-            if (_build == null && _committed == null)
+            if (_build == null && _fields.Committed == null)
                 return false;
-            FlowFieldVolumeRequest current = _build != null ? _build.Request : _committed.Request;
+            FlowFieldVolumeRequest current = _build != null ? _build.Request : _fields.Committed.Request;
             return !current.HasSameGoal(request) && current.HasSameResult(request);
         }
 
@@ -154,8 +138,7 @@ namespace Common.FlowField
         public void CancelWork()
         {
             DiscardBuild();
-            _requests.Pending = false;
-            _hasPendingModifierRecompose = false;
+            _inputs.ClearOwed();
         }
 
         // The world may have changed while nothing observed it, so the session
@@ -163,18 +146,16 @@ namespace Common.FlowField
         // builds again.
         public void DropComputedState()
         {
-            _committed = null;
-            _requests.Pending = _requests.HasLatest;
+            _fields.Drop();
+            _inputs.Requests.Pending = _inputs.Requests.HasLatest;
         }
 
         public void ReleaseResources()
         {
-            _committed = null;
-            _requests.Clear();
-            _bakedBaseTouched = null;
+            _fields.Release();
+            _inputs.Reset();
             _overlapBuffer = null;
             _cellQuery.Clear();
-            _spares.Clear();
         }
 
         private static Vector3 ObstacleHalfExtents(float cellSize, float clearance)

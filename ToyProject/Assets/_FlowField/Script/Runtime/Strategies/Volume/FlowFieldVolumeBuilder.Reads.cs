@@ -12,9 +12,9 @@ namespace Common.FlowField
         internal bool TryExportBakeData(out FlowFieldVolumeBakePayload payload)
         {
             payload = default;
-            if (_committed == null)
+            if (_fields.Committed == null)
                 return false;
-            FlowFieldVolumeRequest request = _committed.Request;
+            FlowFieldVolumeRequest request = _fields.Committed.Request;
             FlowFieldGridSpace grid = request.Grid;
             FlowFieldVolumeBakeMetadata metadata = new FlowFieldVolumeBakeMetadata(
                 FlowFieldVolumeBakeData.SupportedFormatVersion,
@@ -30,44 +30,44 @@ namespace Common.FlowField
                 request.HasGoal,
                 request.GoalWorld,
                 request.GoalInfluenceRadius,
-                request.HasGoal ? _committed.GoalIndex : -1);
+                request.HasGoal ? _fields.Committed.GoalIndex : -1);
             // Static bake assets store the immutable base field. The current
             // Default Direction and registered Modifiers are runtime inputs
             // and are composed again when the snapshot is loaded.
             payload = new FlowFieldVolumeBakePayload(
                 metadata,
-                (bool[])_committed.Blocked.Clone(),
-                (uint[])_committed.Topology.Clone(),
-                (FlowFieldGoalFlags[])_committed.GoalFlags.Clone(),
-                (int[])_committed.NextCells.Clone(),
-                (Vector3[])_committed.BaseDirections.Clone(),
-                (float[])_committed.BaseSpeeds.Clone(),
-                (Vector3[])_committed.EscapeDirections.Clone());
+                (bool[])_fields.Committed.Blocked.Clone(),
+                (uint[])_fields.Committed.Topology.Clone(),
+                (FlowFieldGoalFlags[])_fields.Committed.GoalFlags.Clone(),
+                (int[])_fields.Committed.NextCells.Clone(),
+                (Vector3[])_fields.Committed.BaseDirections.Clone(),
+                (float[])_fields.Committed.BaseSpeeds.Clone(),
+                (Vector3[])_fields.Committed.EscapeDirections.Clone());
             return true;
         }
 
         public bool TryGetFieldInfo(int revision, out FlowFieldFieldInfo info)
         {
             info = default;
-            if (_committed == null)
+            if (_fields.Committed == null)
                 return false;
 
-            FlowFieldVolumeRequest request = _committed.Request;
+            FlowFieldVolumeRequest request = _fields.Committed.Request;
             // A running build or a move within the Goal cell leaves the
             // published result behind the requested Goal, as on Surface2D.
             // StaticBaked requests all carry the baked Goal.
-            FlowFieldVolumeRequest requested = _requests.HasLatest ? _requests.Latest : request;
+            FlowFieldVolumeRequest requested = _inputs.Requests.HasLatest ? _inputs.Requests.Latest : request;
             Vector3 resolvedGoal = default;
-            bool hasResolvedGoal = _committed.GoalIndex >= 0
-                && _committed.GoalIndex < _committed.Grid.CellCount;
+            bool hasResolvedGoal = _fields.Committed.GoalIndex >= 0
+                && _fields.Committed.GoalIndex < _fields.Committed.Grid.CellCount;
             if (hasResolvedGoal)
             {
-                _committed.Grid.FromFlatIndex(
-                    _committed.GoalIndex,
+                _fields.Committed.Grid.FromFlatIndex(
+                    _fields.Committed.GoalIndex,
                     out int goalX,
                     out int goalY,
                     out int goalZ);
-                resolvedGoal = _committed.Grid.LocalToWorldCenter(goalX, goalY, goalZ);
+                resolvedGoal = _fields.Committed.Grid.LocalToWorldCenter(goalX, goalY, goalZ);
             }
 
             info = new FlowFieldFieldInfo(
@@ -87,10 +87,10 @@ namespace Common.FlowField
 
         // The published field. A request on another grid or source drops it
         // (Submit), so it is always on the latest request's grid.
-        public FlowFieldField PublishedField => _committed;
+        public FlowFieldField PublishedField => _fields.Committed;
 
         // The latest request's grid, which the next build uses, as in Surface2D.
-        public FlowFieldGridSpace LatestGrid => _requests.HasLatest ? _requests.Latest.Grid : default;
+        public FlowFieldGridSpace LatestGrid => _inputs.Requests.HasLatest ? _inputs.Requests.Latest.Grid : default;
 
         // Volume3D knows nothing newer than its published field; the shared
         // rule reads that field and the notified uncertain regions.
