@@ -59,6 +59,7 @@ public sealed class FlowFieldReadmeMover : MonoBehaviour
 | `FlowFieldGoalTarget` | 켜져 있는 동안 자기 위치를 Manager의 Goal로 정하고(Influence Radius 포함), 움직이거나 반경이 바뀌면 다시 정합니다. 끄면 자기가 정한 Goal이 아직 Manager의 Goal일 때만 지웁니다. 여러 target이 한 Manager를 가리키면 마지막에 알린 target의 Goal이 쓰입니다. |
 | `FlowFieldSpeedModifier` | 영향 영역 안 셀의 속도 배율에 Speed Multiplier를 곱합니다. 기본 Priority는 100입니다. |
 | `FlowFieldNoiseModifier` | 영향 영역 안 셀의 방향을 위치마다 고정된 각도(최대 Max Angle Degrees, Spatial Frequency, Seed)만큼 돌립니다. 기본 Priority는 200입니다. |
+| `FlowFieldWorld` (Asset) | Manager들을 영역으로 묶습니다. 같은 Space Mode·Cell Size·lattice의 영역은 격자가 닿는 곳에서 이어지고, Additive로 불러온 장면에 걸쳐도 됩니다. World Goal과 공유 등록 API를 가집니다. Project 창의 Create > FlowField > World로 만듭니다. |
 | `FlowFieldDisplaySettings` | Manager와 같은 GameObject에 두는 Scene View 표시 옵션입니다(Show Field, Volume3D의 FullVolume·Slice 표시). 계산은 바꾸지 않고, 없으면 Scene View에 방향장을 그리지 않습니다. |
 
 - `FlowFieldDynamicObstacle`과 `FlowFieldGoalTarget`은 `StaticBaked` Manager에서 아무것도 하지 않습니다. 장애물과 Goal이 Bake한 그대로이기 때문입니다.
@@ -83,6 +84,7 @@ Inspector는 그룹마다 제목을 달고, 지금 Space Mode가 읽지 않는 �
 | Additional Agent Types | Name, Clearance, Max Slope, Max Step Height | 위 설정(`Default` 유형) 밖의 주체 유형입니다(최대 2개). 유형마다 자기 Clearance와 Surface2D의 Max Slope·Max Step Height로 따로 빌드한 필드를 가지고, `TryGetAgentType(name, out type)`으로 찾은 유형으로 조회합니다. 개수와 이름은 `Release()` 뒤에 바꿉니다. `StaticBaked`에서는 쓸 수 없고, `BakedBase`에서는 Bake 대신 장면을 scan합니다. 규칙은 [TechnicalNotes](Docs/TechnicalNotes.md#agent-유형) |
 | Flow | Default Direction | Goal이 없거나 Goal 영향 밖인 셀의 방향입니다. |
 | | Goal Influence Radius | 0이면 격자 전체가 Goal로 흐르고, 양수면 Goal 중심의 그 반경 구 안만 Goal로 흐릅니다. 영향 안에서 Goal로 갈 길이 없는 셀은 멈춥니다. |
+| (그룹 없음) | World | 이 Manager가 영역이 될 `FlowFieldWorld`입니다. 격자 원점이 world의 lattice 위에 있어야 하고 다른 영역과 겹치면 안 됩니다. `Release()` 뒤에만 바꿉니다 |
 | (그룹 없음) | Goal Transform | Init과 Bake가 한 번 읽는 초기 Goal입니다. 이후 이동은 `SetGoal()`이나 `FlowFieldGoalTarget`으로 알립니다. |
 | Mode | Space Mode | `Surface2D` 또는 `Volume3D`입니다. Play 중 세션이 초기화돼 있거나 Faulted인 동안 잠기므로 `Release()` 뒤에 바꿉니다. |
 | | Bake Mode | `RuntimeDynamic`, `StaticBaked`, `BakedBase` 중 하나입니다. Play 중에는 잠깁니다. |
@@ -120,6 +122,7 @@ Inspector는 그룹마다 제목을 달고, 지금 Space Mode가 읽지 않는 �
 | Goal 변경 | `SetGoal(FlowFieldGoalRequest.Position(position, radius))` 또는 `FlowFieldGoalRequest.Target(transform, radius)`, 지우기는 `FlowFieldGoalRequest.None`. 또는 `FlowFieldGoalTarget`. 장애물 결과를 재사용하고, 마지막에 정한 Goal이 쓰입니다 |
 | 추가 Goal | `AddGoal(FlowFieldGoalKind.Shared 또는 Group, FlowFieldGoalRequest.Position(position, radius))`이 돌려준 핸들로 `TrySample(position, handle, out sample)`, `IsGoalReady(handle)`, `SetGoal(handle, request)`, `RemoveGoal(handle)`. `TrySampleNearestShared(position, out sample, out handle)`은 걸음 수가 가장 적은 `Shared` Goal로 답합니다. 기본 Goal과 같은 바닥·장애물·Modifier를 쓰고 기본 Goal 필드 다음에 빌드됩니다. `StaticBaked`는 받지 않습니다. 규칙은 [TechnicalNotes](Docs/TechnicalNotes.md#추가-goal) |
 | Agent 유형 | `TryGetAgentType(name, out type)`으로 찾은 유형을 `TrySample(position, type, out sample)`, `IsAgentTypeReady(type)`, `TrySample(position, handle, type, out sample)`, `IsGoalReady(handle, type)`, `TrySampleNearestShared(position, type, out sample, out handle)`에 넘깁니다. 유형을 받지 않는 호출과 `State`는 `Default` 유형입니다. 입력은 모든 유형에 적용됩니다 |
+| World 영역 | `world.AddGoal(kind, FlowFieldGoalRequest.Position(position))`의 핸들을 `world.TrySample(position, handle, out sample)`이나 각 영역 Manager의 `TrySample(position, handle, ...)`로 읽습니다. 이동 주체는 영역 경계를 넘어 따라가고, 불러오지 않은 영역의 Goal은 가장 가까운 경계로 이끕니다. 영역을 넘는 장애물과 Modifier는 `world.RegisterDynamicObstacle()`, `world.RegisterVectorModifier()`로 한 번 등록합니다. `world.TryGetArea(position, out manager)`. 규칙은 [TechnicalNotes](Docs/TechnicalNotes.md#world-영역) |
 | 움직이는 장애물 | `RegisterDynamicObstacle(collider)` → 움직일 때마다 `NotifyDynamicObstacleMoved(collider)` → `UnregisterDynamicObstacle(collider)`. `FlowFieldDynamicObstacle`이 이 셋을 대신합니다. 파괴된 Collider 등록은 "Cannot register a destroyed Collider." |
 | 장애물 영역 알림 (`RuntimeDynamic`, `BakedBase`) | `NotifyObstacleRegionDirty(bounds)`. 이전과 현재 Bounds의 합집합을 넘깁니다. 유한하지 않은 Bounds는 `ArgumentOutOfRangeException`("Bounds must be finite.") |
 | 바닥 형상 변경 (`RuntimeDynamic`) | `NotifyCellsDirty()`. 바닥(Volume3D는 모든 셀)과 장애물을 모두 다시 조회합니다. 진행 중인 빌드는 버리지 않고, 다음 빌드가 바닥을 다시 조회합니다 |

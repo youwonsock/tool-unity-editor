@@ -324,6 +324,32 @@ Manager의 Obstacle Clearance, Max Slope, Max Step Height가 `Default` 유형입
 - **Bake:** Bake Asset에는 `Default` 유형만 들어갑니다. `BakedBase`에서 추가 유형은 `RuntimeDynamic`처럼 장면을 scan해 빌드하고, `StaticBaked`는 Init이 거부합니다("StaticBaked loads the Default agent type only; remove the Additional Agent Types.").
 - **Editor:** Scene View 표시, Edit Mode 미리보기, Bake는 `Default` 유형만 다룹니다.
 
+## World 영역
+
+`FlowFieldWorld` Asset(Space Mode, Cell Size, Lattice Origin)을 참조하는 Manager는 그 world의 영역입니다. 사용자가 둔 영역들이 격자가 닿는 곳에서 이어지고, Additive로 불러온 여러 장면에 걸칠 수 있습니다.
+
+- **영역:**
+  - Manager의 World 칸이 영역의 world를 정합니다. 영역은 world와 같은 Space Mode와 Cell Size를 쓰고, 격자 원점이 lattice(Lattice Origin에서 셀 단위) 위에 있어야 하며(Surface2D는 X·Z, Volume3D는 세 축), 다른 영역과 겹치면 안 됩니다. Init이 이를 검사해 거부하고, Inspector는 lattice 검사를 미리 보여 줍니다.
+  - Init이 world에 들어가고 Release와 파괴(장면 내림 포함)가 나옵니다. World 칸은 Release 뒤에만 바뀌고, Play 중 설정 편집으로 격자가 움직이면 영역도 움직입니다.
+  - 두 영역의 상자가 한 셀 안에서 만나면 닿는 영역이고, 그 사이 이웃 걸음(경계 칸 쌍, `FlowFieldWorldAreas`)을 미리 찾아 둡니다.
+- **World Goal:**
+  - `FlowFieldWorld.AddGoal`이 만든 Goal은 모든 영역의 모든 Agent 유형 세션에 같은 번호의 [추가 Goal](#추가-goal)이 됩니다. 그래서 world의 `TrySample`이나 각 영역 Manager가 같은 핸들로 읽습니다. 영향 반경은 0이어야 합니다.
+  - 탐색은 seed(`FlowFieldGoalSeeds`)에서 시작합니다. Goal을 품은 영역은 Goal 칸에서, 모든 영역은 닿는 영역의 걸음 수 + 1에서 시작합니다. 경계를 넘는 걸음은 그 유형의 연결 규칙을 따릅니다. Surface2D는 두 칸 모두 걸을 수 있고 Max Step Height 안이며 대각선은 양옆 칸까지, Volume3D는 두 칸이 열려 있고 대각선은 지나는 모서리 칸까지입니다.
+  - 풀이는 seed를 비용 순으로 큐 사이에 넣어 한 출발점 탐색처럼 칸을 비용 순으로 내보냅니다. 영역 안에 더 가까운 칸이 없는 seed 칸은 경계 너머로 걷습니다(`FlowFieldNextCell.Portal`). 그래서 닿는 두 영역은 둘을 덮는 Manager 하나와 모든 칸의 걸음 수가 같습니다.
+  - 어느 영역에도 없는 Goal은 각 영역의 바깥 경계 칸에서 직선 추정(셀 단위 Chebyshev 거리)으로 시작합니다. 이동 주체는 가장 가까운 경계까지 가서 멈춥니다. 영역 밖으로 가는 흐름은 없습니다.
+  - StaticBaked 영역은 자기 Goal을 구운 그대로 두고, World Goal은 구운 칸 위에서 런타임에 탐색합니다(Physics 없음).
+- **갱신과 epoch:**
+  - `FlowFieldBuildDriver`가 매 프레임 빌드 전에 각 world를 갱신합니다(`FlowFieldWorldGoals.Update`). 모든 영역 세션이 모든 World Goal을 가졌는지 보고, 입력(자기 칸, 자기 Goal 필드, 닿는 영역의 칸과 Goal 필드와 그 epoch)이 바뀐 곳만 seed를 다시 계산합니다.
+  - Goal 이동, 영역 들어오고 나감, 어느 영역의 새 입력(`BaseStamp`)은 새 epoch를 엽니다. seed는 그 epoch에 빌드된 이웃 필드에서만 옵니다. 바뀐 길을 거쳐 되돌아오는 옛 걸음 수가 서로를 끝없이 키우지 않게 하기 위해서입니다. 그런 이웃이 아직 없는 영역은 지금 필드를 유지합니다.
+  - 그래서 어느 영역의 입력이든 모든 World Goal이 Goal을 품은 영역부터 다시 퍼집니다. 이웃 하나를 지날 때마다 그 영역의 빌드 한 번이 걸립니다.
+- **경계를 넘는 조회:**
+  - World Goal의 조회는 닿는 영역의 칸을 자기 칸 옆에 둔 view(`FlowFieldStitchedCellView`)로 [샘플 안전 규칙](#샘플-안전-규칙)을 적용합니다. 닿는 영역의 칸은 자기 칸 뒤의 번호이고, 자기 좌표로 읽습니다.
+  - 경계 너머 걸음은 격자 밖에서 멈추지 않고, 그 걸음이 닿는 칸(불확실 영역, 막힘, 지면, 낙차와 높은 턱)으로 검사합니다. 닿는 영역의 칸은 그 영역의 최신 정보와 불확실 영역을 씁니다.
+  - 닿는 영역이 없는 경계 너머 걸음과, 영역의 Goal이 아닌 필드의 경계 너머 걸음은 격자 밖처럼 멈춥니다.
+- **공유 등록:**
+  - `FlowFieldWorld.RegisterDynamicObstacle`·`NotifyDynamicObstacleMoved`·`NotifyObstacleRegionDirty`와 `RegisterVectorModifier`·`NotifyModifierChanged`(와 해제)는 world의 모든 영역에 나눠 줍니다. 격자에 닿지 않는 영역은 등록만 유지하므로, 영역을 넘어 움직이는 장애물도 한 번 등록하면 됩니다.
+  - 매 프레임 빌드 전에 새로 들어온 영역, Fault 뒤 재시작한 영역, 다시 Init한 영역이 빠진 등록을 받습니다(`FlowFieldWorldRegistrations`). StaticBaked 영역은 받지 않고, 한 영역의 실패는 로그로 남기고 다른 영역을 막지 않습니다.
+
 ## Modifier
 
 - 적용 여부는 두 모드 모두 `FlowFieldVectorUtility.CanApplyModifier`로 판정합니다. 막힌 셀, Goal Anchor, 도달할 수 없는 셀, 기본 방향이 0인 셀에는 적용하지 않습니다.
@@ -456,6 +482,7 @@ Manager의 Obstacle Clearance, Max Slope, Max Step Height가 `Default` 유형입
 | `Protocol` | 빌드 단계, 풀이 중 Stop·Release, 거부·폐기된 빌드, Default Direction 동기화, 증분 결과와 fresh 결과의 일치 |
 | `Safety` | 샘플 안전 규칙: 막힘·지면 없음·격자 밖·낙차로 향하는 움직이는 샘플이 없는지 |
 | `Obstacles` | 등록·해제·파괴·순간이동, 불확실 영역, 미등록 장애물 sweep, 격자 왕복 |
+| `World` | World 영역: lattice·겹침·경계 칸 쌍, seed 탐색(Goal 칸 seed는 추가 Goal과 같은 필드, 여러 seed는 다중 출발 탐색과 같은 걸음 수), 닿는 두 영역과 하나의 Manager가 같은 걸음 수(두 모드), 경계를 넘는 이동 주체와 경계 너머 알림의 정지, 영역 밖 Goal, 장면 스트리밍, 공유 등록, StaticBaked 영역의 World Goal |
 | `Agents` | Agent 유형: Manager 설정과 같은 유형은 같은 필드, 넓은 유형은 기본 유형의 막힘을 포함하고 연결을 넘지 않음, 장애물·Goal·Modifier·켜고 끄기가 모든 유형에 닿음, 유형의 잘못된 값과 개수 변경의 Fault, StaticBaked 거부 |
 | `Modifiers`, `SpaceMode` | 빌드 중 Modifier 파괴, Priority, Space Mode 편집, Fault와 재시도, scheduler 등록 |
 | `Goal`, `EditorBake` | `FlowFieldGoalTarget`, Goal 반경, 추가 Goal(기본 Goal 자리에서 같은 필드, 입력 storm 뒤 fresh와 같고 게시된 필드가 바뀌지 않음, 가장 가까운 Goal, 핸들, 움직이는 기본 Goal·Group Goal과 번갈아 빌드, 빌드 중 Modifier 등록, 기본 Goal이 먼저 게시한 막힘, Manager API와 StaticBaked 거부), Editor 미리보기와 Volume 표시, Bake 거부·대상·복제·다시 Bake |
