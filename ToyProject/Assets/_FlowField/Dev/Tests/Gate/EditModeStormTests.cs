@@ -1,6 +1,7 @@
 using NUnit.Framework;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using static Common.FlowField.Tests.FlowFieldEditSessions;
 
 namespace Common.FlowField.Tests
 {
@@ -15,8 +16,6 @@ namespace Common.FlowField.Tests
     internal sealed class EditModeStormTests
     {
         private const int Steps = 24;
-        // Pumps that finish the owed builds; Surface2D begins one per pump.
-        private const int MaxSettlePumps = 64;
 
         private readonly FlowFieldTestLog _log = new FlowFieldTestLog();
 
@@ -53,7 +52,7 @@ namespace Common.FlowField.Tests
             {
                 FlowFieldManagerConfig current = WithGoal(manager, settings, null);
                 Start(session, bakeMode, current);
-                Settle(session, seed, -1);
+                Settle(session, Where(seed, -1));
                 Assert.That(session.TryGetFieldInfo(out FlowFieldFieldInfo info), Is.True, Where(seed, -1));
                 Bounds bounds = info.WorldBounds;
 
@@ -72,15 +71,15 @@ namespace Common.FlowField.Tests
 
                 FlowFieldManagerConfig final = WithGoal(manager, settings, StormTests.FinalGoal(bounds));
                 session.SubmitConfig(in final, FlowFieldConfigChange.Goal);
-                Settle(session, seed, Steps);
-                string afterStorm = Hash(session);
+                Settle(session, Where(seed, Steps));
+                string afterStorm = Hash(Published(session));
                 // What the storm left must still keep every field rule.
                 FlowFieldFieldChecks.AssertInvariants(Published(session));
 
                 fresh = Create(settings.SpaceMode);
                 Start(fresh, bakeMode, final);
-                Settle(fresh, seed, Steps);
-                Assert.That(afterStorm, Is.EqualTo(Hash(fresh)), Where(seed, Steps) + " the storm left a trace.");
+                Settle(fresh, Where(seed, Steps));
+                Assert.That(afterStorm, Is.EqualTo(Hash(Published(fresh))), Where(seed, Steps) + " the storm left a trace.");
             }
             finally
             {
@@ -134,49 +133,6 @@ namespace Common.FlowField.Tests
             FlowFieldManagerConfig config = WithGoal(manager, settings, goal);
             session.SubmitConfig(in config, FlowFieldConfigChange.Goal);
             return config;
-        }
-
-        private static FlowFieldSession Create(FlowFieldSpaceMode spaceMode)
-            => spaceMode == FlowFieldSpaceMode.Volume3D ? FlowFieldSession.CreateVolume() : FlowFieldSession.CreateSurface();
-
-        // Init's order: the bake mode, then the whole settings as a rebuild.
-        private static void Start(FlowFieldSession session, FlowFieldBakeMode bakeMode, in FlowFieldManagerConfig config)
-        {
-            session.Initialize(bakeMode);
-            session.SubmitConfig(in config, FlowFieldConfigChange.Rebuild);
-        }
-
-        private static FlowFieldManagerConfig WithGoal(FlowFieldManager manager, in FlowFieldManagerConfig settings, Vector3? goal)
-            => new FlowFieldManagerConfig(
-                settings.SpaceMode,
-                settings.BakeMode,
-                in settings.Grid,
-                in settings.Surface,
-                in settings.Obstacles,
-                in settings.Flow,
-                in settings.BakeAssets,
-                manager.transform,
-                goal.HasValue,
-                goal ?? default);
-
-        // Runs every owed build to its end, waiting for the worker.
-        private static void Settle(FlowFieldSession session, int seed, int step)
-        {
-            for (int pump = 0; pump < MaxSettlePumps && (session.HasActiveBuild || session.HasOwedInput || session.HasPendingRequest); pump++)
-                session.Pump();
-            Assert.That(session.IsFaulted, Is.False, Where(seed, step) + " faulted: " + session.LastError);
-            Assert.That(session.HasActiveBuild || session.HasOwedInput || session.HasPendingRequest, Is.False,
-                Where(seed, step) + " never settled.");
-            Assert.That(session.IsReady, Is.True, Where(seed, step) + " has no field.");
-        }
-
-        private static string Hash(FlowFieldSession session)
-            => FlowFieldFieldHash.Format(FlowFieldFieldHash.Compute(Published(session)));
-
-        private static FlowFieldField Published(FlowFieldSession session)
-        {
-            Assert.That(session.TryGetPublishedField(out FlowFieldField field), Is.True);
-            return field;
         }
 
         private static string Where(int seed, int step) => $"seed {seed}, step {step}:";
