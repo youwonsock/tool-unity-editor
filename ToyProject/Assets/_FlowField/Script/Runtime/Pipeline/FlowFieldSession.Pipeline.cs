@@ -62,7 +62,7 @@ namespace Common.FlowField
             {
                 // Inside the try, so a failing sweep faults this session only.
                 if (_releasedInScene.Count > 0)
-                    RecheckReleasedColliders();
+                    _releasedInScene.Recheck(Time.frameCount, _reportReleasedGone);
                 if (sweep)
                     RunObstacleSweep();
                 int begun = 0;

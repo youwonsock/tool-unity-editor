@@ -58,6 +58,7 @@ namespace Common.FlowField
             _builder = createBuilder?.Invoke(new BuildHost(this))
                 ?? throw new ArgumentNullException(nameof(createBuilder));
             _sweep = new FlowFieldObstacleSweep(ApplySweptChange);
+            _reportReleasedGone = ReportReleasedGone;
         }
 
         internal static FlowFieldSession CreateSurface(FlowFieldExecutionBoundary boundary = null)
@@ -113,24 +114,10 @@ namespace Common.FlowField
         /// <summary>The registered dynamic obstacles, the same in both modes.</summary>
         internal FlowFieldObstacleRegistry Obstacles { get; } = new FlowFieldObstacleRegistry();
 
-        // Colliders unregistered while still in the scene, where they were and
-        // in which frame (see RecheckReleasedColliders).
-        private readonly System.Collections.Generic.List<ReleasedCollider> _releasedInScene
-            = new System.Collections.Generic.List<ReleasedCollider>(4);
-
-        private readonly struct ReleasedCollider
-        {
-            internal readonly Collider Collider;
-            internal readonly Bounds Bounds;
-            internal readonly int Frame;
-
-            internal ReleasedCollider(Collider collider, Bounds bounds, int frame)
-            {
-                Collider = collider;
-                Bounds = bounds;
-                Frame = frame;
-            }
-        }
+        // Colliders unregistered while still in the scene, rechecked before
+        // each pump's builds, and the callback that reports one gone.
+        private readonly FlowFieldReleasedColliders _releasedInScene = new FlowFieldReleasedColliders();
+        private readonly Action<Bounds> _reportReleasedGone;
 
         /// <summary>
         /// Whether the unregistered obstacle sweep runs in this session: the

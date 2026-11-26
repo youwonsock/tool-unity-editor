@@ -3,6 +3,18 @@ using UnityEngine;
 
 namespace Common.FlowField
 {
+    /// <summary>What a command deferred from Modifier code does if the session stopped before it ran.</summary>
+    internal enum FlowFieldDeferredKind
+    {
+        // Runs only while the session runs.
+        Command,
+        // A registration reported as accepted: dropping it leaves a warning.
+        ModifierRegistration,
+        ObstacleRegistration,
+        // Also runs while the session is faulted, as it would outside the operation.
+        Removal,
+    }
+
     /// <summary>
     /// The input both space modes share: settings, obstacle and Modifier
     /// commands, and the uncertain regions they mark.
@@ -85,27 +97,27 @@ namespace Common.FlowField
 
         // Kept apart so only a deferred call allocates the closure.
         private bool DeferRegisterModifier(IFlowFieldVectorModifier modifier)
-            => Defer(() => RegisterModifierNow(modifier), "Modifier");
+            => Defer(() => RegisterModifierNow(modifier), FlowFieldDeferredKind.ModifierRegistration);
 
         private bool DeferUnregisterModifier(IFlowFieldVectorModifier modifier)
-            => Defer(() => UnregisterModifierNow(modifier), removal: true);
+            => Defer(() => UnregisterModifierNow(modifier), FlowFieldDeferredKind.Removal);
 
         private void DeferNotifyModifierChanged(IFlowFieldVectorModifier modifier, FlowFieldModifierChange change)
             => Defer(() =>
             {
                 NotifyModifierChangedNow(modifier, change);
                 return true;
-            });
+            }, FlowFieldDeferredKind.Command);
 
         private bool DeferRegisterObstacle(Collider collider)
-            => Defer(() => RegisterObstacleNow(collider), "obstacle");
+            => Defer(() => RegisterObstacleNow(collider), FlowFieldDeferredKind.ObstacleRegistration);
 
         private bool DeferUnregisterObstacle(Collider collider)
-            => Defer(() => UnregisterObstacleNow(collider), removal: true);
+            => Defer(() => UnregisterObstacleNow(collider), FlowFieldDeferredKind.Removal);
 
-        private bool Defer(Func<bool> command, string registration = null, bool removal = false)
+        private bool Defer(Func<bool> command, FlowFieldDeferredKind kind)
         {
-            Boundary.Defer(() => RunDeferred(command, registration, removal));
+            Boundary.Defer(() => RunDeferred(command, kind));
             return true;
         }
 
@@ -113,12 +125,14 @@ namespace Common.FlowField
         // already cleared what a removal would have changed, but a registration
         // that was reported as accepted is lost, so it leaves a warning. A removal
         // still runs when the operation faulted, as it would have outside it.
-        private void RunDeferred(Func<bool> command, string registration, bool removal)
+        private void RunDeferred(Func<bool> command, FlowFieldDeferredKind kind)
         {
-            if (IsInitialized || removal && IsFaulted)
+            if (IsInitialized || kind == FlowFieldDeferredKind.Removal && IsFaulted)
                 command();
-            else if (registration != null)
-                Debug.LogWarning($"[FlowField] The session stopped, so a deferred {registration} registration was dropped.");
+            else if (kind == FlowFieldDeferredKind.ModifierRegistration)
+                Debug.LogWarning("[FlowField] The session stopped, so a deferred Modifier registration was dropped.");
+            else if (kind == FlowFieldDeferredKind.ObstacleRegistration)
+                Debug.LogWarning("[FlowField] The session stopped, so a deferred obstacle registration was dropped.");
         }
 
         // The Manager has checked the bounds are finite and refuses this, like
@@ -206,45 +220,14 @@ namespace Common.FlowField
             // A faulted or stopped session may retry or start again in this
             // frame, before the Destroy, so it is rechecked as well.
             if (change.Current.HasValue)
-                RememberReleased(new ReleasedCollider(collider, change.Current.Value, Time.frameCount));
+                _releasedInScene.Remember(collider, change.Current.Value, Time.frameCount);
             return true;
         }
 
-        private void RememberReleased(ReleasedCollider released)
-        {
-            for (int index = 0; index < _releasedInScene.Count; index++)
-            {
-                if (ReferenceEquals(_releasedInScene[index].Collider, released.Collider))
-                {
-                    _releasedInScene[index] = released;
-                    return;
-                }
-            }
-            _releasedInScene.Add(released);
-        }
-
-        // A Collider unregistered while still in the scene can count as a
-        // static obstacle, and the build that starts next scans it so. Destroy
-        // removes it only at the end of a frame, after that scan, and nothing
-        // would report its spot again. So for the next two frames its spot is
-        // reported once more as soon as it has left the scene.
-        private void RecheckReleasedColliders()
-        {
-            for (int index = _releasedInScene.Count - 1; index >= 0; index--)
-            {
-                ReleasedCollider released = _releasedInScene[index];
-                int age = Time.frameCount - released.Frame;
-                if (age <= 0)
-                    continue;
-                Collider collider = released.Collider;
-                bool inScene = collider != null && collider.enabled && collider.gameObject.activeInHierarchy;
-                if (inScene && age < 2)
-                    continue;
-                _releasedInScene.RemoveAt(index);
-                if (!inScene)
-                    ApplyObstacleChange(FlowFieldObstacleChange.RegionDirty(released.Bounds, null));
-            }
-        }
+        // A Collider released while still in the scene has left it: its spot
+        // is scanned again (FlowFieldReleasedColliders).
+        private void ReportReleasedGone(Bounds bounds)
+            => ApplyObstacleChange(FlowFieldObstacleChange.RegionDirty(bounds, null));
 
         // The Manager refuses it inside Modifier code, so it never waits.
         internal bool NotifyObstacleMovedCommand(Collider collider)
