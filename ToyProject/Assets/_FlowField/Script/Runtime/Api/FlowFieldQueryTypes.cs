@@ -25,7 +25,7 @@ namespace Common.FlowField
 
         /// <summary>No Goal: SetGoal with it clears the Goal.</summary>
         public static FlowFieldGoalRequest None
-            => new FlowFieldGoalRequest(false, default, 0f);
+            => new FlowFieldGoalRequest(hasGoal: false, default, 0f);
 
         /// <summary>A Goal at a world position.</summary>
         /// <exception cref="ArgumentOutOfRangeException">
@@ -38,7 +38,7 @@ namespace Common.FlowField
                 throw new ArgumentOutOfRangeException(nameof(worldPosition));
             if (!FlowFieldGridSpace.IsFinite(influenceRadius) || influenceRadius < 0f)
                 throw new ArgumentOutOfRangeException(nameof(influenceRadius));
-            return new FlowFieldGoalRequest(true, worldPosition, influenceRadius);
+            return new FlowFieldGoalRequest(hasGoal: true, worldPosition, influenceRadius);
         }
 
         /// <summary>
@@ -114,6 +114,6 @@ namespace Common.FlowField
 
         /// <summary>No direction, no speed, no surface and no cell: what a failed read returns.</summary>
         public static FlowFieldSample Stopped
-            => new FlowFieldSample(Vector3.zero, 0f, Vector3.zero, false, false);
+            => new FlowFieldSample(Vector3.zero, 0f, Vector3.zero, hasSurface: false, hasCell: false);
     }
 }

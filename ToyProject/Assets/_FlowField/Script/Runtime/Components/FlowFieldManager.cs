@@ -363,7 +363,7 @@ namespace Common.FlowField
         {
             if (_goalTransform == null || _hasExplicitGoal)
                 return;
-            ChangeExplicitGoal(true, _goalTransform.position);
+            ChangeExplicitGoal(hasGoal: true, _goalTransform.position);
         }
 
         // A Goal without its own radius (the Goal Transform's) uses the
@@ -412,7 +412,7 @@ namespace Common.FlowField
             Modifiers.Detach();
             owner.Release();
             // The Goal is input like the registrations Release clears.
-            ChangeExplicitGoal(false, default);
+            ChangeExplicitGoal(hasGoal: false, default);
             unchecked { GoalLifetime++; }
         }
 

@@ -31,7 +31,7 @@ namespace Common.FlowField
         }
 
         internal static FlowFieldSurfaceGoalResolution None
-            => new FlowFieldSurfaceGoalResolution(false, false, 0, 0, -1, 0f, default);
+            => new FlowFieldSurfaceGoalResolution(hasActiveGoal: false, isValid: false, 0, 0, -1, 0f, default);
     }
 
     internal static class FlowFieldSurfaceGoalResolver
@@ -135,6 +135,6 @@ namespace Common.FlowField
         }
 
         internal static FlowFieldSurfaceGoalSolveInput None
-            => new FlowFieldSurfaceGoalSolveInput(false, -1, 0f);
+            => new FlowFieldSurfaceGoalSolveInput(hasGoal: false, -1, 0f);
     }
 }

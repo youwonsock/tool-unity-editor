@@ -152,7 +152,7 @@ namespace Common.FlowField
                     heldVersion = GoalVersion;
                     return;
                 }
-                ChangeExplicitGoal(false, default);
+                ChangeExplicitGoal(hasGoal: false, default);
             }
             else
             {
@@ -170,7 +170,7 @@ namespace Common.FlowField
                     heldVersion = GoalVersion;
                     return;
                 }
-                ChangeExplicitGoal(true, request.WorldPosition, request.InfluenceRadius);
+                ChangeExplicitGoal(hasGoal: true, request.WorldPosition, request.InfluenceRadius);
             }
 
             heldVersion = GoalVersion;
@@ -183,7 +183,7 @@ namespace Common.FlowField
         {
             if (!IsFaulted || !_hasExplicitGoal)
                 return;
-            ChangeExplicitGoal(false, default);
+            ChangeExplicitGoal(hasGoal: false, default);
         }
 
         /// <inheritdoc/>
