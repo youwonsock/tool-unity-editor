@@ -84,7 +84,7 @@ namespace Common.FlowField
     /// observes a Modifier between its notifications. The caller enters the
     /// user-code boundary around calls that run Modifier code.
     /// </summary>
-    internal sealed class FlowFieldModifierRegistry
+    internal sealed class FlowFieldModifierRegistry : IFlowFieldModifierView
     {
         private readonly List<FlowFieldModifierEntry> _entries = new List<FlowFieldModifierEntry>(16);
         private readonly Func<IFlowFieldModifierArea> _createArea;
@@ -94,10 +94,10 @@ namespace Common.FlowField
             _createArea = createArea;
         }
 
-        internal IReadOnlyList<FlowFieldModifierEntry> Entries => _entries;
+        public IReadOnlyList<FlowFieldModifierEntry> Entries => _entries;
         internal int Count => _entries.Count;
 
-        internal bool Contains(IFlowFieldVectorModifier modifier) => Find(modifier) != null;
+        public bool Contains(IFlowFieldVectorModifier modifier) => Find(modifier) != null;
 
         internal FlowFieldModifierEntry Get(IFlowFieldVectorModifier modifier) => Find(modifier);
 
@@ -191,7 +191,7 @@ namespace Common.FlowField
                     $"FlowField modifier '{modifier.GetType().Name}' returned a null snapshot.");
 
         /// <summary>Every Modifier's snapshot and Influence Collider, in priority order.</summary>
-        internal FlowFieldModifierWorkItem[] CaptureSnapshots()
+        public FlowFieldModifierWorkItem[] CaptureSnapshots()
         {
             if (_entries.Count == 0)
                 return Array.Empty<FlowFieldModifierWorkItem>();

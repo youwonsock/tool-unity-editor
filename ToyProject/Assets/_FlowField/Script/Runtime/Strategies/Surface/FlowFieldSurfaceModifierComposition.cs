@@ -29,7 +29,7 @@ namespace Common.FlowField
 
     internal sealed class FlowFieldSurfaceModifierComposition
     {
-        private readonly FlowFieldModifierRegistry _registry;
+        private readonly IFlowFieldModifierView _registry;
         private readonly List<FlowFieldSurfaceModifierLayer> _runtimeLayers = new List<FlowFieldSurfaceModifierLayer>(16);
         private readonly FlowFieldSurfaceComposeRun _composeRun = new FlowFieldSurfaceComposeRun();
         private Collider[] _overlapBuffer;
@@ -38,7 +38,7 @@ namespace Common.FlowField
         internal static FlowFieldSurfaceModifierArea AreaOf(FlowFieldModifierEntry entry)
             => (FlowFieldSurfaceModifierArea)entry.Area;
 
-        internal FlowFieldSurfaceModifierComposition(FlowFieldModifierRegistry registry)
+        internal FlowFieldSurfaceModifierComposition(IFlowFieldModifierView registry)
         {
             if (registry == null)
                 throw new ArgumentNullException(nameof(registry));

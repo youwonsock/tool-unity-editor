@@ -34,7 +34,7 @@ namespace Common.FlowField
 
             // The sweep decides what the masks hold, so starting or stopping
             // it rebuilds every obstacle.
-            bool sweepsObstacles = _session.SweepsObstacles;
+            bool sweepsObstacles = _host.SweepsObstacles;
             if (sweepsObstacles != _masksSweep)
             {
                 _masksSweep = sweepsObstacles;
@@ -164,7 +164,7 @@ namespace Common.FlowField
 
         private FlowFieldCellRect RebuildModifierAreaData(in FlowFieldSurfaceRequest request)
         {
-            using FlowFieldExecutionBoundary.OperationScope userCode = _session.Boundary.EnterUserCode();
+            using FlowFieldExecutionBoundary.OperationScope userCode = _host.EnterUserCode();
             return _modifierComposition.RebuildAreaData(
                 new FlowFieldSurfaceModifierBuildRequest(
                     _state.Grid,
@@ -187,7 +187,7 @@ namespace Common.FlowField
             FlowFieldCellRect region = _state.DirtyFinalRegion.IsValid
                 ? _state.DirtyFinalRegion
                 : FlowFieldCellRect.Full(_state.Grid);
-            using (_session.Boundary.EnterUserCode())
+            using (_host.EnterUserCode())
             {
                 _modifierComposition.BeginFinalField(
                     new FlowFieldSurfaceModifierBuildRequest(
@@ -210,7 +210,7 @@ namespace Common.FlowField
         private void ContinueCompose()
         {
             bool finished;
-            using (_session.Boundary.EnterUserCode())
+            using (_host.EnterUserCode())
                 finished = _modifierComposition.StepFinalField(in _composeStage.FrameBudget);
             // StepBuild yields until the composition finishes.
             if (!finished)

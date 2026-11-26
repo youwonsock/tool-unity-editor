@@ -62,7 +62,7 @@ namespace Common.FlowField
         /// layer. A registered Collider that moves or leaves later in the build
         /// is notified, and its uncertain region outlives this build.
         /// </summary>
-        internal void CaptureRegistered(FlowFieldObstacleRegistry registry)
+        internal void CaptureRegistered(IFlowFieldObstacleView registry)
         {
             Array.Clear(_registered, 0, _registeredCount);
             _registeredCount = 0;

@@ -62,14 +62,14 @@ namespace Common.FlowField
         private bool _commitIncludeBase;
         private FlowFieldCellRect _commitRegion;
 
-        // The session that runs this builder. Lifecycle, events and the build
-        // loop live there.
-        private readonly FlowFieldSession _session;
+        // What this builder reads from the session that runs it. Lifecycle,
+        // events and the build loop live there.
+        private readonly IFlowFieldBuildHost _host;
 
-        internal FlowFieldSurfaceBuilder(FlowFieldSession session, IFlowFieldSurfaceSource surfaceSource = null)
+        internal FlowFieldSurfaceBuilder(IFlowFieldBuildHost host, IFlowFieldSurfaceSource surfaceSource = null)
         {
-            _session = session ?? throw new ArgumentNullException(nameof(session));
-            _obstacleMasks = new FlowFieldSurfaceObstacleMasks(session.Obstacles);
+            _host = host ?? throw new ArgumentNullException(nameof(host));
+            _obstacleMasks = new FlowFieldSurfaceObstacleMasks(host.Obstacles);
             _baseStage = new FlowFieldSurfaceBaseStage(
                 _state,
                 _obstacleMasks,
@@ -88,7 +88,7 @@ namespace Common.FlowField
                 _ => FlowFieldSurfaceSourceKind.SceneBuild,
             };
             _state.BakedBaseTouched = null;
-            _modifierComposition ??= new FlowFieldSurfaceModifierComposition(_session.Modifiers);
+            _modifierComposition ??= new FlowFieldSurfaceModifierComposition(_host.Modifiers);
             PrepareSolveBackend();
             MarkDirty(FlowFieldSurfaceDirtyFlags.All, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
         }

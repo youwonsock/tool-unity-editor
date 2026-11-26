@@ -9,7 +9,7 @@ namespace Common.FlowField
     /// notified; the region stays uncertain until a build that queried it after
     /// the change is published, and movers in it stop until then.
     /// </summary>
-    internal sealed class FlowFieldSafety
+    internal sealed class FlowFieldSafety : IFlowFieldUncertainRegions
     {
         private const int MaxUncertainBounds = 64;
         // Surface2D compares regions with cells in XZ only.
@@ -23,7 +23,7 @@ namespace Common.FlowField
 
         internal FlowFieldSafety(bool planar) => _planar = planar;
 
-        internal int UncertainRegionCount => _uncertainBounds.Count + _observingBounds.Count;
+        public int UncertainRegionCount => _uncertainBounds.Count + _observingBounds.Count;
 
         internal void ClearRegions()
         {
@@ -69,7 +69,7 @@ namespace Common.FlowField
         /// </summary>
         internal void BuildAbandoned() => _awaitingPublish = false;
 
-        internal Bounds[] ObservedRegions() => _observingBounds.ToArray();
+        public Bounds[] ObservedRegions() => _observingBounds.ToArray();
 
         // New obstacle settings make the whole region uncertain as given,
         // without the cell and clearance margin MarkDirty adds.

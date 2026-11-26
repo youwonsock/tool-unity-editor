@@ -52,7 +52,7 @@ namespace Common.FlowField
             float clearance,
             bool[] destination,
             FlowFieldCellRect region,
-            FlowFieldObstacleRegistry registeredObstacles,
+            IFlowFieldObstacleView registeredObstacles,
             ref Collider[] overlapBuffer,
             ref Collider[] targetOverlapBuffer)
         {
@@ -89,7 +89,7 @@ namespace Common.FlowField
             float clearance,
             bool[] destination,
             FlowFieldCellRect region,
-            FlowFieldObstacleRegistry registered,
+            IFlowFieldObstacleView registered,
             ref Collider[] overlapBuffer)
         {
             FlowFieldSurfaceMaskArguments.ValidateTarget(grid, surface, destination);
@@ -266,7 +266,7 @@ namespace Common.FlowField
         private struct StaticObstaclePolicy : IObstaclePolicy
         {
             public Collider[] TargetBuffer;
-            public FlowFieldObstacleRegistry Registered;
+            public IFlowFieldObstacleView Registered;
 
             // GameObject.isStatic is always false in a Player, so it cannot
             // decide this. A Collider without a Rigidbody is what the physics

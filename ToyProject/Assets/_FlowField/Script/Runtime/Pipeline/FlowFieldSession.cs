@@ -50,19 +50,19 @@ namespace Common.FlowField
 
         internal FlowFieldSession(
             FlowFieldExecutionBoundary boundary,
-            Func<FlowFieldSession, IFlowFieldSpaceBuilder> createBuilder)
+            Func<IFlowFieldBuildHost, IFlowFieldSpaceBuilder> createBuilder)
         {
             Boundary = boundary ?? new FlowFieldExecutionBoundary();
-            _builder = createBuilder?.Invoke(this)
+            _builder = createBuilder?.Invoke(new BuildHost(this))
                 ?? throw new ArgumentNullException(nameof(createBuilder));
             _sweep = new FlowFieldObstacleSweep(ApplySweptChange);
         }
 
         internal static FlowFieldSession CreateSurface(FlowFieldExecutionBoundary boundary = null)
-            => new FlowFieldSession(boundary, session => new FlowFieldSurfaceBuilder(session, null));
+            => new FlowFieldSession(boundary, host => new FlowFieldSurfaceBuilder(host, null));
 
         internal static FlowFieldSession CreateVolume(FlowFieldExecutionBoundary boundary = null)
-            => new FlowFieldSession(boundary, session => new FlowFieldVolumeBuilder(session));
+            => new FlowFieldSession(boundary, host => new FlowFieldVolumeBuilder(host));
 
         /// <summary>
         /// An isolated Surface2D bake session on the ground the bake scanned.
@@ -72,7 +72,7 @@ namespace Common.FlowField
         internal static FlowFieldSession CreateSurfaceBake(IFlowFieldSurfaceSource ground, out FlowFieldSurfaceBuilder builder)
         {
             FlowFieldSurfaceBuilder created = null;
-            var session = new FlowFieldSession(null, owner => created = new FlowFieldSurfaceBuilder(owner, ground));
+            var session = new FlowFieldSession(null, host => created = new FlowFieldSurfaceBuilder(host, ground));
             builder = created;
             return session;
         }
@@ -81,9 +81,25 @@ namespace Common.FlowField
         internal static FlowFieldSession CreateVolumeBake(out FlowFieldVolumeBuilder builder)
         {
             FlowFieldVolumeBuilder created = null;
-            var session = new FlowFieldSession(null, owner => created = new FlowFieldVolumeBuilder(owner));
+            var session = new FlowFieldSession(null, host => created = new FlowFieldVolumeBuilder(host));
             builder = created;
             return session;
+        }
+
+        // What the builder reads from this session. Every read goes to the
+        // session's own state, so the Modifier registry and the uncertain
+        // regions are still created on first use.
+        private sealed class BuildHost : IFlowFieldBuildHost
+        {
+            private readonly FlowFieldSession _session;
+
+            internal BuildHost(FlowFieldSession session) => _session = session;
+
+            public IFlowFieldObstacleView Obstacles => _session.Obstacles;
+            public IFlowFieldModifierView Modifiers => _session.Modifiers;
+            public IFlowFieldUncertainRegions UncertainRegions => _session.Safety;
+            public bool SweepsObstacles => _session.SweepsObstacles;
+            public FlowFieldExecutionBoundary.OperationScope EnterUserCode() => _session.Boundary.EnterUserCode();
         }
 
         private FlowFieldModifierRegistry _modifiers;

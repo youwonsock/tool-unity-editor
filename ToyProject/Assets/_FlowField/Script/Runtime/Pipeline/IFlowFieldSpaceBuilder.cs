@@ -53,8 +53,8 @@ namespace Common.FlowField
     /// What one space mode does inside the common <see cref="FlowFieldSession"/>:
     /// how it builds a field, reads it, and takes obstacle and Modifier input.
     /// The session owns the lifecycle, the events and the build loop and calls
-    /// these members; a builder reaches the session through the reference it
-    /// was created with.
+    /// these members; a builder reads the session only through the
+    /// <see cref="IFlowFieldBuildHost"/> it was created with.
     /// </summary>
     internal interface IFlowFieldSpaceBuilder
     {

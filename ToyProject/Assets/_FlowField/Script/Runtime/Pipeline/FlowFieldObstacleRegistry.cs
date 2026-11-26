@@ -53,7 +53,7 @@ namespace Common.FlowField
     /// reports both its old and new bounds, so the cells it left and the
     /// cells it reached are rebuilt.
     /// </summary>
-    internal sealed class FlowFieldObstacleRegistry
+    internal sealed class FlowFieldObstacleRegistry : IFlowFieldObstacleView
     {
         private const float MoveEpsilonSqr = 0.00000001f;
 
@@ -66,13 +66,13 @@ namespace Common.FlowField
         private readonly List<Bounds> _bounds = new List<Bounds>(16);
         private readonly Dictionary<Collider, int> _indices = new Dictionary<Collider, int>();
 
-        internal int Count => _colliders.Count;
-        internal Collider GetCollider(int index) => _colliders[index];
+        public int Count => _colliders.Count;
+        public Collider GetCollider(int index) => _colliders[index];
         // Where each Collider was last reported: registration or a notified move.
-        internal Bounds GetBounds(int index) => _bounds[index];
+        public Bounds GetBounds(int index) => _bounds[index];
 
         /// <summary>Whether the Collider is registered. Static masks leave these Colliders to the dynamic mask.</summary>
-        internal bool Contains(Collider collider)
+        public bool Contains(Collider collider)
             => !ReferenceEquals(collider, null) && _indices.ContainsKey(collider);
 
         private void RemoveAt(int index)

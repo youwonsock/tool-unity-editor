@@ -56,7 +56,7 @@ namespace Common.FlowField
         private Collider[] _overlapBuffer;
         private Collider[] _targetOverlapBuffer;
         // The session's registered obstacles; the dynamic mask is built from them.
-        private readonly FlowFieldObstacleRegistry _registry;
+        private readonly IFlowFieldObstacleView _registry;
 
         // The registered overlay, kept between rebuilds with what each Collider
         // was drawn as, so a rebuild redraws only the cells a change can reach:
@@ -90,7 +90,7 @@ namespace Common.FlowField
                 => IsTrigger == other.IsTrigger && Bounds.Equals(other.Bounds);
         }
 
-        internal FlowFieldSurfaceObstacleMasks(FlowFieldObstacleRegistry registry)
+        internal FlowFieldSurfaceObstacleMasks(IFlowFieldObstacleView registry)
         {
             _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         }

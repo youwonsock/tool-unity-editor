@@ -194,7 +194,7 @@ namespace Common.FlowField
             if (!build.ObstaclesSynced)
             {
                 Physics.SyncTransforms();
-                _cellQuery.CaptureRegistered(_session.Obstacles);
+                _cellQuery.CaptureRegistered(_host.Obstacles);
                 // The session observed the uncertain regions after this build
                 // began, so they are read here, before the first query.
                 if (build.PublishedBlocked != null)
@@ -278,7 +278,7 @@ namespace Common.FlowField
             _cellQuery.BeginModifierStep(
                 FlowFieldVolumeCellQuery.StepBounds(build.Request.Grid, _stepCells, count, cellHalf),
                 build.Modifiers);
-            using FlowFieldExecutionBoundary.OperationScope userCode = _session.Boundary.EnterUserCode();
+            using FlowFieldExecutionBoundary.OperationScope userCode = _host.EnterUserCode();
             for (int i = 0; i < count; i++)
             {
                 int index = _stepCells[i];
@@ -329,7 +329,7 @@ namespace Common.FlowField
 
         // Destroyed while still registered: never unregistered.
         private bool IsGone(in FlowFieldModifierWorkItem modifier)
-            => modifier.IsDestroyed && _session.Modifiers.Contains(modifier.Modifier);
+            => modifier.IsDestroyed && _host.Modifiers.Contains(modifier.Modifier);
 
         private bool HasDestroyedModifier(BuildContext build)
         {
@@ -471,8 +471,8 @@ namespace Common.FlowField
             _requests.Pending = false;
             _hasPendingModifierRecompose = false;
             FlowFieldModifierWorkItem[] modifierSnapshots;
-            using (_session.Boundary.EnterUserCode())
-                modifierSnapshots = _session.Modifiers.CaptureSnapshots();
+            using (_host.EnterUserCode())
+                modifierSnapshots = _host.Modifiers.CaptureSnapshots();
             // A recompose queries no obstacles, so it resolves no safety region.
             if (recompose)
             {
@@ -510,13 +510,13 @@ namespace Common.FlowField
                 // Collider moved before it would never be seen.
                 else if (request.BakeMode == FlowFieldBakeMode.BakedBase
                     && !queryEveryCell
-                    && !_session.SweepsObstacles)
+                    && !_host.SweepsObstacles)
                 {
                     // BakedBase starts again from the bake. With nothing that
                     // changed since, its obstacle results stand as baked.
                     _build.LoadsBakedObstacles = true;
                     _build.ReusesObstacleQueries = _safety.UncertainRegionCount == 0
-                        && _session.Obstacles.Count == 0
+                        && _host.Obstacles.Count == 0
                         && !_bakedBaseTouched.HasValue;
                 }
             }
@@ -559,7 +559,7 @@ namespace Common.FlowField
             if (_bakedBaseTouched.HasValue)
                 regions.Add(_bakedBaseTouched.Value);
             float margin = FlowFieldObstacleReach.Margin(build.Request.Grid.CellSize, build.Request.ObstacleClearance);
-            FlowFieldObstacleRegistry registry = _session.Obstacles;
+            IFlowFieldObstacleView registry = _host.Obstacles;
             for (int i = 0; i < registry.Count; i++)
             {
                 regions.Add(FlowFieldObstacleReach.Expand(registry.GetBounds(i), margin));

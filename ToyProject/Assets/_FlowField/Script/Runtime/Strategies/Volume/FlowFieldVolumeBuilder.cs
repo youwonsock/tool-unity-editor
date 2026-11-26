@@ -24,7 +24,7 @@ namespace Common.FlowField
         private readonly FlowFieldSpareArrays _spares = new FlowFieldSpareArrays();
         // The uncertain regions, which the session owns and updates. The
         // builder only reads them to limit its obstacle queries.
-        private FlowFieldSafety _safety => _session.Safety;
+        private IFlowFieldUncertainRegions _safety => _host.UncertainRegions;
 
         private VolumeFieldData _committed;
         private BuildContext _build;
@@ -42,13 +42,13 @@ namespace Common.FlowField
         private Bounds? _bakedBaseTouched;
         private FlowFieldBakeMode _bakeMode;
 
-        // The session that runs this builder. Lifecycle, events and the build
-        // loop live there.
-        private readonly FlowFieldSession _session;
+        // What this builder reads from the session that runs it. Lifecycle,
+        // events and the build loop live there.
+        private readonly IFlowFieldBuildHost _host;
 
-        internal FlowFieldVolumeBuilder(FlowFieldSession session)
+        internal FlowFieldVolumeBuilder(IFlowFieldBuildHost host)
         {
-            _session = session ?? throw new ArgumentNullException(nameof(session));
+            _host = host ?? throw new ArgumentNullException(nameof(host));
         }
 
         public FlowFieldSpaceMode SpaceMode => FlowFieldSpaceMode.Volume3D;
