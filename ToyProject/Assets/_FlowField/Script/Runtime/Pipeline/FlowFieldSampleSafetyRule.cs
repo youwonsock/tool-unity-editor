@@ -23,6 +23,7 @@ namespace Common.FlowField
     /// A published field can lag behind notified obstacle changes and the
     /// latest build: a sample that would take a mover into such a change
     /// stops, and a mover inside a cell that is now blocked is sent out.
+    /// What differs between the modes comes from an <see cref="IFlowFieldCellView"/>.
     /// </summary>
     internal static class FlowFieldSampleSafetyRule
     {
@@ -39,7 +40,11 @@ namespace Common.FlowField
         // The unit vector of each neighbor step; Surface2D uses the first 8.
         private static readonly Vector3[] StepDirections = CreateStepDirections();
 
-        /// <summary>Returns true and the sample to use when the rule overrides the published one.</summary>
+        /// <summary>
+        /// Returns true and the sample to use when the rule overrides the
+        /// published one. The latest cells serve only when they describe this
+        /// field; otherwise the published field answers.
+        /// </summary>
         internal static bool Apply(
             FlowFieldField field,
             int index,
@@ -49,8 +54,22 @@ namespace Common.FlowField
             IFlowFieldLatestCells latest,
             out FlowFieldSample sample)
         {
+            if (field.Grid.SpaceMode == FlowFieldSpaceMode.Volume3D)
+                return Apply(new FlowFieldVolumeCellView(field, regions), index, worldPosition, in published, out sample);
+            IFlowFieldLatestCells described = latest != null && latest.Describes(field) ? latest : null;
+            return Apply(new FlowFieldSurfaceCellView(field, described, regions), index, worldPosition, in published, out sample);
+        }
+
+        internal static bool Apply<TView>(
+            in TView cells,
+            int index,
+            Vector3 worldPosition,
+            in FlowFieldSample published,
+            out FlowFieldSample sample)
+            where TView : struct, IFlowFieldCellView
+        {
             sample = published;
-            var cells = new Cells(field, latest != null && latest.Describes(field) ? latest : null, regions);
+            FlowFieldField field = cells.Field;
 
             if (cells.IsUncertain(index) || !cells.IsWalkable(index))
             {
@@ -59,7 +78,7 @@ namespace Common.FlowField
             }
             if (cells.IsBlocked(index))
             {
-                sample = Escape(field, index, in cells, published);
+                sample = Escape(in cells, index, published);
                 return true;
             }
 
@@ -77,17 +96,17 @@ namespace Common.FlowField
             bool turned = direction != baseDirection;
             bool pathStep = next >= 0 && next != index;
             bool unsafeMove = pathStep
-                ? IsStepUnsafe(field.Grid, index, next, pathLink: true, in cells)
-                    || turned && IsHeadingUnsafe(field.Grid, index, direction, in cells)
+                ? IsStepUnsafe(in cells, index, next, pathLink: true)
+                    || turned && IsHeadingUnsafe(in cells, index, direction)
                 : next == FlowFieldNextCell.DefaultDirection && (turned
-                    ? IsHeadingUnsafe(field.Grid, index, direction, in cells)
-                    : IsDirectionUnsafe(field.Grid, index, baseDirection, in cells)
-                        || IsHeadingUnsafe(field.Grid, index, baseDirection, in cells));
+                    ? IsHeadingUnsafe(in cells, index, direction)
+                    : IsDirectionUnsafe(in cells, index, baseDirection)
+                        || IsHeadingUnsafe(in cells, index, baseDirection));
             // Off the path's own step, the step this mover crosses next along
             // the sample's direction, from where it is in its cell: a mover
             // drifting sideways reaches a ledge beside the way there.
             if (!unsafeMove && (next == FlowFieldNextCell.DefaultDirection || pathStep && turned))
-                unsafeMove = IsExitStepUnsafe(field.Grid, index, worldPosition, published.Direction, in cells);
+                unsafeMove = IsExitStepUnsafe(in cells, index, worldPosition, published.Direction);
             if (!unsafeMove)
                 return false;
             sample = Stop(published);
@@ -96,15 +115,14 @@ namespace Common.FlowField
 
         // Every cell of the box from this cell to the next, and the link
         // itself: the path's link for a path step, the ground's otherwise.
-        private static bool IsStepUnsafe(FlowFieldGridSpace grid, int index, int next, bool pathLink, in Cells cells)
+        private static bool IsStepUnsafe<TView>(in TView cells, int index, int next, bool pathLink)
+            where TView : struct, IFlowFieldCellView
         {
-            if (next >= grid.CellCount)
+            if (next >= cells.Grid.CellCount)
                 return true;
-            grid.Locate(index, out int x0, out int y0, out int z0);
-            grid.Locate(next, out int x1, out int y1, out int z1);
-            int direction = grid.SpaceMode == FlowFieldSpaceMode.Volume3D
-                ? FlowFieldNeighborUtility.FindDirectionIndex(x1 - x0, y1 - y0, z1 - z0)
-                : FlowFieldNeighborUtility.FindDirectionIndex(x1 - x0, z1 - z0);
+            cells.Locate(index, out int x0, out int y0, out int z0);
+            cells.Locate(next, out int x1, out int y1, out int z1);
+            int direction = cells.DirectionIndex(x1 - x0, y1 - y0, z1 - z0);
             if (direction < 0
                 || !(pathLink ? cells.HasLink(index, direction) : cells.HasGroundLink(index, direction)))
                 return true;
@@ -112,7 +130,7 @@ namespace Common.FlowField
             for (int y = Mathf.Min(y0, y1); y <= Mathf.Max(y0, y1); y++)
             for (int z = Mathf.Min(z0, z1); z <= Mathf.Max(z0, z1); z++)
             {
-                if (grid.TryLocal(x, y, z, out int cell) && cells.IsUnsafe(cell))
+                if (cells.TryCell(x, y, z, out int cell) && IsUnsafe(in cells, cell))
                     return true;
             }
             return false;
@@ -120,19 +138,15 @@ namespace Common.FlowField
 
         // Every cell the direction can step into along its non-zero axes; a
         // direction with none has nowhere to go.
-        private static bool IsDirectionUnsafe(
-            FlowFieldGridSpace grid,
-            int index,
-            Vector3 direction,
-            in Cells cells)
+        private static bool IsDirectionUnsafe<TView>(in TView cells, int index, Vector3 direction)
+            where TView : struct, IFlowFieldCellView
         {
-            bool volume = grid.SpaceMode == FlowFieldSpaceMode.Volume3D;
             int sx = Sign(direction.x, DirectionAxisThreshold);
-            int sy = volume ? Sign(direction.y, DirectionAxisThreshold) : 0;
+            int sy = cells.HasVerticalAxis ? Sign(direction.y, DirectionAxisThreshold) : 0;
             int sz = Sign(direction.z, DirectionAxisThreshold);
             if (sx == 0 && sy == 0 && sz == 0)
                 return true;
-            grid.Locate(index, out int x, out int y, out int z);
+            cells.Locate(index, out int x, out int y, out int z);
             for (int mask = 1; mask < 8; mask++)
             {
                 if ((mask & 1) != 0 && sx == 0 || (mask & 2) != 0 && sy == 0 || (mask & 4) != 0 && sz == 0)
@@ -140,7 +154,7 @@ namespace Common.FlowField
                 int tx = x + ((mask & 1) != 0 ? sx : 0);
                 int ty = y + ((mask & 2) != 0 ? sy : 0);
                 int tz = z + ((mask & 4) != 0 ? sz : 0);
-                if (!grid.TryLocal(tx, ty, tz, out int target) || cells.IsUnsafe(target))
+                if (!cells.TryCell(tx, ty, tz, out int target) || IsUnsafe(in cells, target))
                     return true;
             }
             return false;
@@ -149,12 +163,11 @@ namespace Common.FlowField
         // The nearest neighbor step to the direction, checked as a step. A
         // direction with no heading (none, or straight up or down on a
         // Surface) has nowhere to go.
-        private static bool IsHeadingUnsafe(FlowFieldGridSpace grid, int index, Vector3 direction, in Cells cells)
+        private static bool IsHeadingUnsafe<TView>(in TView cells, int index, Vector3 direction)
+            where TView : struct, IFlowFieldCellView
         {
-            bool volume = grid.SpaceMode == FlowFieldSpaceMode.Volume3D;
-            if (!volume)
-                direction.y = 0f;
-            int count = volume ? FlowFieldNeighborUtility.VolumeCount : FlowFieldNeighborUtility.SurfaceCount;
+            direction = cells.Planar(direction);
+            int count = cells.StepCount;
             int nearest = -1;
             float best = DirectionAxisThreshold;
             for (int i = 0; i < count; i++)
@@ -168,13 +181,13 @@ namespace Common.FlowField
             }
             if (nearest < 0)
                 return true;
-            grid.Locate(index, out int x, out int y, out int z);
-            return !grid.TryLocal(
+            cells.Locate(index, out int x, out int y, out int z);
+            return !cells.TryCell(
                     x + FlowFieldNeighborUtility.DeltaX[nearest],
                     y + FlowFieldNeighborUtility.DeltaY[nearest],
                     z + FlowFieldNeighborUtility.DeltaZ[nearest],
                     out int target)
-                || IsStepUnsafe(grid, index, target, pathLink: false, in cells);
+                || IsStepUnsafe(in cells, index, target, pathLink: false);
         }
 
         // The steps a mover at this position takes next in a straight line:
@@ -188,20 +201,15 @@ namespace Common.FlowField
         // fine, as the escape sends a mover back out, and so is a step up over
         // Max Step Height, which the mover meets like a wall: the check ends
         // there, and a turn along either keeps moving.
-        private static bool IsExitStepUnsafe(
-            FlowFieldGridSpace grid,
-            int index,
-            Vector3 worldPosition,
-            Vector3 direction,
-            in Cells cells)
+        private static bool IsExitStepUnsafe<TView>(in TView cells, int index, Vector3 worldPosition, Vector3 direction)
+            where TView : struct, IFlowFieldCellView
         {
-            bool volume = grid.SpaceMode == FlowFieldSpaceMode.Volume3D;
-            if (!volume)
-                direction.y = 0f;
+            FlowFieldGridSpace grid = cells.Grid;
+            direction = cells.Planar(direction);
             Vector3 offset = worldPosition - grid.CellCenter(index);
             float half = 0.5f * grid.CellSize;
             float toX = DistanceToFace(offset.x, direction.x, half);
-            float toY = volume ? DistanceToFace(offset.y, direction.y, half) : float.PositiveInfinity;
+            float toY = cells.HasVerticalAxis ? DistanceToFace(offset.y, direction.y, half) : float.PositiveInfinity;
             float toZ = DistanceToFace(offset.z, direction.z, half);
             float first = Mathf.Min(toX, Mathf.Min(toY, toZ));
             if (float.IsPositiveInfinity(first))
@@ -213,7 +221,7 @@ namespace Common.FlowField
             int sx = direction.x > 0f ? 1 : -1;
             int sy = direction.y > 0f ? 1 : -1;
             int sz = direction.z > 0f ? 1 : -1;
-            grid.Locate(index, out int x, out int y, out int z);
+            cells.Locate(index, out int x, out int y, out int z);
             // Each crossing is one face, or the faces reached together (an edge
             // or corner) as one diagonal step.
             float crossed = float.NegativeInfinity;
@@ -229,7 +237,7 @@ namespace Common.FlowField
                 int dx = toX > crossed && toX <= upTo ? sx : 0;
                 int dy = toY > crossed && toY <= upTo ? sy : 0;
                 int dz = toZ > crossed && toZ <= upTo ? sz : 0;
-                if (IsCrossingUnsafe(grid, volume, x, y, z, dx, dy, dz, in cells, out bool walled))
+                if (IsCrossingUnsafe(in cells, x, y, z, dx, dy, dz, out bool walled))
                     return true;
                 // A blocked cell or a step up stops the mover like a wall, so
                 // it slides on from here instead.
@@ -242,46 +250,31 @@ namespace Common.FlowField
             }
         }
 
-        // One crossing from cell (x, y, z): the cells it passes and, on a
-        // Surface2D, whether it drops. A diagonal may slip into either cell
-        // beside it, and on through one the mover can step into. Walled when
-        // the mover cannot enter the cell it crosses into.
-        private static bool IsCrossingUnsafe(
-            FlowFieldGridSpace grid,
-            bool volume,
+        // One crossing from cell (x, y, z): the cells it passes, then what the
+        // mode says about the crossing itself. Walled when the mover cannot
+        // enter the cell it crosses into.
+        private static bool IsCrossingUnsafe<TView>(
+            in TView cells,
             int x,
             int y,
             int z,
             int dx,
             int dy,
             int dz,
-            in Cells cells,
             out bool walled)
+            where TView : struct, IFlowFieldCellView
         {
             walled = false;
-            if (!grid.TryLocal(x + dx, y + dy, z + dz, out int target))
+            if (!cells.TryCell(x + dx, y + dy, z + dz, out int target))
                 return true;
             for (int cx = Mathf.Min(x, x + dx); cx <= Mathf.Max(x, x + dx); cx++)
             for (int cy = Mathf.Min(y, y + dy); cy <= Mathf.Max(y, y + dy); cy++)
             for (int cz = Mathf.Min(z, z + dz); cz <= Mathf.Max(z, z + dz); cz++)
             {
-                if (grid.TryLocal(cx, cy, cz, out int cell) && (cells.IsUncertain(cell) || !cells.IsWalkable(cell)))
+                if (cells.TryCell(cx, cy, cz, out int cell) && (cells.IsUncertain(cell) || !cells.IsWalkable(cell)))
                     return true;
             }
-            // A Volume3D link is missing only next to a blocked cell.
-            if (volume)
-            {
-                walled = cells.IsBlocked(target);
-                return false;
-            }
-            int from = grid.ToFlatIndex(x, z);
-            if (cells.IsDrop(from, target)
-                || dx != 0 && dz != 0
-                    && (cells.IsDropThrough(from, grid.ToFlatIndex(x + dx, z), target)
-                        || cells.IsDropThrough(from, grid.ToFlatIndex(x, z + dz), target)))
-                return true;
-            walled = cells.IsBlocked(target) || cells.IsStepUp(from, target);
-            return false;
+            return cells.IsCrossingUnsafe(x, y, z, dx, dy, dz, target, out walled);
         }
 
         // How far along the direction the face of one axis is.
@@ -309,35 +302,33 @@ namespace Common.FlowField
         // cross more of it on the way out (a Surface2D escape points to the
         // nearest open cell, which can be several cells away), so a blocked
         // target is fine; a notified change, no ground or the grid edge is not.
-        private static bool IsEscapeTargetUnsafe(FlowFieldGridSpace grid, int index, Vector3 escape, in Cells cells)
+        private static bool IsEscapeTargetUnsafe<TView>(in TView cells, int index, Vector3 escape)
+            where TView : struct, IFlowFieldCellView
         {
-            bool volume = grid.SpaceMode == FlowFieldSpaceMode.Volume3D;
-            grid.Locate(index, out int x, out int y, out int z);
-            return !grid.TryLocal(
+            cells.Locate(index, out int x, out int y, out int z);
+            return !cells.TryCell(
                     x + Sign(escape.x, EscapeAxisThreshold),
-                    y + (volume ? Sign(escape.y, EscapeAxisThreshold) : 0),
+                    y + (cells.HasVerticalAxis ? Sign(escape.y, EscapeAxisThreshold) : 0),
                     z + Sign(escape.z, EscapeAxisThreshold),
                     out int target)
                 || cells.IsUncertain(target)
                 || !cells.IsWalkable(target);
         }
 
-        private static FlowFieldSample Escape(FlowFieldField field, int index, in Cells cells, in FlowFieldSample published)
+        private static FlowFieldSample Escape<TView>(in TView cells, int index, in FlowFieldSample published)
+            where TView : struct, IFlowFieldCellView
         {
             Vector3 escape = cells.EscapeDirection(index);
             if (!FlowFieldGridSpace.IsFinite(escape)
                 || escape.sqrMagnitude <= FlowFieldVectorUtility.DirectionEpsilonSqr
-                || IsEscapeTargetUnsafe(field.Grid, index, escape, in cells))
+                || IsEscapeTargetUnsafe(in cells, index, escape))
                 return Stop(published);
-            if (field.Surface == null)
-                return new FlowFieldSample(escape, 1f, Vector3.zero, false, true);
-            Vector3 normal = FlowFieldVectorUtility.ValidateSurfaceNormal(field.Surface.GetSurfaceNormal(index));
-            Vector3 direction = Vector3.ProjectOnPlane(escape, normal);
-            direction = direction.sqrMagnitude > FlowFieldVectorUtility.DirectionEpsilonSqr
-                ? direction.normalized
-                : Vector3.zero;
-            return new FlowFieldSample(direction, 1f, normal, true, true);
+            return cells.EscapeSample(index, escape, in published);
         }
+
+        private static bool IsUnsafe<TView>(in TView cells, int index)
+            where TView : struct, IFlowFieldCellView
+            => cells.IsUncertain(index) || cells.IsBlocked(index) || !cells.IsWalkable(index);
 
         // A cell exists here, but nothing may move through it yet.
         private static FlowFieldSample Stop(in FlowFieldSample published)
@@ -345,87 +336,5 @@ namespace Common.FlowField
 
         private static int Sign(float value, float threshold)
             => value > threshold ? 1 : value < -threshold ? -1 : 0;
-
-        // The latest cells when the mode has them for this field, otherwise the
-        // published field itself, plus the notified uncertain regions.
-        private readonly struct Cells
-        {
-            private readonly FlowFieldField _field;
-            private readonly IFlowFieldLatestCells _latest;
-            private readonly FlowFieldSafety _regions;
-
-            internal Cells(FlowFieldField field, IFlowFieldLatestCells latest, FlowFieldSafety regions)
-            {
-                _field = field;
-                _latest = latest;
-                _regions = regions;
-            }
-
-            internal bool IsUncertain(int index)
-                => _regions != null && _regions.IsCellUncertain(_field.Grid, _field.Grid.CellCenter(index));
-
-            internal bool IsBlocked(int index)
-                => _latest != null ? _latest.IsBlocked(index) : _field.Blocked[index];
-
-            internal bool IsWalkable(int index)
-                => _latest != null
-                    ? _latest.IsWalkable(index)
-                    : _field.Surface == null || _field.Surface.IsSurfaceValid(index);
-
-            // The published link: a newly blocked cell on the way is caught by
-            // the cell checks around it.
-            internal bool HasLink(int index, int direction)
-                => (_field.Topology[index] & (1u << direction)) != 0u;
-
-            // The link the ground allows whatever the Goal. A Surface2D path
-            // links only cells inside the Goal's influence, so other steps
-            // read the published Surface's step links (Max Slope is a per-cell
-            // validity check), both sides of a diagonal as the path does. A
-            // Volume3D path links every open cell, so its links serve.
-            internal bool HasGroundLink(int index, int direction)
-            {
-                FlowFieldSurfaceData surface = _field.Surface;
-                if (surface == null)
-                    return HasLink(index, direction);
-                int mask = surface.NeighborMasks[index];
-                if ((mask & (1 << direction)) == 0)
-                    return false;
-                int dx = FlowFieldNeighborUtility.DeltaX[direction];
-                int dz = FlowFieldNeighborUtility.DeltaZ[direction];
-                return dx == 0 || dz == 0
-                    || (mask & (1 << (dx > 0 ? 0 : 1))) != 0 && (mask & (1 << (dz > 0 ? 2 : 3))) != 0;
-            }
-
-            // A Surface2D step down by more than Max Step Height, which the
-            // ground does not link: a ledge a mover cannot come back from.
-            internal bool IsDrop(int from, int to)
-            {
-                FlowFieldSurfaceData surface = _field.Surface;
-                return surface != null && surface.Heights[to] < surface.Heights[from] - surface.MaxStepHeight;
-            }
-
-            // A Surface2D step up by more than Max Step Height: the mover meets
-            // it like a wall.
-            internal bool IsStepUp(int from, int to)
-            {
-                FlowFieldSurfaceData surface = _field.Surface;
-                return surface != null && surface.Heights[to] > surface.Heights[from] + surface.MaxStepHeight;
-            }
-
-            // A diagonal's drop into the cell beside it, or beyond it when the
-            // mover can step into that cell.
-            internal bool IsDropThrough(int from, int beside, int to)
-                => IsDrop(from, beside) || !IsBlocked(beside) && !IsStepUp(from, beside) && IsDrop(beside, to);
-
-            internal Vector3 EscapeDirection(int index)
-                => _latest != null
-                    ? _latest.EscapeDirection(index)
-                    : _field.EscapeDirections != null
-                        ? _field.EscapeDirections[index]
-                        : _field.FinalDirections[index];
-
-            internal bool IsUnsafe(int index)
-                => IsUncertain(index) || IsBlocked(index) || !IsWalkable(index);
-        }
     }
 }
