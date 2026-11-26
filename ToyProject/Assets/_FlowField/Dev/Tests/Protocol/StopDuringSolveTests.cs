@@ -43,7 +43,8 @@ namespace Common.FlowField.Tests
                 manager.enabled = false;
             FlowFieldRuntimeState stopped = release ? FlowFieldRuntimeState.Released : FlowFieldRuntimeState.Suspended;
             Assert.That(session.State, Is.EqualTo(stopped), FlowFieldProtocolScenes.Describe(session));
-            Assert.That(session.LifetimeGeneration, Is.Not.EqualTo(generation), "The lifetime did not end, so a late solve callback would still count.");
+            Assert.That(session.LifetimeGeneration, Is.Not.EqualTo(generation), "The lifetime did not end, so its queued events would still be delivered.");
+            // The dropped build is what keeps a late solve callback out.
             Assert.That(session.HasActiveBuild, Is.False, "The stopped session kept its build: " + FlowFieldProtocolScenes.Describe(session));
             Assert.That(session.IsWaitingForExternalCompletion, Is.False, "The stopped session still waits for its solve.");
             Assert.That(FlowFieldBuildScheduler.Contains(session), Is.False, "The scheduler still pumps the stopped session.");
