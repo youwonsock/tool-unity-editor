@@ -7,8 +7,8 @@ namespace Common.FlowField
     /// The build pipeline both space modes run. A build begins, takes steps
     /// until it is published or rejected, and the session moves between
     /// Building and Ready around it and records which uncertain regions it
-    /// resolves. The builder only supplies the steps and says what each build
-    /// queries.
+    /// resolves. The builder begins each build and says what it queries; the
+    /// build supplies its steps.
     /// </summary>
     internal sealed partial class FlowFieldSession
     {
@@ -16,13 +16,13 @@ namespace Common.FlowField
         private void LeaveBuildingIfIdle()
         {
             if (Lifecycle == FlowFieldSessionLifecycle.Building
-                && !_builder.HasActiveBuild
+                && !HasActiveBuild
                 && !_builder.HasOwedInput
                 && _builder.PublishedField != null)
                 SetLifecycle(FlowFieldSessionLifecycle.Active);
         }
 
-        internal bool IsWaitingForExternalCompletion => _builder.IsWaitingForExternalCompletion;
+        internal bool IsWaitingForExternalCompletion => _activeBuild is { IsLive: true, IsWaitingForWorker: true };
 
         internal bool IsBuilding => CanPump && (IsRebuilding || HasPendingRequest);
 
@@ -68,7 +68,7 @@ namespace Common.FlowField
                 int begun = 0;
                 while (CanPump)
                 {
-                    if (!_builder.HasActiveBuild)
+                    if (!HasActiveBuild)
                     {
                         FlowFieldBuildPolicy policy = _builder.BuildPolicy;
                         if (begun >= policy.MaxBuildsBegunPerPump
@@ -79,7 +79,7 @@ namespace Common.FlowField
                             PruneDestroyedObstacles();
                             PruneDestroyedModifiers();
                         }
-                        bool started = _builder.TryBeginBuild(out FlowFieldBuildStart start);
+                        bool started = _builder.TryBeginBuild(out FlowFieldBuildStart start, out _activeBuild);
                         if (start.InvalidatedRegion.HasValue)
                             Safety.InvalidateRegion(start.InvalidatedRegion.Value);
                         if (!started)
@@ -92,14 +92,14 @@ namespace Common.FlowField
                         begun++;
                     }
 
-                    FlowFieldBuildStep step = _builder.StepBuild(in budget, waitForWorker);
+                    FlowFieldBuildStep step = _activeBuild.Step(in budget, waitForWorker);
                     if (!CanPump)
                         return;
                     switch (step)
                     {
                         case FlowFieldBuildStep.Completed:
                             // Only a field that reads differently is a new Revision.
-                            bool changed = _builder.PublishBuild();
+                            bool changed = _activeBuild.Publish();
                             Safety.BuildPublished();
                             if (changed)
                             {

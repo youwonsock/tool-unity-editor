@@ -53,6 +53,8 @@ namespace Common.FlowField
         }
 
         private BuildPhase _phase;
+        // The build the session steps: live while it is this one and a phase runs.
+        private ActiveBuild _build;
         // Advances with every CancelWork, so a solve callback from before it
         // is dropped (the session cancels on Stop, Restart, Release, Dispose
         // and a fault).
@@ -231,6 +233,7 @@ namespace Common.FlowField
         public void CancelWork()
         {
             unchecked { _cancelCount++; }
+            _build = null;
             _solveBackend?.Cancel();
             _composeStage.Clear();
             _phase = BuildPhase.None;

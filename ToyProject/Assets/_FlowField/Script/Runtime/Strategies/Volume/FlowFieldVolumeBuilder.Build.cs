@@ -392,7 +392,7 @@ namespace Common.FlowField
             return rects.ToArray();
         }
 
-        private bool CommitBuild(BuildContext build)
+        internal bool CommitBuild(BuildContext build)
         {
             // The solver or the static bake has already resolved the Goal. An
             // anchor flag must never change the published Goal identity.
@@ -426,36 +426,32 @@ namespace Common.FlowField
                 _spares.Queue = build.Queue ?? _spares.Queue;
                 _spares.Influence = build.Influence ?? _spares.Influence;
             }
+            build.End();
             _build = null;
             return changed;
         }
 
 
-        public bool IsWaitingForExternalCompletion
-            => _build != null && _build.SolveRunning && !_build.SolveHandle.IsCompleted;
-
         public FlowFieldBuildPolicy BuildPolicy => new FlowFieldBuildPolicy(beginsAfterBudget: false, maxBuildsBegunPerPump: int.MaxValue);
 
-        public bool HasActiveBuild => _build != null;
-
         // Every build but a Modifier recompose queries the obstacles.
-        public bool TryBeginBuild(out FlowFieldBuildStart start)
+        public bool TryBeginBuild(out FlowFieldBuildStart start, out IFlowFieldBuild build)
         {
             bool started = TryBeginPendingBuild();
             start = new FlowFieldBuildStart(started && !_build.IsModifierRecompose, null);
+            build = started ? _build : null;
             return started;
         }
 
-        public FlowFieldBuildStep StepBuild(in FlowFieldBuildBudget budget, bool waitForWorker)
+        // One step of the build the session runs; its context forwards here.
+        internal FlowFieldBuildStep Step(BuildContext build, in FlowFieldBuildBudget budget, bool waitForWorker)
         {
-            if (IsWaitingForExternalCompletion && !waitForWorker)
+            if (build.IsWaitingForWorker && !waitForWorker)
                 return FlowFieldBuildStep.Waiting;
-            if (StepBuild(_build, budget, waitForWorker))
+            if (StepBuild(build, budget, waitForWorker))
                 return FlowFieldBuildStep.Completed;
-            return _build.SolveRunning ? FlowFieldBuildStep.Waiting : FlowFieldBuildStep.Yield;
+            return build.SolveRunning ? FlowFieldBuildStep.Waiting : FlowFieldBuildStep.Yield;
         }
-
-        public bool PublishBuild() => CommitBuild(_build);
 
         public bool HasOwedInput => _requests.Pending || _hasPendingModifierRecompose;
 
@@ -477,6 +473,7 @@ namespace Common.FlowField
             if (recompose)
             {
                 _build = new BuildContext(
+                    this,
                     _committed,
                     modifierSnapshots,
                     FlowFieldSpareArrays.Take(ref _spares.FinalDirections, request.Grid.CellCount),
@@ -490,7 +487,7 @@ namespace Common.FlowField
                 bool queryEveryCell = _queryEveryCell;
                 _obstacleQueryRequired = false;
                 _queryEveryCell = false;
-                _build = new BuildContext(request, modifierSnapshots);
+                _build = new BuildContext(this, request, modifierSnapshots);
                 _build.RequiresFullQuery = requiresFullQuery;
                 _build.QueriesEveryCell = queryEveryCell;
                 if (reuseObstacles)
@@ -579,7 +576,7 @@ namespace Common.FlowField
                 _obstacleQueryRequired = true;
             if (previous != null && previous.QueriesEveryCell)
                 _queryEveryCell = true;
-            previous?.Dispose();
+            previous?.End();
         }
     }
 }

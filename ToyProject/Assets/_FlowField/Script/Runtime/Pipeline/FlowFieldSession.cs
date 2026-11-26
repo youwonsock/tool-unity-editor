@@ -37,6 +37,8 @@ namespace Common.FlowField
     {
         internal readonly FlowFieldExecutionBoundary Boundary;
         private readonly IFlowFieldSpaceBuilder _builder;
+        // The build the pipeline steps; one that is no longer live is done.
+        private IFlowFieldBuild _activeBuild;
         private FlowFieldSafety _safety;
         // The settings the latest request was built from; the uncertain-region
         // margin uses their Obstacle Clearance.
@@ -173,7 +175,7 @@ namespace Common.FlowField
         // TrySample can succeed inside the grid.
         internal bool IsReady => CanPump && _builder.PublishedField != null;
         internal bool HasPendingRequest => _builder.HasPendingRequest;
-        internal bool HasActiveBuild => _builder.HasActiveBuild;
+        internal bool HasActiveBuild => _activeBuild is { IsLive: true };
         internal bool HasOwedInput => _builder.HasOwedInput;
         internal Exception Fault { get; private set; }
         internal string LastError => Fault?.Message;
@@ -315,6 +317,7 @@ namespace Common.FlowField
         {
             unchecked { LifetimeGeneration++; }
             _builder.CancelWork();
+            _activeBuild = null;
             Safety.BuildAbandoned();
         }
 

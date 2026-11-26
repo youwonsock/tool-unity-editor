@@ -109,10 +109,14 @@ namespace Common.FlowField
     }
 
     /// <summary>
-    /// Private workspace and continuation cursors for one Volume3D build.
+    /// Private workspace and continuation cursors for one Volume3D build. The
+    /// builder that began it runs its stages.
     /// </summary>
-    internal sealed class FlowFieldVolumeBuildContext
+    internal sealed class FlowFieldVolumeBuildContext : IFlowFieldBuild
     {
+        private readonly FlowFieldVolumeBuilder _owner;
+        // Committed or discarded.
+        private bool _ended;
         internal readonly FlowFieldVolumeRequest Request;
         internal int Count => Request.Grid.CellCount;
         internal bool[] Blocked;
@@ -161,9 +165,11 @@ namespace Common.FlowField
         internal FlowFieldVolumeCellCursor ModifierCells;
 
         internal FlowFieldVolumeBuildContext(
+            FlowFieldVolumeBuilder owner,
             in FlowFieldVolumeRequest request,
             FlowFieldModifierWorkItem[] modifiers)
         {
+            _owner = owner;
             Request = request;
             Modifiers = modifiers ?? Array.Empty<FlowFieldModifierWorkItem>();
             Phase = FlowFieldVolumeBuildPhase.Allocate;
@@ -174,11 +180,12 @@ namespace Common.FlowField
         /// published arrays are shared read-only; only the final field is new.
         /// </summary>
         internal FlowFieldVolumeBuildContext(
+            FlowFieldVolumeBuilder owner,
             FlowFieldField<FlowFieldVolumeRequest> published,
             FlowFieldModifierWorkItem[] modifiers,
             Vector3[] finalDirections,
             float[] finalSpeeds)
-            : this(published.Request, modifiers)
+            : this(owner, published.Request, modifiers)
         {
             IsModifierRecompose = true;
             Blocked = published.Blocked;
@@ -193,6 +200,15 @@ namespace Common.FlowField
             FinalSpeeds = finalSpeeds;
             Phase = FlowFieldVolumeBuildPhase.Modifiers;
         }
+
+        public bool IsLive => !_ended;
+
+        public bool IsWaitingForWorker => !_ended && SolveRunning && !SolveHandle.IsCompleted;
+
+        public FlowFieldBuildStep Step(in FlowFieldBuildBudget budget, bool waitForWorker)
+            => _owner.Step(this, in budget, waitForWorker);
+
+        public bool Publish() => _owner.CommitBuild(this);
 
         // The obstacle stage then queries only the regions LimitToRegions names.
         internal void QueryOnlyChangedRegions(bool[] publishedBlocked) => PublishedBlocked = publishedBlocked;
@@ -282,9 +298,12 @@ namespace Common.FlowField
             _solvePins.Release();
         }
 
-        internal void Dispose()
+        // Committed or discarded: no longer live. A solve still running is
+        // cancelled; a committed build has already finished its own.
+        internal void End()
         {
             CancelSolve();
+            _ended = true;
         }
     }
 }

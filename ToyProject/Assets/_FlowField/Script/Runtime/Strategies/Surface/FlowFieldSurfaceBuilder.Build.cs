@@ -384,10 +384,7 @@ namespace Common.FlowField
                 && left.ContentEquals(right);
 
 
-        // A solve is running on a worker thread.
-        public bool IsWaitingForExternalCompletion => _phase == BuildPhase.WaitingSolve;
-
-        public bool HasActiveBuild => _phase != BuildPhase.None;
+        private bool HasActiveBuild => _phase != BuildPhase.None;
 
         // The base stages run in one frame so their Physics reads form one
         // snapshot, so one build begins per pump whatever the budget says.
@@ -395,8 +392,9 @@ namespace Common.FlowField
 
         public bool HasOwedInput => _requests.Pending || _configOwed;
 
-        public bool TryBeginBuild(out FlowFieldBuildStart start)
+        public bool TryBeginBuild(out FlowFieldBuildStart start, out IFlowFieldBuild build)
         {
+            build = null;
             Bounds? invalidated = null;
             if (_configOwed)
             {
@@ -408,10 +406,11 @@ namespace Common.FlowField
             if (!_requests.Pending)
                 return false;
             _phase = BuildPhase.Begin;
+            build = _build = new ActiveBuild(this);
             return true;
         }
 
-        public FlowFieldBuildStep StepBuild(in FlowFieldBuildBudget budget, bool waitForWorker)
+        private FlowFieldBuildStep StepBuild(in FlowFieldBuildBudget budget, bool waitForWorker)
         {
             _composeStage.FrameBudget = budget;
             try
@@ -461,7 +460,7 @@ namespace Common.FlowField
             }
         }
 
-        public bool PublishBuild()
+        private bool PublishBuild()
         {
             _phase = BuildPhase.None;
             return Commit(_commitRequest, _commitResultChanged, _commitIncludeBase, _commitRegion);
@@ -479,6 +478,25 @@ namespace Common.FlowField
             _commitIncludeBase = includeBase;
             _commitRegion = finalRegion;
             _phase = BuildPhase.Publish;
+        }
+
+        // The build the session steps. Its phase and commit arguments stay on
+        // the builder, which runs one build at a time.
+        private sealed class ActiveBuild : IFlowFieldBuild
+        {
+            private readonly FlowFieldSurfaceBuilder _owner;
+
+            internal ActiveBuild(FlowFieldSurfaceBuilder owner) => _owner = owner;
+
+            public bool IsLive => ReferenceEquals(_owner._build, this) && _owner._phase != BuildPhase.None;
+
+            public bool IsWaitingForWorker
+                => ReferenceEquals(_owner._build, this) && _owner._phase == BuildPhase.WaitingSolve;
+
+            public FlowFieldBuildStep Step(in FlowFieldBuildBudget budget, bool waitForWorker)
+                => _owner.StepBuild(in budget, waitForWorker);
+
+            public bool Publish() => _owner.PublishBuild();
         }
     }
 }
