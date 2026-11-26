@@ -29,14 +29,14 @@
 - Surface 풀이 완료 콜백은 자기 빌드를 붙잡고, 그 빌드가 아직 풀이를 기다릴 때만 진행합니다. 콜백은 `Poll` 안, 곧 그 빌드의 `Step` 안에서만 옵니다.
 - 조회: `TrySample`과 `TryClampPositionToGrid`는 예외 없이 상태를 돌려주는 `TrySampleStatus`·`TryClampStatus`를 쓰고, 예외를 던지는 쪽은 그 상태를 `FlowFieldFailures`의 예외로 바꿉니다.
 - 입력: 장애물 등록부(`FlowFieldObstacleRegistry`), Modifier 등록부(`FlowFieldModifierRegistry`), 불확실 영역(`FlowFieldSafety`)을 Session이 가집니다. 장애물 변화가 닿는 범위는 Bounds를 셀 크기 + Obstacle Clearance만큼 넓힌 곳이고(`FlowFieldObstacleReach`), 이전·현재 Bounds 어느 쪽도 그렇게 넓혀 격자에 닿지 않는 변화는 건너뜁니다.
-- Builder는 Session을 참조하지 않습니다. 등록부와 불확실 영역의 읽기 view, sweep 여부, 사용자 코드 경계만 담은 `IFlowFieldBuildHost`를 받고, Session 안의 `BuildHost`가 매번 Session의 상태로 넘깁니다.
+- Builder는 Session을 참조하지 않습니다. 등록부와 불확실 영역의 읽기 view, 추가 Goal 집합(`FlowFieldGoalSet`), sweep 여부, 사용자 코드 경계만 담은 `IFlowFieldBuildHost`를 받고, Session 안의 `BuildHost`가 매번 Session의 상태로 넘깁니다.
 - Bake 세션은 `CreateSurfaceBake`·`CreateVolumeBake`가 만들고 Builder를 함께 돌려줍니다. Bake는 그 Builder에서 내보내기(`TryExportBakeData`)와 진행률만 읽고, 준비한 요청은 `SubmitPrepared`로 `SubmitConfig`와 같은 입력 규칙(불확실 영역, Building 전환, 상태 알림)을 거칩니다.
 
 ### Builder
 
 - 모드마다 다른 일은 `IFlowFieldSpaceBuilder`의 두 구현 `FlowFieldSurfaceBuilder`, `FlowFieldVolumeBuilder`가 맡습니다. 두 Builder의 partial 파일은 같은 구성입니다: 본체(상태, 요청 수락, 수명 훅), `*.Build.cs`(빌드 단계), `*.Config.cs`(설정 검사와 요청), `*.Inputs.cs`(장애물·Modifier 입력), `*.Reads.cs`(게시 필드, 격자, 정보, Bake 내보내기).
 - 요청: `Initialize(bakeMode)`, `SubmitConfig`. Session이 정한 Bake Mode를 `Initialize`에서 받아 다음 `Initialize`까지 보관하고, 설정 스냅샷의 Bake Mode는 읽지 않습니다. 실행 중이 아닌 세션은 Session이 입력을 거부하므로 Builder는 수명을 검사하지 않습니다.
-- 빌드: `TryBeginBuild`가 빌드 객체를 돌려주고, `BuildPolicy`가 한 Pump에 시작할 수 있는 빌드를 정합니다. Surface는 `FlowFieldSurfaceBuild`(phase, 진행 중인 합성, 게시 인자, 프레임 예산), Volume은 `FlowFieldVolumeBuildContext`가 빌드이고, 한 Builder는 빌드를 하나씩 돌립니다. Session은 `HasPendingRequest`(scheduler가 할 일이 있는지)와 `HasOwedInput`(진행 중인 빌드에 없는 입력)을 따로 읽습니다.
+- 빌드: `TryBeginBuild`가 빌드 객체를 돌려주고, `BuildPolicy`가 한 Pump에 시작할 수 있는 빌드를 정합니다. Surface는 `FlowFieldSurfaceBuild`(phase, 진행 중인 합성, 게시 인자, 프레임 예산), Volume은 `FlowFieldVolumeBuildContext`가 빌드이고, 추가 Goal은 두 모드 모두 Goal 묶음 빌드(`FlowFieldSurfaceGoalBatch`, `FlowFieldVolumeGoalBatch`)입니다. 한 Builder는 빌드를 하나씩 돌립니다. Session은 `HasPendingRequest`(scheduler가 할 일이 있는지)와 `HasOwedInput`(진행 중인 빌드에 없는 입력)을 따로 읽습니다.
 - 상태: 다음 빌드가 갚을 입력은 입력 ledger(`FlowFieldSurfaceInputLedger`, `FlowFieldVolumeInputLedger`)에, 게시 필드는 store(`FlowFieldSurfaceFieldStore`, `FlowFieldVolumeFieldStore`)에 있고, `FlowFieldSurfaceState`에는 staging 데이터만 남습니다. Surface base 단계는 빌드 도중에도 ledger의 dirty 상태를 고쳐 쓰므로, 빌드를 시작할 때 복사하지 않습니다.
 - 읽기: `PublishedField`·`TryGetFieldInfo`(Revision은 Session이 넘김), `LatestGrid`(마지막 요청의 Grid, `ClampPositionToGrid`가 씀), `LatestCells`(게시 필드보다 새 셀 정보. 조회마다 `TryCapture`로 배열을 한 번 받음. Surface는 진행 중인 빌드의 기본 단계 결과, Volume은 없음).
 - 입력: `ApplyObstacleChange`·`ApplyModifierChange`·`CreateModifierArea`.
@@ -94,10 +94,10 @@
 - 게시 필드는 격자와 세 층입니다. 층은 게시된 뒤 바뀌지 않으므로 다음 게시가 같은 층을 참조로 다시 쓸 수 있습니다.
   - 씬 층(`FlowFieldSceneLayer`): Surface2D의 지면(`FlowFieldSurfaceData`, Max Slope와 Max Step Height 포함). Volume3D에는 없습니다.
   - 주체 층(`FlowFieldAgentLayer`): 막힘, 지면 Topology(Goal 영향과 상관없는 연결), Volume3D의 탈출 방향.
-  - Goal 층(`FlowFieldGoalLayer`): Goal 범위 Topology, Goal 플래그, 다음 칸, 기본·최종 방향과 속도, Modifier 영향(Surface2D), Goal 활성 여부와 Goal 칸.
+  - Goal 층(`FlowFieldGoalLayer`): Goal 범위 Topology, Goal 플래그, 다음 칸, 기본·최종 방향과 속도, Modifier 영향(Surface2D), Goal 활성 여부와 Goal 칸. [추가 Goal](#추가-goal)의 층은 Goal까지의 걸음 수도 둡니다.
 - 끝난 풀이는 새 입력이 들어와 있어도 게시합니다. 계속 움직이는 Goal 때문에 결과가 끊기지 않게 하기 위해서입니다. Grid나 설정이 바뀌었거나 Goal이 사라진 경우만 거부합니다.
 - `NotifyCellsDirty`는 격자를 그대로 두므로 진행 중인 빌드를 거부하지 않고(Surface `Ground` flag), 바닥은 다음 빌드가 다시 scan합니다. 바닥이 실제로 바뀌었으면 그 빌드가 새 격자처럼 전체를 다시 만듭니다.
-- Revision은 두 모드 모두 게시 내용(셀 상태, 방향, 속도, Goal)이 실제로 바뀔 때만 늘고, 그때 `FieldChanged`를 보냅니다. Volume은 `FlowFieldField.HasSameContent`로 층마다 비교하고(memcmp), Surface는 commit Job이 바뀐 칸을 찾습니다. 기본 방향·속도와 지면 Topology는 다른 값에서 정해지므로 비교하지 않습니다.
+- Revision은 두 모드 모두 게시 내용(셀 상태, 방향, 속도, Goal)이 실제로 바뀔 때만 늘고, 그때 `FieldChanged`를 보냅니다. 추가 Goal의 필드도 같습니다. Volume은 `FlowFieldField.HasSameContent`로 층마다 비교하고(memcmp), Surface는 commit Job이 바뀐 칸을 찾습니다. 기본 방향·속도와 지면 Topology는 다른 값에서 정해지므로 비교하지 않습니다.
 - 내용이 같아도 요청 스냅샷 갱신, 불확실 영역 정리, Ready 전환은 그대로 합니다.
 - Revision은 Session이 세지만, Space Mode를 바꿔 Manager가 새 Session을 만들면 이전 Session의 값에서 이어 셉니다(`ContinueRevision`). 그래서 한 Manager는 두 필드에 같은 Revision을 보이지 않습니다.
 
@@ -263,6 +263,41 @@
   - 최종 필드는 Modifier 단계가 기본 필드를 4,096개씩 나눠 복사한 데서 시작합니다.
   - Surface 게시는 전체 commit이면 모든 칸을 쓰고, 부분 commit이면 게시 필드를 먼저 통째로 복사합니다.
 
+## 추가 Goal
+
+기본 Goal(`SetGoal`, Goal Transform, `FlowFieldGoalTarget`) 밖에 Goal을 더 둘 수 있습니다(`AddGoal`). 추가 Goal은 기본 Goal과 같은 지면·장애물·Modifier 위에서 자기 Goal 층만 따로 만듭니다. 상태와 집합은 Session의 `FlowFieldGoalSet`이 들고, 빌드는 두 Builder의 `.Goals` partial이 맡습니다.
+
+- **종류:**
+  - `Shared`는 여러 주체가 같이 쓰는 목적지이고 `TrySampleNearestShared`의 후보입니다.
+  - `Group`은 한 무리가 잠시 쓰는 목적지입니다. 자주 움직인다고 보고, 한 빌드 안에서 `Shared`보다 먼저 만듭니다.
+  - 두 종류 모두 핸들(`FlowFieldGoalHandle`)로 읽고 옮기고 지웁니다. 지운 Goal의 번호는 다시 쓰지 않으므로 오래된 핸들이 다른 Goal을 가리키지 않습니다.
+- **빌드 순서:**
+  - 추가 Goal은 기본 Goal의 필드가 게시된 뒤에만 빌드합니다.
+  - 기본 Goal에 할 일이 없으면 바로 빌드하고, 둘 다 할 일이 있으면 번갈아 빌드합니다(기본 Goal 빌드 한 번 뒤 추가 Goal 빌드 한 번). 그래서 매 프레임 움직이는 Goal이나 장애물이 있어도 추가 Goal이 멈추지 않습니다. 대신 기본 Goal의 새 결과는 추가 Goal 빌드 한 번만큼 늦을 수 있습니다.
+  - 빌드 한 번(`IFlowFieldBuild`)이 할 일이 있는 추가 Goal을 모두 묶어 만듭니다. 시작할 때 게시된 필드의 씬·주체 층을 참조로 쓰고, Goal마다 Goal 층 하나를 만듭니다. 장애물을 다시 조회하지 않으므로 이 게시는 불확실 영역을 풀지 않습니다.
+- **Surface2D:**
+  - Goal마다 작업 공간과 풀이 backend를 따로 둡니다. 게시된 막힘으로 탈출 방향을 다시 만든 뒤, Goal 범위 Topology·BFS·Modifier 합성을 기본 Goal과 같은 코드로 돌립니다.
+  - BFS는 Goal마다 워커 스레드에서 나란히 돌고, 합성은 프레임 예산에 맞춰 Goal 하나씩 나눠 진행합니다.
+  - 기본 Goal 빌드가 아직 칸을 찾지 않은 Modifier(추가 Goal 빌드 중에 등록했거나 새 격자)는 이 합성에서 빠집니다. 그 입력이 추가 Goal을 다시 빌드하므로, 다음 결과에는 들어갑니다.
+- **Volume3D:**
+  - Goal마다 BuildContext를 장애물 재사용 모드로 만듭니다. 막힘·Topology·탈출 방향은 게시된 주체 층을 그대로 쓰므로 Topology와 탈출 Job을 건너뜁니다.
+  - Goal마다 따로 둔 spare 배열에 풀고, 풀이는 워커 스레드에서 나란히 돕니다.
+- **다시 빌드:**
+  - 기본 Goal만 바꾼 입력을 뺀 모든 입력(설정, 장애물, Modifier, 다시 빌드)은 모든 추가 Goal을 다시 빌드합니다(`FlowFieldGoalSet.BaseStamp`).
+  - 추가 Goal을 옮기면 그 Goal만 다시 빌드합니다. 0.0001 world unit 안의 이동에 같은 반경이면 아무것도 하지 않습니다.
+  - 기본 Goal에 할 일이 남은 채 차례가 와서 만든 추가 Goal은 게시된 필드가 반영한 입력까지만 따라잡은 것입니다(`FlowFieldGoalSet.PublishedStamp`, 기본 Goal 빌드가 시작할 때의 stamp). 그래서 그 기본 Goal 빌드가 게시된 뒤 한 번 더 빌드하고, 그동안 세션은 Building입니다.
+  - 빌드 중 들어온 입력은 그 빌드를 버리지 않고 게시한 뒤 다음 빌드를 부릅니다. 기본 Goal과 같이 계속 바뀌는 입력에도 결과가 끊기지 않게 하기 위해서입니다.
+- **게시:**
+  - 내용이 바뀐 게시는 기본 Goal과 같이 `Revision`을 늘리고 `FieldChanged`를 보냅니다.
+  - Goal 층에는 Goal까지의 걸음 수(`Distances`, BFS 비용)도 둡니다. 닿지 않는 칸은 `int.MaxValue`입니다.
+  - 추가 Goal 필드가 읽는 주체 층의 배열은 기본 Goal의 다음 게시가 spare로 돌려받지 않습니다(`FlowFieldGoalSet.HoldsAgent`). 그래서 게시된 추가 Goal 필드는 바뀌지 않고, 기본 Goal의 다음 빌드도 그 배열에 쓰지 않습니다. 대신 기본 Goal과 추가 Goal이 서로 다른 주체 층을 읽는 동안은 그 배열을 새로 할당합니다.
+- **읽기:**
+  - `TrySample(position, handle, out sample)`은 기본 Goal과 같은 샘플 안전 규칙과 불확실 영역을 씁니다.
+  - 추가 Goal 필드는 기본 Goal의 필드가 같은 격자로 게시되어 있을 때만 답합니다.
+  - 새 격자나 Bake source, Stop, 재시작은 모든 추가 Goal 필드를 버립니다(`FieldEpoch`). 그 앞에 시작한 빌드는 아무것도 게시하지 않습니다. Release는 추가 Goal을 모두 지웁니다.
+  - `TrySampleNearestShared`는 위치의 칸에서 걸음 수가 가장 적은 `Shared` Goal의 필드로 답하고, 같으면 먼저 추가한 Goal입니다. 어느 Goal도 닿지 않는 칸(막힘, 모든 영향 반경 밖)이면 먼저 추가한 준비된 `Shared` Goal이 자기 샘플처럼 답합니다.
+- **Bake:** Bake Asset에는 추가 Goal이 들어가지 않습니다. `BakedBase`는 추가 Goal도 런타임에 BFS로 풀고, `StaticBaked`는 `AddGoal`을 거부합니다.
+
 ## Modifier
 
 - 적용 여부는 두 모드 모두 `FlowFieldVectorUtility.CanApplyModifier`로 판정합니다. 막힌 셀, Goal Anchor, 도달할 수 없는 셀, 기본 방향이 0인 셀에는 적용하지 않습니다.
@@ -396,12 +431,12 @@
 | `Safety` | 샘플 안전 규칙: 막힘·지면 없음·격자 밖·낙차로 향하는 움직이는 샘플이 없는지 |
 | `Obstacles` | 등록·해제·파괴·순간이동, 불확실 영역, 미등록 장애물 sweep, 격자 왕복 |
 | `Modifiers`, `SpaceMode` | 빌드 중 Modifier 파괴, Priority, Space Mode 편집, Fault와 재시도, scheduler 등록 |
-| `Goal`, `EditorBake` | `FlowFieldGoalTarget`, Goal 반경, Editor 미리보기와 Volume 표시, Bake 거부·대상·복제·다시 Bake |
+| `Goal`, `EditorBake` | `FlowFieldGoalTarget`, Goal 반경, 추가 Goal(기본 Goal 자리에서 같은 필드, 입력 storm 뒤 fresh와 같고 게시된 필드가 바뀌지 않음, 가장 가까운 Goal, 움직이는 기본 Goal과 번갈아 빌드, 빌드 중 Modifier 등록, Manager API와 StaticBaked 거부), Editor 미리보기와 Volume 표시, Bake 거부·대상·복제·다시 Bake |
 
 - **기록값:** 기대값을 규칙으로 정할 수 없는 시나리오(셀 개수 등)는 테스트를 만든 코드가 낸 값을 `FlowFieldRecorded`로 고정합니다. 값이 바뀌면 의도한 변화인지 확인한 뒤 갱신합니다.
 - **기다리는 방법:** 샘플 컨트롤러는 Manager가 처음 Ready가 되면 첫 Goal을 정합니다. 그래서 Play 진입 뒤 한 번 더 안정될 때까지(Ready → 1초 → Ready) 기다린 다음 시나리오를 시작합니다. 테스트가 직접 Pump할 때는 정해진 횟수만큼 확인하면 만료되는 예산(`FlowFieldTestBudget.AfterChecks`)으로 빌드를 정한 지점에서 멈춥니다.
-- **재현:** `EditModeStormTests`는 테스트가 직접 Pump하는 Edit Mode 세션에서, 정해진 횟수만큼 확인하면 만료되는 예산과 워커를 기다리는 Pump로 돕니다. 그래서 매번 같은 순서로 실행되고, 실패 메시지의 seed와 단계 번호로 같은 실행을 다시 만들 수 있습니다.
-- **구조와 테스트:** 테스트는 Session 수준 이름(`HasActiveBuild`, `HasPendingRequest`, `HasOwedInput`, `IsWaitingForExternalCompletion`, `Revision`, `State`, 불확실 영역 수)만 읽습니다. 그래서 Builder 내부를 바꿔도 테스트는 그대로입니다.
+- **재현:** `EditModeStormTests`와 `AdditionalGoalTests`는 테스트가 직접 Pump하는 Edit Mode 세션에서, 정해진 횟수만큼 확인하면 만료되는 예산과 워커를 기다리는 Pump로 돕니다. 그래서 매번 같은 순서로 실행되고, 실패 메시지의 seed와 단계 번호로 같은 실행을 다시 만들 수 있습니다.
+- **구조와 테스트:** 테스트는 Session 수준 이름(`HasActiveBuild`, `HasPendingRequest`, `HasOwedInput`, `IsWaitingForExternalCompletion`, `Revision`, `State`, 불확실 영역 수, 추가 Goal 집합과 그 필드)만 읽습니다. 그래서 Builder 내부를 바꿔도 테스트는 그대로입니다.
 - **주의:** 테스트가 도는 동안 스크립트를 고치면 Play 진입 때 컴파일이 일어나 그 뒤 테스트가 Play Mode에 들어가지 못합니다.
 
 ## UML 갱신

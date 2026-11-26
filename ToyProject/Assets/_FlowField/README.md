@@ -115,13 +115,14 @@ Inspector는 그룹마다 제목을 달고, 지금 Space Mode가 읽지 않는 �
 | 상황 | 호출 |
 | --- | --- |
 | 결과 읽기 | `TrySample(position, out sample)`. `sample`은 `Direction`, `SpeedMultiplier`, `SurfaceNormal`, `HasSurface`, `HasCell`을 줍니다. 예외로 받으려면 `Sample()`. 상태는 `State`, `IsReady`, `IsRebuilding`, `IsFaulted`, `LastError`, `TryGetFieldInfo()`로 봅니다 |
-| 결과 변화 알림 | `FieldChanged`, `StateChanged`. `FieldChanged`와 `Revision`은 게시 내용이 실제로 바뀔 때만 바뀌고, Space Mode를 바꿔도 `Revision`은 이어서 셉니다. 핸들러 안에서 모든 명령을 쓸 수 있습니다 |
+| 결과 변화 알림 | `FieldChanged`, `StateChanged`. `FieldChanged`와 `Revision`은 게시 내용(추가 Goal 포함)이 실제로 바뀔 때만 바뀌고, Space Mode를 바꿔도 `Revision`은 이어서 셉니다. 핸들러 안에서 모든 명령을 쓸 수 있습니다 |
 | Goal 변경 | `SetGoal(FlowFieldGoalRequest.Position(position, radius))` 또는 `FlowFieldGoalRequest.Target(transform, radius)`, 지우기는 `FlowFieldGoalRequest.None`. 또는 `FlowFieldGoalTarget`. 장애물 결과를 재사용하고, 마지막에 정한 Goal이 쓰입니다 |
+| 추가 Goal | `AddGoal(FlowFieldGoalKind.Shared 또는 Group, FlowFieldGoalRequest.Position(position, radius))`이 돌려준 핸들로 `TrySample(position, handle, out sample)`, `IsGoalReady(handle)`, `SetGoal(handle, request)`, `RemoveGoal(handle)`. `TrySampleNearestShared(position, out sample, out handle)`은 걸음 수가 가장 적은 `Shared` Goal로 답합니다. 기본 Goal과 같은 바닥·장애물·Modifier를 쓰고 기본 Goal 필드 다음에 빌드됩니다. `StaticBaked`는 받지 않습니다. 규칙은 [TechnicalNotes](Docs/TechnicalNotes.md#추가-goal) |
 | 움직이는 장애물 | `RegisterDynamicObstacle(collider)` → 움직일 때마다 `NotifyDynamicObstacleMoved(collider)` → `UnregisterDynamicObstacle(collider)`. `FlowFieldDynamicObstacle`이 이 셋을 대신합니다. 파괴된 Collider 등록은 "Cannot register a destroyed Collider." |
 | 장애물 영역 알림 (`RuntimeDynamic`, `BakedBase`) | `NotifyObstacleRegionDirty(bounds)`. 이전과 현재 Bounds의 합집합을 넘깁니다. 유한하지 않은 Bounds는 `ArgumentOutOfRangeException`("Bounds must be finite.") |
 | 바닥 형상 변경 (`RuntimeDynamic`) | `NotifyCellsDirty()`. 바닥(Volume3D는 모든 셀)과 장애물을 모두 다시 조회합니다. 진행 중인 빌드는 버리지 않고, 다음 빌드가 바닥을 다시 조회합니다 |
 | 다시 빌드 | `RequestRebuild()`. 실행 중인 세션은 장애물을 모두 다시 조회하고, 격자와 Surface 설정이 그대로면 Surface2D 바닥은 다시 scan하지 않습니다. `RuntimeDynamic`에서 Play 중 Manager를 옮긴 뒤 부르면 새 격자로 처음부터 다시 만듭니다. `BakedBase`는 Bake 막힘에서 다시 시작해 Init 뒤 바뀐 영역과 등록 장애물 영역만 다시 조회합니다. 꺼 둔 Manager에서는 검사만 하고 켤 때 빌드합니다. Faulted 세션에서는 바닥까지 처음부터 다시 빌드하는 재시도입니다([실패 규칙](#실패-규칙)) |
-| 모드 변경 | `Release()` → `SetSpaceMode()` → `Init()`. Release는 등록과 `SetGoal()`의 Goal을 지웁니다. `FlowFieldDynamicObstacle`, `FlowFieldGoalTarget`, Modifier 컴포넌트는 스스로 다시 붙지만, `RegisterDynamicObstacle()`·`RegisterVectorModifier()`로 직접 등록한 것과 `SetGoal()`의 Goal은 다시 등록하고 정합니다 |
+| 모드 변경 | `Release()` → `SetSpaceMode()` → `Init()`. Release는 등록, `SetGoal()`의 Goal, 추가 Goal을 지웁니다. `FlowFieldDynamicObstacle`, `FlowFieldGoalTarget`, Modifier 컴포넌트는 스스로 다시 붙지만, `RegisterDynamicObstacle()`·`RegisterVectorModifier()`로 직접 등록한 것과 `SetGoal()`의 Goal은 다시 등록하고 정합니다 |
 | 직접 구현한 Modifier | `RegisterVectorModifier()`, 값·Priority·영역이 바뀔 때 `NotifyModifierChanged()`, `UnregisterVectorModifier()`. 구현 규칙은 [TechnicalNotes](Docs/TechnicalNotes.md#modifier) |
 | 격자 안 위치 | `ClampPositionToGrid()`, 예외 없이 쓰려면 `TryClampPositionToGrid()`. 마지막 요청의 Grid로 맞추며, Surface2D는 X·Z만 맞춥니다 |
 | 빌드 예산 | `FlowFieldBuildSettings.BudgetMilliseconds`. 프로젝트 전체가 프레임마다 나눠 쓰는 메인 스레드 시간(기본 2ms)이고, Play 세션이 시작할 때 기본값으로 돌아갑니다. 0 이하·NaN·무한대는 `ArgumentOutOfRangeException` |
@@ -133,24 +134,25 @@ Inspector는 그룹마다 제목을 달고, 지금 Space Mode가 읽지 않는 �
 
 ## 실패 규칙
 
-두 공간 모드가 같은 규칙을 따릅니다. 아래 표의 "명령"은 `SetGoal`, `NotifyCellsDirty`, `NotifyObstacleRegionDirty`, `RegisterDynamicObstacle`, `UnregisterDynamicObstacle`, `NotifyDynamicObstacleMoved`, `RegisterVectorModifier`, `UnregisterVectorModifier`, `NotifyModifierChanged`, `RequestRebuild`입니다. `Init`, `Release`, `SetSpaceMode`는 표 아래에 적습니다.
+두 공간 모드가 같은 규칙을 따릅니다. 아래 표의 "명령"은 `SetGoal`, `NotifyCellsDirty`, `NotifyObstacleRegionDirty`, `RegisterDynamicObstacle`, `UnregisterDynamicObstacle`, `NotifyDynamicObstacleMoved`, `RegisterVectorModifier`, `UnregisterVectorModifier`, `NotifyModifierChanged`, `RequestRebuild`, `AddGoal`, 핸들을 받는 `SetGoal`, `RemoveGoal`입니다. `Init`, `Release`, `SetSpaceMode`는 표 아래에 적습니다.
 
 | 상태 | `TrySample` | `Sample` | `TryClampPositionToGrid` | `ClampPositionToGrid` | 명령 |
 | --- | --- | --- | --- | --- | --- |
 | 초기화 전, `Release()` 뒤 | false | `InvalidOperationException` ① | false | `InvalidOperationException` ① | `InvalidOperationException` ① |
-| Faulted | false | `InvalidOperationException` ② | false | `InvalidOperationException` ② | `InvalidOperationException` ②. `Unregister*`는 받고 bool을 돌려주며, `RequestRebuild`는 재시도합니다 |
+| Faulted | false | `InvalidOperationException` ② | false | `InvalidOperationException` ② | `InvalidOperationException` ②. `Unregister*`와 `RemoveGoal`은 받고 bool을 돌려주며, `RequestRebuild`는 재시도합니다 |
 | 결과 없음 (첫 빌드, 다시 켠 뒤, 재시도 뒤, Grid 변경 뒤, 비활성) | false | `InvalidOperationException` ③ | true, 최신 Grid로 맞춤 | 최신 Grid로 맞춤 | 받습니다 |
 | 좌표 NaN·무한대 | false | `ArgumentOutOfRangeException` ④ | false | `ArgumentOutOfRangeException` ④ | — |
 | 격자 밖 | false | `ArgumentOutOfRangeException` ⑤ | true, 가장 가까운 격자 안 위치 | 가장 가까운 격자 안 위치 | — |
 
 메시지: ① "FlowFieldManager is not initialized." ② "FlowFieldManager is faulted. Call RequestRebuild() to retry."(InnerException = 원인) ③ "FlowField session is not ready." ④ "Position must be finite." ⑤ "Position is outside the FlowField grid."
 
+- **추가 Goal:** `AddGoal`은 Goal이 없는 요청(`FlowFieldGoalRequest.None`)에 `ArgumentException`, 정의되지 않은 종류에 `ArgumentOutOfRangeException`을 던집니다. 이 Manager의 Goal을 가리키지 않는 핸들은 `SetGoal`·`RemoveGoal`이 false, `TrySample`·`IsGoalReady`가 false입니다. 추가 Goal의 `TrySample`은 기본 `TrySample`처럼 예외를 던지지 않습니다.
 - **판정 순서:** `Sample()`은 수명(초기화 전·Faulted) → 결과 없음 → 좌표 NaN·무한대 → 격자 밖 순서로, `ClampPositionToGrid()`는 수명 → 좌표 NaN·무한대 순서로 봅니다. 그래서 초기화했지만 결과가 없을 때 NaN을 넘기면 `Sample()`은 ③, `ClampPositionToGrid()`는 ④를 던집니다. `TrySample()`과 `TryClampPositionToGrid()`는 어떤 상태에서도 예외를 던지지 않고, `IsReady`가 true면 격자 안 유한 좌표의 `TrySample()`은 성공합니다.
 - **`Init()`:** Play Mode에서만 받습니다(Edit Mode에서는 "FlowFieldManager.Init runs only in Play Mode. In Edit Mode, use Bake and the Scene View preview."). 같은 모드로 이미 초기화됐으면 아무것도 하지 않고, Faulted면 ②를 던집니다.
 - **`Release()`, `SetSpaceMode()`:** `Release()`는 초기화 전이나 이미 Release한 뒤에 부르면 조용히 돌아옵니다. `SetSpaceMode()`는 초기화 전과 `Release()` 뒤에만 받고, 초기화됐거나 Faulted면 "FlowField Space Mode can only change after Release and before Init."을 던집니다. Inspector에서 Space Mode를 바꿔 둔 채 초기화된 세션에 `Init()`을 불러도 같은 예외입니다.
 - **잘못된 설정:** `Init()`과 실행 중인 세션의 `RequestRebuild()`는 처음 걸린 이유를 담은 `InvalidOperationException`을 호출자에게 던지고 세션을 바꾸지 않습니다. Play 중 Inspector 편집, `SetGoal()`, `NotifyCellsDirty()`는 예외 대신 세션을 Fault로 만듭니다. 이때 새 Goal은 남아 재시도가 그 Goal로 빌드합니다.
 - **Fault 재시도:** 원인을 고친 뒤 `RequestRebuild()`를 부르면 세션을 처음부터(Surface2D 바닥 포함) 다시 빌드하고, 등록한 장애물과 Modifier는 유지합니다. Fault 중에 Space Mode를 바꿔 두었으면 세션을 건드리지 않고 Space Mode 잠금 예외를 던집니다. 재시도가 다시 실패하면 세션은 다시 Fault가 되고 그 예외를 호출자에게 던집니다. 꺼 둔 Manager는 Fault만 풀고 켤 때 빌드합니다. Fault 중에 끈 `FlowFieldDynamicObstacle`과 `FlowFieldGoalTarget`은 재시도 결과에 남지 않습니다. `Release()`도 Fault 세션을 받습니다.
-- **Bake 모드:** `StaticBaked`에서 `SetGoal`, `NotifyCellsDirty`, `NotifyObstacleRegionDirty`, `RegisterDynamicObstacle`, `NotifyDynamicObstacleMoved`는 `InvalidOperationException`("... is not allowed in StaticBaked mode.")을 던지고, `UnregisterDynamicObstacle`은 false를 돌려줍니다. `BakedBase`는 `NotifyCellsDirty`만 거부합니다.
+- **Bake 모드:** `StaticBaked`에서 `SetGoal`, `AddGoal`, `NotifyCellsDirty`, `NotifyObstacleRegionDirty`, `RegisterDynamicObstacle`, `NotifyDynamicObstacleMoved`는 `InvalidOperationException`("... is not allowed in StaticBaked mode.")을 던지고, `UnregisterDynamicObstacle`은 false를 돌려줍니다. `BakedBase`는 `NotifyCellsDirty`만 거부합니다.
 - **Bake 자리:** Bake Asset을 쓰는 Manager는 Bake 자리에 묶이므로, 옮기면 `RequestRebuild()`가 예외를 던지고 `BakedBase`는 다음 `SetGoal()`도 Fault를 냅니다. 되돌린 뒤 `RequestRebuild()`로 재시도합니다.
 - **Modifier의 Fault:** Modifier 컴포넌트 자체가 Fault면 Manager 재빌드로 풀리지 않습니다. Modifier를 끈 채 그 컴포넌트의 `Release()` → 값 수정 → `Init()` 순서로 복구한 뒤 다시 켭니다.
 
