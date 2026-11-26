@@ -4,17 +4,32 @@ namespace Common.FlowField
 {
     /// <summary>
     /// The Volume3D cells a read sees: every cell of the grid, 26 neighbor
-    /// steps along all three axes, and the published field itself, since
-    /// Volume3D knows nothing newer than what it published.
+    /// steps along all three axes, and the published field. A builder knows
+    /// nothing newer than what it published; an additional Goal's read takes
+    /// the default Goal's newer blocked cells and escape directions.
     /// </summary>
     internal readonly struct FlowFieldVolumeCellView : IFlowFieldCellView
     {
         private readonly FlowFieldField _field;
+        private readonly FlowFieldStagedCells _latest;
+        private readonly bool _hasLatest;
         private readonly FlowFieldSafety _regions;
 
         internal FlowFieldVolumeCellView(FlowFieldField field, FlowFieldSafety regions)
+            : this(field, default, hasLatest: false, regions)
+        {
+        }
+
+        // latest serves only with hasLatest, when it describes this field.
+        internal FlowFieldVolumeCellView(
+            FlowFieldField field,
+            in FlowFieldStagedCells latest,
+            bool hasLatest,
+            FlowFieldSafety regions)
         {
             _field = field;
+            _latest = latest;
+            _hasLatest = hasLatest;
             _regions = regions;
         }
 
@@ -51,7 +66,7 @@ namespace Common.FlowField
         public bool IsUncertain(int index)
             => _regions != null && _regions.IsCellUncertain(_field.Grid, _field.Grid.CellCenter(index));
 
-        public bool IsBlocked(int index) => _field.Agent.Blocked[index];
+        public bool IsBlocked(int index) => _hasLatest ? _latest.IsBlocked(index) : _field.Agent.Blocked[index];
 
         // A mover can be anywhere in the volume; only blocked cells are closed.
         public bool IsWalkable(int index) => true;
@@ -64,7 +79,11 @@ namespace Common.FlowField
         public bool HasGroundLink(int index, int direction) => HasLink(index, direction);
 
         public Vector3 EscapeDirection(int index)
-            => _field.Agent.EscapeDirections != null ? _field.Agent.EscapeDirections[index] : _field.Goal.FinalDirections[index];
+            => _hasLatest
+                ? _latest.EscapeDirection(index)
+                : _field.Agent.EscapeDirections != null
+                    ? _field.Agent.EscapeDirections[index]
+                    : _field.Goal.FinalDirections[index];
 
         // A link is missing only next to a blocked cell, which walls the mover.
         public bool IsCrossingUnsafe(int x, int y, int z, int dx, int dy, int dz, int target, out bool walled)

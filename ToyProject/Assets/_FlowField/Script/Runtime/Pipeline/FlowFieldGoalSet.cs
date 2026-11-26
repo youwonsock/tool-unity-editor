@@ -35,7 +35,9 @@ namespace Common.FlowField
 
         private readonly List<Entry> _entries = new List<Entry>(4);
         // Ids keep counting across Clear, so a handle never names a later Goal.
-        private int _nextId = 1;
+        // Shared by every session, so a handle never names a Goal of another
+        // Manager or of a later session of the same Manager.
+        private static int s_nextId = 1;
 
         internal IReadOnlyList<Entry> Entries => _entries;
         internal int Count => _entries.Count;
@@ -64,17 +66,30 @@ namespace Common.FlowField
         internal bool IsBuildable(Entry entry)
             => entry.BuiltRequestRevision != entry.RequestRevision || entry.BuiltBaseStamp != PublishedStamp;
 
-        internal bool HasBuildable
+        internal bool HasBuildable => HasBuildableOf(FlowFieldGoalKind.Shared) || HasBuildableOf(FlowFieldGoalKind.Group);
+
+        internal bool HasBuildableOf(FlowFieldGoalKind kind)
         {
-            get
+            for (int i = 0; i < _entries.Count; i++)
             {
-                for (int i = 0; i < _entries.Count; i++)
-                {
-                    if (IsBuildable(_entries[i]))
-                        return true;
-                }
-                return false;
+                if (_entries[i].Kind == kind && IsBuildable(_entries[i]))
+                    return true;
             }
+            return false;
+        }
+
+        /// <summary>
+        /// The kind the next batch builds. Group Goals move often and wait for
+        /// their field, so they go first, but never twice in a row while a
+        /// Shared Goal waits.
+        /// </summary>
+        internal FlowFieldGoalKind NextBatchKind(FlowFieldGoalKind? last)
+        {
+            bool group = HasBuildableOf(FlowFieldGoalKind.Group);
+            bool shared = HasBuildableOf(FlowFieldGoalKind.Shared);
+            if (group && shared)
+                return last == FlowFieldGoalKind.Group ? FlowFieldGoalKind.Shared : FlowFieldGoalKind.Group;
+            return group ? FlowFieldGoalKind.Group : FlowFieldGoalKind.Shared;
         }
 
         internal void MarkPublished(int stamp) => PublishedStamp = stamp;
@@ -110,8 +125,8 @@ namespace Common.FlowField
 
         internal Entry Add(FlowFieldGoalKind kind, in FlowFieldGoalRequest request)
         {
-            var entry = new Entry(_nextId, kind, request);
-            unchecked { _nextId++; }
+            var entry = new Entry(s_nextId, kind, request);
+            s_nextId = s_nextId == int.MaxValue ? 1 : s_nextId + 1;
             _entries.Add(entry);
             return entry;
         }

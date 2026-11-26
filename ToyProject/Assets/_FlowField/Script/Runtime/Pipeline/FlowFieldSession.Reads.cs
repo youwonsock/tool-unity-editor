@@ -84,6 +84,48 @@ namespace Common.FlowField
         // A Goal's field reads like the default one, with the same safety rule
         // and uncertain regions, from its own Goal layer.
 
+        /// <summary>
+        /// The newest cells an additional Goal's read knows: a build in
+        /// progress first, else the default Goal's published agent layer when
+        /// it is newer than the one the Goal was built on. A default build
+        /// that publishes clears the uncertain regions it queried while the
+        /// Goals are still on the older layer, so without these cells a Goal
+        /// read would follow a path into a newly blocked cell.
+        /// </summary>
+        private sealed class GoalLatestCells : IFlowFieldLatestCells
+        {
+            internal IFlowFieldLatestCells Build;
+            internal FlowFieldField Published;
+
+            public bool TryCapture(FlowFieldField field, out FlowFieldStagedCells cells)
+            {
+                if (Build != null && Build.TryCapture(field, out cells))
+                    return true;
+                cells = default;
+                FlowFieldField published = Published;
+                if (published == null
+                    || ReferenceEquals(published.Agent, field.Agent)
+                    || !published.Grid.MatchesBounds(field.Grid)
+                    || !ReferenceEquals(published.Scene?.Surface, field.Scene?.Surface))
+                    return false;
+                cells = new FlowFieldStagedCells(
+                    published.Agent.Blocked,
+                    published.Scene?.Surface,
+                    published.Agent.EscapeDirections);
+                return true;
+            }
+        }
+
+        private readonly GoalLatestCells _goalCells = new GoalLatestCells();
+
+        // Reads happen on the main thread, one at a time.
+        private IFlowFieldLatestCells GoalCells()
+        {
+            _goalCells.Build = _builder.LatestCells;
+            _goalCells.Published = _builder.PublishedField;
+            return _goalCells;
+        }
+
         /// <summary>Whether the Goal's field answers samples.</summary>
         internal bool IsGoalReady(int id) => GoalField(id) != null;
 
@@ -92,7 +134,7 @@ namespace Common.FlowField
             sample = FlowFieldSample.Stopped;
             FlowFieldField field = GoalField(id);
             return field != null
-                && FlowFieldSampler.Sample(field, worldPosition, Safety, _builder.LatestCells, out sample)
+                && FlowFieldSampler.Sample(field, worldPosition, Safety, GoalCells(), out sample)
                     == FlowFieldSampleStatus.Sampled;
         }
 
@@ -141,7 +183,7 @@ namespace Common.FlowField
             }
             if (nearest == null)
                 return false;
-            return FlowFieldSampler.Sample(nearest, worldPosition, Safety, _builder.LatestCells, out sample)
+            return FlowFieldSampler.Sample(nearest, worldPosition, Safety, GoalCells(), out sample)
                 == FlowFieldSampleStatus.Sampled;
         }
 

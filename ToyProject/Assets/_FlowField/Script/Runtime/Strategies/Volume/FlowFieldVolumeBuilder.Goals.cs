@@ -19,6 +19,8 @@ namespace Common.FlowField
         private FlowFieldVolumeGoalBatch _goalBatch;
         // A default Goal build began since the last batch.
         private bool _goalTurn;
+        // The kind the last batch built.
+        private FlowFieldGoalKind? _lastBatchKind;
 
         private bool AdditionalGoalsDue => _fields.Committed != null && _host.Goals.HasDue;
 
@@ -39,9 +41,11 @@ namespace Common.FlowField
             using (_host.EnterUserCode())
                 snapshots = _host.Modifiers.CaptureSnapshots();
             var batch = new FlowFieldVolumeGoalBatch(this, _fields.Committed, goals.PublishedStamp, goals.FieldEpoch);
-            // Group Goals first: they move often and wait for their field.
-            AddDueGoals(batch, goals, FlowFieldGoalKind.Group, snapshots);
-            AddDueGoals(batch, goals, FlowFieldGoalKind.Shared, snapshots);
+            // One kind a batch, so a moving Group Goal never waits for every
+            // Shared Goal.
+            FlowFieldGoalKind kind = goals.NextBatchKind(_lastBatchKind);
+            _lastBatchKind = kind;
+            AddDueGoals(batch, goals, kind, snapshots);
             build = _goalBatch = batch;
             return true;
         }
@@ -128,6 +132,13 @@ namespace Common.FlowField
         // any is waited for.
         internal FlowFieldBuildStep StepGoalBatch(FlowFieldVolumeGoalBatch batch, in FlowFieldBuildBudget budget, bool waitForWorker)
         {
+            // A new grid, a stop or a restart dropped the fields: the batch
+            // would publish nothing.
+            if (_host.Goals.FieldEpoch != batch.FieldEpoch)
+            {
+                batch.End();
+                return FlowFieldBuildStep.Rejected;
+            }
             bool waiting = false;
             bool remaining = false;
             for (int i = 0; i < batch.Items.Count; i++)

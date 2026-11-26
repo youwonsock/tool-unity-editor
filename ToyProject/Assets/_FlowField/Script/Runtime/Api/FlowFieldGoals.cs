@@ -11,8 +11,9 @@ namespace Common.FlowField
         /// </summary>
         Shared,
         /// <summary>
-        /// A destination one group follows, which may move often. Group Goals are built before
-        /// shared ones.
+        /// A destination one group follows, which may move often. Group Goals build in batches of
+        /// their own, ahead of Shared Goals but never twice in a row while a Shared Goal waits, so
+        /// a moving Group Goal's field never waits for every Shared Goal.
         /// </summary>
         Group,
     }
@@ -20,7 +21,8 @@ namespace Common.FlowField
     /// <summary>
     /// An additional Goal of a Manager, besides its default Goal. Each one gets its own field on
     /// the same ground and obstacles. The default value names no Goal, and a handle stops naming
-    /// its Goal once it is removed or the session is released; it never names a later Goal.
+    /// its Goal once it is removed or the session is released; it never names a later Goal or a
+    /// Goal of another Manager.
     /// </summary>
     public readonly struct FlowFieldGoalHandle : IEquatable<FlowFieldGoalHandle>
     {

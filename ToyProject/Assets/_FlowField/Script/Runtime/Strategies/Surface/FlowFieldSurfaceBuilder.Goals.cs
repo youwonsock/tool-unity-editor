@@ -20,6 +20,8 @@ namespace Common.FlowField
         private FlowFieldSurfaceGoalBatch _goalBatch;
         // A default Goal build began since the last batch.
         private bool _goalTurn;
+        // The kind the last batch built.
+        private FlowFieldGoalKind? _lastBatchKind;
 
         private bool AdditionalGoalsDue => PublishedField != null && _host.Goals.HasDue;
 
@@ -37,9 +39,11 @@ namespace Common.FlowField
                 return false;
             PruneGoalScratch(goals);
             var batch = new FlowFieldSurfaceGoalBatch(this, PublishedField, goals.PublishedStamp, goals.FieldEpoch);
-            // Group Goals first: they move often and wait for their field.
-            AddDueGoals(batch, goals, FlowFieldGoalKind.Group);
-            AddDueGoals(batch, goals, FlowFieldGoalKind.Shared);
+            // One kind a batch, so a moving Group Goal never waits for every
+            // Shared Goal.
+            FlowFieldGoalKind kind = goals.NextBatchKind(_lastBatchKind);
+            _lastBatchKind = kind;
+            AddDueGoals(batch, goals, kind);
             build = _goalBatch = batch;
             return true;
         }
@@ -102,6 +106,13 @@ namespace Common.FlowField
             batch.FrameBudget = budget;
             try
             {
+                // A new grid, a stop or a restart dropped the fields: the
+                // batch would publish nothing.
+                if (_host.Goals.FieldEpoch != batch.FieldEpoch)
+                {
+                    batch.Drop();
+                    return FlowFieldBuildStep.Rejected;
+                }
                 if (batch.Phase == BatchPhase.Prepare)
                     PrepareGoalBatch(batch);
                 if (batch.Phase == BatchPhase.Solving)

@@ -119,7 +119,7 @@
 규칙이 읽는 정보는 다음과 같습니다.
 
 - 모드마다 다른 것(축, 이웃 걸음, 옆 칸, 막힘·지면·연결, 낙차와 높은 턱, 탈출 샘플)은 `IFlowFieldCellView`가 답하고, 규칙 안에는 모드 분기가 없습니다. Sampler가 조회마다 view를 고르고, 같은 view로 칸을 읽은 뒤 규칙을 적용합니다.
-- "최신 정보"는 Surface의 경우 진행 중인 빌드의 작업 공간이 게시 필드와 같은 격자·지면일 때의 막힘·지면·탈출이고(조회마다 한 번 받음), 그 밖에는 게시 필드입니다. 게시 필드는 탈출 방향을 두지 않으므로 그때 탈출은 최종 방향입니다.
+- "최신 정보"는 Surface의 경우 진행 중인 빌드의 작업 공간이 게시 필드와 같은 격자·지면일 때의 막힘·지면·탈출이고(조회마다 한 번 받음), 그 밖에는 게시 필드입니다. 게시 필드는 탈출 방향을 두지 않으므로 그때 탈출은 최종 방향입니다. 추가 Goal의 읽기는 [추가 Goal](#추가-goal)에 적습니다.
 - 연결은 항상 게시 필드에서 읽습니다. 진행 중인 빌드는 새 Goal의 영향 반경으로 연결을 다시 만들기 때문에, 게시된 걸음과 맞지 않습니다.
 - 경로 걸음(3번)은 게시된 Topology를, 4번의 걸음은 지면 연결을 읽습니다. 5번은 연결을 읽지 않고, Surface2D에서는 게시된 칸 높이로 낙차와 높은 턱을 봅니다.
 - 지면 연결: Surface2D Topology는 Goal 영향 반경 안의 칸만 잇기 때문에, 게시된 Surface의 단차 연결(Max Step Height, 대각선은 경로처럼 양옆 연결까지)을 씁니다. Max Slope는 칸마다 지면 유효성으로 봅니다. Volume3D는 Topology가 모든 열린 칸을 이으므로 그대로 씁니다.
@@ -269,15 +269,17 @@
 
 - **종류:**
   - `Shared`는 여러 주체가 같이 쓰는 목적지이고 `TrySampleNearestShared`의 후보입니다.
-  - `Group`은 한 무리가 잠시 쓰는 목적지입니다. 자주 움직인다고 보고, 한 빌드 안에서 `Shared`보다 먼저 만듭니다.
-  - 두 종류 모두 핸들(`FlowFieldGoalHandle`)로 읽고 옮기고 지웁니다. 지운 Goal의 번호는 다시 쓰지 않으므로 오래된 핸들이 다른 Goal을 가리키지 않습니다.
+  - `Group`은 한 무리가 잠시 쓰는 목적지입니다. 자주 움직인다고 보고 `Shared`보다 먼저 빌드합니다(아래 빌드 순서).
+  - 두 종류 모두 핸들(`FlowFieldGoalHandle`)로 읽고 옮기고 지웁니다. Goal 번호는 모든 세션이 함께 세고 다시 쓰지 않으므로, 오래된 핸들이나 다른 Manager의 핸들이 다른 Goal을 가리키지 않습니다.
 - **빌드 순서:**
   - 추가 Goal은 기본 Goal의 필드가 게시된 뒤에만 빌드합니다.
   - 기본 Goal에 할 일이 없으면 바로 빌드하고, 둘 다 할 일이 있으면 번갈아 빌드합니다(기본 Goal 빌드 한 번 뒤 추가 Goal 빌드 한 번). 그래서 매 프레임 움직이는 Goal이나 장애물이 있어도 추가 Goal이 멈추지 않습니다. 대신 기본 Goal의 새 결과는 추가 Goal 빌드 한 번만큼 늦을 수 있습니다.
-  - 빌드 한 번(`IFlowFieldBuild`)이 할 일이 있는 추가 Goal을 모두 묶어 만듭니다. 시작할 때 게시된 필드의 씬·주체 층을 참조로 쓰고, Goal마다 Goal 층 하나를 만듭니다. 장애물을 다시 조회하지 않으므로 이 게시는 불확실 영역을 풀지 않습니다.
+  - 빌드 한 번(`IFlowFieldBuild`)이 한 종류의 할 일이 있는 Goal을 모두 묶어 만듭니다. `Group`이 먼저지만, `Shared`가 기다리면 `Group` 빌드를 두 번 연속하지 않습니다. 그래서 움직이는 `Group` Goal은 모든 `Shared` Goal을 기다리지 않고, 계속 움직여도 `Shared` Goal이 멈추지 않습니다.
+  - 빌드는 시작할 때 게시된 필드의 씬·주체 층을 참조로 쓰고, Goal마다 Goal 층 하나를 만듭니다. 장애물을 다시 조회하지 않으므로 이 게시는 불확실 영역을 풀지 않습니다.
+  - 새 격자나 Bake source, Stop, 재시작이 필드를 버리면 진행 중인 빌드는 다음 단계에서 멈춥니다.
 - **Surface2D:**
   - Goal마다 작업 공간과 풀이 backend를 따로 둡니다. 게시된 막힘으로 탈출 방향을 다시 만든 뒤, Goal 범위 Topology·BFS·Modifier 합성을 기본 Goal과 같은 코드로 돌립니다.
-  - BFS는 Goal마다 워커 스레드에서 나란히 돌고, 합성은 프레임 예산에 맞춰 Goal 하나씩 나눠 진행합니다.
+  - 묶음의 모든 Goal의 준비(탈출 방향, 영향 범위, Topology)는 기본 Goal의 기본 단계처럼 예산과 상관없이 한 프레임에 돕니다. BFS는 Goal마다 워커 스레드에서 나란히 돌고, 합성은 프레임 예산에 맞춰 Goal 하나씩 나눠 진행합니다. 게시할 때 Goal 층 배열을 새로 할당합니다.
   - 기본 Goal 빌드가 아직 칸을 찾지 않은 Modifier(추가 Goal 빌드 중에 등록했거나 새 격자)는 이 합성에서 빠집니다. 그 입력이 추가 Goal을 다시 빌드하므로, 다음 결과에는 들어갑니다.
 - **Volume3D:**
   - Goal마다 BuildContext를 장애물 재사용 모드로 만듭니다. 막힘·Topology·탈출 방향은 게시된 주체 층을 그대로 쓰므로 Topology와 탈출 Job을 건너뜁니다.
@@ -288,11 +290,12 @@
   - 기본 Goal에 할 일이 남은 채 차례가 와서 만든 추가 Goal은 게시된 필드가 반영한 입력까지만 따라잡은 것입니다(`FlowFieldGoalSet.PublishedStamp`, 기본 Goal 빌드가 시작할 때의 stamp). 그래서 그 기본 Goal 빌드가 게시된 뒤 한 번 더 빌드하고, 그동안 세션은 Building입니다.
   - 빌드 중 들어온 입력은 그 빌드를 버리지 않고 게시한 뒤 다음 빌드를 부릅니다. 기본 Goal과 같이 계속 바뀌는 입력에도 결과가 끊기지 않게 하기 위해서입니다.
 - **게시:**
-  - 내용이 바뀐 게시는 기본 Goal과 같이 `Revision`을 늘리고 `FieldChanged`를 보냅니다.
+  - 내용이 바뀐 게시는 기본 Goal과 같이 `Revision`을 늘리고 `FieldChanged`를 보냅니다. `RemoveGoal`은 게시가 아니므로 `TrySampleNearestShared`의 답이 바뀌어도 `Revision`을 늘리지 않습니다.
   - Goal 층에는 Goal까지의 걸음 수(`Distances`, BFS 비용)도 둡니다. 닿지 않는 칸은 `int.MaxValue`입니다.
   - 추가 Goal 필드가 읽는 주체 층의 배열은 기본 Goal의 다음 게시가 spare로 돌려받지 않습니다(`FlowFieldGoalSet.HoldsAgent`). 그래서 게시된 추가 Goal 필드는 바뀌지 않고, 기본 Goal의 다음 빌드도 그 배열에 쓰지 않습니다. 대신 기본 Goal과 추가 Goal이 서로 다른 주체 층을 읽는 동안은 그 배열을 새로 할당합니다.
 - **읽기:**
   - `TrySample(position, handle, out sample)`은 기본 Goal과 같은 샘플 안전 규칙과 불확실 영역을 씁니다.
+  - "최신 정보"는 진행 중인 빌드의 칸(Surface2D)이고, 없으면 기본 Goal의 게시 필드가 그 Goal이 읽는 주체 층보다 새로울 때 그 막힘과 탈출 방향입니다. 기본 Goal 빌드가 게시되면 그 빌드가 조회한 불확실 영역이 풀리는데, 추가 Goal은 다시 빌드될 때까지 이전 주체 층을 읽습니다. 그 사이 새로 막힌 칸으로 가는 길은 이 정보로 멈추고, 새로 막힌 칸 안에서는 기본 Goal 필드처럼 빠져나갑니다. Surface2D에서 지면을 다시 scan해 바뀐 동안은 이 정보가 없고, 추가 Goal은 다시 빌드될 때까지 이전 지면을 읽습니다.
   - 추가 Goal 필드는 기본 Goal의 필드가 같은 격자로 게시되어 있을 때만 답합니다.
   - 새 격자나 Bake source, Stop, 재시작은 모든 추가 Goal 필드를 버립니다(`FieldEpoch`). 그 앞에 시작한 빌드는 아무것도 게시하지 않습니다. Release는 추가 Goal을 모두 지웁니다.
   - `TrySampleNearestShared`는 위치의 칸에서 걸음 수가 가장 적은 `Shared` Goal의 필드로 답하고, 같으면 먼저 추가한 Goal입니다. 어느 Goal도 닿지 않는 칸(막힘, 모든 영향 반경 밖)이면 먼저 추가한 준비된 `Shared` Goal이 자기 샘플처럼 답합니다.
@@ -431,7 +434,7 @@
 | `Safety` | 샘플 안전 규칙: 막힘·지면 없음·격자 밖·낙차로 향하는 움직이는 샘플이 없는지 |
 | `Obstacles` | 등록·해제·파괴·순간이동, 불확실 영역, 미등록 장애물 sweep, 격자 왕복 |
 | `Modifiers`, `SpaceMode` | 빌드 중 Modifier 파괴, Priority, Space Mode 편집, Fault와 재시도, scheduler 등록 |
-| `Goal`, `EditorBake` | `FlowFieldGoalTarget`, Goal 반경, 추가 Goal(기본 Goal 자리에서 같은 필드, 입력 storm 뒤 fresh와 같고 게시된 필드가 바뀌지 않음, 가장 가까운 Goal, 움직이는 기본 Goal과 번갈아 빌드, 빌드 중 Modifier 등록, Manager API와 StaticBaked 거부), Editor 미리보기와 Volume 표시, Bake 거부·대상·복제·다시 Bake |
+| `Goal`, `EditorBake` | `FlowFieldGoalTarget`, Goal 반경, 추가 Goal(기본 Goal 자리에서 같은 필드, 입력 storm 뒤 fresh와 같고 게시된 필드가 바뀌지 않음, 가장 가까운 Goal, 핸들, 움직이는 기본 Goal·Group Goal과 번갈아 빌드, 빌드 중 Modifier 등록, 기본 Goal이 먼저 게시한 막힘, Manager API와 StaticBaked 거부), Editor 미리보기와 Volume 표시, Bake 거부·대상·복제·다시 Bake |
 
 - **기록값:** 기대값을 규칙으로 정할 수 없는 시나리오(셀 개수 등)는 테스트를 만든 코드가 낸 값을 `FlowFieldRecorded`로 고정합니다. 값이 바뀌면 의도한 변화인지 확인한 뒤 갱신합니다.
 - **기다리는 방법:** 샘플 컨트롤러는 Manager가 처음 Ready가 되면 첫 Goal을 정합니다. 그래서 Play 진입 뒤 한 번 더 안정될 때까지(Ready → 1초 → Ready) 기다린 다음 시나리오를 시작합니다. 테스트가 직접 Pump할 때는 정해진 횟수만큼 확인하면 만료되는 예산(`FlowFieldTestBudget.AfterChecks`)으로 빌드를 정한 지점에서 멈춥니다.

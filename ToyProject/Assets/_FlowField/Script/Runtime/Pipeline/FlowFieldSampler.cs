@@ -34,11 +34,11 @@ namespace Common.FlowField
             if (!field.Grid.ContainsWorldPosition(worldPosition))
                 return FlowFieldSampleStatus.OutOfGrid;
 
-            if (field.Grid.SpaceMode == FlowFieldSpaceMode.Volume3D)
-                return Sample(new FlowFieldVolumeCellView(field, regions), worldPosition, out sample);
             // The latest cells serve only when they describe this field.
             FlowFieldStagedCells staged = default;
             bool hasStaged = latest != null && latest.TryCapture(field, out staged);
+            if (field.Grid.SpaceMode == FlowFieldSpaceMode.Volume3D)
+                return Sample(new FlowFieldVolumeCellView(field, in staged, hasStaged, regions), worldPosition, out sample);
             return Sample(new FlowFieldSurfaceCellView(field, in staged, hasStaged, regions), worldPosition, out sample);
         }
 

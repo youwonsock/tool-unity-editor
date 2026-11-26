@@ -11,8 +11,11 @@ namespace Common.FlowField.Tests
     /// Goal's field reads as the default Goal's field would with that Goal,
     /// after any mix of inputs; a published Goal field never changes; the
     /// nearest shared Goal answers; Stop, Restart, removal and Release drop
-    /// the fields; the Goals build while the default Goal moves every pump;
-    /// and a Modifier registered while they build never faults them.
+    /// the fields and a handle never names another Goal; the Goals build
+    /// while the default Goal and a Group Goal move every pump; a Modifier
+    /// registered while they build never faults them; and a Goal read never
+    /// follows its older field into cells the default Goal's newer field has
+    /// blocked.
     /// </summary>
     [TestFixture, Category("Goal")]
     internal sealed class AdditionalGoalTests
@@ -21,6 +24,7 @@ namespace Common.FlowField.Tests
         private const int MaxGoals = 3;
         private const int MaxCubes = 3;
         private const int MovingPumps = 400;
+        private const int WindowPumps = 400;
 
         private readonly FlowFieldTestLog _log = new FlowFieldTestLog();
         private readonly List<FlowFieldSession> _sessions = new List<FlowFieldSession>();
@@ -183,26 +187,99 @@ namespace Common.FlowField.Tests
             Settle(session, "after Release and Init");
             Assert.That(session.IsGoalReady(other), Is.False);
             Assert.That(session.SetGoalCommand(other, FlowFieldGoalRequest.Position(goal)), Is.False);
+
+            // A handle never names a later Goal, of this session or another.
+            int again = session.AddGoalCommand(FlowFieldGoalKind.Shared, FlowFieldGoalRequest.Position(goal));
+            FlowFieldSession second = Track(CreateSettled(_manager, _settings, null));
+            int elsewhere = second.AddGoalCommand(FlowFieldGoalKind.Shared, FlowFieldGoalRequest.Position(goal));
+            Assert.That(new[] { id, other, again, elsewhere }, Is.Unique);
+            Assert.That(second.RemoveGoalCommand(again), Is.False, "Another session's handle names no Goal here.");
         }
 
-        // The default Goal moves before every pump, so its field is always
-        // owed; the Goals take turns with it and still build.
+        // The default Goal and a Group Goal move before every pump, so the
+        // default field and the Group Goal are always owed; the Goals take
+        // turns with the default Goal, and the kinds take turns, so the
+        // Shared Goal still builds.
         [TestCase(FlowFieldPlayScene.SampleScene)]
         [TestCase(FlowFieldPlayScene.VolumeScene)]
-        public void GoalBuildsWhileTheDefaultGoalKeepsMoving(string scene)
+        public void GoalsBuildWhileTheDefaultGoalKeepsMoving(string scene)
         {
             FlowFieldSession session = Open(scene, FlowFieldBakeMode.RuntimeDynamic);
-            int id = session.AddGoalCommand(FlowFieldGoalKind.Group, FlowFieldGoalRequest.Position(Point(0.5f, 0.5f)));
+            int group = session.AddGoalCommand(FlowFieldGoalKind.Group, FlowFieldGoalRequest.Position(Point(0.5f, 0.5f)));
+            int shared = session.AddGoalCommand(FlowFieldGoalKind.Shared, FlowFieldGoalRequest.Position(Point(0.5f, 0.8f)));
             int pumps = 0;
-            while (pumps < MovingPumps && !session.IsGoalReady(id))
+            while (pumps < MovingPumps && !(session.IsGoalReady(group) && session.IsGoalReady(shared)))
             {
-                FlowFieldManagerConfig config = WithGoal(_manager, _settings, Point(pumps % 2 == 0 ? 0.3f : 0.7f, 0.5f));
+                bool even = pumps % 2 == 0;
+                FlowFieldManagerConfig config = WithGoal(_manager, _settings, Point(even ? 0.3f : 0.7f, 0.5f));
                 session.SubmitConfig(in config, FlowFieldConfigChange.Goal);
+                session.SetGoalCommand(group, FlowFieldGoalRequest.Position(Point(0.5f, even ? 0.4f : 0.6f)));
                 session.Pump(FlowFieldTestBudget.AfterChecks(2), waitForWorker: true);
                 Assert.That(session.IsFaulted, Is.False, "pump " + pumps + " faulted: " + session.LastError);
                 pumps++;
             }
-            Assert.That(session.IsGoalReady(id), Is.True, "The Goal never built while the default Goal moved.");
+            Assert.That(session.IsGoalReady(group), Is.True, "The Group Goal never built while the default Goal moved.");
+            Assert.That(session.IsGoalReady(shared), Is.True, "The Shared Goal never built while the Group Goal moved.");
+        }
+
+        // After a default build publishes a new obstacle, the uncertain
+        // region it queried is gone while the Goal still reads its older
+        // field. Volume3D has no build cells to fall back on, so the read
+        // must take the default Goal's newer blocked cells: a newly blocked
+        // cell escapes as the default field's does, and a cell whose Goal
+        // path leads into one stops. Surface2D's build cells cover the same
+        // window.
+        [Test]
+        public void VolumeGoalReadSeesTheDefaultGoalsNewerCells()
+        {
+            FlowFieldSession session = Open(FlowFieldPlayScene.VolumeScene, FlowFieldBakeMode.RuntimeDynamic);
+            int id = session.AddGoalCommand(FlowFieldGoalKind.Shared, FlowFieldGoalRequest.Position(Point(0.85f, 0.5f)));
+            Settle(session, "with the Goal");
+
+            Collider cube = CreateCube(Point(0.6f, 0.5f));
+            Assert.That(session.RegisterObstacleCommand(cube), Is.True);
+            FlowFieldField published = null;
+            FlowFieldField goal = null;
+            bool window = false;
+            for (int pump = 0; pump < WindowPumps && !window; pump++)
+            {
+                session.Pump(FlowFieldTestBudget.AfterChecks(1), waitForWorker: true);
+                Assert.That(session.IsFaulted, Is.False, session.LastError);
+                published = session.TryGetPublishedField(out FlowFieldField field) ? field : null;
+                goal = session.Goals.Find(id).Field;
+                window = published != null
+                    && goal != null
+                    && !ReferenceEquals(published.Agent, goal.Agent)
+                    && session.Safety.UncertainRegionCount == 0;
+            }
+            Assert.That(window, Is.True, "The default field never published the cube before the Goal rebuilt.");
+
+            int newlyBlocked = 0;
+            int ledIn = 0;
+            FlowFieldGridSpace grid = published.Grid;
+            for (int index = 0; index < grid.CellCount; index++)
+            {
+                Vector3 center = grid.CellCenter(index);
+                if (published.Agent.Blocked[index] && !goal.Agent.Blocked[index])
+                {
+                    newlyBlocked++;
+                    Assert.That(session.TrySample(center, out FlowFieldSample expected), Is.True);
+                    Assert.That(session.TrySampleGoal(id, center, out FlowFieldSample sample), Is.True);
+                    Assert.That(sample, Is.EqualTo(expected), "A newly blocked cell escapes as the default field's does.");
+                    continue;
+                }
+                int next = goal.Goal.NextCells[index];
+                if (published.Agent.Blocked[index] || next < 0 || next == index
+                    || !published.Agent.Blocked[next] || goal.Agent.Blocked[next])
+                    continue;
+                ledIn++;
+                Assert.That(session.TrySampleGoal(id, center, out FlowFieldSample stopped), Is.True);
+                Assert.That(stopped.SpeedMultiplier, Is.EqualTo(0f),
+                    "A Goal path into a newly blocked cell must stop at " + center.ToString("F2"));
+            }
+            Assert.That(newlyBlocked, Is.GreaterThan(0), "The cube blocked no open cell.");
+            Assert.That(ledIn, Is.GreaterThan(0), "No Goal path led into the cube.");
+            Settle(session, "after the window");
         }
 
         // A Modifier registers while two Goals build; Surface2D finds its
@@ -366,17 +443,19 @@ namespace Common.FlowField.Tests
         private FlowFieldGoalRequest RandomRequest(System.Random random)
             => FlowFieldGoalRequest.Position(StormTests.Pick(_bounds, random), Radius);
 
+        private Collider CreateCube(System.Random random) => CreateCube(CubePosition(random));
+
         // A cube on the Obstacle Layer, 1.6 cells wide; in Surface2D as tall
         // as the field.
-        private Collider CreateCube(System.Random random)
+        private Collider CreateCube(Vector3 position)
         {
             var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            cube.name = "Storm Cube";
+            cube.name = "Test Cube";
             cube.layer = FlowFieldObstacleProbe.ObstacleLayer(_manager);
             float width = _settings.Grid.CellSize * 1.6f;
             bool volume = _settings.SpaceMode == FlowFieldSpaceMode.Volume3D;
             cube.transform.localScale = new Vector3(width, volume ? width : _bounds.size.y, width);
-            cube.transform.position = CubePosition(random);
+            cube.transform.position = position;
             Physics.SyncTransforms();
             return cube.GetComponent<Collider>();
         }
