@@ -301,6 +301,28 @@
   - `TrySampleNearestShared`는 위치의 칸에서 걸음 수가 가장 적은 `Shared` Goal의 필드로 답하고, 같으면 먼저 추가한 Goal입니다. 어느 Goal도 닿지 않는 칸(막힘, 모든 영향 반경 밖)이면 먼저 추가한 준비된 `Shared` Goal이 자기 샘플처럼 답합니다.
 - **Bake:** Bake Asset에는 추가 Goal이 들어가지 않습니다. `BakedBase`는 추가 Goal도 런타임에 BFS로 풀고, `StaticBaked`는 `AddGoal`을 거부합니다.
 
+## Agent 유형
+
+Manager의 Obstacle Clearance, Max Slope, Max Step Height가 `Default` 유형입니다. Additional Agent Types(최대 2개)는 이름과 자기 Clearance, Max Slope, Max Step Height(Surface2D만)를 가지고, 같은 격자·지면 Layer·장애물·Goal 위에서 자기 필드를 만듭니다.
+
+- **구조:**
+  - Manager가 유형마다 세션을 하나 더 둡니다(`FlowFieldManager.Agents.cs`). 그 세션은 기본 세션과 같은 Space Mode이고, 설정 스냅샷에서 그 유형의 값만 바꿔 받습니다(`CaptureAgentConfig`).
+  - 그래서 파이프라인, 샘플 안전 규칙, 불확실 영역, 추가 Goal, scheduler를 유형마다 그대로 씁니다. 대신 지면 scan, 장애물 조회, sweep, 빌드가 유형마다 따로 돌아 비용이 유형 수만큼 늡니다.
+  - Manager는 입력(설정, `SetGoal`, 장애물과 Modifier 등록·해제·통지, 추가 Goal, 다시 빌드)을 모든 세션에 나눠 줍니다. 추가 Goal은 모든 세션에서 같은 번호이므로 한 핸들로 유형마다 읽습니다.
+- **수명:** 유형 세션은 기본 세션을 따라 Init, 끄기(Stop)와 켜기(Restart), Release, 파괴를 함께 겪습니다. Space Mode를 바꾸거나 유형의 개수·이름을 바꾼 뒤의 Init은 유형 세션을 새로 만듭니다.
+- **상태와 이벤트:**
+  - `State`, `IsReady`, `IsRebuilding`, `TrySample(position, out sample)`처럼 유형을 받지 않는 호출은 `Default` 유형입니다. 다른 유형은 `IsAgentTypeReady(type)`과 유형을 받는 `TrySample`, `IsGoalReady`, `TrySampleNearestShared`로 읽습니다.
+  - 추가 유형의 게시도 Manager의 `Revision`을 늘리고 `FieldChanged`를 보냅니다(`FlowFieldSession.AdvanceRevision`).
+- **Fault:**
+  - 유형 세션이 Fault면 Manager가 "Agent type "이름" failed: ..."로 Fault가 됩니다. Manager가 Fault인 동안 유형 세션은 멈춥니다.
+  - 재시도(`RequestRebuild`)와 켜기는 모든 세션을 처음부터 다시 빌드합니다. 스스로 Fault였던 유형 세션은 그동안 받지 못한 추가 Goal을 기본 세션에서 다시 가져옵니다.
+- **설정 변경:**
+  - Play 중 유형의 값(Clearance, Max Slope, Max Step Height) 편집은 바로 다시 빌드하고, 잘못된 값은 "Agent type "이름": ..."으로 Fault를 냅니다.
+  - 유형의 개수와 이름은 Release 뒤에만 바꿉니다. 세션이 있는 동안 바꾸면 Bake Mode 편집처럼 Fault입니다("The number and names of Additional Agent Types can change only after Release.").
+  - 이름은 비어 있지 않고 서로 달라야 하며 `Default`일 수 없습니다.
+- **Bake:** Bake Asset에는 `Default` 유형만 들어갑니다. `BakedBase`에서 추가 유형은 `RuntimeDynamic`처럼 장면을 scan해 빌드하고, `StaticBaked`는 Init이 거부합니다("StaticBaked loads the Default agent type only; remove the Additional Agent Types.").
+- **Editor:** Scene View 표시, Edit Mode 미리보기, Bake는 `Default` 유형만 다룹니다.
+
 ## Modifier
 
 - 적용 여부는 두 모드 모두 `FlowFieldVectorUtility.CanApplyModifier`로 판정합니다. 막힌 셀, Goal Anchor, 도달할 수 없는 셀, 기본 방향이 0인 셀에는 적용하지 않습니다.
@@ -433,6 +455,7 @@
 | `Protocol` | 빌드 단계, 풀이 중 Stop·Release, 거부·폐기된 빌드, Default Direction 동기화, 증분 결과와 fresh 결과의 일치 |
 | `Safety` | 샘플 안전 규칙: 막힘·지면 없음·격자 밖·낙차로 향하는 움직이는 샘플이 없는지 |
 | `Obstacles` | 등록·해제·파괴·순간이동, 불확실 영역, 미등록 장애물 sweep, 격자 왕복 |
+| `Agents` | Agent 유형: Manager 설정과 같은 유형은 같은 필드, 넓은 유형은 기본 유형의 막힘을 포함하고 연결을 넘지 않음, 장애물·Goal·Modifier·켜고 끄기가 모든 유형에 닿음, 유형의 잘못된 값과 개수 변경의 Fault, StaticBaked 거부 |
 | `Modifiers`, `SpaceMode` | 빌드 중 Modifier 파괴, Priority, Space Mode 편집, Fault와 재시도, scheduler 등록 |
 | `Goal`, `EditorBake` | `FlowFieldGoalTarget`, Goal 반경, 추가 Goal(기본 Goal 자리에서 같은 필드, 입력 storm 뒤 fresh와 같고 게시된 필드가 바뀌지 않음, 가장 가까운 Goal, 핸들, 움직이는 기본 Goal·Group Goal과 번갈아 빌드, 빌드 중 Modifier 등록, 기본 Goal이 먼저 게시한 막힘, Manager API와 StaticBaked 거부), Editor 미리보기와 Volume 표시, Bake 거부·대상·복제·다시 Bake |
 

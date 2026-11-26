@@ -54,7 +54,7 @@ public sealed class FlowFieldReadmeMover : MonoBehaviour
 
 | 컴포넌트 | 하는 일 |
 | --- | --- |
-| `FlowFieldManager` | 설정을 직렬화하고 계산 세션 하나를 가집니다. 조회(`IFlowFieldProvider`)와 입력(`IFlowFieldController`) API를 구현합니다. 끄면 결과를 버리고 멈추며(Suspended), 다시 켜면 처음부터 빌드합니다. |
+| `FlowFieldManager` | 설정을 직렬화하고 계산 세션을 가집니다(Agent 유형마다 하나). 조회(`IFlowFieldProvider`)와 입력(`IFlowFieldController`) API를 구현합니다. 끄면 결과를 버리고 멈추며(Suspended), 다시 켜면 처음부터 빌드합니다. |
 | `FlowFieldDynamicObstacle` | 켜져 있는 동안 지정한 Collider를 Manager에 등록하고, Bounds가 바뀌면 프레임당 한 번 이동을 알립니다. 끄거나 파괴하면 해제합니다. Manager나 Collider를 바꾸거나 Collider만 파괴되면 옛 등록을 해제하고, Release 뒤 다시 Init하면 스스로 다시 등록합니다. |
 | `FlowFieldGoalTarget` | 켜져 있는 동안 자기 위치를 Manager의 Goal로 정하고(Influence Radius 포함), 움직이거나 반경이 바뀌면 다시 정합니다. 끄면 자기가 정한 Goal이 아직 Manager의 Goal일 때만 지웁니다. 여러 target이 한 Manager를 가리키면 마지막에 알린 target의 Goal이 쓰입니다. |
 | `FlowFieldSpeedModifier` | 영향 영역 안 셀의 속도 배율에 Speed Multiplier를 곱합니다. 기본 Priority는 100입니다. |
@@ -80,6 +80,7 @@ Inspector는 그룹마다 제목을 달고, 지금 Space Mode가 읽지 않는 �
 | | Clearance | 장애물 검사를 셀 밖으로 넓히는 거리입니다. |
 | | Sweep Unregistered | 등록하지 않은 장애물을 주기적으로 찾아 반영합니다([런타임 API](#런타임-api)). `StaticBaked`에서는 켤 수 없습니다. |
 | | Sweep Interval | sweep 간격입니다(unscaled 초, 0은 프레임마다). |
+| Additional Agent Types | Name, Clearance, Max Slope, Max Step Height | 위 설정(`Default` 유형) 밖의 주체 유형입니다(최대 2개). 유형마다 자기 Clearance와 Surface2D의 Max Slope·Max Step Height로 따로 빌드한 필드를 가지고, `TryGetAgentType(name, out type)`으로 찾은 유형으로 조회합니다. 개수와 이름은 `Release()` 뒤에 바꿉니다. `StaticBaked`에서는 쓸 수 없고, `BakedBase`에서는 Bake 대신 장면을 scan합니다. 규칙은 [TechnicalNotes](Docs/TechnicalNotes.md#agent-유형) |
 | Flow | Default Direction | Goal이 없거나 Goal 영향 밖인 셀의 방향입니다. |
 | | Goal Influence Radius | 0이면 격자 전체가 Goal로 흐르고, 양수면 Goal 중심의 그 반경 구 안만 Goal로 흐릅니다. 영향 안에서 Goal로 갈 길이 없는 셀은 멈춥니다. |
 | (그룹 없음) | Goal Transform | Init과 Bake가 한 번 읽는 초기 Goal입니다. 이후 이동은 `SetGoal()`이나 `FlowFieldGoalTarget`으로 알립니다. |
@@ -118,6 +119,7 @@ Inspector는 그룹마다 제목을 달고, 지금 Space Mode가 읽지 않는 �
 | 결과 변화 알림 | `FieldChanged`, `StateChanged`. `FieldChanged`와 `Revision`은 게시 내용(추가 Goal 포함)이 실제로 바뀔 때만 바뀌고, Space Mode를 바꿔도 `Revision`은 이어서 셉니다. 핸들러 안에서 모든 명령을 쓸 수 있습니다 |
 | Goal 변경 | `SetGoal(FlowFieldGoalRequest.Position(position, radius))` 또는 `FlowFieldGoalRequest.Target(transform, radius)`, 지우기는 `FlowFieldGoalRequest.None`. 또는 `FlowFieldGoalTarget`. 장애물 결과를 재사용하고, 마지막에 정한 Goal이 쓰입니다 |
 | 추가 Goal | `AddGoal(FlowFieldGoalKind.Shared 또는 Group, FlowFieldGoalRequest.Position(position, radius))`이 돌려준 핸들로 `TrySample(position, handle, out sample)`, `IsGoalReady(handle)`, `SetGoal(handle, request)`, `RemoveGoal(handle)`. `TrySampleNearestShared(position, out sample, out handle)`은 걸음 수가 가장 적은 `Shared` Goal로 답합니다. 기본 Goal과 같은 바닥·장애물·Modifier를 쓰고 기본 Goal 필드 다음에 빌드됩니다. `StaticBaked`는 받지 않습니다. 규칙은 [TechnicalNotes](Docs/TechnicalNotes.md#추가-goal) |
+| Agent 유형 | `TryGetAgentType(name, out type)`으로 찾은 유형을 `TrySample(position, type, out sample)`, `IsAgentTypeReady(type)`, `TrySample(position, handle, type, out sample)`, `IsGoalReady(handle, type)`, `TrySampleNearestShared(position, type, out sample, out handle)`에 넘깁니다. 유형을 받지 않는 호출과 `State`는 `Default` 유형입니다. 입력은 모든 유형에 적용됩니다 |
 | 움직이는 장애물 | `RegisterDynamicObstacle(collider)` → 움직일 때마다 `NotifyDynamicObstacleMoved(collider)` → `UnregisterDynamicObstacle(collider)`. `FlowFieldDynamicObstacle`이 이 셋을 대신합니다. 파괴된 Collider 등록은 "Cannot register a destroyed Collider." |
 | 장애물 영역 알림 (`RuntimeDynamic`, `BakedBase`) | `NotifyObstacleRegionDirty(bounds)`. 이전과 현재 Bounds의 합집합을 넘깁니다. 유한하지 않은 Bounds는 `ArgumentOutOfRangeException`("Bounds must be finite.") |
 | 바닥 형상 변경 (`RuntimeDynamic`) | `NotifyCellsDirty()`. 바닥(Volume3D는 모든 셀)과 장애물을 모두 다시 조회합니다. 진행 중인 빌드는 버리지 않고, 다음 빌드가 바닥을 다시 조회합니다 |
