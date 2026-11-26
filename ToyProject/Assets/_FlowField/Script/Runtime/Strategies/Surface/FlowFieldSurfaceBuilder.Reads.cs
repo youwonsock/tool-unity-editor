@@ -14,20 +14,20 @@ namespace Common.FlowField
             bool hasRequestedGoal = false;
             Vector3 requestedGoal = default;
             float influenceRadius = 0f;
-            if (_requests.HasLatest)
+            if (_inputs.Requests.HasLatest)
             {
-                if (_requests.Latest.SourceKind == FlowFieldSurfaceSourceKind.StaticSnapshot)
+                if (_inputs.Requests.Latest.SourceKind == FlowFieldSurfaceSourceKind.StaticSnapshot)
                 {
-                    FlowFieldSurfaceBakeSnapshot snapshot = _requests.Latest.BakeSnapshot;
+                    FlowFieldSurfaceBakeSnapshot snapshot = _inputs.Requests.Latest.BakeSnapshot;
                     hasRequestedGoal = snapshot != null && snapshot.HasGoal;
                     requestedGoal = snapshot != null ? snapshot.RequestedGoalWorld : default;
                     influenceRadius = snapshot != null ? snapshot.GoalInfluenceRadius : 0f;
                 }
                 else
                 {
-                    hasRequestedGoal = _requests.Latest.Goal.IsValid;
-                    requestedGoal = _requests.Latest.Goal.RequestedWorld;
-                    influenceRadius = _requests.Latest.Goal.InfluenceRadius;
+                    hasRequestedGoal = _inputs.Requests.Latest.Goal.IsValid;
+                    requestedGoal = _inputs.Requests.Latest.Goal.RequestedWorld;
+                    influenceRadius = _inputs.Requests.Latest.Goal.InfluenceRadius;
                 }
             }
 
@@ -81,7 +81,7 @@ namespace Common.FlowField
 
         // The latest request's grid, which the next build uses, as in Volume3D.
         public FlowFieldGridSpace LatestGrid
-            => _requests.HasLatest ? _requests.Latest.SurfaceSettings.Grid : _state.Grid;
+            => _inputs.Requests.HasLatest ? _inputs.Requests.Latest.SurfaceSettings.Grid : _state.Grid;
 
         /// <summary>
         /// What a bake stores: the published Surface and a copy of its

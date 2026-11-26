@@ -31,7 +31,7 @@ namespace Common.FlowField
                 return;
             // Before the first build the latest request already holds the grid.
             FlowFieldGridSpace grid = LatestGrid;
-            float clearance = _requests.HasLatest ? _requests.Latest.ObstacleClearance : 0f;
+            float clearance = _inputs.Requests.HasLatest ? _inputs.Requests.Latest.ObstacleClearance : 0f;
             FlowFieldCellRect dirty = FlowFieldCellRect.Invalid;
             if (grid.IsValid)
             {
@@ -48,7 +48,7 @@ namespace Common.FlowField
         {
             Bounds reach = FlowFieldObstacleReach.Expand(bounds, grid.CellSize, clearance);
             if (_sourceKind == FlowFieldSurfaceSourceKind.BakedBase)
-                _state.BakedBaseTouched = FlowFieldObstacleReach.Encapsulate(_state.BakedBaseTouched, reach);
+                _inputs.BakedBaseTouched = FlowFieldObstacleReach.Encapsulate(_inputs.BakedBaseTouched, reach);
             return FlowFieldCellRect.FromBounds(grid, reach);
         }
 

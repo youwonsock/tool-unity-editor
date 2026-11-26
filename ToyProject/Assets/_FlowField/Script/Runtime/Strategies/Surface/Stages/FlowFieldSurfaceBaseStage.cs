@@ -10,17 +10,20 @@ namespace Common.FlowField
     internal sealed class FlowFieldSurfaceBaseStage
     {
         private readonly FlowFieldSurfaceState _state;
+        private readonly FlowFieldSurfaceInputLedger _inputs;
         private readonly FlowFieldSurfaceObstacleMasks _obstacleMasks;
         private readonly FlowFieldSurfaceGoalTracker _goalTracker;
         private readonly IFlowFieldSurfaceSource _surfaceSource;
 
         internal FlowFieldSurfaceBaseStage(
             FlowFieldSurfaceState state,
+            FlowFieldSurfaceInputLedger inputs,
             FlowFieldSurfaceObstacleMasks obstacleMasks,
             FlowFieldSurfaceGoalTracker goalTracker,
             IFlowFieldSurfaceSource surfaceSource)
         {
             _state = state;
+            _inputs = inputs;
             _obstacleMasks = obstacleMasks;
             _goalTracker = goalTracker;
             _surfaceSource = surfaceSource;
@@ -81,15 +84,15 @@ namespace Common.FlowField
 
             if (boundsChanged)
                 _state.HasObstacleMask = false;
-            _state.DirtyFlags |= FlowFieldSurfaceDirtyFlags.StaticObstacles
+            _inputs.DirtyFlags |= FlowFieldSurfaceDirtyFlags.StaticObstacles
                 | FlowFieldSurfaceDirtyFlags.DynamicObstacles
                 | FlowFieldSurfaceDirtyFlags.Escape
                 | FlowFieldSurfaceDirtyFlags.DefaultDirection
                 | FlowFieldSurfaceDirtyFlags.Goal
                 | FlowFieldSurfaceDirtyFlags.ModifierArea
                 | FlowFieldSurfaceDirtyFlags.FinalRegion;
-            _state.DirtyFinalRegion = FlowFieldCellRect.Full(_state.Grid);
-            _state.DirtyObstacleRegion = FlowFieldCellRect.Full(_state.Grid);
+            _inputs.DirtyFinalRegion = FlowFieldCellRect.Full(_state.Grid);
+            _inputs.DirtyObstacleRegion = FlowFieldCellRect.Full(_state.Grid);
             modifiers?.MarkAllAreasDirty();
             return true;
         }
@@ -119,7 +122,7 @@ namespace Common.FlowField
             {
                 _state.ResolvedDefaultDirection = FlowFieldVectorUtility.NormalizeDefaultDirection(request.DefaultDirection);
                 pending |= FlowFieldSurfaceDirtyFlags.FinalRegion;
-                _state.ExpandFinalDirty(FlowFieldCellRect.Full(_state.Grid));
+                _inputs.ExpandFinalDirty(FlowFieldCellRect.Full(_state.Grid));
             }
 
             bool rebuildStatic = (pending & FlowFieldSurfaceDirtyFlags.StaticObstacles) != 0;
@@ -148,9 +151,9 @@ namespace Common.FlowField
                         request.ObstacleCheckHeight,
                         request.ObstacleCheckCenterOffset,
                         request.ObstacleClearance,
-                        _state.DirtyObstacleRegion,
+                        _inputs.DirtyObstacleRegion,
                         request.SourceKind == FlowFieldSurfaceSourceKind.BakedBase ? request.BakeSnapshot : null,
-                        _state.BakedBaseTouched,
+                        _inputs.BakedBaseTouched,
                         sweepsObstacles),
                     goal,
                     surfaceChanged),
@@ -172,7 +175,7 @@ namespace Common.FlowField
             bool surfaceChanged,
             ref FlowFieldSurfaceDirtyFlags pending)
         {
-            _state.DirtyObstacleRegion = FlowFieldCellRect.Invalid;
+            _inputs.DirtyObstacleRegion = FlowFieldCellRect.Invalid;
             if (rebuildStatic || rebuildDynamic)
                 _state.HasObstacleMask = true;
             if ((rebuildStatic || rebuildDynamic)
@@ -191,7 +194,7 @@ namespace Common.FlowField
                         | FlowFieldSurfaceDirtyFlags.FinalRegion)) == FlowFieldSurfaceDirtyFlags.None)
                 {
                     pending &= ~FlowFieldSurfaceDirtyFlags.FinalRegion;
-                    _state.DirtyFinalRegion = FlowFieldCellRect.Invalid;
+                    _inputs.DirtyFinalRegion = FlowFieldCellRect.Invalid;
                 }
             }
             // Escape directions read the ground as well as the mask (which
@@ -206,7 +209,7 @@ namespace Common.FlowField
                         _state.Workspace);
                 UpdateBlockedWarning(prepared.HasWalkableSurface);
                 pending |= FlowFieldSurfaceDirtyFlags.Goal | FlowFieldSurfaceDirtyFlags.FinalRegion;
-                _state.ExpandFinalDirty(FlowFieldCellRect.Full(_state.Grid));
+                _inputs.ExpandFinalDirty(FlowFieldCellRect.Full(_state.Grid));
             }
             if (prepared.GoalStatus == FlowFieldSurfaceGoalBuildStatus.NoWalkableSurface
                 && _goalTracker.TryConsumeMissingWalkableWarning())
@@ -225,14 +228,14 @@ namespace Common.FlowField
                     == FlowFieldSurfaceDirtyFlags.None)
                 {
                     pending &= ~FlowFieldSurfaceDirtyFlags.FinalRegion;
-                    _state.DirtyFinalRegion = FlowFieldCellRect.Invalid;
+                    _inputs.DirtyFinalRegion = FlowFieldCellRect.Invalid;
                 }
             }
             if ((rebuildGoal && prepared.GoalChanged)
                 || prepared.ObstacleMaskChanged)
             {
                 pending |= FlowFieldSurfaceDirtyFlags.FinalRegion;
-                _state.ExpandFinalDirty(FlowFieldCellRect.Full(_state.Grid));
+                _inputs.ExpandFinalDirty(FlowFieldCellRect.Full(_state.Grid));
             }
         }
 

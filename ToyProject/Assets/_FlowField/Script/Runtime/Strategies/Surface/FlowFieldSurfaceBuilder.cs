@@ -17,26 +17,21 @@ namespace Common.FlowField
         private readonly FlowFieldSurfaceFieldStore _fieldStore = new FlowFieldSurfaceFieldStore();
         private readonly FlowFieldSurfaceObstacleMasks _obstacleMasks;
         private readonly FlowFieldSurfaceGoalTracker _goalTracker = new FlowFieldSurfaceGoalTracker();
-        private readonly FlowFieldRequestInbox<FlowFieldSurfaceRequest> _requests
-            = new FlowFieldRequestInbox<FlowFieldSurfaceRequest>();
+        // What input owes the next build.
+        private readonly FlowFieldSurfaceInputLedger _inputs = new FlowFieldSurfaceInputLedger();
         private readonly FlowFieldSurfaceBaseStage _baseStage;
         // The worker-thread solve. A StaticBaked field never solves and has
         // none; dropping the computed state drops it, and the next solve
         // takes a new one.
         private FlowFieldSurfaceBaseFieldBuild _solveBackend;
         private FlowFieldSurfaceModifierComposition _modifierComposition;
-        private FlowFieldSurfaceRequest? _committedRequest;
         private FlowFieldBakeMode _bakeMode;
         private FlowFieldSurfaceSourceKind _sourceKind;
-        // Configuration input that arrived while a build ran. The next build
-        // submits it before it begins.
-        private FlowFieldManagerConfig _owedConfig;
-        private bool _configOwed;
         // Whether the staged masks were built with the obstacle sweep.
         private bool _masksSweep;
 
         public FlowFieldSpaceMode SpaceMode => FlowFieldSpaceMode.Surface2D;
-        public bool HasPendingRequest => _requests.Pending;
+        public bool HasPendingRequest => _inputs.Requests.Pending;
 
         // The build the session steps, or the last one. One runs at a time.
         private FlowFieldSurfaceBuild _build;
@@ -51,6 +46,7 @@ namespace Common.FlowField
             _obstacleMasks = new FlowFieldSurfaceObstacleMasks(host.Obstacles);
             _baseStage = new FlowFieldSurfaceBaseStage(
                 _state,
+                _inputs,
                 _obstacleMasks,
                 _goalTracker,
                 surfaceSource ?? FlowFieldRaycastSurfaceSource.Instance);
@@ -66,7 +62,7 @@ namespace Common.FlowField
                 FlowFieldBakeMode.BakedBase => FlowFieldSurfaceSourceKind.BakedBase,
                 _ => FlowFieldSurfaceSourceKind.SceneBuild,
             };
-            _state.BakedBaseTouched = null;
+            _inputs.BakedBaseTouched = null;
             _modifierComposition ??= new FlowFieldSurfaceModifierComposition(_host.Modifiers);
             PrepareSolveBackend();
             MarkDirty(FlowFieldSurfaceDirtyFlags.All, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
@@ -90,18 +86,18 @@ namespace Common.FlowField
             {
                 flags |= FlowFieldSurfaceDirtyFlags.FinalRegion;
             }
-            _state.DirtyFlags |= flags;
+            _inputs.DirtyFlags |= flags;
             if (finalRegion.IsValid)
-                _state.ExpandFinalDirty(finalRegion);
+                _inputs.ExpandFinalDirty(finalRegion);
             // Obstacle work without a region rescans every cell.
             if (obstacleRegion.IsValid)
-                _state.ExpandObstacleDirty(obstacleRegion);
+                _inputs.ExpandObstacleDirty(obstacleRegion);
             else if ((flags & FlowFieldSurfaceDirtyFlags.Obstacles) != 0)
-                _state.ExpandObstacleDirty(FlowFieldCellRect.Full(LatestGrid));
+                _inputs.ExpandObstacleDirty(FlowFieldCellRect.Full(LatestGrid));
             // Dirty observations reuse the latest accepted request. Initial
             // setup has no request yet and must wait for its first Submit.
-            if (_requests.HasLatest)
-                _requests.Pending = true;
+            if (_inputs.Requests.HasLatest)
+                _inputs.Requests.Pending = true;
         }
 
         /// <summary>
@@ -111,7 +107,7 @@ namespace Common.FlowField
         internal void ObserveGoalRemoved()
         {
             if (_sourceKind != FlowFieldSurfaceSourceKind.StaticSnapshot)
-                _state.GoalRemoved = true;
+                _inputs.GoalRemoved = true;
         }
 
         /// <summary>
@@ -128,7 +124,7 @@ namespace Common.FlowField
             // return to the old one. Obstacle changes that reached no cell of
             // the new grid were never applied to the old field (the session
             // skips them), so it can never be shown again.
-            if (_committedRequest.HasValue && !_committedRequest.Value.HasSameSource(request))
+            if (_fieldStore.CommittedRequest.HasValue && !_fieldStore.CommittedRequest.Value.HasSameSource(request))
                 DropPublishedField();
             FlowFieldSurfaceDirtyFlags inputFlags = InputDirtyFlags(request);
             Bounds? invalidated = ObstacleSettingsInvalidation(request);
@@ -139,24 +135,24 @@ namespace Common.FlowField
                 _modifierComposition?.MarkAllAreasDirty();
 
             FlowFieldSurfaceDirtyFlags combinedFlags = inputFlags | request.DirtyFlags;
-            _state.DirtyFlags |= combinedFlags;
+            _inputs.DirtyFlags |= combinedFlags;
             if ((combinedFlags & FlowFieldSurfaceDirtyFlags.FinalRegion) != 0)
             {
-                _state.ExpandFinalDirty(
+                _inputs.ExpandFinalDirty(
                     request.DirtyFinalRegion.IsValid
                         ? request.DirtyFinalRegion
                         : FlowFieldCellRect.Full(_state.Grid));
             }
             if (request.DirtyObstacleRegion.IsValid)
-                _state.ExpandObstacleDirty(request.DirtyObstacleRegion);
+                _inputs.ExpandObstacleDirty(request.DirtyObstacleRegion);
             // New obstacle settings rescan every cell.
             if ((inputFlags & FlowFieldSurfaceDirtyFlags.Obstacles) != 0)
-                _state.ExpandObstacleDirty(FlowFieldCellRect.Full(request.SurfaceSettings.Grid));
+                _inputs.ExpandObstacleDirty(FlowFieldCellRect.Full(request.SurfaceSettings.Grid));
 
-            _requests.Accept(request);
+            _inputs.Requests.Accept(request);
             // A StaticBaked request carries no runtime Goal: the field loads
             // the baked one, which nothing can remove.
-            _state.GoalRemoved = request.SourceKind != FlowFieldSurfaceSourceKind.StaticSnapshot
+            _inputs.GoalRemoved = request.SourceKind != FlowFieldSurfaceSourceKind.StaticSnapshot
                 && !request.Goal.IsValid;
             // A new grid or source hides the published field at once; the session
             // reports the state when the input is accepted.
@@ -173,11 +169,11 @@ namespace Common.FlowField
         /// </summary>
         private FlowFieldSurfaceDirtyFlags InputDirtyFlags(in FlowFieldSurfaceRequest request)
         {
-            if (!_requests.HasLatest)
+            if (!_inputs.Requests.HasLatest)
                 return FlowFieldSurfaceDirtyFlags.None;
-            FlowFieldSurfaceDirtyFlags flags = request.HasSameInputs(_requests.Latest)
+            FlowFieldSurfaceDirtyFlags flags = request.HasSameInputs(_inputs.Requests.Latest)
                 ? FlowFieldSurfaceDirtyFlags.None
-                : _requests.Latest.GetInputDirtyFlags(request);
+                : _inputs.Requests.Latest.GetInputDirtyFlags(request);
             if (!FlowFieldVectorUtility.SameDefaultDirection(
                     _state.ResolvedDefaultDirection,
                     FlowFieldVectorUtility.NormalizeDefaultDirection(request.DefaultDirection)))
@@ -194,15 +190,14 @@ namespace Common.FlowField
         /// </summary>
         internal Bounds? ObstacleSettingsInvalidation(in FlowFieldSurfaceRequest request)
         {
-            bool changed = _requests.HasLatest
-                && _requests.Latest.HasSameSource(request)
-                && !_requests.Latest.HasSameObstacleInputs(request);
+            bool changed = _inputs.Requests.HasLatest
+                && _inputs.Requests.Latest.HasSameSource(request)
+                && !_inputs.Requests.Latest.HasSameObstacleInputs(request);
             return changed ? request.SurfaceSettings.BakeBounds : (Bounds?)null;
         }
 
         private void DropPublishedField()
         {
-            _committedRequest = null;
             _fieldStore.Clear();
         }
 
@@ -214,7 +209,7 @@ namespace Common.FlowField
             _build?.Drop();
             _build = null;
             _solveBackend?.Cancel();
-            _state.DirtyFlags = FlowFieldSurfaceDirtyFlags.None;
+            _inputs.DirtyFlags = FlowFieldSurfaceDirtyFlags.None;
         }
 
         // Drops the published field and the computed Surface, keeping the
@@ -231,7 +226,7 @@ namespace Common.FlowField
             _state.HasObstacleMask = false;
             _state.Surface = null;
             _state.Workspace.ClearAll();
-            _configOwed = false;
+            _inputs.ConfigOwed = false;
             // A Goal that was prepared but not solved must not be reported as
             // unchanged by the next build.
             _goalTracker.ForgetLastBuild();
@@ -247,7 +242,6 @@ namespace Common.FlowField
             _baseStage.Clear();
             _obstacleMasks.Clear();
 
-            _committedRequest = null;
             _fieldStore.Clear();
             _state.Workspace.Release();
             _state.Grid = default;
@@ -256,14 +250,8 @@ namespace Common.FlowField
             _state.HasObstacleMask = false;
             _state.BaseComposed = false;
             _state.LastComposedRegion = FlowFieldCellRect.Invalid;
-            _state.DirtyFlags = FlowFieldSurfaceDirtyFlags.All;
-            _state.DirtyFinalRegion = FlowFieldCellRect.Invalid;
-            _state.DirtyObstacleRegion = FlowFieldCellRect.Invalid;
             _state.ResolvedDefaultDirection = Vector3.zero;
-            _requests.Clear();
-            _configOwed = false;
-            _state.GoalRemoved = false;
-            _state.BakedBaseTouched = null;
+            _inputs.Reset();
             _masksSweep = false;
         }
 

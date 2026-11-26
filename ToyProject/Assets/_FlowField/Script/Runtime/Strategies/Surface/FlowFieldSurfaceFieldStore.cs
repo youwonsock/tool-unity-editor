@@ -15,6 +15,10 @@ namespace Common.FlowField
         private readonly FlowFieldSpareArrays _spares = new FlowFieldSpareArrays();
         private FlowFieldField _field;
 
+        // The request of the last build that published, whether or not its
+        // cells changed; null after Clear.
+        internal FlowFieldSurfaceRequest? CommittedRequest;
+
         internal FlowFieldField Field => _field;
         internal FlowFieldGridSpace Grid => _field?.Grid ?? default;
         internal FlowFieldSurfaceData Surface => _field?.Surface;
@@ -246,6 +250,7 @@ namespace Common.FlowField
 
         internal void Clear()
         {
+            CommittedRequest = null;
             _field = null;
             _spares.Clear();
         }

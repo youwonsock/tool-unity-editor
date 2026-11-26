@@ -29,7 +29,7 @@ namespace Common.FlowField
                         requeryObstacles ? RequeryObstacleFlags : FlowFieldSurfaceDirtyFlags.None,
                         FlowFieldCellRect.Invalid,
                         requeryObstacles ? FlowFieldCellRect.Full(signature.Surface.Grid) : FlowFieldCellRect.Invalid));
-                    _configOwed = false;
+                    _inputs.ConfigOwed = false;
                     return invalidated;
                 }
                 case FlowFieldConfigChange.Goal:
@@ -61,13 +61,13 @@ namespace Common.FlowField
             FlowFieldSurfaceRequest current = CreateCurrentRequest(in config);
             FlowFieldSurfaceDirtyFlags flags = InputDirtyFlags(current);
             MarkDirty(flags, FlowFieldCellRect.Invalid, FlowFieldCellRect.Invalid);
-            if (_requests.HasLatest && current.HasSameInputs(_requests.Latest))
+            if (_inputs.Requests.HasLatest && current.HasSameInputs(_inputs.Requests.Latest))
             {
                 // The settings are back to the submitted request, Goal
                 // included, so a change owed during this build was reverted
                 // before it began: drop it. A direction a solve already
                 // composed is composed again (the flags above).
-                _configOwed = false;
+                _inputs.ConfigOwed = false;
                 return null;
             }
             // A new grid drops the published field at once.
@@ -81,11 +81,11 @@ namespace Common.FlowField
         {
             if (immediately || !HasActiveBuild)
             {
-                _configOwed = false;
+                _inputs.ConfigOwed = false;
                 return Submit(CreateCurrentRequest(in config));
             }
-            _owedConfig = config;
-            _configOwed = true;
+            _inputs.OwedConfig = config;
+            _inputs.ConfigOwed = true;
             return ObstacleSettingsInvalidation(CreateCurrentRequest(in config));
         }
 
