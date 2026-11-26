@@ -96,7 +96,9 @@ namespace Common.FlowField
 
         // ----- Configuration -------------------------------------------------
         // The builder turns the Manager's settings into its own request; every
-        // change arrives as a notification, never by polling the scene.
+        // change arrives as a notification, never by polling the scene. The
+        // session refuses input while it is not running, so a builder never
+        // checks the lifecycle itself.
         // Initialize prepares a builder that has no request yet for the bake
         // mode the session starts with; the builder keeps it until the next
         // Initialize. SubmitConfig returns the region new obstacle settings

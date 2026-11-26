@@ -137,10 +137,6 @@ namespace Common.FlowField
         /// </summary>
         internal Bounds? Submit(in FlowFieldSurfaceRequest request)
         {
-            if (_session.Disposed)
-                throw new ObjectDisposedException(nameof(FlowFieldSurfaceBuilder));
-            if (!_session.IsInitialized)
-                throw new InvalidOperationException("FlowField session is not initialized.");
             if (request.SourceKind != _sourceKind)
                 throw new InvalidOperationException("FlowField request source does not match the active session.");
 

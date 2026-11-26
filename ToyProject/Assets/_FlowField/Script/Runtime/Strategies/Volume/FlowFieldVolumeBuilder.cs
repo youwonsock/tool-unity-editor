@@ -92,9 +92,6 @@ namespace Common.FlowField
         /// </summary>
         internal Bounds? Submit(in FlowFieldVolumeRequest request, bool requeryObstacles = false)
         {
-            ThrowIfDisposed();
-            if (!_session.IsInitialized)
-                throw new InvalidOperationException("FlowField volume session is not initialized.");
             ValidateRequest(request);
             if (requeryObstacles)
                 _obstacleQueryRequired = true;
@@ -182,12 +179,6 @@ namespace Common.FlowField
 
         private static Vector3 ObstacleHalfExtents(float cellSize, float clearance)
             => Vector3.one * FlowFieldOverlapUtility.CellHalfExtent(cellSize, clearance);
-
-        private void ThrowIfDisposed()
-        {
-            if (_session.Disposed)
-                throw new ObjectDisposedException(nameof(FlowFieldVolumeBuilder));
-        }
 
         private void ValidateRequest(in FlowFieldVolumeRequest request)
         {
