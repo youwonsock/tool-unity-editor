@@ -122,7 +122,7 @@ namespace Common.FlowField
         private static bool IsStepUnsafe<TView>(in TView cells, int index, int next, bool pathLink)
             where TView : struct, IFlowFieldCellView
         {
-            if (next >= cells.Grid.CellCount)
+            if (!cells.Contains(next))
                 return true;
             cells.Locate(index, out int x0, out int y0, out int z0);
             cells.Locate(next, out int x1, out int y1, out int z1);

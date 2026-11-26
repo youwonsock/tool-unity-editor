@@ -48,6 +48,40 @@ namespace Common.FlowField
         private readonly Dictionary<(FlowFieldSession, int), SeedInputs> _inputs
             = new Dictionary<(FlowFieldSession, int), SeedInputs>();
         private readonly Dictionary<FlowFieldSession, int> _baseStamps = new Dictionary<FlowFieldSession, int>();
+        private readonly Dictionary<FlowFieldSession, AreaStitch> _stitches = new Dictionary<FlowFieldSession, AreaStitch>();
+
+        // The touching areas of one area session's type, for its world Goal reads.
+        private sealed class AreaStitch : IFlowFieldStitchSource
+        {
+            internal FlowFieldWorldArea Area;
+            internal string TypeName;
+
+            public int Count => Area.Borders.Count;
+
+            public bool TryGet(
+                int index,
+                out FlowFieldField field,
+                out FlowFieldSafety regions,
+                out IFlowFieldLatestCells latest,
+                out int offsetX,
+                out int offsetY,
+                out int offsetZ)
+            {
+                field = null;
+                regions = null;
+                latest = null;
+                FlowFieldWorldArea other = Area.Borders[index].Other;
+                offsetX = other.Box.MinX - Area.Box.MinX;
+                offsetY = other.Box.MinY - Area.Box.MinY;
+                offsetZ = other.Box.MinZ - Area.Box.MinZ;
+                FlowFieldSession session = SessionOf(other, TypeName);
+                if (session == null || !session.TryGetPublishedField(out field))
+                    return false;
+                regions = session.Safety;
+                latest = session.LatestCells;
+                return true;
+            }
+        }
         private readonly SeedInputs _scratchInputs = new SeedInputs();
         private readonly List<int> _cells = new List<int>(64);
         private readonly List<int> _costs = new List<int>(64);
@@ -148,6 +182,14 @@ namespace Common.FlowField
                     FlowFieldSession session = manager.WorldSession(s);
                     if (!TakesGoals(session))
                         continue;
+                    if (!_stitches.TryGetValue(session, out AreaStitch stitch))
+                    {
+                        stitch = new AreaStitch();
+                        _stitches.Add(session, stitch);
+                    }
+                    stitch.Area = areas[a];
+                    stitch.TypeName = manager.WorldSessionName(s);
+                    session.Stitch = stitch;
                     int stamp = session.Goals.BaseStamp;
                     if (!_baseStamps.TryGetValue(session, out int seen) || seen != stamp)
                     {

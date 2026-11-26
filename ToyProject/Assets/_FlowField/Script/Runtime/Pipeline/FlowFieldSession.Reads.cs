@@ -133,9 +133,25 @@ namespace Common.FlowField
         {
             sample = FlowFieldSample.Stopped;
             FlowFieldField field = GoalField(id);
-            return field != null
-                && FlowFieldSampler.Sample(field, worldPosition, Safety, GoalCells(), out sample)
-                    == FlowFieldSampleStatus.Sampled;
+            return field != null && SampleGoalField(Goals.Find(id), field, worldPosition, out sample);
+        }
+
+        /// <summary>
+        /// The touching areas a world Goal's read steps into, set by the world
+        /// this session's Manager joined; null outside a world.
+        /// </summary>
+        internal IFlowFieldStitchSource Stitch { get; set; }
+
+        // The builder's newer cells, for a touching area's reads.
+        internal IFlowFieldLatestCells LatestCells => _builder.LatestCells;
+
+        // A world Goal's steps may lead into a touching area: they are checked there.
+        private bool SampleGoalField(FlowFieldGoalSet.Entry entry, FlowFieldField field, Vector3 worldPosition, out FlowFieldSample sample)
+        {
+            FlowFieldSampleStatus status = entry?.Seeds != null && Stitch != null
+                ? FlowFieldSampler.SampleStitched(field, worldPosition, Safety, GoalCells(), Stitch, out sample)
+                : FlowFieldSampler.Sample(field, worldPosition, Safety, GoalCells(), out sample);
+            return status == FlowFieldSampleStatus.Sampled;
         }
 
         /// <summary>
@@ -154,6 +170,8 @@ namespace Common.FlowField
             FlowFieldField fallback = null;
             int fallbackId = 0;
             int best = FlowFieldGoalLayer.Unreachable;
+            FlowFieldGoalSet.Entry nearestEntry = null;
+            FlowFieldGoalSet.Entry fallbackEntry = null;
             FlowFieldField published = _builder.PublishedField;
             IReadOnlyList<FlowFieldGoalSet.Entry> entries = Goals.Entries;
             for (int i = 0; i < entries.Count; i++)
@@ -168,23 +186,25 @@ namespace Common.FlowField
                 {
                     fallback = field;
                     fallbackId = entry.Id;
+                    fallbackEntry = entry;
                 }
                 int[] distances = field.Goal.Distances;
                 if (distances == null || distances[index] >= best)
                     continue;
                 best = distances[index];
                 nearest = field;
+                nearestEntry = entry;
                 goalId = entry.Id;
             }
             if (nearest == null)
             {
                 nearest = fallback;
+                nearestEntry = fallbackEntry;
                 goalId = fallbackId;
             }
             if (nearest == null)
                 return false;
-            return FlowFieldSampler.Sample(nearest, worldPosition, Safety, GoalCells(), out sample)
-                == FlowFieldSampleStatus.Sampled;
+            return SampleGoalField(nearestEntry, nearest, worldPosition, out sample);
         }
 
         /// <summary>The Goal's field, valid until the next pump, or null.</summary>

@@ -55,6 +55,12 @@ namespace Common.FlowField
             return new FlowFieldSample(direction, _field.Goal.FinalSpeeds[index], normal, hasSurface: true, hasCell: true);
         }
 
+        public bool Contains(int index) => (uint)index < (uint)_field.Grid.CellCount;
+
+        public float GroundHeight(int index) => _field.Scene.Surface.Heights[index];
+
+        public float StepHeight => _field.Scene.Surface.MaxStepHeight;
+
         public int NextCell(int index)
         {
             int next = _field.Goal.NextCells[index];

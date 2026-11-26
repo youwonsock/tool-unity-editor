@@ -53,6 +53,12 @@ namespace Common.FlowField
                 hasSurface: false,
                 hasCell: true);
 
+        public bool Contains(int index) => (uint)index < (uint)_field.Grid.CellCount;
+
+        public float GroundHeight(int index) => 0f;
+
+        public float StepHeight => float.PositiveInfinity;
+
         public int NextCell(int index)
         {
             int next = _field.Goal.NextCells[index];

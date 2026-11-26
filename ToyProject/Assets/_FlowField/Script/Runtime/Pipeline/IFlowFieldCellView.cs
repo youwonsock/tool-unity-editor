@@ -14,6 +14,12 @@ namespace Common.FlowField
     {
         FlowFieldField Field { get; }
         FlowFieldGridSpace Grid { get; }
+        // Whether an index names a cell of this view.
+        bool Contains(int index);
+        // Surface2D: the cell's ground height and the step a mover climbs;
+        // Volume3D has no ground, 0 and no limit.
+        float GroundHeight(int index);
+        float StepHeight { get; }
         // The cell a world position inside the grid falls in.
         bool TryLocate(Vector3 worldPosition, out int index);
         // The published sample of a cell, before the safety rule.

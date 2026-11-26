@@ -42,6 +42,66 @@ namespace Common.FlowField
             return Sample(new FlowFieldSurfaceCellView(field, in staged, hasStaged, regions), worldPosition, out sample);
         }
 
+        // Reused by every stitched read; reads run on the main thread.
+        private static readonly FlowFieldStitchedViews<FlowFieldSurfaceCellView> SurfaceStitch
+            = new FlowFieldStitchedViews<FlowFieldSurfaceCellView>();
+        private static readonly FlowFieldStitchedViews<FlowFieldVolumeCellView> VolumeStitch
+            = new FlowFieldStitchedViews<FlowFieldVolumeCellView>();
+
+        /// <summary>
+        /// <see cref="Sample"/> of a world Goal's field, whose steps may lead
+        /// into the touching areas <paramref name="stitch"/> names: the rule
+        /// checks those steps against the cells they land in.
+        /// </summary>
+        internal static FlowFieldSampleStatus SampleStitched(
+            FlowFieldField field,
+            Vector3 worldPosition,
+            FlowFieldSafety regions,
+            IFlowFieldLatestCells latest,
+            IFlowFieldStitchSource stitch,
+            out FlowFieldSample sample)
+        {
+            sample = FlowFieldSample.Stopped;
+            if (field == null)
+                return FlowFieldSampleStatus.NotReady;
+            if (!FlowFieldGridSpace.IsFinite(worldPosition))
+                return FlowFieldSampleStatus.NonFinite;
+            if (!field.Grid.ContainsWorldPosition(worldPosition))
+                return FlowFieldSampleStatus.OutOfGrid;
+            FlowFieldStagedCells staged = default;
+            bool hasStaged = latest != null && latest.TryCapture(field, out staged);
+            int first = field.Grid.CellCount;
+            if (field.Grid.SpaceMode == FlowFieldSpaceMode.Volume3D)
+            {
+                VolumeStitch.Clear();
+                for (int i = 0; i < stitch.Count; i++)
+                {
+                    if (!stitch.TryGet(i, out FlowFieldField other, out FlowFieldSafety otherRegions,
+                            out IFlowFieldLatestCells otherLatest, out int ox, out int oy, out int oz))
+                        continue;
+                    FlowFieldStagedCells otherStaged = default;
+                    bool otherHas = otherLatest != null && otherLatest.TryCapture(other, out otherStaged);
+                    VolumeStitch.Add(new FlowFieldVolumeCellView(other, in otherStaged, otherHas, otherRegions), ox, oy, oz, first);
+                    first += other.Grid.CellCount;
+                }
+                var volume = new FlowFieldVolumeCellView(field, in staged, hasStaged, regions);
+                return Sample(new FlowFieldStitchedCellView<FlowFieldVolumeCellView>(in volume, VolumeStitch), worldPosition, out sample);
+            }
+            SurfaceStitch.Clear();
+            for (int i = 0; i < stitch.Count; i++)
+            {
+                if (!stitch.TryGet(i, out FlowFieldField other, out FlowFieldSafety otherRegions,
+                        out IFlowFieldLatestCells otherLatest, out int ox, out int oy, out int oz))
+                    continue;
+                FlowFieldStagedCells otherStaged = default;
+                bool otherHas = otherLatest != null && otherLatest.TryCapture(other, out otherStaged);
+                SurfaceStitch.Add(new FlowFieldSurfaceCellView(other, in otherStaged, otherHas, otherRegions), ox, oy, oz, first);
+                first += other.Grid.CellCount;
+            }
+            var surface = new FlowFieldSurfaceCellView(field, in staged, hasStaged, regions);
+            return Sample(new FlowFieldStitchedCellView<FlowFieldSurfaceCellView>(in surface, SurfaceStitch), worldPosition, out sample);
+        }
+
         /// <summary>The cell of the field a world position falls in; false outside its grid.</summary>
         internal static bool TryLocate(FlowFieldField field, Vector3 worldPosition, out int index)
         {
