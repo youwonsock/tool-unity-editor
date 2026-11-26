@@ -92,6 +92,92 @@ namespace Common.FlowField.Tests
             Assert.That(stopped.SpeedMultiplier, Is.EqualTo(0f), "The step into A's notified change must stop.");
         }
 
+        // An area whose Bake Bounds shrink while it builds a world Goal: its
+        // seeds belong to the old grid, so they go with its field, and the
+        // area builds the Goal again on its new grid.
+        [UnityTest, Timeout(300000)]
+        public IEnumerator AreaRebuildsWorldGoalsOnANewGrid()
+        {
+            yield return EnterEmptyPlayMode();
+            FlowFieldWorld world = CreateWorld(FlowFieldSpaceMode.Surface2D);
+            CreateGround();
+            FlowFieldManager a = CreateManager("A", FlowFieldSpaceMode.Surface2D, Vector3.zero, new Vector3(10f, 4f, 10f), world);
+            FlowFieldManager b = CreateManager("B", FlowFieldSpaceMode.Surface2D, new Vector3(10f, 0f, 0f), new Vector3(10f, 4f, 10f), world);
+            yield return WaitUntilSettled(a, b);
+            FlowFieldGoalHandle goal = world.AddGoal(FlowFieldGoalKind.Shared, FlowFieldGoalRequest.Position(new Vector3(15.5f, 0f, 5.5f)));
+            yield return WaitUntilSettled(a, b, world, goal);
+
+            // A keeps touching B along its east edge, now 6 cells deep.
+            var serialized = new UnityEditor.SerializedObject(a);
+            serialized.FindProperty(FlowFieldManager.PropertyNames.BakeBoundsLocal).boundsValue
+                = new Bounds(new Vector3(5f, 0f, 3f), new Vector3(10f, 4f, 6f));
+            serialized.ApplyModifiedProperties();
+            Assert.That(a.IsFaulted, Is.False, a.LastError);
+            yield return WaitUntilSettled(a, b, world, goal);
+            Assert.That(a.IsFaulted, Is.False, a.LastError);
+            FlowFieldField field = a.Session.GoalField(goal.Id);
+            Assert.That(field.Grid.Depth, Is.EqualTo(6));
+            Assert.That(field.Goal.Distances[field.Grid.ToFlatIndex(0, 2)], Is.Not.EqualTo(FlowFieldGoalLayer.Unreachable),
+                "A reaches the Goal in B on its new grid.");
+        }
+
+        // A world Goal inside the wall starts from the nearest walkable cell,
+        // and an area that touches no other one gets no field for it.
+        [UnityTest, Timeout(300000)]
+        public IEnumerator GoalInAWallAndAnIsolatedArea()
+        {
+            yield return EnterEmptyPlayMode();
+            FlowFieldWorld world = CreateWorld(FlowFieldSpaceMode.Surface2D);
+            CreateGround();
+            CreateWall(volume: false, 10f);
+            FlowFieldManager a = CreateManager("A", FlowFieldSpaceMode.Surface2D, Vector3.zero, new Vector3(10f, 4f, 10f), world);
+            FlowFieldManager b = CreateManager("B", FlowFieldSpaceMode.Surface2D, new Vector3(10f, 0f, 0f), new Vector3(10f, 4f, 10f), world);
+            FlowFieldManager far = CreateManager("Far", FlowFieldSpaceMode.Surface2D, new Vector3(0f, 0f, 12f), new Vector3(4f, 4f, 4f), world);
+            yield return WaitUntilSettled(a, b);
+            yield return WaitUntilSettled(far, null);
+            FlowFieldGoalHandle goal = world.AddGoal(FlowFieldGoalKind.Shared, FlowFieldGoalRequest.Position(new Vector3(10.5f, 0f, 5.5f)));
+            float deadline = Time.realtimeSinceStartup + SettleTimeoutSeconds;
+            while (!(a.IsGoalReady(goal) && b.IsGoalReady(goal)))
+            {
+                if (Time.realtimeSinceStartup > deadline)
+                    Assert.Fail("The world Goal in the wall never built: " + FlowFieldPlayScene.Describe());
+                yield return null;
+            }
+            yield return WaitUntilSettled(a, b);
+            FlowFieldField fieldB = b.Session.GoalField(goal.Id);
+            Assert.That(fieldB.Goal.Distances[fieldB.Grid.ToFlatIndex(5, 1)], Is.Not.EqualTo(FlowFieldGoalLayer.Unreachable),
+                "A Goal in the wall must start from the nearest walkable cell.");
+            Assert.That(far.IsGoalReady(goal), Is.False, "An isolated area has no field for a Goal it cannot reach.");
+            Assert.That(far.Session.GoalField(goal.Id), Is.Null);
+            Assert.That(world.IsGoalReady(goal), Is.False, "The world is not ready while an area has no field.");
+        }
+
+        // B joins first and an obstacle notice in A arrives every frame: the
+        // epochs still spread the Goal in A to B.
+        [UnityTest, Timeout(300000)]
+        public IEnumerator ConstantInputStillReachesEveryArea()
+        {
+            yield return EnterEmptyPlayMode();
+            FlowFieldWorld world = CreateWorld(FlowFieldSpaceMode.Surface2D);
+            CreateGround();
+            FlowFieldManager b = CreateManager("B", FlowFieldSpaceMode.Surface2D, new Vector3(10f, 0f, 0f), new Vector3(10f, 4f, 10f), world);
+            FlowFieldManager a = CreateManager("A", FlowFieldSpaceMode.Surface2D, Vector3.zero, new Vector3(10f, 4f, 10f), world);
+            yield return WaitUntilSettled(a, b);
+            FlowFieldGoalHandle goal = world.AddGoal(FlowFieldGoalKind.Shared, FlowFieldGoalRequest.Position(new Vector3(1.5f, 0f, 5.5f)));
+            float deadline = Time.realtimeSinceStartup + SettleTimeoutSeconds;
+            bool reached = false;
+            while (!reached)
+            {
+                if (Time.realtimeSinceStartup > deadline)
+                    Assert.Fail("B never reached the Goal in A: " + FlowFieldPlayScene.Describe());
+                a.NotifyObstacleRegionDirty(new Bounds(new Vector3(1.5f, 0f, 0.5f), Vector3.one * 0.5f));
+                yield return null;
+                FlowFieldField fieldB = b.Session.GoalField(goal.Id);
+                reached = fieldB != null
+                    && fieldB.Goal.Distances[fieldB.Grid.ToFlatIndex(9, 5)] != FlowFieldGoalLayer.Unreachable;
+            }
+        }
+
         private static Vector3 Flat(Vector3 position, bool volume) => volume ? position : new Vector3(position.x, 0f, position.z);
 
         [UnityTest, Timeout(300000)]

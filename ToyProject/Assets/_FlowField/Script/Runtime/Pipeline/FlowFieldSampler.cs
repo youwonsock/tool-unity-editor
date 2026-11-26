@@ -85,7 +85,10 @@ namespace Common.FlowField
                     first += other.Grid.CellCount;
                 }
                 var volume = new FlowFieldVolumeCellView(field, in staged, hasStaged, regions);
-                return Sample(new FlowFieldStitchedCellView<FlowFieldVolumeCellView>(in volume, VolumeStitch), worldPosition, out sample);
+                FlowFieldSampleStatus volumeStatus = Sample(
+                    new FlowFieldStitchedCellView<FlowFieldVolumeCellView>(in volume, VolumeStitch), worldPosition, out sample);
+                VolumeStitch.Clear();
+                return volumeStatus;
             }
             SurfaceStitch.Clear();
             for (int i = 0; i < stitch.Count; i++)
@@ -99,7 +102,10 @@ namespace Common.FlowField
                 first += other.Grid.CellCount;
             }
             var surface = new FlowFieldSurfaceCellView(field, in staged, hasStaged, regions);
-            return Sample(new FlowFieldStitchedCellView<FlowFieldSurfaceCellView>(in surface, SurfaceStitch), worldPosition, out sample);
+            FlowFieldSampleStatus status = Sample(
+                new FlowFieldStitchedCellView<FlowFieldSurfaceCellView>(in surface, SurfaceStitch), worldPosition, out sample);
+            SurfaceStitch.Clear();
+            return status;
         }
 
         /// <summary>The cell of the field a world position falls in; false outside its grid.</summary>

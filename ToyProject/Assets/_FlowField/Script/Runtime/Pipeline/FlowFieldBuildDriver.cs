@@ -40,7 +40,15 @@ namespace Common.FlowField
         {
             if (!Application.isPlaying)
                 return;
-            FlowFieldWorldAreas.UpdateAll();
+            // A world's failure never keeps the builds from running.
+            try
+            {
+                FlowFieldWorldAreas.UpdateAll();
+            }
+            catch (System.Exception exception)
+            {
+                Debug.LogException(exception);
+            }
             FlowFieldBuildScheduler.PumpAll(FlowFieldBuildSettings.BudgetMilliseconds);
         }
     }

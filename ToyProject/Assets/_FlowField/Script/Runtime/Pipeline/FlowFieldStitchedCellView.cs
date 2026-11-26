@@ -36,7 +36,13 @@ namespace Common.FlowField
         // The first encoded index of each view's cells.
         internal int[] Bases = new int[4];
 
-        internal void Clear() => Count = 0;
+        // Drops the views, so no field outlives the read through them.
+        internal void Clear()
+        {
+            for (int i = 0; i < Count; i++)
+                Views[i] = default;
+            Count = 0;
+        }
 
         internal void Add(in TView view, int offsetX, int offsetY, int offsetZ, int first)
         {

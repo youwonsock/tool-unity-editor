@@ -28,6 +28,9 @@ namespace Common.FlowField
             // Manager alone; the seeds the published field was built with.
             internal FlowFieldGoalSeeds Seeds;
             internal FlowFieldGoalSeeds BuiltSeeds;
+            // A world Goal builds only from seeds: until its world gives this
+            // area some, the area has no field for it.
+            internal bool World;
 
             internal Entry(int id, FlowFieldGoalKind kind, in FlowFieldGoalRequest request)
             {
@@ -64,11 +67,15 @@ namespace Common.FlowField
 
         // Not yet built for the latest input: the session stays Building.
         internal bool IsDue(Entry entry)
-            => entry.BuiltRequestRevision != entry.RequestRevision || entry.BuiltBaseStamp != BaseStamp;
+            => HasSearch(entry)
+                && (entry.BuiltRequestRevision != entry.RequestRevision || entry.BuiltBaseStamp != BaseStamp);
 
         // Not yet built on the published field: a batch can build it now.
         internal bool IsBuildable(Entry entry)
-            => entry.BuiltRequestRevision != entry.RequestRevision || entry.BuiltBaseStamp != PublishedStamp;
+            => HasSearch(entry)
+                && (entry.BuiltRequestRevision != entry.RequestRevision || entry.BuiltBaseStamp != PublishedStamp);
+
+        private static bool HasSearch(Entry entry) => !entry.World || entry.Seeds != null;
 
         internal bool HasBuildable => HasBuildableOf(FlowFieldGoalKind.Shared) || HasBuildableOf(FlowFieldGoalKind.Group);
 
@@ -136,11 +143,11 @@ namespace Common.FlowField
         }
 
         // A positive id is another session's for the same Goal.
-        internal Entry Add(FlowFieldGoalKind kind, in FlowFieldGoalRequest request, int id = 0)
+        internal Entry Add(FlowFieldGoalKind kind, in FlowFieldGoalRequest request, int id = 0, bool world = false)
         {
             if (id <= 0)
                 id = NextId();
-            var entry = new Entry(id, kind, request);
+            var entry = new Entry(id, kind, request) { World = world };
             _entries.Add(entry);
             return entry;
         }
@@ -194,6 +201,19 @@ namespace Common.FlowField
             return true;
         }
 
+        /// <summary>
+        /// A world Goal's new position, which only its seeds carry into the
+        /// search: the area builds again when they change.
+        /// </summary>
+        internal bool TrySetWorldRequest(int id, in FlowFieldGoalRequest request)
+        {
+            Entry entry = Find(id);
+            if (entry == null)
+                return false;
+            entry.Request = request;
+            return true;
+        }
+
         internal bool Remove(int id)
         {
             for (int i = 0; i < _entries.Count; i++)
@@ -216,10 +236,13 @@ namespace Common.FlowField
         internal void DropFields()
         {
             unchecked { FieldEpoch++; }
+            // Seeds name cells of the grid they were made for.
             for (int i = 0; i < _entries.Count; i++)
             {
                 _entries[i].Field = null;
                 _entries[i].BuiltBaseStamp = -1;
+                _entries[i].Seeds = null;
+                _entries[i].BuiltSeeds = null;
             }
         }
 

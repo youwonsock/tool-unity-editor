@@ -58,6 +58,7 @@ namespace Common.FlowField
         public FlowFieldGoalHandle AddGoal(FlowFieldGoalKind kind, in FlowFieldGoalRequest request)
         {
             ThrowIfNotPlaying();
+            ThrowIfInUserCode(nameof(AddGoal));
             if (!System.Enum.IsDefined(typeof(FlowFieldGoalKind), kind))
                 throw new System.ArgumentOutOfRangeException(nameof(kind));
             ValidateRequest(in request);
@@ -71,15 +72,23 @@ namespace Common.FlowField
         public bool SetGoal(FlowFieldGoalHandle goal, in FlowFieldGoalRequest request)
         {
             ThrowIfNotPlaying();
+            ThrowIfInUserCode(nameof(SetGoal));
             ValidateRequest(in request);
             return goal.IsValid && Areas.Goals.TrySet(goal.Id, request);
         }
 
         /// <summary>Removes a world Goal from every area.</summary>
         /// <returns>False when the handle names no Goal of this world.</returns>
-        public bool RemoveGoal(FlowFieldGoalHandle goal) => goal.IsValid && Areas.Goals.Remove(goal.Id);
+        public bool RemoveGoal(FlowFieldGoalHandle goal)
+        {
+            ThrowIfInUserCode(nameof(RemoveGoal));
+            return goal.IsValid && Areas.Goals.Remove(goal.Id);
+        }
 
-        /// <summary>Whether every joined area has a field of the world Goal.</summary>
+        /// <summary>
+        /// Whether every joined area has a field of the world Goal for its Default agent type. An area
+        /// the Goal cannot reach yet, or at all, has none.
+        /// </summary>
         public bool IsGoalReady(FlowFieldGoalHandle goal)
         {
             if (!goal.IsValid || !Areas.Goals.Contains(goal.Id))
@@ -173,6 +182,15 @@ namespace Common.FlowField
                 throw new System.ArgumentException("A world Goal needs a position; FlowFieldGoalRequest.None names no Goal.", nameof(request));
             if (request.InfluenceRadius > 0f)
                 throw new System.ArgumentException("A world Goal reaches every area; use an Influence Radius of 0.", nameof(request));
+        }
+
+        // Modifier code runs inside an area's operation, where a world command
+        // would change what that operation reads.
+        private void ThrowIfInUserCode(string command)
+        {
+            if (Areas.IsInUserCode)
+                throw new System.InvalidOperationException(
+                    $"{command} cannot be called from a Modifier's Observe, CaptureSnapshot or Modify.");
         }
 
         private static void ThrowIfNotPlaying()

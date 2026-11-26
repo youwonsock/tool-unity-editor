@@ -17,6 +17,11 @@ namespace Common.FlowField
         private readonly FlowFieldWorldAreas _areas;
         private readonly List<Collider> _obstacles = new List<Collider>(8);
         private readonly List<IFlowFieldVectorModifier> _modifiers = new List<IFlowFieldVectorModifier>(4);
+        // A registration an area refused: tried again only once that area's
+        // session starts a new lifetime (a restart, or Release and Init).
+        private readonly HashSet<(FlowFieldSession, int, object)> _refused = new HashSet<(FlowFieldSession, int, object)>();
+        private static readonly Predicate<Collider> IsDestroyed = collider => collider == null;
+        private static readonly Predicate<IFlowFieldVectorModifier> IsMissing = FlowFieldVectorUtility.IsMissingModifier;
 
         internal FlowFieldWorldRegistrations(FlowFieldWorldAreas areas)
         {
@@ -36,12 +41,20 @@ namespace Common.FlowField
         {
             if (!_obstacles.Remove(collider))
                 return false;
-            IReadOnlyList<FlowFieldWorldArea> areas = _areas.All;
-            for (int i = 0; i < areas.Count; i++)
+            _areas.EnterOperations();
+            try
             {
-                FlowFieldManager manager = areas[i].Manager;
-                if (Takes(manager, removal: true))
-                    Run(manager, () => manager.UnregisterDynamicObstacle(collider));
+                IReadOnlyList<FlowFieldWorldArea> areas = _areas.All;
+                for (int i = 0; i < areas.Count; i++)
+                {
+                    FlowFieldManager manager = areas[i].Manager;
+                    if (Takes(manager, removal: true))
+                        Run(manager, () => manager.UnregisterDynamicObstacle(collider));
+                }
+            }
+            finally
+            {
+                _areas.ExitOperations();
             }
             return true;
         }
@@ -51,40 +64,56 @@ namespace Common.FlowField
         {
             if (!_obstacles.Contains(collider))
                 return false;
-            IReadOnlyList<FlowFieldWorldArea> areas = _areas.All;
-            for (int i = 0; i < areas.Count; i++)
+            _areas.EnterOperations();
+            try
             {
-                FlowFieldManager manager = areas[i].Manager;
-                if (!Takes(manager, removal: false))
-                    continue;
-                try
+                IReadOnlyList<FlowFieldWorldArea> areas = _areas.All;
+                for (int i = 0; i < areas.Count; i++)
                 {
-                    manager.NotifyDynamicObstacleMoved(collider);
+                    FlowFieldManager manager = areas[i].Manager;
+                    if (!Takes(manager, removal: false))
+                        continue;
+                    try
+                    {
+                        manager.NotifyDynamicObstacleMoved(collider);
+                    }
+                    catch (Exception exception)
+                    {
+                        Debug.LogException(exception, manager);
+                    }
                 }
-                catch (Exception exception)
-                {
-                    Debug.LogException(exception, manager);
-                }
+            }
+            finally
+            {
+                _areas.ExitOperations();
             }
             return true;
         }
 
         internal void NotifyRegionDirty(Bounds worldBounds)
         {
-            IReadOnlyList<FlowFieldWorldArea> areas = _areas.All;
-            for (int i = 0; i < areas.Count; i++)
+            _areas.EnterOperations();
+            try
             {
-                FlowFieldManager manager = areas[i].Manager;
-                if (!Takes(manager, removal: false))
-                    continue;
-                try
+                IReadOnlyList<FlowFieldWorldArea> areas = _areas.All;
+                for (int i = 0; i < areas.Count; i++)
                 {
-                    manager.NotifyObstacleRegionDirty(worldBounds);
+                    FlowFieldManager manager = areas[i].Manager;
+                    if (!Takes(manager, removal: false))
+                        continue;
+                    try
+                    {
+                        manager.NotifyObstacleRegionDirty(worldBounds);
+                    }
+                    catch (Exception exception)
+                    {
+                        Debug.LogException(exception, manager);
+                    }
                 }
-                catch (Exception exception)
-                {
-                    Debug.LogException(exception, manager);
-                }
+            }
+            finally
+            {
+                _areas.ExitOperations();
             }
         }
 
@@ -101,12 +130,20 @@ namespace Common.FlowField
         {
             if (!_modifiers.Remove(modifier))
                 return false;
-            IReadOnlyList<FlowFieldWorldArea> areas = _areas.All;
-            for (int i = 0; i < areas.Count; i++)
+            _areas.EnterOperations();
+            try
             {
-                FlowFieldManager manager = areas[i].Manager;
-                if (Takes(manager, removal: true))
-                    Run(manager, () => manager.UnregisterVectorModifier(modifier));
+                IReadOnlyList<FlowFieldWorldArea> areas = _areas.All;
+                for (int i = 0; i < areas.Count; i++)
+                {
+                    FlowFieldManager manager = areas[i].Manager;
+                    if (Takes(manager, removal: true))
+                        Run(manager, () => manager.UnregisterVectorModifier(modifier));
+                }
+            }
+            finally
+            {
+                _areas.ExitOperations();
             }
             return true;
         }
@@ -115,20 +152,28 @@ namespace Common.FlowField
         {
             if (!_modifiers.Contains(modifier))
                 return false;
-            IReadOnlyList<FlowFieldWorldArea> areas = _areas.All;
-            for (int i = 0; i < areas.Count; i++)
+            _areas.EnterOperations();
+            try
             {
-                FlowFieldManager manager = areas[i].Manager;
-                if (!Takes(manager, removal: false) || !manager.Session.Modifiers.Contains(modifier))
-                    continue;
-                try
+                IReadOnlyList<FlowFieldWorldArea> areas = _areas.All;
+                for (int i = 0; i < areas.Count; i++)
                 {
-                    manager.NotifyModifierChanged(modifier, change);
+                    FlowFieldManager manager = areas[i].Manager;
+                    if (!Takes(manager, removal: false) || !manager.Session.Modifiers.Contains(modifier))
+                        continue;
+                    try
+                    {
+                        manager.NotifyModifierChanged(modifier, change);
+                    }
+                    catch (Exception exception)
+                    {
+                        Debug.LogException(exception, manager);
+                    }
                 }
-                catch (Exception exception)
-                {
-                    Debug.LogException(exception, manager);
-                }
+            }
+            finally
+            {
+                _areas.ExitOperations();
             }
             return true;
         }
@@ -136,33 +181,55 @@ namespace Common.FlowField
         /// <summary>Every area that takes registrations holds every one; destroyed ones leave.</summary>
         internal void Update()
         {
-            _obstacles.RemoveAll(collider => collider == null);
-            _modifiers.RemoveAll(FlowFieldVectorUtility.IsMissingModifier);
+            _obstacles.RemoveAll(IsDestroyed);
+            _modifiers.RemoveAll(IsMissing);
             if (_obstacles.Count == 0 && _modifiers.Count == 0)
                 return;
-            IReadOnlyList<FlowFieldWorldArea> areas = _areas.All;
-            for (int a = 0; a < areas.Count; a++)
+            _areas.EnterOperations();
+            try
             {
-                FlowFieldManager manager = areas[a].Manager;
-                if (!Takes(manager, removal: false))
-                    continue;
-                try
+                IReadOnlyList<FlowFieldWorldArea> areas = _areas.All;
+                for (int a = 0; a < areas.Count; a++)
                 {
+                    FlowFieldManager manager = areas[a].Manager;
+                    if (!Takes(manager, removal: false))
+                        continue;
+                    FlowFieldSession session = manager.Session;
                     for (int i = 0; i < _obstacles.Count; i++)
                     {
                         if (!manager.IsDynamicObstacleRegistered(_obstacles[i]))
-                            manager.RegisterDynamicObstacle(_obstacles[i]);
+                            TryRegister(manager, session, _obstacles[i]);
                     }
                     for (int i = 0; i < _modifiers.Count; i++)
                     {
-                        if (!manager.Session.Modifiers.Contains(_modifiers[i]))
-                            manager.RegisterVectorModifier(_modifiers[i]);
+                        if (!session.Modifiers.Contains(_modifiers[i]))
+                            TryRegister(manager, session, _modifiers[i]);
                     }
                 }
-                catch (Exception exception)
-                {
-                    Debug.LogException(exception, manager);
-                }
+            }
+            finally
+            {
+                _areas.ExitOperations();
+            }
+        }
+
+        // Logged once: a refused registration waits for the area's next lifetime.
+        private void TryRegister(FlowFieldManager manager, FlowFieldSession session, object registration)
+        {
+            var key = (session, session.LifetimeGeneration, registration);
+            if (_refused.Contains(key))
+                return;
+            try
+            {
+                if (registration is Collider collider)
+                    manager.RegisterDynamicObstacle(collider);
+                else
+                    manager.RegisterVectorModifier((IFlowFieldVectorModifier)registration);
+            }
+            catch (Exception exception)
+            {
+                _refused.Add(key);
+                Debug.LogException(exception, manager);
             }
         }
 

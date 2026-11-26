@@ -26,6 +26,12 @@ namespace Common.FlowField
             internal readonly FlowFieldGoalKind Kind;
             internal FlowFieldGoalRequest Request;
             internal int Epoch = 1;
+            // A change since the epoch began waits for the epoch's wave to
+            // settle, or for MaxEpochFrames, before the next epoch begins.
+            internal bool EpochPending;
+            internal int PendingSince = -1;
+            // Nothing changed or built for this Goal in the last update.
+            internal bool Quiet = true;
 
             internal Goal(int id, FlowFieldGoalKind kind, in FlowFieldGoalRequest request)
             {
@@ -82,7 +88,14 @@ namespace Common.FlowField
                 return true;
             }
         }
+        // The longest a change waits for the epoch's wave: a world whose
+        // inputs never stop changing still starts new epochs.
+        private const int MaxEpochFrames = 30;
+
         private readonly SeedInputs _scratchInputs = new SeedInputs();
+        private readonly HashSet<FlowFieldSession> _liveSessions = new HashSet<FlowFieldSession>();
+        private readonly List<FlowFieldSession> _deadSessions = new List<FlowFieldSession>();
+        private readonly List<(FlowFieldSession, int)> _deadInputs = new List<(FlowFieldSession, int)>();
         private readonly List<int> _cells = new List<int>(64);
         private readonly List<int> _costs = new List<int>(64);
         private readonly List<int> _directions = new List<int>(64);
@@ -105,24 +118,30 @@ namespace Common.FlowField
             return goal.Id;
         }
 
+        // The seeds carry the new position into every area's search, so the
+        // areas whose seeds change build again and the others keep theirs.
         internal bool TrySet(int id, in FlowFieldGoalRequest request)
         {
             Goal goal = Find(id);
             if (goal == null)
                 return false;
             goal.Request = request;
-            unchecked { goal.Epoch++; }
-            for (int a = 0; a < _areas.All.Count; a++)
+            _areas.EnterOperations();
+            try
             {
-                FlowFieldManager manager = _areas.All[a].Manager;
-                for (int s = 0; s < manager.WorldSessionCount; s++)
+                for (int a = 0; a < _areas.All.Count; a++)
                 {
-                    FlowFieldSession session = manager.WorldSession(s);
-                    if (TakesGoals(session))
-                        session.SetGoalCommand(id, request);
+                    FlowFieldManager manager = _areas.All[a].Manager;
+                    for (int s = 0; s < manager.WorldSessionCount; s++)
+                        manager.WorldSession(s).Goals.TrySetWorldRequest(id, request);
                 }
+                RequestEpoch(goal);
+                Update();
             }
-            Update();
+            finally
+            {
+                _areas.ExitOperations();
+            }
             return true;
         }
 
@@ -132,18 +151,34 @@ namespace Common.FlowField
             if (goal == null)
                 return false;
             _goals.Remove(goal);
-            for (int a = 0; a < _areas.All.Count; a++)
+            _areas.EnterOperations();
+            try
             {
-                FlowFieldManager manager = _areas.All[a].Manager;
-                for (int s = 0; s < manager.WorldSessionCount; s++)
+                for (int a = 0; a < _areas.All.Count; a++)
                 {
-                    FlowFieldSession session = manager.WorldSession(s);
-                    _inputs.Remove((session, id));
-                    if (session.IsInitialized || session.IsFaulted)
-                        session.RemoveGoalCommand(id);
+                    FlowFieldManager manager = _areas.All[a].Manager;
+                    for (int s = 0; s < manager.WorldSessionCount; s++)
+                    {
+                        FlowFieldSession session = manager.WorldSession(s);
+                        _inputs.Remove((session, id));
+                        if (session.IsInitialized || session.IsFaulted)
+                            session.RemoveGoalCommand(id);
+                    }
                 }
             }
+            finally
+            {
+                _areas.ExitOperations();
+            }
             return true;
+        }
+
+        private static void RequestEpoch(Goal goal)
+        {
+            if (goal.EpochPending)
+                return;
+            goal.EpochPending = true;
+            goal.PendingSince = Time.frameCount;
         }
 
         internal bool Contains(int id) => Find(id) != null;
@@ -172,7 +207,22 @@ namespace Common.FlowField
         {
             if (_goals.Count == 0)
                 return;
+            _areas.EnterOperations();
+            try
+            {
+                UpdateGoals();
+            }
+            finally
+            {
+                _areas.ExitOperations();
+            }
+        }
+
+        private void UpdateGoals()
+        {
             bool newEpoch = _areasChanged;
+            if (_areasChanged)
+                PruneLeftSessions();
             _areasChanged = false;
             IReadOnlyList<FlowFieldWorldArea> areas = _areas.All;
             for (int a = 0; a < areas.Count; a++)
@@ -202,53 +252,112 @@ namespace Common.FlowField
                         Goal goal = _goals[g];
                         if (session.Goals.Find(goal.Id) == null)
                         {
-                            session.AddGoalCommand(goal.Kind, goal.Request, goal.Id);
+                            session.AddGoalCommand(goal.Kind, goal.Request, goal.Id, world: true);
                             newEpoch = true;
                         }
                     }
                 }
             }
-            if (newEpoch)
+            int frame = Time.frameCount;
+            for (int g = 0; g < _goals.Count; g++)
             {
-                for (int g = 0; g < _goals.Count; g++)
-                    unchecked { _goals[g].Epoch++; }
+                Goal goal = _goals[g];
+                if (newEpoch)
+                    RequestEpoch(goal);
+                // A change waits until the current epoch's wave has settled,
+                // so every area gets seeds of one epoch, but never longer
+                // than MaxEpochFrames.
+                if (goal.EpochPending && (goal.Quiet || frame - goal.PendingSince >= MaxEpochFrames))
+                {
+                    unchecked { goal.Epoch++; }
+                    goal.EpochPending = false;
+                    goal.PendingSince = -1;
+                }
             }
             for (int g = 0; g < _goals.Count; g++)
             {
+                Goal goal = _goals[g];
+                bool active = false;
                 for (int a = 0; a < areas.Count; a++)
                 {
                     FlowFieldManager manager = areas[a].Manager;
                     for (int s = 0; s < manager.WorldSessionCount; s++)
                     {
                         FlowFieldSession session = manager.WorldSession(s);
-                        if (TakesGoals(session))
-                            UpdateSeeds(_goals[g], areas[a], s, session);
+                        if (!TakesGoals(session))
+                            continue;
+                        active |= UpdateSeeds(goal, areas[a], s, session);
+                        FlowFieldGoalSet.Entry entry = session.Goals.Find(goal.Id);
+                        active |= entry != null && session.Goals.IsDue(entry);
                     }
                 }
+                goal.Quiet = !active;
             }
         }
 
-        private void UpdateSeeds(Goal goal, FlowFieldWorldArea area, int sessionIndex, FlowFieldSession session)
+        // Forgets the sessions of areas that left, so their fields go.
+        private void PruneLeftSessions()
+        {
+            _liveSessions.Clear();
+            IReadOnlyList<FlowFieldWorldArea> areas = _areas.All;
+            for (int a = 0; a < areas.Count; a++)
+            {
+                FlowFieldManager manager = areas[a].Manager;
+                for (int s = 0; s < manager.WorldSessionCount; s++)
+                    _liveSessions.Add(manager.WorldSession(s));
+            }
+            _deadSessions.Clear();
+            foreach (FlowFieldSession session in _stitches.Keys)
+            {
+                if (!_liveSessions.Contains(session))
+                    _deadSessions.Add(session);
+            }
+            foreach (FlowFieldSession session in _baseStamps.Keys)
+            {
+                if (!_liveSessions.Contains(session) && !_deadSessions.Contains(session))
+                    _deadSessions.Add(session);
+            }
+            for (int i = 0; i < _deadSessions.Count; i++)
+            {
+                _stitches.Remove(_deadSessions[i]);
+                _baseStamps.Remove(_deadSessions[i]);
+                _deadSessions[i].Stitch = null;
+            }
+            _deadInputs.Clear();
+            foreach ((FlowFieldSession, int) key in _inputs.Keys)
+            {
+                if (!_liveSessions.Contains(key.Item1))
+                    _deadInputs.Add(key);
+            }
+            for (int i = 0; i < _deadInputs.Count; i++)
+                _inputs.Remove(_deadInputs[i]);
+        }
+
+        // True when the area session's seeds changed.
+        private bool UpdateSeeds(Goal goal, FlowFieldWorldArea area, int sessionIndex, FlowFieldSession session)
         {
             if (!session.TryGetPublishedField(out FlowFieldField own))
-                return;
+                return false;
             string typeName = area.Manager.WorldSessionName(sessionIndex);
-            SeedInputs inputs = Inputs(goal, area, typeName, own, session.Goals.Find(goal.Id));
+            FlowFieldGoalSet.Entry entry = session.Goals.Find(goal.Id);
+            SeedInputs inputs = Inputs(goal, area, typeName, own, entry);
             if (!_inputs.TryGetValue((session, goal.Id), out SeedInputs last))
             {
                 last = new SeedInputs();
                 _inputs.Add((session, goal.Id), last);
             }
             if (Same(inputs, last))
-                return;
+                return false;
             Copy(inputs, last);
 
             FlowFieldGoalSeeds seeds = ComputeSeeds(goal, area, typeName, own, out bool holdsGoal, out bool fromNeighbors);
             // Until a neighbor has a field of this epoch, an area away from
-            // the Goal keeps the field it has.
+            // the Goal keeps the field it has, or has none yet.
             if (!holdsGoal && !fromNeighbors && _areas.Find(goal.Request.WorldPosition) != null)
-                return;
+                return false;
+            bool changed = entry?.Seeds == null || !seeds.SameSearch(entry.Seeds);
             session.SetGoalSeedsCommand(goal.Id, seeds);
+            return changed;
         }
 
         // The area's own cells and Goal field, and each touching area's cells,
@@ -339,6 +448,11 @@ namespace Common.FlowField
             LocalCell(grid, position, out int gx, out int gy, out int gz);
             int goalCell = -1;
             holdsGoal = grid.ContainsWorldPosition(position) && grid.TryLocal(gx, gy, gz, out goalCell);
+            // A Goal in a blocked cell or one without ground starts from the
+            // nearest walkable cell of its area, as one Manager's Goal does.
+            if (holdsGoal && !Walkable(own, goalCell))
+                goalCell = NearestWalkable(own, gx, gy, gz);
+            holdsGoal &= goalCell >= 0;
             if (holdsGoal)
                 Add(goalCell, 0, FlowFieldGoalSeeds.NoDirection, 0f);
 
@@ -474,6 +588,31 @@ namespace Common.FlowField
                 && Connects(own, cell, besideZ, sideZ, step)
                 && Connects(besideX, sideX, other, otherCell, step)
                 && Connects(besideZ, sideZ, other, otherCell, step);
+        }
+
+        // The walkable cell nearest the local cell, by squared cell distance,
+        // the lowest index on a tie; -1 when the area has none.
+        private static int NearestWalkable(FlowFieldField field, int x, int y, int z)
+        {
+            FlowFieldGridSpace grid = field.Grid;
+            int nearest = -1;
+            long best = long.MaxValue;
+            for (int cell = 0; cell < grid.CellCount; cell++)
+            {
+                if (!Walkable(field, cell))
+                    continue;
+                grid.Locate(cell, out int cx, out int cy, out int cz);
+                long dx = cx - x;
+                long dy = cy - y;
+                long dz = cz - z;
+                long distance = dx * dx + dy * dy + dz * dz;
+                if (distance < best)
+                {
+                    best = distance;
+                    nearest = cell;
+                }
+            }
+            return nearest;
         }
 
         private static bool Walkable(FlowFieldField field, int index)

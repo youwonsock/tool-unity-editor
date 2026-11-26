@@ -401,8 +401,8 @@ namespace Common.FlowField
             if (_session.SubmitConfig(in config, change) && change == FlowFieldConfigChange.Rebuild)
                 _session.AttachRuntimeScheduler();
             SubmitAgentConfigs(change);
-            if (change == FlowFieldConfigChange.Settings || change == FlowFieldConfigChange.Rebuild)
-                RefreshWorldArea();
+            // Every submit reads where the Manager is now.
+            RefreshWorldArea();
         }
 
         // Modifiers enabled while the session could not take them join

@@ -335,20 +335,26 @@ Manager의 Obstacle Clearance, Max Slope, Max Step Height가 `Default` 유형입
 - **World Goal:**
   - `FlowFieldWorld.AddGoal`이 만든 Goal은 모든 영역의 모든 Agent 유형 세션에 같은 번호의 [추가 Goal](#추가-goal)이 됩니다. 그래서 world의 `TrySample`이나 각 영역 Manager가 같은 핸들로 읽습니다. 영향 반경은 0이어야 합니다.
   - 탐색은 seed(`FlowFieldGoalSeeds`)에서 시작합니다. Goal을 품은 영역은 Goal 칸에서, 모든 영역은 닿는 영역의 걸음 수 + 1에서 시작합니다. 경계를 넘는 걸음은 그 유형의 연결 규칙을 따릅니다. Surface2D는 두 칸 모두 걸을 수 있고 Max Step Height 안이며 대각선은 양옆 칸까지, Volume3D는 두 칸이 열려 있고 대각선은 지나는 모서리 칸까지입니다.
-  - 풀이는 seed를 비용 순으로 큐 사이에 넣어 한 출발점 탐색처럼 칸을 비용 순으로 내보냅니다. 영역 안에 더 가까운 칸이 없는 seed 칸은 경계 너머로 걷습니다(`FlowFieldNextCell.Portal`). 그래서 닿는 두 영역은 둘을 덮는 Manager 하나와 모든 칸의 걸음 수가 같습니다.
+  - Goal 칸이 막혔거나 지면이 없으면, Goal을 품은 영역 안에서 가장 가까운(칸 거리 제곱, 같으면 낮은 번호) 걸을 수 있는 칸에서 시작합니다.
+  - 풀이는 seed를 비용 순으로 큐 사이에 넣어 한 출발점 탐색처럼 칸을 비용 순으로 내보냅니다. 영역 안에 더 가까운 칸이 없는 seed 칸은 경계 너머로 걷습니다(`FlowFieldNextCell.Portal`). 그래서 닿는 두 영역은 둘을 덮는 Manager 하나와 모든 칸의 걸음 수가 같습니다. 방향은 경계 칸에서 다를 수 있습니다. 영역 안의 같은 걸음 수 칸을 경계 너머 걸음보다 먼저 고르기 때문입니다.
+  - World Goal은 seed로만 빌드합니다. seed를 아직 받지 못한 영역(Goal에 닿을 길이 없거나, 그 Agent 유형이 이웃에 없거나, 이웃이 Fault)은 그 Goal의 필드가 없고 `IsGoalReady`가 false입니다. Agent 유형은 이름으로 영역끼리 이어집니다. 격자가 바뀌거나 Stop·재시작하면 seed도 필드와 함께 버리고 다시 받습니다.
   - 어느 영역에도 없는 Goal은 각 영역의 바깥 경계 칸에서 직선 추정(셀 단위 Chebyshev 거리)으로 시작합니다. 이동 주체는 가장 가까운 경계까지 가서 멈춥니다. 영역 밖으로 가는 흐름은 없습니다.
   - StaticBaked 영역은 자기 Goal을 구운 그대로 두고, World Goal은 구운 칸 위에서 런타임에 탐색합니다(Physics 없음).
 - **갱신과 epoch:**
   - `FlowFieldBuildDriver`가 매 프레임 빌드 전에 각 world를 갱신합니다(`FlowFieldWorldGoals.Update`). 모든 영역 세션이 모든 World Goal을 가졌는지 보고, 입력(자기 칸, 자기 Goal 필드, 닿는 영역의 칸과 Goal 필드와 그 epoch)이 바뀐 곳만 seed를 다시 계산합니다.
   - Goal 이동, 영역 들어오고 나감, 어느 영역의 새 입력(`BaseStamp`)은 새 epoch를 엽니다. seed는 그 epoch에 빌드된 이웃 필드에서만 옵니다. 바뀐 길을 거쳐 되돌아오는 옛 걸음 수가 서로를 끝없이 키우지 않게 하기 위해서입니다. 그런 이웃이 아직 없는 영역은 지금 필드를 유지합니다.
-  - 그래서 어느 영역의 입력이든 모든 World Goal이 Goal을 품은 영역부터 다시 퍼집니다. 이웃 하나를 지날 때마다 그 영역의 빌드 한 번이 걸립니다.
+  - 새 epoch는 지금 epoch가 퍼지기를 마칠 때(그 Goal의 seed가 바뀌지 않고 빌드할 영역이 없을 때)나 30프레임이 지났을 때 시작합니다. 그래서 입력이 매 프레임 바뀌어도 먼 영역까지 퍼지고, 어느 영역의 입력이든 모든 World Goal이 Goal을 품은 영역부터 다시 퍼집니다. 이웃 하나를 지날 때마다 그 영역의 빌드 한 번이 걸립니다.
+  - `FlowFieldWorld.SetGoal`은 영역 요청을 다시 빌드하지 않고 seed로만 새 위치를 전하므로, seed가 바뀐 영역만 다시 빌드합니다.
+  - World의 명령과 갱신은 모든 영역 Manager의 작업 하나로 돌아, 그 사이 이벤트는 world가 끝난 뒤 핸들러에 갑니다. Modifier 코드 안에서는 world 명령을 거부합니다. 영역이 나가면 그 세션의 갱신 기록도 지웁니다.
+  - World Asset의 값(Space Mode, Cell Size, Lattice Origin)은 Play 중에 바꾸지 않습니다. 들어온 영역은 들어올 때의 lattice로 남습니다.
 - **경계를 넘는 조회:**
   - World Goal의 조회는 닿는 영역의 칸을 자기 칸 옆에 둔 view(`FlowFieldStitchedCellView`)로 [샘플 안전 규칙](#샘플-안전-규칙)을 적용합니다. 닿는 영역의 칸은 자기 칸 뒤의 번호이고, 자기 좌표로 읽습니다.
   - 경계 너머 걸음은 격자 밖에서 멈추지 않고, 그 걸음이 닿는 칸(불확실 영역, 막힘, 지면, 낙차와 높은 턱)으로 검사합니다. 닿는 영역의 칸은 그 영역의 최신 정보와 불확실 영역을 씁니다.
   - 닿는 영역이 없는 경계 너머 걸음과, 영역의 Goal이 아닌 필드의 경계 너머 걸음은 격자 밖처럼 멈춥니다.
 - **공유 등록:**
   - `FlowFieldWorld.RegisterDynamicObstacle`·`NotifyDynamicObstacleMoved`·`NotifyObstacleRegionDirty`와 `RegisterVectorModifier`·`NotifyModifierChanged`(와 해제)는 world의 모든 영역에 나눠 줍니다. 격자에 닿지 않는 영역은 등록만 유지하므로, 영역을 넘어 움직이는 장애물도 한 번 등록하면 됩니다.
-  - 매 프레임 빌드 전에 새로 들어온 영역, Fault 뒤 재시작한 영역, 다시 Init한 영역이 빠진 등록을 받습니다(`FlowFieldWorldRegistrations`). StaticBaked 영역은 받지 않고, 한 영역의 실패는 로그로 남기고 다른 영역을 막지 않습니다.
+  - 매 프레임 빌드 전에 새로 들어온 영역, Fault 뒤 재시작한 영역, 다시 Init한 영역이 빠진 등록을 받습니다(`FlowFieldWorldRegistrations`). StaticBaked 영역은 받지 않고, 한 영역의 실패(예: 같은 Priority)는 한 번 로그로 남기고 그 영역 세션이 다시 시작할 때까지 다시 시도하지 않으며, 다른 영역을 막지 않습니다.
+  - World 해제는 각 Manager에서 그 Collider나 Modifier를 해제하므로, 같은 대상을 Manager에 따로 등록했다면 그것도 풀립니다.
 
 ## Modifier
 

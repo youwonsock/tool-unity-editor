@@ -83,6 +83,12 @@ namespace Common.FlowField
             _joinedWorld.Areas.Join(this, grid, in box);
         }
 
+        // A world's commands run as this Manager's operation, so handlers run
+        // after the world has finished, as after the Manager's own commands.
+        internal FlowFieldExecutionBoundary.OperationScope EnterOperation() => _boundary.EnterOperation();
+
+        internal bool IsInUserCode => _boundary.IsInUserCode;
+
         private void LeaveWorld()
         {
             if (_joinedWorld == null)

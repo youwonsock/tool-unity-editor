@@ -150,16 +150,73 @@ namespace Common.FlowField
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetForPlaySession() => Worlds.Clear();
 
+        private static readonly List<FlowFieldWorldAreas> UpdateOrder = new List<FlowFieldWorldAreas>(2);
+
         /// <summary>
         /// Once a frame before the builds: every area takes the world's
-        /// registrations it misses, and the world's Goals their seeds.
+        /// registrations it misses, and the world's Goals their seeds. A
+        /// handler may join a Manager to another world meanwhile, so the
+        /// worlds are read first.
         /// </summary>
         internal static void UpdateAll()
         {
-            foreach (FlowFieldWorldAreas areas in Worlds.Values)
+            UpdateOrder.Clear();
+            UpdateOrder.AddRange(Worlds.Values);
+            for (int i = 0; i < UpdateOrder.Count; i++)
             {
-                areas.Registrations.Update();
-                areas.Goals.Update();
+                UpdateOrder[i].Registrations.Update();
+                UpdateOrder[i].Goals.Update();
+            }
+            UpdateOrder.Clear();
+        }
+
+        private readonly List<FlowFieldExecutionBoundary.OperationScope> _operations
+            = new List<FlowFieldExecutionBoundary.OperationScope>(4);
+        private int _operationDepth;
+
+        /// <summary>
+        /// A world's commands run as one operation of every area's Manager, so
+        /// the events they raise reach handlers after the world has finished,
+        /// as after a Manager's own command. Pair with <see cref="ExitOperations"/>.
+        /// </summary>
+        internal void EnterOperations()
+        {
+            if (_operationDepth++ > 0)
+                return;
+            for (int i = 0; i < _areas.Count; i++)
+            {
+                if (_areas[i].Manager != null)
+                    _operations.Add(_areas[i].Manager.EnterOperation());
+            }
+        }
+
+        internal void ExitOperations()
+        {
+            if (--_operationDepth > 0)
+                return;
+            // Each exit may deliver its Manager's events, and a handler may
+            // enter again: scopes leave the list before they end, so whichever
+            // exit runs last ends every one exactly once.
+            while (_operationDepth == 0 && _operations.Count > 0)
+            {
+                int last = _operations.Count - 1;
+                FlowFieldExecutionBoundary.OperationScope scope = _operations[last];
+                _operations.RemoveAt(last);
+                scope.Dispose();
+            }
+        }
+
+        /// <summary>Whether a Modifier's code is running in one of the areas, where world commands are refused.</summary>
+        internal bool IsInUserCode
+        {
+            get
+            {
+                for (int i = 0; i < _areas.Count; i++)
+                {
+                    if (_areas[i].Manager != null && _areas[i].Manager.IsInUserCode)
+                        return true;
+                }
+                return false;
             }
         }
 
