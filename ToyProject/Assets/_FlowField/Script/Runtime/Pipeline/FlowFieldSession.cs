@@ -102,6 +102,7 @@ namespace Common.FlowField
             public IFlowFieldModifierView Modifiers => _session.Modifiers;
             public IFlowFieldUncertainRegions UncertainRegions => _session.Safety;
             public bool SweepsObstacles => _session.SweepsObstacles;
+            public FlowFieldGoalSet Goals => _session.Goals;
             public FlowFieldExecutionBoundary.OperationScope EnterUserCode() => _session.Boundary.EnterUserCode();
         }
 
@@ -113,6 +114,9 @@ namespace Common.FlowField
 
         /// <summary>The registered dynamic obstacles, the same in both modes.</summary>
         internal FlowFieldObstacleRegistry Obstacles { get; } = new FlowFieldObstacleRegistry();
+
+        /// <summary>The additional Goals and the fields built for them, the same in both modes.</summary>
+        internal FlowFieldGoalSet Goals { get; } = new FlowFieldGoalSet();
 
         // Colliders unregistered while still in the scene, rechecked before
         // each pump's builds, and the callback that reports one gone.
@@ -209,6 +213,7 @@ namespace Common.FlowField
             AbandonWork();
             DetachRuntimeScheduler();
             _builder.DropComputedState();
+            Goals.DropFields();
             // The restart reads the whole scene again wherever the sweep runs
             // (FlowFieldObstacleSweep), so the sweep starts over too.
             _sweep.Clear();
@@ -227,6 +232,7 @@ namespace Common.FlowField
                 return;
             AbandonWork();
             _builder.DropComputedState();
+            Goals.DropFields();
             Fault = null;
             SetLifecycle(FlowFieldSessionLifecycle.Building);
         }
@@ -315,6 +321,7 @@ namespace Common.FlowField
             Obstacles.Clear();
             _releasedInScene.Clear();
             _modifiers?.Clear();
+            Goals.Clear();
             _builder.ReleaseResources();
             Safety.ClearRegions();
             _sweep.Reset();

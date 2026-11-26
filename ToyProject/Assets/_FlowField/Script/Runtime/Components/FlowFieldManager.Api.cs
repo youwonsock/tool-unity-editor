@@ -187,6 +187,65 @@ namespace Common.FlowField
         }
 
         /// <inheritdoc/>
+        public FlowFieldGoalHandle AddGoal(FlowFieldGoalKind kind, in FlowFieldGoalRequest request)
+        {
+            _boundary.ThrowIfInUserCode(nameof(AddGoal));
+            ThrowIfLifecycleUnavailable();
+            if (!Enum.IsDefined(typeof(FlowFieldGoalKind), kind))
+                throw new ArgumentOutOfRangeException(nameof(kind));
+            if (!request.HasGoal)
+                throw MissingGoal(nameof(request));
+            if (BakeMode == FlowFieldBakeMode.StaticBaked)
+                throw FlowFieldFailures.NotAllowedIn("Adding a Goal", FlowFieldBakeMode.StaticBaked);
+            return new FlowFieldGoalHandle(ActiveSession.AddGoalCommand(kind, request));
+        }
+
+        /// <inheritdoc/>
+        public bool SetGoal(FlowFieldGoalHandle goal, in FlowFieldGoalRequest request)
+        {
+            _boundary.ThrowIfInUserCode(nameof(SetGoal));
+            ThrowIfLifecycleUnavailable();
+            if (!request.HasGoal)
+                throw MissingGoal(nameof(request));
+            return goal.IsValid && ActiveSession.SetGoalCommand(goal.Id, request);
+        }
+
+        /// <inheritdoc/>
+        public bool RemoveGoal(FlowFieldGoalHandle goal)
+        {
+            _boundary.ThrowIfInUserCode(nameof(RemoveGoal));
+            if (!IsFaulted)
+                ThrowIfLifecycleUnavailable();
+            return goal.IsValid && ActiveSession.RemoveGoalCommand(goal.Id);
+        }
+
+        /// <inheritdoc/>
+        public bool IsGoalReady(FlowFieldGoalHandle goal)
+            => goal.IsValid && ActiveSession != null && ActiveSession.IsGoalReady(goal.Id);
+
+        /// <inheritdoc/>
+        public bool TrySample(Vector3 worldPosition, FlowFieldGoalHandle goal, out FlowFieldSample sample)
+        {
+            sample = FlowFieldSample.Stopped;
+            return goal.IsValid && ActiveSession != null && ActiveSession.TrySampleGoal(goal.Id, worldPosition, out sample);
+        }
+
+        /// <inheritdoc/>
+        public bool TrySampleNearestShared(Vector3 worldPosition, out FlowFieldSample sample, out FlowFieldGoalHandle goal)
+        {
+            sample = FlowFieldSample.Stopped;
+            goal = default;
+            if (ActiveSession == null || !ActiveSession.TrySampleNearestShared(worldPosition, out sample, out int id))
+                return false;
+            goal = new FlowFieldGoalHandle(id);
+            return true;
+        }
+
+        private static ArgumentException MissingGoal(string parameter)
+            => new ArgumentException(
+                "An additional Goal needs a position; FlowFieldGoalRequest.None names no Goal.", parameter);
+
+        /// <inheritdoc/>
         public void NotifyCellsDirty()
         {
             _boundary.ThrowIfInUserCode(nameof(NotifyCellsDirty));

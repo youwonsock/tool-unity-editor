@@ -76,6 +76,13 @@ namespace Common.FlowField
         internal readonly bool IsActive;
         // The resolved Goal cell, or -1.
         internal readonly int CellIndex;
+        // Additional Goals only: the steps from each cell to the Goal,
+        // Unreachable outside its reach. It follows from the topology and the
+        // Goal, so it is not compared.
+        internal readonly int[] Distances;
+
+        // The value of Distances for a cell the Goal does not reach.
+        internal const int Unreachable = int.MaxValue;
 
         internal FlowFieldGoalLayer(
             uint[] topology,
@@ -87,8 +94,10 @@ namespace Common.FlowField
             float[] finalSpeeds,
             bool[] modifierInfluence,
             bool isActive,
-            int cellIndex)
+            int cellIndex,
+            int[] distances = null)
         {
+            Distances = distances;
             Topology = topology;
             Flags = flags;
             NextCells = nextCells;

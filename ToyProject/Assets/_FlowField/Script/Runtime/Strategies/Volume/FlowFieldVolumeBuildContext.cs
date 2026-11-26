@@ -160,6 +160,12 @@ namespace Common.FlowField
         // results (a reuse or a Modifier recompose): it publishes that same
         // layer instead of a copy around the same arrays.
         internal FlowFieldAgentLayer ReusedAgent;
+        // Where the allocation stage takes its arrays: the published field's
+        // spares, or an additional Goal's own.
+        internal FlowFieldSpareArrays Spares;
+        // The additional Goals' base stamp when a default Goal build began;
+        // its field stands for every input before it.
+        internal int GoalStamp;
         // Obstacle queries cover only these regions; other cells keep this published mask.
         internal bool[] PublishedBlocked;
         // BakedBase: the build copies the baked obstacle results, and its
@@ -209,6 +215,8 @@ namespace Common.FlowField
         public bool IsLive => !_ended;
 
         public bool IsWaitingForWorker => !_ended && SolveRunning && !SolveHandle.IsCompleted;
+
+        public bool BuildsAdditionalGoals => false;
 
         public FlowFieldBuildStep Step(in FlowFieldBuildBudget budget, bool waitForWorker)
             => _owner.Step(this, in budget, waitForWorker);

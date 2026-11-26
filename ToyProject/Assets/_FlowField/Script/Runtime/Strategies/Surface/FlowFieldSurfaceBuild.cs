@@ -54,6 +54,9 @@ namespace Common.FlowField
         // poll composes with it too.
         internal FlowFieldBuildBudget FrameBudget = FlowFieldBuildBudget.Unlimited;
         internal FlowFieldSurfaceCommit Commit;
+        // The additional Goals' base stamp when this build began; its field
+        // stands for every input before it.
+        internal int GoalStamp;
 
         internal FlowFieldSurfaceBuild(FlowFieldSurfaceBuilder owner) => _owner = owner;
 
@@ -65,6 +68,8 @@ namespace Common.FlowField
         public bool IsLive => Phase != FlowFieldSurfaceBuildPhase.None;
 
         public bool IsWaitingForWorker => Phase == FlowFieldSurfaceBuildPhase.WaitingSolve;
+
+        public bool BuildsAdditionalGoals => false;
 
         public FlowFieldBuildStep Step(in FlowFieldBuildBudget budget, bool waitForWorker)
             => _owner.StepBuild(this, in budget, waitForWorker);

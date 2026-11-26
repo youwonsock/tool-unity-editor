@@ -364,7 +364,8 @@ namespace Common.FlowField
                     _state.Surface,
                     _state.Workspace,
                     includeBase,
-                    finalRegion.IsValid ? finalRegion : FlowFieldCellRect.Full(_state.Grid));
+                    finalRegion.IsValid ? finalRegion : FlowFieldCellRect.Full(_state.Grid),
+                    _host.Goals);
             }
             _fieldStore.CommittedRequest = request;
             if (!_inputs.Requests.Pending)
@@ -391,7 +392,7 @@ namespace Common.FlowField
         // snapshot, so one build begins per pump whatever the budget says.
         public FlowFieldBuildPolicy BuildPolicy => new FlowFieldBuildPolicy(beginsAfterBudget: true, maxBuildsBegunPerPump: 1);
 
-        public bool HasOwedInput => _inputs.Requests.Pending || _inputs.ConfigOwed;
+        public bool HasOwedInput => _inputs.Requests.Pending || _inputs.ConfigOwed || AdditionalGoalsDue;
 
         public bool TryBeginBuild(out FlowFieldBuildStart start, out IFlowFieldBuild build)
         {
@@ -402,11 +403,22 @@ namespace Common.FlowField
                 _inputs.ConfigOwed = false;
                 invalidated = Submit(CreateCurrentRequest(in _inputs.OwedConfig));
             }
+            // The additional Goals build when nothing is owed to the default
+            // Goal, and take turns with it while both are owed, so a field
+            // that changes every frame never starves them. They query no
+            // obstacles.
+            if ((!_inputs.Requests.Pending || _goalTurn) && TryBeginGoalBatch(_inputs.Requests.Pending, out build))
+            {
+                _goalTurn = false;
+                start = new FlowFieldBuildStart(false, invalidated);
+                return true;
+            }
             // A build with a new grid or obstacle mask queries every obstacle.
             start = new FlowFieldBuildStart((_inputs.DirtyFlags & ObstacleQueryMask) != 0, invalidated);
             if (!_inputs.Requests.Pending)
                 return false;
-            build = _build = new FlowFieldSurfaceBuild(this);
+            _goalTurn = _host.Goals.Count > 0;
+            build = _build = new FlowFieldSurfaceBuild(this) { GoalStamp = _host.Goals.BaseStamp };
             return true;
         }
 
@@ -460,7 +472,9 @@ namespace Common.FlowField
         {
             build.Phase = BuildPhase.None;
             FlowFieldSurfaceCommit commit = build.Commit;
-            return Commit(commit.Request, commit.ResultChanged, commit.IncludeBase, commit.Region);
+            bool changed = Commit(commit.Request, commit.ResultChanged, commit.IncludeBase, commit.Region);
+            _host.Goals.MarkPublished(build.GoalStamp);
+            return changed;
         }
 
         /// <summary>Marks the build ready to publish with what Commit needs.</summary>

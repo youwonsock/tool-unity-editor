@@ -88,7 +88,8 @@ namespace Common.FlowField
             FlowFieldSurfaceData surface,
             FlowFieldSurfaceWorkspace workspace,
             bool includeBase,
-            FlowFieldCellRect region)
+            FlowFieldCellRect region,
+            FlowFieldGoalSet goals)
         {
             if (workspace == null || !grid.IsValid || surface == null || !surface.IsValid
                 || workspace.Capacity != grid.CellCount)
@@ -143,7 +144,8 @@ namespace Common.FlowField
                 return false;
             }
 
-            _spares.Retire(previous, next);
+            // An agent layer an additional Goal still reads keeps its arrays.
+            _spares.Retire(previous, next, goals.HoldsAgent(previous?.Agent));
             _field = next;
             return true;
         }

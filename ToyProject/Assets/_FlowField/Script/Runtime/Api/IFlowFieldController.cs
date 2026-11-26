@@ -58,6 +58,41 @@ namespace Common.FlowField
         /// </exception>
         void SetGoal(in FlowFieldGoalRequest request);
         /// <summary>
+        /// Adds a Goal besides the default one. It gets its own field on the same ground,
+        /// obstacles and Modifiers, built after the default Goal's field and again whenever
+        /// anything but the default Goal changes. Read it with
+        /// <see cref="IFlowFieldProvider.TrySample(UnityEngine.Vector3, FlowFieldGoalHandle, out FlowFieldSample)"/>.
+        /// Release removes every additional Goal.
+        /// </summary>
+        /// <returns>The handle that names the new Goal.</returns>
+        /// <exception cref="System.ArgumentException"><paramref name="request"/> has no Goal.</exception>
+        /// <exception cref="System.ArgumentOutOfRangeException">
+        /// <paramref name="kind"/> is not a defined value.
+        /// </exception>
+        /// <exception cref="System.InvalidOperationException">
+        /// Not initialized, faulted, in StaticBaked mode, or called from Modifier code.
+        /// </exception>
+        FlowFieldGoalHandle AddGoal(FlowFieldGoalKind kind, in FlowFieldGoalRequest request);
+        /// <summary>
+        /// Moves an additional Goal. A position within 0.0001 world units with the same Influence
+        /// Radius rebuilds nothing. Its field keeps answering until the new one is built.
+        /// </summary>
+        /// <returns>False when the handle names no Goal of this Manager.</returns>
+        /// <exception cref="System.ArgumentException"><paramref name="request"/> has no Goal.</exception>
+        /// <exception cref="System.InvalidOperationException">
+        /// Not initialized, faulted, or called from Modifier code.
+        /// </exception>
+        bool SetGoal(FlowFieldGoalHandle goal, in FlowFieldGoalRequest request);
+        /// <summary>
+        /// Removes an additional Goal and its field; the handle names no Goal afterwards. A faulted
+        /// session takes it as well.
+        /// </summary>
+        /// <returns>False when the handle names no Goal of this Manager.</returns>
+        /// <exception cref="System.InvalidOperationException">
+        /// Not initialized and not faulted, or called from Modifier code.
+        /// </exception>
+        bool RemoveGoal(FlowFieldGoalHandle goal);
+        /// <summary>
         /// Rebuilds every cell from the scene: Surface2D scans the ground and every obstacle again,
         /// Volume3D queries every obstacle again. Invalid current settings fault the session
         /// instead of throwing.

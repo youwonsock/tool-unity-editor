@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Common.FlowField
@@ -78,5 +79,79 @@ namespace Common.FlowField
             field = IsReady ? _builder.PublishedField : null;
             return field != null;
         }
+
+        // ----- Additional Goals ---------------------------------------------
+        // A Goal's field reads like the default one, with the same safety rule
+        // and uncertain regions, from its own Goal layer.
+
+        /// <summary>Whether the Goal's field answers samples.</summary>
+        internal bool IsGoalReady(int id) => GoalField(id) != null;
+
+        internal bool TrySampleGoal(int id, Vector3 worldPosition, out FlowFieldSample sample)
+        {
+            sample = FlowFieldSample.Stopped;
+            FlowFieldField field = GoalField(id);
+            return field != null
+                && FlowFieldSampler.Sample(field, worldPosition, Safety, _builder.LatestCells, out sample)
+                    == FlowFieldSampleStatus.Sampled;
+        }
+
+        /// <summary>
+        /// Samples the shared Goal the fewest steps away from the position's
+        /// cell, the earliest added on a tie. Where no shared Goal reaches the
+        /// cell (blocked, outside every reach), the earliest added shared Goal
+        /// whose grid holds the position answers, as its own sample would.
+        /// </summary>
+        internal bool TrySampleNearestShared(Vector3 worldPosition, out FlowFieldSample sample, out int goalId)
+        {
+            sample = FlowFieldSample.Stopped;
+            goalId = 0;
+            if (!CanPump || !FlowFieldGridSpace.IsFinite(worldPosition))
+                return false;
+            FlowFieldField nearest = null;
+            FlowFieldField fallback = null;
+            int fallbackId = 0;
+            int best = FlowFieldGoalLayer.Unreachable;
+            FlowFieldField published = _builder.PublishedField;
+            IReadOnlyList<FlowFieldGoalSet.Entry> entries = Goals.Entries;
+            for (int i = 0; i < entries.Count; i++)
+            {
+                FlowFieldGoalSet.Entry entry = entries[i];
+                FlowFieldField field = Readable(entry.Field, published);
+                if (entry.Kind != FlowFieldGoalKind.Shared
+                    || field == null
+                    || !FlowFieldSampler.TryLocate(field, worldPosition, out int index))
+                    continue;
+                if (fallback == null)
+                {
+                    fallback = field;
+                    fallbackId = entry.Id;
+                }
+                int[] distances = field.Goal.Distances;
+                if (distances == null || distances[index] >= best)
+                    continue;
+                best = distances[index];
+                nearest = field;
+                goalId = entry.Id;
+            }
+            if (nearest == null)
+            {
+                nearest = fallback;
+                goalId = fallbackId;
+            }
+            if (nearest == null)
+                return false;
+            return FlowFieldSampler.Sample(nearest, worldPosition, Safety, _builder.LatestCells, out sample)
+                == FlowFieldSampleStatus.Sampled;
+        }
+
+        /// <summary>The Goal's field, valid until the next pump, or null.</summary>
+        internal FlowFieldField GoalField(int id)
+            => CanPump ? Readable(Goals.Find(id)?.Field, _builder.PublishedField) : null;
+
+        // A Goal's field answers while the default Goal's field is published
+        // on the same grid: a new grid hides both until each is built on it.
+        private static FlowFieldField Readable(FlowFieldField field, FlowFieldField published)
+            => field != null && published != null && field.Grid.MatchesBounds(published.Grid) ? field : null;
     }
 }

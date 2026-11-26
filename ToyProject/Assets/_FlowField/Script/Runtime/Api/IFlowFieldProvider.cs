@@ -33,9 +33,9 @@ namespace Common.FlowField
         /// <summary>The message of the fault while <see cref="IsFaulted"/>; otherwise null.</summary>
         string LastError { get; }
         /// <summary>
-        /// Advances each time a build publishes a field that reads differently, together with
-        /// <see cref="FieldChanged"/>. It never goes back, also across Release and a Space Mode
-        /// change; 0 before the first field.
+        /// Advances each time a build publishes a field that reads differently, the default Goal's
+        /// or an additional Goal's, together with <see cref="FieldChanged"/>. It never goes back,
+        /// also across Release and a Space Mode change; 0 before the first field.
         /// </summary>
         int Revision { get; }
         /// <summary>
@@ -49,8 +49,8 @@ namespace Common.FlowField
         /// </summary>
         FlowFieldBakeMode BakeMode { get; }
         /// <summary>
-        /// Raised when a build publishes a field that reads differently, as <see cref="Revision"/>
-        /// advances. Handlers run after the FlowField operation that raised the event has returned,
+        /// Raised when a build publishes a field that reads differently, the default Goal's or an
+        /// additional Goal's, as <see cref="Revision"/> advances. Handlers run after the FlowField operation that raised the event has returned,
         /// one at a time and in order, and may call any command. An exception from a handler is
         /// logged, not thrown. An event still queued when the session stops, restarts, faults or is
         /// released is dropped.
@@ -101,6 +101,35 @@ namespace Common.FlowField
         /// <summary>Describes the published field.</summary>
         /// <returns>True while <see cref="IsReady"/>; otherwise false with a default info.</returns>
         bool TryGetFieldInfo(out FlowFieldFieldInfo info);
+
+        /// <summary>
+        /// Whether the field of an additional Goal answers samples. It is false until its first
+        /// field is built, after the default Goal's field, and again after a new grid, a stop or a
+        /// restart until it is built again. Its field keeps answering while a newer one builds.
+        /// </summary>
+        bool IsGoalReady(FlowFieldGoalHandle goal);
+        /// <summary>
+        /// Reads the field of an additional Goal at a world position, as <see cref="TrySample(Vector3, out FlowFieldSample)"/>
+        /// reads the default one: the same safety rule applies. It never throws.
+        /// </summary>
+        /// <returns>
+        /// True with the sample when <see cref="IsGoalReady"/> and the position is finite and inside
+        /// the grid; otherwise false with <see cref="FlowFieldSample.Stopped"/>, also for a handle
+        /// that names no Goal of this Manager.
+        /// </returns>
+        bool TrySample(Vector3 worldPosition, FlowFieldGoalHandle goal, out FlowFieldSample sample);
+        /// <summary>
+        /// Reads the field of the shared Goal fewest cell steps away from the position, the earliest
+        /// added on a tie. Where no shared Goal reaches the position's cell (it is blocked or outside
+        /// every Goal's influence), the earliest added ready shared Goal answers, as its own sample
+        /// would. Group Goals and the default Goal are not considered. It never throws.
+        /// </summary>
+        /// <returns>
+        /// True with the sample and the Goal that answered; false with
+        /// <see cref="FlowFieldSample.Stopped"/> and the default handle when no ready shared Goal's
+        /// grid holds the position.
+        /// </returns>
+        bool TrySampleNearestShared(Vector3 worldPosition, out FlowFieldSample sample, out FlowFieldGoalHandle goal);
     }
 
 }

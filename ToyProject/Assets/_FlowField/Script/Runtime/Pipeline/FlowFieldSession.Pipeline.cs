@@ -98,9 +98,13 @@ namespace Common.FlowField
                     switch (step)
                     {
                         case FlowFieldBuildStep.Completed:
-                            // Only a field that reads differently is a new Revision.
+                            // Only a field that reads differently is a new
+                            // Revision. Additional Goals query no obstacles,
+                            // so their publication resolves no uncertain region.
+                            bool additionalGoals = _activeBuild.BuildsAdditionalGoals;
                             bool changed = _activeBuild.Publish();
-                            Safety.BuildPublished();
+                            if (!additionalGoals)
+                                Safety.BuildPublished();
                             if (changed)
                             {
                                 unchecked { Revision++; }

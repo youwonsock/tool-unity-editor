@@ -42,6 +42,19 @@ namespace Common.FlowField
             return Sample(new FlowFieldSurfaceCellView(field, in staged, hasStaged, regions), worldPosition, out sample);
         }
 
+        /// <summary>The cell of the field a world position falls in; false outside its grid.</summary>
+        internal static bool TryLocate(FlowFieldField field, Vector3 worldPosition, out int index)
+        {
+            index = -1;
+            if (field == null
+                || !FlowFieldGridSpace.IsFinite(worldPosition)
+                || !field.Grid.ContainsWorldPosition(worldPosition))
+                return false;
+            return field.Grid.SpaceMode == FlowFieldSpaceMode.Volume3D
+                ? new FlowFieldVolumeCellView(field, null).TryLocate(worldPosition, out index)
+                : new FlowFieldSurfaceCellView(field, default, hasLatest: false, null).TryLocate(worldPosition, out index);
+        }
+
         private static FlowFieldSampleStatus Sample<TView>(in TView cells, Vector3 worldPosition, out FlowFieldSample sample)
             where TView : struct, IFlowFieldCellView
         {

@@ -61,6 +61,9 @@ namespace Common.FlowField
         bool IsLive { get; }
         // A solve is running on a worker thread.
         bool IsWaitingForWorker { get; }
+        // It builds additional Goals on the published layers: it queries no
+        // obstacles and leaves the default Goal's field as it is.
+        bool BuildsAdditionalGoals { get; }
         FlowFieldBuildStep Step(in FlowFieldBuildBudget budget, bool waitForWorker);
         // Publishes the completed build; true when the field now reads differently.
         bool Publish();

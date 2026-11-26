@@ -164,12 +164,18 @@ namespace Common.FlowField
             area.InfluenceRect = maskRect;
         }
 
-        /// <summary>Takes the Modifier snapshots for one composition, then <see cref="StepFinalField"/> runs it.</summary>
+        /// <summary>
+        /// Takes the Modifier snapshots for one composition, then <see cref="StepFinalField"/> runs it.
+        /// An additional Goal's composition may run while the default Goal still owes a Modifier its
+        /// cells; with <paramref name="leavesOutUnprepared"/> such a Modifier is left out, and the
+        /// change that owes them rebuilds the Goal again.
+        /// </summary>
         internal void BeginFinalField(
             in FlowFieldSurfaceModifierBuildRequest request,
             Vector3 defaultDirection,
             FlowFieldCellRect dirty,
-            bool rebuildBase = true)
+            bool rebuildBase = true,
+            bool leavesOutUnprepared = false)
         {
             if (!request.Grid.IsValid)
                 throw new ArgumentException("Modifier compose requires a valid grid.", nameof(request));
@@ -184,7 +190,7 @@ namespace Common.FlowField
             if (!FlowFieldGridSpace.IsFinite(request.ObstacleCheckCenterOffset))
                 throw new ArgumentOutOfRangeException(nameof(request.ObstacleCheckCenterOffset));
 
-            BuildRuntimeLayers(request.Grid.CellCount);
+            BuildRuntimeLayers(request.Grid.CellCount, leavesOutUnprepared);
             _composeRun.Begin(
                 request.Grid,
                 request.Surface,
@@ -234,7 +240,7 @@ namespace Common.FlowField
                 AreaOf(_registry.Entries[i]).AreaDirty = true;
         }
 
-        private void BuildRuntimeLayers(int cellCount)
+        private void BuildRuntimeLayers(int cellCount, bool leavesOutUnprepared)
         {
             _runtimeLayers.Clear();
             for (int i = 0; i < _registry.Entries.Count; i++)
@@ -250,7 +256,11 @@ namespace Common.FlowField
                 if (AreaOf(entry).InfluenceMask == null
                     || AreaOf(entry).InfluenceMask.Length != cellCount
                     || !AreaOf(entry).InfluenceIndicesBuilt)
+                {
+                    if (leavesOutUnprepared)
+                        continue;
                     throw new InvalidOperationException("Registered modifier data is inconsistent.");
+                }
 
                 IFlowFieldModifierSnapshot snapshot = FlowFieldModifierRegistry.CaptureSnapshot(entry.Modifier);
 

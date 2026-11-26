@@ -38,6 +38,13 @@ namespace Common.FlowField
                 config.Obstacles.Layer,
                 config.Obstacles.SweepInterval);
             Bounds? invalidated = _builder.SubmitConfig(in config, change);
+            // Every input but the default Goal is a new base for the
+            // additional Goals, and a new grid or source drops their fields
+            // with the published one.
+            if (change != FlowFieldConfigChange.Goal)
+                Goals.TouchBase();
+            if (_builder.PublishedField == null)
+                Goals.DropFields();
             if (invalidated.HasValue)
                 Safety.InvalidateRegion(invalidated.Value);
             EnterBuildingIfOwed();
@@ -151,6 +158,7 @@ namespace Common.FlowField
                 registered = Modifiers.Register(modifier);
             if (!registered)
                 return false;
+            Goals.TouchBase();
             _builder.ApplyModifierChange(new FlowFieldModifierUpdate(
                 FlowFieldModifierUpdateKind.Registered, Modifiers.Get(modifier)));
             EnterBuildingIfOwed();
@@ -168,6 +176,7 @@ namespace Common.FlowField
                 return false;
             bool removed = Modifiers.Unregister(modifier, entry =>
             {
+                Goals.TouchBase();
                 if (!IsFaulted)
                     _builder.ApplyModifierChange(new FlowFieldModifierUpdate(
                         FlowFieldModifierUpdateKind.Unregistered, entry));
@@ -195,6 +204,7 @@ namespace Common.FlowField
                 ReportFault(exception);
                 return;
             }
+            Goals.TouchBase();
             _builder.ApplyModifierChange(new FlowFieldModifierUpdate(
                 FlowFieldModifierUpdateKind.Changed, Modifiers.Get(modifier), change, result));
             EnterBuildingIfOwed();
@@ -259,6 +269,7 @@ namespace Common.FlowField
             // nothing. A BakedBase retry still reloads the bake and queries
             // only what changed since Initialize, so the builder records
             // where the change reached.
+            Goals.TouchBase();
             if (IsFaulted)
             {
                 _builder.ApplyObstacleChange(in change);
@@ -288,6 +299,39 @@ namespace Common.FlowField
             if (!FlowFieldGridSpace.IsFinite(bounds.center) || !FlowFieldGridSpace.IsFinite(bounds.size))
                 return true;
             return FlowFieldCellRect.FromBounds(grid, FlowFieldObstacleReach.Expand(bounds, reach)).IsValid;
+        }
+
+        // ----- Additional Goals ---------------------------------------------
+        // The Manager has checked the request, the kind and the Bake Mode. A
+        // Goal's field builds once the default Goal's pipeline has nothing owed.
+
+        internal int AddGoalCommand(FlowFieldGoalKind kind, in FlowFieldGoalRequest request)
+        {
+            ThrowIfInputUnavailable();
+            int id = Goals.Add(kind, request).Id;
+            EnterBuildingIfOwed();
+            return id;
+        }
+
+        /// <summary>False when the Goal is not in the set.</summary>
+        internal bool SetGoalCommand(int id, in FlowFieldGoalRequest request)
+        {
+            ThrowIfInputUnavailable();
+            if (!Goals.TrySetRequest(id, request))
+                return false;
+            EnterBuildingIfOwed();
+            return true;
+        }
+
+        // A faulted session takes removals too, as with obstacles and Modifiers.
+        internal bool RemoveGoalCommand(int id)
+        {
+            if (!IsInitialized && !IsFaulted)
+                throw FlowFieldFailures.NotInitialized();
+            if (!Goals.Remove(id))
+                return false;
+            LeaveBuildingIfIdle();
+            return true;
         }
 
         private void ThrowIfInputUnavailable()

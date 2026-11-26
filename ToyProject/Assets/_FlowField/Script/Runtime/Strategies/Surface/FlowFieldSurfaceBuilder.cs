@@ -31,7 +31,7 @@ namespace Common.FlowField
         private bool _masksSweep;
 
         public FlowFieldSpaceMode SpaceMode => FlowFieldSpaceMode.Surface2D;
-        public bool HasPendingRequest => _inputs.Requests.Pending;
+        public bool HasPendingRequest => _inputs.Requests.Pending || AdditionalGoalsDue;
 
         // The build the session steps, or the last one. One runs at a time.
         private FlowFieldSurfaceBuild _build;
@@ -208,6 +208,7 @@ namespace Common.FlowField
         {
             _build?.Drop();
             _build = null;
+            CancelGoalBatch();
             _solveBackend?.Cancel();
             _inputs.DirtyFlags = FlowFieldSurfaceDirtyFlags.None;
         }
@@ -235,6 +236,7 @@ namespace Common.FlowField
 
         public void ReleaseResources()
         {
+            ReleaseGoalScratch();
             DetachSolveBackend();
             _modifierComposition?.Clear();
             _modifierComposition = null;

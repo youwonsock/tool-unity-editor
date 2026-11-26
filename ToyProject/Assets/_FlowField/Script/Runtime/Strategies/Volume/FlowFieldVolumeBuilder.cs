@@ -40,7 +40,7 @@ namespace Common.FlowField
         }
 
         public FlowFieldSpaceMode SpaceMode => FlowFieldSpaceMode.Volume3D;
-        public bool HasPendingRequest => _inputs.IsOwed || _build != null;
+        public bool HasPendingRequest => _inputs.IsOwed || _build != null || AdditionalGoalsDue;
         internal bool TryGetLatestRequestedInput(out FlowFieldVolumeRequest request)
         {
             request = _inputs.Requests.Latest;
@@ -138,6 +138,7 @@ namespace Common.FlowField
         public void CancelWork()
         {
             DiscardBuild();
+            CancelGoalBatch();
             _inputs.ClearOwed();
         }
 
@@ -152,6 +153,7 @@ namespace Common.FlowField
 
         public void ReleaseResources()
         {
+            ReleaseGoalScratch();
             _fields.Release();
             _inputs.Reset();
             _overlapBuffer = null;

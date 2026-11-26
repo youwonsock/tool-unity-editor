@@ -157,30 +157,30 @@ namespace Common.FlowField
             switch (build.AllocationStage)
             {
                 case FlowFieldVolumeAllocation.Blocked:
-                    build.Blocked ??= FlowFieldSpareArrays.Take(ref _fields.Spares.Blocked, build.Count);
+                    build.Blocked ??= FlowFieldSpareArrays.Take(ref build.Spares.Blocked, build.Count);
                     if (build.PublishedBlocked != null)
                         Array.Copy(build.PublishedBlocked, build.Blocked, build.Count);
                     break;
-                case FlowFieldVolumeAllocation.Topology: build.Topology ??= FlowFieldSpareArrays.Take(ref _fields.Spares.Topology, build.Count); break;
-                case FlowFieldVolumeAllocation.GoalFlags: build.GoalFlags = FlowFieldSpareArrays.Take(ref _fields.Spares.GoalFlags, build.Count); break;
-                case FlowFieldVolumeAllocation.Next: build.Next = FlowFieldSpareArrays.Take(ref _fields.Spares.Next, build.Count); break;
-                case FlowFieldVolumeAllocation.Directions: build.Directions = FlowFieldSpareArrays.Take(ref _fields.Spares.Directions, build.Count); break;
-                case FlowFieldVolumeAllocation.Speeds: build.Speeds = FlowFieldSpareArrays.Take(ref _fields.Spares.Speeds, build.Count); break;
-                case FlowFieldVolumeAllocation.FinalDirections: build.FinalDirections = FlowFieldSpareArrays.Take(ref _fields.Spares.FinalDirections, build.Count); break;
-                case FlowFieldVolumeAllocation.FinalSpeeds: build.FinalSpeeds = FlowFieldSpareArrays.Take(ref _fields.Spares.FinalSpeeds, build.Count); break;
-                case FlowFieldVolumeAllocation.EscapeDirections: build.EscapeDirections ??= FlowFieldSpareArrays.Take(ref _fields.Spares.EscapeDirections, build.Count); break;
+                case FlowFieldVolumeAllocation.Topology: build.Topology ??= FlowFieldSpareArrays.Take(ref build.Spares.Topology, build.Count); break;
+                case FlowFieldVolumeAllocation.GoalFlags: build.GoalFlags = FlowFieldSpareArrays.Take(ref build.Spares.GoalFlags, build.Count); break;
+                case FlowFieldVolumeAllocation.Next: build.Next = FlowFieldSpareArrays.Take(ref build.Spares.Next, build.Count); break;
+                case FlowFieldVolumeAllocation.Directions: build.Directions = FlowFieldSpareArrays.Take(ref build.Spares.Directions, build.Count); break;
+                case FlowFieldVolumeAllocation.Speeds: build.Speeds = FlowFieldSpareArrays.Take(ref build.Spares.Speeds, build.Count); break;
+                case FlowFieldVolumeAllocation.FinalDirections: build.FinalDirections = FlowFieldSpareArrays.Take(ref build.Spares.FinalDirections, build.Count); break;
+                case FlowFieldVolumeAllocation.FinalSpeeds: build.FinalSpeeds = FlowFieldSpareArrays.Take(ref build.Spares.FinalSpeeds, build.Count); break;
+                case FlowFieldVolumeAllocation.EscapeDirections: build.EscapeDirections ??= FlowFieldSpareArrays.Take(ref build.Spares.EscapeDirections, build.Count); break;
                 // A StaticBaked build loads its navigation and never searches.
                 case FlowFieldVolumeAllocation.Costs:
                     if (build.Request.BakeMode != FlowFieldBakeMode.StaticBaked)
-                        build.Costs = FlowFieldSpareArrays.Take(ref _fields.Spares.Costs, build.Count);
+                        build.Costs = FlowFieldSpareArrays.Take(ref build.Spares.Costs, build.Count);
                     break;
                 case FlowFieldVolumeAllocation.Queue:
                     if (build.Request.BakeMode != FlowFieldBakeMode.StaticBaked)
-                        build.Queue = FlowFieldSpareArrays.Take(ref _fields.Spares.Queue, build.Count);
+                        build.Queue = FlowFieldSpareArrays.Take(ref build.Spares.Queue, build.Count);
                     break;
                 case FlowFieldVolumeAllocation.Influence:
                     if (build.Request.BakeMode != FlowFieldBakeMode.StaticBaked)
-                        build.Influence = FlowFieldSpareArrays.Take(ref _fields.Spares.Influence, build.Count);
+                        build.Influence = FlowFieldSpareArrays.Take(ref build.Spares.Influence, build.Count);
                     break;
             }
 
@@ -416,7 +416,8 @@ namespace Common.FlowField
 
             // The request snapshot and the safety regions update either way;
             // only a field that reads differently is a new Revision.
-            bool changed = _fields.Publish(next);
+            bool changed = _fields.Publish(next, _host.Goals);
+            _host.Goals.MarkPublished(build.GoalStamp);
             if (!build.IsModifierRecompose)
             {
                 // The published field holds none of these.
@@ -435,10 +436,25 @@ namespace Common.FlowField
         // Every build but a Modifier recompose queries the obstacles.
         public bool TryBeginBuild(out FlowFieldBuildStart start, out IFlowFieldBuild build)
         {
+            // The additional Goals build when nothing is owed to the default
+            // Goal, and take turns with it while both are owed, so a field
+            // that changes every frame never starves them.
+            start = new FlowFieldBuildStart(false, null);
+            if (_goalTurn && TryBeginGoalBatch(_inputs.IsOwed, out build))
+            {
+                _goalTurn = false;
+                return true;
+            }
+            int goalStamp = _host.Goals.BaseStamp;
             bool started = TryBeginPendingBuild();
             start = new FlowFieldBuildStart(started && !_build.IsModifierRecompose, null);
             build = started ? _build : null;
-            return started;
+            if (started)
+            {
+                _build.GoalStamp = goalStamp;
+                _goalTurn = _host.Goals.Count > 0;
+            }
+            return started || TryBeginGoalBatch(primaryOwed: false, out build);
         }
 
         // One step of the build the session runs; its context forwards here.
@@ -451,7 +467,7 @@ namespace Common.FlowField
             return build.SolveRunning ? FlowFieldBuildStep.Waiting : FlowFieldBuildStep.Yield;
         }
 
-        public bool HasOwedInput => _inputs.IsOwed;
+        public bool HasOwedInput => _inputs.IsOwed || AdditionalGoalsDue;
 
         private bool TryBeginPendingBuild()
         {
@@ -475,6 +491,7 @@ namespace Common.FlowField
                     modifierSnapshots,
                     FlowFieldSpareArrays.Take(ref _fields.Spares.FinalDirections, request.Grid.CellCount),
                     FlowFieldSpareArrays.Take(ref _fields.Spares.FinalSpeeds, request.Grid.CellCount));
+                _build.Spares = _fields.Spares;
             }
             else
             {
@@ -482,6 +499,7 @@ namespace Common.FlowField
                 bool requeryChangedCells = !reuseObstacles && CanRequeryChangedCells(request);
                 _inputs.TakeFullQueries(out bool requiresFullQuery, out bool queryEveryCell);
                 _build = new BuildContext(this, request, modifierSnapshots);
+                _build.Spares = _fields.Spares;
                 _build.RequiresFullQuery = requiresFullQuery;
                 _build.QueriesEveryCell = queryEveryCell;
                 if (reuseObstacles)

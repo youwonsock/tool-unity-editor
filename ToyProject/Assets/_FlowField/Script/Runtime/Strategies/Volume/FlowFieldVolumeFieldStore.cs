@@ -11,11 +11,12 @@ namespace Common.FlowField
         // The published field, or null.
         internal FlowFieldField<FlowFieldVolumeRequest> Committed { get; private set; }
 
-        // True when the field now reads differently.
-        internal bool Publish(FlowFieldField<FlowFieldVolumeRequest> next)
+        // True when the field now reads differently. An agent layer an
+        // additional Goal still reads keeps its arrays.
+        internal bool Publish(FlowFieldField<FlowFieldVolumeRequest> next, FlowFieldGoalSet goals)
         {
             bool changed = !FlowFieldField.HasSameContent(Committed, next);
-            Spares.Retire(Committed, next);
+            Spares.Retire(Committed, next, goals.HoldsAgent(Committed?.Agent));
             Committed = next;
             return changed;
         }

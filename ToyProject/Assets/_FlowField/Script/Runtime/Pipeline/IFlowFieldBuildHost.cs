@@ -44,6 +44,9 @@ namespace Common.FlowField
         IFlowFieldModifierView Modifiers { get; }
         IFlowFieldUncertainRegions UncertainRegions { get; }
         bool SweepsObstacles { get; }
+        // The additional Goals: the session changes their requests, a Goal
+        // batch build publishes their fields.
+        FlowFieldGoalSet Goals { get; }
         // Commands issued from inside wait until the scope ends.
         FlowFieldExecutionBoundary.OperationScope EnterUserCode();
     }
