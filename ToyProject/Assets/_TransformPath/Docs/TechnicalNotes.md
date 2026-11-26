@@ -11,9 +11,8 @@
 | `Common.TransformPath.Samples` | `Samples/Scripts/` | 샘플 씬의 컨트롤러·UI·카메라·수신기, 원 모양(`TransformPathCircleShape`)과 간격 정책(`TransformPathGapPolicy`). UGUI 참조 |
 | `Common.TransformPath.Tests` | `Dev/Tests/` | EditMode 테스트. 런타임과 Inspector 도구의 규칙(`PathEditorToolTests`)을 함께 확인하므로 두 어셈블리의 내부에 접근합니다 |
 | `Common.TransformPath.Tests.Fixtures` | `Dev/Tests/Fixtures/` | 테스트가 붙이는 컴포넌트(시험용 원 모양, 이벤트 수신기). Unity는 Editor 어셈블리의 컴포넌트를 붙이지 않으므로 런타임 어셈블리이며, `UNITY_INCLUDE_TESTS`일 때만 컴파일합니다 |
-| `Common.TransformPath.PlayerProbe`, `.PlayerProbe.Editor` | `Dev/` | 이 저장소의 성능 측정 Player(`Tools/run-transformpath-probe.sh`)와 `-executeMethod` 빌드 진입점 |
 
-시스템과 에디터는 `Script/` 폴더 하나입니다. 샘플, 테스트, 측정 도구는 시스템을 참조만 하고, 시스템은 이들을 모릅니다. 샘플과 테스트 고정 어셈블리에는 내부 접근을 주지 않으므로 공개 API만으로 만들어집니다. 샘플의 `TransformPathCircleShape`와 테스트 고정 어셈블리의 원은 이렇게 `PathShapeProvider`를 다른 어셈블리에서 상속할 수 있음을 컴파일로 보입니다. 측정 어셈블리는 Editor와 `TRANSFORMPATH_PLAYER_PROBE`를 정의한 측정 빌드에서만 컴파일합니다.
+시스템과 에디터는 `Script/` 폴더 하나입니다. 샘플과 테스트는 시스템을 참조만 하고, 시스템은 이들을 모릅니다. 샘플과 테스트 고정 어셈블리에는 내부 접근을 주지 않으므로 공개 API만으로 만들어집니다. 샘플의 `TransformPathCircleShape`와 테스트 고정 어셈블리의 원은 이렇게 `PathShapeProvider`를 다른 어셈블리에서 상속할 수 있음을 컴파일로 보입니다.
 
 `Script/` 아래 시스템 코드는 역할로 나눕니다: `Core`(계약, 상수, 이벤트 정의), `Geometry`, `Providers`, `Playback`, `Queue`, `Execution`(Driver, Boundary), `Components`, `Sync`, `Utilities`.
 
@@ -135,9 +134,7 @@
 ## 검증
 
 - EditMode 테스트: `Tools/run-transformpath-tests.sh`. 테스트마다 알림 순서 큐를 새로 쓰고(`PathBoundaryIsolatedTest`), 끝날 때 열린 작업이나 전달되지 않은 알림이 남으면 실패합니다.
-- Player 측정: `Tools/run-transformpath-probe.sh`
-- IL2CPP 빌드: `Tools/run-il2cpp-build.sh`
-- 측정을 비교할 커밋은 `UNITY_TREE`로 넘깁니다. 해시, 브랜치 이름, `HEAD` 모두 이 checkout 기준으로 풉니다.
+- 작업 트리 대신 다른 커밋을 시험하려면 `UNITY_TREE`로 넘깁니다. 해시, 브랜치 이름, `HEAD` 모두 이 checkout 기준으로 풉니다.
 
 ## UML 갱신
 

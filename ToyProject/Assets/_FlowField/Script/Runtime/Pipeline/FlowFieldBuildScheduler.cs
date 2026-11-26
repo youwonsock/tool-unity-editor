@@ -20,27 +20,20 @@ namespace Common.FlowField
         private static readonly Stopwatch Timer = new Stopwatch();
         private static readonly Func<double> ElapsedMilliseconds = () => Timer.Elapsed.TotalMilliseconds;
 
-        // The longest main-thread pass since the last read, for the Player probe.
-        internal static double LongestPumpMilliseconds { get; private set; }
-
-        internal static void ResetLongestPump() => LongestPumpMilliseconds = 0d;
-
         internal static int Count => Sessions.Count;
 
         internal static bool Contains(FlowFieldSession session) => Sessions.Contains(session);
 
         /// <summary>
-        /// Clears the round-robin position and the probe reading at the start of
-        /// a Play session. With domain reload disabled, static fields otherwise
-        /// carry over from the previous one. Registered sessions stay: each one
-        /// leaves when it stops, is released or is disposed, and a session that
-        /// never runs never joins.
+        /// Clears the round-robin position at the start of a Play session. With
+        /// domain reload disabled, static fields otherwise carry over from the
+        /// previous one. Registered sessions stay: each one leaves when it stops,
+        /// is released or is disposed, and a session that never runs never joins.
         /// </summary>
         internal static void ResetForNewPlaySession()
         {
             _cursor = 0;
             _pumping = false;
-            LongestPumpMilliseconds = 0d;
         }
 
         internal static void Register(FlowFieldSession session)
@@ -110,7 +103,6 @@ namespace Common.FlowField
             finally
             {
                 _pumping = false;
-                LongestPumpMilliseconds = Math.Max(LongestPumpMilliseconds, Timer.Elapsed.TotalMilliseconds);
             }
         }
 

@@ -158,7 +158,7 @@ Inspector는 그룹마다 제목을 달고, 지금 Space Mode가 읽지 않는 �
 
 - `Assets/_FlowField/Script/` 폴더를 `.meta`와 함께 복사합니다. 시스템(`Common.FlowField`)과 에디터(`Common.FlowField.Editor`) 어셈블리가 들어 있습니다.
 - 패키지: Burst(1.8.13), Collections(1.4.0), Mathematics(1.2.6), Physics 모듈. 괄호는 이 프로젝트가 쓰는 버전입니다.
-- `Samples/`(샘플 씬·스크립트)와 `Dev/`(측정 도구와 회귀 테스트)는 옮기지 않아도 됩니다. 샘플을 옮기면 URP, UGUI와 레이어 8번 `FlowFieldGround`, 9번 `FlowFieldObstacle`, 10번 `FlowFieldAgent`가 필요합니다. 씬이 레이어를 번호로 저장하므로 번호도 같아야 합니다.
+- `Samples/`(샘플 씬·스크립트)와 `Dev/`(회귀 테스트)는 옮기지 않아도 됩니다. 샘플을 옮기면 URP, UGUI와 레이어 8번 `FlowFieldGround`, 9번 `FlowFieldObstacle`, 10번 `FlowFieldAgent`가 필요합니다. 씬이 레이어를 번호로 저장하므로 번호도 같아야 합니다.
 - 시스템은 폴더 위치에 기대지 않습니다. Bake Asset은 씬 옆에 만들어집니다.
 
 ## 구조

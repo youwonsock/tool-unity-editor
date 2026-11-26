@@ -1,20 +1,18 @@
-# Sourced by the Unity scripts. Copies the current working tree into a separate
-# Git worktree, so an open Unity Editor keeps its project lock. Ignored files
-# are left out, which also proves a fresh checkout is sufficient. Also provides
-# run_limited.
+# Sourced by run-transformpath-tests.sh. Copies the current working tree into
+# a separate Git worktree, so an open Unity Editor keeps its project lock.
+# Ignored files are left out, which also proves a fresh checkout is sufficient.
+# Also provides run_limited.
 #
 # UNITY_PATH           Unity executable (default: the Hub install of the project version)
 # UNITY_WORKTREE       Reused worktree (default: under TMPDIR, keeps its Library)
 # UNITY_RESULTS        Folder for results and logs (default: <worktree>-results)
-# UNITY_TREE           Commit (hash, branch or HEAD of this checkout) to build instead of the working tree
-# UNITY_BUILD_TIMEOUT  Seconds a Player build may take (default 3600)
+# UNITY_TREE           Commit (hash, branch or HEAD of this checkout) to use instead of the working tree
 
 root=$(git rev-parse --show-toplevel)
 version=$(sed -n 's/^m_EditorVersion: //p' "$root/ToyProject/ProjectSettings/ProjectVersion.txt")
 unity=${UNITY_PATH:-/Applications/Unity/Hub/Editor/$version/Unity.app/Contents/MacOS/Unity}
 worktree=${UNITY_WORKTREE:-${TMPDIR:-/tmp}/tool-unity-editor-snapshot}
 results=${UNITY_RESULTS:-$worktree-results}
-build_timeout=${UNITY_BUILD_TIMEOUT:-3600}
 mkdir -p "$results"
 
 stop_tree() {

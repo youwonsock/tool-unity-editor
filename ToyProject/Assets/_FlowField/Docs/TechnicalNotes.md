@@ -9,13 +9,11 @@
 | `Common.FlowField` | `Script/` | 계약, 격자, Session, 계산 단계, 결과 저장소, Bake 데이터, `FlowFieldManager`와 Modifier 컴포넌트 |
 | `Common.FlowField.Editor` | `Script/Editor/` | Inspector, Bake, Scene View 표시 |
 | `Common.FlowField.Samples` | `Samples/Scripts/` | 샘플 씬의 에이전트·컨트롤러·UI(UGUI 참조) |
-| `Common.FlowField.PlayerProbe`, `.PlayerProbe.Editor` | `Dev/` | 이 저장소의 성능·회귀 측정 Player와 `-executeMethod` 빌드 진입점 |
 | `Common.FlowField.Tests`, `.Tests.Fixtures` | `Dev/Tests/` | Editor에서만 도는 회귀 테스트와 테스트용 Modifier([회귀 테스트](#회귀-테스트)) |
 
-- 시스템과 에디터 어셈블리는 `Script/` 폴더 하나에 있습니다. 샘플, 측정 도구, 테스트는 시스템을 참조하고, 시스템은 그것들을 모릅니다.
-- `Script/FlowFieldAssemblyInfo.cs`의 `InternalsVisibleTo`가 Editor 어셈블리, 두 측정 어셈블리, 테스트 어셈블리에 내부를 엽니다. `Script/Editor/FlowFieldEditorAssemblyInfo.cs`는 Editor 어셈블리의 내부를 테스트에 엽니다. Editor가 쓰는 내부는 아래 "Editor 경계"에 있습니다.
-- 측정이 읽는 값(Scheduler의 `LongestPumpMilliseconds` 등)은 시스템에 있습니다. `Dev/`가 없어도 시스템은 그대로 컴파일됩니다.
-- 측정 어셈블리는 Editor와, `FLOWFIELD_PLAYER_PROBE`를 정의한 측정 빌드(`Tools/run-player-probe.sh`)에서만 컴파일합니다.
+- 시스템과 에디터 어셈블리는 `Script/` 폴더 하나에 있습니다. 샘플과 테스트는 시스템을 참조하고, 시스템은 그것들을 모릅니다.
+- `Script/FlowFieldAssemblyInfo.cs`의 `InternalsVisibleTo`가 Editor 어셈블리와 테스트 어셈블리에 내부를 엽니다. `Script/Editor/FlowFieldEditorAssemblyInfo.cs`는 Editor 어셈블리의 내부를 테스트에 엽니다. Editor가 쓰는 내부는 아래 "Editor 경계"에 있습니다.
+- `Dev/`가 없어도 시스템은 그대로 컴파일됩니다.
 
 ## 파이프라인과 전략
 
