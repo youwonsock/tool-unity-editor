@@ -141,18 +141,26 @@ namespace Common.FlowField
         {
             World = world;
             Goals = new FlowFieldWorldGoals(this);
+            Registrations = new FlowFieldWorldRegistrations(this);
         }
 
         internal readonly FlowFieldWorldGoals Goals;
+        internal readonly FlowFieldWorldRegistrations Registrations;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetForPlaySession() => Worlds.Clear();
 
-        /// <summary>Every world's Goals take their seeds, once a frame before the builds.</summary>
+        /// <summary>
+        /// Once a frame before the builds: every area takes the world's
+        /// registrations it misses, and the world's Goals their seeds.
+        /// </summary>
         internal static void UpdateAll()
         {
             foreach (FlowFieldWorldAreas areas in Worlds.Values)
+            {
+                areas.Registrations.Update();
                 areas.Goals.Update();
+            }
         }
 
         internal static FlowFieldWorldAreas For(FlowFieldWorld world)

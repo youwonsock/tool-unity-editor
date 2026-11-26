@@ -105,6 +105,68 @@ namespace Common.FlowField
             return TryGetArea(worldPosition, out FlowFieldManager area) && area.TrySample(worldPosition, goal, out sample);
         }
 
+        /// <summary>
+        /// Registers an obstacle with every area, for one that may move from one area into another:
+        /// each area rebuilds the cells it reaches, and areas that join later take it too. Report
+        /// moves with <see cref="NotifyDynamicObstacleMoved"/>. StaticBaked areas keep their bake.
+        /// </summary>
+        /// <returns>False when the world already holds it.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="collider"/> is null.</exception>
+        /// <exception cref="InvalidOperationException">Called outside Play Mode or with a destroyed Collider.</exception>
+        public bool RegisterDynamicObstacle(Collider collider)
+        {
+            ThrowIfNotPlaying();
+            if (ReferenceEquals(collider, null))
+                throw new System.ArgumentNullException(nameof(collider));
+            if (collider == null)
+                throw FlowFieldFailures.DestroyedCollider();
+            return Areas.Registrations.RegisterObstacle(collider);
+        }
+
+        /// <summary>Removes a world obstacle from every area.</summary>
+        /// <returns>False when the world does not hold it.</returns>
+        public bool UnregisterDynamicObstacle(Collider collider)
+            => !ReferenceEquals(collider, null) && Areas.Registrations.UnregisterObstacle(collider);
+
+        /// <summary>A world obstacle moved; every area rebuilds where it was and where it is.</summary>
+        /// <returns>False when the world does not hold it.</returns>
+        public bool NotifyDynamicObstacleMoved(Collider collider)
+            => !ReferenceEquals(collider, null) && Areas.Registrations.NotifyObstacleMoved(collider);
+
+        /// <summary>Rebuilds the cells the Bounds reach in every area, as each Manager's own call does.</summary>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="worldBounds"/> is not finite.</exception>
+        public void NotifyObstacleRegionDirty(Bounds worldBounds)
+        {
+            if (!FlowFieldGridSpace.IsFinite(worldBounds.center) || !FlowFieldGridSpace.IsFinite(worldBounds.size))
+                throw FlowFieldFailures.BoundsNotFinite(nameof(worldBounds));
+            Areas.Registrations.NotifyRegionDirty(worldBounds);
+        }
+
+        /// <summary>
+        /// Registers a Modifier with every area, for one whose influence may reach more than one:
+        /// each area composes it on its own cells, and areas that join later take it too.
+        /// </summary>
+        /// <returns>False when the world already holds it.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="modifier"/> is null.</exception>
+        /// <exception cref="InvalidOperationException">Called outside Play Mode.</exception>
+        public bool RegisterVectorModifier(IFlowFieldVectorModifier modifier)
+        {
+            ThrowIfNotPlaying();
+            if (modifier == null)
+                throw new System.ArgumentNullException(nameof(modifier));
+            return Areas.Registrations.RegisterModifier(modifier);
+        }
+
+        /// <summary>Removes a world Modifier from every area.</summary>
+        /// <returns>False when the world does not hold it.</returns>
+        public bool UnregisterVectorModifier(IFlowFieldVectorModifier modifier)
+            => modifier != null && Areas.Registrations.UnregisterModifier(modifier);
+
+        /// <summary>A world Modifier changed; every area that holds it composes again.</summary>
+        /// <returns>False when the world does not hold it.</returns>
+        public bool NotifyModifierChanged(IFlowFieldVectorModifier modifier, FlowFieldModifierChange change)
+            => modifier != null && Areas.Registrations.NotifyModifierChanged(modifier, change);
+
         private static void ValidateRequest(in FlowFieldGoalRequest request)
         {
             if (!request.HasGoal)
