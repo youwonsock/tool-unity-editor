@@ -28,22 +28,28 @@ namespace Common.FlowField
     }
 
     /// <summary>
-    /// What an agent can enter: which cells are blocked and, in Volume3D, the
-    /// way out of a blocked cell. It follows from the ground and the
-    /// obstacles only, whatever the Goal.
+    /// What an agent can enter: which cells are blocked, the links between
+    /// open cells and, in Volume3D, the way out of a blocked cell. It follows
+    /// from the ground and the obstacles only, whatever the Goal.
     /// </summary>
     internal sealed class FlowFieldAgentLayer
     {
         internal readonly bool[] Blocked;
+        // The links the ground and the obstacles allow, whatever the Goal:
+        // the Goal layer's Topology without the Goal's influence. Volume3D
+        // links every open cell there already, so it is the same array.
+        internal readonly uint[] GroundTopology;
         // Volume3D only; Surface2D reconstructs escape vectors when asked.
         internal readonly Vector3[] EscapeDirections;
 
-        internal FlowFieldAgentLayer(bool[] blocked, Vector3[] escapeDirections)
+        internal FlowFieldAgentLayer(bool[] blocked, uint[] groundTopology, Vector3[] escapeDirections)
         {
             Blocked = blocked ?? throw new ArgumentNullException(nameof(blocked));
+            GroundTopology = groundTopology ?? throw new ArgumentNullException(nameof(groundTopology));
             EscapeDirections = escapeDirections;
         }
 
+        // GroundTopology follows from Blocked and the scene, so it is not compared.
         internal static bool SameContent(FlowFieldAgentLayer left, FlowFieldAgentLayer right)
             => ReferenceEquals(left, right)
                 || FlowFieldLayerBytes.Same(left.Blocked, right.Blocked)

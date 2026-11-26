@@ -12,10 +12,35 @@ namespace Common.FlowField
     {
         private const float DistanceTieEpsilon = 0.000001f;
 
+        /// <summary>
+        /// The Goal's links (inside its influence) and the ground's links
+        /// (every valid open cell), from the same staged cells.
+        /// </summary>
         public static void BuildTopologyMasks(
             FlowFieldGridSpace grid,
             FlowFieldSurfaceData surface,
             FlowFieldSurfaceWorkspace workspace)
+        {
+            RunTopologyJob(grid, surface, workspace, workspace?.TopologyMasks, ignoreInfluence: false);
+            RunTopologyJob(grid, surface, workspace, workspace?.GroundTopologyMasks, ignoreInfluence: true);
+        }
+
+        /// <summary>
+        /// Only the ground's links. A StaticBaked load takes the Goal's links
+        /// from the bake, which stores no ground links.
+        /// </summary>
+        internal static void BuildGroundTopologyMasks(
+            FlowFieldGridSpace grid,
+            FlowFieldSurfaceData surface,
+            FlowFieldSurfaceWorkspace workspace)
+            => RunTopologyJob(grid, surface, workspace, workspace?.GroundTopologyMasks, ignoreInfluence: true);
+
+        private static void RunTopologyJob(
+            FlowFieldGridSpace grid,
+            FlowFieldSurfaceData surface,
+            FlowFieldSurfaceWorkspace workspace,
+            byte[] target,
+            bool ignoreInfluence)
         {
             if (!grid.IsValid)
                 throw new System.ArgumentException("Topology mask requires a valid grid.", nameof(grid));
@@ -24,8 +49,8 @@ namespace Common.FlowField
             if (workspace == null)
                 throw new System.ArgumentNullException(nameof(workspace));
             if (workspace.Capacity != grid.CellCount
-                || workspace.TopologyMasks == null
-                || workspace.TopologyMasks.Length != grid.CellCount)
+                || target == null
+                || target.Length != grid.CellCount)
                 throw new System.ArgumentException("Topology mask workspace capacity must match the grid.", nameof(workspace));
             workspace.AssertWritable(nameof(BuildTopologyMasks));
 
@@ -36,13 +61,14 @@ namespace Common.FlowField
                 {
                     var job = new FlowFieldSurfaceTopologyJob
                     {
-                        Topology = pins.Pin(workspace.TopologyMasks),
+                        Topology = pins.Pin(target),
                         Blocked = pins.Pin(workspace.Blocked),
                         Influence = pins.Pin(workspace.InfluenceMask),
                         SurfaceFlags = pins.Pin(surface.Flags),
                         NeighborMasks = pins.Pin(surface.NeighborMasks),
                         Width = grid.Width,
                         Depth = grid.Depth,
+                        IgnoreInfluence = ignoreInfluence,
                     };
                     for (int direction = 0; direction < FlowFieldNeighborUtility.SurfaceCount; direction++)
                     {

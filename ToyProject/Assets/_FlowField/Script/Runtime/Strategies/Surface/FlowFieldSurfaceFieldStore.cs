@@ -47,6 +47,8 @@ namespace Common.FlowField
                 new FlowFieldSurfaceFieldCommitJob
                 {
                     Blocked = pins.Pin(agent.Blocked),
+                    GroundTopology = pins.Pin(agent.GroundTopology),
+                    GroundTopologySource = pins.Pin(workspace.GroundTopologyMasks),
                     BlockedSource = pins.Pin(workspace.Blocked),
                     Topology = pins.Pin(goal.Topology),
                     TopologySource = pins.Pin(workspace.TopologyMasks),
@@ -155,7 +157,10 @@ namespace Common.FlowField
 
         // The published field keeps no escape directions.
         private FlowFieldAgentLayer TakeAgent(int count)
-            => new FlowFieldAgentLayer(FlowFieldSpareArrays.Take(ref _spares.Blocked, count), escapeDirections: null);
+            => new FlowFieldAgentLayer(
+                FlowFieldSpareArrays.Take(ref _spares.Blocked, count),
+                FlowFieldSpareArrays.Take(ref _spares.GroundTopology, count),
+                escapeDirections: null);
 
         private FlowFieldGoalLayer TakeGoal(int count, FlowFieldSurfaceWorkspace workspace)
             => new FlowFieldGoalLayer(
@@ -182,7 +187,10 @@ namespace Common.FlowField
         }
 
         private static void CopyAgent(FlowFieldAgentLayer from, FlowFieldAgentLayer to, int count)
-            => Array.Copy(from.Blocked, to.Blocked, count);
+        {
+            Array.Copy(from.Blocked, to.Blocked, count);
+            Array.Copy(from.GroundTopology, to.GroundTopology, count);
+        }
 
         private static void CopyGoal(FlowFieldGoalLayer from, FlowFieldGoalLayer to, int count)
         {
@@ -212,6 +220,8 @@ namespace Common.FlowField
                 throw new ArgumentException("Committed workspace does not match the field store.", nameof(workspace));
             workspace.AssertWritable(nameof(CopyToWorkspace));
             Array.Copy(_field.Agent.Blocked, workspace.Blocked, Capacity);
+            for (int i = 0; i < Capacity; i++)
+                workspace.GroundTopologyMasks[i] = (byte)_field.Agent.GroundTopology[i];
             CopyGoalAndFieldToWorkspace(workspace);
             // Escape vectors are a diagnostic/bake concern rather than part
             // of the compact runtime field. Reconstruct them only when an

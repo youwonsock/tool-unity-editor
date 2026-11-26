@@ -47,7 +47,7 @@ namespace Common.FlowField.Tests
             var field = new FlowFieldField(
                 grid,
                 null,
-                new FlowFieldAgentLayer(blocked, new Vector3[count]),
+                new FlowFieldAgentLayer(blocked, topology, new Vector3[count]),
                 new FlowFieldGoalLayer(
                     topology,
                     new FlowFieldGoalFlags[count],

@@ -119,6 +119,7 @@ namespace Common.FlowField
                 // is only needed for the first build or when the referenced
                 // snapshot/signature changed.
                 request.BakeSnapshot.CopyToWorkspace(_state.Grid, _state.Workspace);
+                FlowFieldSurfaceGraphTraversal.BuildGroundTopologyMasks(_state.Grid, _state.Surface, _state.Workspace);
                 _baseStage.LoadedSnapshot = request.BakeSnapshot;
 
                 _state.HasObstacleMask = true;

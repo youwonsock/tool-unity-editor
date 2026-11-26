@@ -401,7 +401,7 @@ namespace Common.FlowField
                 build.Request,
                 build.Request.Grid,
                 scene: null,
-                build.ReusedAgent ?? new FlowFieldAgentLayer(build.Blocked, build.EscapeDirections),
+                build.ReusedAgent ?? new FlowFieldAgentLayer(build.Blocked, build.Topology, build.EscapeDirections),
                 new FlowFieldGoalLayer(
                     build.Topology,
                     build.GoalFlags,

@@ -11,6 +11,7 @@ namespace Common.FlowField
     internal sealed class FlowFieldSpareArrays
     {
         internal bool[] Blocked;
+        internal uint[] GroundTopology;
         internal uint[] Topology;
         internal FlowFieldGoalFlags[] GoalFlags;
         internal int[] Next;
@@ -41,6 +42,9 @@ namespace Common.FlowField
             if (replaced == null)
                 return;
             Keep(ref Blocked, replaced.Agent.Blocked, next.Agent.Blocked);
+            // Volume3D's ground topology is its Goal topology, kept once below.
+            if (!ReferenceEquals(replaced.Agent.GroundTopology, replaced.Goal.Topology))
+                Keep(ref GroundTopology, replaced.Agent.GroundTopology, next.Agent.GroundTopology);
             Keep(ref Topology, replaced.Goal.Topology, next.Goal.Topology);
             Keep(ref GoalFlags, replaced.Goal.Flags, next.Goal.Flags);
             Keep(ref Next, replaced.Goal.NextCells, next.Goal.NextCells);
@@ -62,6 +66,7 @@ namespace Common.FlowField
         internal void Clear()
         {
             Blocked = null;
+            GroundTopology = null;
             Topology = null;
             GoalFlags = null;
             Next = null;

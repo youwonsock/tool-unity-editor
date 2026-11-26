@@ -216,6 +216,8 @@ namespace Common.FlowField
 
         internal int Width;
         internal int Depth;
+        // The ground topology: every valid open cell counts as inside.
+        internal bool IgnoreInfluence;
         internal fixed int DeltaX[NeighborCount];
         internal fixed int DeltaZ[NeighborCount];
 
@@ -241,7 +243,7 @@ namespace Common.FlowField
         }
 
         private bool Traversable(int index)
-            => (SurfaceFlags[index] & ValidSurface) != 0 && Influence[index] && !Blocked[index];
+            => (SurfaceFlags[index] & ValidSurface) != 0 && (IgnoreInfluence || Influence[index]) && !Blocked[index];
 
         private bool CanTraverse(int x, int z, int direction, int connections)
         {
@@ -484,6 +486,8 @@ namespace Common.FlowField
         [NativeDisableUnsafePtrRestriction] internal bool* Blocked;
         [NativeDisableUnsafePtrRestriction] internal bool* BlockedSource;
         // The published field keeps topology as uint, the workspace as byte.
+        [NativeDisableUnsafePtrRestriction] internal uint* GroundTopology;
+        [NativeDisableUnsafePtrRestriction] internal byte* GroundTopologySource;
         [NativeDisableUnsafePtrRestriction] internal uint* Topology;
         [NativeDisableUnsafePtrRestriction] internal byte* TopologySource;
         [NativeDisableUnsafePtrRestriction] internal FlowFieldGoalFlags* GoalFlags;
@@ -502,7 +506,7 @@ namespace Common.FlowField
         [NativeDisableUnsafePtrRestriction] internal bool* InfluenceSource;
         [NativeDisableUnsafePtrRestriction] internal bool* Changed;
 
-        internal const int PinnedArrayCount = 19;
+        internal const int PinnedArrayCount = 21;
 
         internal int Width;
         internal int MinX;
@@ -528,6 +532,8 @@ namespace Common.FlowField
                         || Differs(BaseDirections[i], BaseDirectionsSource[i])
                         || !Approximately(BaseSpeeds[i], BaseSpeedsSource[i]);
                     Blocked[i] = BlockedSource[i];
+                    // It follows from Blocked and the Surface, so it reports no change.
+                    GroundTopology[i] = GroundTopologySource[i];
                     Topology[i] = TopologySource[i];
                     GoalFlags[i] = GoalFlagsSource[i];
                     Next[i] = NextSource[i];

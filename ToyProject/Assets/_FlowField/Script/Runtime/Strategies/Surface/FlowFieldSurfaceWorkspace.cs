@@ -32,6 +32,9 @@ namespace Common.FlowField
         // Final eight-neighbor topology after Surface, obstacle, influence and
         // diagonal-corner checks. The solve job consumes this mask.
         internal byte[] TopologyMasks { get; private set; }
+        // The same links without the Goal's influence: what the ground and
+        // the obstacles allow. Published on the agent layer.
+        internal byte[] GroundTopologyMasks { get; private set; }
         internal int ResolvedGoalIndex { get; private set; } = -1;
         internal bool HasActiveGoal { get; private set; }
 
@@ -79,6 +82,7 @@ namespace Common.FlowField
             Queue = new int[cellCount];
             NextCells = new int[cellCount];
             TopologyMasks = new byte[cellCount];
+            GroundTopologyMasks = new byte[cellCount];
             for (int i = 0; i < cellCount; i++)
                 NextCells[i] = FlowFieldNextCell.DefaultDirection;
             ResolvedGoalIndex = -1;
@@ -107,6 +111,7 @@ namespace Common.FlowField
             Queue = null;
             NextCells = null;
             TopologyMasks = null;
+            GroundTopologyMasks = null;
             ResolvedGoalIndex = -1;
             HasActiveGoal = false;
         }
@@ -195,6 +200,7 @@ namespace Common.FlowField
             Array.Clear(EscapeDirections, 0, Capacity);
             ClearGoal();
             Array.Clear(TopologyMasks, 0, Capacity);
+            Array.Clear(GroundTopologyMasks, 0, Capacity);
             Array.Clear(BaseDirections, 0, Capacity);
             Array.Clear(BaseSpeedMultipliers, 0, Capacity);
             Array.Clear(FinalDirections, 0, Capacity);
