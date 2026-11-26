@@ -1,12 +1,13 @@
 using System;
 using UnityEngine;
+using BuildPhase = Common.FlowField.FlowFieldSurfaceBuildPhase;
 
 namespace Common.FlowField
 {
     /// <summary>The stages of one Surface2D rebuild, from a pending request to the published field.</summary>
     internal sealed partial class FlowFieldSurfaceBuilder
     {
-        private void BuildPending()
+        private void BuildPending(FlowFieldSurfaceBuild build)
         {
             if (!_requests.Pending)
                 return;
@@ -28,7 +29,7 @@ namespace Common.FlowField
             _state.DirtyFlags = FlowFieldSurfaceDirtyFlags.None;
             if (request.SourceKind == FlowFieldSurfaceSourceKind.StaticSnapshot)
             {
-                BuildStaticSnapshot(request, pending);
+                BuildStaticSnapshot(build, request, pending);
                 return;
             }
 
@@ -70,13 +71,14 @@ namespace Common.FlowField
             // field, so composing before the solve would never be visible.
             if (_state.Workspace.HasActiveGoal && topologyChanged)
             {
-                StartBfs(request);
+                StartBfs(build, request);
                 return;
             }
 
             if ((pending & (FlowFieldSurfaceDirtyFlags.ModifierStack | FlowFieldSurfaceDirtyFlags.FinalRegion)) != 0)
             {
                 ComposeThenCommit(
+                    build,
                     request,
                     rebuildBase: IsBaseDirty(pending)
                         || (pending & FlowFieldSurfaceDirtyFlags.DefaultDirection) != 0
@@ -89,13 +91,17 @@ namespace Common.FlowField
             // change, so the published cells stay as they are and Commit copies
             // nothing.
             QueueCommit(
+                build,
                 request,
                 resultChanged: false,
                 includeBase: false,
                 finalRegion: _state.LastComposedRegion);
         }
 
-        private void BuildStaticSnapshot(in FlowFieldSurfaceRequest request, FlowFieldSurfaceDirtyFlags pending)
+        private void BuildStaticSnapshot(
+            FlowFieldSurfaceBuild build,
+            in FlowFieldSurfaceRequest request,
+            FlowFieldSurfaceDirtyFlags pending)
         {
             if (request.BakeSnapshot == null)
                 throw new InvalidOperationException(MissingBakeMessage);
@@ -151,11 +157,12 @@ namespace Common.FlowField
                     | FlowFieldSurfaceDirtyFlags.DefaultDirection)) != 0;
             if (finalDirty)
             {
-                ComposeThenCommit(request, rebuildBase, resultChanged: true);
+                ComposeThenCommit(build, request, rebuildBase, resultChanged: true);
                 return;
             }
 
             QueueCommit(
+                build,
                 request,
                 resultChanged: false,
                 includeBase: false,
@@ -180,6 +187,7 @@ namespace Common.FlowField
         // the sample safety rule, a restore after a rejected build and the bake
         // export all read them.
         private void ComposeThenCommit(
+            FlowFieldSurfaceBuild build,
             in FlowFieldSurfaceRequest request,
             bool rebuildBase,
             bool resultChanged)
@@ -202,34 +210,31 @@ namespace Common.FlowField
             }
             _state.LastComposedRegion = rebuildBase ? FlowFieldCellRect.Full(_state.Grid) : region;
             _state.DirtyFinalRegion = FlowFieldCellRect.Invalid;
-            _composeStage.Begin(request, rebuildBase, resultChanged);
-            _phase = BuildPhase.Composing;
-            ContinueCompose();
+            build.BeginCompose(request, rebuildBase, resultChanged);
+            ContinueCompose(build);
         }
 
-        private void ContinueCompose()
+        private void ContinueCompose(FlowFieldSurfaceBuild build)
         {
             bool finished;
             using (_host.EnterUserCode())
-                finished = _modifierComposition.StepFinalField(in _composeStage.FrameBudget);
+                finished = _modifierComposition.StepFinalField(in build.FrameBudget);
             // StepBuild yields until the composition finishes.
             if (!finished)
                 return;
 
-            _state.BaseComposed |= _composeStage.RebuildBase;
+            _state.BaseComposed |= build.ComposeRebuildBase;
             QueueCommit(
-                _composeStage.Request,
-                _composeStage.ResultChanged,
-                _composeStage.RebuildBase,
+                build,
+                build.ComposeRequest,
+                build.ComposeResultChanged,
+                build.ComposeRebuildBase,
                 _state.LastComposedRegion);
-            _composeStage.Clear();
         }
 
         // Only a build with an active Goal solves; the others compose directly.
-        private void StartBfs(in FlowFieldSurfaceRequest request)
+        private void StartBfs(FlowFieldSurfaceBuild build, in FlowFieldSurfaceRequest request)
         {
-            // A solve callback can arrive after the build was cancelled.
-            int cancelCount = _cancelCount;
             FlowFieldSurfaceBfsRequest bfsRequest = new FlowFieldSurfaceBfsRequest(
                 _state.Grid,
                 _state.Surface,
@@ -240,26 +245,21 @@ namespace Common.FlowField
                 _state.Workspace.ResolvedGoalIndex);
 
             // Set first: the callback that reports the solve moves the phase on.
-            _phase = BuildPhase.WaitingSolve;
+            build.Phase = BuildPhase.WaitingSolve;
             PrepareSolveBackend();
-            bool accepted = _solveBackend.StartBfs(bfsRequest, _ => RunBfsCallback(cancelCount));
+            bool accepted = _solveBackend.StartBfs(bfsRequest, _ => RunBfsCallback(build));
             // Only a disposed backend refuses a solve.
-            if (!accepted && IsCurrentBuild(cancelCount))
+            if (!accepted && build.IsWaitingForWorker)
                 throw new InvalidOperationException("FlowField BFS session could not be started.");
         }
 
-        // The solve this build waits for. Stop, a fault and Dispose cancel the
-        // build, so a late callback finds neither.
-        private bool IsCurrentBuild(int cancelCount)
-            => cancelCount == _cancelCount
-                && _phase == BuildPhase.WaitingSolve;
-
         // The backend calls back from Poll, inside StepBuild: a failure leaves
-        // through StepBuild and the session faults.
-        private void RunBfsCallback(int cancelCount)
+        // through StepBuild and the session faults. Stop, a fault and Dispose
+        // drop the build, so a late callback finds it no longer waiting.
+        private void RunBfsCallback(FlowFieldSurfaceBuild build)
         {
-            if (IsCurrentBuild(cancelCount))
-                OnBfsCompleted();
+            if (build.IsWaitingForWorker)
+                OnBfsCompleted(build);
         }
 
         /// <summary>
@@ -297,11 +297,11 @@ namespace Common.FlowField
                 _requests.Pending = true;
         }
 
-        private void OnBfsCompleted()
+        private void OnBfsCompleted(FlowFieldSurfaceBuild build)
         {
             if (RejectOutdatedWork())
             {
-                _phase = BuildPhase.Rejected;
+                build.Phase = BuildPhase.Rejected;
                 return;
             }
 
@@ -321,7 +321,7 @@ namespace Common.FlowField
                 _state.ResolvedDefaultDirection = resolvedDefault;
             if ((pending & FlowFieldSurfaceDirtyFlags.ModifierArea) != 0)
                 RebuildModifierAreaData(finalRequest);
-            ComposeThenCommit(finalRequest, rebuildBase: true, resultChanged: true);
+            ComposeThenCommit(build, finalRequest, rebuildBase: true, resultChanged: true);
         }
 
         private void RestoreStagingAfterStaleResult()
@@ -384,7 +384,7 @@ namespace Common.FlowField
                 && left.ContentEquals(right);
 
 
-        private bool HasActiveBuild => _phase != BuildPhase.None;
+        private bool HasActiveBuild => _build is { IsLive: true };
 
         // The base stages run in one frame so their Physics reads form one
         // snapshot, so one build begins per pump whatever the budget says.
@@ -405,21 +405,21 @@ namespace Common.FlowField
             start = new FlowFieldBuildStart((_state.DirtyFlags & ObstacleQueryMask) != 0, invalidated);
             if (!_requests.Pending)
                 return false;
-            _phase = BuildPhase.Begin;
-            build = _build = new ActiveBuild(this);
+            build = _build = new FlowFieldSurfaceBuild(this);
             return true;
         }
 
-        private FlowFieldBuildStep StepBuild(in FlowFieldBuildBudget budget, bool waitForWorker)
+        // One step of the build the session runs; the build forwards here.
+        internal FlowFieldBuildStep StepBuild(FlowFieldSurfaceBuild build, in FlowFieldBuildBudget budget, bool waitForWorker)
         {
-            _composeStage.FrameBudget = budget;
+            build.FrameBudget = budget;
             try
             {
-                switch (_phase)
+                switch (build.Phase)
                 {
                     case BuildPhase.Begin:
-                        _phase = BuildPhase.None;
-                        BuildPending();
+                        build.Phase = BuildPhase.None;
+                        BuildPending(build);
                         break;
                     case BuildPhase.WaitingSolve:
                         // A finished solve reports through its callback, which
@@ -430,18 +430,13 @@ namespace Common.FlowField
                         // Input can only change between frames, so checking here
                         // covers everything that arrived since the last piece.
                         if (RejectOutdatedWork())
-                        {
-                            _composeStage.Clear();
-                            _phase = BuildPhase.Rejected;
-                        }
+                            build.Phase = BuildPhase.Rejected;
                         else
-                        {
-                            ContinueCompose();
-                        }
+                            ContinueCompose(build);
                         break;
                 }
 
-                switch (_phase)
+                switch (build.Phase)
                 {
                     case BuildPhase.WaitingSolve:
                         return FlowFieldBuildStep.Waiting;
@@ -450,53 +445,33 @@ namespace Common.FlowField
                     case BuildPhase.Publish:
                         return FlowFieldBuildStep.Completed;
                     default:
-                        _phase = BuildPhase.None;
+                        build.Phase = BuildPhase.None;
                         return FlowFieldBuildStep.Rejected;
                 }
             }
             finally
             {
-                _composeStage.FrameBudget = FlowFieldBuildBudget.Unlimited;
+                build.FrameBudget = FlowFieldBuildBudget.Unlimited;
             }
         }
 
-        private bool PublishBuild()
+        internal bool PublishBuild(FlowFieldSurfaceBuild build)
         {
-            _phase = BuildPhase.None;
-            return Commit(_commitRequest, _commitResultChanged, _commitIncludeBase, _commitRegion);
+            build.Phase = BuildPhase.None;
+            FlowFieldSurfaceCommit commit = build.Commit;
+            return Commit(commit.Request, commit.ResultChanged, commit.IncludeBase, commit.Region);
         }
 
         /// <summary>Marks the build ready to publish with what Commit needs.</summary>
-        private void QueueCommit(
+        private static void QueueCommit(
+            FlowFieldSurfaceBuild build,
             in FlowFieldSurfaceRequest request,
             bool resultChanged,
             bool includeBase,
             FlowFieldCellRect finalRegion)
         {
-            _commitRequest = request;
-            _commitResultChanged = resultChanged;
-            _commitIncludeBase = includeBase;
-            _commitRegion = finalRegion;
-            _phase = BuildPhase.Publish;
-        }
-
-        // The build the session steps. Its phase and commit arguments stay on
-        // the builder, which runs one build at a time.
-        private sealed class ActiveBuild : IFlowFieldBuild
-        {
-            private readonly FlowFieldSurfaceBuilder _owner;
-
-            internal ActiveBuild(FlowFieldSurfaceBuilder owner) => _owner = owner;
-
-            public bool IsLive => ReferenceEquals(_owner._build, this) && _owner._phase != BuildPhase.None;
-
-            public bool IsWaitingForWorker
-                => ReferenceEquals(_owner._build, this) && _owner._phase == BuildPhase.WaitingSolve;
-
-            public FlowFieldBuildStep Step(in FlowFieldBuildBudget budget, bool waitForWorker)
-                => _owner.StepBuild(in budget, waitForWorker);
-
-            public bool Publish() => _owner.PublishBuild();
+            build.Commit = new FlowFieldSurfaceCommit(request, resultChanged, includeBase, finalRegion);
+            build.Phase = BuildPhase.Publish;
         }
     }
 }

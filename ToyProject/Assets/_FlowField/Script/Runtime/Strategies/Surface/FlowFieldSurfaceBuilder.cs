@@ -24,7 +24,6 @@ namespace Common.FlowField
         // none; dropping the computed state drops it, and the next solve
         // takes a new one.
         private FlowFieldSurfaceBaseFieldBuild _solveBackend;
-        private readonly FlowFieldSurfaceComposeStage _composeStage = new FlowFieldSurfaceComposeStage();
         private FlowFieldSurfaceModifierComposition _modifierComposition;
         private FlowFieldSurfaceRequest? _committedRequest;
         private FlowFieldBakeMode _bakeMode;
@@ -39,30 +38,8 @@ namespace Common.FlowField
         public FlowFieldSpaceMode SpaceMode => FlowFieldSpaceMode.Surface2D;
         public bool HasPendingRequest => _requests.Pending;
 
-        // Where the active build stands. A build begins with the synchronous
-        // base stages, may wait for its solve on a worker thread, composes the
-        // final field over as many frames as the budget needs, and publishes.
-        private enum BuildPhase
-        {
-            None,
-            Begin,
-            WaitingSolve,
-            Composing,
-            Publish,
-            Rejected,
-        }
-
-        private BuildPhase _phase;
-        // The build the session steps: live while it is this one and a phase runs.
-        private ActiveBuild _build;
-        // Advances with every CancelWork, so a solve callback from before it
-        // is dropped (the session cancels on Stop, Restart, Release, Dispose
-        // and a fault).
-        private int _cancelCount;
-        private FlowFieldSurfaceRequest _commitRequest;
-        private bool _commitResultChanged;
-        private bool _commitIncludeBase;
-        private FlowFieldCellRect _commitRegion;
+        // The build the session steps, or the last one. One runs at a time.
+        private FlowFieldSurfaceBuild _build;
 
         // What this builder reads from the session that runs it. Lifecycle,
         // events and the build loop live there.
@@ -229,14 +206,14 @@ namespace Common.FlowField
             _fieldStore.Clear();
         }
 
-        // The session advanced its generation, so a late solve callback is dropped.
+        // The session cancels on Stop, Restart, Release, Dispose and a fault.
+        // The dropped build is no longer live, so a solve callback that
+        // arrives later is ignored.
         public void CancelWork()
         {
-            unchecked { _cancelCount++; }
+            _build?.Drop();
             _build = null;
             _solveBackend?.Cancel();
-            _composeStage.Clear();
-            _phase = BuildPhase.None;
             _state.DirtyFlags = FlowFieldSurfaceDirtyFlags.None;
         }
 
