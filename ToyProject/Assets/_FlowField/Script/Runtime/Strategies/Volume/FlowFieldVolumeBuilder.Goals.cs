@@ -69,10 +69,13 @@ namespace Common.FlowField
                     scratch = new FlowFieldVolumeGoalScratch();
                     _goalScratch.Add(entry.Id, scratch);
                 }
+                // A StaticBaked area's world Goal is searched on the baked
+                // cells: the build reuses them, so it queries no Physics.
+                bool baked = baseRequest.BakeMode == FlowFieldBakeMode.StaticBaked;
                 var request = new FlowFieldVolumeRequest(
                     baseRequest.Grid,
                     baseRequest.WorldBounds,
-                    baseRequest.BakeMode,
+                    baked ? FlowFieldBakeMode.RuntimeDynamic : baseRequest.BakeMode,
                     baseRequest.ObstacleLayer,
                     baseRequest.ObstacleClearance,
                     baseRequest.SweepUnregistered,
@@ -80,7 +83,7 @@ namespace Common.FlowField
                     entry.Request.WorldPosition,
                     entry.Request.InfluenceRadius,
                     baseRequest.DefaultDirection,
-                    baseRequest.BakeData);
+                    baked ? null : baseRequest.BakeData);
                 // The published obstacle results stand: the build allocates
                 // the Goal arrays from the Goal's own spares and solves.
                 var build = new BuildContext(this, request, snapshots)

@@ -47,8 +47,8 @@ namespace Common.FlowField
         /// from its cell and the others from the steps their touching areas need, so a mover follows
         /// it across the areas. While no loaded area holds it, each area leads to its outer border
         /// nearest the Goal by a straight-line estimate and stops there. Areas that join later build
-        /// it too; StaticBaked areas do not. Read it with <see cref="TrySample"/> or each area's
-        /// Manager, which knows the same handle.
+        /// it too. A StaticBaked area searches it on its baked cells, with no Physics. Read it with
+        /// <see cref="TrySample"/> or each area's Manager, which knows the same handle.
         /// </summary>
         /// <exception cref="ArgumentException">
         /// <paramref name="request"/> has no Goal or a positive Influence Radius: a world Goal reaches every area.
@@ -79,7 +79,7 @@ namespace Common.FlowField
         /// <returns>False when the handle names no Goal of this world.</returns>
         public bool RemoveGoal(FlowFieldGoalHandle goal) => goal.IsValid && Areas.Goals.Remove(goal.Id);
 
-        /// <summary>Whether every joined area that builds Goals has a field of the world Goal.</summary>
+        /// <summary>Whether every joined area has a field of the world Goal.</summary>
         public bool IsGoalReady(FlowFieldGoalHandle goal)
         {
             if (!goal.IsValid || !Areas.Goals.Contains(goal.Id))
@@ -87,7 +87,7 @@ namespace Common.FlowField
             IReadOnlyList<FlowFieldManager> managers = Managers;
             for (int i = 0; i < managers.Count; i++)
             {
-                if (managers[i].BakeMode != FlowFieldBakeMode.StaticBaked && !managers[i].IsGoalReady(goal))
+                if (!managers[i].IsGoalReady(goal))
                     return false;
             }
             return true;

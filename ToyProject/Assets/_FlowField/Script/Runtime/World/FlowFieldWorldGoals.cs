@@ -158,9 +158,10 @@ namespace Common.FlowField
             return null;
         }
 
-        // A session that builds Goals now. StaticBaked loads its Goal only.
+        // A session that builds Goals now. A StaticBaked area searches its
+        // world Goals on its baked cells; its own Goal stays as baked.
         private static bool TakesGoals(FlowFieldSession session)
-            => session.IsInitialized && !session.IsFaulted && session.BakeMode != FlowFieldBakeMode.StaticBaked;
+            => session.IsInitialized && !session.IsFaulted;
 
         /// <summary>
         /// Once a frame, before the builds: every area session holds every

@@ -33,13 +33,15 @@ namespace Common.FlowField.Tests
             }
         }
 
-        internal static FlowFieldWorld CreateWorld(FlowFieldSpaceMode mode)
+        internal static FlowFieldWorld CreateWorld(FlowFieldSpaceMode mode) => CreateWorld(mode, CellSize, Vector3.zero);
+
+        internal static FlowFieldWorld CreateWorld(FlowFieldSpaceMode mode, float cellSize, Vector3 latticeOrigin)
         {
             var world = ScriptableObject.CreateInstance<FlowFieldWorld>();
             var serialized = new SerializedObject(world);
             serialized.FindProperty("_spaceMode").enumValueIndex = (int)mode;
-            serialized.FindProperty("_cellSize").floatValue = CellSize;
-            serialized.FindProperty("_latticeOrigin").vector3Value = Vector3.zero;
+            serialized.FindProperty("_cellSize").floatValue = cellSize;
+            serialized.FindProperty("_latticeOrigin").vector3Value = latticeOrigin;
             serialized.ApplyModifiedPropertiesWithoutUndo();
             return world;
         }
