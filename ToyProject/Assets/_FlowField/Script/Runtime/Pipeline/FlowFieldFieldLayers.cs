@@ -1,4 +1,5 @@
 using System;
+using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine;
 
 namespace Common.FlowField
@@ -15,6 +16,14 @@ namespace Common.FlowField
         internal FlowFieldSceneLayer(FlowFieldSurfaceData surface)
         {
             Surface = surface ?? throw new ArgumentNullException(nameof(surface));
+        }
+
+        // The same ground, or no ground on either side.
+        internal static bool SameContent(FlowFieldSceneLayer left, FlowFieldSceneLayer right)
+        {
+            FlowFieldSurfaceData a = left?.Surface;
+            FlowFieldSurfaceData b = right?.Surface;
+            return ReferenceEquals(a, b) || a != null && b != null && a.ContentEquals(b);
         }
     }
 
@@ -34,6 +43,11 @@ namespace Common.FlowField
             Blocked = blocked ?? throw new ArgumentNullException(nameof(blocked));
             EscapeDirections = escapeDirections;
         }
+
+        internal static bool SameContent(FlowFieldAgentLayer left, FlowFieldAgentLayer right)
+            => ReferenceEquals(left, right)
+                || FlowFieldLayerBytes.Same(left.Blocked, right.Blocked)
+                && FlowFieldLayerBytes.Same(left.EscapeDirections, right.EscapeDirections);
     }
 
     /// <summary>
@@ -79,6 +93,35 @@ namespace Common.FlowField
             ModifierInfluence = modifierInfluence;
             IsActive = isActive;
             CellIndex = cellIndex;
+        }
+
+        // The base vectors are not compared: reads take only the final ones.
+        internal static bool SameContent(FlowFieldGoalLayer left, FlowFieldGoalLayer right)
+            => ReferenceEquals(left, right)
+                || left.IsActive == right.IsActive
+                && left.CellIndex == right.CellIndex
+                && FlowFieldLayerBytes.Same(left.Topology, right.Topology)
+                && FlowFieldLayerBytes.Same(left.Flags, right.Flags)
+                && FlowFieldLayerBytes.Same(left.NextCells, right.NextCells)
+                && FlowFieldLayerBytes.Same(left.FinalDirections, right.FinalDirections)
+                && FlowFieldLayerBytes.Same(left.FinalSpeeds, right.FinalSpeeds)
+                && FlowFieldLayerBytes.Same(left.ModifierInfluence, right.ModifierInfluence);
+    }
+
+    /// <summary>The bitwise array comparison the layers share: memcmp over each array.</summary>
+    internal static class FlowFieldLayerBytes
+    {
+        internal static unsafe bool Same<T>(T[] left, T[] right) where T : unmanaged
+        {
+            if (ReferenceEquals(left, right))
+                return true;
+            if (left == null || right == null || left.Length != right.Length)
+                return false;
+            if (left.Length == 0)
+                return true;
+            fixed (T* a = left)
+            fixed (T* b = right)
+                return UnsafeUtility.MemCmp(a, b, (long)left.Length * sizeof(T)) == 0;
         }
     }
 }

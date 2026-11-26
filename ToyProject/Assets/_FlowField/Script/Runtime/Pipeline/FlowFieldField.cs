@@ -1,5 +1,4 @@
 using System;
-using Unity.Collections.LowLevel.Unsafe;
 
 namespace Common.FlowField
 {
@@ -23,47 +22,19 @@ namespace Common.FlowField
         internal int Capacity => Agent.Blocked.Length;
 
         /// <summary>
-        /// Whether two fields answer every read the same: the cells, their
-        /// state and the Goal. A publication with the same content keeps the
-        /// Revision, so callers see a change only when there is one. The base
-        /// vectors are not compared: only the final ones are read.
+        /// Whether two fields answer every read the same: the grid and each
+        /// layer's content. A publication with the same content keeps the
+        /// Revision, so callers see a change only when there is one.
         /// </summary>
         internal static bool HasSameContent(FlowFieldField left, FlowFieldField right)
         {
             if (ReferenceEquals(left, right))
                 return true;
-            if (left == null || right == null
-                || !left.Grid.MatchesBounds(right.Grid)
-                || left.Goal.IsActive != right.Goal.IsActive
-                || left.Goal.CellIndex != right.Goal.CellIndex)
-                return false;
-            FlowFieldSurfaceData leftSurface = left.Scene?.Surface;
-            FlowFieldSurfaceData rightSurface = right.Scene?.Surface;
-            if (!ReferenceEquals(leftSurface, rightSurface)
-                && (leftSurface == null || rightSurface == null || !leftSurface.ContentEquals(rightSurface)))
-                return false;
-            return SameBytes(left.Agent.Blocked, right.Agent.Blocked)
-                && SameBytes(left.Goal.Topology, right.Goal.Topology)
-                && SameBytes(left.Goal.Flags, right.Goal.Flags)
-                && SameBytes(left.Goal.NextCells, right.Goal.NextCells)
-                && SameBytes(left.Goal.FinalDirections, right.Goal.FinalDirections)
-                && SameBytes(left.Goal.FinalSpeeds, right.Goal.FinalSpeeds)
-                && SameBytes(left.Agent.EscapeDirections, right.Agent.EscapeDirections)
-                && SameBytes(left.Goal.ModifierInfluence, right.Goal.ModifierInfluence);
-        }
-
-        // A bitwise comparison: memcmp over each array.
-        private static unsafe bool SameBytes<T>(T[] left, T[] right) where T : unmanaged
-        {
-            if (ReferenceEquals(left, right))
-                return true;
-            if (left == null || right == null || left.Length != right.Length)
-                return false;
-            if (left.Length == 0)
-                return true;
-            fixed (T* a = left)
-            fixed (T* b = right)
-                return UnsafeUtility.MemCmp(a, b, (long)left.Length * sizeof(T)) == 0;
+            return left != null && right != null
+                && left.Grid.MatchesBounds(right.Grid)
+                && FlowFieldSceneLayer.SameContent(left.Scene, right.Scene)
+                && FlowFieldAgentLayer.SameContent(left.Agent, right.Agent)
+                && FlowFieldGoalLayer.SameContent(left.Goal, right.Goal);
         }
 
         internal FlowFieldField(

@@ -156,6 +156,10 @@ namespace Common.FlowField
         // Blocked, Topology and EscapeDirections follow only from the obstacles,
         // so they are shared read-only with the published field.
         internal bool ReusesObstacleQueries;
+        // The published agent layer, when this build keeps its obstacle
+        // results (a reuse or a Modifier recompose): it publishes that same
+        // layer instead of a copy around the same arrays.
+        internal FlowFieldAgentLayer ReusedAgent;
         // Obstacle queries cover only these regions; other cells keep this published mask.
         internal bool[] PublishedBlocked;
         // BakedBase: the build copies the baked obstacle results, and its
@@ -188,6 +192,7 @@ namespace Common.FlowField
             : this(owner, published.Request, modifiers)
         {
             IsModifierRecompose = true;
+            ReusedAgent = published.Agent;
             Blocked = published.Agent.Blocked;
             Topology = published.Goal.Topology;
             GoalFlags = published.Goal.Flags;

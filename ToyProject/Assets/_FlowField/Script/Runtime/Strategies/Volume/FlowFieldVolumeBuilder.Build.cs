@@ -401,7 +401,7 @@ namespace Common.FlowField
                 build.Request,
                 build.Request.Grid,
                 scene: null,
-                new FlowFieldAgentLayer(build.Blocked, build.EscapeDirections),
+                build.ReusedAgent ?? new FlowFieldAgentLayer(build.Blocked, build.EscapeDirections),
                 new FlowFieldGoalLayer(
                     build.Topology,
                     build.GoalFlags,
@@ -487,6 +487,7 @@ namespace Common.FlowField
                 if (reuseObstacles)
                 {
                     _build.ReusesObstacleQueries = true;
+                    _build.ReusedAgent = _fields.Committed.Agent;
                     _build.Blocked = _fields.Committed.Agent.Blocked;
                     _build.Topology = _fields.Committed.Goal.Topology;
                     _build.EscapeDirections = _fields.Committed.Agent.EscapeDirections;
