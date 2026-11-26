@@ -16,35 +16,50 @@ namespace Common.FlowField
 
     /// <summary>
     /// One obstacle change and the world regions it touched: where the
-    /// obstacle was and where it is now. Either may be absent.
+    /// obstacle was and where it is now. Either may be absent; bounds that
+    /// are not finite count as absent.
     /// </summary>
     internal readonly struct FlowFieldObstacleChange
     {
         internal readonly FlowFieldObstacleChangeKind Kind;
         internal readonly Collider Collider;
-        internal readonly bool HasPrevious;
-        internal readonly Bounds Previous;
-        internal readonly bool HasCurrent;
-        internal readonly Bounds Current;
+        internal readonly Bounds? Previous;
+        internal readonly Bounds? Current;
 
-        internal FlowFieldObstacleChange(
+        private FlowFieldObstacleChange(
             FlowFieldObstacleChangeKind kind,
             Collider collider,
-            bool hasPrevious,
-            Bounds previous,
-            bool hasCurrent,
-            Bounds current)
+            Bounds? previous,
+            Bounds? current)
         {
             Kind = kind;
             Collider = collider;
-            HasPrevious = hasPrevious && IsFinite(previous);
-            Previous = previous;
-            HasCurrent = hasCurrent && IsFinite(current);
-            Current = current;
+            Previous = Finite(previous);
+            Current = Finite(current);
         }
 
-        private static bool IsFinite(Bounds bounds)
-            => FlowFieldGridSpace.IsFinite(bounds.center) && FlowFieldGridSpace.IsFinite(bounds.size);
+        // Something in these regions changed: NotifyObstacleRegionDirty, the
+        // sweep, or a released Collider that left the scene.
+        internal static FlowFieldObstacleChange RegionDirty(Bounds? previous, Bounds? current)
+            => new FlowFieldObstacleChange(FlowFieldObstacleChangeKind.RegionDirty, null, previous, current);
+
+        internal static FlowFieldObstacleChange Registered(Collider collider, Bounds current)
+            => new FlowFieldObstacleChange(FlowFieldObstacleChangeKind.Registered, collider, null, current);
+
+        // current is where a Collider still in the scene is now.
+        internal static FlowFieldObstacleChange Unregistered(Collider collider, Bounds previous, Bounds? current)
+            => new FlowFieldObstacleChange(FlowFieldObstacleChangeKind.Unregistered, collider, previous, current);
+
+        // A destroyed Collider has no current bounds.
+        internal static FlowFieldObstacleChange Moved(Collider collider, Bounds previous, Bounds? current)
+            => new FlowFieldObstacleChange(FlowFieldObstacleChangeKind.Moved, collider, previous, current);
+
+        private static Bounds? Finite(Bounds? bounds)
+            => bounds.HasValue
+                && FlowFieldGridSpace.IsFinite(bounds.Value.center)
+                && FlowFieldGridSpace.IsFinite(bounds.Value.size)
+                    ? bounds
+                    : null;
     }
 
     /// <summary>
@@ -113,8 +128,7 @@ namespace Common.FlowField
             _indices.Add(collider, _colliders.Count);
             _colliders.Add(collider);
             _bounds.Add(current);
-            change = new FlowFieldObstacleChange(
-                FlowFieldObstacleChangeKind.Registered, collider, false, default, true, current);
+            change = FlowFieldObstacleChange.Registered(collider, current);
             return true;
         }
 
@@ -134,9 +148,8 @@ namespace Common.FlowField
             Bounds previous = _bounds[index];
             RemoveAt(index);
             bool inScene = collider != null && collider.enabled && collider.gameObject.activeInHierarchy;
-            Bounds current = inScene ? FlowFieldPhysicsSync.SyncedBounds(collider) : default;
-            change = new FlowFieldObstacleChange(
-                FlowFieldObstacleChangeKind.Unregistered, collider, true, previous, inScene, current);
+            Bounds? current = inScene ? FlowFieldPhysicsSync.SyncedBounds(collider) : (Bounds?)null;
+            change = FlowFieldObstacleChange.Unregistered(collider, previous, current);
             return true;
         }
 
@@ -158,8 +171,7 @@ namespace Common.FlowField
             if (collider == null)
             {
                 RemoveAt(index);
-                change = new FlowFieldObstacleChange(
-                    FlowFieldObstacleChangeKind.Moved, collider, true, previous, false, default);
+                change = FlowFieldObstacleChange.Moved(collider, previous, null);
                 changed = true;
                 return true;
             }
@@ -168,8 +180,7 @@ namespace Common.FlowField
                 && (current.size - previous.size).sqrMagnitude <= MoveEpsilonSqr)
                 return true;
             _bounds[index] = current;
-            change = new FlowFieldObstacleChange(
-                FlowFieldObstacleChangeKind.Moved, collider, true, previous, true, current);
+            change = FlowFieldObstacleChange.Moved(collider, previous, current);
             changed = true;
             return true;
         }

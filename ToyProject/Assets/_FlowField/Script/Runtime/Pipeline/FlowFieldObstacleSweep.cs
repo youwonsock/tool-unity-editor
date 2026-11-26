@@ -24,7 +24,8 @@ namespace Common.FlowField
         private const int CollidersPerStep = 1024;
         private const float MoveEpsilonSqr = 0.00000001f;
 
-        internal delegate void ChangeReport(bool hasPrevious, Bounds previous, bool hasCurrent, Bounds current);
+        // Where an unregistered Collider was and is; null where it was not or is gone.
+        internal delegate void ChangeReport(Bounds? previous, Bounds? current);
 
         private readonly ChangeReport _report;
         private readonly Dictionary<Collider, Bounds> _observed = new Dictionary<Collider, Bounds>(64);
@@ -128,7 +129,7 @@ namespace Common.FlowField
                     {
                         _observed.Remove(collider);
                         if (_recorded && HasMoved(seen, current))
-                            _report(true, seen, false, default);
+                            _report(seen, null);
                     }
                     continue;
                 }
@@ -139,13 +140,13 @@ namespace Common.FlowField
                         continue;
                     _observed[collider] = current;
                     if (_recorded)
-                        _report(true, previous, true, current);
+                        _report(previous, current);
                 }
                 else
                 {
                     _observed.Add(collider, current);
                     if (_recorded)
-                        _report(false, default, true, current);
+                        _report(null, current);
                 }
             }
             if (_cursor >= _hitCount)
@@ -198,7 +199,7 @@ namespace Common.FlowField
                 Bounds previous = _observed[_removed[i]];
                 _observed.Remove(_removed[i]);
                 if (_recorded)
-                    _report(true, previous, false, default);
+                    _report(previous, null);
             }
             _removed.Clear();
             _seen.Clear();

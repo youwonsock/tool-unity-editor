@@ -35,10 +35,10 @@ namespace Common.FlowField
             FlowFieldCellRect dirty = FlowFieldCellRect.Invalid;
             if (grid.IsValid)
             {
-                if (change.HasPrevious)
-                    dirty = FlowFieldCellRect.Union(dirty, Touch(grid, change.Previous, clearance));
-                if (change.HasCurrent)
-                    dirty = FlowFieldCellRect.Union(dirty, Touch(grid, change.Current, clearance));
+                if (change.Previous.HasValue)
+                    dirty = FlowFieldCellRect.Union(dirty, Touch(grid, change.Previous.Value, clearance));
+                if (change.Current.HasValue)
+                    dirty = FlowFieldCellRect.Union(dirty, Touch(grid, change.Current.Value, clearance));
             }
             MarkDirty(ObstacleChangeFlags(in change), dirty, dirty);
         }

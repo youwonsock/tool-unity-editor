@@ -126,8 +126,7 @@ namespace Common.FlowField
         internal void NotifyObstacleRegionDirtyCommand(Bounds worldBounds)
         {
             ThrowIfInputUnavailable();
-            ApplyObstacleChange(new FlowFieldObstacleChange(
-                FlowFieldObstacleChangeKind.RegionDirty, null, false, default, true, worldBounds));
+            ApplyObstacleChange(FlowFieldObstacleChange.RegionDirty(null, worldBounds));
         }
 
         private bool RegisterModifierNow(IFlowFieldVectorModifier modifier)
@@ -206,8 +205,8 @@ namespace Common.FlowField
             ApplyObstacleChange(in change);
             // A faulted or stopped session may retry or start again in this
             // frame, before the Destroy, so it is rechecked as well.
-            if (change.HasCurrent)
-                RememberReleased(new ReleasedCollider(collider, change.Current, Time.frameCount));
+            if (change.Current.HasValue)
+                RememberReleased(new ReleasedCollider(collider, change.Current.Value, Time.frameCount));
             return true;
         }
 
@@ -243,8 +242,7 @@ namespace Common.FlowField
                     continue;
                 _releasedInScene.RemoveAt(index);
                 if (!inScene)
-                    ApplyObstacleChange(new FlowFieldObstacleChange(
-                        FlowFieldObstacleChangeKind.RegionDirty, null, true, released.Bounds, false, default));
+                    ApplyObstacleChange(FlowFieldObstacleChange.RegionDirty(released.Bounds, null));
             }
         }
 
@@ -270,9 +268,9 @@ namespace Common.FlowField
             FlowFieldGridSpace grid = _builder.LatestGrid;
             float reach = grid.IsValid ? ObstacleReach(grid) : 0f;
             if (grid.IsValid
-                && (change.HasPrevious || change.HasCurrent)
-                && !Reaches(grid, change.HasPrevious, change.Previous, reach)
-                && !Reaches(grid, change.HasCurrent, change.Current, reach))
+                && (change.Previous.HasValue || change.Current.HasValue)
+                && !Reaches(grid, change.Previous, reach)
+                && !Reaches(grid, change.Current, reach))
                 return;
             // A faulted session builds nothing, and its retry starts from
             // nothing. A BakedBase retry still reloads the bake and queries
@@ -285,10 +283,10 @@ namespace Common.FlowField
             }
             if (BakeMode != FlowFieldBakeMode.StaticBaked && grid.IsValid)
             {
-                if (change.HasPrevious)
-                    Safety.MarkDirty(change.Previous, reach);
-                if (change.HasCurrent)
-                    Safety.MarkDirty(change.Current, reach);
+                if (change.Previous.HasValue)
+                    Safety.MarkDirty(change.Previous.Value, reach);
+                if (change.Current.HasValue)
+                    Safety.MarkDirty(change.Current.Value, reach);
             }
             _builder.ApplyObstacleChange(in change);
             EnterBuildingIfOwed();
@@ -299,10 +297,11 @@ namespace Common.FlowField
             => FlowFieldObstacleReach.Margin(grid.CellSize, _hasConfig ? _config.Obstacles.Clearance : 0f);
 
         // Bounds that are not finite count as reaching, so marking them reports the fault.
-        private static bool Reaches(FlowFieldGridSpace grid, bool has, Bounds bounds, float reach)
+        private static bool Reaches(FlowFieldGridSpace grid, Bounds? region, float reach)
         {
-            if (!has)
+            if (!region.HasValue)
                 return false;
+            Bounds bounds = region.Value;
             if (!FlowFieldGridSpace.IsFinite(bounds.center) || !FlowFieldGridSpace.IsFinite(bounds.size))
                 return true;
             return FlowFieldCellRect.FromBounds(grid, FlowFieldObstacleReach.Expand(bounds, reach)).IsValid;

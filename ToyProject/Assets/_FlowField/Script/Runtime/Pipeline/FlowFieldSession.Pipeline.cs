@@ -158,15 +158,13 @@ namespace Common.FlowField
             {
                 // A stopped sweep no longer watches the bounds, so the masks
                 // built with it are rebuilt without it.
-                ApplyObstacleChange(new FlowFieldObstacleChange(
-                    FlowFieldObstacleChangeKind.RegionDirty, null, false, default, true, _sweep.SweepBounds));
+                ApplyObstacleChange(FlowFieldObstacleChange.RegionDirty(null, _sweep.SweepBounds));
             }
         }
 
         // An unregistered Collider appeared, moved or disappeared.
-        private void ApplySweptChange(bool hasPrevious, Bounds previous, bool hasCurrent, Bounds current)
-            => ApplyObstacleChange(new FlowFieldObstacleChange(
-                FlowFieldObstacleChangeKind.RegionDirty, null, hasPrevious, previous, hasCurrent, current));
+        private void ApplySweptChange(Bounds? previous, Bounds? current)
+            => ApplyObstacleChange(FlowFieldObstacleChange.RegionDirty(previous, current));
 
         // The scheduler holds sessions that build or wait for a retry. A
         // stopped session leaves it (Stop) and joins again when its restart

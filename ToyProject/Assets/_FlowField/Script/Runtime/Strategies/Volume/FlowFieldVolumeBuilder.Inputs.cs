@@ -12,10 +12,10 @@ namespace Common.FlowField
             if (_bakeMode == FlowFieldBakeMode.BakedBase && _inputs.Requests.HasLatest)
             {
                 float margin = FlowFieldObstacleReach.Margin(_inputs.Requests.Latest.Grid.CellSize, _inputs.Requests.Latest.ObstacleClearance);
-                if (change.HasPrevious)
-                    _inputs.TouchBakedBase(FlowFieldObstacleReach.Expand(change.Previous, margin));
-                if (change.HasCurrent)
-                    _inputs.TouchBakedBase(FlowFieldObstacleReach.Expand(change.Current, margin));
+                if (change.Previous.HasValue)
+                    _inputs.TouchBakedBase(FlowFieldObstacleReach.Expand(change.Previous.Value, margin));
+                if (change.Current.HasValue)
+                    _inputs.TouchBakedBase(FlowFieldObstacleReach.Expand(change.Current.Value, margin));
             }
             if (_inputs.Requests.Pending)
                 return;
