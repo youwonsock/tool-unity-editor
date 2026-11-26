@@ -172,7 +172,8 @@ Inspector는 그룹마다 제목을 달고, 지금 Space Mode가 읽지 않는 �
 <sub>PlantUML 원본: [Docs/flowfield-structure.puml](Docs/flowfield-structure.puml)</sub>
 
 - **Manager**는 직렬화 설정과 Unity 콜백을 맡고, 설정 스냅샷(`FlowFieldManagerConfig`)과 공개 API 호출을 Session에 넘깁니다.
-- **Session**(`FlowFieldSession`)은 두 공간 모드가 같이 쓰는 파이프라인입니다. 수명, 이벤트, 빌드 루프, 등록부, 실패 규칙이 한 벌이고, 모드마다 다른 계산만 Builder(`FlowFieldSurfaceBuilder`, `FlowFieldVolumeBuilder`)가 맡습니다. 완성된 결과만 게시하므로 다음 빌드 중에도 이전 결과를 읽습니다.
+- **Session**(`FlowFieldSession`)은 두 공간 모드가 같이 쓰는 파이프라인입니다. 수명, 이벤트, 빌드 루프, 등록부, 실패 규칙이 한 벌이고, 모드마다 다른 계산만 Builder(`FlowFieldSurfaceBuilder`, `FlowFieldVolumeBuilder`)가 맡습니다. Builder는 Session을 참조하지 않고 `IFlowFieldBuildHost`로 등록부를 읽으며, 시작한 빌드를 객체(`IFlowFieldBuild`)로 Session에 넘깁니다. 완성된 결과만 게시하므로 다음 빌드 중에도 이전 결과를 읽습니다.
+- **조회**(`FlowFieldSampler`)는 조회마다 모드별 cell view를 하나 골라 게시 값을 읽고, 두 모드 공통의 샘플 안전 규칙을 같은 view로 적용합니다.
 - **Scheduler**(`FlowFieldBuildScheduler`)는 프로젝트 전체에서 프레임당 하나의 예산으로 세션들을 돌아가며 진행합니다. Volume3D의 모든 단계와 Surface2D의 합성은 예산에 맞춰 나뉘고, 풀이(BFS)는 워커 스레드에서 돕니다. Surface2D의 바닥·장애물·Goal·Modifier 영역 단계는 Physics 결과를 한 스냅샷으로 얻으려고 예산과 상관없이 한 프레임에 돌므로, 그 프레임은 예산을 넘을 수 있습니다.
 - **Execution Boundary**(`FlowFieldExecutionBoundary`)는 이벤트를 가장 바깥 작업이 끝난 뒤 전달합니다. Modifier 코드(`Observe`, `CaptureSnapshot`, `Modify`)는 작업 안에서 실행되고, 그 안에서 부른 등록·해제·`NotifyModifierChanged`만 작업 뒤로 미루며 다른 명령은 예외를 던집니다.
 

@@ -20,22 +20,25 @@
 ### Session
 
 - `FlowFieldSession`은 두 모드가 같이 쓰는 파이프라인이고, 모드와 무관한 규칙은 모두 여기 있습니다. 파일은 `FlowFieldSession.cs`(수명, 이벤트), `FlowFieldSession.Inputs.cs`(설정·장애물·Modifier 입력과 불확실 영역), `FlowFieldSession.Pipeline.cs`(빌드 루프), `FlowFieldSession.Reads.cs`(조회)입니다.
-- 수명 전이(`Initialize`·`Stop`·`Restart`·`Release`·Fault·`Dispose`)와 세대 번호(`LifetimeGeneration`)를 맡습니다. 세대는 Stop, Restart, Release, Fault 때 늘고, 그 앞에서 시작한 일의 큐 이벤트와 늦은 풀이 콜백은 버립니다.
+- 수명 전이(`Initialize`·`Stop`·`Restart`·`Release`·Fault·`Dispose`)와 세대 번호(`LifetimeGeneration`)를 맡습니다. 세대는 Stop, Restart, Release, Fault 때 늘고, 그 앞에서 시작한 일의 큐 이벤트는 버립니다. 같은 때 Builder가 진행 중인 빌드를 버리므로 늦은 풀이 콜백도 버려집니다.
 - 빌드 루프는 `RunPipeline` 하나입니다. Scheduler는 `PumpScheduled`(프레임 예산, 워커를 기다리지 않음, sweep 실행)로, 직접 소유자(Bake, Edit Mode 미리보기)는 `Pump`(워커를 기다림, sweep 없음)로 부릅니다.
 - 빌드 중 상태 전이, Revision, `FieldChanged`, Fault, 불확실 영역 갱신은 Session만 합니다.
-- Builder는 빌드를 시작할 때 `FlowFieldBuildStart`(그 빌드가 장애물을 조회하는지, 새 장애물 설정이 불확실하게 만든 영역)를, 단계마다 `FlowFieldBuildStep`(계속·대기·버림·완료)과 게시 필드가 달라졌는지만 돌려줍니다. 실패는 예외로 알립니다.
+- Builder는 빌드를 시작할 때 빌드 객체(`IFlowFieldBuild`)와 `FlowFieldBuildStart`(그 빌드가 장애물을 조회하는지, 새 장애물 설정이 불확실하게 만든 영역)를 돌려줍니다. Session은 그 빌드를 들고 단계(`Step`)마다 `FlowFieldBuildStep`(계속·대기·버림·완료)을, 게시(`Publish`) 때 게시 필드가 달라졌는지를 받습니다. 실패는 예외로 알립니다.
+- 빌드는 게시, 거부, Builder가 버린 뒤(`CancelWork`, 새 격자) `IsLive`가 false이고, Session은 그때 다음 빌드를 시작합니다. `HasActiveBuild`와 `IsWaitingForExternalCompletion`도 이 빌드에서 읽습니다.
 - 버린 결과 뒤에 남은 입력이 있으면 Ready로 돌아가지 않고 Building을 유지합니다.
-- Surface 풀이 완료 콜백은 세대 번호와 빌드 단계(`WaitingSolve`)로 유효성을 판단합니다. 콜백은 `Poll` 안, 곧 `StepBuild` 안에서만 옵니다.
+- Surface 풀이 완료 콜백은 자기 빌드를 붙잡고, 그 빌드가 아직 풀이를 기다릴 때만 진행합니다. 콜백은 `Poll` 안, 곧 그 빌드의 `Step` 안에서만 옵니다.
 - 조회: `TrySample`과 `TryClampPositionToGrid`는 예외 없이 상태를 돌려주는 `TrySampleStatus`·`TryClampStatus`를 쓰고, 예외를 던지는 쪽은 그 상태를 `FlowFieldFailures`의 예외로 바꿉니다.
 - 입력: 장애물 등록부(`FlowFieldObstacleRegistry`), Modifier 등록부(`FlowFieldModifierRegistry`), 불확실 영역(`FlowFieldSafety`)을 Session이 가집니다. 장애물 변화가 닿는 범위는 Bounds를 셀 크기 + Obstacle Clearance만큼 넓힌 곳이고(`FlowFieldObstacleReach`), 이전·현재 Bounds 어느 쪽도 그렇게 넓혀 격자에 닿지 않는 변화는 건너뜁니다.
+- Builder는 Session을 참조하지 않습니다. 등록부와 불확실 영역의 읽기 view, sweep 여부, 사용자 코드 경계만 담은 `IFlowFieldBuildHost`를 받고, Session 안의 `BuildHost`가 매번 Session의 상태로 넘깁니다.
 - Bake 세션은 `CreateSurfaceBake`·`CreateVolumeBake`가 만들고 Builder를 함께 돌려줍니다. Bake는 그 Builder에서 내보내기(`TryExportBakeData`)와 진행률만 읽고, 준비한 요청은 `SubmitPrepared`로 `SubmitConfig`와 같은 입력 규칙(불확실 영역, Building 전환, 상태 알림)을 거칩니다.
 
 ### Builder
 
 - 모드마다 다른 일은 `IFlowFieldSpaceBuilder`의 두 구현 `FlowFieldSurfaceBuilder`, `FlowFieldVolumeBuilder`가 맡습니다. 두 Builder의 partial 파일은 같은 구성입니다: 본체(상태, 요청 수락, 수명 훅), `*.Build.cs`(빌드 단계), `*.Config.cs`(설정 검사와 요청), `*.Inputs.cs`(장애물·Modifier 입력), `*.Reads.cs`(게시 필드, 격자, 정보, Bake 내보내기).
-- 요청: `Initialize`(Session이 정한 Bake Mode를 읽음), `SubmitConfig`. 두 Builder 모두 Bake Mode를 설정 스냅샷이 아니라 Session에서 읽습니다.
-- 빌드 단계: `TryBeginBuild`·`StepBuild`·`PublishBuild`, `BuildPolicy`. Session은 `HasPendingRequest`(scheduler가 할 일이 있는지)와 `HasOwedInput`(진행 중인 빌드에 없는 입력)을 따로 읽습니다.
-- 읽기: `PublishedField`·`TryGetFieldInfo`, `LatestGrid`(마지막 요청의 Grid, `ClampPositionToGrid`가 씀), `LatestCells`(게시 필드보다 새 셀 정보. Surface는 진행 중인 빌드의 기본 단계 결과, Volume은 없음).
+- 요청: `Initialize(bakeMode)`, `SubmitConfig`. Session이 정한 Bake Mode를 `Initialize`에서 받아 다음 `Initialize`까지 보관하고, 설정 스냅샷의 Bake Mode는 읽지 않습니다. 실행 중이 아닌 세션은 Session이 입력을 거부하므로 Builder는 수명을 검사하지 않습니다.
+- 빌드: `TryBeginBuild`가 빌드 객체를 돌려주고, `BuildPolicy`가 한 Pump에 시작할 수 있는 빌드를 정합니다. Surface는 `FlowFieldSurfaceBuild`(phase, 진행 중인 합성, 게시 인자, 프레임 예산), Volume은 `FlowFieldVolumeBuildContext`가 빌드이고, 한 Builder는 빌드를 하나씩 돌립니다. Session은 `HasPendingRequest`(scheduler가 할 일이 있는지)와 `HasOwedInput`(진행 중인 빌드에 없는 입력)을 따로 읽습니다.
+- 상태: 다음 빌드가 갚을 입력은 입력 ledger(`FlowFieldSurfaceInputLedger`, `FlowFieldVolumeInputLedger`)에, 게시 필드는 store(`FlowFieldSurfaceFieldStore`, `FlowFieldVolumeFieldStore`)에 있고, `FlowFieldSurfaceState`에는 staging 데이터만 남습니다. Surface base 단계는 빌드 도중에도 ledger의 dirty 상태를 고쳐 쓰므로, 빌드를 시작할 때 복사하지 않습니다.
+- 읽기: `PublishedField`·`TryGetFieldInfo`(Revision은 Session이 넘김), `LatestGrid`(마지막 요청의 Grid, `ClampPositionToGrid`가 씀), `LatestCells`(게시 필드보다 새 셀 정보. 조회마다 `TryCapture`로 배열을 한 번 받음. Surface는 진행 중인 빌드의 기본 단계 결과, Volume은 없음).
 - 입력: `ApplyObstacleChange`·`ApplyModifierChange`·`CreateModifierArea`.
 - 수명 훅: `CancelWork`·`DropComputedState`·`ReleaseResources`. Dispose는 없고, `ReleaseResources`가 Builder가 가진 것을 모두 놓습니다.
 
@@ -49,7 +52,7 @@
 
 ### 공통 부품
 
-- 게시 필드 `FlowFieldField`, 조회 `FlowFieldSampler`, 요청 보관 `FlowFieldRequestInbox`, 셀 합성 규칙 `FlowFieldVectorUtility.ApplyModifier`, 이벤트 경계 `FlowFieldExecutionBoundary`, 예산 `FlowFieldBuildScheduler`.
+- 게시 필드 `FlowFieldField`, 조회 `FlowFieldSampler`(모드별 cell view `FlowFieldSurfaceCellView`·`FlowFieldVolumeCellView`를 조회마다 한 번 고름), 요청 보관 `FlowFieldRequestInbox`, 셀 합성 규칙 `FlowFieldVectorUtility.ApplyModifier`, 이벤트 경계 `FlowFieldExecutionBoundary`, 예산 `FlowFieldBuildScheduler`.
 - `FlowFieldBuildDriver`가 Play Mode에서 프레임마다 한 번, 다른 LateUpdate 뒤(실행 순서 30000)에 scheduler를 돌립니다. Play 세션이 시작할 때 scheduler의 정적 상태와 `FlowFieldBuildSettings.BudgetMilliseconds`를 되돌립니다. Domain reload를 꺼도 이전 Play의 값이 남지 않게 하기 위해서입니다.
 - next 셀 표식 `FlowFieldNextCell`: Default Direction(-1), 막힘(-2), 도달 불가(-3). 다음 셀이 자기 자신이면 Goal anchor입니다. 두 모드의 풀이, Bake Asset 검증, 샘플 안전 규칙이 같이 씁니다.
 - 겹침 조회 `FlowFieldOverlapUtility`: 버퍼가 차면 두 배로 늘리고 `MaxOverlapHits`(4,096)에서 멈춥니다. 상한에 닿았을 때의 처리(Fault, 셀별 검사, sweep 중단)는 호출하는 쪽이 정합니다.
@@ -111,7 +114,8 @@
 
 규칙이 읽는 정보는 다음과 같습니다.
 
-- "최신 정보"는 Surface의 경우 진행 중인 빌드의 작업 공간이 게시 필드와 같은 격자·지면일 때의 막힘·지면·탈출이고, 그 밖에는 게시 필드입니다.
+- 모드마다 다른 것(축, 이웃 걸음, 옆 칸, 막힘·지면·연결, 낙차와 높은 턱, 탈출 샘플)은 `IFlowFieldCellView`가 답하고, 규칙 안에는 모드 분기가 없습니다. Sampler가 조회마다 view를 고르고, 같은 view로 칸을 읽은 뒤 규칙을 적용합니다.
+- "최신 정보"는 Surface의 경우 진행 중인 빌드의 작업 공간이 게시 필드와 같은 격자·지면일 때의 막힘·지면·탈출이고(조회마다 한 번 받음), 그 밖에는 게시 필드입니다. 게시 필드는 탈출 방향을 두지 않으므로 그때 탈출은 최종 방향입니다.
 - 연결은 항상 게시 필드에서 읽습니다. 진행 중인 빌드는 새 Goal의 영향 반경으로 연결을 다시 만들기 때문에, 게시된 걸음과 맞지 않습니다.
 - 경로 걸음(3번)은 게시된 Topology를, 4번의 걸음은 지면 연결을 읽습니다. 5번은 연결을 읽지 않고, Surface2D에서는 게시된 칸 높이로 낙차와 높은 턱을 봅니다.
 - 지면 연결: Surface2D Topology는 Goal 영향 반경 안의 칸만 잇기 때문에, 게시된 Surface의 단차 연결(Max Step Height, 대각선은 경로처럼 양옆 연결까지)을 씁니다. Max Slope는 칸마다 지면 유효성으로 봅니다. Volume3D는 Topology가 모든 열린 칸을 이으므로 그대로 씁니다.
@@ -169,7 +173,7 @@
 - `FlowFieldObstacleRegistry`는 Collider에서 자리로 가는 사전을 두어, 등록·해제·이동 통지가 목록을 훑지 않습니다. 등록 순서를 읽는 곳이 없으므로 해제는 마지막 항목을 빈 자리로 옮깁니다.
 - 정적 마스크 규칙, sweep, `FlowFieldDynamicObstacle`은 `Contains`로 등록 여부만 묻습니다.
 - 해제하지 않고 파괴된 등록 Collider는 할 일이 있는 빌드가 시작되기 직전에 Session이 지우고, 마지막으로 알린 자리를 이동처럼 불확실 영역으로 둡니다. 할 일이 없는 동안에는 등록부를 훑지 않습니다.
-- 장면에 남은 채 해제한 Collider는 다음 두 프레임 동안 보고, 그사이 장면을 떠나면 그 자리를 한 번 더 알립니다. 같은 프레임의 `Destroy`는 그 프레임에 시작한 빌드가 그 Collider를 정적 장애물로 scan한 뒤에야 지우기 때문입니다. 꺼 둔 세션도 같은 프레임에 다시 켜면 그 프레임에 빌드를 시작하므로 같이 기록합니다.
+- 장면에 남은 채 해제한 Collider는 다음 두 프레임 동안 보고, 그사이 장면을 떠나면 그 자리를 한 번 더 알립니다. 같은 프레임의 `Destroy`는 그 프레임에 시작한 빌드가 그 Collider를 정적 장애물로 scan한 뒤에야 지우기 때문입니다. 꺼 둔 세션도 같은 프레임에 다시 켜면 그 프레임에 빌드를 시작하므로 같이 기록합니다. 이 기록은 `FlowFieldReleasedColliders`가 맡습니다.
 - Fault 중에 받은 해제도 Builder가 그 자리를 기록해, `BakedBase` 재시도가 다시 조회합니다.
 
 ### 미등록 장애물 sweep
@@ -378,7 +382,7 @@
 
 | 분류 | 내용 |
 | --- | --- |
-| `Gate` | 두 샘플 씬 × Bake Mode 셋의 게시 필드 해시가 기록한 기준값과 같은지, Edit Mode Bake 결과가 커밋된 Bake Asset과 같은지, 입력 storm과 수명 storm 뒤의 필드가 fresh Release·Init와 같은지 |
+| `Gate` | 두 샘플 씬 × Bake Mode 셋의 게시 필드 해시가 기록한 기준값과 같은지, Edit Mode Bake 결과가 커밋된 Bake Asset과 같은지, 입력 storm과 수명 storm(Play Mode, 그리고 seed를 고정한 Edit Mode) 뒤의 필드가 fresh Release·Init와 같은지 |
 | `Protocol` | 빌드 단계, 풀이 중 Stop·Release, 거부·폐기된 빌드, Default Direction 동기화, 증분 결과와 fresh 결과의 일치 |
 | `Safety` | 샘플 안전 규칙: 막힘·지면 없음·격자 밖·낙차로 향하는 움직이는 샘플이 없는지 |
 | `Obstacles` | 등록·해제·파괴·순간이동, 불확실 영역, 미등록 장애물 sweep, 격자 왕복 |
@@ -387,6 +391,8 @@
 
 - **기록값:** 기대값을 규칙으로 정할 수 없는 시나리오(셀 개수 등)는 테스트를 만든 코드가 낸 값을 `FlowFieldRecorded`로 고정합니다. 값이 바뀌면 의도한 변화인지 확인한 뒤 갱신합니다.
 - **기다리는 방법:** 샘플 컨트롤러는 Manager가 처음 Ready가 되면 첫 Goal을 정합니다. 그래서 Play 진입 뒤 한 번 더 안정될 때까지(Ready → 1초 → Ready) 기다린 다음 시나리오를 시작합니다. 테스트가 직접 Pump할 때는 정해진 횟수만큼 확인하면 만료되는 예산(`FlowFieldTestBudget.AfterChecks`)으로 빌드를 정한 지점에서 멈춥니다.
+- **재현:** `EditModeStormTests`는 테스트가 직접 Pump하는 Edit Mode 세션에서, 정해진 횟수만큼 확인하면 만료되는 예산과 워커를 기다리는 Pump로 돕니다. 그래서 매번 같은 순서로 실행되고, 실패 메시지의 seed와 단계 번호로 같은 실행을 다시 만들 수 있습니다.
+- **구조와 테스트:** 테스트는 Session 수준 이름(`HasActiveBuild`, `HasPendingRequest`, `HasOwedInput`, `IsWaitingForExternalCompletion`, `Revision`, `State`, 불확실 영역 수)만 읽습니다. 그래서 Builder 내부를 바꿔도 테스트는 그대로입니다.
 - **주의:** 테스트가 도는 동안 스크립트를 고치면 Play 진입 때 컴파일이 일어나 그 뒤 테스트가 Play Mode에 들어가지 못합니다.
 
 ## UML 갱신

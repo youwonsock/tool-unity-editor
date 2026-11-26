@@ -12,31 +12,36 @@ participant "Manager" as M
 participant "Scheduler" as Q
 participant "Session" as S
 participant "Builder\n(Surface·Volume)" as B
+participant "빌드\n(IFlowFieldBuild)" as D
 
 M -> S : 입력(설정·Goal·장애물·Modifier)
-S -> B : 입력 반영
+S -> B : 입력 반영 (입력 ledger에 기록)
 S -> S : 할 일이 생기면 Building
 loop 프레임마다 (LateUpdate)
   Q -> S : PumpScheduled(budget)
   S -> S : 미등록 장애물 sweep 한 단계(켰을 때)
   loop 예산과 BuildPolicy가 허락하는 동안 (RunPipeline)
-    S -> B : TryBeginBuild
-    B --> S : 시작 여부·장애물을 조회하는지
+    S -> B : TryBeginBuild (진행 중인 빌드가 없을 때)
+    B --> S : 빌드 객체·장애물을 조회하는지
     S -> S : 조회하면 불확실 영역을 관찰 중으로
-    S -> B : StepBuild(budget)
-    B --> S : 계속 · 대기 · 버림 · 완료
+    S -> D : Step(budget)
+    D --> S : 계속 · 대기 · 버림 · 완료
     alt 완료
-      S -> B : PublishBuild
-      B --> S : 필드가 달라졌는지
+      S -> D : Publish
+      D --> S : 필드가 달라졌는지
       S -> S : 관찰한 불확실 영역 해소,\n달라졌으면 Revision 증가
     end
   end
   S --> M : FieldChanged·StateChanged (작업이 끝난 뒤)
 end
 M -> S : TrySample(위치)
-S -> S : 게시 값 + 공통 샘플 안전 규칙
+S -> S : 모드별 cell view로 게시 값 +\n공통 샘플 안전 규칙
 note over B
   Surface: 기본 단계를 한 프레임에, BFS는 Job
   Volume: 64셀씩 나눠 계산, BFS는 Job
+end note
+note over D
+  게시·거부 뒤나 Builder가 버리면
+  (CancelWork, 새 격자) IsLive가 false
 end note
 @enduml

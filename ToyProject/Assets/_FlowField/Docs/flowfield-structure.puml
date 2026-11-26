@@ -22,20 +22,38 @@ class FlowFieldSpaceStrategy {
   모드별 Session 생성·검증·격자·Bounds 맞춤
 }
 class "FlowFieldSession\n(공통 파이프라인)" as Session {
-  {field} 수명·상태·이벤트 (본체)
+  {field} 수명·상태·이벤트, BuildHost (본체)
   {field} 설정·장애물·Modifier 입력, 불확실 영역 (.Inputs)
-  {field} 빌드 루프 (.Pipeline)
-  {field} 조회·샘플 안전 규칙 (.Reads)
+  {field} 빌드 루프, 진행 중인 빌드 (.Pipeline)
+  {field} 조회 (.Reads)
+}
+interface IFlowFieldBuildHost {
+  {field} 등록부·불확실 영역 읽기 view
+  {field} sweep 여부·사용자 코드 경계
 }
 interface IFlowFieldSpaceBuilder {
-  요청·빌드 단계·게시 필드
+  요청·빌드 시작·게시 필드
   입력 반영·수명 훅
 }
+interface IFlowFieldBuild {
+  IsLive·Step·Publish
+}
 class FlowFieldSurfaceBuilder {
-  Surface2D 계산 (8방향)
+  {field} Surface2D 계산 (8방향)
+  {field} 입력 ledger·게시 store·staging
 }
 class FlowFieldVolumeBuilder {
-  Volume3D 계산 (26방향)
+  {field} Volume3D 계산 (26방향)
+  {field} 입력 ledger·게시 store
+}
+class "FlowFieldSurfaceBuild\nFlowFieldVolumeBuildContext" as Builds {
+  빌드 하나의 단계와 게시 인자
+}
+class "FlowFieldSampler\n+ 샘플 안전 규칙" as Sampler {
+  조회마다 모드별 cell view를 한 번 고름
+}
+interface IFlowFieldCellView {
+  {field} 축·이웃·막힘·연결·낙차·탈출
 }
 class FlowFieldBuildScheduler {
   모든 Session에 프레임당 공통 예산
@@ -53,8 +71,16 @@ FlowFieldManager --> FlowFieldSpaceStrategy
 FlowFieldSpaceStrategy ..> Session : 생성
 FlowFieldManager --> Session
 Session --> IFlowFieldSpaceBuilder
+Session --> IFlowFieldBuild : 진행
+Session ..> Sampler : 조회
+Sampler ..> IFlowFieldCellView
 FlowFieldSurfaceBuilder ..|> IFlowFieldSpaceBuilder
 FlowFieldVolumeBuilder ..|> IFlowFieldSpaceBuilder
+FlowFieldSurfaceBuilder ..> IFlowFieldBuildHost : 읽기
+FlowFieldVolumeBuilder ..> IFlowFieldBuildHost : 읽기
+FlowFieldSurfaceBuilder ..> Builds : 시작
+FlowFieldVolumeBuilder ..> Builds : 시작
+Builds ..|> IFlowFieldBuild
 FlowFieldBuildScheduler --> Session : PumpScheduled(budget)
 Session --> FlowFieldExecutionBoundary
 Editor ..> FlowFieldManager : CaptureConfig
