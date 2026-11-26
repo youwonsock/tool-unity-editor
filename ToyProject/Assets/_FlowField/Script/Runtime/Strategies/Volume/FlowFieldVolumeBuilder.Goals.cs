@@ -92,6 +92,15 @@ namespace Common.FlowField
                     Topology = published.Goal.Topology,
                     EscapeDirections = published.Agent.EscapeDirections,
                 };
+                // A world Goal searches from its seeds over every open cell.
+                if (entry.Seeds != null)
+                {
+                    scratch.ResizePortals(request.Grid.CellCount);
+                    entry.Seeds.FillPortals(scratch.PortalDirections, scratch.PortalCosts, scratch.PortalHeights);
+                    build.Seeds = entry.Seeds;
+                    build.PortalDirections = scratch.PortalDirections;
+                    build.PortalCosts = scratch.PortalCosts;
+                }
                 batch.Items.Add(new FlowFieldVolumeGoalBatch.Item
                 {
                     Entry = entry,
@@ -184,8 +193,10 @@ namespace Common.FlowField
                     continue;
                 BuildContext build = item.Build;
                 // The solve has resolved the Goal; an anchor flag never
-                // changes its identity, as for the default Goal.
+                // changes its identity, as for the default Goal. A world Goal
+                // is directed whether or not its cell is in this grid.
                 int goalIndex = build.Request.HasGoal ? build.GoalIndex : -1;
+                bool active = goalIndex >= 0 || build.Seeds != null;
                 var goal = new FlowFieldGoalLayer(
                     build.Topology,
                     build.GoalFlags,
@@ -195,7 +206,7 @@ namespace Common.FlowField
                     build.FinalDirections,
                     build.FinalSpeeds,
                     modifierInfluence: null,
-                    isActive: goalIndex >= 0,
+                    isActive: active,
                     goalIndex,
                     distances: build.Costs);
                 var field = new VolumeFieldData(build.Request, build.Request.Grid, scene: null, batch.Base.Agent, goal);
@@ -205,6 +216,7 @@ namespace Common.FlowField
                 spares.Queue = build.Queue ?? spares.Queue;
                 spares.Influence = build.Influence ?? spares.Influence;
                 item.Entry.Field = field;
+                item.Entry.BuiltSeeds = build.Seeds;
                 item.Entry.BuiltRequestRevision = item.RequestRevision;
                 item.Entry.BuiltBaseStamp = batch.BaseStamp;
             }

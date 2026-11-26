@@ -149,6 +149,19 @@ namespace Common.FlowField
             HasActiveGoal = true;
         }
 
+        /// <summary>
+        /// A world Goal's search: the field is directed whether or not the Goal
+        /// cell is in this grid (<paramref name="goalCell"/> -1).
+        /// </summary>
+        internal void SetSeededGoal(int goalCell)
+        {
+            AssertWritable(nameof(SetSeededGoal));
+            if (goalCell < -1 || goalCell >= Capacity)
+                throw new ArgumentOutOfRangeException(nameof(goalCell));
+            ResolvedGoalIndex = goalCell;
+            HasActiveGoal = true;
+        }
+
         internal void LoadBakedGoal(
             bool hasGoal,
             int resolvedGoalIndex,

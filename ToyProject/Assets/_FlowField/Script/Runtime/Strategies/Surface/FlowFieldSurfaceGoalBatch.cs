@@ -13,6 +13,19 @@ namespace Common.FlowField
         internal readonly FlowFieldSurfaceWorkspace Workspace = new FlowFieldSurfaceWorkspace();
         internal readonly FlowFieldSurfaceBaseFieldBuild Solve = new FlowFieldSurfaceBaseFieldBuild();
         internal readonly FlowFieldSurfaceGoalTracker Tracker = new FlowFieldSurfaceGoalTracker();
+        // A world Goal's portal arrays, sized with the workspace.
+        internal int[] PortalDirections = Array.Empty<int>();
+        internal int[] PortalCosts = Array.Empty<int>();
+        internal float[] PortalHeights = Array.Empty<float>();
+
+        internal void ResizePortals(int count)
+        {
+            if (PortalDirections.Length == count)
+                return;
+            PortalDirections = new int[count];
+            PortalCosts = new int[count];
+            PortalHeights = new float[count];
+        }
 
         public void Dispose()
         {
@@ -46,6 +59,8 @@ namespace Common.FlowField
             internal FlowFieldGoalSet.Entry Entry;
             internal int RequestRevision;
             internal FlowFieldSurfaceGoalScratch Scratch;
+            // A world Goal's seeds, or null.
+            internal FlowFieldGoalSeeds Seeds;
             // A solve was started; Solved once it reported or none was needed.
             internal bool Solving;
             internal bool Solved;

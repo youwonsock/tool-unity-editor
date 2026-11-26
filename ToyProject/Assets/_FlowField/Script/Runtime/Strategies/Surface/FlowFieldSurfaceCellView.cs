@@ -55,6 +55,12 @@ namespace Common.FlowField
             return new FlowFieldSample(direction, _field.Goal.FinalSpeeds[index], normal, hasSurface: true, hasCell: true);
         }
 
+        public int NextCell(int index)
+        {
+            int next = _field.Goal.NextCells[index];
+            return FlowFieldNextCell.IsPortal(next) ? int.MaxValue : next;
+        }
+
         public int StepCount => FlowFieldNeighborUtility.SurfaceCount;
         public bool HasVerticalAxis => false;
 

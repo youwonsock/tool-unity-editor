@@ -18,6 +18,10 @@ namespace Common.FlowField
         bool TryLocate(Vector3 worldPosition, out int index);
         // The published sample of a cell, before the safety rule.
         FlowFieldSample ReadCell(int index);
+        // The published next cell, or a FlowFieldNextCell marker. A world
+        // Goal's step across the border is an index no cell of this view has,
+        // unless the view knows the area across.
+        int NextCell(int index);
         // Neighbor steps: 8 in Surface2D, 26 in Volume3D.
         int StepCount { get; }
         // Volume3D moves along y; a Surface2D direction ignores it.

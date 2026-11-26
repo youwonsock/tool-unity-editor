@@ -13,7 +13,17 @@ namespace Common.FlowField
         internal const int Blocked = -2;
         // Inside the Goal's influence with no path to the Goal: the cell stops.
         internal const int Unreachable = -3;
-        // The lowest valid value.
+        // The lowest value a field of one area holds.
         internal const int Min = Unreachable;
+
+        // A world Goal's next step leaves the area: the code holds the step
+        // direction, and the cell across the border is in a touching area.
+        private const int PortalBase = -16;
+
+        internal static int Portal(int direction) => PortalBase - direction;
+
+        internal static bool IsPortal(int next) => next <= PortalBase && next > PortalBase - FlowFieldNeighborUtility.VolumeCount;
+
+        internal static int PortalDirection(int next) => PortalBase - next;
     }
 }

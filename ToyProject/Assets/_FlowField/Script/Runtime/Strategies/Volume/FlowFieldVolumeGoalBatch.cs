@@ -9,6 +9,19 @@ namespace Common.FlowField
     internal sealed class FlowFieldVolumeGoalScratch
     {
         internal readonly FlowFieldSpareArrays Spares = new FlowFieldSpareArrays();
+        // A world Goal's portal arrays, sized with the grid.
+        internal int[] PortalDirections = System.Array.Empty<int>();
+        internal int[] PortalCosts = System.Array.Empty<int>();
+        internal float[] PortalHeights = System.Array.Empty<float>();
+
+        internal void ResizePortals(int count)
+        {
+            if (PortalDirections.Length == count)
+                return;
+            PortalDirections = new int[count];
+            PortalCosts = new int[count];
+            PortalHeights = new float[count];
+        }
     }
 
     /// <summary>

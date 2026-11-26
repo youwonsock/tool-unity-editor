@@ -324,6 +324,16 @@ namespace Common.FlowField
             return true;
         }
 
+        /// <summary>A world Goal's seeds in this area changed. False when the Goal is not in the set.</summary>
+        internal bool SetGoalSeedsCommand(int id, FlowFieldGoalSeeds seeds)
+        {
+            ThrowIfInputUnavailable();
+            if (!Goals.TrySetSeeds(id, seeds))
+                return false;
+            EnterBuildingIfOwed();
+            return true;
+        }
+
         // A faulted session takes removals too, as with obstacles and Modifiers.
         internal bool RemoveGoalCommand(int id)
         {

@@ -23,6 +23,7 @@ namespace Common.FlowField
         internal const int ChunkSize = 4096;
         internal const int Unreachable = int.MaxValue;
         internal const int PinnedArrayCount = 10;
+        internal const int SeedArrayCount = 4;
 
         [NativeDisableUnsafePtrRestriction] internal bool* Blocked;
         [NativeDisableUnsafePtrRestriction] internal uint* Topology;
@@ -37,6 +38,20 @@ namespace Common.FlowField
         // One-element arrays shared with the owner: its cancel request and the Goal the chain resolved.
         [NativeDisableUnsafePtrRestriction] internal int* Cancel;
         [NativeDisableUnsafePtrRestriction] internal int* ResolvedGoal;
+        // A world Goal's search: the seeds sorted by cost, and per cell the
+        // cheapest seed across the border, its step and cost. RequestedGoal
+        // is then the Goal's cell in this grid or -1, and every open cell is
+        // in reach.
+        [NativeDisableUnsafePtrRestriction] internal int* SeedCells;
+        [NativeDisableUnsafePtrRestriction] internal int* SeedCosts;
+        [NativeDisableUnsafePtrRestriction] internal int* PortalDirections;
+        [NativeDisableUnsafePtrRestriction] internal int* PortalCosts;
+        internal int SeedCount;
+        internal bool Seeded;
+        // The Goal in local cells, possibly outside the grid, for tie-breaks.
+        internal int GoalX;
+        internal int GoalY;
+        internal int GoalZ;
 
         internal int Width;
         internal int Height;
@@ -295,6 +310,9 @@ namespace Common.FlowField
 
         private int Resolve()
         {
+            // A world Goal keeps its own cell, or has none in this grid.
+            if (Data.Seeded)
+                return Data.RequestedGoal >= 0 && !Data.Blocked[Data.RequestedGoal] ? Data.RequestedGoal : -1;
             if (!Data.HasGoal)
                 return -1;
             int goal = Data.RequestedGoal;
@@ -334,6 +352,13 @@ namespace Common.FlowField
         {
             if (Data.Cancelled)
                 return;
+            if (Data.Seeded)
+            {
+                Data.ChunkRange(chunk, out int first, out int last);
+                for (int index = first; index < last; index++)
+                    Data.Influence[index] = !Data.Blocked[index];
+                return;
+            }
             int goal = *Data.ResolvedGoal;
             if (goal < 0)
                 return;
@@ -370,6 +395,11 @@ namespace Common.FlowField
         {
             if (Data.Cancelled)
                 return;
+            if (Data.Seeded)
+            {
+                RunSeeded();
+                return;
+            }
             int goal = *Data.ResolvedGoal;
             if (goal < 0)
                 return;
@@ -383,6 +413,57 @@ namespace Common.FlowField
                 if ((head & (FlowFieldVolumeSolveData.ChunkSize - 1)) == 0 && Data.Cancelled)
                     return;
                 int current = Data.Queue[head++];
+                Data.Unflatten(current, out int x, out int y, out int z);
+                int candidate = Data.Costs[current] + 1;
+                uint mask = Data.Topology[current];
+                for (int direction = 0; direction < NeighborCount; direction++)
+                {
+                    if ((mask & (1u << direction)) == 0u)
+                        continue;
+                    int nx = x + Data.DeltaX[direction];
+                    int ny = y + Data.DeltaY[direction];
+                    int nz = z + Data.DeltaZ[direction];
+                    if (!Data.InBounds(nx, ny, nz))
+                        continue;
+                    int neighbor = Data.Flat(nx, ny, nz);
+                    if (!Data.Influence[neighbor] || candidate >= Data.Costs[neighbor])
+                        continue;
+                    Data.Costs[neighbor] = candidate;
+                    Data.Queue[tail++] = neighbor;
+                }
+            }
+        }
+
+        // Seeds join the search in cost order between the cells it reaches,
+        // so cells leave the queue by cost as in a one-source search.
+        private void RunSeeded()
+        {
+            for (int seed = 0; seed < Data.SeedCount; seed++)
+            {
+                int cell = Data.SeedCells[seed];
+                if (Data.Influence[cell] && Data.SeedCosts[seed] < Data.Costs[cell])
+                    Data.Costs[cell] = Data.SeedCosts[seed];
+            }
+            int head = 0;
+            int tail = 0;
+            int next = 0;
+            int steps = 0;
+            while (head < tail || next < Data.SeedCount)
+            {
+                if ((steps++ & (FlowFieldVolumeSolveData.ChunkSize - 1)) == 0 && Data.Cancelled)
+                    return;
+                int current;
+                if (next < Data.SeedCount && (head >= tail || Data.SeedCosts[next] <= Data.Costs[Data.Queue[head]]))
+                {
+                    current = Data.SeedCells[next];
+                    // A cell reached for less, or a second seed of the cell.
+                    if (Data.SeedCosts[next++] != Data.Costs[current] || !Data.Influence[current])
+                        continue;
+                }
+                else
+                {
+                    current = Data.Queue[head++];
+                }
                 Data.Unflatten(current, out int x, out int y, out int z);
                 int candidate = Data.Costs[current] + 1;
                 uint mask = Data.Topology[current];
@@ -419,8 +500,16 @@ namespace Common.FlowField
                 return;
             int goal = *Data.ResolvedGoal;
             int gx = 0, gy = 0, gz = 0;
-            if (goal >= 0)
+            if (Data.Seeded)
+            {
+                gx = Data.GoalX;
+                gy = Data.GoalY;
+                gz = Data.GoalZ;
+            }
+            else if (goal >= 0)
+            {
                 Data.Unflatten(goal, out gx, out gy, out gz);
+            }
 
             Data.ChunkRange(chunk, out int start, out int end);
             for (int index = start; index < end; index++)
@@ -444,7 +533,7 @@ namespace Common.FlowField
 
                 Vector3 direction = Data.DefaultDirection;
                 int next = FlowFieldNextCell.DefaultDirection;
-                bool influenced = goal >= 0 && Data.Influence[index];
+                bool influenced = (Data.Seeded || goal >= 0) && Data.Influence[index];
                 if (influenced)
                 {
                     if (Data.Costs[index] == FlowFieldVolumeSolveData.Unreachable)
@@ -480,16 +569,28 @@ namespace Common.FlowField
                             }
                         }
                         if (next >= 0)
+                        {
                             direction = Data.StepDirection(bestDirection);
+                        }
+                        else if (Data.Seeded && Data.PortalDirections[index] >= 0
+                            && Data.PortalCosts[index] == Data.Costs[index])
+                        {
+                            // No closer cell inside the grid: step across the border.
+                            int portal = Data.PortalDirections[index];
+                            next = FlowFieldNextCell.Portal(portal);
+                            direction = Data.StepDirection(portal);
+                        }
                         else
+                        {
                             next = FlowFieldNextCell.Unreachable;
+                        }
                     }
                     if (next == FlowFieldNextCell.Unreachable)
                         direction = Vector3.zero;
                 }
 
                 Data.Next[index] = next;
-                Data.GoalFlags[index] = next >= 0
+                Data.GoalFlags[index] = next >= 0 || FlowFieldNextCell.IsPortal(next)
                     ? FlowFieldGoalFlags.Directed
                     : influenced
                         ? FlowFieldGoalFlags.Unreachable

@@ -160,13 +160,15 @@ namespace Common.FlowField
             Job = job;
         }
 
-        internal static unsafe FlowFieldSurfaceSolve Create(
-            FlowFieldGridSpace grid,
-            FlowFieldSurfaceData surface,
-            FlowFieldSurfaceWorkspace workspace,
-            int goalIndex)
+        internal static unsafe FlowFieldSurfaceSolve Create(in FlowFieldSurfaceBfsRequest request)
         {
-            var pins = new FlowFieldPinnedArrays(FlowFieldSurfaceSolveJob.PinnedArrayCount);
+            FlowFieldGridSpace grid = request.Grid;
+            FlowFieldSurfaceData surface = request.Surface;
+            FlowFieldSurfaceWorkspace workspace = request.Workspace;
+            int goalIndex = request.GoalIndex;
+            FlowFieldGoalSeeds seeds = request.Seeds;
+            var pins = new FlowFieldPinnedArrays(FlowFieldSurfaceSolveJob.PinnedArrayCount
+                + (seeds != null ? FlowFieldSurfaceSolveJob.SeedArrayCount : 0));
             var cancel = new int[1];
             FlowFieldSurfaceSolveJob job;
             try
@@ -192,7 +194,18 @@ namespace Common.FlowField
                     Goal = goalIndex,
                     DirectionEpsilonSqr = FlowFieldVectorUtility.DirectionEpsilonSqr,
                     ProjectionEpsilon = Mathf.Epsilon,
+                    GoalX = request.GoalX,
+                    GoalZ = request.GoalZ,
                 };
+                if (seeds != null && seeds.Count > 0)
+                {
+                    job.SeedCells = pins.Pin(seeds.Cells);
+                    job.SeedCosts = pins.Pin(seeds.Costs);
+                    job.PortalDirections = pins.Pin(request.PortalDirections);
+                    job.PortalCosts = pins.Pin(request.PortalCosts);
+                    job.PortalHeights = pins.Pin(request.PortalHeights);
+                    job.SeedCount = seeds.Count;
+                }
             }
             catch
             {
@@ -232,11 +245,7 @@ namespace Common.FlowField
                 return false;
             ValidateRequest(request);
 
-            _solve = FlowFieldSurfaceSolve.Create(
-                request.Grid,
-                request.Surface,
-                request.Workspace,
-                request.GoalIndex);
+            _solve = FlowFieldSurfaceSolve.Create(in request);
             _request = request;
             _completed = completed;
             _handle = _solve.Job.Schedule();
@@ -283,6 +292,21 @@ namespace Common.FlowField
                 throw new ArgumentException("FlowField BFS requires a valid Surface Bake.", nameof(request));
             if (request.Workspace == null || request.Workspace.Capacity != request.Grid.CellCount)
                 throw new ArgumentException("FlowField BFS workspace capacity does not match the grid.", nameof(request));
+            if (request.Seeds != null)
+            {
+                int count = request.Grid.CellCount;
+                if (request.PortalDirections?.Length != count || request.PortalCosts?.Length != count
+                    || request.PortalHeights?.Length != count)
+                    throw new ArgumentException("A seeded FlowField BFS needs portal arrays of the grid's size.", nameof(request));
+                for (int i = 0; i < request.Seeds.Count; i++)
+                {
+                    if ((uint)request.Seeds.Cells[i] >= (uint)count || request.Seeds.Costs[i] < 0)
+                        throw new ArgumentOutOfRangeException(nameof(request), "A FlowField seed lies outside the grid.");
+                }
+                if (request.GoalIndex >= count || request.Workspace.ResolvedGoalIndex != request.GoalIndex)
+                    throw new InvalidOperationException("A seeded FlowField BFS Goal must be the workspace's Goal cell.");
+                return;
+            }
             if (!request.Grid.IsLocalInBounds(request.GoalX, request.GoalZ)
                 || request.GoalIndex < 0
                 || request.GoalIndex >= request.Grid.CellCount)

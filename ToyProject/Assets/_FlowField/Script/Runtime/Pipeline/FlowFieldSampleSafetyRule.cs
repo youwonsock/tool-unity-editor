@@ -94,7 +94,7 @@ namespace Common.FlowField
             // its axes can step into, but the ground link only on the step it
             // heads for: a Surface projection leaves tiny side components,
             // and a ledge beside the way is no reason to stop.
-            int next = field.Goal.NextCells[index];
+            int next = cells.NextCell(index);
             Vector3 baseDirection = field.Goal.BaseDirections[index];
             Vector3 direction = field.Goal.FinalDirections[index];
             bool turned = direction != baseDirection;

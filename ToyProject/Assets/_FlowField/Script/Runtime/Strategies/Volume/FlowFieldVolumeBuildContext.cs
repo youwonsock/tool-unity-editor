@@ -163,6 +163,10 @@ namespace Common.FlowField
         // Where the allocation stage takes its arrays: the published field's
         // spares, or an additional Goal's own.
         internal FlowFieldSpareArrays Spares;
+        // A world Goal's seeds and the portal arrays filled from them, or null.
+        internal FlowFieldGoalSeeds Seeds;
+        internal int[] PortalDirections;
+        internal int[] PortalCosts;
         // The additional Goals' base stamp when a default Goal build began;
         // its field stands for every input before it.
         internal int GoalStamp;
@@ -250,7 +254,9 @@ namespace Common.FlowField
         internal unsafe void StartSolve()
         {
             FlowFieldGridSpace grid = Request.Grid;
-            _solvePins = new FlowFieldPinnedArrays(FlowFieldVolumeSolveData.PinnedArrayCount + 2);
+            bool seeded = Seeds != null;
+            _solvePins = new FlowFieldPinnedArrays(FlowFieldVolumeSolveData.PinnedArrayCount + 2
+                + (seeded ? FlowFieldVolumeSolveData.SeedArrayCount : 0));
             _solveCancel = new int[1];
             _solveGoal = new[] { -1 };
             try
@@ -278,6 +284,24 @@ namespace Common.FlowField
                     GoalInfluenceRadius = Request.GoalInfluenceRadius,
                     DefaultDirection = FlowFieldVectorUtility.NormalizeDefaultDirection(Request.DefaultDirection),
                 };
+                if (seeded)
+                {
+                    data.Seeded = true;
+                    data.HasGoal = true;
+                    data.RequestedGoal = Seeds.GoalCell;
+                    data.GoalInfluenceRadius = 0f;
+                    data.GoalX = Seeds.GoalX;
+                    data.GoalY = Seeds.GoalY;
+                    data.GoalZ = Seeds.GoalZ;
+                    data.PortalDirections = _solvePins.Pin(PortalDirections);
+                    data.PortalCosts = _solvePins.Pin(PortalCosts);
+                    if (Seeds.Count > 0)
+                    {
+                        data.SeedCells = _solvePins.Pin(Seeds.Cells);
+                        data.SeedCosts = _solvePins.Pin(Seeds.Costs);
+                        data.SeedCount = Seeds.Count;
+                    }
+                }
                 data.FillNeighborTables();
                 SolveHandle = data.ScheduleChain(buildObstacleResults: !ReusesObstacleQueries);
             }

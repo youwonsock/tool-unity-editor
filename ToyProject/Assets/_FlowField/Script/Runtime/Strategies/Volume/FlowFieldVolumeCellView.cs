@@ -53,6 +53,12 @@ namespace Common.FlowField
                 hasSurface: false,
                 hasCell: true);
 
+        public int NextCell(int index)
+        {
+            int next = _field.Goal.NextCells[index];
+            return FlowFieldNextCell.IsPortal(next) ? int.MaxValue : next;
+        }
+
         public int StepCount => FlowFieldNeighborUtility.VolumeCount;
         public bool HasVerticalAxis => true;
         public Vector3 Planar(Vector3 direction) => direction;

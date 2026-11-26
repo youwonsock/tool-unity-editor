@@ -66,6 +66,7 @@ namespace Common.FlowField
                     Entry = entry,
                     RequestRevision = entry.RequestRevision,
                     Scratch = scratch,
+                    Seeds = entry.Seeds,
                 });
             }
         }
@@ -156,6 +157,11 @@ namespace Common.FlowField
                 // directions; the published field keeps none, so they are
                 // built here from the same blocked cells.
                 FlowFieldSurfaceNavigationPreparation.BuildEscapeDirections(grid, surface, workspace);
+                if (item.Seeds != null)
+                {
+                    StartSeeded(item, grid, surface, workspace);
+                    continue;
+                }
                 FlowFieldGoalRequest request = item.Entry.Request;
                 FlowFieldSurfaceGoalResolution resolution = FlowFieldSurfaceGoalResolver.Resolve(
                     grid,
@@ -191,6 +197,52 @@ namespace Common.FlowField
                 item.Solving = true;
             }
             batch.Phase = BatchPhase.Solving;
+        }
+
+        // A world Goal: every walkable cell is in reach, and the search
+        // starts from the seeds. Without seeds the field reaches nothing yet.
+        private static void StartSeeded(
+            FlowFieldSurfaceGoalBatch.Item item,
+            FlowFieldGridSpace grid,
+            FlowFieldSurfaceData surface,
+            FlowFieldSurfaceWorkspace workspace)
+        {
+            FlowFieldGoalSeeds seeds = item.Seeds;
+            workspace.ClearGoal();
+            for (int index = 0; index < grid.CellCount; index++)
+                workspace.InfluenceMask[index] = surface.IsSurfaceValid(index) && !workspace.Blocked[index];
+            FlowFieldSurfaceGraphTraversal.BuildTopologyMasks(grid, surface, workspace);
+            int goalCell = seeds.GoalCell >= 0 && workspace.InfluenceMask[seeds.GoalCell] ? seeds.GoalCell : -1;
+            workspace.SetSeededGoal(goalCell);
+            FlowFieldSurfaceGoalScratch scratch = item.Scratch;
+            scratch.ResizePortals(grid.CellCount);
+            seeds.FillPortals(scratch.PortalDirections, scratch.PortalCosts, scratch.PortalHeights);
+            var solve = new FlowFieldSurfaceBfsRequest(
+                grid,
+                surface,
+                workspace,
+                seeds,
+                goalCell,
+                scratch.PortalDirections,
+                scratch.PortalCosts,
+                scratch.PortalHeights);
+            if (solve.Seeds.Count == 0)
+            {
+                // Nothing to start from: every reachable cell stops.
+                for (int index = 0; index < grid.CellCount; index++)
+                {
+                    workspace.Costs[index] = int.MaxValue;
+                    bool open = workspace.InfluenceMask[index];
+                    workspace.NextCells[index] = open ? FlowFieldNextCell.Unreachable : FlowFieldNextCell.Blocked;
+                    workspace.GoalFlags[index] = open ? FlowFieldGoalFlags.Unreachable : FlowFieldGoalFlags.None;
+                }
+                item.Solved = true;
+                return;
+            }
+            FlowFieldSurfaceGoalBatch.Item started = item;
+            if (!scratch.Solve.StartBfs(solve, _ => started.Solved = true))
+                throw new InvalidOperationException("FlowField BFS session could not be started.");
+            item.Solving = true;
         }
 
         private static void PrepareWithoutGoal(
@@ -281,6 +333,7 @@ namespace Common.FlowField
                     CreateGoalLayer(item.Scratch.Workspace));
                 changed |= !FlowFieldField.HasSameContent(item.Entry.Field, field);
                 item.Entry.Field = field;
+                item.Entry.BuiltSeeds = item.Seeds;
                 item.Entry.BuiltRequestRevision = item.RequestRevision;
                 item.Entry.BuiltBaseStamp = batch.BaseStamp;
             }

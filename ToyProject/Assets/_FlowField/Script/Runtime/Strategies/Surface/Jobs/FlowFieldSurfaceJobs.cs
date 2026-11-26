@@ -8,7 +8,9 @@ namespace Common.FlowField
 {
     /// <summary>
     /// BFS and Goal directions of one Surface2D build, from the influence and
-    /// topology that the Goal stage prepared.
+    /// topology that the Goal stage prepared. A world Goal's search starts
+    /// from seeds instead of one Goal cell: each seed has a cost, and a seed
+    /// that leads across the area's border makes its cell step there.
     /// </summary>
     [BurstCompile(FloatMode = FloatMode.Strict, FloatPrecision = FloatPrecision.Standard)]
     internal unsafe struct FlowFieldSurfaceSolveJob : IJob
@@ -21,6 +23,7 @@ namespace Common.FlowField
         private const float NormalizeEpsilon = 0.00001f;
 
         internal const int PinnedArrayCount = 12;
+        internal const int SeedArrayCount = 5;
 
         [NativeDisableUnsafePtrRestriction] internal int* Costs;
         [NativeDisableUnsafePtrRestriction] internal int* Queue;
@@ -34,6 +37,17 @@ namespace Common.FlowField
         [NativeDisableUnsafePtrRestriction] internal float* Heights;
         [NativeDisableUnsafePtrRestriction] internal Vector3* Normals;
         [NativeDisableUnsafePtrRestriction] internal int* Cancel;
+        // A seeded search: the seeds sorted by cost, and per cell the cheapest
+        // seed across the border (its step, cost and the height it climbs to).
+        [NativeDisableUnsafePtrRestriction] internal int* SeedCells;
+        [NativeDisableUnsafePtrRestriction] internal int* SeedCosts;
+        [NativeDisableUnsafePtrRestriction] internal int* PortalDirections;
+        [NativeDisableUnsafePtrRestriction] internal int* PortalCosts;
+        [NativeDisableUnsafePtrRestriction] internal float* PortalHeights;
+        internal int SeedCount;
+        // The Goal in local cells, possibly outside the grid, for tie-breaks.
+        internal int GoalX;
+        internal int GoalZ;
 
         internal int Width;
         internal int Depth;
@@ -50,9 +64,135 @@ namespace Common.FlowField
             int* offsets = stackalloc int[NeighborCount];
             for (int direction = 0; direction < NeighborCount; direction++)
                 offsets[direction] = DeltaX[direction] + Width * DeltaZ[direction];
+            if (SeedCount > 0)
+            {
+                RunSeededBfs(offsets);
+                if (!Cancelled)
+                    RunSeededDirections(offsets);
+                return;
+            }
             RunBfs(offsets);
             if (!Cancelled)
                 RunDirections(offsets);
+        }
+
+        // Seeds join the search in cost order between the cells it reaches,
+        // so cells leave the queue by cost as in a one-source search.
+        private void RunSeededBfs(int* offsets)
+        {
+            for (int index = 0; index < Count; index++)
+                Costs[index] = Unreachable;
+            for (int seed = 0; seed < SeedCount; seed++)
+            {
+                int cell = SeedCells[seed];
+                if (Traversable(cell) && SeedCosts[seed] < Costs[cell])
+                    Costs[cell] = SeedCosts[seed];
+            }
+
+            int head = 0;
+            int tail = 0;
+            int next = 0;
+            int steps = 0;
+            while (head < tail || next < SeedCount)
+            {
+                if ((steps++ & (CancelCheckInterval - 1)) == 0 && Cancelled)
+                    return;
+                int current;
+                if (next < SeedCount && (head >= tail || SeedCosts[next] <= Costs[Queue[head]]))
+                {
+                    current = SeedCells[next];
+                    // A cell reached for less, or a second seed of the cell.
+                    if (SeedCosts[next++] != Costs[current] || !Traversable(current))
+                        continue;
+                }
+                else
+                {
+                    current = Queue[head++];
+                }
+                int candidate = Costs[current] + 1;
+                int mask = Topology[current];
+                for (int direction = 0; direction < NeighborCount; direction++)
+                {
+                    if ((mask & (1 << direction)) == 0)
+                        continue;
+                    int neighbor = current + offsets[direction];
+                    if (candidate >= Costs[neighbor])
+                        continue;
+                    Costs[neighbor] = candidate;
+                    Queue[tail++] = neighbor;
+                }
+            }
+        }
+
+        // As RunDirections, toward GoalX/GoalZ, where a cell with no closer
+        // neighbor inside the area steps across its border instead.
+        private void RunSeededDirections(int* offsets)
+        {
+            for (int index = 0; index < Count; index++)
+            {
+                if ((index & (CancelCheckInterval - 1)) == 0 && Cancelled)
+                    return;
+                bool valid = (SurfaceFlags[index] & ValidSurface) != 0;
+                NextCells[index] = !valid || Blocked[index]
+                    ? FlowFieldNextCell.Blocked
+                    : FlowFieldNextCell.Unreachable;
+                bool traversable = Traversable(index);
+                if (!traversable || Costs[index] == Unreachable)
+                {
+                    if (traversable)
+                        GoalFlags[index] = FlowFieldGoalFlags.Unreachable;
+                    continue;
+                }
+
+                GoalFlags[index] = FlowFieldGoalFlags.Directed;
+                if (index == Goal)
+                {
+                    GoalFlags[index] |= FlowFieldGoalFlags.Anchor;
+                    GoalDirections[index] = Vector3.zero;
+                    NextCells[index] = index;
+                    continue;
+                }
+
+                int z = index / Width;
+                int x = index - z * Width;
+                int best = -1;
+                int bestScore = 0;
+                int previousWave = Costs[index] - 1;
+                int mask = Topology[index];
+                for (int direction = 0; direction < NeighborCount; direction++)
+                {
+                    if ((mask & (1 << direction)) == 0)
+                        continue;
+                    int neighbor = index + offsets[direction];
+                    if (Costs[neighbor] != previousWave)
+                        continue;
+                    int sx = DeltaX[direction];
+                    int sz = DeltaZ[direction];
+                    int score = 2 * (sx * (GoalX - x) + sz * (GoalZ - z)) - (sx * sx + sz * sz);
+                    if (best < 0 || score > bestScore || score == bestScore && neighbor < best)
+                    {
+                        bestScore = score;
+                        best = neighbor;
+                    }
+                }
+
+                if (best >= 0)
+                {
+                    GoalDirections[index] = DirectionTo(index, x, z, best);
+                    NextCells[index] = best;
+                    continue;
+                }
+                int portal = PortalDirections[index];
+                if (portal >= 0 && PortalCosts[index] == Costs[index])
+                {
+                    Vector3 target = CellCenter(x + DeltaX[portal], z + DeltaZ[portal], PortalHeights[index]);
+                    GoalDirections[index] = DirectionToward(index, x, z, target);
+                    NextCells[index] = FlowFieldNextCell.Portal(portal);
+                    continue;
+                }
+                GoalFlags[index] = FlowFieldGoalFlags.Unreachable;
+                NextCells[index] = FlowFieldNextCell.Unreachable;
+            }
         }
 
         private bool Cancelled => Volatile.Read(ref *Cancel) != 0;
@@ -167,8 +307,13 @@ namespace Common.FlowField
         {
             int nextZ = next / Width;
             int nextX = next - nextZ * Width;
+            return DirectionToward(index, x, z, CellCenter(nextX, nextZ, Heights[next]));
+        }
+
+        // The step from the cell's center to the target, on the cell's ground.
+        private Vector3 DirectionToward(int index, int x, int z, Vector3 target)
+        {
             Vector3 current = CellCenter(x, z, Heights[index]);
-            Vector3 target = CellCenter(nextX, nextZ, Heights[next]);
             Vector3 step = new Vector3(target.x - current.x, target.y - current.y, target.z - current.z);
 
             Vector3 normal = Normalize(Normals[index]);

@@ -24,6 +24,10 @@ namespace Common.FlowField
             // The field reads answer from, or null while none was built on the
             // current grid and source.
             internal FlowFieldField Field;
+            // A world Goal's seeds in this area, or null for a Goal of this
+            // Manager alone; the seeds the published field was built with.
+            internal FlowFieldGoalSeeds Seeds;
+            internal FlowFieldGoalSeeds BuiltSeeds;
 
             internal Entry(int id, FlowFieldGoalKind kind, in FlowFieldGoalRequest request)
             {
@@ -159,6 +163,28 @@ namespace Common.FlowField
                 && Mathf.Abs(entry.Request.InfluenceRadius - request.InfluenceRadius) <= FlowFieldManagerConfig.ValueEpsilon)
                 return true;
             entry.Request = request;
+            unchecked { entry.RequestRevision++; }
+            return true;
+        }
+
+        /// <summary>
+        /// A world Goal's new seeds in this area; seeds that start the same
+        /// search ask for nothing new. False when the Goal is not in the set.
+        /// </summary>
+        internal bool TrySetSeeds(int id, FlowFieldGoalSeeds seeds)
+        {
+            Entry entry = Find(id);
+            if (entry == null)
+                return false;
+            if (seeds == null ? entry.Seeds == null : seeds.SameSearch(entry.Seeds))
+            {
+                // The same search under a newer epoch: the field stands for it.
+                entry.Seeds = seeds;
+                if (entry.BuiltSeeds != null && seeds != null && seeds.SameSearch(entry.BuiltSeeds))
+                    entry.BuiltSeeds = seeds;
+                return true;
+            }
+            entry.Seeds = seeds;
             unchecked { entry.RequestRevision++; }
             return true;
         }
