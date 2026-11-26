@@ -65,6 +65,7 @@ namespace Common.FlowField
         {
             FlowFieldManagerConfig config = CaptureConfig();
             FlowFieldSpaceStrategy.For(_spaceMode).Validate(in config, bakeModeLocked: false, validateStaticGoal: true);
+            ValidateAgentTypes(_spaceMode, sessionHoldsTypes: false);
         }
 
         /// <summary>
@@ -79,6 +80,7 @@ namespace Common.FlowField
             FlowFieldManagerConfig config = CaptureConfig(spaceMode, _bakeMode);
             bool bakeModeLocked = IsInitialized && BakeMode != _bakeMode;
             FlowFieldSpaceStrategy.For(spaceMode).Validate(in config, bakeModeLocked, validateStaticGoal: false);
+            ValidateAgentTypes(spaceMode, sessionHoldsTypes: IsInitialized || IsFaulted);
         }
     }
 }

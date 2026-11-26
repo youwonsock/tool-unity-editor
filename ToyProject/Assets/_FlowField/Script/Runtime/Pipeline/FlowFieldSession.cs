@@ -178,6 +178,17 @@ namespace Common.FlowField
         /// change, so a Manager never shows the same Revision for two fields.
         /// </summary>
         internal void ContinueRevision(int revision) => Revision = revision;
+
+        /// <summary>
+        /// A session of another agent type of the same Manager published a
+        /// field that reads differently: the Manager's one Revision advances,
+        /// with FieldChanged, through this session.
+        /// </summary>
+        internal void AdvanceRevision()
+        {
+            unchecked { Revision++; }
+            NotifyFieldCommitted();
+        }
         // Advances when the session stops being what earlier work was for:
         // Stop, Restart, Release and a fault, which must also drop a late
         // solve callback. Queued events and late solve callbacks

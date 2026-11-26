@@ -130,6 +130,46 @@ namespace Common.FlowField
         /// grid holds the position.
         /// </returns>
         bool TrySampleNearestShared(Vector3 worldPosition, out FlowFieldSample sample, out FlowFieldGoalHandle goal);
+
+        /// <summary>
+        /// 1 for <see cref="FlowFieldAgentType.Default"/> plus the Additional Agent Types: the
+        /// session's from Init to Release, otherwise the serialized ones.
+        /// </summary>
+        int AgentTypeCount { get; }
+        /// <summary>
+        /// Finds an agent type by name: <see cref="FlowFieldAgentType.DefaultName"/> or the name of an
+        /// Additional Agent Type, the session's from Init to Release, otherwise the serialized one.
+        /// </summary>
+        /// <returns>False with <see cref="FlowFieldAgentType.Default"/> when no type has the name.</returns>
+        bool TryGetAgentType(string name, out FlowFieldAgentType type);
+        /// <summary>
+        /// Whether the agent type's field answers samples, as <see cref="IsReady"/> says for
+        /// <see cref="FlowFieldAgentType.Default"/>. An Additional Agent Type builds beside the default
+        /// one and may become ready later. False for a type this Manager does not have.
+        /// </summary>
+        bool IsAgentTypeReady(FlowFieldAgentType type);
+        /// <summary>
+        /// <see cref="TrySample(Vector3, out FlowFieldSample)"/> on the agent type's field. It never
+        /// throws, and is false for a type this Manager does not have.
+        /// </summary>
+        bool TrySample(Vector3 worldPosition, FlowFieldAgentType type, out FlowFieldSample sample);
+        /// <summary>Whether the additional Goal's field of the agent type answers samples.</summary>
+        bool IsGoalReady(FlowFieldGoalHandle goal, FlowFieldAgentType type);
+        /// <summary>
+        /// <see cref="TrySample(Vector3, FlowFieldGoalHandle, out FlowFieldSample)"/> on the agent
+        /// type's field of the additional Goal. It never throws.
+        /// </summary>
+        bool TrySample(Vector3 worldPosition, FlowFieldGoalHandle goal, FlowFieldAgentType type, out FlowFieldSample sample);
+        /// <summary>
+        /// <see cref="TrySampleNearestShared(Vector3, out FlowFieldSample, out FlowFieldGoalHandle)"/>
+        /// over the agent type's fields of the shared Goals, whose steps follow that type's cells.
+        /// It never throws.
+        /// </summary>
+        bool TrySampleNearestShared(
+            Vector3 worldPosition,
+            FlowFieldAgentType type,
+            out FlowFieldSample sample,
+            out FlowFieldGoalHandle goal);
     }
 
 }

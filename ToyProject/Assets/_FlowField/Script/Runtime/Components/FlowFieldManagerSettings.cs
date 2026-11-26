@@ -57,6 +57,24 @@ namespace Common.FlowField
         };
     }
 
+    /// <summary>
+    /// An agent type besides the Manager's own settings: another obstacle clearance, and in
+    /// Surface2D another slope and step height. Each gets its own fields on the same grid,
+    /// ground layer and obstacles.
+    /// </summary>
+    [Serializable]
+    internal struct FlowFieldAgentTypeSettings
+    {
+        [Tooltip("The name TryGetAgentType finds this type by; unique, and not \"Default\".")]
+        [SerializeField] internal string Name;
+        [Tooltip("How far obstacle detection extends beyond a cell for this type.")]
+        [SerializeField] internal float Clearance;
+        [Tooltip("Surface2D only: the steepest ground this type walks on, in degrees.")]
+        [SerializeField] internal float MaxSlope;
+        [Tooltip("Surface2D only: the highest step this type climbs.")]
+        [SerializeField] internal float MaxStepHeight;
+    }
+
     /// <summary>The direction used where no Goal applies, and the Goal reach.</summary>
     [Serializable]
     internal struct FlowFieldFlowSettings

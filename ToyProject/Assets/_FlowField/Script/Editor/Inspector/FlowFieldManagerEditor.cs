@@ -47,6 +47,7 @@ namespace Common.FlowField.Editor
             if (!isVolume)
                 DrawSettings(FlowFieldManager.PropertyNames.Surface, "Surface");
             DrawSettings(FlowFieldManager.PropertyNames.Obstacles, "Obstacles");
+            DrawAgentTypes(manager);
             DrawSettings(FlowFieldManager.PropertyNames.Flow, "Flow");
             EditorGUILayout.PropertyField(serializedObject.FindProperty(FlowFieldManager.PropertyNames.GoalTransform));
 
@@ -136,6 +137,24 @@ namespace Common.FlowField.Editor
         }
 
         // A settings bundle drawn as a header and its fields, without a foldout.
+        // The settings above are the Default agent type; each element adds one.
+        private void DrawAgentTypes(FlowFieldManager manager)
+        {
+            SerializedProperty types = serializedObject.FindProperty(FlowFieldManager.PropertyNames.AgentTypes);
+            if (types == null)
+                return;
+            EditorGUILayout.Space();
+            EditorGUILayout.PropertyField(types, new GUIContent("Additional Agent Types"), true);
+            if (types.arraySize > 0 && manager.BakeMode == FlowFieldBakeMode.StaticBaked)
+                EditorGUILayout.HelpBox(
+                    "StaticBaked loads the Default agent type only; Init refuses Additional Agent Types.",
+                    MessageType.Warning);
+            else if (types.arraySize > 0 && manager.BakeMode == FlowFieldBakeMode.BakedBase)
+                EditorGUILayout.HelpBox(
+                    "The bake holds the Default agent type; each Additional Agent Type scans the scene at runtime.",
+                    MessageType.Info);
+        }
+
         private void DrawSettings(string path, string header)
         {
             SerializedProperty bundle = serializedObject.FindProperty(path);

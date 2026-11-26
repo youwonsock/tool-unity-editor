@@ -43,6 +43,7 @@ namespace Common.FlowField
             internal const string Obstacles = nameof(_obstacles);
             internal const string ObstacleLayer = Obstacles + "." + nameof(FlowFieldObstacleSettings.Layer);
             internal const string Flow = nameof(_flow);
+            internal const string AgentTypes = nameof(_agentTypes);
             internal const string GoalTransform = nameof(_goalTransform);
             internal const string SpaceMode = nameof(_spaceMode);
             internal const string BakeMode = nameof(_bakeMode);
@@ -220,7 +221,10 @@ namespace Common.FlowField
         private void SuspendAfterDisable()
         {
             using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
-            ActiveSession?.Stop();
+            if (ActiveSession == null)
+                return;
+            ActiveSession.Stop();
+            StopAgentSessions();
         }
 
         private void OnDestroy()
@@ -233,6 +237,7 @@ namespace Common.FlowField
         {
             using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
             _session?.Dispose();
+            DisposeAgentSessions();
         }
 
         // Init reuses the session of the configured mode. A session of the
@@ -278,13 +283,16 @@ namespace Common.FlowField
             using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
             AdoptGoalTransform();
             EnsureSessionForConfiguredMode();
+            EnsureAgentSessions();
             _session.Initialize(_bakeMode);
+            InitializeAgentSessions();
             // A disabled Manager starts building when it is enabled. It still
             // holds the request, so its grid answers ClampPositionToGrid and
             // takes obstacle input the same way in both modes.
             if (!isActiveAndEnabled)
             {
                 _session.Stop();
+                StopAgentSessions();
                 SubmitConfig(FlowFieldConfigChange.Rebuild);
                 return;
             }
@@ -313,7 +321,9 @@ namespace Common.FlowField
                 else
                 {
                     owner.Restart();
+                    RestartAgentSessions();
                     owner.Stop();
+                    StopAgentSessions();
                 }
                 return;
             }
@@ -343,9 +353,11 @@ namespace Common.FlowField
         private void RestartSession(FlowFieldSession owner)
         {
             owner.Restart();
+            RestartAgentSessions();
             try
             {
                 owner.ObserveModifiers();
+                ObserveAgentModifiers();
                 ValidateSessionConfiguration();
                 StartBuilding();
             }
@@ -384,6 +396,7 @@ namespace Common.FlowField
             FlowFieldManagerConfig config = CaptureConfig(SpaceMode, _bakeMode);
             if (_session.SubmitConfig(in config, change) && change == FlowFieldConfigChange.Rebuild)
                 _session.AttachRuntimeScheduler();
+            SubmitAgentConfigs(change);
         }
 
         // Modifiers enabled while the session could not take them join
@@ -411,6 +424,7 @@ namespace Common.FlowField
             using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
             Modifiers.Detach();
             owner.Release();
+            ReleaseAgentSessions();
             // The Goal is input like the registrations Release clears.
             ChangeExplicitGoal(hasGoal: false, default);
             unchecked { GoalLifetime++; }
@@ -429,11 +443,17 @@ namespace Common.FlowField
             => FieldChanged?.Invoke();
 
         // Logged before forwarding: a handler may retry at once, which retires
-        // the session's Failed event along with the rest of that lifetime.
+        // the session's Failed event along with the rest of that lifetime. A
+        // faulted Manager stops its agent types until the retry.
         private void OnSessionStateChanged(FlowFieldRuntimeState state)
         {
-            if (state == FlowFieldRuntimeState.Faulted && !string.IsNullOrEmpty(LastError))
-                Debug.LogError($"[FlowField] Build failed: {LastError}", this);
+            if (state == FlowFieldRuntimeState.Faulted)
+            {
+                if (!string.IsNullOrEmpty(LastError))
+                    Debug.LogError($"[FlowField] Build failed: {LastError}", this);
+                using (_boundary.EnterOperation())
+                    StopAgentSessions();
+            }
             StateChanged?.Invoke(state);
         }
 

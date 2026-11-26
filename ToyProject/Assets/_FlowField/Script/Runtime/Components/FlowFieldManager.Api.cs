@@ -68,7 +68,13 @@ namespace Common.FlowField
                 throw FlowFieldFailures.DestroyedCollider();
             if (BakeMode == FlowFieldBakeMode.StaticBaked)
                 throw FlowFieldFailures.NotAllowedIn("Dynamic obstacle registration", FlowFieldBakeMode.StaticBaked);
-            return ActiveSession.RegisterObstacleCommand(collider);
+            bool registered = ActiveSession.RegisterObstacleCommand(collider);
+            for (int i = 0; i < _agentSessions.Length; i++)
+            {
+                if (!_agentSessions[i].IsFaulted)
+                    _agentSessions[i].RegisterObstacleCommand(collider);
+            }
+            return registered;
         }
 
         /// <inheritdoc/>
@@ -82,7 +88,10 @@ namespace Common.FlowField
                 throw new ArgumentNullException(nameof(collider));
             if (BakeMode == FlowFieldBakeMode.StaticBaked)
                 return false;
-            return ActiveSession.UnregisterObstacleCommand(collider);
+            bool unregistered = ActiveSession.UnregisterObstacleCommand(collider);
+            for (int i = 0; i < _agentSessions.Length; i++)
+                _agentSessions[i].UnregisterObstacleCommand(collider);
+            return unregistered;
         }
 
         // Whether the running session holds this Collider; a Release clears
@@ -107,7 +116,13 @@ namespace Common.FlowField
                 throw new ArgumentNullException(nameof(collider));
             if (BakeMode == FlowFieldBakeMode.StaticBaked)
                 throw FlowFieldFailures.NotAllowedIn("Obstacle changes", FlowFieldBakeMode.StaticBaked);
-            return ActiveSession.NotifyObstacleMovedCommand(collider);
+            bool moved = ActiveSession.NotifyObstacleMovedCommand(collider);
+            for (int i = 0; i < _agentSessions.Length; i++)
+            {
+                if (!_agentSessions[i].IsFaulted)
+                    _agentSessions[i].NotifyObstacleMovedCommand(collider);
+            }
+            return moved;
         }
 
         /// <inheritdoc/>
@@ -121,6 +136,11 @@ namespace Common.FlowField
             if (BakeMode == FlowFieldBakeMode.StaticBaked)
                 throw FlowFieldFailures.NotAllowedIn("Obstacle changes", FlowFieldBakeMode.StaticBaked);
             ActiveSession.NotifyObstacleRegionDirtyCommand(worldBounds);
+            for (int i = 0; i < _agentSessions.Length; i++)
+            {
+                if (!_agentSessions[i].IsFaulted)
+                    _agentSessions[i].NotifyObstacleRegionDirtyCommand(worldBounds);
+            }
         }
 
         /// <inheritdoc/>
@@ -197,7 +217,14 @@ namespace Common.FlowField
                 throw MissingGoal(nameof(request));
             if (BakeMode == FlowFieldBakeMode.StaticBaked)
                 throw FlowFieldFailures.NotAllowedIn("Adding a Goal", FlowFieldBakeMode.StaticBaked);
-            return new FlowFieldGoalHandle(ActiveSession.AddGoalCommand(kind, request));
+            // Every agent type builds the Goal under the same id.
+            int id = ActiveSession.AddGoalCommand(kind, request);
+            for (int i = 0; i < _agentSessions.Length; i++)
+            {
+                if (!_agentSessions[i].IsFaulted)
+                    _agentSessions[i].AddGoalCommand(kind, request, id);
+            }
+            return new FlowFieldGoalHandle(id);
         }
 
         /// <inheritdoc/>
@@ -207,7 +234,14 @@ namespace Common.FlowField
             ThrowIfLifecycleUnavailable();
             if (!request.HasGoal)
                 throw MissingGoal(nameof(request));
-            return goal.IsValid && ActiveSession.SetGoalCommand(goal.Id, request);
+            if (!goal.IsValid || !ActiveSession.SetGoalCommand(goal.Id, request))
+                return false;
+            for (int i = 0; i < _agentSessions.Length; i++)
+            {
+                if (!_agentSessions[i].IsFaulted)
+                    _agentSessions[i].SetGoalCommand(goal.Id, request);
+            }
+            return true;
         }
 
         /// <inheritdoc/>
@@ -216,7 +250,11 @@ namespace Common.FlowField
             _boundary.ThrowIfInUserCode(nameof(RemoveGoal));
             if (!IsFaulted)
                 ThrowIfLifecycleUnavailable();
-            return goal.IsValid && ActiveSession.RemoveGoalCommand(goal.Id);
+            if (!goal.IsValid || !ActiveSession.RemoveGoalCommand(goal.Id))
+                return false;
+            for (int i = 0; i < _agentSessions.Length; i++)
+                _agentSessions[i].RemoveGoalCommand(goal.Id);
+            return true;
         }
 
         /// <inheritdoc/>
@@ -262,7 +300,13 @@ namespace Common.FlowField
             if (modifier == null)
                 throw new ArgumentNullException(nameof(modifier));
             ThrowIfLifecycleUnavailable();
-            return ActiveSession.RegisterModifierCommand(modifier);
+            bool registered = ActiveSession.RegisterModifierCommand(modifier);
+            for (int i = 0; i < _agentSessions.Length; i++)
+            {
+                if (!_agentSessions[i].IsFaulted)
+                    _agentSessions[i].RegisterModifierCommand(modifier);
+            }
+            return registered;
         }
 
         /// <inheritdoc/>
@@ -274,7 +318,10 @@ namespace Common.FlowField
             // or a retry would apply it again.
             if (!IsFaulted)
                 ThrowIfLifecycleUnavailable();
-            return ActiveSession.UnregisterModifierCommand(modifier);
+            bool unregistered = ActiveSession.UnregisterModifierCommand(modifier);
+            for (int i = 0; i < _agentSessions.Length; i++)
+                _agentSessions[i].UnregisterModifierCommand(modifier);
+            return unregistered;
         }
 
         /// <inheritdoc/>
@@ -292,6 +339,11 @@ namespace Common.FlowField
                 return;
             ThrowIfLifecycleUnavailable();
             ActiveSession.NotifyModifierChangedCommand(modifier, change);
+            for (int i = 0; i < _agentSessions.Length; i++)
+            {
+                if (!_agentSessions[i].IsFaulted)
+                    _agentSessions[i].NotifyModifierChangedCommand(modifier, change);
+            }
         }
     }
 }

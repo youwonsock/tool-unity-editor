@@ -305,10 +305,11 @@ namespace Common.FlowField
         // The Manager has checked the request, the kind and the Bake Mode. A
         // Goal's field builds once the default Goal's pipeline has nothing owed.
 
-        internal int AddGoalCommand(FlowFieldGoalKind kind, in FlowFieldGoalRequest request)
+        // An agent type's session adds the Goal under the primary session's id.
+        internal int AddGoalCommand(FlowFieldGoalKind kind, in FlowFieldGoalRequest request, int id = 0)
         {
             ThrowIfInputUnavailable();
-            int id = Goals.Add(kind, request).Id;
+            id = Goals.Add(kind, request, id).Id;
             EnterBuildingIfOwed();
             return id;
         }

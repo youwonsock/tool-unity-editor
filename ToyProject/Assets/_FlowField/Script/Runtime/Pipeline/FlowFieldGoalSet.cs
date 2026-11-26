@@ -123,10 +123,15 @@ namespace Common.FlowField
             return false;
         }
 
-        internal Entry Add(FlowFieldGoalKind kind, in FlowFieldGoalRequest request)
+        // A positive id is another session's for the same Goal.
+        internal Entry Add(FlowFieldGoalKind kind, in FlowFieldGoalRequest request, int id = 0)
         {
-            var entry = new Entry(s_nextId, kind, request);
-            s_nextId = s_nextId == int.MaxValue ? 1 : s_nextId + 1;
+            if (id <= 0)
+            {
+                id = s_nextId;
+                s_nextId = s_nextId == int.MaxValue ? 1 : s_nextId + 1;
+            }
+            var entry = new Entry(id, kind, request);
             _entries.Add(entry);
             return entry;
         }
