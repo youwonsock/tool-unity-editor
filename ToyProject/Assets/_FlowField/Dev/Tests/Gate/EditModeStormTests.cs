@@ -74,6 +74,8 @@ namespace Common.FlowField.Tests
                 session.SubmitConfig(in final, FlowFieldConfigChange.Goal);
                 Settle(session, seed, Steps);
                 string afterStorm = Hash(session);
+                // What the storm left must still keep every field rule.
+                FlowFieldFieldChecks.AssertInvariants(Published(session));
 
                 fresh = Create(settings.SpaceMode);
                 Start(fresh, bakeMode, final);
@@ -169,9 +171,12 @@ namespace Common.FlowField.Tests
         }
 
         private static string Hash(FlowFieldSession session)
+            => FlowFieldFieldHash.Format(FlowFieldFieldHash.Compute(Published(session)));
+
+        private static FlowFieldField Published(FlowFieldSession session)
         {
             Assert.That(session.TryGetPublishedField(out FlowFieldField field), Is.True);
-            return FlowFieldFieldHash.Format(FlowFieldFieldHash.Compute(field));
+            return field;
         }
 
         private static string Where(int seed, int step) => $"seed {seed}, step {step}:";
