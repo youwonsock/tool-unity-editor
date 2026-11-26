@@ -58,20 +58,18 @@ namespace Common.FlowField
         // The base stage of a build in progress already knows obstacles the
         // published field was not built with. The solve job only reads these
         // arrays, and the base stage writes them on this thread.
-        bool IFlowFieldLatestCells.Describes(FlowFieldField field)
-            => _state.Grid.IsValid
-                && _state.Workspace != null
-                && _state.Workspace.Capacity == _state.Grid.CellCount
-                && field.Grid.MatchesBounds(_state.Grid)
-                && ReferenceEquals(field.Surface, _state.Surface);
-
-        bool IFlowFieldLatestCells.IsBlocked(int index) => _state.Workspace.Blocked[index];
-
-        bool IFlowFieldLatestCells.IsWalkable(int index)
-            => _state.Surface != null && _state.Surface.IsSurfaceValid(index);
-
-        Vector3 IFlowFieldLatestCells.EscapeDirection(int index)
-            => _state.Workspace.EscapeDirections != null ? _state.Workspace.EscapeDirections[index] : Vector3.zero;
+        bool IFlowFieldLatestCells.TryCapture(FlowFieldField field, out FlowFieldStagedCells cells)
+        {
+            cells = default;
+            if (!_state.Grid.IsValid
+                || _state.Workspace == null
+                || _state.Workspace.Capacity != _state.Grid.CellCount
+                || !field.Grid.MatchesBounds(_state.Grid)
+                || !ReferenceEquals(field.Surface, _state.Surface))
+                return false;
+            cells = new FlowFieldStagedCells(_state.Workspace.Blocked, _state.Surface, _state.Workspace.EscapeDirections);
+            return true;
+        }
 
 
         // The published field. A request on another grid or source drops it

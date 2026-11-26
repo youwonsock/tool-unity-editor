@@ -11,11 +11,33 @@ namespace Common.FlowField
     /// </summary>
     internal interface IFlowFieldLatestCells
     {
-        /// <summary>True when these cells are the published field's cells, newer or not.</summary>
-        bool Describes(FlowFieldField field);
-        bool IsBlocked(int index);
-        bool IsWalkable(int index);
-        Vector3 EscapeDirection(int index);
+        /// <summary>
+        /// True, with the arrays to read, when these cells are the published
+        /// field's cells, newer or not. One call a read; the rest reads arrays.
+        /// </summary>
+        bool TryCapture(FlowFieldField field, out FlowFieldStagedCells cells);
+    }
+
+    /// <summary>The latest cells of one read, as arrays a build in progress writes on this thread.</summary>
+    internal readonly struct FlowFieldStagedCells
+    {
+        private readonly bool[] _blocked;
+        private readonly FlowFieldSurfaceData _surface;
+        private readonly Vector3[] _escapeDirections;
+
+        internal FlowFieldStagedCells(bool[] blocked, FlowFieldSurfaceData surface, Vector3[] escapeDirections)
+        {
+            _blocked = blocked;
+            _surface = surface;
+            _escapeDirections = escapeDirections;
+        }
+
+        internal bool IsBlocked(int index) => _blocked[index];
+
+        internal bool IsWalkable(int index) => _surface != null && _surface.IsSurfaceValid(index);
+
+        internal Vector3 EscapeDirection(int index)
+            => _escapeDirections != null ? _escapeDirections[index] : Vector3.zero;
     }
 
     /// <summary>
@@ -23,7 +45,8 @@ namespace Common.FlowField
     /// A published field can lag behind notified obstacle changes and the
     /// latest build: a sample that would take a mover into such a change
     /// stops, and a mover inside a cell that is now blocked is sent out.
-    /// What differs between the modes comes from an <see cref="IFlowFieldCellView"/>.
+    /// What differs between the modes comes from an <see cref="IFlowFieldCellView"/>,
+    /// which <see cref="FlowFieldSampler"/> picks once per read.
     /// </summary>
     internal static class FlowFieldSampleSafetyRule
     {
@@ -40,26 +63,7 @@ namespace Common.FlowField
         // The unit vector of each neighbor step; Surface2D uses the first 8.
         private static readonly Vector3[] StepDirections = CreateStepDirections();
 
-        /// <summary>
-        /// Returns true and the sample to use when the rule overrides the
-        /// published one. The latest cells serve only when they describe this
-        /// field; otherwise the published field answers.
-        /// </summary>
-        internal static bool Apply(
-            FlowFieldField field,
-            int index,
-            Vector3 worldPosition,
-            in FlowFieldSample published,
-            FlowFieldSafety regions,
-            IFlowFieldLatestCells latest,
-            out FlowFieldSample sample)
-        {
-            if (field.Grid.SpaceMode == FlowFieldSpaceMode.Volume3D)
-                return Apply(new FlowFieldVolumeCellView(field, regions), index, worldPosition, in published, out sample);
-            IFlowFieldLatestCells described = latest != null && latest.Describes(field) ? latest : null;
-            return Apply(new FlowFieldSurfaceCellView(field, described, regions), index, worldPosition, in published, out sample);
-        }
-
+        /// <summary>Returns true and the sample to use when the rule overrides the published one.</summary>
         internal static bool Apply<TView>(
             in TView cells,
             int index,

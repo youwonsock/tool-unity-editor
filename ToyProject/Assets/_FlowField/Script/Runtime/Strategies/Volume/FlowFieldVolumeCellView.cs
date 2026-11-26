@@ -3,9 +3,9 @@ using UnityEngine;
 namespace Common.FlowField
 {
     /// <summary>
-    /// The Volume3D cells the sample safety rule reads: every cell of the
-    /// grid, 26 neighbor steps along all three axes, and the published field
-    /// itself, since Volume3D knows nothing newer than what it published.
+    /// The Volume3D cells a read sees: every cell of the grid, 26 neighbor
+    /// steps along all three axes, and the published field itself, since
+    /// Volume3D knows nothing newer than what it published.
     /// </summary>
     internal readonly struct FlowFieldVolumeCellView : IFlowFieldCellView
     {
@@ -20,6 +20,24 @@ namespace Common.FlowField
 
         public FlowFieldField Field => _field;
         public FlowFieldGridSpace Grid => _field.Grid;
+
+        public bool TryLocate(Vector3 worldPosition, out int index)
+        {
+            index = -1;
+            if (!_field.Grid.TryWorldToLocal(worldPosition, out int x, out int y, out int z))
+                return false;
+            index = _field.Grid.ToFlatIndex(x, y, z);
+            return true;
+        }
+
+        public FlowFieldSample ReadCell(int index)
+            => new FlowFieldSample(
+                _field.FinalDirections[index],
+                _field.FinalSpeeds[index],
+                Vector3.zero,
+                hasSurface: false,
+                hasCell: true);
+
         public int StepCount => FlowFieldNeighborUtility.VolumeCount;
         public bool HasVerticalAxis => true;
         public Vector3 Planar(Vector3 direction) => direction;

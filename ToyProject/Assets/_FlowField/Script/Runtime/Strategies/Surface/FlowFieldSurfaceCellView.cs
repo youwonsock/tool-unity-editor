@@ -3,29 +3,58 @@ using UnityEngine;
 namespace Common.FlowField
 {
     /// <summary>
-    /// The Surface2D cells the sample safety rule reads: one layer of cells
-    /// (any other y is outside the grid), 8 neighbor steps, the ground's step
-    /// links, and the drops and steps up between cell heights. Blocked,
-    /// walkable and the escape come from the latest cells when a build in
-    /// progress knows newer ones for this field. A Surface2D field always
-    /// carries its Surface.
+    /// The Surface2D cells a read sees: one layer of cells (any other y is
+    /// outside the grid), 8 neighbor steps, the ground's step links, and the
+    /// drops and steps up between cell heights. Blocked, walkable and the
+    /// escape come from the latest cells when a build in progress knows newer
+    /// ones for this field. A Surface2D field always carries its Surface.
     /// </summary>
     internal readonly struct FlowFieldSurfaceCellView : IFlowFieldCellView
     {
         private readonly FlowFieldField _field;
-        private readonly IFlowFieldLatestCells _latest;
+        private readonly FlowFieldStagedCells _latest;
+        private readonly bool _hasLatest;
         private readonly FlowFieldSafety _regions;
 
-        // latest must describe this field, or be null.
-        internal FlowFieldSurfaceCellView(FlowFieldField field, IFlowFieldLatestCells latest, FlowFieldSafety regions)
+        // latest serves only with hasLatest, when it describes this field.
+        internal FlowFieldSurfaceCellView(
+            FlowFieldField field,
+            in FlowFieldStagedCells latest,
+            bool hasLatest,
+            FlowFieldSafety regions)
         {
             _field = field;
             _latest = latest;
+            _hasLatest = hasLatest;
             _regions = regions;
         }
 
         public FlowFieldField Field => _field;
         public FlowFieldGridSpace Grid => _field.Grid;
+
+        public bool TryLocate(Vector3 worldPosition, out int index)
+        {
+            index = -1;
+            if (!_field.Grid.TryWorldToLocal(worldPosition, out int x, out int z))
+                return false;
+            index = _field.Grid.ToFlatIndex(x, z);
+            return true;
+        }
+
+        // A cell without a surface has nothing to follow. Elsewhere the
+        // direction lies in the surface plane.
+        public FlowFieldSample ReadCell(int index)
+        {
+            FlowFieldSurfaceData surface = _field.Surface;
+            if (!surface.IsSurfaceValid(index))
+                return FlowFieldSample.Stopped;
+            Vector3 normal = surface.GetSurfaceNormal(index);
+            Vector3 direction = _field.FinalDirections[index];
+            if (direction.sqrMagnitude > FlowFieldVectorUtility.DirectionEpsilonSqr)
+                direction = Vector3.ProjectOnPlane(direction, normal).normalized;
+            return new FlowFieldSample(direction, _field.FinalSpeeds[index], normal, hasSurface: true, hasCell: true);
+        }
+
         public int StepCount => FlowFieldNeighborUtility.SurfaceCount;
         public bool HasVerticalAxis => false;
 
@@ -44,10 +73,10 @@ namespace Common.FlowField
         public bool IsUncertain(int index)
             => _regions != null && _regions.IsCellUncertain(_field.Grid, _field.Grid.CellCenter(index));
 
-        public bool IsBlocked(int index) => _latest != null ? _latest.IsBlocked(index) : _field.Blocked[index];
+        public bool IsBlocked(int index) => _hasLatest ? _latest.IsBlocked(index) : _field.Blocked[index];
 
         public bool IsWalkable(int index)
-            => _latest != null ? _latest.IsWalkable(index) : _field.Surface.IsSurfaceValid(index);
+            => _hasLatest ? _latest.IsWalkable(index) : _field.Surface.IsSurfaceValid(index);
 
         // The published link: a newly blocked cell on the way is caught by
         // the cell checks around it.
@@ -70,7 +99,7 @@ namespace Common.FlowField
         // The published field keeps no escape directions, so without the
         // latest cells the final direction stands in.
         public Vector3 EscapeDirection(int index)
-            => _latest != null
+            => _hasLatest
                 ? _latest.EscapeDirection(index)
                 : _field.EscapeDirections != null
                     ? _field.EscapeDirections[index]

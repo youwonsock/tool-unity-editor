@@ -3,16 +3,21 @@ using UnityEngine;
 namespace Common.FlowField
 {
     /// <summary>
-    /// The cells of one published field as the sample safety rule reads them,
-    /// one implementation per space mode. The rule picks the view once per
-    /// read and asks it everything that differs between the modes: the axes,
-    /// the neighbor steps, which cells exist next to a cell, what blocks or
-    /// links them, and how a crossing or an escape ends.
+    /// The cells of one published field as a read sees them, one
+    /// implementation per space mode. The sampler picks the view once per
+    /// read; the cell read and the sample safety rule ask it everything that
+    /// differs between the modes: the axes, the neighbor steps, which cells
+    /// exist next to a cell, what blocks or links them, and how a crossing or
+    /// an escape ends.
     /// </summary>
     internal interface IFlowFieldCellView
     {
         FlowFieldField Field { get; }
         FlowFieldGridSpace Grid { get; }
+        // The cell a world position inside the grid falls in.
+        bool TryLocate(Vector3 worldPosition, out int index);
+        // The published sample of a cell, before the safety rule.
+        FlowFieldSample ReadCell(int index);
         // Neighbor steps: 8 in Surface2D, 26 in Volume3D.
         int StepCount { get; }
         // Volume3D moves along y; a Surface2D direction ignores it.

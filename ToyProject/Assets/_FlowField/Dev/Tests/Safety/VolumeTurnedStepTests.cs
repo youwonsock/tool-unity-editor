@@ -62,12 +62,10 @@ namespace Common.FlowField.Tests
             var published = new FlowFieldSample(direction, 1f, Vector3.zero, false, true);
 
             bool overridden = FlowFieldSampleSafetyRule.Apply(
-                field,
+                new FlowFieldVolumeCellView(field, new FlowFieldSafety(false)),
                 centre,
                 grid.CellCenter(centre),
                 in published,
-                new FlowFieldSafety(false),
-                null,
                 out FlowFieldSample sample);
 
             string what = "direction " + direction.ToString("F3") + " toward blocked corner " + corner;

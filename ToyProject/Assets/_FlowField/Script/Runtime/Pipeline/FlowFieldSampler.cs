@@ -12,63 +12,49 @@ namespace Common.FlowField
     }
 
     /// <summary>
-    /// Reads a published field in either space mode. It never throws; the
-    /// session turns a failed status into the exception its contract names
-    /// and applies <see cref="FlowFieldSampleSafetyRule"/> to the cell.
+    /// Reads a published field in either space mode and applies
+    /// <see cref="FlowFieldSampleSafetyRule"/> to the cell. It picks the mode's
+    /// <see cref="IFlowFieldCellView"/> once per read and never throws; the
+    /// session turns a failed status into the exception its contract names.
     /// </summary>
     internal static class FlowFieldSampler
     {
         internal static FlowFieldSampleStatus Sample(
             FlowFieldField field,
             Vector3 worldPosition,
-            out FlowFieldSample sample,
-            out int index)
+            FlowFieldSafety regions,
+            IFlowFieldLatestCells latest,
+            out FlowFieldSample sample)
         {
             sample = FlowFieldSample.Stopped;
-            index = -1;
             if (field == null)
                 return FlowFieldSampleStatus.NotReady;
             if (!FlowFieldGridSpace.IsFinite(worldPosition))
                 return FlowFieldSampleStatus.NonFinite;
-
-            FlowFieldGridSpace grid = field.Grid;
-            if (!grid.ContainsWorldPosition(worldPosition))
+            if (!field.Grid.ContainsWorldPosition(worldPosition))
                 return FlowFieldSampleStatus.OutOfGrid;
 
-            if (field.Surface != null)
-            {
-                if (!grid.TryWorldToLocal(worldPosition, out int x, out int z))
-                    return FlowFieldSampleStatus.OutOfGrid;
-                index = grid.ToFlatIndex(x, z);
-                sample = ReadSurfaceCell(field, index);
-            }
-            else
-            {
-                if (!grid.TryWorldToLocal(worldPosition, out int x, out int y, out int z))
-                    return FlowFieldSampleStatus.OutOfGrid;
-                index = grid.ToFlatIndex(x, y, z);
-                sample = new FlowFieldSample(
-                    field.FinalDirections[index],
-                    field.FinalSpeeds[index],
-                    Vector3.zero,
-                    false,
-                    true);
-            }
-            return FlowFieldSampleStatus.Sampled;
+            if (field.Grid.SpaceMode == FlowFieldSpaceMode.Volume3D)
+                return Sample(new FlowFieldVolumeCellView(field, regions), worldPosition, out sample);
+            // The latest cells serve only when they describe this field.
+            FlowFieldStagedCells staged = default;
+            bool hasStaged = latest != null && latest.TryCapture(field, out staged);
+            return Sample(new FlowFieldSurfaceCellView(field, in staged, hasStaged, regions), worldPosition, out sample);
         }
 
-        // A cell without a surface has nothing to follow. Elsewhere the
-        // direction lies in the surface plane.
-        private static FlowFieldSample ReadSurfaceCell(FlowFieldField field, int index)
+        private static FlowFieldSampleStatus Sample<TView>(in TView cells, Vector3 worldPosition, out FlowFieldSample sample)
+            where TView : struct, IFlowFieldCellView
         {
-            FlowFieldSurfaceData surface = field.Surface;
-            if (!surface.IsSurfaceValid(index))
-                return FlowFieldSample.Stopped;
-            Vector3 normal = surface.GetSurfaceNormal(index);
-            Vector3 direction = field.FinalDirections[index];
-            if (direction.sqrMagnitude > FlowFieldVectorUtility.DirectionEpsilonSqr)
-                direction = Vector3.ProjectOnPlane(direction, normal).normalized;
-            return new FlowFieldSample(direction, field.FinalSpeeds[index], normal, true, true);
+            if (!cells.TryLocate(worldPosition, out int index))
+            {
+                sample = FlowFieldSample.Stopped;
+                return FlowFieldSampleStatus.OutOfGrid;
+            }
+            FlowFieldSample published = cells.ReadCell(index);
+            sample = FlowFieldSampleSafetyRule.Apply(in cells, index, worldPosition, in published, out FlowFieldSample safe)
+                ? safe
+                : published;
+            return FlowFieldSampleStatus.Sampled;
         }
     }
 }
