@@ -38,8 +38,10 @@ namespace Common.FlowField
 
         private void LateUpdate()
         {
-            if (Application.isPlaying)
-                FlowFieldBuildScheduler.PumpAll(FlowFieldBuildSettings.BudgetMilliseconds);
+            if (!Application.isPlaying)
+                return;
+            FlowFieldWorldAreas.UpdateAll();
+            FlowFieldBuildScheduler.PumpAll(FlowFieldBuildSettings.BudgetMilliseconds);
         }
     }
 }

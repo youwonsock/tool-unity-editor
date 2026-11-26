@@ -140,10 +140,20 @@ namespace Common.FlowField
         private FlowFieldWorldAreas(FlowFieldWorld world)
         {
             World = world;
+            Goals = new FlowFieldWorldGoals(this);
         }
+
+        internal readonly FlowFieldWorldGoals Goals;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetForPlaySession() => Worlds.Clear();
+
+        /// <summary>Every world's Goals take their seeds, once a frame before the builds.</summary>
+        internal static void UpdateAll()
+        {
+            foreach (FlowFieldWorldAreas areas in Worlds.Values)
+                areas.Goals.Update();
+        }
 
         internal static FlowFieldWorldAreas For(FlowFieldWorld world)
         {

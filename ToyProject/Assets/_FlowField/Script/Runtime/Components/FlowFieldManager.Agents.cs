@@ -34,6 +34,14 @@ namespace Common.FlowField
         // The session of an additional type, for the Editor-only tests.
         internal FlowFieldSession AgentSession(int index) => _agentSessions[index];
 
+        // Every session of this Manager, the Default type's first, for a world.
+        internal int WorldSessionCount => _session == null ? 0 : 1 + _agentSessions.Length;
+
+        internal FlowFieldSession WorldSession(int index) => index == 0 ? _session : _agentSessions[index - 1];
+
+        internal string WorldSessionName(int index)
+            => index == 0 ? FlowFieldAgentType.DefaultName : _agentSessionNames[index - 1];
+
         // A session holds its agent types from Init to Release.
         private bool SessionHoldsAgentTypes => IsInitialized || IsFaulted;
 

@@ -127,14 +127,19 @@ namespace Common.FlowField
             return false;
         }
 
+        /// <summary>A Goal id no session has used, for a Goal of many sessions.</summary>
+        internal static int NextId()
+        {
+            int id = s_nextId;
+            s_nextId = s_nextId == int.MaxValue ? 1 : s_nextId + 1;
+            return id;
+        }
+
         // A positive id is another session's for the same Goal.
         internal Entry Add(FlowFieldGoalKind kind, in FlowFieldGoalRequest request, int id = 0)
         {
             if (id <= 0)
-            {
-                id = s_nextId;
-                s_nextId = s_nextId == int.MaxValue ? 1 : s_nextId + 1;
-            }
+                id = NextId();
             var entry = new Entry(id, kind, request);
             _entries.Add(entry);
             return entry;
