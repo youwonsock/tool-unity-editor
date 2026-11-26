@@ -4,6 +4,7 @@ using System.IO;
 using System.Text.RegularExpressions;
 using Common.OptimizeTool.Editor;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using Object = UnityEngine.Object;
@@ -166,9 +167,10 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
         /// Saves, for each target MeshFilter, a copy of its mesh that keeps only the triangles facing the view, as
         /// <c>&lt;MeshFilter name&gt;_BackfaceCulled.asset</c>, and assigns it to that MeshFilter. A MeshFilter that
         /// still shows this baker's output is baked from its recorded original, so baking again does not cut twice; a
-        /// mesh assigned by hand since then is the new original. Every result is computed before any asset or
-        /// MeshFilter changes, and a failed save restores both. In Play Mode the mesh swap is temporary and not
-        /// recorded with Undo; the saved assets stay.
+        /// mesh assigned by hand since then is the new original. An existing asset at an output path needs the overwrite
+        /// setting unless this baker saved it and no MeshFilter outside this bake shows it. Every result is computed
+        /// before any asset or MeshFilter changes, and a failed save restores both. In Play Mode the mesh swap is
+        /// temporary and not recorded with Undo; the saved assets stay.
         /// </summary>
         public static Mesh[] BakeBackfaces(this BackfaceCullMeshBaker baker)
         {
@@ -201,12 +203,14 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
                 PlayModeMeshGuard.Capture(baker, BakerFilters(baker));
                 PlayModeMeshGuard.RequireUnprotected(baker, paths);
             }
+            var ownOutputs = new HashSet<Mesh>();
             foreach (string path in AssetFileTransaction.ValidateAssetPaths(paths))
             {
-                // This baker's own outputs are replaced without the overwrite setting.
-                if (!(AssetDatabase.LoadMainAssetAtPath(path) is Mesh existing && IsOwnOutput(baker, existing)))
-                    AssetFileTransaction.ValidateOutputTarget(path, typeof(Mesh), baker.OverwriteExistingAssets);
+                // This baker's own outputs are replaced without the overwrite setting, unless another MeshFilter shows them.
+                if (AssetDatabase.LoadMainAssetAtPath(path) is Mesh existing && IsOwnOutput(baker, existing)) ownOutputs.Add(existing);
+                else AssetFileTransaction.ValidateOutputTarget(path, typeof(Mesh), baker.OverwriteExistingAssets);
             }
+            if (ownOutputs.Count > 0 && !baker.OverwriteExistingAssets) RequireUnshared(baker, filters, ownOutputs);
             var staged = new List<Mesh>();
             try
             {
@@ -243,7 +247,7 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
         /// <summary>
         /// Gives every MeshFilter that still shows this baker's output its recorded original mesh and clears the record,
         /// as one Undo step in Edit Mode. A mesh assigned by hand since the bake is kept, and saved baked assets are
-        /// kept; a later bake still replaces them without the overwrite setting.
+        /// kept; a later bake still replaces them without the overwrite setting while no other MeshFilter shows them.
         /// </summary>
         public static void RestoreOriginalMeshes(this BackfaceCullMeshBaker baker)
         {
@@ -292,6 +296,49 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
         }
 
         private static bool IsOwnOutput(BackfaceCullMeshBaker baker, Mesh mesh) => baker.BakedMeshes.Contains(mesh);
+
+        /// <summary>
+        /// Refuses to replace an own output that a MeshFilter outside <paramref name="targets"/> shows, because that
+        /// MeshFilter would change too. The saved-mesh list is serialized, so a duplicated baker or another instance of
+        /// the same Prefab lists the original's outputs as its own. The check covers every loaded scene, inactive
+        /// objects included; in a Prefab stage it covers only that Prefab, whose instances follow it anyway.
+        /// </summary>
+        private static void RequireUnshared(BackfaceCullMeshBaker baker, MeshFilter[] targets, HashSet<Mesh> outputs)
+        {
+            var excluded = new HashSet<MeshFilter>(targets);
+            var found = new List<MeshFilter>();
+            foreach (Scene scene in ScenesInView(baker.gameObject.scene))
+                foreach (GameObject root in scene.GetRootGameObjects())
+                {
+                    root.GetComponentsInChildren(true, found);
+                    foreach (MeshFilter filter in found)
+                    {
+                        Mesh shown = filter.sharedMesh;
+                        if (shown == null || excluded.Contains(filter) || !outputs.Contains(shown)) continue;
+                        throw new InvalidOperationException($"Output already exists: {AssetDatabase.GetAssetPath(shown)}. '{HierarchyPath(filter.transform)}' also shows it and is not a target of this bake. Turn on Overwrite Existing Assets to replace it, or change the Save Path.");
+                    }
+                }
+        }
+
+        /// <summary>The scenes whose objects a bake in <paramref name="own"/> can change through a shared asset.</summary>
+        private static IEnumerable<Scene> ScenesInView(Scene own)
+        {
+            if (!own.IsValid() || !own.isLoaded) yield break;
+            yield return own;
+            if (EditorSceneManager.IsPreviewScene(own)) yield break;
+            for (int i = 0; i < SceneManager.sceneCount; i++)
+            {
+                Scene scene = SceneManager.GetSceneAt(i);
+                if (scene.isLoaded && scene != own) yield return scene;
+            }
+        }
+
+        private static string HierarchyPath(Transform transform)
+        {
+            string path = transform.name;
+            for (Transform parent = transform.parent; parent != null; parent = parent.parent) path = parent.name + "/" + path;
+            return path;
+        }
 
         private static void AssignBaked(BackfaceCullMeshBaker baker, MeshFilter[] filters, Mesh[] originals, Mesh[] baked,
             MeshSceneEdit edit)

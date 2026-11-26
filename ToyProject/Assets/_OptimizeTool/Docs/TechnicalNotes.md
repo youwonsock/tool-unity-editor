@@ -108,7 +108,7 @@ flowchart LR
 | --- | --- | --- |
 | MeshOptimization | `MeshCombiner` / `MeshBuildSettings` / `MeshSourceRendererState` | Inspector 설정, 그 설정에서 만든 빌드 옵션(직렬화하지 않음), 결합 씬 출력과 원본 Renderer 상태 |
 | MeshOptimization | `BackfaceCullMeshBaker` / `BakedMeshOriginal` | 제자리 Backface 베이크 설정, MeshFilter별 원본·출력 Mesh 기록(`_originalMeshes`)과 이 Baker가 저장한 Mesh 목록(`_bakedMeshes`) |
-| MeshOptimization.Editor | `MeshToolCommands` | `BuildMeshes`·`CombineAndSaveMeshes`·`RestoreSources`·`BakeBackfaces`·`RestoreOriginalMeshes` 확장 메서드. 입력 수집, 출력 경로 생성(`_meshName.asset` 또는 `_meshName_0.asset`부터), 남은 이전 출력 경고 |
+| MeshOptimization.Editor | `MeshToolCommands` | `BuildMeshes`·`CombineAndSaveMeshes`·`RestoreSources`·`BakeBackfaces`·`RestoreOriginalMeshes` 확장 메서드. 입력 수집, 출력 경로 생성(`_meshName.asset` 또는 `_meshName_0.asset`부터), 남은 이전 출력 경고, 베이크 대상 밖 MeshFilter가 보여 주는 Baker 출력의 거부 |
 | MeshOptimization.Editor | `MeshBuildPipeline` | `Build(sources, destinationWorldToLocal, settings)`. 저장 경로와 분리된 입력 검증, 컬링·변환·Material별 결합. 기하 연산은 `MeshGeometry`, 씬 Physics 조회는 `MeshOcclusion` |
 | MeshOptimization.Editor | `MeshBuildResult` | Mesh와 Material 매핑을 항목별로 묶고 임시 Mesh만 소유. `Dispose()`는 원본을 파괴하지 않음 |
 | MeshOptimization.Editor | `MeshRendererSettings` | 입력 Renderer가 지원하지 않는 데이터(PropertyBlock, Lightmap, LOD 등)를 쓰는지 검사하고, 병합 입력끼리 같아야 하는 Renderer 설정을 비교. `ApplyTo`로 결과 Renderer에 Material과 설정을 적용 |
@@ -161,8 +161,9 @@ flowchart LR
 - 표본 후보는 모든 Vertex와 퇴화하지 않은 삼각형의 중심점입니다. 그래서 Vertex가 적은 큰 면도 안쪽을 검사합니다. 후보 수가 `_occlusionSampleCount` 이하이면 모두를, 더 많으면 균등 간격 표본을 검사합니다(결정적). 보이는 비율이 `_visibilityThreshold`보다 작으면 MeshFilter 전체를 뺍니다. Camera, 양수 샘플 수, `0..1` 임계값, 유효한 LayerMask가 필요합니다.
 - **Backface:** 판정은 `MeshGeometry.CullBackfaces` 하나가 합니다. 삼각형마다 World-space Normal과 관찰자 쪽 방향의 각도를 보고, 각도 이내인 삼각형만 원시 정점 레이아웃 그대로 남깁니다. `MeshBuildPipeline`은 결합 중 `_enableBackfaceCulling`과 `_backfaceCullingAngle`로, `BackfaceCullMeshBaker`는 MeshFilter마다, `MeshProcessing.CullBackfaces`는 호출자가 준 값으로 이 판정을 부릅니다.
 - 관찰자 쪽 방향은 카메라 overload에서 Perspective면 삼각형 중심에서 카메라 위치로, Orthographic이면 `-camera.forward`입니다. 방향 overload는 `-viewDirection.normalized`를 모든 삼각형에 씁니다. 방향은 유한하고 0이 아니어야 합니다. 비균일·음수 Scale은 법선 역전치 변환과 winding 보정으로 처리합니다.
-- **제자리 베이크:** `BakeBackfaces`는 폴더, 각도, 카메라 또는 방향을 먼저 검증하고, 모든 MeshFilter의 결과를 계산한 뒤 한 번에 저장·교체합니다. 원본은 MeshFilter가 아직 이 Baker의 출력을 쓰고 있을 때만 기록(`_originalMeshes`)에서 가져오고, 아니면 지금 Mesh를 새 원본으로 씁니다. 그래서 다시 베이크해도 이미 깎은 Mesh를 또 깎지 않습니다. 모든 삼각형이 제거되는 입력, 겹치는 출력 이름, 이 Baker가 쓰지 않은 기존 출력(덮어쓰기 꺼짐)은 바꾸기 전에 거부합니다. Mesh 교체와 기록은 Undo와 Prefab 인스턴스 오버라이드로 남습니다.
-- `RestoreOriginalMeshes`는 출력을 아직 쓰는 MeshFilter에만 원본을 돌려주고 기록을 비우며, Undo 한 단계입니다. 손으로 바꾼 Mesh는 그대로 둡니다. 저장한 출력은 `_bakedMeshes`에 남아 다음 베이크가 덮어쓰기 설정 없이 다시 씁니다.
+- **제자리 베이크:** `BakeBackfaces`는 폴더, 각도, 카메라 또는 방향을 먼저 검증하고, 모든 MeshFilter의 결과를 계산한 뒤 한 번에 저장·교체합니다. 원본은 MeshFilter가 아직 이 Baker의 출력을 쓰고 있을 때만 기록(`_originalMeshes`)에서 가져오고, 아니면 지금 Mesh를 새 원본으로 씁니다. 그래서 다시 베이크해도 이미 깎은 Mesh를 또 깎지 않습니다. 모든 삼각형이 제거되는 입력, 겹치는 출력 이름, 덮어쓰기가 꺼졌을 때 이 Baker가 쓰지 않은 기존 출력은 바꾸기 전에 거부합니다. Mesh 교체와 기록은 Undo와 Prefab 인스턴스 오버라이드로 남습니다.
+- **공유된 출력:** 덮어쓰기가 꺼져 있어도 `_bakedMeshes`에 있는 출력은 다시 쓰지만, 이번 베이크 대상이 아닌 MeshFilter가 그 Mesh를 보여 주면 거부합니다(`RequireUnshared`). `_bakedMeshes`는 직렬화 필드라서 Edit > Duplicate로 만든 복제본이나 같은 Prefab의 다른 인스턴스도 같은 목록을 갖고, 복제한 자식 MeshFilter는 이름이 같아 출력 경로도 같습니다. 그래서 목록만 보면 복제본이 원본의 출력을 자기 것으로 알고 덮어, 원본이 복제본의 면을 보여 줍니다. 확인 범위는 로드된 모든 씬의 MeshFilter(비활성 포함)이고, Baker가 Prefab Mode에 있으면 그 Prefab 씬만 봅니다. 씬의 인스턴스는 편집 중인 Prefab을 따르기 때문입니다. 대상 MeshFilter끼리만 보여 주는 출력은 그대로 다시 쓰므로, Save Path를 바꾼 복제본은 그 뒤로 덮어쓰기 없이 다시 베이크합니다. 반대로 덮어쓰기를 켜면 공유된 출력도 다른 기존 파일처럼 교체합니다.
+- `RestoreOriginalMeshes`는 출력을 아직 쓰는 MeshFilter에만 원본을 돌려주고 기록을 비우며, Undo 한 단계입니다. 손으로 바꾼 Mesh는 그대로 둡니다. 저장한 출력은 `_bakedMeshes`에 남아, 대상 밖 MeshFilter가 보여 주지 않으면 다음 베이크가 덮어쓰기 설정 없이 다시 씁니다.
 - Target Camera가 비어 있고 컬링이 켜져 있으면 `MeshToolCommands`가 Combiner의 씬에서 대체 카메라를 고릅니다. 켜진 `MainCamera` 태그 카메라가 먼저이고, 없으면 루트부터 깊이 우선으로 훑어 처음 만난 켜진 카메라입니다. `FindObjectsByType`는 순서를 보장하지 않으므로 쓰지 않습니다. 고른 카메라 이름은 `LastBuildWarnings`에 남습니다. `MeshBuildPipeline.Build`와 `MeshBuildSettings`는 대체하지 않고 카메라를 요구합니다.
 
 ## PhysicsRecorder

@@ -20,7 +20,7 @@ namespace Common.OptimizeTool.MeshOptimization
         [SerializeField] private bool _allowReadableCopy;
         [Tooltip("Recalculate normals of meshes that have none instead of failing.")]
         [SerializeField] private bool _allowNormalRecalculation;
-        [Tooltip("Replace other existing mesh assets at the output paths, keeping their GUIDs. This baker's own outputs are always replaced.")]
+        [Tooltip("Replace existing mesh assets at the output paths, keeping their GUIDs. Without it, only this baker's own outputs are replaced, and only while no MeshFilter outside the bake shows them.")]
         [SerializeField] private bool _overwriteExistingAssets;
         [Tooltip("View the kept triangles face. When empty, the scene's enabled MainCamera, or else its first enabled camera, is used. Ignored with a custom vector.")]
         [SerializeField] private Camera _targetCamera;
@@ -52,7 +52,10 @@ namespace Common.OptimizeTool.MeshOptimization
             set => _originalMeshes = value;
         }
 
-        /// <summary>Every mesh asset this baker saved; a later bake replaces them without the overwrite setting.</summary>
+        /// <summary>
+        /// Every mesh asset this baker saved. A later bake replaces them without the overwrite setting while no MeshFilter
+        /// outside that bake shows them. A duplicate of this component copies the list.
+        /// </summary>
         internal List<Mesh> BakedMeshes
         {
             get => _bakedMeshes;
