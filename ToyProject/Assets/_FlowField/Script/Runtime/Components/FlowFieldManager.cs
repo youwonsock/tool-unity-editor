@@ -117,9 +117,9 @@ namespace Common.FlowField
             ? ActiveSession.SpaceMode
             : _spaceMode;
         /// <summary>
-        /// Advances each time a build publishes a field that reads differently. The count goes on
-        /// across sessions, so it never goes back, even while an edited Space Mode leaves no active
-        /// session; 0 before the first field.
+        /// Advances each time a build publishes a field that reads differently, of any Goal and any
+        /// agent type. The count goes on across sessions, so it never goes back, even while an
+        /// edited Space Mode leaves no active session; 0 before the first field.
         /// </summary>
         public int Revision => _session?.Revision ?? 0;
         /// <inheritdoc/>

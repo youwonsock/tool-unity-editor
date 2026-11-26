@@ -47,7 +47,7 @@ namespace Common.FlowField.Editor
             if (!isVolume)
                 DrawSettings(FlowFieldManager.PropertyNames.Surface, "Surface");
             DrawSettings(FlowFieldManager.PropertyNames.Obstacles, "Obstacles");
-            DrawAgentTypes(manager);
+            DrawAgentTypes(manager, isVolume);
             DrawSettings(FlowFieldManager.PropertyNames.Flow, "Flow");
             EditorGUILayout.PropertyField(serializedObject.FindProperty(FlowFieldManager.PropertyNames.GoalTransform));
 
@@ -138,13 +138,47 @@ namespace Common.FlowField.Editor
 
         // A settings bundle drawn as a header and its fields, without a foldout.
         // The settings above are the Default agent type; each element adds one.
-        private void DrawAgentTypes(FlowFieldManager manager)
+        // A new type starts from the Manager's own values. A session holds the
+        // number and names from Init to Release, so they are locked then.
+        private void DrawAgentTypes(FlowFieldManager manager, bool isVolume)
         {
             SerializedProperty types = serializedObject.FindProperty(FlowFieldManager.PropertyNames.AgentTypes);
             if (types == null)
                 return;
             EditorGUILayout.Space();
-            EditorGUILayout.PropertyField(types, new GUIContent("Additional Agent Types"), true);
+            EditorGUILayout.LabelField("Additional Agent Types", EditorStyles.boldLabel);
+            bool locked = Application.isPlaying && (manager.IsInitialized || manager.IsFaulted);
+            for (int i = 0; i < types.arraySize; i++)
+            {
+                SerializedProperty element = types.GetArrayElementAtIndex(i);
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    using (new EditorGUI.DisabledScope(locked))
+                    {
+                        EditorGUILayout.PropertyField(element.FindPropertyRelative(nameof(FlowFieldAgentTypeSettings.Name)));
+                        if (GUILayout.Button("Remove", GUILayout.Width(64)))
+                        {
+                            types.DeleteArrayElementAtIndex(i);
+                            break;
+                        }
+                    }
+                }
+                EditorGUI.indentLevel++;
+                EditorGUILayout.PropertyField(element.FindPropertyRelative(nameof(FlowFieldAgentTypeSettings.Clearance)));
+                if (!isVolume)
+                {
+                    EditorGUILayout.PropertyField(element.FindPropertyRelative(nameof(FlowFieldAgentTypeSettings.MaxSlope)));
+                    EditorGUILayout.PropertyField(element.FindPropertyRelative(nameof(FlowFieldAgentTypeSettings.MaxStepHeight)));
+                }
+                EditorGUI.indentLevel--;
+            }
+            using (new EditorGUI.DisabledScope(locked || types.arraySize >= FlowFieldManager.MaxAdditionalAgentTypes))
+            {
+                if (GUILayout.Button("Add Agent Type"))
+                    AddAgentType(types);
+            }
+            if (locked)
+                EditorGUILayout.HelpBox("The number and names of agent types change after Release.", MessageType.None);
             if (types.arraySize > 0 && manager.BakeMode == FlowFieldBakeMode.StaticBaked)
                 EditorGUILayout.HelpBox(
                     "StaticBaked loads the Default agent type only; Init refuses Additional Agent Types.",
@@ -153,6 +187,20 @@ namespace Common.FlowField.Editor
                 EditorGUILayout.HelpBox(
                     "The bake holds the Default agent type; each Additional Agent Type scans the scene at runtime.",
                     MessageType.Info);
+        }
+
+        private void AddAgentType(SerializedProperty types)
+        {
+            int index = types.arraySize;
+            types.arraySize = index + 1;
+            SerializedProperty element = types.GetArrayElementAtIndex(index);
+            element.FindPropertyRelative(nameof(FlowFieldAgentTypeSettings.Name)).stringValue = "Agent " + (index + 1);
+            element.FindPropertyRelative(nameof(FlowFieldAgentTypeSettings.Clearance)).floatValue = serializedObject
+                .FindProperty(FlowFieldManager.PropertyNames.Obstacles + "." + nameof(FlowFieldObstacleSettings.Clearance)).floatValue;
+            element.FindPropertyRelative(nameof(FlowFieldAgentTypeSettings.MaxSlope)).floatValue = serializedObject
+                .FindProperty(FlowFieldManager.PropertyNames.Surface + "." + nameof(FlowFieldSurfaceSettings.MaxSlope)).floatValue;
+            element.FindPropertyRelative(nameof(FlowFieldAgentTypeSettings.MaxStepHeight)).floatValue = serializedObject
+                .FindProperty(FlowFieldManager.PropertyNames.Surface + "." + nameof(FlowFieldSurfaceSettings.MaxStepHeight)).floatValue;
         }
 
         private void DrawSettings(string path, string header)

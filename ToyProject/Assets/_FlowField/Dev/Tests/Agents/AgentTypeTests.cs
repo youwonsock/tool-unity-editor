@@ -12,8 +12,10 @@ namespace Common.FlowField.Tests
     /// Additional Agent Types on a running Manager. A type with the Manager's
     /// own settings reads the same field; a wider type with a lower step
     /// blocks at least the default type's cells and keeps at most its links;
-    /// obstacles, Goals, Modifiers and enabling reach every type; a type's
-    /// invalid value or a changed number of types faults the Manager, and
+    /// obstacles, Goals, Modifiers and enabling reach every type, also an
+    /// input a handler makes during another; a type's invalid value or a
+    /// changed number of types faults the Manager, a retry brings back what a
+    /// type missed, a type found for older sessions names none, and
     /// StaticBaked refuses them.
     /// </summary>
     [TestFixture, Category("Agents")]
@@ -77,11 +79,86 @@ namespace Common.FlowField.Tests
             Assert.That(manager.LastError, Is.EqualTo(locked));
 
             manager.Release();
+            Assert.That(manager.TryGetAgentType("Small", out _), Is.False, "Only a session's types are found.");
             manager.Init();
             yield return WaitUntilAllReady(manager);
             Assert.That(manager.AgentTypeCount, Is.EqualTo(3));
             Assert.That(manager.TryGetAgentType("Large", out FlowFieldAgentType large), Is.True);
             Assert.That(manager.IsAgentTypeReady(large), Is.True);
+            Assert.That(manager.IsAgentTypeReady(small), Is.False, "A type found for the older sessions names none.");
+            Assert.That(manager.TryGetAgentType("Small", out FlowFieldAgentType again), Is.True);
+            Assert.That(again, Is.Not.EqualTo(small));
+        }
+
+        // A handler that runs while the Manager takes an input and makes its
+        // own input finds every type with the first, so every type ends with
+        // the handler's.
+        [UnityTest, Timeout(300000)]
+        public IEnumerator HandlerInputReachesEveryType()
+        {
+            yield return FlowFieldPlayScene.Enter(FlowFieldPlayScene.SampleScene, FlowFieldBakeMode.RuntimeDynamic);
+            FlowFieldManager manager = Manager;
+            FlowFieldManagerConfig config = manager.CaptureConfig();
+            Restart(manager, new AgentType("Same", config.Obstacles.Clearance, config.Surface.MaxSlope, config.Surface.MaxStepHeight));
+            yield return WaitUntilAllReady(manager);
+            Bounds bounds = WorldBounds(manager);
+            FlowFieldGoalHandle goal = manager.AddGoal(FlowFieldGoalKind.Shared, FlowFieldGoalRequest.Position(Point(bounds, 0.2f, 0.2f)));
+            yield return WaitUntilAllReady(manager);
+
+            Vector3 first = Point(bounds, 0.4f, 0.6f);
+            Vector3 second = Point(bounds, 0.7f, 0.3f);
+            bool moved = false;
+            void MoveOnBuilding(FlowFieldRuntimeState state)
+            {
+                if (moved || state != FlowFieldRuntimeState.Building)
+                    return;
+                moved = true;
+                manager.SetGoal(goal, FlowFieldGoalRequest.Position(second));
+            }
+            manager.StateChanged += MoveOnBuilding;
+            try
+            {
+                Assert.That(manager.SetGoal(goal, FlowFieldGoalRequest.Position(first)), Is.True);
+            }
+            finally
+            {
+                manager.StateChanged -= MoveOnBuilding;
+            }
+            Assert.That(moved, Is.True, "The input never raised Building.");
+            int id = goal.Id;
+            Assert.That(manager.Session.Goals.Find(id).Request.WorldPosition, Is.EqualTo(second));
+            Assert.That(manager.AgentSession(0).Goals.Find(id).Request.WorldPosition, Is.EqualTo(second),
+                "The type kept the first input after the handler's.");
+            yield return WaitUntilAllReady(manager);
+            Assert.That(manager.TryGetAgentType("Same", out FlowFieldAgentType same), Is.True);
+            AssertSamplesMatch(manager, same, bounds, goal);
+        }
+
+        // A type that misses a registration takes it again at the retry.
+        [UnityTest, Timeout(300000)]
+        public IEnumerator RetryBringsBackWhatATypeMissed()
+        {
+            yield return FlowFieldPlayScene.Enter(FlowFieldPlayScene.SampleScene, FlowFieldBakeMode.RuntimeDynamic);
+            FlowFieldManager manager = Manager;
+            FlowFieldManagerConfig config = manager.CaptureConfig();
+            Restart(manager, new AgentType("Small", config.Obstacles.Clearance, config.Surface.MaxSlope, config.Surface.MaxStepHeight));
+            yield return WaitUntilAllReady(manager);
+            Bounds bounds = WorldBounds(manager);
+            GameObject cube = FlowFieldObstacleProbe.CreateRegisteredCube(manager, "Missed Cube", Point(bounds, 0.5f, 0.5f), config.Grid.CellSize);
+            Collider collider = cube.GetComponent<Collider>();
+            yield return WaitUntilAllReady(manager);
+            // The type loses the registration the Manager still holds.
+            Assert.That(manager.AgentSession(0).UnregisterObstacleCommand(collider), Is.True);
+
+            const string invalid = "Agent type \"Small\": Obstacle Clearance must be finite and not negative.";
+            ExpectBuildFailed(Log, invalid);
+            SetTypeClearance(manager, 0, -1f);
+            Assert.That(manager.IsFaulted, Is.True);
+            SetTypeClearance(manager, 0, config.Obstacles.Clearance);
+            manager.RequestRebuild();
+            yield return WaitUntilAllReady(manager);
+            Assert.That(manager.AgentSession(0).Obstacles.Contains(collider), Is.True, "The retry did not bring the obstacle back.");
+            Assert.That(Hash(AgentField(manager, 0)), Is.EqualTo(FlowFieldPlayScene.Hash(manager)));
         }
 
         [UnityTest, Timeout(300000)]

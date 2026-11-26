@@ -68,13 +68,16 @@ namespace Common.FlowField
                 throw FlowFieldFailures.DestroyedCollider();
             if (BakeMode == FlowFieldBakeMode.StaticBaked)
                 throw FlowFieldFailures.NotAllowedIn("Dynamic obstacle registration", FlowFieldBakeMode.StaticBaked);
-            bool registered = ActiveSession.RegisterObstacleCommand(collider);
-            for (int i = 0; i < _agentSessions.Length; i++)
+            using (EnterFanOut())
             {
-                if (!_agentSessions[i].IsFaulted)
-                    _agentSessions[i].RegisterObstacleCommand(collider);
+                bool registered = ActiveSession.RegisterObstacleCommand(collider);
+                for (int i = 0; i < _agentSessions.Length; i++)
+                {
+                    if (!_agentSessions[i].IsFaulted)
+                        _agentSessions[i].RegisterObstacleCommand(collider);
+                }
+                return registered;
             }
-            return registered;
         }
 
         /// <inheritdoc/>
@@ -88,10 +91,13 @@ namespace Common.FlowField
                 throw new ArgumentNullException(nameof(collider));
             if (BakeMode == FlowFieldBakeMode.StaticBaked)
                 return false;
-            bool unregistered = ActiveSession.UnregisterObstacleCommand(collider);
-            for (int i = 0; i < _agentSessions.Length; i++)
-                _agentSessions[i].UnregisterObstacleCommand(collider);
-            return unregistered;
+            using (EnterFanOut())
+            {
+                bool unregistered = ActiveSession.UnregisterObstacleCommand(collider);
+                for (int i = 0; i < _agentSessions.Length; i++)
+                    _agentSessions[i].UnregisterObstacleCommand(collider);
+                return unregistered;
+            }
         }
 
         // Whether the running session holds this Collider; a Release clears
@@ -116,13 +122,16 @@ namespace Common.FlowField
                 throw new ArgumentNullException(nameof(collider));
             if (BakeMode == FlowFieldBakeMode.StaticBaked)
                 throw FlowFieldFailures.NotAllowedIn("Obstacle changes", FlowFieldBakeMode.StaticBaked);
-            bool moved = ActiveSession.NotifyObstacleMovedCommand(collider);
-            for (int i = 0; i < _agentSessions.Length; i++)
+            using (EnterFanOut())
             {
-                if (!_agentSessions[i].IsFaulted)
-                    _agentSessions[i].NotifyObstacleMovedCommand(collider);
+                bool moved = ActiveSession.NotifyObstacleMovedCommand(collider);
+                for (int i = 0; i < _agentSessions.Length; i++)
+                {
+                    if (!_agentSessions[i].IsFaulted)
+                        _agentSessions[i].NotifyObstacleMovedCommand(collider);
+                }
+                return moved;
             }
-            return moved;
         }
 
         /// <inheritdoc/>
@@ -135,11 +144,14 @@ namespace Common.FlowField
                 throw FlowFieldFailures.BoundsNotFinite(nameof(worldBounds));
             if (BakeMode == FlowFieldBakeMode.StaticBaked)
                 throw FlowFieldFailures.NotAllowedIn("Obstacle changes", FlowFieldBakeMode.StaticBaked);
-            ActiveSession.NotifyObstacleRegionDirtyCommand(worldBounds);
-            for (int i = 0; i < _agentSessions.Length; i++)
+            using (EnterFanOut())
             {
-                if (!_agentSessions[i].IsFaulted)
-                    _agentSessions[i].NotifyObstacleRegionDirtyCommand(worldBounds);
+                ActiveSession.NotifyObstacleRegionDirtyCommand(worldBounds);
+                for (int i = 0; i < _agentSessions.Length; i++)
+                {
+                    if (!_agentSessions[i].IsFaulted)
+                        _agentSessions[i].NotifyObstacleRegionDirtyCommand(worldBounds);
+                }
             }
         }
 
@@ -218,13 +230,16 @@ namespace Common.FlowField
             if (BakeMode == FlowFieldBakeMode.StaticBaked)
                 throw FlowFieldFailures.NotAllowedIn("Adding a Goal", FlowFieldBakeMode.StaticBaked);
             // Every agent type builds the Goal under the same id.
-            int id = ActiveSession.AddGoalCommand(kind, request);
-            for (int i = 0; i < _agentSessions.Length; i++)
+            using (EnterFanOut())
             {
-                if (!_agentSessions[i].IsFaulted)
-                    _agentSessions[i].AddGoalCommand(kind, request, id);
+                int id = ActiveSession.AddGoalCommand(kind, request);
+                for (int i = 0; i < _agentSessions.Length; i++)
+                {
+                    if (!_agentSessions[i].IsFaulted)
+                        _agentSessions[i].AddGoalCommand(kind, request, id);
+                }
+                return new FlowFieldGoalHandle(id);
             }
-            return new FlowFieldGoalHandle(id);
         }
 
         /// <inheritdoc/>
@@ -234,14 +249,19 @@ namespace Common.FlowField
             ThrowIfLifecycleUnavailable();
             if (!request.HasGoal)
                 throw MissingGoal(nameof(request));
-            if (!goal.IsValid || !ActiveSession.SetGoalCommand(goal.Id, request))
+            if (!goal.IsValid)
                 return false;
-            for (int i = 0; i < _agentSessions.Length; i++)
+            using (EnterFanOut())
             {
-                if (!_agentSessions[i].IsFaulted)
-                    _agentSessions[i].SetGoalCommand(goal.Id, request);
+                if (!ActiveSession.SetGoalCommand(goal.Id, request))
+                    return false;
+                for (int i = 0; i < _agentSessions.Length; i++)
+                {
+                    if (!_agentSessions[i].IsFaulted)
+                        _agentSessions[i].SetGoalCommand(goal.Id, request);
+                }
+                return true;
             }
-            return true;
         }
 
         /// <inheritdoc/>
@@ -250,11 +270,16 @@ namespace Common.FlowField
             _boundary.ThrowIfInUserCode(nameof(RemoveGoal));
             if (!IsFaulted)
                 ThrowIfLifecycleUnavailable();
-            if (!goal.IsValid || !ActiveSession.RemoveGoalCommand(goal.Id))
+            if (!goal.IsValid)
                 return false;
-            for (int i = 0; i < _agentSessions.Length; i++)
-                _agentSessions[i].RemoveGoalCommand(goal.Id);
-            return true;
+            using (EnterFanOut())
+            {
+                if (!ActiveSession.RemoveGoalCommand(goal.Id))
+                    return false;
+                for (int i = 0; i < _agentSessions.Length; i++)
+                    _agentSessions[i].RemoveGoalCommand(goal.Id);
+                return true;
+            }
         }
 
         /// <inheritdoc/>
@@ -300,13 +325,16 @@ namespace Common.FlowField
             if (modifier == null)
                 throw new ArgumentNullException(nameof(modifier));
             ThrowIfLifecycleUnavailable();
-            bool registered = ActiveSession.RegisterModifierCommand(modifier);
-            for (int i = 0; i < _agentSessions.Length; i++)
+            using (EnterFanOut())
             {
-                if (!_agentSessions[i].IsFaulted)
-                    _agentSessions[i].RegisterModifierCommand(modifier);
+                bool registered = ActiveSession.RegisterModifierCommand(modifier);
+                for (int i = 0; i < _agentSessions.Length; i++)
+                {
+                    if (!_agentSessions[i].IsFaulted)
+                        _agentSessions[i].RegisterModifierCommand(modifier);
+                }
+                return registered;
             }
-            return registered;
         }
 
         /// <inheritdoc/>
@@ -318,10 +346,13 @@ namespace Common.FlowField
             // or a retry would apply it again.
             if (!IsFaulted)
                 ThrowIfLifecycleUnavailable();
-            bool unregistered = ActiveSession.UnregisterModifierCommand(modifier);
-            for (int i = 0; i < _agentSessions.Length; i++)
-                _agentSessions[i].UnregisterModifierCommand(modifier);
-            return unregistered;
+            using (EnterFanOut())
+            {
+                bool unregistered = ActiveSession.UnregisterModifierCommand(modifier);
+                for (int i = 0; i < _agentSessions.Length; i++)
+                    _agentSessions[i].UnregisterModifierCommand(modifier);
+                return unregistered;
+            }
         }
 
         /// <inheritdoc/>
@@ -338,11 +369,16 @@ namespace Common.FlowField
             if (change == FlowFieldModifierChange.None)
                 return;
             ThrowIfLifecycleUnavailable();
-            ActiveSession.NotifyModifierChangedCommand(modifier, change);
-            for (int i = 0; i < _agentSessions.Length; i++)
+            using (EnterFanOut())
             {
-                if (!_agentSessions[i].IsFaulted)
-                    _agentSessions[i].NotifyModifierChangedCommand(modifier, change);
+                ActiveSession.NotifyModifierChangedCommand(modifier, change);
+                // A type that missed the registration waits for the next retry.
+                for (int i = 0; i < _agentSessions.Length; i++)
+                {
+                    FlowFieldSession agent = _agentSessions[i];
+                    if (!agent.IsFaulted && agent.Modifiers.Contains(modifier))
+                        agent.NotifyModifierChangedCommand(modifier, change);
+                }
             }
         }
     }

@@ -33,9 +33,9 @@ namespace Common.FlowField
         /// <summary>The message of the fault while <see cref="IsFaulted"/>; otherwise null.</summary>
         string LastError { get; }
         /// <summary>
-        /// Advances each time a build publishes a field that reads differently, the default Goal's
-        /// or an additional Goal's, together with <see cref="FieldChanged"/>. It never goes back,
-        /// also across Release and a Space Mode change; 0 before the first field.
+        /// Advances each time a build publishes a field that reads differently, of any Goal and any
+        /// agent type, together with <see cref="FieldChanged"/>. It never goes back, also across
+        /// Release and a Space Mode change; 0 before the first field.
         /// </summary>
         int Revision { get; }
         /// <summary>
@@ -49,8 +49,8 @@ namespace Common.FlowField
         /// </summary>
         FlowFieldBakeMode BakeMode { get; }
         /// <summary>
-        /// Raised when a build publishes a field that reads differently, the default Goal's or an
-        /// additional Goal's, as <see cref="Revision"/> advances. Handlers run after the FlowField operation that raised the event has returned,
+        /// Raised when a build publishes a field that reads differently, of any Goal and any agent
+        /// type, as <see cref="Revision"/> advances. Handlers run after the FlowField operation that raised the event has returned,
         /// one at a time and in order, and may call any command. An exception from a handler is
         /// logged, not thrown. An event still queued when the session stops, restarts, faults or is
         /// released is dropped.
@@ -137,8 +137,8 @@ namespace Common.FlowField
         /// </summary>
         int AgentTypeCount { get; }
         /// <summary>
-        /// Finds an agent type by name: <see cref="FlowFieldAgentType.DefaultName"/> or the name of an
-        /// Additional Agent Type, the session's from Init to Release, otherwise the serialized one.
+        /// Finds an agent type by name: <see cref="FlowFieldAgentType.DefaultName"/> at any time, or
+        /// the name of an Additional Agent Type of the session from Init to Release.
         /// </summary>
         /// <returns>False with <see cref="FlowFieldAgentType.Default"/> when no type has the name.</returns>
         bool TryGetAgentType(string name, out FlowFieldAgentType type);

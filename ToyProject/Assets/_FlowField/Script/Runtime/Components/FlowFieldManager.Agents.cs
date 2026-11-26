@@ -24,6 +24,10 @@ namespace Common.FlowField
         private FlowFieldSession[] _agentSessions = Array.Empty<FlowFieldSession>();
         private string[] _agentSessionNames = Array.Empty<string>();
         private FlowFieldSpaceMode _agentSessionMode;
+        // Names the sessions, so a type found for older sessions or another
+        // Manager names none of these. Shared by every Manager.
+        private int _agentSessionStamp;
+        private static int s_nextAgentSessionStamp = 1;
 
         private FlowFieldAgentTypeSettings[] AgentTypeSettings => _agentTypes ?? Array.Empty<FlowFieldAgentTypeSettings>();
 
@@ -44,24 +48,13 @@ namespace Common.FlowField
                 return false;
             if (name == FlowFieldAgentType.DefaultName)
                 return true;
-            if (SessionHoldsAgentTypes)
-            {
-                for (int i = 0; i < _agentSessionNames.Length; i++)
-                {
-                    if (string.Equals(_agentSessionNames[i], name, StringComparison.Ordinal))
-                    {
-                        type = new FlowFieldAgentType(i + 1);
-                        return true;
-                    }
-                }
+            if (!SessionHoldsAgentTypes)
                 return false;
-            }
-            FlowFieldAgentTypeSettings[] settings = AgentTypeSettings;
-            for (int i = 0; i < settings.Length; i++)
+            for (int i = 0; i < _agentSessionNames.Length; i++)
             {
-                if (string.Equals(settings[i].Name, name, StringComparison.Ordinal))
+                if (string.Equals(_agentSessionNames[i], name, StringComparison.Ordinal))
                 {
-                    type = new FlowFieldAgentType(i + 1);
+                    type = new FlowFieldAgentType(i + 1, _agentSessionStamp);
                     return true;
                 }
             }
@@ -112,7 +105,9 @@ namespace Common.FlowField
             if (primary == null || type.IsDefault)
                 return primary;
             int index = type.Index - 1;
-            return index >= 0 && index < _agentSessions.Length ? _agentSessions[index] : null;
+            return type.Stamp == _agentSessionStamp && index >= 0 && index < _agentSessions.Length
+                ? _agentSessions[index]
+                : null;
         }
 
         // ----- Settings -------------------------------------------------------
@@ -196,6 +191,31 @@ namespace Common.FlowField
             return true;
         }
 
+        /// <summary>
+        /// With agent types, one input reaches every session before any
+        /// handler runs, so a handler's own input never lands between them.
+        /// Without them a command opens no operation, as before.
+        /// </summary>
+        private FanOutScope EnterFanOut() => new FanOutScope(_agentSessions.Length > 0 ? _boundary : null);
+
+        private readonly struct FanOutScope : IDisposable
+        {
+            private readonly FlowFieldExecutionBoundary.OperationScope _operation;
+            private readonly bool _entered;
+
+            internal FanOutScope(FlowFieldExecutionBoundary boundary)
+            {
+                _entered = boundary != null;
+                _operation = _entered ? boundary.EnterOperation() : default;
+            }
+
+            public void Dispose()
+            {
+                if (_entered)
+                    _operation.Dispose();
+            }
+        }
+
         // ----- Lifecycle ------------------------------------------------------
 
         // Init, before the sessions start: a session per type in the primary
@@ -221,6 +241,8 @@ namespace Common.FlowField
             _agentSessions = sessions;
             _agentSessionNames = names;
             _agentSessionMode = _spaceMode;
+            _agentSessionStamp = s_nextAgentSessionStamp;
+            s_nextAgentSessionStamp = s_nextAgentSessionStamp == int.MaxValue ? 1 : s_nextAgentSessionStamp + 1;
         }
 
         private void DisposeAgentSessions()
@@ -256,9 +278,10 @@ namespace Common.FlowField
         }
 
         // Starts each type again from nothing, whether it runs, stopped or
-        // faulted, as the primary session's retry and enabling do. A type
-        // that faulted on its own skipped the Goal input since; it takes the
-        // primary session's Goals again.
+        // faulted, as the primary session's retry and enabling do. A session
+        // that faulted skipped input since, and a deferred registration can
+        // reach one session and not another around a fault, so each type takes
+        // the primary session's registrations and Goals again.
         private void RestartAgentSessions()
         {
             for (int i = 0; i < _agentSessions.Length; i++)
@@ -266,7 +289,40 @@ namespace Common.FlowField
                 FlowFieldSession agent = _agentSessions[i];
                 agent.Stop();
                 agent.Restart();
+                SyncAgentRegistrations(agent);
                 SyncAgentGoals(agent);
+            }
+        }
+
+        private void SyncAgentRegistrations(FlowFieldSession agent)
+        {
+            FlowFieldObstacleRegistry primaryObstacles = _session.Obstacles;
+            FlowFieldObstacleRegistry obstacles = agent.Obstacles;
+            for (int i = obstacles.Count - 1; i >= 0; i--)
+            {
+                Collider collider = obstacles.GetCollider(i);
+                if (!primaryObstacles.Contains(collider))
+                    agent.UnregisterObstacleCommand(collider);
+            }
+            for (int i = 0; i < primaryObstacles.Count; i++)
+            {
+                Collider collider = primaryObstacles.GetCollider(i);
+                if (collider != null && !obstacles.Contains(collider))
+                    agent.RegisterObstacleCommand(collider);
+            }
+            FlowFieldModifierRegistry primaryModifiers = _session.Modifiers;
+            FlowFieldModifierRegistry modifiers = agent.Modifiers;
+            for (int i = modifiers.Count - 1; i >= 0; i--)
+            {
+                IFlowFieldVectorModifier modifier = modifiers.Entries[i].Modifier;
+                if (!primaryModifiers.Contains(modifier))
+                    agent.UnregisterModifierCommand(modifier);
+            }
+            for (int i = 0; i < primaryModifiers.Count; i++)
+            {
+                IFlowFieldVectorModifier modifier = primaryModifiers.Entries[i].Modifier;
+                if (!FlowFieldVectorUtility.IsMissingModifier(modifier) && !modifiers.Contains(modifier))
+                    agent.RegisterModifierCommand(modifier);
             }
         }
 

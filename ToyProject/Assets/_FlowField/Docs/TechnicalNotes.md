@@ -308,14 +308,15 @@ Manager의 Obstacle Clearance, Max Slope, Max Step Height가 `Default` 유형입
 - **구조:**
   - Manager가 유형마다 세션을 하나 더 둡니다(`FlowFieldManager.Agents.cs`). 그 세션은 기본 세션과 같은 Space Mode이고, 설정 스냅샷에서 그 유형의 값만 바꿔 받습니다(`CaptureAgentConfig`).
   - 그래서 파이프라인, 샘플 안전 규칙, 불확실 영역, 추가 Goal, scheduler를 유형마다 그대로 씁니다. 대신 지면 scan, 장애물 조회, sweep, 빌드가 유형마다 따로 돌아 비용이 유형 수만큼 늡니다.
-  - Manager는 입력(설정, `SetGoal`, 장애물과 Modifier 등록·해제·통지, 추가 Goal, 다시 빌드)을 모든 세션에 나눠 줍니다. 추가 Goal은 모든 세션에서 같은 번호이므로 한 핸들로 유형마다 읽습니다.
+  - Manager는 입력(설정, `SetGoal`, 장애물과 Modifier 등록·해제·통지, 추가 Goal, 다시 빌드)을 모든 세션에 나눠 줍니다. 유형이 있으면 한 입력을 작업 하나로 열어 모든 세션이 받은 뒤에 이벤트를 전달하므로, 핸들러가 낸 입력이 세션 사이에 끼지 않습니다. 추가 Goal은 모든 세션에서 같은 번호이므로 한 핸들로 유형마다 읽습니다.
+  - 유형(`FlowFieldAgentType`)은 Init이 만든 세션의 것으로, `TryGetAgentType`은 Init부터 Release까지 그 세션의 유형만 찾습니다. 유형이나 Space Mode가 바뀌어 세션을 새로 만든 뒤의 옛 유형과 다른 Manager의 유형은 아무 유형도 가리키지 않습니다.
 - **수명:** 유형 세션은 기본 세션을 따라 Init, 끄기(Stop)와 켜기(Restart), Release, 파괴를 함께 겪습니다. Space Mode를 바꾸거나 유형의 개수·이름을 바꾼 뒤의 Init은 유형 세션을 새로 만듭니다.
 - **상태와 이벤트:**
   - `State`, `IsReady`, `IsRebuilding`, `TrySample(position, out sample)`처럼 유형을 받지 않는 호출은 `Default` 유형입니다. 다른 유형은 `IsAgentTypeReady(type)`과 유형을 받는 `TrySample`, `IsGoalReady`, `TrySampleNearestShared`로 읽습니다.
   - 추가 유형의 게시도 Manager의 `Revision`을 늘리고 `FieldChanged`를 보냅니다(`FlowFieldSession.AdvanceRevision`).
 - **Fault:**
   - 유형 세션이 Fault면 Manager가 "Agent type "이름" failed: ..."로 Fault가 됩니다. Manager가 Fault인 동안 유형 세션은 멈춥니다.
-  - 재시도(`RequestRebuild`)와 켜기는 모든 세션을 처음부터 다시 빌드합니다. 스스로 Fault였던 유형 세션은 그동안 받지 못한 추가 Goal을 기본 세션에서 다시 가져옵니다.
+  - 재시도(`RequestRebuild`)와 켜기는 모든 세션을 처음부터 다시 빌드합니다. 이때 유형 세션은 장애물·Modifier 등록과 추가 Goal을 기본 세션에 맞춥니다. 스스로 Fault였던 동안 받지 못한 입력과, Modifier 코드 안에서 미룬 등록이 Fault 즈음 한 세션에만 닿은 경우를 되돌리기 위해서입니다.
 - **설정 변경:**
   - Play 중 유형의 값(Clearance, Max Slope, Max Step Height) 편집은 바로 다시 빌드하고, 잘못된 값은 "Agent type "이름": ..."으로 Fault를 냅니다.
   - 유형의 개수와 이름은 Release 뒤에만 바꿉니다. 세션이 있는 동안 바꾸면 Bake Mode 편집처럼 Fault입니다("The number and names of Additional Agent Types can change only after Release.").
