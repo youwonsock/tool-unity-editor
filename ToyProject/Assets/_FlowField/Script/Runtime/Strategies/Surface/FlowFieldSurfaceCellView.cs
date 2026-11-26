@@ -45,14 +45,14 @@ namespace Common.FlowField
         // direction lies in the surface plane.
         public FlowFieldSample ReadCell(int index)
         {
-            FlowFieldSurfaceData surface = _field.Surface;
+            FlowFieldSurfaceData surface = _field.Scene.Surface;
             if (!surface.IsSurfaceValid(index))
                 return FlowFieldSample.Stopped;
             Vector3 normal = surface.GetSurfaceNormal(index);
-            Vector3 direction = _field.FinalDirections[index];
+            Vector3 direction = _field.Goal.FinalDirections[index];
             if (direction.sqrMagnitude > FlowFieldVectorUtility.DirectionEpsilonSqr)
                 direction = Vector3.ProjectOnPlane(direction, normal).normalized;
-            return new FlowFieldSample(direction, _field.FinalSpeeds[index], normal, hasSurface: true, hasCell: true);
+            return new FlowFieldSample(direction, _field.Goal.FinalSpeeds[index], normal, hasSurface: true, hasCell: true);
         }
 
         public int StepCount => FlowFieldNeighborUtility.SurfaceCount;
@@ -73,21 +73,21 @@ namespace Common.FlowField
         public bool IsUncertain(int index)
             => _regions != null && _regions.IsCellUncertain(_field.Grid, _field.Grid.CellCenter(index));
 
-        public bool IsBlocked(int index) => _hasLatest ? _latest.IsBlocked(index) : _field.Blocked[index];
+        public bool IsBlocked(int index) => _hasLatest ? _latest.IsBlocked(index) : _field.Agent.Blocked[index];
 
         public bool IsWalkable(int index)
-            => _hasLatest ? _latest.IsWalkable(index) : _field.Surface.IsSurfaceValid(index);
+            => _hasLatest ? _latest.IsWalkable(index) : _field.Scene.Surface.IsSurfaceValid(index);
 
         // The published link: a newly blocked cell on the way is caught by
         // the cell checks around it.
-        public bool HasLink(int index, int direction) => (_field.Topology[index] & (1u << direction)) != 0u;
+        public bool HasLink(int index, int direction) => (_field.Goal.Topology[index] & (1u << direction)) != 0u;
 
         // A Surface2D path links only cells inside the Goal's influence, so
         // other steps read the published Surface's step links (Max Slope is a
         // per-cell validity check), both sides of a diagonal as the path does.
         public bool HasGroundLink(int index, int direction)
         {
-            int mask = _field.Surface.NeighborMasks[index];
+            int mask = _field.Scene.Surface.NeighborMasks[index];
             if ((mask & (1 << direction)) == 0)
                 return false;
             int dx = FlowFieldNeighborUtility.DeltaX[direction];
@@ -101,9 +101,9 @@ namespace Common.FlowField
         public Vector3 EscapeDirection(int index)
             => _hasLatest
                 ? _latest.EscapeDirection(index)
-                : _field.EscapeDirections != null
-                    ? _field.EscapeDirections[index]
-                    : _field.FinalDirections[index];
+                : _field.Agent.EscapeDirections != null
+                    ? _field.Agent.EscapeDirections[index]
+                    : _field.Goal.FinalDirections[index];
 
         // A drop over Max Step Height is unsafe; a diagonal may also slip into
         // either cell beside it, and on through one the mover can step into.
@@ -125,7 +125,7 @@ namespace Common.FlowField
         // Along the surface at the blocked cell.
         public FlowFieldSample EscapeSample(int index, Vector3 escape, in FlowFieldSample published)
         {
-            Vector3 normal = FlowFieldVectorUtility.ValidateSurfaceNormal(_field.Surface.GetSurfaceNormal(index));
+            Vector3 normal = FlowFieldVectorUtility.ValidateSurfaceNormal(_field.Scene.Surface.GetSurfaceNormal(index));
             Vector3 direction = Vector3.ProjectOnPlane(escape, normal);
             direction = direction.sqrMagnitude > FlowFieldVectorUtility.DirectionEpsilonSqr
                 ? direction.normalized
@@ -137,14 +137,14 @@ namespace Common.FlowField
         // link: a ledge a mover cannot come back from.
         private bool IsDrop(int from, int to)
         {
-            FlowFieldSurfaceData surface = _field.Surface;
+            FlowFieldSurfaceData surface = _field.Scene.Surface;
             return surface.Heights[to] < surface.Heights[from] - surface.MaxStepHeight;
         }
 
         // A step up by more than Max Step Height: the mover meets it like a wall.
         private bool IsStepUp(int from, int to)
         {
-            FlowFieldSurfaceData surface = _field.Surface;
+            FlowFieldSurfaceData surface = _field.Scene.Surface;
             return surface.Heights[to] > surface.Heights[from] + surface.MaxStepHeight;
         }
 

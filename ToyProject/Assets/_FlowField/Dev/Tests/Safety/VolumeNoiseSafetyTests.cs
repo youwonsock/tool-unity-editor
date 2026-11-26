@@ -61,7 +61,7 @@ namespace Common.FlowField.Tests
             for (int x = 0; x < grid.Width; x++)
             {
                 int i = grid.ToFlatIndex(x, y, z);
-                if (field.Blocked[i] || field.NextCells[i] == i)
+                if (field.Agent.Blocked[i] || field.Goal.NextCells[i] == i)
                     continue;
                 scanned++;
                 if (!FlowFieldSafetyScan.IsMoving(manager, grid.CellCenter(i), out FlowFieldSample sample))
@@ -73,12 +73,12 @@ namespace Common.FlowField.Tests
                 int targetY = y + step.y;
                 int targetZ = z + step.z;
                 bool offGrid = !grid.IsLocalInBounds(targetX, targetY, targetZ);
-                if (!offGrid && !field.Blocked[grid.ToFlatIndex(targetX, targetY, targetZ)])
+                if (!offGrid && !field.Agent.Blocked[grid.ToFlatIndex(targetX, targetY, targetZ)])
                     continue;
                 unsafeSteps.Add("cell (" + x + "," + y + "," + z + ") at " + grid.CellCenter(i).ToString("F2")
                     + " direction " + direction.ToString("F2") + " step " + step
                     + (offGrid ? " off-grid" : " blocked")
-                    + (field.NextCells[i] == FlowFieldNextCell.DefaultDirection ? " (Default Direction)" : " (path)"));
+                    + (field.Goal.NextCells[i] == FlowFieldNextCell.DefaultDirection ? " (Default Direction)" : " (path)"));
             }
             FlowFieldSafetyScan.AssertNone(scenario, unsafeSteps);
             return "cells=" + scanned + " moving=" + moving;

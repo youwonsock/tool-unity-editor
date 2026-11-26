@@ -83,7 +83,7 @@ namespace Common.FlowField.Tests
         internal static string Report(FlowFieldManager manager, Cells cells)
         {
             string blocked = manager.TryGetPublishedField(out FlowFieldField field)
-                ? "P=" + field.Blocked[cells.P] + " Q=" + field.Blocked[cells.Q]
+                ? "P=" + field.Agent.Blocked[cells.P] + " Q=" + field.Agent.Blocked[cells.Q]
                 : "no field";
             return blocked + " uncertain=" + UncertainRegions(manager) + " state=" + manager.State;
         }
@@ -107,8 +107,8 @@ namespace Common.FlowField.Tests
                     int p = Index(grid, xP, y, z);
                     int q = Index(grid, xQ, y, z);
                     int between = Index(grid, xBetween, y, z);
-                    if (!field.Blocked[p] && !field.Blocked[q] && !field.Blocked[between]
-                        && field.FinalSpeeds[p] > 0.5f && field.FinalSpeeds[q] > 0.5f)
+                    if (!field.Agent.Blocked[p] && !field.Agent.Blocked[q] && !field.Agent.Blocked[between]
+                        && field.Goal.FinalSpeeds[p] > 0.5f && field.Goal.FinalSpeeds[q] > 0.5f)
                         return CellsOf(manager, grid, p, q);
                 }
             }
@@ -128,7 +128,7 @@ namespace Common.FlowField.Tests
                 {
                     int p = Index(grid, 2, y, z);
                     int q = Index(grid, grid.Width - 3, y, z);
-                    if (!field.Blocked[p] && !field.Blocked[q])
+                    if (!field.Agent.Blocked[p] && !field.Agent.Blocked[q])
                         return CellsOf(manager, grid, p, q);
                 }
             }
@@ -156,8 +156,8 @@ namespace Common.FlowField.Tests
                     int p = Index(grid, xP, y, z);
                     int next = Index(grid, xP + 1, y, z);
                     int q = Index(grid, xQ, y, z);
-                    if (!field.Blocked[p] && !field.Blocked[q] && !field.Blocked[next]
-                        && field.FinalSpeeds[p] > 0.5f && field.FinalSpeeds[q] > 0.5f)
+                    if (!field.Agent.Blocked[p] && !field.Agent.Blocked[q] && !field.Agent.Blocked[next]
+                        && field.Goal.FinalSpeeds[p] > 0.5f && field.Goal.FinalSpeeds[q] > 0.5f)
                         return CellsOf(manager, grid, p, q);
                 }
             }
@@ -168,8 +168,8 @@ namespace Common.FlowField.Tests
         /// <summary>The first open cell from <paramref name="start"/> on, at full speed when asked.</summary>
         internal static int PickOpenCell(FlowFieldField field, int start, bool fullSpeed)
         {
-            for (int cell = start; cell < field.Blocked.Length; cell++)
-                if (!field.Blocked[cell] && (!fullSpeed || field.FinalSpeeds[cell] > 0.5f))
+            for (int cell = start; cell < field.Agent.Blocked.Length; cell++)
+                if (!field.Agent.Blocked[cell] && (!fullSpeed || field.Goal.FinalSpeeds[cell] > 0.5f))
                     return cell;
             Assert.Fail("No open probe cell: " + FlowFieldPlayScene.Describe());
             return -1;
@@ -303,8 +303,8 @@ namespace Common.FlowField.Tests
         {
             FlowFieldField field = Published(manager);
             string observed = Report(manager, cells) + " | " + FlowFieldPlayScene.Describe();
-            Assert.That(field.Blocked[cells.P], Is.EqualTo(pBlocked), what + ": P blocked. " + observed);
-            Assert.That(field.Blocked[cells.Q], Is.EqualTo(qBlocked), what + ": Q blocked. " + observed);
+            Assert.That(field.Agent.Blocked[cells.P], Is.EqualTo(pBlocked), what + ": P blocked. " + observed);
+            Assert.That(field.Agent.Blocked[cells.Q], Is.EqualTo(qBlocked), what + ": Q blocked. " + observed);
         }
 
         /// <summary>Ready with no uncertain region left, and P and Q blocked as given.</summary>
@@ -319,7 +319,7 @@ namespace Common.FlowField.Tests
         internal static void AssertBlocked(FlowFieldManager manager, int cell, bool blocked, string what)
         {
             FlowFieldField field = Published(manager);
-            Assert.That(field.Blocked[cell], Is.EqualTo(blocked),
+            Assert.That(field.Agent.Blocked[cell], Is.EqualTo(blocked),
                 what + ": cell " + cell + " blocked. uncertain=" + UncertainRegions(manager) + " | " + FlowFieldPlayScene.Describe());
         }
 

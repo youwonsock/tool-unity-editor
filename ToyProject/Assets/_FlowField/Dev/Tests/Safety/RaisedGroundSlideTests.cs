@@ -137,7 +137,7 @@ namespace Common.FlowField.Tests
             heading.y = 0f;
             if (heading.sqrMagnitude < 1e-8f)
             {
-                heading = cells.Field.FinalDirections[i];
+                heading = cells.Field.Goal.FinalDirections[i];
                 heading.y = 0f;
             }
             heading = heading.normalized;

@@ -64,7 +64,7 @@ namespace Common.FlowField.Tests
 
             yield return FlowFieldPlayScene.WaitUntilSettled(2f);
             Assert.That(manager.TryGetPublishedField(out FlowFieldField field), Is.True);
-            Assert.That(field.HasActiveGoal, Is.False, "The removed Goal was published.");
+            Assert.That(field.Goal.IsActive, Is.False, "The removed Goal was published.");
             FlowFieldFieldSnapshot afterDiscard = FlowFieldFieldSnapshot.Capture(manager);
             yield return FlowFieldProtocolScenes.SettleFresh(manager, FlowFieldGoalRequest.None);
             Assert.That(afterDiscard.Difference(FlowFieldFieldSnapshot.Capture(manager)), Is.Empty,

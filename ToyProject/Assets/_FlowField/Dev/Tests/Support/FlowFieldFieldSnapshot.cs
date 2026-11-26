@@ -24,12 +24,12 @@ namespace Common.FlowField.Tests
         {
             Array[] arrays =
             {
-                field.Blocked, field.Topology, field.GoalFlags, field.NextCells, field.BaseDirections, field.BaseSpeeds,
-                field.FinalDirections, field.FinalSpeeds, field.EscapeDirections, field.ModifierInfluence,
+                field.Agent.Blocked, field.Goal.Topology, field.Goal.Flags, field.Goal.NextCells, field.Goal.BaseDirections, field.Goal.BaseSpeeds,
+                field.Goal.FinalDirections, field.Goal.FinalSpeeds, field.Agent.EscapeDirections, field.Goal.ModifierInfluence,
             };
             for (int i = 0; i < Names.Length; i++)
                 _arrays[Names[i]] = arrays[i] == null ? null : (Array)arrays[i].Clone();
-            _goal = "goal=" + field.HasActiveGoal + "@" + field.GoalIndex;
+            _goal = "goal=" + field.Goal.IsActive + "@" + field.Goal.CellIndex;
         }
 
         internal static FlowFieldFieldSnapshot Capture(FlowFieldManager manager)

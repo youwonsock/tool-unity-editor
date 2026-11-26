@@ -400,19 +400,19 @@ namespace Common.FlowField
             VolumeFieldData next = new VolumeFieldData(
                 build.Request,
                 build.Request.Grid,
-                surface: null,
-                build.Blocked,
-                build.Topology,
-                build.GoalFlags,
-                build.Next,
-                build.Directions,
-                build.Speeds,
-                build.FinalDirections,
-                build.FinalSpeeds,
-                build.EscapeDirections,
-                modifierInfluence: null,
-                hasActiveGoal: goalIndex >= 0,
-                goalIndex);
+                scene: null,
+                new FlowFieldAgentLayer(build.Blocked, build.EscapeDirections),
+                new FlowFieldGoalLayer(
+                    build.Topology,
+                    build.GoalFlags,
+                    build.Next,
+                    build.Directions,
+                    build.Speeds,
+                    build.FinalDirections,
+                    build.FinalSpeeds,
+                    modifierInfluence: null,
+                    isActive: goalIndex >= 0,
+                    goalIndex));
 
             // The request snapshot and the safety regions update either way;
             // only a field that reads differently is a new Revision.
@@ -487,13 +487,13 @@ namespace Common.FlowField
                 if (reuseObstacles)
                 {
                     _build.ReusesObstacleQueries = true;
-                    _build.Blocked = _fields.Committed.Blocked;
-                    _build.Topology = _fields.Committed.Topology;
-                    _build.EscapeDirections = _fields.Committed.EscapeDirections;
+                    _build.Blocked = _fields.Committed.Agent.Blocked;
+                    _build.Topology = _fields.Committed.Goal.Topology;
+                    _build.EscapeDirections = _fields.Committed.Agent.EscapeDirections;
                 }
                 else if (requeryChangedCells)
                 {
-                    _build.QueryOnlyChangedRegions(_fields.Committed.Blocked);
+                    _build.QueryOnlyChangedRegions(_fields.Committed.Agent.Blocked);
                 }
                 // While the sweep runs, a reload queries every cell instead,
                 // as Surface2D's swept mask scans every obstacle: the sweep's

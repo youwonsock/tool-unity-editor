@@ -93,9 +93,9 @@ namespace Common.FlowField.Tests
             Assert.That(manager.TryGetPublishedField(out FlowFieldField field), Is.True,
                 "No published field: " + FlowFieldPlayScene.Describe());
             int count = 0;
-            for (int i = 0; i < field.FinalSpeeds.Length; i++)
+            for (int i = 0; i < field.Goal.FinalSpeeds.Length; i++)
             {
-                if (field.FinalSpeeds[i] > 1.01f)
+                if (field.Goal.FinalSpeeds[i] > 1.01f)
                     count++;
             }
             return count;
@@ -107,9 +107,9 @@ namespace Common.FlowField.Tests
             Assert.That(manager.TryGetPublishedField(out FlowFieldField field), Is.True,
                 "No published field: " + FlowFieldPlayScene.Describe());
             int count = 0;
-            for (int i = 0; i < field.FinalSpeeds.Length; i++)
+            for (int i = 0; i < field.Goal.FinalSpeeds.Length; i++)
             {
-                if (field.BaseSpeeds[i] > 0f && field.FinalSpeeds[i] < field.BaseSpeeds[i] * 0.75f)
+                if (field.Goal.BaseSpeeds[i] > 0f && field.Goal.FinalSpeeds[i] < field.Goal.BaseSpeeds[i] * 0.75f)
                     count++;
             }
             return count;
@@ -120,11 +120,11 @@ namespace Common.FlowField.Tests
         {
             Assert.That(manager.TryGetPublishedField(out FlowFieldField field), Is.True,
                 "No published field: " + FlowFieldPlayScene.Describe());
-            Assert.That(field.ModifierInfluence, Is.Not.Null, "Only Surface2D keeps Modifier influence.");
+            Assert.That(field.Goal.ModifierInfluence, Is.Not.Null, "Only Surface2D keeps Modifier influence.");
             int count = 0;
-            for (int i = 0; i < field.ModifierInfluence.Length; i++)
+            for (int i = 0; i < field.Goal.ModifierInfluence.Length; i++)
             {
-                if (field.ModifierInfluence[i])
+                if (field.Goal.ModifierInfluence[i])
                     count++;
             }
             return count;

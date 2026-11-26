@@ -56,14 +56,14 @@ namespace Common.FlowField.Tests
             for (int x = 0; x < cells.Width; x++)
             {
                 int i = cells.Index(x, z);
-                if (field.NextCells[i] != FlowFieldNextCell.DefaultDirection || cells.Blocked[i])
+                if (field.Goal.NextCells[i] != FlowFieldNextCell.DefaultDirection || cells.Blocked[i])
                     continue;
                 defaultCells++;
                 Vector3 center = cells.Center(i);
                 if (!FlowFieldSafetyScan.IsMoving(manager, center, out FlowFieldSample sample))
                 {
                     // A stop for a Surface projection's tiny side component.
-                    Vector3 published = field.FinalDirections[i];
+                    Vector3 published = field.Goal.FinalDirections[i];
                     float publishedPlanar = new Vector2(published.x, published.z).magnitude;
                     float side = Mathf.Min(Mathf.Abs(published.x), Mathf.Abs(published.z));
                     if (publishedPlanar > 1e-4f && side > 1e-6f && side < 0.01f * publishedPlanar)

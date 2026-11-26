@@ -37,13 +37,13 @@ namespace Common.FlowField.Tests
             for (int x = 0; x < cells.Width; x++)
             {
                 int i = cells.Index(x, z);
-                if (field.NextCells[i] != FlowFieldNextCell.DefaultDirection || cells.Blocked[i])
+                if (field.Goal.NextCells[i] != FlowFieldNextCell.DefaultDirection || cells.Blocked[i])
                     continue;
                 defaultCells++;
                 bool moves = FlowFieldSafetyScan.IsMoving(manager, cells.Center(i), out FlowFieldSample sample);
                 if (moves)
                     moving++;
-                Vector3 direction = moves ? sample.Direction : field.FinalDirections[i];
+                Vector3 direction = moves ? sample.Direction : field.Goal.FinalDirections[i];
                 if (!FlowFieldSafetyScan.TrySectorStep(direction, out int stepX, out int stepZ))
                     continue;
                 int targetX = x + stepX;
@@ -51,7 +51,7 @@ namespace Common.FlowField.Tests
                 if (!cells.Contains(targetX, targetZ) || !cells.IsOpen(cells.Index(targetX, targetZ)))
                     continue;
                 int link = FlowFieldNeighborUtility.FindDirectionIndex(stepX, stepZ);
-                if ((field.Topology[i] & (1u << link)) != 0u)
+                if ((field.Goal.Topology[i] & (1u << link)) != 0u)
                     continue;
                 missingLinks++;
                 if (moves)

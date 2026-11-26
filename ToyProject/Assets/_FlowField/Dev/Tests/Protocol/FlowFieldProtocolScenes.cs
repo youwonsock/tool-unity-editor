@@ -187,14 +187,14 @@ namespace Common.FlowField.Tests
         {
             Assert.That(manager.TryGetPublishedField(out FlowFieldField field), Is.True, FlowFieldPlayScene.Describe());
             int baseD1 = 0, baseD2 = 0, finalD2 = 0;
-            foreach (Vector3 direction in field.BaseDirections)
+            foreach (Vector3 direction in field.Goal.BaseDirections)
             {
                 if (Vector3.Distance(direction, PlusZ) < 1e-3f)
                     baseD1++;
                 if (Vector3.Distance(direction, PlusX) < 1e-3f)
                     baseD2++;
             }
-            foreach (Vector3 direction in field.FinalDirections)
+            foreach (Vector3 direction in field.Goal.FinalDirections)
             {
                 if (Vector3.Distance(direction, PlusX) < 1e-3f)
                     finalD2++;

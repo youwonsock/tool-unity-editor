@@ -1,42 +1,32 @@
+using System;
 using Unity.Collections.LowLevel.Unsafe;
-using UnityEngine;
 
 namespace Common.FlowField
 {
     /// <summary>
-    /// A published field, the same shape in both space modes. Once published it
-    /// never changes; a new publication replaces the whole object, and the
-    /// arrays it replaced go back to <see cref="FlowFieldSpareArrays"/>. A reader
-    /// outside the session may therefore use a field only until the next pump.
-    /// Arrays a mode does not keep are null.
+    /// A published field, the same shape in both space modes: the grid and
+    /// three layers, the scene (Surface2D's ground, null in Volume3D), the
+    /// agent (what is blocked) and the Goal (the navigation toward it). Once
+    /// published it never changes; a new publication replaces the whole
+    /// object, and the arrays it replaced go back to
+    /// <see cref="FlowFieldSpareArrays"/>. A reader outside the session may
+    /// therefore use a field only until the next pump. Arrays a mode does not
+    /// keep are null.
     /// </summary>
     internal class FlowFieldField
     {
         internal readonly FlowFieldGridSpace Grid;
-        // Surface2D only: heights, normals and which cells have a surface.
-        internal readonly FlowFieldSurfaceData Surface;
-        internal readonly bool[] Blocked;
-        // Surface2D uses 8 bits, Volume3D 26.
-        internal readonly uint[] Topology;
-        internal readonly FlowFieldGoalFlags[] GoalFlags;
-        internal readonly int[] NextCells;
-        internal readonly Vector3[] BaseDirections;
-        internal readonly float[] BaseSpeeds;
-        internal readonly Vector3[] FinalDirections;
-        internal readonly float[] FinalSpeeds;
-        // Volume3D only; Surface2D reconstructs escape vectors when asked.
-        internal readonly Vector3[] EscapeDirections;
-        // Surface2D only: the cells a Modifier touched.
-        internal readonly bool[] ModifierInfluence;
-        internal readonly bool HasActiveGoal;
-        internal readonly int GoalIndex;
+        internal readonly FlowFieldSceneLayer Scene;
+        internal readonly FlowFieldAgentLayer Agent;
+        internal readonly FlowFieldGoalLayer Goal;
 
-        internal int Capacity => Blocked.Length;
+        internal int Capacity => Agent.Blocked.Length;
 
         /// <summary>
         /// Whether two fields answer every read the same: the cells, their
         /// state and the Goal. A publication with the same content keeps the
-        /// Revision, so callers see a change only when there is one.
+        /// Revision, so callers see a change only when there is one. The base
+        /// vectors are not compared: only the final ones are read.
         /// </summary>
         internal static bool HasSameContent(FlowFieldField left, FlowFieldField right)
         {
@@ -44,20 +34,22 @@ namespace Common.FlowField
                 return true;
             if (left == null || right == null
                 || !left.Grid.MatchesBounds(right.Grid)
-                || left.HasActiveGoal != right.HasActiveGoal
-                || left.GoalIndex != right.GoalIndex)
+                || left.Goal.IsActive != right.Goal.IsActive
+                || left.Goal.CellIndex != right.Goal.CellIndex)
                 return false;
-            if (!ReferenceEquals(left.Surface, right.Surface)
-                && (left.Surface == null || right.Surface == null || !left.Surface.ContentEquals(right.Surface)))
+            FlowFieldSurfaceData leftSurface = left.Scene?.Surface;
+            FlowFieldSurfaceData rightSurface = right.Scene?.Surface;
+            if (!ReferenceEquals(leftSurface, rightSurface)
+                && (leftSurface == null || rightSurface == null || !leftSurface.ContentEquals(rightSurface)))
                 return false;
-            return SameBytes(left.Blocked, right.Blocked)
-                && SameBytes(left.Topology, right.Topology)
-                && SameBytes(left.GoalFlags, right.GoalFlags)
-                && SameBytes(left.NextCells, right.NextCells)
-                && SameBytes(left.FinalDirections, right.FinalDirections)
-                && SameBytes(left.FinalSpeeds, right.FinalSpeeds)
-                && SameBytes(left.EscapeDirections, right.EscapeDirections)
-                && SameBytes(left.ModifierInfluence, right.ModifierInfluence);
+            return SameBytes(left.Agent.Blocked, right.Agent.Blocked)
+                && SameBytes(left.Goal.Topology, right.Goal.Topology)
+                && SameBytes(left.Goal.Flags, right.Goal.Flags)
+                && SameBytes(left.Goal.NextCells, right.Goal.NextCells)
+                && SameBytes(left.Goal.FinalDirections, right.Goal.FinalDirections)
+                && SameBytes(left.Goal.FinalSpeeds, right.Goal.FinalSpeeds)
+                && SameBytes(left.Agent.EscapeDirections, right.Agent.EscapeDirections)
+                && SameBytes(left.Goal.ModifierInfluence, right.Goal.ModifierInfluence);
         }
 
         // A bitwise comparison: memcmp over each array.
@@ -76,34 +68,14 @@ namespace Common.FlowField
 
         internal FlowFieldField(
             FlowFieldGridSpace grid,
-            FlowFieldSurfaceData surface,
-            bool[] blocked,
-            uint[] topology,
-            FlowFieldGoalFlags[] goalFlags,
-            int[] nextCells,
-            Vector3[] baseDirections,
-            float[] baseSpeeds,
-            Vector3[] finalDirections,
-            float[] finalSpeeds,
-            Vector3[] escapeDirections,
-            bool[] modifierInfluence,
-            bool hasActiveGoal,
-            int goalIndex)
+            FlowFieldSceneLayer scene,
+            FlowFieldAgentLayer agent,
+            FlowFieldGoalLayer goal)
         {
             Grid = grid;
-            Surface = surface;
-            Blocked = blocked;
-            Topology = topology;
-            GoalFlags = goalFlags;
-            NextCells = nextCells;
-            BaseDirections = baseDirections;
-            BaseSpeeds = baseSpeeds;
-            FinalDirections = finalDirections;
-            FinalSpeeds = finalSpeeds;
-            EscapeDirections = escapeDirections;
-            ModifierInfluence = modifierInfluence;
-            HasActiveGoal = hasActiveGoal;
-            GoalIndex = goalIndex;
+            Scene = scene;
+            Agent = agent ?? throw new ArgumentNullException(nameof(agent));
+            Goal = goal ?? throw new ArgumentNullException(nameof(goal));
         }
     }
 
@@ -115,34 +87,10 @@ namespace Common.FlowField
         internal FlowFieldField(
             in TRequest request,
             FlowFieldGridSpace grid,
-            FlowFieldSurfaceData surface,
-            bool[] blocked,
-            uint[] topology,
-            FlowFieldGoalFlags[] goalFlags,
-            int[] nextCells,
-            Vector3[] baseDirections,
-            float[] baseSpeeds,
-            Vector3[] finalDirections,
-            float[] finalSpeeds,
-            Vector3[] escapeDirections,
-            bool[] modifierInfluence,
-            bool hasActiveGoal,
-            int goalIndex)
-            : base(
-                grid,
-                surface,
-                blocked,
-                topology,
-                goalFlags,
-                nextCells,
-                baseDirections,
-                baseSpeeds,
-                finalDirections,
-                finalSpeeds,
-                escapeDirections,
-                modifierInfluence,
-                hasActiveGoal,
-                goalIndex)
+            FlowFieldSceneLayer scene,
+            FlowFieldAgentLayer agent,
+            FlowFieldGoalLayer goal)
+            : base(grid, scene, agent, goal)
         {
             Request = request;
         }

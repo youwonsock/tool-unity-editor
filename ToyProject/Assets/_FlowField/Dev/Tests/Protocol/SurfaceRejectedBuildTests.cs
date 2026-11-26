@@ -71,7 +71,7 @@ namespace Common.FlowField.Tests
 
             yield return FinishRejected(manager, session, uncertainty, "Goal removal");
             Assert.That(manager.TryGetPublishedField(out FlowFieldField field), Is.True);
-            Assert.That(field.HasActiveGoal, Is.False, "The removed Goal was published.");
+            Assert.That(field.Goal.IsActive, Is.False, "The removed Goal was published.");
             FlowFieldFieldSnapshot afterReject = FlowFieldFieldSnapshot.Capture(manager);
             yield return FlowFieldProtocolScenes.SettleFresh(manager, FlowFieldGoalRequest.None);
             Assert.That(afterReject.Difference(FlowFieldFieldSnapshot.Capture(manager)), Is.Empty,

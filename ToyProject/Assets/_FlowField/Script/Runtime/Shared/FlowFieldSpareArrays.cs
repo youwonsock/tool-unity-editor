@@ -40,16 +40,16 @@ namespace Common.FlowField
         {
             if (replaced == null)
                 return;
-            Keep(ref Blocked, replaced.Blocked, next.Blocked);
-            Keep(ref Topology, replaced.Topology, next.Topology);
-            Keep(ref GoalFlags, replaced.GoalFlags, next.GoalFlags);
-            Keep(ref Next, replaced.NextCells, next.NextCells);
-            Keep(ref Directions, replaced.BaseDirections, next.BaseDirections);
-            Keep(ref Speeds, replaced.BaseSpeeds, next.BaseSpeeds);
-            Keep(ref FinalDirections, replaced.FinalDirections, next.FinalDirections);
-            Keep(ref FinalSpeeds, replaced.FinalSpeeds, next.FinalSpeeds);
-            Keep(ref EscapeDirections, replaced.EscapeDirections, next.EscapeDirections);
-            Keep(ref ModifierInfluence, replaced.ModifierInfluence, next.ModifierInfluence);
+            Keep(ref Blocked, replaced.Agent.Blocked, next.Agent.Blocked);
+            Keep(ref Topology, replaced.Goal.Topology, next.Goal.Topology);
+            Keep(ref GoalFlags, replaced.Goal.Flags, next.Goal.Flags);
+            Keep(ref Next, replaced.Goal.NextCells, next.Goal.NextCells);
+            Keep(ref Directions, replaced.Goal.BaseDirections, next.Goal.BaseDirections);
+            Keep(ref Speeds, replaced.Goal.BaseSpeeds, next.Goal.BaseSpeeds);
+            Keep(ref FinalDirections, replaced.Goal.FinalDirections, next.Goal.FinalDirections);
+            Keep(ref FinalSpeeds, replaced.Goal.FinalSpeeds, next.Goal.FinalSpeeds);
+            Keep(ref EscapeDirections, replaced.Agent.EscapeDirections, next.Agent.EscapeDirections);
+            Keep(ref ModifierInfluence, replaced.Goal.ModifierInfluence, next.Goal.ModifierInfluence);
         }
 
         // A mode that does not keep an array leaves the spare it has alone.

@@ -173,7 +173,7 @@ namespace Common.FlowField.Tests
         {
             for (int step = 0; step < GhostSteps; step++)
             {
-                Vector3 direction = cells.Field.FinalDirections[cells.Index(x, z)];
+                Vector3 direction = cells.Field.Goal.FinalDirections[cells.Index(x, z)];
                 direction.y = 0f;
                 if (direction.sqrMagnitude < 1e-8f)
                     return false;

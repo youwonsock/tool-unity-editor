@@ -65,7 +65,7 @@ namespace Common.FlowField
                 || _state.Workspace == null
                 || _state.Workspace.Capacity != _state.Grid.CellCount
                 || !field.Grid.MatchesBounds(_state.Grid)
-                || !ReferenceEquals(field.Surface, _state.Surface))
+                || !ReferenceEquals(field.Scene?.Surface, _state.Surface))
                 return false;
             cells = new FlowFieldStagedCells(_state.Workspace.Blocked, _state.Surface, _state.Workspace.EscapeDirections);
             return true;

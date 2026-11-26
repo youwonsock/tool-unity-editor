@@ -43,7 +43,7 @@ namespace Common.FlowField.Editor
             FlowFieldReadView view;
             if (Application.isPlaying)
             {
-                if (!manager.TryGetPublishedField(out FlowFieldField field) || field.Surface == null)
+                if (!manager.TryGetPublishedField(out FlowFieldField field) || field.Scene == null)
                     return;
                 view = FlowFieldReadView.FromSurfaceField(field);
                 grid = field.Grid;

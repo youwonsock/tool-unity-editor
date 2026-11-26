@@ -137,7 +137,7 @@ namespace Common.FlowField.Tests
             yield return FlowFieldObstacleProbe.Enter(scene, FlowFieldBakeMode.RuntimeDynamic);
             FlowFieldManager manager = Manager;
             FlowFieldField field = FlowFieldObstacleProbe.Published(manager);
-            int cell = FlowFieldObstacleProbe.PickOpenCell(field, field.Blocked.Length / 2, fullSpeed: true);
+            int cell = FlowFieldObstacleProbe.PickOpenCell(field, field.Agent.Blocked.Length / 2, fullSpeed: true);
             Vector3 position = field.Grid.CellCenter(cell);
             Assert.That(manager.TrySample(position, out FlowFieldSample before), Is.True, "No sample before the edits.");
             Assert.That(before.SpeedMultiplier, Is.GreaterThan(0f), "The probe cell does not move before the edits.");

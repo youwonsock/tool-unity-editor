@@ -32,8 +32,8 @@ namespace Common.FlowField
 
         public FlowFieldSample ReadCell(int index)
             => new FlowFieldSample(
-                _field.FinalDirections[index],
-                _field.FinalSpeeds[index],
+                _field.Goal.FinalDirections[index],
+                _field.Goal.FinalSpeeds[index],
                 Vector3.zero,
                 hasSurface: false,
                 hasCell: true);
@@ -51,20 +51,20 @@ namespace Common.FlowField
         public bool IsUncertain(int index)
             => _regions != null && _regions.IsCellUncertain(_field.Grid, _field.Grid.CellCenter(index));
 
-        public bool IsBlocked(int index) => _field.Blocked[index];
+        public bool IsBlocked(int index) => _field.Agent.Blocked[index];
 
         // A mover can be anywhere in the volume; only blocked cells are closed.
         public bool IsWalkable(int index) => true;
 
         // The published link: a newly blocked cell on the way is caught by
         // the cell checks around it.
-        public bool HasLink(int index, int direction) => (_field.Topology[index] & (1u << direction)) != 0u;
+        public bool HasLink(int index, int direction) => (_field.Goal.Topology[index] & (1u << direction)) != 0u;
 
         // A Volume3D path links every open cell, so its links serve.
         public bool HasGroundLink(int index, int direction) => HasLink(index, direction);
 
         public Vector3 EscapeDirection(int index)
-            => _field.EscapeDirections != null ? _field.EscapeDirections[index] : _field.FinalDirections[index];
+            => _field.Agent.EscapeDirections != null ? _field.Agent.EscapeDirections[index] : _field.Goal.FinalDirections[index];
 
         // A link is missing only next to a blocked cell, which walls the mover.
         public bool IsCrossingUnsafe(int x, int y, int z, int dx, int dy, int dz, int target, out bool walled)

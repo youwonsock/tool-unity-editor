@@ -185,10 +185,10 @@ namespace Common.FlowField.Tests
             internal SurfaceCells(FlowFieldManager manager)
             {
                 Field = PublishedField(manager);
-                Surface = Field.Surface;
+                Surface = Field.Scene?.Surface;
                 Assert.That(Surface, Is.Not.Null, "The scan needs a Surface2D field: " + FlowFieldPlayScene.Describe());
                 Grid = Field.Grid;
-                Blocked = Field.Blocked;
+                Blocked = Field.Agent.Blocked;
                 Heights = Surface.Heights;
                 MaxStep = Surface.MaxStepHeight;
                 Width = Grid.Width;

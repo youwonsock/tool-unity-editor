@@ -70,7 +70,7 @@ namespace Common.FlowField.Tests
             yield return FlowFieldObstacleProbe.PauseThenReady(0.5f);
 
             FlowFieldField field = FlowFieldObstacleProbe.Published(manager);
-            int cell = FlowFieldObstacleProbe.PickOpenCell(field, field.Blocked.Length / 3, fullSpeed: false);
+            int cell = FlowFieldObstacleProbe.PickOpenCell(field, field.Agent.Blocked.Length / 3, fullSpeed: false);
             FlowFieldObstacleProbe.CreateCube(
                 manager, ProbeName, FlowFieldObstacleProbe.Position(manager, field.Grid, cell), field.Grid.CellSize);
             FlowFieldObstacleProbe.AssertBlocked(manager, cell, false, "placed with the sweep off");

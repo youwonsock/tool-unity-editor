@@ -188,14 +188,14 @@ namespace Common.FlowField
             : this(owner, published.Request, modifiers)
         {
             IsModifierRecompose = true;
-            Blocked = published.Blocked;
-            Topology = published.Topology;
-            GoalFlags = published.GoalFlags;
-            Next = published.NextCells;
-            Directions = published.BaseDirections;
-            Speeds = published.BaseSpeeds;
-            EscapeDirections = published.EscapeDirections;
-            GoalIndex = published.GoalIndex;
+            Blocked = published.Agent.Blocked;
+            Topology = published.Goal.Topology;
+            GoalFlags = published.Goal.Flags;
+            Next = published.Goal.NextCells;
+            Directions = published.Goal.BaseDirections;
+            Speeds = published.Goal.BaseSpeeds;
+            EscapeDirections = published.Agent.EscapeDirections;
+            GoalIndex = published.Goal.CellIndex;
             FinalDirections = finalDirections;
             FinalSpeeds = finalSpeeds;
             Phase = FlowFieldVolumeBuildPhase.Modifiers;

@@ -59,17 +59,17 @@ namespace Common.FlowField.Tests
                 Assert.That(manager.TryGetPublishedField(out FlowFieldField field), Is.True, FlowFieldPlayScene.Describe());
                 Assert.That(manager.TryGetFieldInfo(out FlowFieldFieldInfo info), Is.True, FlowFieldPlayScene.Describe());
                 var snapshot = new FieldSnapshot { Goal = info.ResolvedGoalWorld };
-                snapshot.Add(nameof(FlowFieldField.Blocked), field.Blocked);
-                snapshot.Add(nameof(FlowFieldField.Topology), field.Topology);
-                snapshot.Add(nameof(FlowFieldField.GoalFlags), field.GoalFlags);
-                snapshot.Add(nameof(FlowFieldField.NextCells), field.NextCells);
-                snapshot.Add(nameof(FlowFieldField.BaseDirections), field.BaseDirections);
-                snapshot.Add(nameof(FlowFieldField.BaseSpeeds), field.BaseSpeeds);
-                snapshot.Add(nameof(FlowFieldField.FinalDirections), field.FinalDirections);
-                snapshot.Add(nameof(FlowFieldField.FinalSpeeds), field.FinalSpeeds);
-                snapshot.Add(nameof(FlowFieldField.EscapeDirections), field.EscapeDirections);
-                snapshot.Add(nameof(FlowFieldField.ModifierInfluence), field.ModifierInfluence);
-                snapshot._blocked = (bool[])field.Blocked.Clone();
+                snapshot.Add(nameof(FlowFieldAgentLayer.Blocked), field.Agent.Blocked);
+                snapshot.Add(nameof(FlowFieldGoalLayer.Topology), field.Goal.Topology);
+                snapshot.Add(nameof(FlowFieldGoalLayer.Flags), field.Goal.Flags);
+                snapshot.Add(nameof(FlowFieldGoalLayer.NextCells), field.Goal.NextCells);
+                snapshot.Add(nameof(FlowFieldGoalLayer.BaseDirections), field.Goal.BaseDirections);
+                snapshot.Add(nameof(FlowFieldGoalLayer.BaseSpeeds), field.Goal.BaseSpeeds);
+                snapshot.Add(nameof(FlowFieldGoalLayer.FinalDirections), field.Goal.FinalDirections);
+                snapshot.Add(nameof(FlowFieldGoalLayer.FinalSpeeds), field.Goal.FinalSpeeds);
+                snapshot.Add(nameof(FlowFieldAgentLayer.EscapeDirections), field.Agent.EscapeDirections);
+                snapshot.Add(nameof(FlowFieldGoalLayer.ModifierInfluence), field.Goal.ModifierInfluence);
+                snapshot._blocked = (bool[])field.Agent.Blocked.Clone();
                 return snapshot;
             }
 

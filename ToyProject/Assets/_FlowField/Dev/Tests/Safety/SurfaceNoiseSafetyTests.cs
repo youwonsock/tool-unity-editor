@@ -58,17 +58,17 @@ namespace Common.FlowField.Tests
             for (int x = 0; x < cells.Width; x++)
             {
                 int i = cells.Index(x, z);
-                int next = field.NextCells[i];
+                int next = field.Goal.NextCells[i];
                 if ((keepGoal ? next == i : next != FlowFieldNextCell.DefaultDirection) || cells.Blocked[i])
                     continue;
                 scanned++;
                 if (!FlowFieldSafetyScan.IsMoving(manager, cells.Center(i), out FlowFieldSample sample))
                     continue;
                 moving++;
-                if (HeadsUnsafe(cells, x, z, field.BaseDirections[i]))
+                if (HeadsUnsafe(cells, x, z, field.Goal.BaseDirections[i]))
                     unsafeByBase++;
                 if (HeadsUnsafe(cells, x, z, sample.Direction))
-                    unsafeSamples.Add(cells.Describe(x, z) + " base " + field.BaseDirections[i].ToString("F2")
+                    unsafeSamples.Add(cells.Describe(x, z) + " base " + field.Goal.BaseDirections[i].ToString("F2")
                         + " sample " + sample.Direction.ToString("F2") + " speed " + sample.SpeedMultiplier.ToString("F2"));
             }
             FlowFieldSafetyScan.AssertNone(scenario, unsafeSamples);

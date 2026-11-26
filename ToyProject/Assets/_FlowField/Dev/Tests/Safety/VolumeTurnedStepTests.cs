@@ -47,18 +47,18 @@ namespace Common.FlowField.Tests
             var field = new FlowFieldField(
                 grid,
                 null,
-                blocked,
-                topology,
-                new FlowFieldGoalFlags[count],
-                nextCells,
-                baseDirections,
-                speeds,
-                finalDirections,
-                speeds,
-                new Vector3[count],
-                null,
-                false,
-                -1);
+                new FlowFieldAgentLayer(blocked, new Vector3[count]),
+                new FlowFieldGoalLayer(
+                    topology,
+                    new FlowFieldGoalFlags[count],
+                    nextCells,
+                    baseDirections,
+                    speeds,
+                    finalDirections,
+                    speeds,
+                    null,
+                    false,
+                    -1));
             var published = new FlowFieldSample(direction, 1f, Vector3.zero, false, true);
 
             bool overridden = FlowFieldSampleSafetyRule.Apply(

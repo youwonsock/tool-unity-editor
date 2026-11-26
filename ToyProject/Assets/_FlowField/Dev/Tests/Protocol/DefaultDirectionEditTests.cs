@@ -69,14 +69,14 @@ namespace Common.FlowField.Tests
             Vector3 direction = FlowFieldProtocolScenes.GetVector(manager, FlowFieldProtocolScenes.DefaultDirectionPath).normalized;
             Assert.That(manager.TryGetPublishedField(out FlowFieldField field), Is.True, FlowFieldPlayScene.Describe());
             int open = 0, baseMatches = 0, finalMatches = 0;
-            for (int i = 0; i < field.NextCells.Length; i++)
+            for (int i = 0; i < field.Goal.NextCells.Length; i++)
             {
-                if (field.Blocked[i] || field.NextCells[i] != FlowFieldNextCell.DefaultDirection)
+                if (field.Agent.Blocked[i] || field.Goal.NextCells[i] != FlowFieldNextCell.DefaultDirection)
                     continue;
                 open++;
-                if (Vector3.Distance(field.BaseDirections[i], direction) < 1e-3f)
+                if (Vector3.Distance(field.Goal.BaseDirections[i], direction) < 1e-3f)
                     baseMatches++;
-                if (Vector3.Distance(field.FinalDirections[i], direction) < 1e-3f)
+                if (Vector3.Distance(field.Goal.FinalDirections[i], direction) < 1e-3f)
                     finalMatches++;
             }
             return new Counts(open, baseMatches, finalMatches);

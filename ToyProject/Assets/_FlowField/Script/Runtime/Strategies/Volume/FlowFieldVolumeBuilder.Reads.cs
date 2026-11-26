@@ -30,19 +30,19 @@ namespace Common.FlowField
                 request.HasGoal,
                 request.GoalWorld,
                 request.GoalInfluenceRadius,
-                request.HasGoal ? _fields.Committed.GoalIndex : -1);
+                request.HasGoal ? _fields.Committed.Goal.CellIndex : -1);
             // Static bake assets store the immutable base field. The current
             // Default Direction and registered Modifiers are runtime inputs
             // and are composed again when the snapshot is loaded.
             payload = new FlowFieldVolumeBakePayload(
                 metadata,
-                (bool[])_fields.Committed.Blocked.Clone(),
-                (uint[])_fields.Committed.Topology.Clone(),
-                (FlowFieldGoalFlags[])_fields.Committed.GoalFlags.Clone(),
-                (int[])_fields.Committed.NextCells.Clone(),
-                (Vector3[])_fields.Committed.BaseDirections.Clone(),
-                (float[])_fields.Committed.BaseSpeeds.Clone(),
-                (Vector3[])_fields.Committed.EscapeDirections.Clone());
+                (bool[])_fields.Committed.Agent.Blocked.Clone(),
+                (uint[])_fields.Committed.Goal.Topology.Clone(),
+                (FlowFieldGoalFlags[])_fields.Committed.Goal.Flags.Clone(),
+                (int[])_fields.Committed.Goal.NextCells.Clone(),
+                (Vector3[])_fields.Committed.Goal.BaseDirections.Clone(),
+                (float[])_fields.Committed.Goal.BaseSpeeds.Clone(),
+                (Vector3[])_fields.Committed.Agent.EscapeDirections.Clone());
             return true;
         }
 
@@ -58,12 +58,12 @@ namespace Common.FlowField
             // StaticBaked requests all carry the baked Goal.
             FlowFieldVolumeRequest requested = _inputs.Requests.HasLatest ? _inputs.Requests.Latest : request;
             Vector3 resolvedGoal = default;
-            bool hasResolvedGoal = _fields.Committed.GoalIndex >= 0
-                && _fields.Committed.GoalIndex < _fields.Committed.Grid.CellCount;
+            bool hasResolvedGoal = _fields.Committed.Goal.CellIndex >= 0
+                && _fields.Committed.Goal.CellIndex < _fields.Committed.Grid.CellCount;
             if (hasResolvedGoal)
             {
                 _fields.Committed.Grid.FromFlatIndex(
-                    _fields.Committed.GoalIndex,
+                    _fields.Committed.Goal.CellIndex,
                     out int goalX,
                     out int goalY,
                     out int goalZ);

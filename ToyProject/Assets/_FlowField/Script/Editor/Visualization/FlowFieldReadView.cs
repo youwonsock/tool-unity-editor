@@ -145,12 +145,12 @@ namespace Common.FlowField.Editor
         internal static FlowFieldReadView FromSurfaceField(FlowFieldField field)
             => CreateSurface(
                 field.Grid,
-                field.Surface,
-                field.Blocked,
-                field.GoalFlags,
-                field.FinalDirections,
-                field.FinalSpeeds,
-                field.ModifierInfluence);
+                field.Scene.Surface,
+                field.Agent.Blocked,
+                field.Goal.Flags,
+                field.Goal.FinalDirections,
+                field.Goal.FinalSpeeds,
+                field.Goal.ModifierInfluence);
 
         /// <summary>
         /// A view of a published Volume3D field, for this repaint only. The
@@ -165,9 +165,9 @@ namespace Common.FlowField.Editor
                     field.Request.BakeData,
                     field.Request.BakeRevision,
                     resultId),
-                field.Blocked,
-                field.FinalDirections,
-                field.FinalSpeeds);
+                field.Agent.Blocked,
+                field.Goal.FinalDirections,
+                field.Goal.FinalSpeeds);
 
         internal static FlowFieldReadView CreateVolume(
             FlowFieldVolumeVisualizationSource source,

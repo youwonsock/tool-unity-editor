@@ -18,16 +18,16 @@ namespace Common.FlowField.Tests
             if (field == null)
                 throw new ArgumentNullException(nameof(field));
             ulong hash = OffsetBasis;
-            Mix(ref hash, field.Blocked);
-            Mix(ref hash, field.Topology);
-            Mix(ref hash, field.GoalFlags);
-            Mix(ref hash, field.NextCells);
-            Mix(ref hash, field.BaseDirections);
-            Mix(ref hash, field.BaseSpeeds);
-            Mix(ref hash, field.FinalDirections);
-            Mix(ref hash, field.FinalSpeeds);
-            Mix(ref hash, field.EscapeDirections);
-            Mix(ref hash, field.ModifierInfluence);
+            Mix(ref hash, field.Agent.Blocked);
+            Mix(ref hash, field.Goal.Topology);
+            Mix(ref hash, field.Goal.Flags);
+            Mix(ref hash, field.Goal.NextCells);
+            Mix(ref hash, field.Goal.BaseDirections);
+            Mix(ref hash, field.Goal.BaseSpeeds);
+            Mix(ref hash, field.Goal.FinalDirections);
+            Mix(ref hash, field.Goal.FinalSpeeds);
+            Mix(ref hash, field.Agent.EscapeDirections);
+            Mix(ref hash, field.Goal.ModifierInfluence);
             return hash;
         }
 

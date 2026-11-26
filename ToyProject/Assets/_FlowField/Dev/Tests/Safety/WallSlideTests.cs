@@ -61,7 +61,7 @@ namespace Common.FlowField.Tests
             for (int x = 0; x < cells.Width; x++)
             {
                 int i = cells.Index(x, z);
-                if (!cells.IsOpen(i) || field.NextCells[i] < FlowFieldNextCell.DefaultDirection)
+                if (!cells.IsOpen(i) || field.Goal.NextCells[i] < FlowFieldNextCell.DefaultDirection)
                     continue;
                 Vector3 center = cells.Center(i);
                 if (!FlowFieldSafetyScan.IsMoving(manager, center, out FlowFieldSample sample))

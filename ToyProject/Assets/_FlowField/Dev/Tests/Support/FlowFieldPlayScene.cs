@@ -126,7 +126,7 @@ namespace Common.FlowField.Tests
         internal static int CellCount(FlowFieldManager manager)
         {
             Assert.That(manager.TryGetPublishedField(out FlowFieldField field), Is.True);
-            return field.Blocked.Length;
+            return field.Agent.Blocked.Length;
         }
 
         private static bool AllReady()

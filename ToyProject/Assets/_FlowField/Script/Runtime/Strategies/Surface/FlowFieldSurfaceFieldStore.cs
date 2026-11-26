@@ -21,9 +21,9 @@ namespace Common.FlowField
 
         internal FlowFieldField Field => _field;
         internal FlowFieldGridSpace Grid => _field?.Grid ?? default;
-        internal FlowFieldSurfaceData Surface => _field?.Surface;
-        internal bool HasActiveGoal => _field != null && _field.HasActiveGoal;
-        internal int ResolvedGoalIndex => _field?.GoalIndex ?? -1;
+        internal FlowFieldSurfaceData Surface => _field?.Scene.Surface;
+        internal bool HasActiveGoal => _field != null && _field.Goal.IsActive;
+        internal int ResolvedGoalIndex => _field?.Goal.CellIndex ?? -1;
         internal int Capacity => _field?.Capacity ?? 0;
         internal bool IsValid => _field != null && Grid.IsValid && Surface != null && Surface.IsValid;
 
@@ -43,23 +43,23 @@ namespace Common.FlowField
             {
                 new FlowFieldSurfaceFieldCommitJob
                 {
-                    Blocked = pins.Pin(target.Blocked),
+                    Blocked = pins.Pin(target.Agent.Blocked),
                     BlockedSource = pins.Pin(workspace.Blocked),
-                    Topology = pins.Pin(target.Topology),
+                    Topology = pins.Pin(target.Goal.Topology),
                     TopologySource = pins.Pin(workspace.TopologyMasks),
-                    GoalFlags = pins.Pin(target.GoalFlags),
+                    GoalFlags = pins.Pin(target.Goal.Flags),
                     GoalFlagsSource = pins.Pin(workspace.GoalFlags),
-                    Next = pins.Pin(target.NextCells),
+                    Next = pins.Pin(target.Goal.NextCells),
                     NextSource = pins.Pin(workspace.NextCells),
-                    BaseDirections = pins.Pin(target.BaseDirections),
+                    BaseDirections = pins.Pin(target.Goal.BaseDirections),
                     BaseDirectionsSource = pins.Pin(workspace.BaseDirections),
-                    BaseSpeeds = pins.Pin(target.BaseSpeeds),
+                    BaseSpeeds = pins.Pin(target.Goal.BaseSpeeds),
                     BaseSpeedsSource = pins.Pin(workspace.BaseSpeedMultipliers),
-                    FinalDirections = pins.Pin(target.FinalDirections),
+                    FinalDirections = pins.Pin(target.Goal.FinalDirections),
                     FinalDirectionsSource = pins.Pin(workspace.FinalDirections),
-                    FinalSpeeds = pins.Pin(target.FinalSpeeds),
+                    FinalSpeeds = pins.Pin(target.Goal.FinalSpeeds),
                     FinalSpeedsSource = pins.Pin(workspace.FinalSpeedMultipliers),
-                    Influence = pins.Pin(target.ModifierInfluence),
+                    Influence = pins.Pin(target.Goal.ModifierInfluence),
                     InfluenceSource = pins.Pin(workspace.ModifierInfluence),
                     Changed = pins.Pin(changed),
                     Width = width,
@@ -124,8 +124,8 @@ namespace Common.FlowField
             bool any = full;
             any |= CopyRegion(grid.Width, workspace, next, includeBase, minX, maxX, minZ, maxZ);
             any |= previous == null
-                || previous.HasActiveGoal != next.HasActiveGoal
-                || previous.GoalIndex != next.GoalIndex;
+                || previous.Goal.IsActive != next.Goal.IsActive
+                || previous.Goal.CellIndex != next.Goal.CellIndex;
 
             if (!any)
             {
@@ -150,49 +150,38 @@ namespace Common.FlowField
             FlowFieldSurfaceWorkspace workspace)
             => new FlowFieldField(
                 grid,
-                surface,
-                FlowFieldSpareArrays.Take(ref _spares.Blocked, count),
-                FlowFieldSpareArrays.Take(ref _spares.Topology, count),
-                FlowFieldSpareArrays.Take(ref _spares.GoalFlags, count),
-                FlowFieldSpareArrays.Take(ref _spares.Next, count),
-                FlowFieldSpareArrays.Take(ref _spares.Directions, count),
-                FlowFieldSpareArrays.Take(ref _spares.Speeds, count),
-                FlowFieldSpareArrays.Take(ref _spares.FinalDirections, count),
-                FlowFieldSpareArrays.Take(ref _spares.FinalSpeeds, count),
-                escapeDirections: null,
-                FlowFieldSpareArrays.Take(ref _spares.ModifierInfluence, count),
-                workspace.HasActiveGoal,
-                workspace.ResolvedGoalIndex);
+                new FlowFieldSceneLayer(surface),
+                new FlowFieldAgentLayer(
+                    FlowFieldSpareArrays.Take(ref _spares.Blocked, count),
+                    escapeDirections: null),
+                new FlowFieldGoalLayer(
+                    FlowFieldSpareArrays.Take(ref _spares.Topology, count),
+                    FlowFieldSpareArrays.Take(ref _spares.GoalFlags, count),
+                    FlowFieldSpareArrays.Take(ref _spares.Next, count),
+                    FlowFieldSpareArrays.Take(ref _spares.Directions, count),
+                    FlowFieldSpareArrays.Take(ref _spares.Speeds, count),
+                    FlowFieldSpareArrays.Take(ref _spares.FinalDirections, count),
+                    FlowFieldSpareArrays.Take(ref _spares.FinalSpeeds, count),
+                    FlowFieldSpareArrays.Take(ref _spares.ModifierInfluence, count),
+                    workspace.HasActiveGoal,
+                    workspace.ResolvedGoalIndex));
 
+        // The same agent and Goal layers on a new Surface snapshot.
         private static FlowFieldField Share(FlowFieldField field, FlowFieldGridSpace grid, FlowFieldSurfaceData surface)
-            => new FlowFieldField(
-                grid,
-                surface,
-                field.Blocked,
-                field.Topology,
-                field.GoalFlags,
-                field.NextCells,
-                field.BaseDirections,
-                field.BaseSpeeds,
-                field.FinalDirections,
-                field.FinalSpeeds,
-                field.EscapeDirections,
-                field.ModifierInfluence,
-                field.HasActiveGoal,
-                field.GoalIndex);
+            => new FlowFieldField(grid, new FlowFieldSceneLayer(surface), field.Agent, field.Goal);
 
         private static void CopyAll(FlowFieldField from, FlowFieldField to)
         {
             int count = from.Capacity;
-            Array.Copy(from.Blocked, to.Blocked, count);
-            Array.Copy(from.Topology, to.Topology, count);
-            Array.Copy(from.GoalFlags, to.GoalFlags, count);
-            Array.Copy(from.NextCells, to.NextCells, count);
-            Array.Copy(from.BaseDirections, to.BaseDirections, count);
-            Array.Copy(from.BaseSpeeds, to.BaseSpeeds, count);
-            Array.Copy(from.FinalDirections, to.FinalDirections, count);
-            Array.Copy(from.FinalSpeeds, to.FinalSpeeds, count);
-            Array.Copy(from.ModifierInfluence, to.ModifierInfluence, count);
+            Array.Copy(from.Agent.Blocked, to.Agent.Blocked, count);
+            Array.Copy(from.Goal.Topology, to.Goal.Topology, count);
+            Array.Copy(from.Goal.Flags, to.Goal.Flags, count);
+            Array.Copy(from.Goal.NextCells, to.Goal.NextCells, count);
+            Array.Copy(from.Goal.BaseDirections, to.Goal.BaseDirections, count);
+            Array.Copy(from.Goal.BaseSpeeds, to.Goal.BaseSpeeds, count);
+            Array.Copy(from.Goal.FinalDirections, to.Goal.FinalDirections, count);
+            Array.Copy(from.Goal.FinalSpeeds, to.Goal.FinalSpeeds, count);
+            Array.Copy(from.Goal.ModifierInfluence, to.Goal.ModifierInfluence, count);
         }
 
         internal FlowFieldSurfaceWorkspace CreateWorkspaceSnapshot()
@@ -210,7 +199,7 @@ namespace Common.FlowField
             if (!IsValid || workspace == null || workspace.Capacity != Capacity)
                 throw new ArgumentException("Committed workspace does not match the field store.", nameof(workspace));
             workspace.AssertWritable(nameof(CopyToWorkspace));
-            Array.Copy(_field.Blocked, workspace.Blocked, Capacity);
+            Array.Copy(_field.Agent.Blocked, workspace.Blocked, Capacity);
             CopyGoalAndFieldToWorkspace(workspace);
             // Escape vectors are a diagnostic/bake concern rather than part
             // of the compact runtime field. Reconstruct them only when an
@@ -229,21 +218,21 @@ namespace Common.FlowField
             if (!IsValid || workspace == null || workspace.Capacity != Capacity)
                 throw new ArgumentException("Committed workspace does not match the field store.", nameof(workspace));
             workspace.AssertWritable(nameof(CopyGoalAndFieldToWorkspace));
-            FlowFieldField field = _field;
+            FlowFieldGoalLayer goal = _field.Goal;
             for (int i = 0; i < Capacity; i++)
-                workspace.TopologyMasks[i] = (byte)field.Topology[i];
-            Array.Copy(field.GoalFlags, workspace.GoalFlags, Capacity);
-            Array.Copy(field.NextCells, workspace.NextCells, Capacity);
-            Array.Copy(field.BaseDirections, workspace.BaseDirections, Capacity);
-            Array.Copy(field.BaseSpeeds, workspace.BaseSpeedMultipliers, Capacity);
-            Array.Copy(field.FinalDirections, workspace.FinalDirections, Capacity);
-            Array.Copy(field.FinalSpeeds, workspace.FinalSpeedMultipliers, Capacity);
-            Array.Copy(field.ModifierInfluence, workspace.ModifierInfluence, Capacity);
-            workspace.LoadBakedGoal(HasActiveGoal, ResolvedGoalIndex, field.NextCells);
+                workspace.TopologyMasks[i] = (byte)goal.Topology[i];
+            Array.Copy(goal.Flags, workspace.GoalFlags, Capacity);
+            Array.Copy(goal.NextCells, workspace.NextCells, Capacity);
+            Array.Copy(goal.BaseDirections, workspace.BaseDirections, Capacity);
+            Array.Copy(goal.BaseSpeeds, workspace.BaseSpeedMultipliers, Capacity);
+            Array.Copy(goal.FinalDirections, workspace.FinalDirections, Capacity);
+            Array.Copy(goal.FinalSpeeds, workspace.FinalSpeedMultipliers, Capacity);
+            Array.Copy(goal.ModifierInfluence, workspace.ModifierInfluence, Capacity);
+            workspace.LoadBakedGoal(HasActiveGoal, ResolvedGoalIndex, goal.NextCells);
             for (int i = 0; i < Capacity; i++)
             {
-                workspace.GoalDirections[i] = (field.GoalFlags[i] & FlowFieldGoalFlags.Directed) != 0
-                    ? field.BaseDirections[i]
+                workspace.GoalDirections[i] = (goal.Flags[i] & FlowFieldGoalFlags.Directed) != 0
+                    ? goal.BaseDirections[i]
                     : Vector3.zero;
             }
         }
