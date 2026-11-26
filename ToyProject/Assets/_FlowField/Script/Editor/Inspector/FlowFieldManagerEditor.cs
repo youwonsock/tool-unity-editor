@@ -50,6 +50,7 @@ namespace Common.FlowField.Editor
             DrawAgentTypes(manager, isVolume);
             DrawSettings(FlowFieldManager.PropertyNames.Flow, "Flow");
             EditorGUILayout.PropertyField(serializedObject.FindProperty(FlowFieldManager.PropertyNames.GoalTransform));
+            DrawWorld(manager);
 
             // The Mode header comes from the field's [Header] attribute.
             // SetSpaceMode refuses the same states: Release first.
@@ -137,6 +138,16 @@ namespace Common.FlowField.Editor
         }
 
         // A settings bundle drawn as a header and its fields, without a foldout.
+        // The world the Manager joins at Init; it stays until Release.
+        private void DrawWorld(FlowFieldManager manager)
+        {
+            EditorGUILayout.Space();
+            using (new EditorGUI.DisabledScope(Application.isPlaying && (manager.IsInitialized || manager.IsFaulted)))
+                EditorGUILayout.PropertyField(serializedObject.FindProperty(FlowFieldManager.PropertyNames.World));
+            if (!manager.TryValidateWorldLattice(out string reason))
+                EditorGUILayout.HelpBox(reason, MessageType.Warning);
+        }
+
         // The settings above are the Default agent type; each element adds one.
         // A new type starts from the Manager's own values. A session holds the
         // number and names from Init to Release, so they are locked then.

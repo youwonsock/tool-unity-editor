@@ -45,6 +45,7 @@ namespace Common.FlowField
             internal const string Flow = nameof(_flow);
             internal const string AgentTypes = nameof(_agentTypes);
             internal const string GoalTransform = nameof(_goalTransform);
+            internal const string World = nameof(_world);
             internal const string SpaceMode = nameof(_spaceMode);
             internal const string BakeMode = nameof(_bakeMode);
             internal const string BakeAssets = nameof(_bakeAssets);
@@ -238,6 +239,7 @@ namespace Common.FlowField
             using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
             _session?.Dispose();
             DisposeAgentSessions();
+            LeaveWorld();
         }
 
         // Init reuses the session of the configured mode. A session of the
@@ -294,9 +296,11 @@ namespace Common.FlowField
                 _session.Stop();
                 StopAgentSessions();
                 SubmitConfig(FlowFieldConfigChange.Rebuild);
+                JoinWorld();
                 return;
             }
             StartBuilding();
+            JoinWorld();
         }
 
         /// <inheritdoc/>
@@ -397,6 +401,8 @@ namespace Common.FlowField
             if (_session.SubmitConfig(in config, change) && change == FlowFieldConfigChange.Rebuild)
                 _session.AttachRuntimeScheduler();
             SubmitAgentConfigs(change);
+            if (change == FlowFieldConfigChange.Settings || change == FlowFieldConfigChange.Rebuild)
+                RefreshWorldArea();
         }
 
         // Modifiers enabled while the session could not take them join
@@ -425,6 +431,7 @@ namespace Common.FlowField
             Modifiers.Detach();
             owner.Release();
             ReleaseAgentSessions();
+            LeaveWorld();
             // The Goal is input like the registrations Release clears.
             ChangeExplicitGoal(hasGoal: false, default);
             unchecked { GoalLifetime++; }
