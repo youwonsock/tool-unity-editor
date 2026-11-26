@@ -5,7 +5,7 @@ namespace Common.FlowField
     /// <summary>Reads of the published Surface2D field: the field, its grid and info, and the bake export.</summary>
     internal sealed partial class FlowFieldSurfaceBuilder
     {
-        public bool TryGetFieldInfo(out FlowFieldFieldInfo info)
+        public bool TryGetFieldInfo(int revision, out FlowFieldFieldInfo info)
         {
             info = default;
             if (!_fieldStore.Grid.IsValid || _fieldStore.Surface == null || !_fieldStore.Surface.IsValid)
@@ -44,7 +44,7 @@ namespace Common.FlowField
                 _fieldStore.Surface.BakeBoundsWorld,
                 FlowFieldSpaceMode.Surface2D,
                 _bakeMode,
-                _session.Revision,
+                revision,
                 hasRequestedGoal,
                 requestedGoal,
                 influenceRadius,

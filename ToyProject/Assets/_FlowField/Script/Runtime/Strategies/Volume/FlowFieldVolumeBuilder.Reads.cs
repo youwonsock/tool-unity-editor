@@ -46,7 +46,7 @@ namespace Common.FlowField
             return true;
         }
 
-        public bool TryGetFieldInfo(out FlowFieldFieldInfo info)
+        public bool TryGetFieldInfo(int revision, out FlowFieldFieldInfo info)
         {
             info = default;
             if (_committed == null)
@@ -75,7 +75,7 @@ namespace Common.FlowField
                 request.WorldBounds,
                 FlowFieldSpaceMode.Volume3D,
                 request.BakeMode,
-                _session.Revision,
+                revision,
                 requested.HasGoal,
                 requested.GoalWorld,
                 requested.GoalInfluenceRadius,

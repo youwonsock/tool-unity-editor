@@ -91,7 +91,8 @@ namespace Common.FlowField
         // The latest request's grid: ClampPositionToGrid uses it, before and
         // after the build that publishes it. Valid once a request exists.
         FlowFieldGridSpace LatestGrid { get; }
-        bool TryGetFieldInfo(out FlowFieldFieldInfo info);
+        // The session owns the Revision the info reports.
+        bool TryGetFieldInfo(int revision, out FlowFieldFieldInfo info);
 
         // ----- Configuration -------------------------------------------------
         // The builder turns the Manager's settings into its own request; every

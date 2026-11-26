@@ -71,7 +71,7 @@ namespace Common.FlowField
         internal bool TryGetFieldInfo(out FlowFieldFieldInfo info)
         {
             info = default;
-            return IsReady && _builder.TryGetFieldInfo(out info);
+            return IsReady && _builder.TryGetFieldInfo(Revision, out info);
         }
 
         /// <summary>
