@@ -228,8 +228,8 @@ namespace Common.FlowField
         // Only a build with an active Goal solves; the others compose directly.
         private void StartBfs(in FlowFieldSurfaceRequest request)
         {
-            // A solve callback can arrive after this lifetime has ended.
-            int generation = _session.LifetimeGeneration;
+            // A solve callback can arrive after the build was cancelled.
+            int cancelCount = _cancelCount;
             FlowFieldSurfaceBfsRequest bfsRequest = new FlowFieldSurfaceBfsRequest(
                 _state.Grid,
                 _state.Surface,
@@ -242,24 +242,23 @@ namespace Common.FlowField
             // Set first: the callback that reports the solve moves the phase on.
             _phase = BuildPhase.WaitingSolve;
             PrepareSolveBackend();
-            bool accepted = _solveBackend.StartBfs(bfsRequest, _ => RunBfsCallback(generation));
+            bool accepted = _solveBackend.StartBfs(bfsRequest, _ => RunBfsCallback(cancelCount));
             // Only a disposed backend refuses a solve.
-            if (!accepted && IsCurrentBuild(generation))
+            if (!accepted && IsCurrentBuild(cancelCount))
                 throw new InvalidOperationException("FlowField BFS session could not be started.");
         }
 
-        // The solve this build waits for. Stop and a fault cancel the build and
-        // advance the generation, so a late callback finds neither.
-        private bool IsCurrentBuild(int generation)
-            => !_session.Disposed
-                && generation == _session.LifetimeGeneration
+        // The solve this build waits for. Stop, a fault and Dispose cancel the
+        // build, so a late callback finds neither.
+        private bool IsCurrentBuild(int cancelCount)
+            => cancelCount == _cancelCount
                 && _phase == BuildPhase.WaitingSolve;
 
         // The backend calls back from Poll, inside StepBuild: a failure leaves
         // through StepBuild and the session faults.
-        private void RunBfsCallback(int generation)
+        private void RunBfsCallback(int cancelCount)
         {
-            if (IsCurrentBuild(generation))
+            if (IsCurrentBuild(cancelCount))
                 OnBfsCompleted();
         }
 

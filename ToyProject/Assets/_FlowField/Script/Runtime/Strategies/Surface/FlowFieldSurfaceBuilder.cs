@@ -53,6 +53,10 @@ namespace Common.FlowField
         }
 
         private BuildPhase _phase;
+        // Advances with every CancelWork, so a solve callback from before it
+        // is dropped (the session cancels on Stop, Restart, Release, Dispose
+        // and a fault).
+        private int _cancelCount;
         private FlowFieldSurfaceRequest _commitRequest;
         private bool _commitResultChanged;
         private bool _commitIncludeBase;
@@ -226,6 +230,7 @@ namespace Common.FlowField
         // The session advanced its generation, so a late solve callback is dropped.
         public void CancelWork()
         {
+            unchecked { _cancelCount++; }
             _solveBackend?.Cancel();
             _composeStage.Clear();
             _phase = BuildPhase.None;
