@@ -192,7 +192,7 @@ namespace Common.FlowField
             BakeMode = bakeMode;
             Fault = null;
             Safety.ClearRegions();
-            _builder.Initialize();
+            _builder.Initialize(bakeMode);
             SetLifecycle(FlowFieldSessionLifecycle.Active);
         }
 

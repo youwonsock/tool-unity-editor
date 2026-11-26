@@ -21,10 +21,10 @@ namespace Common.FlowField
                 {
                     FlowFieldSurfaceSignature signature = CreateSignature(in config);
                     // A StaticBaked field takes no runtime obstacles.
-                    bool requeryObstacles = _session.BakeMode != FlowFieldBakeMode.StaticBaked;
+                    bool requeryObstacles = _bakeMode != FlowFieldBakeMode.StaticBaked;
                     Bounds? invalidated = Submit(CreateRequest(
                         in config,
-                        _session.BakeMode,
+                        _bakeMode,
                         in signature,
                         requeryObstacles ? RequeryObstacleFlags : FlowFieldSurfaceDirtyFlags.None,
                         FlowFieldCellRect.Invalid,
@@ -92,7 +92,7 @@ namespace Common.FlowField
         private FlowFieldSurfaceRequest CreateCurrentRequest(in FlowFieldManagerConfig config)
             => CreateRequest(
                 in config,
-                _session.BakeMode,
+                _bakeMode,
                 CreateSignature(in config),
                 FlowFieldSurfaceDirtyFlags.None,
                 FlowFieldCellRect.Invalid,

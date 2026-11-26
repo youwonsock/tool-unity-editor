@@ -27,6 +27,7 @@ namespace Common.FlowField
         private readonly FlowFieldSurfaceComposeStage _composeStage = new FlowFieldSurfaceComposeStage();
         private FlowFieldSurfaceModifierComposition _modifierComposition;
         private FlowFieldSurfaceRequest? _committedRequest;
+        private FlowFieldBakeMode _bakeMode;
         private FlowFieldSurfaceSourceKind _sourceKind;
         // Configuration input that arrived while a build ran. The next build
         // submits it before it begins.
@@ -72,10 +73,11 @@ namespace Common.FlowField
                 surfaceSource ?? FlowFieldRaycastSurfaceSource.Instance);
         }
 
-        // The session set the bake mode and cleared the uncertain regions.
-        public void Initialize()
+        // The session cleared the uncertain regions.
+        public void Initialize(FlowFieldBakeMode bakeMode)
         {
-            _sourceKind = _session.BakeMode switch
+            _bakeMode = bakeMode;
+            _sourceKind = bakeMode switch
             {
                 FlowFieldBakeMode.StaticBaked => FlowFieldSurfaceSourceKind.StaticSnapshot,
                 FlowFieldBakeMode.BakedBase => FlowFieldSurfaceSourceKind.BakedBase,

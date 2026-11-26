@@ -27,7 +27,7 @@ namespace Common.FlowField
 
         public void ApplyObstacleChange(in FlowFieldObstacleChange change)
         {
-            if (_session.BakeMode == FlowFieldBakeMode.StaticBaked)
+            if (_bakeMode == FlowFieldBakeMode.StaticBaked)
                 return;
             // Before the first build the latest request already holds the grid.
             FlowFieldGridSpace grid = LatestGrid;

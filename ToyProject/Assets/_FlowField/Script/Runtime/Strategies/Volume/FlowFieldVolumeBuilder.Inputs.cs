@@ -9,7 +9,7 @@ namespace Common.FlowField
         // BakedBase also keeps every region a change reached for a reloaded bake.
         public void ApplyObstacleChange(in FlowFieldObstacleChange change)
         {
-            if (_session.BakeMode == FlowFieldBakeMode.BakedBase && _requests.HasLatest)
+            if (_bakeMode == FlowFieldBakeMode.BakedBase && _requests.HasLatest)
             {
                 float margin = FlowFieldObstacleReach.Margin(_requests.Latest.Grid.CellSize, _requests.Latest.ObstacleClearance);
                 if (change.HasPrevious)

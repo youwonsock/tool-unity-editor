@@ -96,10 +96,11 @@ namespace Common.FlowField
         // ----- Configuration -------------------------------------------------
         // The builder turns the Manager's settings into its own request; every
         // change arrives as a notification, never by polling the scene.
-        // Initialize prepares a builder that has no request yet, for the bake
-        // mode the session has just set. SubmitConfig returns the region new
-        // obstacle settings made uncertain, if any.
-        void Initialize();
+        // Initialize prepares a builder that has no request yet for the bake
+        // mode the session starts with; the builder keeps it until the next
+        // Initialize. SubmitConfig returns the region new obstacle settings
+        // made uncertain, if any.
+        void Initialize(FlowFieldBakeMode bakeMode);
         Bounds? SubmitConfig(in FlowFieldManagerConfig config, FlowFieldConfigChange change);
 
         // ----- Input ----------------------------------------------------------

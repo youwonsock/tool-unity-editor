@@ -43,7 +43,7 @@ namespace Common.FlowField
                 _fieldStore.Grid,
                 _fieldStore.Surface.BakeBoundsWorld,
                 FlowFieldSpaceMode.Surface2D,
-                _session.BakeMode,
+                _bakeMode,
                 _session.Revision,
                 hasRequestedGoal,
                 requestedGoal,

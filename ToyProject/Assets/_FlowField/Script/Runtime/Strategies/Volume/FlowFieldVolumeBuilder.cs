@@ -40,6 +40,7 @@ namespace Common.FlowField
         // A reloaded bake queries it again, because the bake still holds what
         // was there before the changes.
         private Bounds? _bakedBaseTouched;
+        private FlowFieldBakeMode _bakeMode;
 
         // The session that runs this builder. Lifecycle, events and the build
         // loop live there.
@@ -73,10 +74,11 @@ namespace Common.FlowField
             }
         }
 
-        // The session set the bake mode and cleared the uncertain regions.
-        // Running with no request yet; the first Submit starts a build.
-        public void Initialize()
+        // The session cleared the uncertain regions. Running with no request
+        // yet; the first Submit starts a build.
+        public void Initialize(FlowFieldBakeMode bakeMode)
         {
+            _bakeMode = bakeMode;
             _requests.Clear();
             _hasPendingModifierRecompose = false;
             _obstacleQueryRequired = false;

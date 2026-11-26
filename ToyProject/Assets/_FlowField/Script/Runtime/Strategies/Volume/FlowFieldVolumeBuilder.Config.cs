@@ -50,7 +50,7 @@ namespace Common.FlowField
         {
             if (!TryCreateLayout(in config, out Bounds worldBounds, out FlowFieldGridSpace grid))
                 throw new InvalidOperationException(FlowFieldManagerConfig.InvalidGridMessage);
-            FlowFieldBakeMode bakeMode = _session.BakeMode;
+            FlowFieldBakeMode bakeMode = _bakeMode;
             return CreateRequest(
                 in config,
                 grid,
