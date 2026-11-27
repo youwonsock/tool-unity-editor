@@ -211,9 +211,11 @@ namespace Common.FlowField
             }
         }
 
+        // The sessions themselves count too: a script reload in Play keeps the
+        // names but not the sessions, and Init then makes them again.
         private bool MatchesAgentSessions(FlowFieldAgentTypeSettings[] types)
         {
-            if (types.Length != _agentSessionNames.Length)
+            if (types.Length != _agentSessionNames.Length || types.Length != _agentSessions.Length)
                 return false;
             for (int i = 0; i < types.Length; i++)
             {
@@ -350,6 +352,10 @@ namespace Common.FlowField
                 if (!primaryModifiers.Contains(modifier))
                     agent.UnregisterModifierCommand(modifier);
             }
+            // The kept Modifiers' Priorities first: an edit made while the type
+            // was faulted or stopped never arrived, and a Modifier registered
+            // next is checked against the Priorities they have now.
+            agent.ObserveModifiers();
             for (int i = 0; i < primaryModifiers.Count; i++)
             {
                 IFlowFieldVectorModifier modifier = primaryModifiers.Entries[i].Modifier;
@@ -371,17 +377,15 @@ namespace Common.FlowField
             for (int i = 0; i < primary.Count; i++)
             {
                 FlowFieldGoalSet.Entry entry = primary.Entries[i];
+                // A world Goal stays one: it builds only from its world's seeds,
+                // and its position reaches the search through them.
                 if (goals.Find(entry.Id) == null)
-                    goals.Add(entry.Kind, entry.Request, entry.Id);
+                    goals.Add(entry.Kind, entry.Request, entry.Id, entry.World);
+                else if (entry.World)
+                    goals.TrySetWorldRequest(entry.Id, entry.Request);
                 else
                     goals.TrySetRequest(entry.Id, entry.Request);
             }
-        }
-
-        private void ObserveAgentModifiers()
-        {
-            for (int i = 0; i < _agentSessions.Length; i++)
-                _agentSessions[i].ObserveModifiers();
         }
 
         private void ReleaseAgentSessions()

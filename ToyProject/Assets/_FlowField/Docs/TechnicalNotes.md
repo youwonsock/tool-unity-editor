@@ -494,10 +494,10 @@ Manager의 Obstacle Clearance, Max Slope, Max Step Height가 `Default` 유형입
 | `Protocol` | 빌드 단계, 풀이 중 Stop·Release, 거부·폐기된 빌드, Default Direction 동기화, 증분 결과와 fresh 결과의 일치 |
 | `Safety` | 샘플 안전 규칙: 막힘·지면 없음·격자 밖·낙차로 향하는 움직이는 샘플이 없는지 |
 | `Obstacles` | 등록·해제·파괴·순간이동, 불확실 영역, 미등록 장애물 sweep, 격자 왕복 |
-| `World` | World 영역: lattice·겹침·경계 칸 쌍, seed 탐색(Goal 칸 seed는 추가 Goal과 같은 필드, 여러 seed는 다중 출발 탐색과 같은 걸음 수), 닿는 두 영역과 하나의 Manager가 같은 걸음 수(두 모드), 경계를 넘는 이동 주체와 경계 너머 알림의 정지, 영역 밖 Goal, 장면 스트리밍, 공유 등록, StaticBaked 영역의 World Goal, World Bake(Goal 영역을 내린 뒤 이웃이 Goal 영역을 불러왔을 때와 같은 걸음 수를 가짐, Bake에 없는 영역과 Bake가 없을 때의 직선 추정, Bake 거부, Bake에 없는 영역 경고) |
-| `Agents` | Agent 유형: Manager 설정과 같은 유형은 같은 필드, 넓은 유형은 기본 유형의 막힘을 포함하고 연결을 넘지 않음, 장애물·Goal·Modifier·켜고 끄기가 모든 유형에 닿음, 유형의 잘못된 값과 개수 변경의 Fault, StaticBaked 거부 |
+| `World` | World 영역: lattice·겹침·경계 칸 쌍, seed 탐색(Goal 칸 seed는 추가 Goal과 같은 필드, 여러 seed는 다중 출발 탐색과 같은 걸음 수), 닿는 두 영역과 하나의 Manager가 같은 걸음 수(두 모드), 경계를 넘는 이동 주체와 경계 너머 알림의 정지, 영역 밖 Goal, 장면 스트리밍, 공유 등록, StaticBaked 영역의 World Goal, 영역 Manager의 World Goal 변경 거부, World Bake(Goal 영역을 내린 뒤 이웃이 Goal 영역을 불러왔을 때와 같은 걸음 수를 가짐, Bake에 없는 영역과 Bake가 없을 때의 직선 추정, Bake 거부, Bake에 없는 영역 경고) |
+| `Agents` | Agent 유형: Manager 설정과 같은 유형은 같은 필드, 넓은 유형은 기본 유형의 막힘을 포함하고 연결을 넘지 않음, 장애물·Goal·Modifier·켜고 끄기가 모든 유형에 닿음(핸들러가 낸 입력, 핸들러보다 먼저 닿는 기본 Goal과 셀 다시 생성 포함), 유형의 잘못된 값과 개수 변경의 Fault, 재시도가 되돌리는 놓친 장애물과 Modifier(Fault 중 바뀐 Priority 포함), 옛 세션의 유형, StaticBaked 거부 |
 | `Modifiers`, `SpaceMode` | 빌드 중 Modifier 파괴, Priority, Space Mode 편집, Fault와 재시도, scheduler 등록 |
-| `Goal`, `EditorBake` | `FlowFieldGoalTarget`, Goal 반경, 추가 Goal(기본 Goal 자리에서 같은 필드, 입력 storm 뒤 fresh와 같고 게시된 필드가 바뀌지 않음, 가장 가까운 Goal, 핸들, 움직이는 기본 Goal·Group Goal과 번갈아 빌드, 빌드 중 Modifier 등록, 기본 Goal이 먼저 게시한 막힘, Manager API와 StaticBaked 거부), Editor 미리보기와 Volume 표시, Bake 거부·대상·복제·다시 Bake |
+| `Goal`, `EditorBake` | `FlowFieldGoalTarget`, Goal 반경, 추가 Goal(기본 Goal 자리에서 같은 필드, 입력 storm 뒤 fresh와 같고 게시된 필드가 바뀌지 않음, 가장 가까운 Goal, 핸들, 움직이는 기본 Goal·Group Goal과 번갈아 빌드, 빌드 중 Modifier 등록, 기본 Goal이 먼저 게시한 막힘, 빌드 중 옮긴 Manager에서 다시 빌드, Manager API와 StaticBaked 거부), Editor 미리보기와 Volume 표시, Bake 거부·대상·복제·다시 Bake |
 
 - **기록값:** 기대값을 규칙으로 정할 수 없는 시나리오(셀 개수 등)는 테스트를 만든 코드가 낸 값을 `FlowFieldRecorded`로 고정합니다. 값이 바뀌면 의도한 변화인지 확인한 뒤 갱신합니다.
 - **기다리는 방법:** 샘플 컨트롤러는 Manager가 처음 Ready가 되면 첫 Goal을 정합니다. 그래서 Play 진입 뒤 한 번 더 안정될 때까지(Ready → 1초 → Ready) 기다린 다음 시나리오를 시작합니다. 테스트가 직접 Pump할 때는 정해진 횟수만큼 확인하면 만료되는 예산(`FlowFieldTestBudget.AfterChecks`)으로 빌드를 정한 지점에서 멈춥니다.

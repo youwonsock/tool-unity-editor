@@ -6,9 +6,12 @@ namespace Common.FlowField
     /// <summary>
     /// The Unity component of a FlowField. It holds the serialized settings
     /// and the Unity callbacks, and forwards the Provider and Controller API
-    /// to one <see cref="FlowFieldSession"/>, which owns all calculation state.
-    /// Files: this one (settings, lifecycle, events), .Api (public calls) and
-    /// .Config (the settings snapshot the builders check and build from).
+    /// to its <see cref="FlowFieldSession"/>s, which own all calculation
+    /// state: one for the Default agent type and one for each Additional Agent
+    /// Type. Files: this one (settings, lifecycle, events), .Api (public
+    /// calls), .Config (the settings snapshot the builders check and build
+    /// from), .Agents (the agent types' sessions) and .World (the area of a
+    /// <see cref="FlowFieldWorld"/>).
     /// Nothing here polls the scene: every change arrives as a call, and only
     /// the obstacle sweep the settings can enable looks for unregistered ones.
     /// </summary>
@@ -57,9 +60,10 @@ namespace Common.FlowField
         // and its successor keep their order and Modifiers of either mode see
         // the same command rules.
         private readonly FlowFieldExecutionBoundary _boundary = new FlowFieldExecutionBoundary();
-        // One session at a time, created by Init for the configured mode. It
-        // stays after Release so its final state remains readable, and is
-        // replaced only when Init runs in the other mode.
+        // The Default agent type's session, created by Init for the configured
+        // mode. It stays after Release so its final state remains readable, and
+        // is replaced only when Init runs in the other mode. The other types'
+        // sessions follow it (.Agents).
         private FlowFieldSession _session;
         // The current session, active or not, for the Editor-only tests.
         internal FlowFieldSession Session => _session;
@@ -201,14 +205,18 @@ namespace Common.FlowField
         /// </summary>
         private void SubmitCheckedConfig(FlowFieldConfigChange change)
         {
-            try
+            // Every agent type takes the settings before any handler runs.
+            using (EnterFanOut())
             {
-                ValidateSessionConfiguration();
-                SubmitConfig(change);
-            }
-            catch (Exception exception)
-            {
-                ActiveSession.ReportFault(exception);
+                try
+                {
+                    ValidateSessionConfiguration();
+                    SubmitConfig(change);
+                }
+                catch (Exception exception)
+                {
+                    ActiveSession.ReportFault(exception);
+                }
             }
         }
 
@@ -325,7 +333,15 @@ namespace Common.FlowField
                 else
                 {
                     owner.Restart();
-                    RestartAgentSessions();
+                    try
+                    {
+                        RestartAgentSessions();
+                    }
+                    catch (Exception exception)
+                    {
+                        owner.ReportFault(exception);
+                        throw;
+                    }
                     owner.Stop();
                     StopAgentSessions();
                 }
@@ -357,11 +373,12 @@ namespace Common.FlowField
         private void RestartSession(FlowFieldSession owner)
         {
             owner.Restart();
-            RestartAgentSessions();
             try
             {
+                // A type that cannot take the primary session's registrations
+                // again faults the Manager, as the primary session's checks do.
+                RestartAgentSessions();
                 owner.ObserveModifiers();
-                ObserveAgentModifiers();
                 ValidateSessionConfiguration();
                 StartBuilding();
             }
