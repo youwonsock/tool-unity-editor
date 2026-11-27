@@ -99,6 +99,52 @@ namespace Common.TransformPath.Tests
         }
 
         [Test]
+        public void SnapToGround_InASceneWithItsOwnPhysics_FindsGroundMovedSinceTheLastSync()
+        {
+            bool autoSync = Physics.autoSyncTransforms;
+            Physics.autoSyncTransforms = false;
+            // A preview scene has its own physics scene, as Prefab Mode does.
+            Scene preview = UnityEditor.SceneManagement.EditorSceneManager.NewPreviewScene();
+            try
+            {
+                GameObject ground = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                ground.transform.position = new Vector3(0f, -0.5f, 0f);
+                ground.transform.localScale = new Vector3(20f, 1f, 20f);
+                SceneManager.MoveGameObjectToScene(ground, preview);
+                var host = new GameObject("Path");
+                SceneManager.MoveGameObjectToScene(host, preview);
+                var points = new List<Transform>();
+                for (int i = 0; i < 2; i++)
+                {
+                    var point = new GameObject("PathPoint" + i).transform;
+                    point.SetParent(host.transform, false);
+                    point.localPosition = new Vector3(5f * i, 5f, 0f);
+                    points.Add(point);
+                }
+                PathData path = host.AddComponent<PathData>();
+                var serialized = new SerializedObject(path);
+                SerializedProperty list = serialized.FindProperty("_pathPoints");
+                list.arraySize = points.Count;
+                for (int i = 0; i < points.Count; i++)
+                    list.GetArrayElementAtIndex(i).objectReferenceValue = points[i];
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+                Assume.That(preview.GetPhysicsScene() != Physics.defaultPhysicsScene);
+                Physics.SyncTransforms();
+                ground.transform.position = new Vector3(0f, 1.5f, 0f);
+
+                PathPointTools.SnapToGround(new List<PathData> { path });
+
+                foreach (Transform point in points)
+                    Assert.AreEqual(2f, point.position.y, 1e-4f);
+            }
+            finally
+            {
+                UnityEditor.SceneManagement.EditorSceneManager.ClosePreviewScene(preview);
+                Physics.autoSyncTransforms = autoSync;
+            }
+        }
+
+        [Test]
         public void RefreshFromChildren_WithFewerThanTwoMatches_KeepsThePoints()
         {
             PathData path = PathAt(Away, Away + new Vector3(5f, 0f, 0f));

@@ -175,6 +175,35 @@ namespace Common.TransformPath.Tests
             Assert.AreEqual(EPathFollowerState.Moving, recorder.Playback.State);
         }
 
+        [TestCase(30)]
+        [TestCase(60)]
+        [TestCase(240)]
+        public void DelayedEventsDueTogether_RunBeforeAnEventReachedThatFrame(int framesPerSecond)
+        {
+            PathData path = _scene.CreatePath(PathMovementSettings.Speed(3f), EPathCurveType.Linear,
+                Vector3.zero, new Vector3(60f, 0f, 0f));
+            PathEventSettingSO faster = _scene.CreateEvent("faster");
+            faster.UseSpeedChange = true;
+            faster.SpeedTarget = 6f;
+            PathEventSettingSO pause = _scene.CreateEvent("pause");
+            pause.Lifecycle = EPathEventLifecycle.Pause;
+            PathEventSettingSO start = _scene.CreateEvent("start");
+            start.DelayedEvents.Add(new PathEventSettingSO.DelayedEventEntry { Delay = 1f, EventSetting = faster });
+            start.DelayedEvents.Add(new PathEventSettingSO.DelayedEventEntry { Delay = 1f, EventSetting = pause });
+            PathEventSettingSO slower = _scene.CreateEvent("slower");
+            slower.UseSpeedChange = true;
+            slower.SpeedTarget = 3f;
+            // "start" at 6 m makes both due at 9 m. "slower" 0.1 m on would cancel any still waiting.
+            _scene.SetEvents(path, (0.1f, start), (9.1f / 60f, slower));
+            var recorder = new RecordingPlayback();
+            recorder.Playback.Play(PathPlaybackRequest.Single(path));
+
+            recorder.Frames(framesPerSecond * 4, 1f / framesPerSecond);
+
+            Assert.AreEqual(EPathFollowerState.Paused, recorder.Playback.State);
+            CollectionAssert.DoesNotContain(recorder.Log, "event slower");
+        }
+
         [Test]
         public void PauseEvent_ResumesThroughItsDelayedEvent_WithTheResumeValue()
         {

@@ -440,6 +440,10 @@ namespace Common.TransformPath.Tests
             PathQueueMember member = CreateMember();
             member.transform.SetParent(firstManager.transform);
             WakeMember(member);
+            // Read and used under the first manager, so a cache taken by either would show below.
+            Assert.AreSame(firstManager, member.Manager);
+            Assert.IsTrue(member.StartQueuedPlayback(PathPlaybackRequest.Single(first)));
+            Assert.AreSame(firstManager, member.ActiveManager);
 
             member.transform.SetParent(secondManager.transform);
             Assert.AreSame(secondManager, member.Manager);
@@ -472,6 +476,39 @@ namespace Common.TransformPath.Tests
                 () => member.StartQueuedPlayback(PathPlaybackRequest.Single(path)));
             StringAssert.Contains("has no manager", error.Message);
             Assert.AreEqual(EPathFollowerState.Ready, member.Follower.State);
+        }
+
+        [Test]
+        public void StartWithANullManager_ThrowsForTheArgument()
+        {
+            PathData path = Line(10f, 2f);
+            PathQueueMember member = CreateMember();
+
+            var error = Assert.Throws<System.ArgumentNullException>(
+                () => member.StartQueuedPlayback(null, PathPlaybackRequest.Single(path)));
+            Assert.AreEqual("manager", error.ParamName);
+            Assert.AreEqual(EPathFollowerState.Ready, member.Follower.State);
+        }
+
+        [Test]
+        public void InactiveMemberUnderAManager_NamesItAndSaysThatItIsInactive()
+        {
+            PathData path = Line(10f, 2f);
+            QueuedPathManager manager = CreateManager(path);
+            PathQueueMember member = CreateMember();
+            member.transform.SetParent(manager.transform);
+            member.gameObject.SetActive(false);
+
+            Assert.AreSame(manager, member.Manager);
+            var error = Assert.Throws<System.InvalidOperationException>(
+                () => member.StartQueuedPlayback(PathPlaybackRequest.Single(path)));
+            StringAssert.Contains("must be active and enabled", error.Message);
+
+            manager.gameObject.SetActive(false);
+            member.gameObject.SetActive(true);
+            error = Assert.Throws<System.InvalidOperationException>(
+                () => member.StartQueuedPlayback(PathPlaybackRequest.Single(path)));
+            StringAssert.Contains("must be active and enabled", error.Message);
         }
 
         [Test]
@@ -1914,11 +1951,15 @@ namespace Common.TransformPath.Tests
             Object.DestroyImmediate(provider.gameObject);
         }
 
-        // What Play Mode runs when a member wakes, if it declares an Awake; Edit Mode does not.
-        private static void WakeMember(PathQueueMember member) =>
-            typeof(PathQueueMember)
-                .GetMethod("Awake", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                ?.Invoke(member, null);
+        // What Play Mode runs when a member wakes, for each of these it declares; Edit Mode
+        // runs none. A member that cached its manager there would show it in the tests.
+        private static void WakeMember(PathQueueMember member)
+        {
+            foreach (string message in new[] { "Awake", "OnEnable", "Start" })
+                typeof(PathQueueMember)
+                    .GetMethod(message, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                    ?.Invoke(member, null);
+        }
 
         private static void DestroyMember(PathQueueMember member)
         {
