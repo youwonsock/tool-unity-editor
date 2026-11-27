@@ -227,6 +227,8 @@ namespace Common.FlowField
             SuspendAfterDisable();
         }
 
+        // A disabled Manager stops building and leaves its world until it is
+        // enabled, as the area of an unloaded scene does.
         private void SuspendAfterDisable()
         {
             using FlowFieldExecutionBoundary.OperationScope operation = _boundary.EnterOperation();
@@ -234,6 +236,7 @@ namespace Common.FlowField
                 return;
             ActiveSession.Stop();
             StopAgentSessions();
+            SuspendWorldArea();
         }
 
         private void OnDestroy()
@@ -304,11 +307,11 @@ namespace Common.FlowField
                 _session.Stop();
                 StopAgentSessions();
                 SubmitConfig(FlowFieldConfigChange.Rebuild);
-                JoinWorld();
+                BindWorld();
                 return;
             }
             StartBuilding();
-            JoinWorld();
+            BindWorld();
         }
 
         /// <inheritdoc/>
@@ -374,6 +377,9 @@ namespace Common.FlowField
                 RestartAgentSessions();
                 owner.ObserveModifiers();
                 ValidateSessionConfiguration();
+                // Enabling joins the world again; the checks above refuse an
+                // area that took its place meanwhile.
+                EnterWorld();
                 StartBuilding();
             }
             catch (Exception exception)

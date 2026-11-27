@@ -5,22 +5,25 @@ namespace Common.FlowField
 {
     /// <summary>
     /// The Manager as an area of a <see cref="FlowFieldWorld"/>: the checks
-    /// that its grid fits the world, joining at Init and leaving at Release
-    /// and destruction, and moving its area when its grid changes.
+    /// that its grid fits the world, joining at Init or when it is enabled,
+    /// leaving when it is disabled, released or destroyed, and moving its
+    /// area when its grid changes.
     /// </summary>
     public partial class FlowFieldManager : IFlowFieldWorldMember
     {
         [SerializeField, Tooltip("The world this Manager is an area of, stitched to the areas its grid touches. It can change only after Release.")]
         private FlowFieldWorld _world;
 
-        // The world Init joined, until Release.
-        private FlowFieldWorld _joinedWorld;
+        // The world Init bound, until Release. The Manager is an area of it
+        // while it is enabled: disabling leaves the world as the area of an
+        // unloaded scene does, and enabling joins it again.
+        private FlowFieldWorld _boundWorld;
 
         /// <summary>The world this Manager joins at Init, or null.</summary>
         public FlowFieldWorld World => _world;
 
-        // The area this Manager is in its joined world, or null.
-        internal FlowFieldWorldArea WorldArea => _joinedWorld != null ? _joinedWorld.Areas.Find(this) : null;
+        // The area this Manager is in its bound world, or null.
+        internal FlowFieldWorldArea WorldArea => _boundWorld != null ? _boundWorld.Areas.Find(this) : null;
 
         /// <summary>
         /// The checks a world adds: the world stays from Init to Release, and
@@ -30,7 +33,7 @@ namespace Common.FlowField
         /// </summary>
         private void ValidateWorld(FlowFieldSpaceMode spaceMode)
         {
-            if (_joinedWorld != null && _world != _joinedWorld)
+            if (_boundWorld != null && _world != _boundWorld)
                 throw new InvalidOperationException("The FlowField World can change only after Release.");
             if (_world == null || !TryWorldLayout(spaceMode, out FlowFieldGridSpace grid))
                 return;
@@ -60,14 +63,31 @@ namespace Common.FlowField
             return FlowFieldSpaceStrategy.For(spaceMode).TryCreateLayout(in config, out _, out grid);
         }
 
-        // Init has checked the world.
-        private void JoinWorld()
+        // Init has checked the world. A disabled Manager joins it when it is
+        // enabled, so one that is never enabled leaves no area behind.
+        private void BindWorld()
         {
-            if (_world == null || !TryWorldLayout(SpaceMode, out FlowFieldGridSpace grid)
-                || !FlowFieldWorldAreas.TryLatticeBox(_world, grid, out FlowFieldLatticeBox box, out _))
+            _boundWorld = _world;
+            EnterWorld();
+        }
+
+        // Joins the bound world where the grid is now. The checks that refuse
+        // an overlap ran before: Init's, or enabling's.
+        private void EnterWorld()
+        {
+            if (_boundWorld == null || !isActiveAndEnabled || WorldArea != null
+                || !TryWorldLayout(SpaceMode, out FlowFieldGridSpace grid)
+                || !FlowFieldWorldAreas.TryLatticeBox(_boundWorld, grid, out FlowFieldLatticeBox box, out _))
                 return;
-            _world.Areas.Join(this, grid, in box);
-            _joinedWorld = _world;
+            _boundWorld.Areas.Join(this, grid, in box);
+        }
+
+        // Disabling: the area leaves and gives back the world's Goals and
+        // registrations until it is enabled.
+        private void SuspendWorldArea()
+        {
+            if (_boundWorld != null)
+                _boundWorld.Areas.Suspend(this);
         }
 
         // A settings change that moved the grid moves the area; the checks
@@ -76,11 +96,11 @@ namespace Common.FlowField
         {
             FlowFieldWorldArea area = WorldArea;
             if (area == null || !TryWorldLayout(SpaceMode, out FlowFieldGridSpace grid)
-                || !FlowFieldWorldAreas.TryLatticeBox(_joinedWorld, grid, out FlowFieldLatticeBox box, out _))
+                || !FlowFieldWorldAreas.TryLatticeBox(_boundWorld, grid, out FlowFieldLatticeBox box, out _))
                 return;
             if (area.Box.Equals(box))
                 return;
-            _joinedWorld.Areas.Join(this, grid, in box);
+            _boundWorld.Areas.Join(this, grid, in box);
         }
 
         // A world's commands run as this Manager's operation, so handlers run
@@ -98,10 +118,10 @@ namespace Common.FlowField
 
         private void LeaveWorld()
         {
-            if (_joinedWorld == null)
+            if (_boundWorld == null)
                 return;
-            _joinedWorld.Areas.Leave(this);
-            _joinedWorld = null;
+            _boundWorld.Areas.Leave(this);
+            _boundWorld = null;
         }
     }
 }

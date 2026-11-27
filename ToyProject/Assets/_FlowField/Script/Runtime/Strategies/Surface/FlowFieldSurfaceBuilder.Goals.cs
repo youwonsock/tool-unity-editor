@@ -199,7 +199,8 @@ namespace Common.FlowField
         }
 
         // A world Goal: every walkable cell is in reach, and the search
-        // starts from the seeds. Without seeds the field reaches nothing yet.
+        // starts from the seeds. Only seeds with a cell build
+        // (FlowFieldGoalSet.HasSearch); without one the area has no field.
         private static void StartSeeded(
             FlowFieldSurfaceGoalBatch.Item item,
             FlowFieldGridSpace grid,
@@ -225,19 +226,6 @@ namespace Common.FlowField
                 scratch.PortalDirections,
                 scratch.PortalCosts,
                 scratch.PortalHeights);
-            if (solve.Seeds.Count == 0)
-            {
-                // Nothing to start from: every reachable cell stops.
-                for (int index = 0; index < grid.CellCount; index++)
-                {
-                    workspace.Costs[index] = int.MaxValue;
-                    bool open = workspace.InfluenceMask[index];
-                    workspace.NextCells[index] = open ? FlowFieldNextCell.Unreachable : FlowFieldNextCell.Blocked;
-                    workspace.GoalFlags[index] = open ? FlowFieldGoalFlags.Unreachable : FlowFieldGoalFlags.None;
-                }
-                item.Solved = true;
-                return;
-            }
             FlowFieldSurfaceGoalBatch.Item started = item;
             if (!scratch.Solve.StartBfs(solve, _ => started.Solved = true))
                 throw new InvalidOperationException("FlowField BFS session could not be started.");
@@ -323,7 +311,8 @@ namespace Common.FlowField
             for (int i = 0; i < batch.Items.Count; i++)
             {
                 FlowFieldSurfaceGoalBatch.Item item = batch.Items[i];
-                if (!ReferenceEquals(goals.Find(item.Entry.Id), item.Entry))
+                // A removed Goal, or a world Goal no way reaches any more.
+                if (!ReferenceEquals(goals.Find(item.Entry.Id), item.Entry) || !FlowFieldGoalSet.HasSearch(item.Entry))
                     continue;
                 FlowFieldField field = new FlowFieldField(
                     batch.Base.Grid,

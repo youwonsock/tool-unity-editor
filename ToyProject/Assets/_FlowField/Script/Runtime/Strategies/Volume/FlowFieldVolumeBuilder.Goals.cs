@@ -192,7 +192,8 @@ namespace Common.FlowField
             for (int i = 0; i < batch.Items.Count; i++)
             {
                 FlowFieldVolumeGoalBatch.Item item = batch.Items[i];
-                if (!ReferenceEquals(goals.Find(item.Entry.Id), item.Entry))
+                // A removed Goal, or a world Goal no way reaches any more.
+                if (!ReferenceEquals(goals.Find(item.Entry.Id), item.Entry) || !FlowFieldGoalSet.HasSearch(item.Entry))
                     continue;
                 BuildContext build = item.Build;
                 // The solve has resolved the Goal; an anchor flag never

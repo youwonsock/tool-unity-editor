@@ -167,7 +167,8 @@ namespace Common.FlowField
         /// Once a frame before the builds: every area takes the world's
         /// registrations it misses, and the world's Goals their seeds. A
         /// handler may join a Manager to another world meanwhile, so the
-        /// worlds are read first.
+        /// worlds are read first. A failure is logged and keeps neither the
+        /// rest of its world nor the other worlds from their update.
         /// </summary>
         internal static void UpdateAll()
         {
@@ -175,8 +176,22 @@ namespace Common.FlowField
             UpdateOrder.AddRange(Worlds.Values);
             for (int i = 0; i < UpdateOrder.Count; i++)
             {
-                UpdateOrder[i].Registrations.Update();
-                UpdateOrder[i].Goals.Update();
+                try
+                {
+                    UpdateOrder[i].Registrations.Update();
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogException(exception, UpdateOrder[i].World);
+                }
+                try
+                {
+                    UpdateOrder[i].Goals.Update();
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogException(exception, UpdateOrder[i].World);
+                }
             }
             UpdateOrder.Clear();
         }
@@ -249,6 +264,33 @@ namespace Common.FlowField
 
         internal IReadOnlyList<FlowFieldWorldArea> All => _areas;
         internal IReadOnlyList<FlowFieldManager> Managers => _managers;
+
+        // The world's lattice when the first of the joined areas joined.
+        private FlowFieldSpaceMode _joinedSpaceMode;
+        private float _joinedCellSize;
+        private Vector3 _joinedLatticeOrigin;
+
+        /// <summary>
+        /// The lattice the joined areas of a Play world stand on, or false
+        /// while none is joined: an edit to the world's asset must not move
+        /// it under them.
+        /// </summary>
+        internal static bool TryGetJoinedLattice(
+            FlowFieldWorld world,
+            out FlowFieldSpaceMode spaceMode,
+            out float cellSize,
+            out Vector3 latticeOrigin)
+        {
+            spaceMode = default;
+            cellSize = 0f;
+            latticeOrigin = default;
+            if (world == null || !Worlds.TryGetValue(world, out FlowFieldWorldAreas areas) || areas._areas.Count == 0)
+                return false;
+            spaceMode = areas._joinedSpaceMode;
+            cellSize = areas._joinedCellSize;
+            latticeOrigin = areas._joinedLatticeOrigin;
+            return true;
+        }
 
         /// <summary>Raised after an area joined or left, with that area.</summary>
         internal event Action<FlowFieldWorldArea> Changed;
@@ -354,6 +396,12 @@ namespace Common.FlowField
         internal FlowFieldWorldArea Join(IFlowFieldWorldMember member, FlowFieldGridSpace grid, in FlowFieldLatticeBox box)
         {
             RemoveArea(member);
+            if (_areas.Count == 0)
+            {
+                _joinedSpaceMode = World.SpaceMode;
+                _joinedCellSize = World.CellSize;
+                _joinedLatticeOrigin = World.LatticeOrigin;
+            }
             var area = new FlowFieldWorldArea(member, grid, box);
             for (int i = 0; i < _areas.Count; i++)
             {
@@ -378,6 +426,29 @@ namespace Common.FlowField
             FlowFieldWorldArea area = RemoveArea(member);
             if (area != null)
                 Changed?.Invoke(area);
+        }
+
+        /// <summary>
+        /// A disabled Manager leaves as the area of an unloaded scene does, and
+        /// gives back the world's Goals and registrations, so it holds none of
+        /// them while it is out. Enabling joins it again, and the next update
+        /// gives them back.
+        /// </summary>
+        internal void Suspend(FlowFieldManager manager)
+        {
+            if (Find(manager) == null)
+                return;
+            EnterOperations();
+            try
+            {
+                Goals.RemoveFrom(manager);
+                Registrations.RemoveFrom(manager);
+            }
+            finally
+            {
+                ExitOperations();
+                Leave(manager);
+            }
         }
 
         private FlowFieldWorldArea RemoveArea(IFlowFieldWorldMember member)

@@ -15,9 +15,12 @@ namespace Common.FlowField
     /// estimates.
     /// <para>
     /// An epoch guards against old steps that ran through an area whose way
-    /// has changed: a Goal moving, an area joining or leaving, or any area's
-    /// new input start a new epoch, and seeds come only from fields built in
-    /// the current one. An area with no such neighbor yet keeps its field.
+    /// has changed: a Goal moving to another cell, an area joining or
+    /// leaving, or any area's new input start a new epoch, and seeds come
+    /// only from fields built in the current one. An area no seed reaches yet
+    /// keeps its field while the epoch spreads. Once the epoch has spread
+    /// without reaching it, or when no chain of touching areas links it to
+    /// the area holding the Goal, its seeds have no cell and it has no field.
     /// </para>
     /// </summary>
     internal sealed class FlowFieldWorldGoals
@@ -102,6 +105,9 @@ namespace Common.FlowField
         private readonly List<int> _costs = new List<int>(64);
         private readonly List<int> _directions = new List<int>(64);
         private readonly List<float> _heights = new List<float>(64);
+        // The areas a chain of touching areas links to the Goal's area.
+        private readonly HashSet<FlowFieldWorldArea> _linked = new HashSet<FlowFieldWorldArea>();
+        private readonly List<FlowFieldWorldArea> _frontier = new List<FlowFieldWorldArea>(8);
         private bool _areasChanged;
 
         internal FlowFieldWorldGoals(FlowFieldWorldAreas areas)
@@ -139,12 +145,15 @@ namespace Common.FlowField
         }
 
         // The seeds carry the new position into every area's search, so the
-        // areas whose seeds change build again and the others keep theirs.
+        // areas whose seeds change build again and the others keep theirs. A
+        // move that stays in the Goal's cell of the lattice and of every area
+        // starts the same searches, so it starts no epoch.
         internal bool TrySet(int id, in FlowFieldGoalRequest request)
         {
             Goal goal = Find(id);
             if (goal == null)
                 return false;
+            bool sameCell = SameCell(goal.Request.WorldPosition, request.WorldPosition);
             goal.Request = request;
             _areas.EnterOperations();
             try
@@ -155,8 +164,11 @@ namespace Common.FlowField
                     for (int s = 0; s < manager.WorldSessionCount; s++)
                         manager.WorldSession(s).Goals.TrySetWorldRequest(id, request);
                 }
-                RequestEpoch(goal);
-                Update();
+                if (!sameCell)
+                {
+                    RequestEpoch(goal);
+                    Update();
+                }
             }
             finally
             {
@@ -189,6 +201,47 @@ namespace Common.FlowField
             finally
             {
                 _areas.ExitOperations();
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// A member that leaves without Release, a disabled Manager, gives
+        /// back every world Goal, so none stays in it while it is out: a Goal
+        /// the world removes meanwhile is gone from it too. It takes them
+        /// again at the first update after it joins.
+        /// </summary>
+        internal void RemoveFrom(IFlowFieldWorldMember member)
+        {
+            for (int s = 0; s < member.WorldSessionCount; s++)
+            {
+                FlowFieldSession session = member.WorldSession(s);
+                for (int g = 0; g < _goals.Count; g++)
+                {
+                    _inputs.Remove((session, _goals[g].Id));
+                    if (session.IsInitialized || session.IsFaulted)
+                        session.RemoveGoalCommand(_goals[g].Id);
+                }
+            }
+        }
+
+        // The same cell of the lattice, which the estimates and the bake read,
+        // and of every area's grid, which its seeds read (a grid may sit a
+        // thousandth of a cell off the lattice).
+        private bool SameCell(Vector3 a, Vector3 b)
+        {
+            FlowFieldWorldAreas.LatticeCell(_areas.World, a, out int ax, out int ay, out int az);
+            FlowFieldWorldAreas.LatticeCell(_areas.World, b, out int bx, out int by, out int bz);
+            if (ax != bx || ay != by || az != bz)
+                return false;
+            IReadOnlyList<FlowFieldWorldArea> areas = _areas.All;
+            for (int i = 0; i < areas.Count; i++)
+            {
+                FlowFieldGridSpace grid = areas[i].Grid;
+                LocalCell(grid, a, out ax, out ay, out az);
+                LocalCell(grid, b, out bx, out by, out bz);
+                if (ax != bx || ay != by || az != bz || grid.ContainsWorldPosition(a) != grid.ContainsWorldPosition(b))
+                    return false;
             }
             return true;
         }
@@ -292,26 +345,60 @@ namespace Common.FlowField
                     unchecked { goal.Epoch++; }
                     goal.EpochPending = false;
                     goal.PendingSince = -1;
+                    // A new epoch has spread nowhere yet.
+                    goal.Quiet = false;
                 }
             }
             for (int g = 0; g < _goals.Count; g++)
             {
                 Goal goal = _goals[g];
+                // The last update changed no seeds and found no build due, and
+                // no epoch waits: the current epoch has spread as far as it
+                // reaches, so an area it has not reached has no way to the Goal.
+                bool spread = goal.Quiet && !goal.EpochPending;
+                FlowFieldWorldArea goalArea = _areas.Find(goal.Request.WorldPosition);
+                FindLinked(goalArea);
                 bool active = false;
                 for (int a = 0; a < areas.Count; a++)
                 {
+                    // A Goal no loaded area holds reaches every area from its
+                    // border; one held by an area reaches only areas linked to it.
+                    bool mayReach = !spread && (goalArea == null || _linked.Contains(areas[a]));
                     IFlowFieldWorldMember manager = areas[a].Member;
                     for (int s = 0; s < manager.WorldSessionCount; s++)
                     {
                         FlowFieldSession session = manager.WorldSession(s);
                         if (!TakesGoals(session))
                             continue;
-                        active |= UpdateSeeds(goal, areas[a], s, session);
+                        active |= UpdateSeeds(goal, areas[a], s, session, mayReach);
                         FlowFieldGoalSet.Entry entry = session.Goals.Find(goal.Id);
                         active |= entry != null && session.Goals.IsDue(entry);
+                        // An area still building its first field may yet open a way.
+                        active |= session.CanPump && !session.IsReady;
                     }
                 }
                 goal.Quiet = !active;
+            }
+        }
+
+        // The areas a chain of touching areas links to the Goal's area; none
+        // when no loaded area holds the Goal.
+        private void FindLinked(FlowFieldWorldArea goalArea)
+        {
+            _linked.Clear();
+            _frontier.Clear();
+            if (goalArea == null)
+                return;
+            _linked.Add(goalArea);
+            _frontier.Add(goalArea);
+            for (int i = 0; i < _frontier.Count; i++)
+            {
+                List<FlowFieldWorldBorder> borders = _frontier[i].Borders;
+                for (int b = 0; b < borders.Count; b++)
+                {
+                    if (_linked.Add(borders[b].Other))
+                        _frontier.Add(borders[b].Other);
+                }
             }
         }
 
@@ -353,8 +440,11 @@ namespace Common.FlowField
                 _inputs.Remove(_deadInputs[i]);
         }
 
-        // True when the area session's seeds changed.
-        private bool UpdateSeeds(Goal goal, FlowFieldWorldArea area, int sessionIndex, FlowFieldSession session)
+        // True when the area session's seeds changed, also when only their
+        // epoch did: the epoch is still spreading, and the areas behind this
+        // one take it at a later update. While the epoch may still reach the
+        // area, seeds with no cell leave its field as it is.
+        private bool UpdateSeeds(Goal goal, FlowFieldWorldArea area, int sessionIndex, FlowFieldSession session, bool mayReach)
         {
             if (!session.TryGetPublishedField(out FlowFieldField own))
                 return false;
@@ -370,12 +460,16 @@ namespace Common.FlowField
                 return false;
             Copy(inputs, last);
 
-            FlowFieldGoalSeeds seeds = ComputeSeeds(goal, area, typeName, own, out bool holdsGoal, out bool fromNeighbors);
-            // Until a neighbor has a field of this epoch, an area away from
-            // the Goal keeps the field it has, or has none yet.
-            if (!holdsGoal && !fromNeighbors && _areas.Find(goal.Request.WorldPosition) != null)
+            FlowFieldGoalSeeds seeds = ComputeSeeds(goal, area, typeName, own);
+            if (seeds.Count == 0 && mayReach)
+            {
+                // No seed reaches the area yet, but the epoch may still bring
+                // one: it keeps the field it has, or has none yet, and looks
+                // again at the next update.
+                last.Epoch = -1;
                 return false;
-            bool changed = entry?.Seeds == null || !seeds.SameSearch(entry.Seeds);
+            }
+            bool changed = entry?.Seeds == null || !seeds.SameSearch(entry.Seeds) || entry.Seeds.Epoch != seeds.Epoch;
             session.SetGoalSeedsCommand(goal.Id, seeds);
             return changed;
         }
@@ -455,9 +549,7 @@ namespace Common.FlowField
             Goal goal,
             FlowFieldWorldArea area,
             string typeName,
-            FlowFieldField own,
-            out bool holdsGoal,
-            out bool fromNeighbors)
+            FlowFieldField own)
         {
             _cells.Clear();
             _costs.Clear();
@@ -467,7 +559,7 @@ namespace Common.FlowField
             Vector3 position = goal.Request.WorldPosition;
             LocalCell(grid, position, out int gx, out int gy, out int gz);
             int goalCell = -1;
-            holdsGoal = grid.ContainsWorldPosition(position) && grid.TryLocal(gx, gy, gz, out goalCell);
+            bool holdsGoal = grid.ContainsWorldPosition(position) && grid.TryLocal(gx, gy, gz, out goalCell);
             // A Goal in a blocked cell or one without ground starts from the
             // nearest walkable cell of its area, as one Manager's Goal does.
             if (holdsGoal && !Walkable(own, goalCell))
@@ -476,7 +568,6 @@ namespace Common.FlowField
             if (holdsGoal)
                 Add(goalCell, 0, FlowFieldGoalSeeds.NoDirection, 0f);
 
-            fromNeighbors = false;
             for (int b = 0; b < area.Borders.Count; b++)
             {
                 FlowFieldWorldBorder border = area.Borders[b];
@@ -490,7 +581,6 @@ namespace Common.FlowField
                 int[] distances = entry.Field.Goal.Distances;
                 if (distances == null)
                     continue;
-                fromNeighbors = true;
                 for (int p = 0; p < border.Pairs.Length; p++)
                 {
                     FlowFieldBorderPair pair = border.Pairs[p];

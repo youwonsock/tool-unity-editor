@@ -22,6 +22,13 @@ namespace Common.FlowField
         private readonly HashSet<(FlowFieldSession, int, object)> _refused = new HashSet<(FlowFieldSession, int, object)>();
         private static readonly Predicate<Collider> IsDestroyed = collider => collider == null;
         private static readonly Predicate<IFlowFieldVectorModifier> IsMissing = FlowFieldVectorUtility.IsMissingModifier;
+        // A refusal of a lifetime that has ended, or of a registration that
+        // is gone, is never asked about again.
+        private static readonly Predicate<(FlowFieldSession, int, object)> IsStaleRefusal = key =>
+            key.Item1.Disposed
+            || key.Item1.LifetimeGeneration != key.Item2
+            || key.Item3 is Collider collider && collider == null
+            || key.Item3 is IFlowFieldVectorModifier modifier && FlowFieldVectorUtility.IsMissingModifier(modifier);
 
         internal FlowFieldWorldRegistrations(FlowFieldWorldAreas areas)
         {
@@ -41,6 +48,7 @@ namespace Common.FlowField
         {
             if (!_obstacles.Remove(collider))
                 return false;
+            ForgetRefusals(collider);
             _areas.EnterOperations();
             try
             {
@@ -130,6 +138,7 @@ namespace Common.FlowField
         {
             if (!_modifiers.Remove(modifier))
                 return false;
+            ForgetRefusals(modifier);
             _areas.EnterOperations();
             try
             {
@@ -183,6 +192,8 @@ namespace Common.FlowField
         {
             _obstacles.RemoveAll(IsDestroyed);
             _modifiers.RemoveAll(IsMissing);
+            if (_refused.Count > 0)
+                _refused.RemoveWhere(IsStaleRefusal);
             if (_obstacles.Count == 0 && _modifiers.Count == 0)
                 return;
             _areas.EnterOperations();
@@ -211,6 +222,38 @@ namespace Common.FlowField
             {
                 _areas.ExitOperations();
             }
+        }
+
+        /// <summary>
+        /// A disabled Manager gives back every registration of the world, so
+        /// none stays in it while it is out; it takes them again at the first
+        /// update after it joins.
+        /// </summary>
+        internal void RemoveFrom(FlowFieldManager manager)
+        {
+            if (!Takes(manager, removal: true))
+                return;
+            for (int i = 0; i < _obstacles.Count; i++)
+            {
+                Collider collider = _obstacles[i];
+                // A destroyed one leaves the Manager by itself.
+                if (collider != null && manager.IsDynamicObstacleRegistered(collider))
+                    Run(manager, () => manager.UnregisterDynamicObstacle(collider));
+            }
+            for (int i = 0; i < _modifiers.Count; i++)
+            {
+                IFlowFieldVectorModifier modifier = _modifiers[i];
+                if (manager.Session.Modifiers.Contains(modifier))
+                    Run(manager, () => manager.UnregisterVectorModifier(modifier));
+            }
+        }
+
+        // A registration the world no longer holds: registered again, it is
+        // tried again in every area.
+        private void ForgetRefusals(object registration)
+        {
+            if (_refused.Count > 0)
+                _refused.RemoveWhere(key => ReferenceEquals(key.Item3, registration));
         }
 
         // Logged once: a refused registration waits for the area's next lifetime.

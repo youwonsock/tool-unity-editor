@@ -7,10 +7,12 @@ namespace Common.FlowField
     /// <summary>
     /// A world of areas: Managers that reference this asset and stitch their fields where their
     /// grids touch, across scenes loaded additively. Every area uses this Space Mode and Cell
-    /// Size, puts its grid on this lattice, and overlaps no other area. Init joins a Manager to
-    /// its world and Release, disabling the scene or destroying it removes it again. The world
-    /// bake, run in the Editor with the world's scenes open, searches the Bake Goals across every
-    /// area, so a world Goal in one of their cells leads through scenes that are not loaded.
+    /// Size, puts its grid on this lattice, and overlaps no other area; these settings cannot
+    /// change while an area is joined. An enabled Manager joins its world at Init, a disabled one
+    /// when it is enabled. Disabling it leaves the world as the area of an unloaded scene does
+    /// until it is enabled again, and Release or destroying it removes it. The world bake, run in
+    /// the Editor with the world's scenes open, searches the Bake Goals across every area, so a
+    /// world Goal in one of their cells leads through scenes that are not loaded.
     /// </summary>
     [CreateAssetMenu(fileName = "FlowFieldWorld", menuName = "FlowField/World")]
     public sealed class FlowFieldWorld : ScriptableObject
@@ -213,6 +215,23 @@ namespace Common.FlowField
         /// <returns>False when the world does not hold it.</returns>
         public bool NotifyModifierChanged(IFlowFieldVectorModifier modifier, FlowFieldModifierChange change)
             => modifier != null && Areas.Registrations.NotifyModifierChanged(modifier, change);
+
+        // The joined areas stand on the lattice they joined, so an edit of it
+        // while any area is joined is undone, as a Manager's Space Mode edit
+        // waits for Release.
+        private void OnValidate()
+        {
+            if (!Application.isPlaying
+                || !FlowFieldWorldAreas.TryGetJoinedLattice(this, out FlowFieldSpaceMode spaceMode, out float cellSize, out Vector3 latticeOrigin)
+                || _spaceMode == spaceMode && _cellSize == cellSize && _latticeOrigin == latticeOrigin)
+                return;
+            _spaceMode = spaceMode;
+            _cellSize = cellSize;
+            _latticeOrigin = latticeOrigin;
+            Debug.LogWarning(
+                $"[FlowField] The Space Mode, Cell Size and Lattice Origin of the FlowField World {name} can change only while no area is joined.",
+                this);
+        }
 
         private static void ValidateRequest(in FlowFieldGoalRequest request)
         {

@@ -29,7 +29,8 @@ namespace Common.FlowField
             internal FlowFieldGoalSeeds Seeds;
             internal FlowFieldGoalSeeds BuiltSeeds;
             // A world Goal builds only from seeds: until its world gives this
-            // area some, the area has no field for it.
+            // area some, or when no way from the Goal reaches the area, the
+            // area has no field for it.
             internal bool World;
 
             internal Entry(int id, FlowFieldGoalKind kind, in FlowFieldGoalRequest request)
@@ -75,7 +76,12 @@ namespace Common.FlowField
             => HasSearch(entry)
                 && (entry.BuiltRequestRevision != entry.RequestRevision || entry.BuiltBaseStamp != PublishedStamp);
 
-        private static bool HasSearch(Entry entry) => !entry.World || entry.Seeds != null;
+        /// <summary>
+        /// Whether the Goal has a search to build: a world Goal needs seeds
+        /// that start somewhere. Seeds with no cell say that no way reaches
+        /// the area, which then has no field.
+        /// </summary>
+        internal static bool HasSearch(Entry entry) => !entry.World || entry.Seeds != null && entry.Seeds.Count > 0;
 
         internal bool HasBuildable => HasBuildableOf(FlowFieldGoalKind.Shared) || HasBuildableOf(FlowFieldGoalKind.Group);
 
@@ -198,6 +204,13 @@ namespace Common.FlowField
             }
             entry.Seeds = seeds;
             unchecked { entry.RequestRevision++; }
+            // No way reaches the area any more: its field goes now, and a
+            // batch that began before publishes nothing for it.
+            if (!HasSearch(entry))
+            {
+                entry.Field = null;
+                entry.BuiltSeeds = null;
+            }
             return true;
         }
 
