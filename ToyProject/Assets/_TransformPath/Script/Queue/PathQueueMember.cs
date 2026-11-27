@@ -71,8 +71,8 @@ namespace Common.TransformPath
 
         /// <summary>
         /// The manager <see cref="StartQueuedPlayback(PathPlaybackRequest)"/> uses: the
-        /// assigned one, or else the one on a parent now, so a member moved or copied
-        /// under another manager starts there.
+        /// assigned one, or else the one on a parent now (inactive parents included),
+        /// so a member moved or copied under another manager starts there.
         /// </summary>
         public QueuedPathManager Manager
         {
@@ -148,8 +148,10 @@ namespace Common.TransformPath
 
         // Without an assigned manager, the one on a parent at the time of asking. It
         // is never written back, so the serialized field keeps only an assignment.
+        // Inactive objects count, so an inactive member still names its manager and
+        // a start can say that the member is inactive, not that it has no manager.
         private QueuedPathManager ResolveManager() =>
-            _manager != null ? _manager : GetComponentInParent<QueuedPathManager>();
+            _manager != null ? _manager : GetComponentInParent<QueuedPathManager>(true);
 
         // A disabled member leaves the queue quietly. Its follower keeps playing,
         // without the queue's limit and without a Resumed notification.
@@ -170,8 +172,18 @@ namespace Common.TransformPath
 
         #region Commands
 
-        /// <summary>Plays in <see cref="Manager"/>: the assigned manager, or else the one on a parent.</summary>
-        public bool StartQueuedPlayback(PathPlaybackRequest request) => StartQueuedPlayback(ResolveManager(), request);
+        /// <summary>
+        /// Plays in <see cref="Manager"/>: the assigned manager, or else the one on a parent.
+        /// Throws <see cref="InvalidOperationException"/> when there is neither.
+        /// </summary>
+        public bool StartQueuedPlayback(PathPlaybackRequest request)
+        {
+            QueuedPathManager manager = ResolveManager();
+            if (manager == null)
+                throw new InvalidOperationException(
+                    $"PathQueueMember '{name}' has no manager: assign one or place the member under a QueuedPathManager.");
+            return StartQueuedPlayback(manager, request);
+        }
 
         /// <summary>
         /// Plays the request and joins the manager. The manager and the request
@@ -181,15 +193,15 @@ namespace Common.TransformPath
         public bool StartQueuedPlayback(QueuedPathManager manager, PathPlaybackRequest request, float maxProgress = 1f)
         {
             if (manager == null)
-                throw new InvalidOperationException(
-                    $"PathQueueMember '{name}' has no manager: assign one or place the member under a QueuedPathManager.");
-            manager.InitializeBeforeAwake();
-            if (!manager.IsEnabledInHierarchy || !manager.IsInitialized)
-                throw new InvalidOperationException("QueuedPathManager must be initialized before starting a queued move.");
-            // A disabled member would never hear the queue or leave it. Not isActiveAndEnabled:
+                throw new ArgumentNullException(nameof(manager));
+            // A disabled member would never hear the queue or leave it. Checked first, so a
+            // member inactive with its manager hears about itself. Not isActiveAndEnabled:
             // that is still false while an earlier component's OnEnable runs on reactivation.
             if (!enabled || !gameObject.activeInHierarchy)
                 throw new InvalidOperationException($"PathQueueMember '{name}' must be active and enabled to join a queue.");
+            manager.InitializeBeforeAwake();
+            if (!manager.IsEnabledInHierarchy || !manager.IsInitialized)
+                throw new InvalidOperationException("QueuedPathManager must be initialized before starting a queued move.");
             ThrowIfQueueCalculating(manager);
             PathValueUtility.ThrowIfNotFinite(maxProgress, nameof(maxProgress));
             PathFollower follower = RequireFollower();
