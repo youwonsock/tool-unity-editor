@@ -30,12 +30,9 @@ namespace Common.FlowField
         private bool TryBeginGoalBatch(bool primaryOwed, out IFlowFieldBuild build)
         {
             build = null;
-            FlowFieldGoalSet goals = _host.Goals;
-            // A removed Goal's scratch goes first, also when no Goal is due.
-            if (_goalScratch.Count > 0)
-                PruneGoalScratch(goals);
             if (!AdditionalGoalsDue)
                 return false;
+            FlowFieldGoalSet goals = _host.Goals;
             if (!primaryOwed)
                 goals.MarkPublished(goals.BaseStamp);
             if (!goals.HasBuildable)

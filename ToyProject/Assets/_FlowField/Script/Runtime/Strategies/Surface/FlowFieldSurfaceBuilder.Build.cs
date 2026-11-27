@@ -398,6 +398,10 @@ namespace Common.FlowField
         {
             build = null;
             Bounds? invalidated = null;
+            // A removed Goal's scratch goes at every build start, also while
+            // the default Goal keeps the Goals from taking a turn.
+            if (_goalScratch.Count > 0)
+                PruneGoalScratch(_host.Goals);
             if (_inputs.ConfigOwed)
             {
                 _inputs.ConfigOwed = false;

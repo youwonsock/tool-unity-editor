@@ -332,18 +332,12 @@ namespace Common.FlowField
                 }
                 else
                 {
+                    // Enabling restarts every session and gives the types the
+                    // primary session's registrations then (RestartSession),
+                    // so here every session only leaves its fault.
                     owner.Restart();
-                    try
-                    {
-                        RestartAgentSessions();
-                    }
-                    catch (Exception exception)
-                    {
-                        owner.ReportFault(exception);
-                        throw;
-                    }
                     owner.Stop();
-                    StopAgentSessions();
+                    LeaveAgentFaults();
                 }
                 return;
             }

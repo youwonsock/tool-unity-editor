@@ -16,8 +16,9 @@ namespace Common.FlowField.Tests
     /// input a handler makes during another, and the default Goal and a cell
     /// regeneration reach them before any handler; a type's invalid value or
     /// a changed number of types faults the Manager, a retry brings back what
-    /// a type missed, a Modifier included, a type found for older sessions
-    /// names none, and StaticBaked refuses them.
+    /// a type missed, a Modifier included, a disabled Manager's retry only
+    /// leaves the faults, a type found for older sessions names none, and
+    /// StaticBaked refuses them.
     /// </summary>
     [TestFixture, Category("Agents")]
     internal sealed class AgentTypeTests : FlowFieldPlayTestBase
@@ -196,6 +197,40 @@ namespace Common.FlowField.Tests
             Assert.That(manager.IsFaulted, Is.False, manager.LastError);
             yield return WaitUntilAllReady(manager);
             Assert.That(manager.AgentSession(0).Modifiers.Contains(missed), Is.True, "The retry did not bring the Modifier back.");
+            Assert.That(Hash(AgentField(manager, 0)), Is.EqualTo(FlowFieldPlayScene.Hash(manager)));
+        }
+
+        // A disabled Manager's retry only leaves the faults, every type's too;
+        // enabling builds every type and brings back what one missed.
+        [UnityTest, Timeout(300000)]
+        public IEnumerator DisabledRetryLeavesTheFaults()
+        {
+            yield return FlowFieldPlayScene.Enter(FlowFieldPlayScene.SampleScene, FlowFieldBakeMode.RuntimeDynamic);
+            FlowFieldManager manager = Manager;
+            FlowFieldManagerConfig config = manager.CaptureConfig();
+            Restart(manager, new AgentType("Small", config.Obstacles.Clearance, config.Surface.MaxSlope, config.Surface.MaxStepHeight));
+            yield return WaitUntilAllReady(manager);
+            Bounds bounds = WorldBounds(manager);
+            GameObject cube = FlowFieldObstacleProbe.CreateRegisteredCube(manager, "Missed Cube", Point(bounds, 0.5f, 0.5f), config.Grid.CellSize);
+            Collider collider = cube.GetComponent<Collider>();
+            yield return WaitUntilAllReady(manager);
+            Assert.That(manager.AgentSession(0).UnregisterObstacleCommand(collider), Is.True);
+
+            ExpectBuildFailed(Log, "Agent type \"Small\": Obstacle Clearance must be finite and not negative.");
+            SetTypeClearance(manager, 0, -1f);
+            Assert.That(manager.IsFaulted, Is.True);
+            SetTypeClearance(manager, 0, config.Obstacles.Clearance);
+            manager.enabled = false;
+            manager.RequestRebuild();
+            Assert.That(manager.IsFaulted, Is.False, manager.LastError);
+            Assert.That(manager.State, Is.EqualTo(FlowFieldRuntimeState.Suspended));
+            Assert.That(manager.AgentSession(0).State, Is.EqualTo(FlowFieldRuntimeState.Suspended));
+            yield return null;
+            Assert.That(manager.State, Is.EqualTo(FlowFieldRuntimeState.Suspended), "A disabled Manager built.");
+
+            manager.enabled = true;
+            yield return WaitUntilAllReady(manager);
+            Assert.That(manager.AgentSession(0).Obstacles.Contains(collider), Is.True, "Enabling did not bring the obstacle back.");
             Assert.That(Hash(AgentField(manager, 0)), Is.EqualTo(FlowFieldPlayScene.Hash(manager)));
         }
 

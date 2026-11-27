@@ -229,7 +229,9 @@ namespace Common.FlowField.Tests
         // must take the default Goal's newer blocked cells: a newly blocked
         // cell escapes as the default field's does, and a cell whose Goal
         // path leads into one stops. Surface2D's build cells cover the same
-        // window.
+        // window, except while a ground rescan builds: then its read takes
+        // the published cells as well and escapes along their final
+        // directions.
         [Test]
         public void VolumeGoalReadSeesTheDefaultGoalsNewerCells()
         {

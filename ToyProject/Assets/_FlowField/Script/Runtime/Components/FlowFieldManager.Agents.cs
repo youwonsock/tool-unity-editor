@@ -330,6 +330,16 @@ namespace Common.FlowField
             }
         }
 
+        // A disabled Manager's retry: each type leaves its fault and waits.
+        private void LeaveAgentFaults()
+        {
+            for (int i = 0; i < _agentSessions.Length; i++)
+            {
+                _agentSessions[i].Restart();
+                _agentSessions[i].Stop();
+            }
+        }
+
         private void SyncAgentRegistrations(FlowFieldSession agent)
         {
             FlowFieldObstacleRegistry primaryObstacles = _session.Obstacles;
