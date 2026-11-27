@@ -79,7 +79,14 @@ namespace Common.FlowField
                             PruneDestroyedObstacles();
                             PruneDestroyedModifiers();
                         }
+                        bool published = _builder.PublishedField != null;
                         bool started = _builder.TryBeginBuild(out FlowFieldBuildStart start, out _activeBuild);
+                        // A submit owed during the last build can bring a new
+                        // grid or source here, which drops the published field:
+                        // the additional Goals' fields go with it, as when
+                        // SubmitConfig drops it, so they build again.
+                        if (published && _builder.PublishedField == null)
+                            Goals.DropFields();
                         if (start.InvalidatedRegion.HasValue)
                             Safety.InvalidateRegion(start.InvalidatedRegion.Value);
                         if (!started)

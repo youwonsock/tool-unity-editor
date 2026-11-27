@@ -13,9 +13,10 @@ namespace Common.FlowField.Tests
     /// nearest shared Goal answers; Stop, Restart, removal and Release drop
     /// the fields and a handle never names another Goal; the Goals build
     /// while the default Goal and a Group Goal move every pump; a Modifier
-    /// registered while they build never faults them; and a Goal read never
+    /// registered while they build never faults them; a Goal read never
     /// follows its older field into cells the default Goal's newer field has
-    /// blocked.
+    /// blocked; and a Manager moved during a build builds them again on its
+    /// new grid.
     /// </summary>
     [TestFixture, Category("Goal")]
     internal sealed class AdditionalGoalTests
@@ -311,6 +312,37 @@ namespace Common.FlowField.Tests
             FlowFieldSession freshB = Track(CreateSettled(_manager, _settings, goalB, modifiers: modifiers));
             Assert.That(Hash(session.GoalField(a)), Is.EqualTo(Hash(Published(freshA))), "Goal A left the Modifier out.");
             Assert.That(Hash(session.GoalField(b)), Is.EqualTo(Hash(Published(freshB))), "Goal B left the Modifier out.");
+        }
+
+        // The Manager moves while a default Goal build runs, so the SetGoal
+        // that reads the new grid is owed and submitted when the next build
+        // begins. That drops the published field, and the Goal builds again
+        // on the new grid, as a fresh session with that Goal would.
+        [TestCase(FlowFieldPlayScene.SampleScene)]
+        [TestCase(FlowFieldPlayScene.VolumeScene)]
+        public void MovedManagerBuildsTheGoalsAgain(string scene)
+        {
+            FlowFieldSession session = Open(scene, FlowFieldBakeMode.RuntimeDynamic);
+            Vector3 goal = Point(0.8f, 0.7f);
+            int id = session.AddGoalCommand(FlowFieldGoalKind.Shared, FlowFieldGoalRequest.Position(goal, Radius));
+            Settle(session, "with the Goal");
+
+            session.SubmitConfig(WithGoal(_manager, _settings, Point(0.3f, 0.3f)), FlowFieldConfigChange.Goal);
+            for (int pump = 0; pump < WindowPumps && !session.HasActiveBuild; pump++)
+                session.Pump(FlowFieldTestBudget.AfterChecks(1), waitForWorker: false);
+            Assert.That(session.HasActiveBuild, Is.True, "No default Goal build was running.");
+
+            _manager.transform.position += new Vector3(_settings.Grid.CellSize * 2f, 0f, 0f);
+            FlowFieldManagerConfig moved = _manager.CaptureConfig(FlowFieldBakeMode.RuntimeDynamic);
+            session.SubmitConfig(WithGoal(_manager, moved, Point(0.35f, 0.3f)), FlowFieldConfigChange.Goal);
+            Settle(session, "after the move");
+
+            Assert.That(session.TryGetFieldInfo(out FlowFieldFieldInfo info), Is.True);
+            Assert.That(info.WorldBounds.min.x, Is.EqualTo(_bounds.min.x + _settings.Grid.CellSize * 2f).Within(0.001f),
+                "The default field did not move with the Manager.");
+            Assert.That(session.IsGoalReady(id), Is.True, "The Goal never built on the new grid.");
+            FlowFieldSession fresh = Track(CreateSettled(_manager, moved, goal));
+            Assert.That(Hash(session.GoalField(id)), Is.EqualTo(Hash(Published(fresh))));
         }
 
         // ----- Steps --------------------------------------------------------
