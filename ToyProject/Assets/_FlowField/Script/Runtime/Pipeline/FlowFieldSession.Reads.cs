@@ -108,10 +108,12 @@ namespace Common.FlowField
                     || !published.Grid.MatchesBounds(field.Grid)
                     || !ReferenceEquals(published.Scene?.Surface, field.Scene?.Surface))
                     return false;
+                // Surface2D keeps no escape directions: a blocked cell's final
+                // direction is its way out, as the default field's read uses.
                 cells = new FlowFieldStagedCells(
                     published.Agent.Blocked,
                     published.Scene?.Surface,
-                    published.Agent.EscapeDirections);
+                    published.Agent.EscapeDirections ?? published.Goal.FinalDirections);
                 return true;
             }
         }

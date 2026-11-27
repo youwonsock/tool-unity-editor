@@ -128,6 +128,11 @@ namespace Common.FlowField
             return true;
         }
 
+        // An agent type's session takes the same deferred registrations as the
+        // Manager's primary session, so only the primary one warns of a drop:
+        // one call, one warning.
+        internal bool WarnsOfDroppedRegistrations { get; set; } = true;
+
         // The session may have stopped by the time a deferred command runs. Stopping
         // already cleared what a removal would have changed, but a registration
         // that was reported as accepted is lost, so it leaves a warning. A removal
@@ -136,6 +141,8 @@ namespace Common.FlowField
         {
             if (IsInitialized || kind == FlowFieldDeferredKind.Removal && IsFaulted)
                 command();
+            else if (!WarnsOfDroppedRegistrations)
+                return;
             else if (kind == FlowFieldDeferredKind.ModifierRegistration)
                 Debug.LogWarning("[FlowField] The session stopped, so a deferred Modifier registration was dropped.");
             else if (kind == FlowFieldDeferredKind.ObstacleRegistration)

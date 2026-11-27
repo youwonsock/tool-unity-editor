@@ -105,7 +105,8 @@ namespace Common.FlowField
         /// <summary>
         /// Whether the field of an additional Goal answers samples. It is false until its first
         /// field is built, after the default Goal's field, and again after a new grid, a stop or a
-        /// restart until it is built again. Its field keeps answering while a newer one builds.
+        /// restart until it is built again, and while the Manager is faulted. Its field keeps
+        /// answering while a newer one builds.
         /// </summary>
         bool IsGoalReady(FlowFieldGoalHandle goal);
         /// <summary>

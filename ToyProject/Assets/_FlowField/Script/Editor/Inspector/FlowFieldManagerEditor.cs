@@ -190,10 +190,10 @@ namespace Common.FlowField.Editor
             }
             if (locked)
                 EditorGUILayout.HelpBox("The number and names of agent types change after Release.", MessageType.None);
-            if (types.arraySize > 0 && manager.BakeMode == FlowFieldBakeMode.StaticBaked)
-                EditorGUILayout.HelpBox(
-                    "StaticBaked loads the Default agent type only; Init refuses Additional Agent Types.",
-                    MessageType.Warning);
+            // Init's own checks, with its words: a name used twice, an empty
+            // or "Default" name, StaticBaked, or a type's invalid value.
+            if (!locked && types.arraySize > 0 && !manager.TryValidateAgentTypes(out string reason))
+                EditorGUILayout.HelpBox(reason + " Init refuses these types.", MessageType.Warning);
             else if (types.arraySize > 0 && manager.BakeMode == FlowFieldBakeMode.BakedBase)
                 EditorGUILayout.HelpBox(
                     "The bake holds the Default agent type; each Additional Agent Type scans the scene at runtime.",
@@ -205,13 +205,31 @@ namespace Common.FlowField.Editor
             int index = types.arraySize;
             types.arraySize = index + 1;
             SerializedProperty element = types.GetArrayElementAtIndex(index);
-            element.FindPropertyRelative(nameof(FlowFieldAgentTypeSettings.Name)).stringValue = "Agent " + (index + 1);
+            element.FindPropertyRelative(nameof(FlowFieldAgentTypeSettings.Name)).stringValue = UnusedAgentTypeName(types, index);
             element.FindPropertyRelative(nameof(FlowFieldAgentTypeSettings.Clearance)).floatValue = serializedObject
                 .FindProperty(FlowFieldManager.PropertyNames.Obstacles + "." + nameof(FlowFieldObstacleSettings.Clearance)).floatValue;
             element.FindPropertyRelative(nameof(FlowFieldAgentTypeSettings.MaxSlope)).floatValue = serializedObject
                 .FindProperty(FlowFieldManager.PropertyNames.Surface + "." + nameof(FlowFieldSurfaceSettings.MaxSlope)).floatValue;
             element.FindPropertyRelative(nameof(FlowFieldAgentTypeSettings.MaxStepHeight)).floatValue = serializedObject
                 .FindProperty(FlowFieldManager.PropertyNames.Surface + "." + nameof(FlowFieldSurfaceSettings.MaxStepHeight)).floatValue;
+        }
+
+        // "Agent N" with the smallest N no other type uses, so removing a type
+        // and adding one never repeats a name.
+        private static string UnusedAgentTypeName(SerializedProperty types, int added)
+        {
+            for (int number = 1; ; number++)
+            {
+                string name = "Agent " + number;
+                bool used = false;
+                for (int i = 0; i < types.arraySize && !used; i++)
+                {
+                    used = i != added && types.GetArrayElementAtIndex(i)
+                        .FindPropertyRelative(nameof(FlowFieldAgentTypeSettings.Name)).stringValue == name;
+                }
+                if (!used)
+                    return name;
+            }
         }
 
         private void DrawSettings(string path, string header)

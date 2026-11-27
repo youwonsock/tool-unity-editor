@@ -158,7 +158,8 @@ namespace Common.FlowField
 
         internal FlowFieldManagerConfig CaptureAgentConfig(int index) => CaptureAgentConfig(SpaceMode, index);
 
-        // Init's checks of the types, with the reason, for the world bake.
+        // Init's checks of the types, with the reason, for the world bake and
+        // the Inspector.
         internal bool TryValidateAgentTypes(out string reason)
         {
             reason = null;
@@ -265,6 +266,7 @@ namespace Common.FlowField
             for (int i = 0; i < types.Length; i++)
             {
                 FlowFieldSession agent = FlowFieldSpaceStrategy.For(_spaceMode).CreateSession(_boundary);
+                agent.WarnsOfDroppedRegistrations = false;
                 string name = types[i].Name;
                 agent.FieldCommitted += OnAgentFieldCommitted;
                 agent.StateChanged += state => OnAgentStateChanged(agent, name, state);

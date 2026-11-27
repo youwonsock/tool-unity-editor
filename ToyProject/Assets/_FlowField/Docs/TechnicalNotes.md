@@ -288,15 +288,15 @@
 - **다시 빌드:**
   - 기본 Goal만 바꾼 입력을 뺀 모든 입력(설정, 장애물, Modifier, 다시 빌드)은 모든 추가 Goal을 다시 빌드합니다(`FlowFieldGoalSet.BaseStamp`).
   - 추가 Goal을 옮기면 그 Goal만 다시 빌드합니다. 0.0001 world unit 안의 이동에 같은 반경이면 아무것도 하지 않습니다.
-  - 기본 Goal에 할 일이 남은 채 차례가 와서 만든 추가 Goal은 게시된 필드가 반영한 입력까지만 따라잡은 것입니다(`FlowFieldGoalSet.PublishedStamp`, 기본 Goal 빌드가 시작할 때의 stamp). 그래서 그 기본 Goal 빌드가 게시된 뒤 한 번 더 빌드하고, 그동안 세션은 Building입니다.
+  - 기본 Goal에 할 일이 남은 채 차례가 와서 만든 추가 Goal은 게시된 필드의 층(막힘, 지면) 위에서 빌드하지만, Modifier의 등록과 값(Volume3D는 영향 Collider의 Bounds도)은 지금 것을 읽습니다. 그래서 기본 Goal 필드에 아직 없는 Modifier 변경이 들어갈 수 있고, 이 필드는 게시된 필드가 반영한 입력까지만 따라잡은 것으로 칩니다(`FlowFieldGoalSet.PublishedStamp`, 기본 Goal 빌드가 시작할 때의 stamp). 그 기본 Goal 빌드가 게시된 뒤 한 번 더 빌드하고, 그동안 세션은 Building입니다.
   - 빌드 중 들어온 입력은 그 빌드를 버리지 않고 게시한 뒤 다음 빌드를 부릅니다. 기본 Goal과 같이 계속 바뀌는 입력에도 결과가 끊기지 않게 하기 위해서입니다.
 - **게시:**
   - 내용이 바뀐 게시는 기본 Goal과 같이 `Revision`을 늘리고 `FieldChanged`를 보냅니다. `RemoveGoal`은 게시가 아니므로 `TrySampleNearestShared`의 답이 바뀌어도 `Revision`을 늘리지 않습니다.
-  - Goal 층에는 Goal까지의 걸음 수(`Distances`, BFS 비용)도 둡니다. 닿지 않는 칸은 `int.MaxValue`입니다.
+  - Goal 층에는 Goal까지의 걸음 수(`Distances`, BFS 비용)도 둡니다. 닿지 않는 칸은 `int.MaxValue`입니다. Surface2D에서 걸을 칸이 없어 Goal 칸을 정하지 못한 Goal 층에는 `Distances`가 없고(null), 가장 가까운 Goal을 고를 때 그 Goal은 어느 칸에도 닿지 않는 것으로 봅니다.
   - 추가 Goal 필드가 읽는 주체 층의 배열은 기본 Goal의 다음 게시가 spare로 돌려받지 않습니다(`FlowFieldGoalSet.HoldsAgent`). 그래서 게시된 추가 Goal 필드는 바뀌지 않고, 기본 Goal의 다음 빌드도 그 배열에 쓰지 않습니다. 대신 기본 Goal과 추가 Goal이 서로 다른 주체 층을 읽는 동안은 그 배열을 새로 할당합니다.
 - **읽기:**
   - `TrySample(position, handle, out sample)`은 기본 Goal과 같은 샘플 안전 규칙과 불확실 영역을 씁니다.
-  - "최신 정보"는 진행 중인 빌드의 칸(Surface2D)이고, 없으면 기본 Goal의 게시 필드가 그 Goal이 읽는 주체 층보다 새로울 때 그 막힘과 탈출 방향입니다. 기본 Goal 빌드가 게시되면 그 빌드가 조회한 불확실 영역이 풀리는데, 추가 Goal은 다시 빌드될 때까지 이전 주체 층을 읽습니다. 그 사이 새로 막힌 칸으로 가는 길은 이 정보로 멈추고, 새로 막힌 칸 안에서는 기본 Goal 필드처럼 빠져나갑니다. Surface2D에서 지면을 다시 scan해 바뀐 동안은 이 정보가 없고, 추가 Goal은 다시 빌드될 때까지 이전 지면을 읽습니다.
+  - "최신 정보"는 진행 중인 빌드의 칸(Surface2D)이고, 없으면 기본 Goal의 게시 필드가 그 Goal이 읽는 주체 층보다 새로울 때 그 막힘과 탈출 방향(Surface2D는 게시 필드의 최종 방향)입니다. 기본 Goal 빌드가 게시되면 그 빌드가 조회한 불확실 영역이 풀리는데, 추가 Goal은 다시 빌드될 때까지 이전 주체 층을 읽습니다. 그 사이 새로 막힌 칸으로 가는 길은 이 정보로 멈추고, 새로 막힌 칸 안에서는 기본 Goal 필드처럼 빠져나갑니다. Surface2D에서 지면을 다시 scan해 바뀐 동안은 이 정보가 없고, 추가 Goal은 다시 빌드될 때까지 이전 지면을 읽습니다.
   - 추가 Goal 필드는 기본 Goal의 필드가 같은 격자로 게시되어 있을 때만 답합니다.
   - 새 격자나 Bake source, Stop, 재시작은 모든 추가 Goal 필드를 버립니다(`FieldEpoch`). 그 앞에 시작한 빌드는 아무것도 게시하지 않습니다. Release는 추가 Goal을 모두 지웁니다.
   - `TrySampleNearestShared`는 위치의 칸에서 걸음 수가 가장 적은 `Shared` Goal의 필드로 답하고, 같으면 먼저 추가한 Goal입니다. 어느 Goal도 닿지 않는 칸(막힘, 모든 영향 반경 밖)이면 먼저 추가한 준비된 `Shared` Goal이 자기 샘플처럼 답합니다.

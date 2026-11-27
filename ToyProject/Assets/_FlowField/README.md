@@ -119,7 +119,7 @@ Inspector는 그룹마다 제목을 달고, 지금 Space Mode가 읽지 않는 �
 | 상황 | 호출 |
 | --- | --- |
 | 결과 읽기 | `TrySample(position, out sample)`. `sample`은 `Direction`, `SpeedMultiplier`, `SurfaceNormal`, `HasSurface`, `HasCell`을 줍니다. 예외로 받으려면 `Sample()`. 상태는 `State`, `IsReady`, `IsRebuilding`, `IsFaulted`, `LastError`, `TryGetFieldInfo()`로 봅니다 |
-| 결과 변화 알림 | `FieldChanged`, `StateChanged`. `FieldChanged`와 `Revision`은 게시 내용(추가 Goal 포함)이 실제로 바뀔 때만 바뀌고, Space Mode를 바꿔도 `Revision`은 이어서 셉니다. 핸들러 안에서 모든 명령을 쓸 수 있습니다 |
+| 결과 변화 알림 | `FieldChanged`, `StateChanged`. `FieldChanged`와 `Revision`은 게시 내용(추가 Goal과 추가 Agent 유형 포함)이 실제로 바뀔 때만 바뀌고, Space Mode를 바꿔도 `Revision`은 이어서 셉니다. 핸들러 안에서 모든 명령을 쓸 수 있습니다 |
 | Goal 변경 | `SetGoal(FlowFieldGoalRequest.Position(position, radius))` 또는 `FlowFieldGoalRequest.Target(transform, radius)`, 지우기는 `FlowFieldGoalRequest.None`. 또는 `FlowFieldGoalTarget`. 장애물 결과를 재사용하고, 마지막에 정한 Goal이 쓰입니다 |
 | 추가 Goal | `AddGoal(FlowFieldGoalKind.Shared 또는 Group, FlowFieldGoalRequest.Position(position, radius))`이 돌려준 핸들로 `TrySample(position, handle, out sample)`, `IsGoalReady(handle)`, `SetGoal(handle, request)`, `RemoveGoal(handle)`. `TrySampleNearestShared(position, out sample, out handle)`은 걸음 수가 가장 적은 `Shared` Goal로 답합니다. 기본 Goal과 같은 바닥·장애물·Modifier를 쓰고 기본 Goal 필드 다음에 빌드됩니다. `StaticBaked`는 받지 않습니다. 규칙은 [TechnicalNotes](Docs/TechnicalNotes.md#추가-goal) |
 | Agent 유형 | `TryGetAgentType(name, out type)`으로 찾은 유형을 `TrySample(position, type, out sample)`, `IsAgentTypeReady(type)`, `TrySample(position, handle, type, out sample)`, `IsGoalReady(handle, type)`, `TrySampleNearestShared(position, type, out sample, out handle)`에 넘깁니다. 유형을 받지 않는 호출과 `State`는 `Default` 유형입니다. 입력은 모든 유형에 적용됩니다 |

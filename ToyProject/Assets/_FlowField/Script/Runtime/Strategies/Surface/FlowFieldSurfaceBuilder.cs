@@ -215,12 +215,14 @@ namespace Common.FlowField
 
         // Drops the published field and the computed Surface, keeping the
         // latest request, registered obstacles and Modifiers. The complete
-        // rebuild queries every obstacle again.
+        // rebuild queries every obstacle again. The session has cancelled the
+        // Goal batch, so a removed Goal's scratch goes here too.
         public void DropComputedState()
         {
             DetachSolveBackend();
             _baseStage.LoadedSnapshot = null;
             DropPublishedField();
+            PruneGoalScratch(_host.Goals);
 
             _state.BaseComposed = false;
             _state.LastComposedRegion = FlowFieldCellRect.Invalid;
