@@ -488,18 +488,20 @@ namespace Common.TransformPath
         bool IPathEffectTarget.HasRoute => _route != null;
 
         // Pause cancels the blend itself, moving or not.
-        bool IPathEffectTarget.Pause()
+        void IPathEffectTarget.Pause()
         {
             _effects.CancelBlend();
-            if (!PauseMovement())
-                return false;
-            _pauseOwner = EPauseOwner.Event;
-            return true;
+            if (PauseMovement())
+                _pauseOwner = EPauseOwner.Event;
         }
 
-        bool IPathEffectTarget.Resume() => _pauseOwner == EPauseOwner.Event && ResumeMovement();
+        void IPathEffectTarget.Resume()
+        {
+            if (_pauseOwner == EPauseOwner.Event)
+                ResumeMovement();
+        }
 
-        bool IPathEffectTarget.ApplyValue(EPathEffectChannel channel, float value) => _cursor.TrySetValue(channel, value);
+        void IPathEffectTarget.ApplyValue(EPathEffectChannel channel, float value) => _cursor.TrySetValue(channel, value);
 
         void IPathEffectTarget.PublishEvent(string eventName)
         {
