@@ -150,6 +150,30 @@ namespace Common.FlowField
                 ConfiguredGoalWorld);
         }
 
+        // The Additional Agent Types as the settings name them, for the world
+        // bake, which makes its own sessions in Edit Mode.
+        internal int ConfiguredAgentTypeCount => AgentTypeSettings.Length;
+
+        internal string ConfiguredAgentTypeName(int index) => AgentTypeSettings[index].Name;
+
+        internal FlowFieldManagerConfig CaptureAgentConfig(int index) => CaptureAgentConfig(SpaceMode, index);
+
+        // Init's checks of the types, with the reason, for the world bake.
+        internal bool TryValidateAgentTypes(out string reason)
+        {
+            reason = null;
+            try
+            {
+                ValidateAgentTypes(SpaceMode, sessionHoldsTypes: false);
+                return true;
+            }
+            catch (InvalidOperationException exception)
+            {
+                reason = exception.Message;
+                return false;
+            }
+        }
+
         /// <summary>
         /// The checks of the additional types. A running session holds its
         /// types, so a changed number or name faults it, as a Bake Mode edit

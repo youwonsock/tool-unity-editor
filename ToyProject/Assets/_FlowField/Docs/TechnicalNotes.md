@@ -69,6 +69,7 @@
   - Bake Asset의 검증과 쓰기(`Apply`), Volume 표시의 검증기 `FlowFieldVolumeBakeValidator`
   - 표시가 읽는 게시 필드 `FlowFieldField`와 Goal 표식 `FlowFieldGoalFlags`, Surface 표시의 가장 가까운 지면 찾기 `FlowFieldSurfaceGraphTraversal`
   - Modifier 규칙(`FlowFieldModifierRegistry.DuplicatePriorityMessage`, `FlowFieldModifierInfluence.TryValidateInfluenceCollider`)
+  - World Bake가 쓰는 영역 구성(`FlowFieldWorldAreas.CreateDetached`, 영역 구성원 `IFlowFieldWorldMember`, `FlowFieldWorldGoals`), Bake 결과 `FlowFieldWorldBake`, Manager의 Agent 유형 설정(`CaptureAgentConfig`, `TryValidateAgentTypes`)
 - `FlowFieldBakeService`는 레이아웃(`TryGetLayout`)과 설정 검사(`TryValidateConfig`, `TryValidateBakeSettings`)를 strategy로, 요청과 Goal 해석은 Builder 정적 함수로 만듭니다. 두 모드의 독립 Bake 세션(Surface2D는 지면 scan이 끝난 뒤 `CreateSurfaceBakeSession`, Volume3D는 `CreateVolumeBakeSession`)도 만듭니다.
 - Volume 표시는 Init이 payload 전에 하는 검사(`TryValidateVolumeConfigBeforePayload`)를 같은 순서·문구로 하고, payload는 단계로 나눠 검증합니다. 검증이 끝났거나 설정이 바뀌면 그 결과를 Bake 검증 캐시에 넣고 `TryValidateConfig`를 그대로 돌립니다.
 - Bake 입력 해시(`ComputeBakeInputHash`)는 BakeService가 설정 스냅샷으로 계산하고, Bake는 프레임마다 시작 때의 값과 비교합니다(`CaptureInputGeneration`).
@@ -338,7 +339,7 @@ Manager의 Obstacle Clearance, Max Slope, Max Step Height가 `Default` 유형입
   - Goal 칸이 막혔거나 지면이 없으면, Goal을 품은 영역 안에서 가장 가까운(칸 거리 제곱, 같으면 낮은 번호) 걸을 수 있는 칸에서 시작합니다.
   - 풀이는 seed를 비용 순으로 큐 사이에 넣어 한 출발점 탐색처럼 칸을 비용 순으로 내보냅니다. 영역 안에 더 가까운 칸이 없는 seed 칸은 경계 너머로 걷습니다(`FlowFieldNextCell.Portal`). 그래서 닿는 두 영역은 둘을 덮는 Manager 하나와 모든 칸의 걸음 수가 같습니다. 방향은 경계 칸에서 다를 수 있습니다. 영역 안의 같은 걸음 수 칸을 경계 너머 걸음보다 먼저 고르기 때문입니다.
   - World Goal은 seed로만 빌드합니다. seed를 아직 받지 못한 영역(Goal에 닿을 길이 없거나, 그 Agent 유형이 이웃에 없거나, 이웃이 Fault)은 그 Goal의 필드가 없고 `IsGoalReady`가 false입니다. Agent 유형은 이름으로 영역끼리 이어집니다. 격자가 바뀌거나 Stop·재시작하면 seed도 필드와 함께 버리고 다시 받습니다.
-  - 어느 영역에도 없는 Goal은 각 영역의 바깥 경계 칸에서 직선 추정(셀 단위 Chebyshev 거리)으로 시작합니다. 이동 주체는 가장 가까운 경계까지 가서 멈춥니다. 영역 밖으로 가는 흐름은 없습니다.
+  - 불러온 어느 영역에도 없는 Goal은 각 영역의 바깥 경계 칸에서, 불러온 영역이 없는 lattice 칸으로 걷는 seed로 시작합니다. World Bake가 그 Goal 칸과 Agent 유형을 탐색해 두었으면, Bake한 영역의 칸으로 걷는 seed는 Bake한 그 칸의 걸음 수 + 1이고 경계 연결 규칙을 지킵니다(불러오지 않은 칸은 Bake가 닿은 칸이면 열린 칸이고 그 높이를 씁니다). Bake한 어느 영역에도 없는 칸으로는, 지금 상자 그대로 Bake에 든 영역은 걷지 않고(Bake 때 아무 영역도 없던 칸입니다), Bake에 없는 영역은 직선 추정으로 걷습니다. Bake가 없으면 모든 영역이 직선 추정(셀 단위 Chebyshev 거리)입니다. 이동 주체는 경계까지 가서 멈춥니다. 영역 밖으로 가는 흐름은 없습니다.
   - StaticBaked 영역은 자기 Goal을 구운 그대로 두고, World Goal은 구운 칸 위에서 런타임에 탐색합니다(Physics 없음).
 - **갱신과 epoch:**
   - `FlowFieldBuildDriver`가 매 프레임 빌드 전에 각 world를 갱신합니다(`FlowFieldWorldGoals.Update`). 모든 영역 세션이 모든 World Goal을 가졌는지 보고, 입력(자기 칸, 자기 Goal 필드, 닿는 영역의 칸과 Goal 필드와 그 epoch)이 바뀐 곳만 seed를 다시 계산합니다.
@@ -347,6 +348,11 @@ Manager의 Obstacle Clearance, Max Slope, Max Step Height가 `Default` 유형입
   - `FlowFieldWorld.SetGoal`은 영역 요청을 다시 빌드하지 않고 seed로만 새 위치를 전하므로, seed가 바뀐 영역만 다시 빌드합니다.
   - World의 명령과 갱신은 모든 영역 Manager의 작업 하나로 돌아, 그 사이 이벤트는 world가 끝난 뒤 핸들러에 갑니다. Modifier 코드 안에서는 world 명령을 거부합니다. 영역이 나가면 그 세션의 갱신 기록도 지웁니다.
   - World Asset의 값(Space Mode, Cell Size, Lattice Origin)은 Play 중에 바꾸지 않습니다. 들어온 영역은 들어올 때의 lattice로 남습니다.
+- **World Bake:**
+  - Editor에서 world Inspector의 Bake(`FlowFieldWorldBaker`)가 열린 장면의 그 world Manager를 모두 모아, Init과 같은 검사(설정, Agent 유형, lattice, 겹침)를 한 뒤 Play와 떨어진 영역 집합(`FlowFieldWorldAreas.CreateDetached`)에 넣습니다. 영역마다 Agent 유형별 Edit Mode 세션을 RuntimeDynamic 설정으로 만들어 Physics에서 칸을 빌드합니다. StaticBaked·BakedBase 영역도 Physics로 빌드하므로, 그 Bake Asset과 장면이 맞아야 Play와 같은 칸이 됩니다.
+  - Bake Goal마다 Play와 같은 World Goal 탐색(seed, epoch, 경계 연결 규칙)을 seed가 더 바뀌지 않고 빌드할 세션이 없을 때까지 돌립니다(`FlowFieldWorldGoals.IsSettled`). 그 뒤 각 영역 바깥 경계 칸 중 Goal에 닿는 칸의 lattice 좌표, 걸음 수, Surface2D 높이를 Agent 유형별로 `FlowFieldWorldBake`에 담아 World Asset에 씁니다(Undo, Asset이면 저장). 같은 칸의 Bake Goal은 한 번만 탐색하고, 어느 영역에도 없는 Bake Goal은 거부합니다.
+  - Bake는 World의 Space Mode, Cell Size, Lattice Origin과 영역들의 lattice 상자를 함께 저장하고, World 값이 다르면 쓰지 않습니다. world Inspector는 열린 장면의 영역이 지금 상자로 Bake에 없으면 경고합니다. 장면의 바닥과 장애물은 검사하지 않으므로 장면을 바꾸면 다시 Bake합니다. Bake 뒤에 더한 영역을 불러오지 않으면 Bake는 그 영역을 모르므로, 그 영역을 거쳐야만 Goal에 닿는 Bake한 영역은 닿지 못합니다. Bake한 걸음 수는 Bake 때의 모든 영역을 거친 길이라, Play에서 불러온 영역의 바뀐 입력은 불러오지 않은 칸의 값에 들어가지 않습니다. 고정값이므로 epoch 보호가 필요 없습니다.
+  - Goal을 품은 영역을 불러왔으면 Bake를 쓰지 않습니다. 그래서 Goal 영역과 다른 영역 사이가 불러오지 않은 영역뿐이면 그 영역은 여전히 Goal에 닿지 않습니다.
 - **경계를 넘는 조회:**
   - World Goal의 조회는 닿는 영역의 칸을 자기 칸 옆에 둔 view(`FlowFieldStitchedCellView`)로 [샘플 안전 규칙](#샘플-안전-규칙)을 적용합니다. 닿는 영역의 칸은 자기 칸 뒤의 번호이고, 자기 좌표로 읽습니다.
   - 경계 너머 걸음은 격자 밖에서 멈추지 않고, 그 걸음이 닿는 칸(불확실 영역, 막힘, 지면, 낙차와 높은 턱)으로 검사합니다. 닿는 영역의 칸은 그 영역의 최신 정보와 불확실 영역을 씁니다.
@@ -488,7 +494,7 @@ Manager의 Obstacle Clearance, Max Slope, Max Step Height가 `Default` 유형입
 | `Protocol` | 빌드 단계, 풀이 중 Stop·Release, 거부·폐기된 빌드, Default Direction 동기화, 증분 결과와 fresh 결과의 일치 |
 | `Safety` | 샘플 안전 규칙: 막힘·지면 없음·격자 밖·낙차로 향하는 움직이는 샘플이 없는지 |
 | `Obstacles` | 등록·해제·파괴·순간이동, 불확실 영역, 미등록 장애물 sweep, 격자 왕복 |
-| `World` | World 영역: lattice·겹침·경계 칸 쌍, seed 탐색(Goal 칸 seed는 추가 Goal과 같은 필드, 여러 seed는 다중 출발 탐색과 같은 걸음 수), 닿는 두 영역과 하나의 Manager가 같은 걸음 수(두 모드), 경계를 넘는 이동 주체와 경계 너머 알림의 정지, 영역 밖 Goal, 장면 스트리밍, 공유 등록, StaticBaked 영역의 World Goal |
+| `World` | World 영역: lattice·겹침·경계 칸 쌍, seed 탐색(Goal 칸 seed는 추가 Goal과 같은 필드, 여러 seed는 다중 출발 탐색과 같은 걸음 수), 닿는 두 영역과 하나의 Manager가 같은 걸음 수(두 모드), 경계를 넘는 이동 주체와 경계 너머 알림의 정지, 영역 밖 Goal, 장면 스트리밍, 공유 등록, StaticBaked 영역의 World Goal, World Bake(Goal 영역을 내린 뒤 이웃이 Goal 영역을 불러왔을 때와 같은 걸음 수를 가짐, Bake에 없는 영역과 Bake가 없을 때의 직선 추정, Bake 거부, Bake에 없는 영역 경고) |
 | `Agents` | Agent 유형: Manager 설정과 같은 유형은 같은 필드, 넓은 유형은 기본 유형의 막힘을 포함하고 연결을 넘지 않음, 장애물·Goal·Modifier·켜고 끄기가 모든 유형에 닿음, 유형의 잘못된 값과 개수 변경의 Fault, StaticBaked 거부 |
 | `Modifiers`, `SpaceMode` | 빌드 중 Modifier 파괴, Priority, Space Mode 편집, Fault와 재시도, scheduler 등록 |
 | `Goal`, `EditorBake` | `FlowFieldGoalTarget`, Goal 반경, 추가 Goal(기본 Goal 자리에서 같은 필드, 입력 storm 뒤 fresh와 같고 게시된 필드가 바뀌지 않음, 가장 가까운 Goal, 핸들, 움직이는 기본 Goal·Group Goal과 번갈아 빌드, 빌드 중 Modifier 등록, 기본 Goal이 먼저 게시한 막힘, Manager API와 StaticBaked 거부), Editor 미리보기와 Volume 표시, Bake 거부·대상·복제·다시 Bake |

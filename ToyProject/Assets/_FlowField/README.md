@@ -59,7 +59,7 @@ public sealed class FlowFieldReadmeMover : MonoBehaviour
 | `FlowFieldGoalTarget` | 켜져 있는 동안 자기 위치를 Manager의 Goal로 정하고(Influence Radius 포함), 움직이거나 반경이 바뀌면 다시 정합니다. 끄면 자기가 정한 Goal이 아직 Manager의 Goal일 때만 지웁니다. 여러 target이 한 Manager를 가리키면 마지막에 알린 target의 Goal이 쓰입니다. |
 | `FlowFieldSpeedModifier` | 영향 영역 안 셀의 속도 배율에 Speed Multiplier를 곱합니다. 기본 Priority는 100입니다. |
 | `FlowFieldNoiseModifier` | 영향 영역 안 셀의 방향을 위치마다 고정된 각도(최대 Max Angle Degrees, Spatial Frequency, Seed)만큼 돌립니다. 기본 Priority는 200입니다. |
-| `FlowFieldWorld` (Asset) | Manager들을 영역으로 묶습니다. 같은 Space Mode·Cell Size·lattice의 영역은 격자가 닿는 곳에서 이어지고, Additive로 불러온 장면에 걸쳐도 됩니다. World Goal과 공유 등록 API를 가집니다. Project 창의 Create > FlowField > World로 만듭니다. |
+| `FlowFieldWorld` (Asset) | Manager들을 영역으로 묶습니다. 같은 Space Mode·Cell Size·lattice의 영역은 격자가 닿는 곳에서 이어지고, Additive로 불러온 장면에 걸쳐도 됩니다. World Goal과 공유 등록 API를 가집니다. Inspector의 Bake는 Bake Goals를 열린 장면의 모든 영역에 걸쳐 미리 탐색합니다. Project 창의 Create > FlowField > World로 만듭니다. |
 | `FlowFieldDisplaySettings` | Manager와 같은 GameObject에 두는 Scene View 표시 옵션입니다(Show Field, Volume3D의 FullVolume·Slice 표시). 계산은 바꾸지 않고, 없으면 Scene View에 방향장을 그리지 않습니다. |
 
 - `FlowFieldDynamicObstacle`과 `FlowFieldGoalTarget`은 `StaticBaked` Manager에서 아무것도 하지 않습니다. 장애물과 Goal이 Bake한 그대로이기 때문입니다.
@@ -109,6 +109,7 @@ Inspector는 그룹마다 제목을 달고, 지금 Space Mode가 읽지 않는 �
 - Asset의 `HasCurrentFormat`이 false면 지금 코드가 읽지 않는 형식이므로 다시 Bake합니다.
 - Clear Bake는 Manager의 참조만 지우고 Asset 파일은 남깁니다. 씬을 옮기거나 씬·Manager 이름을 바꾼 뒤 참조가 빈 채로 Bake하면 새 경로에 Asset을 만들고 원래 경로의 Asset은 남으므로, 필요 없으면 직접 지웁니다.
 - Asset은 자기를 Bake한 Manager를 기억합니다. 복제한 Manager를 Bake하면 원래 Asset을 덮어쓰지 않고 자기 Asset을 새로 만들어 연결합니다.
+- **World Bake:** `FlowFieldWorld` Asset의 Bake Goals에 위치를 넣고, 그 world의 장면을 모두 Additive로 연 Edit Mode에서 world Inspector의 "Bake"를 누릅니다. 열린 장면의 영역 Manager마다 Agent 유형별로 Physics에서 칸을 만들고(RuntimeDynamic처럼), Bake Goal마다 Play와 같은 World Goal 탐색을 돌려 각 영역 바깥 경계 칸의 걸음 수를 Asset에 저장합니다. Play에서 World Goal이 Bake Goal과 같은 칸에 있고 그 칸을 품은 영역을 불러오지 않았으면, 불러온 영역은 직선 추정 대신 Bake한 걸음 수로 경계까지 이끕니다. 장면을 바꾸거나 영역을 더하면 다시 Bake합니다(world Inspector가 Bake에 없는 열린 영역을 경고합니다). World의 Space Mode·Cell Size·Lattice Origin을 바꾼 Bake는 쓰지 않습니다. 장면이나 Manager의 Bake Asset은 바꾸지 않습니다.
 - `BakedBase`는 장애물 변화(등록·해제·이동·영역 알림)가 닿은 영역만 Physics로 다시 조회하므로, Bake 때 막혔던 자리도 옮긴 장애물이면 풀립니다. 그러나 Bake 뒤 아무도 지켜보지 않을 때 옮긴 장면 장애물(등록 전이나 알리지 않은 이동)은 모르므로 Bake 때 자리가 막힌 채 남습니다. `Sweep Unregistered`를 켜면 새 자리는 반영되고, Volume3D는 Bake 때 자리도 풉니다. 장면 장애물을 Editor에서 옮겼다면 다시 Bake합니다.
 
 ## 런타임 API
@@ -122,7 +123,7 @@ Inspector는 그룹마다 제목을 달고, 지금 Space Mode가 읽지 않는 �
 | Goal 변경 | `SetGoal(FlowFieldGoalRequest.Position(position, radius))` 또는 `FlowFieldGoalRequest.Target(transform, radius)`, 지우기는 `FlowFieldGoalRequest.None`. 또는 `FlowFieldGoalTarget`. 장애물 결과를 재사용하고, 마지막에 정한 Goal이 쓰입니다 |
 | 추가 Goal | `AddGoal(FlowFieldGoalKind.Shared 또는 Group, FlowFieldGoalRequest.Position(position, radius))`이 돌려준 핸들로 `TrySample(position, handle, out sample)`, `IsGoalReady(handle)`, `SetGoal(handle, request)`, `RemoveGoal(handle)`. `TrySampleNearestShared(position, out sample, out handle)`은 걸음 수가 가장 적은 `Shared` Goal로 답합니다. 기본 Goal과 같은 바닥·장애물·Modifier를 쓰고 기본 Goal 필드 다음에 빌드됩니다. `StaticBaked`는 받지 않습니다. 규칙은 [TechnicalNotes](Docs/TechnicalNotes.md#추가-goal) |
 | Agent 유형 | `TryGetAgentType(name, out type)`으로 찾은 유형을 `TrySample(position, type, out sample)`, `IsAgentTypeReady(type)`, `TrySample(position, handle, type, out sample)`, `IsGoalReady(handle, type)`, `TrySampleNearestShared(position, type, out sample, out handle)`에 넘깁니다. 유형을 받지 않는 호출과 `State`는 `Default` 유형입니다. 입력은 모든 유형에 적용됩니다 |
-| World 영역 | `world.AddGoal(kind, FlowFieldGoalRequest.Position(position))`의 핸들을 `world.TrySample(position, handle, out sample)`이나 각 영역 Manager의 `TrySample(position, handle, ...)`로 읽습니다. 이동 주체는 영역 경계를 넘어 따라가고, 불러오지 않은 영역의 Goal은 가장 가까운 경계로 이끕니다. 영역을 넘는 장애물과 Modifier는 `world.RegisterDynamicObstacle()`, `world.RegisterVectorModifier()`로 한 번 등록합니다. `world.TryGetArea(position, out manager)`. 규칙은 [TechnicalNotes](Docs/TechnicalNotes.md#world-영역) |
+| World 영역 | `world.AddGoal(kind, FlowFieldGoalRequest.Position(position))`의 핸들을 `world.TrySample(position, handle, out sample)`이나 각 영역 Manager의 `TrySample(position, handle, ...)`로 읽습니다. 이동 주체는 영역 경계를 넘어 따라가고, 불러오지 않은 영역의 Goal은 경계로 이끕니다(World Bake가 그 칸을 탐색했으면 Bake한 길로, 아니면 직선 추정으로). 영역을 넘는 장애물과 Modifier는 `world.RegisterDynamicObstacle()`, `world.RegisterVectorModifier()`로 한 번 등록합니다. `world.TryGetArea(position, out manager)`. 규칙은 [TechnicalNotes](Docs/TechnicalNotes.md#world-영역) |
 | 움직이는 장애물 | `RegisterDynamicObstacle(collider)` → 움직일 때마다 `NotifyDynamicObstacleMoved(collider)` → `UnregisterDynamicObstacle(collider)`. `FlowFieldDynamicObstacle`이 이 셋을 대신합니다. 파괴된 Collider 등록은 "Cannot register a destroyed Collider." |
 | 장애물 영역 알림 (`RuntimeDynamic`, `BakedBase`) | `NotifyObstacleRegionDirty(bounds)`. 이전과 현재 Bounds의 합집합을 넘깁니다. 유한하지 않은 Bounds는 `ArgumentOutOfRangeException`("Bounds must be finite.") |
 | 바닥 형상 변경 (`RuntimeDynamic`) | `NotifyCellsDirty()`. 바닥(Volume3D는 모든 셀)과 장애물을 모두 다시 조회합니다. 진행 중인 빌드는 버리지 않고, 다음 빌드가 바닥을 다시 조회합니다 |

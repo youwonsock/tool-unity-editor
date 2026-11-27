@@ -74,17 +74,19 @@ namespace Common.FlowField
         }
     }
 
-    /// <summary>A Manager that joined a world, its grid on the lattice and its borders.</summary>
+    /// <summary>A Manager (or a bake's sessions) that joined a world, its grid on the lattice and its borders.</summary>
     internal sealed class FlowFieldWorldArea
     {
-        internal readonly FlowFieldManager Manager;
+        internal readonly IFlowFieldWorldMember Member;
+        // The area's Manager; null for a bake's sessions.
+        internal FlowFieldManager Manager => Member as FlowFieldManager;
         internal readonly FlowFieldGridSpace Grid;
         internal readonly FlowFieldLatticeBox Box;
         internal readonly List<FlowFieldWorldBorder> Borders = new List<FlowFieldWorldBorder>(4);
 
-        internal FlowFieldWorldArea(FlowFieldManager manager, FlowFieldGridSpace grid, FlowFieldLatticeBox box)
+        internal FlowFieldWorldArea(IFlowFieldWorldMember member, FlowFieldGridSpace grid, FlowFieldLatticeBox box)
         {
-            Manager = manager;
+            Member = member;
             Grid = grid;
             Box = box;
         }
@@ -111,6 +113,14 @@ namespace Common.FlowField
             z += Box.MinZ;
         }
 
+        // A cell of the grid's outer layer: one with a lattice neighbor outside the area.
+        internal bool IsOuterCell(int index)
+        {
+            Grid.Locate(index, out int x, out int y, out int z);
+            return x == 0 || x == Grid.Width - 1 || z == 0 || z == Grid.Depth - 1
+                || IsVolume && (y == 0 || y == Grid.Height - 1);
+        }
+
         internal FlowFieldWorldBorder BorderWith(FlowFieldWorldArea other)
         {
             for (int i = 0; i < Borders.Count; i++)
@@ -125,7 +135,8 @@ namespace Common.FlowField
     /// <summary>
     /// The areas of one world while Play runs: who joined, where their grids
     /// lie on the lattice and which cells meet across their borders. A Play
-    /// session starts with no area, also with domain reload off.
+    /// session starts with no area, also with domain reload off. A world bake
+    /// makes its own, detached from Play's.
     /// </summary>
     internal sealed class FlowFieldWorldAreas
     {
@@ -185,8 +196,8 @@ namespace Common.FlowField
                 return;
             for (int i = 0; i < _areas.Count; i++)
             {
-                if (_areas[i].Manager != null)
-                    _operations.Add(_areas[i].Manager.EnterOperation());
+                if (_areas[i].Member != null)
+                    _operations.Add(_areas[i].Member.EnterOperation());
             }
         }
 
@@ -213,12 +224,18 @@ namespace Common.FlowField
             {
                 for (int i = 0; i < _areas.Count; i++)
                 {
-                    if (_areas[i].Manager != null && _areas[i].Manager.IsInUserCode)
+                    if (_areas[i].Member != null && _areas[i].Member.IsInUserCode)
                         return true;
                 }
                 return false;
             }
         }
+
+        /// <summary>
+        /// Areas of the world outside Play's registry, for a world bake: its
+        /// own Goals and registrations, no driver, no other area.
+        /// </summary>
+        internal static FlowFieldWorldAreas CreateDetached(FlowFieldWorld world) => new FlowFieldWorldAreas(world);
 
         internal static FlowFieldWorldAreas For(FlowFieldWorld world)
         {
@@ -236,11 +253,11 @@ namespace Common.FlowField
         /// <summary>Raised after an area joined or left, with that area.</summary>
         internal event Action<FlowFieldWorldArea> Changed;
 
-        internal FlowFieldWorldArea Find(FlowFieldManager manager)
+        internal FlowFieldWorldArea Find(IFlowFieldWorldMember member)
         {
             for (int i = 0; i < _areas.Count; i++)
             {
-                if (ReferenceEquals(_areas[i].Manager, manager))
+                if (ReferenceEquals(_areas[i].Member, member))
                     return _areas[i];
             }
             return null;
@@ -255,6 +272,19 @@ namespace Common.FlowField
             }
             return null;
         }
+
+        /// <summary>The lattice cell of a position; Surface2D cells have y 0.</summary>
+        internal static void LatticeCell(FlowFieldWorld world, Vector3 position, out int x, out int y, out int z)
+        {
+            x = LatticeCell(position.x, world.LatticeOrigin.x, world.CellSize);
+            y = world.SpaceMode == FlowFieldSpaceMode.Volume3D
+                ? LatticeCell(position.y, world.LatticeOrigin.y, world.CellSize)
+                : 0;
+            z = LatticeCell(position.z, world.LatticeOrigin.z, world.CellSize);
+        }
+
+        private static int LatticeCell(float position, float origin, float cellSize)
+            => (int)Math.Floor(((double)position - origin) / cellSize);
 
         /// <summary>
         /// The grid's cells on the world's lattice, or false with the reason a
@@ -305,12 +335,12 @@ namespace Common.FlowField
         }
 
         /// <summary>A joined area other than <paramref name="except"/>'s whose cells overlap the box.</summary>
-        internal FlowFieldWorldArea Overlapping(in FlowFieldLatticeBox box, FlowFieldManager except)
+        internal FlowFieldWorldArea Overlapping(in FlowFieldLatticeBox box, IFlowFieldWorldMember except)
         {
             for (int i = 0; i < _areas.Count; i++)
             {
                 FlowFieldWorldArea area = _areas[i];
-                if (!ReferenceEquals(area.Manager, except) && area.Box.Overlaps(in box))
+                if (!ReferenceEquals(area.Member, except) && area.Box.Overlaps(in box))
                     return area;
             }
             return null;
@@ -321,10 +351,10 @@ namespace Common.FlowField
         /// meets of every touching area. The caller checked the lattice and
         /// the overlap.
         /// </summary>
-        internal FlowFieldWorldArea Join(FlowFieldManager manager, FlowFieldGridSpace grid, in FlowFieldLatticeBox box)
+        internal FlowFieldWorldArea Join(IFlowFieldWorldMember member, FlowFieldGridSpace grid, in FlowFieldLatticeBox box)
         {
-            RemoveArea(manager);
-            var area = new FlowFieldWorldArea(manager, grid, box);
+            RemoveArea(member);
+            var area = new FlowFieldWorldArea(member, grid, box);
             for (int i = 0; i < _areas.Count; i++)
             {
                 FlowFieldWorldArea other = _areas[i];
@@ -337,25 +367,27 @@ namespace Common.FlowField
                 other.Borders.Add(new FlowFieldWorldBorder(area, FindPairs(other, area)));
             }
             _areas.Add(area);
-            _managers.Add(manager);
+            if (member is FlowFieldManager manager)
+                _managers.Add(manager);
             Changed?.Invoke(area);
             return area;
         }
 
-        internal void Leave(FlowFieldManager manager)
+        internal void Leave(IFlowFieldWorldMember member)
         {
-            FlowFieldWorldArea area = RemoveArea(manager);
+            FlowFieldWorldArea area = RemoveArea(member);
             if (area != null)
                 Changed?.Invoke(area);
         }
 
-        private FlowFieldWorldArea RemoveArea(FlowFieldManager manager)
+        private FlowFieldWorldArea RemoveArea(IFlowFieldWorldMember member)
         {
-            FlowFieldWorldArea area = Find(manager);
+            FlowFieldWorldArea area = Find(member);
             if (area == null)
                 return null;
             _areas.Remove(area);
-            _managers.Remove(manager);
+            if (member is FlowFieldManager manager)
+                _managers.Remove(manager);
             for (int i = 0; i < area.Borders.Count; i++)
             {
                 List<FlowFieldWorldBorder> theirs = area.Borders[i].Other.Borders;

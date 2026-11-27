@@ -8,7 +8,7 @@ namespace Common.FlowField
     /// that its grid fits the world, joining at Init and leaving at Release
     /// and destruction, and moving its area when its grid changes.
     /// </summary>
-    public partial class FlowFieldManager
+    public partial class FlowFieldManager : IFlowFieldWorldMember
     {
         [SerializeField, Tooltip("The world this Manager is an area of, stitched to the areas its grid touches. It can change only after Release.")]
         private FlowFieldWorld _world;
@@ -39,7 +39,7 @@ namespace Common.FlowField
             FlowFieldWorldArea other = _world.Areas.Overlapping(in box, this);
             if (other != null)
                 throw new InvalidOperationException(
-                    $"This area overlaps the area of {FlowFieldWorld.NameOf(other.Manager)} in the FlowField World {_world.name}.");
+                    $"This area overlaps the area of {other.Member.Name} in the FlowField World {_world.name}.");
         }
 
         /// <summary>
@@ -88,6 +88,13 @@ namespace Common.FlowField
         internal FlowFieldExecutionBoundary.OperationScope EnterOperation() => _boundary.EnterOperation();
 
         internal bool IsInUserCode => _boundary.IsInUserCode;
+
+        string IFlowFieldWorldMember.Name => this != null ? name : "(destroyed)";
+        int IFlowFieldWorldMember.WorldSessionCount => WorldSessionCount;
+        FlowFieldSession IFlowFieldWorldMember.WorldSession(int index) => WorldSession(index);
+        string IFlowFieldWorldMember.WorldSessionName(int index) => WorldSessionName(index);
+        FlowFieldExecutionBoundary.OperationScope IFlowFieldWorldMember.EnterOperation() => EnterOperation();
+        bool IFlowFieldWorldMember.IsInUserCode => IsInUserCode;
 
         private void LeaveWorld()
         {

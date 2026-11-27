@@ -10,7 +10,9 @@ namespace Common.FlowField
     /// starts from seeds this class keeps current once a frame, before the
     /// builds. The area holding the Goal seeds its cell; every area seeds the
     /// cells beside a touching area with that area's steps plus one; a Goal no
-    /// loaded area holds seeds the outer cells with straight-line estimates.
+    /// loaded area holds seeds the outer cells with the world bake's steps
+    /// across them when it searched the Goal's cell, else with straight-line
+    /// estimates.
     /// <para>
     /// An epoch guards against old steps that ran through an area whose way
     /// has changed: a Goal moving, an area joining or leaving, or any area's
@@ -110,6 +112,24 @@ namespace Common.FlowField
 
         internal int Count => _goals.Count;
 
+        /// <summary>
+        /// The last update changed no seeds and found no build due, and no
+        /// epoch waits: the searches have spread as far as they reach. The
+        /// world bake pumps until then.
+        /// </summary>
+        internal bool IsSettled
+        {
+            get
+            {
+                for (int g = 0; g < _goals.Count; g++)
+                {
+                    if (!_goals[g].Quiet || _goals[g].EpochPending)
+                        return false;
+                }
+                return true;
+            }
+        }
+
         internal int Add(FlowFieldGoalKind kind, in FlowFieldGoalRequest request)
         {
             var goal = new Goal(FlowFieldGoalSet.NextId(), kind, request);
@@ -131,7 +151,7 @@ namespace Common.FlowField
             {
                 for (int a = 0; a < _areas.All.Count; a++)
                 {
-                    FlowFieldManager manager = _areas.All[a].Manager;
+                    IFlowFieldWorldMember manager = _areas.All[a].Member;
                     for (int s = 0; s < manager.WorldSessionCount; s++)
                         manager.WorldSession(s).Goals.TrySetWorldRequest(id, request);
                 }
@@ -156,7 +176,7 @@ namespace Common.FlowField
             {
                 for (int a = 0; a < _areas.All.Count; a++)
                 {
-                    FlowFieldManager manager = _areas.All[a].Manager;
+                    IFlowFieldWorldMember manager = _areas.All[a].Member;
                     for (int s = 0; s < manager.WorldSessionCount; s++)
                     {
                         FlowFieldSession session = manager.WorldSession(s);
@@ -227,7 +247,7 @@ namespace Common.FlowField
             IReadOnlyList<FlowFieldWorldArea> areas = _areas.All;
             for (int a = 0; a < areas.Count; a++)
             {
-                FlowFieldManager manager = areas[a].Manager;
+                IFlowFieldWorldMember manager = areas[a].Member;
                 for (int s = 0; s < manager.WorldSessionCount; s++)
                 {
                     FlowFieldSession session = manager.WorldSession(s);
@@ -280,7 +300,7 @@ namespace Common.FlowField
                 bool active = false;
                 for (int a = 0; a < areas.Count; a++)
                 {
-                    FlowFieldManager manager = areas[a].Manager;
+                    IFlowFieldWorldMember manager = areas[a].Member;
                     for (int s = 0; s < manager.WorldSessionCount; s++)
                     {
                         FlowFieldSession session = manager.WorldSession(s);
@@ -302,7 +322,7 @@ namespace Common.FlowField
             IReadOnlyList<FlowFieldWorldArea> areas = _areas.All;
             for (int a = 0; a < areas.Count; a++)
             {
-                FlowFieldManager manager = areas[a].Manager;
+                IFlowFieldWorldMember manager = areas[a].Member;
                 for (int s = 0; s < manager.WorldSessionCount; s++)
                     _liveSessions.Add(manager.WorldSession(s));
             }
@@ -338,7 +358,7 @@ namespace Common.FlowField
         {
             if (!session.TryGetPublishedField(out FlowFieldField own))
                 return false;
-            string typeName = area.Manager.WorldSessionName(sessionIndex);
+            string typeName = area.Member.WorldSessionName(sessionIndex);
             FlowFieldGoalSet.Entry entry = session.Goals.Find(goal.Id);
             SeedInputs inputs = Inputs(goal, area, typeName, own, entry);
             if (!_inputs.TryGetValue((session, goal.Id), out SeedInputs last))
@@ -419,7 +439,7 @@ namespace Common.FlowField
         // The area's session of an agent type, by name, while it takes Goals.
         private static FlowFieldSession SessionOf(FlowFieldWorldArea area, string typeName)
         {
-            FlowFieldManager manager = area.Manager;
+            IFlowFieldWorldMember manager = area.Member;
             for (int s = 0; s < manager.WorldSessionCount; s++)
             {
                 if (manager.WorldSessionName(s) == typeName)
@@ -476,14 +496,14 @@ namespace Common.FlowField
                     FlowFieldBorderPair pair = border.Pairs[p];
                     int steps = distances[pair.Other];
                     if (steps == FlowFieldGoalLayer.Unreachable
-                        || !CanCross(area, own, pair.Cell, pair.Direction, border.Other, otherAgent, pair.Other, typeName))
+                        || !CanCross(area, own, pair.Cell, pair.Direction, typeName, baked: null))
                         continue;
                     Add(pair.Cell, steps + 1, pair.Direction, Height(otherAgent, pair.Other));
                 }
             }
 
             if (_areas.Find(position) == null)
-                AddEstimates(area, own, position);
+                AddOutward(area, own, position, typeName, _areas.World.FindBakedGoal(position, typeName));
 
             return new FlowFieldGoalSeeds(
                 _cells.ToArray(),
@@ -506,21 +526,27 @@ namespace Common.FlowField
         }
 
         // A Goal no loaded area holds: the area's walkable outer cells, toward
-        // the outside, at the steps a straight way to the Goal would take.
-        private void AddEstimates(FlowFieldWorldArea area, FlowFieldField own, Vector3 position)
+        // lattice cells no loaded area holds. With the bake's steps toward the
+        // Goal's cell, a step into a cell of a baked area goes where the bake
+        // reached that cell and the crossing rule allows it, at those steps
+        // plus one. A step into a cell no baked area holds is the estimate's:
+        // none from an area the bake holds as it is, which knew that cell was
+        // no area's; the steps a straight way to the Goal would take from any
+        // other area, and from every area without the bake's steps.
+        private void AddOutward(
+            FlowFieldWorldArea area,
+            FlowFieldField own,
+            Vector3 position,
+            string typeName,
+            FlowFieldWorldBakedGoal baked)
         {
             FlowFieldGridSpace grid = area.Grid;
-            FlowFieldWorld world = _areas.World;
-            int goalX = LatticeCell(position.x, world.LatticeOrigin.x, world.CellSize);
-            int goalY = area.IsVolume ? LatticeCell(position.y, world.LatticeOrigin.y, world.CellSize) : 0;
-            int goalZ = LatticeCell(position.z, world.LatticeOrigin.z, world.CellSize);
+            FlowFieldWorldAreas.LatticeCell(_areas.World, position, out int goalX, out int goalY, out int goalZ);
             int steps = area.IsVolume ? FlowFieldNeighborUtility.VolumeCount : FlowFieldNeighborUtility.SurfaceCount;
+            bool areaBaked = baked != null && _areas.World.BakeHasArea(area.Box);
             for (int cell = 0; cell < grid.CellCount; cell++)
             {
-                grid.Locate(cell, out int lx, out int ly, out int lz);
-                bool edge = lx == 0 || lx == grid.Width - 1 || lz == 0 || lz == grid.Depth - 1
-                    || area.IsVolume && (ly == 0 || ly == grid.Height - 1);
-                if (!edge || !Walkable(own, cell))
+                if (!area.IsOuterCell(cell) || !Walkable(own, cell))
                     continue;
                 area.Locate(cell, out int x, out int y, out int z);
                 for (int direction = 0; direction < steps; direction++)
@@ -530,8 +556,17 @@ namespace Common.FlowField
                     int tz = z + FlowFieldNeighborUtility.DeltaZ[direction];
                     if (area.Box.Contains(tx, ty, tz) || FindArea(tx, ty, tz) != null)
                         continue;
+                    if (baked != null && _areas.World.BakeCovers(tx, ty, tz))
+                    {
+                        if (baked.TryGet(tx, ty, tz, out int bakedSteps, out float height)
+                            && CanCross(area, own, cell, direction, typeName, baked))
+                            Add(cell, bakedSteps + 1, direction, height);
+                        continue;
+                    }
+                    if (areaBaked)
+                        continue;
                     int estimate = Math.Max(Math.Abs(goalX - tx), Math.Max(Math.Abs(goalY - ty), Math.Abs(goalZ - tz)));
-                    Add(cell, estimate + 1, direction, own.Scene != null ? own.Scene.Surface.Heights[cell] : 0f);
+                    Add(cell, estimate + 1, direction, Height(own, cell));
                 }
             }
         }
@@ -539,25 +574,30 @@ namespace Common.FlowField
         // ----- Crossings ------------------------------------------------------
 
         /// <summary>
-        /// Whether a mover of this type steps from the area's cell into the
-        /// other area's cell, by the rule each mode's links follow inside a
-        /// grid. Surface2D: both cells walkable within the step height, and on
-        /// a diagonal both side cells too. Volume3D: both cells open, and on a
-        /// diagonal every corner cell it passes beside.
+        /// Whether a mover of this type steps from the area's cell to the
+        /// lattice cell in the direction, by the rule each mode's links follow
+        /// inside a grid. Surface2D: both cells walkable within the step
+        /// height, and on a diagonal both side cells too. Volume3D: both cells
+        /// open, and on a diagonal every corner cell it passes beside. A cell
+        /// of a loaded area reads its published field; any other cell, the
+        /// baked Goal's cells, where a cell the bake reached counts as open.
         /// </summary>
         private bool CanCross(
             FlowFieldWorldArea area,
             FlowFieldField own,
             int cell,
             int direction,
-            FlowFieldWorldArea otherArea,
-            FlowFieldField other,
-            int otherCell,
-            string typeName)
+            string typeName,
+            FlowFieldWorldBakedGoal baked)
         {
-            if (!Walkable(own, cell) || !Walkable(other, otherCell))
+            if (!Walkable(own, cell))
                 return false;
             area.Locate(cell, out int x, out int y, out int z);
+            int dx = FlowFieldNeighborUtility.DeltaX[direction];
+            int dy = area.IsVolume ? FlowFieldNeighborUtility.DeltaY[direction] : 0;
+            int dz = FlowFieldNeighborUtility.DeltaZ[direction];
+            if (!TryOpenCell(x + dx, y + dy, z + dz, typeName, baked, out float target))
+                return false;
             if (area.IsVolume)
             {
                 for (int i = FlowFieldNeighborUtility.VolumeCornerStart[direction];
@@ -565,29 +605,42 @@ namespace Common.FlowField
                      i++)
                 {
                     int corner = FlowFieldNeighborUtility.VolumeCornerDirections[i];
-                    if (!TryWorldCell(x + FlowFieldNeighborUtility.DeltaX[corner], y + FlowFieldNeighborUtility.DeltaY[corner],
-                            z + FlowFieldNeighborUtility.DeltaZ[corner], typeName, out FlowFieldField field, out int index)
-                        || !Walkable(field, index))
+                    if (!TryOpenCell(x + FlowFieldNeighborUtility.DeltaX[corner], y + FlowFieldNeighborUtility.DeltaY[corner],
+                            z + FlowFieldNeighborUtility.DeltaZ[corner], typeName, baked, out _))
                         return false;
                 }
                 return true;
             }
 
             float step = own.Scene.Surface.MaxStepHeight;
-            if (!Connects(own, cell, other, otherCell, step))
+            float height = own.Scene.Surface.Heights[cell];
+            if (Math.Abs(height - target) > step)
                 return false;
-            int dx = FlowFieldNeighborUtility.DeltaX[direction];
-            int dz = FlowFieldNeighborUtility.DeltaZ[direction];
             if (dx == 0 || dz == 0)
                 return true;
-            return TryWorldCell(x + dx, 0, z, typeName, out FlowFieldField besideX, out int sideX)
-                && TryWorldCell(x, 0, z + dz, typeName, out FlowFieldField besideZ, out int sideZ)
-                && Walkable(besideX, sideX)
-                && Walkable(besideZ, sideZ)
-                && Connects(own, cell, besideX, sideX, step)
-                && Connects(own, cell, besideZ, sideZ, step)
-                && Connects(besideX, sideX, other, otherCell, step)
-                && Connects(besideZ, sideZ, other, otherCell, step);
+            return TryOpenCell(x + dx, 0, z, typeName, baked, out float sideX)
+                && TryOpenCell(x, 0, z + dz, typeName, baked, out float sideZ)
+                && Math.Abs(height - sideX) <= step
+                && Math.Abs(height - sideZ) <= step
+                && Math.Abs(sideX - target) <= step
+                && Math.Abs(sideZ - target) <= step;
+        }
+
+        // A lattice cell a mover of the type stands on, and its ground height:
+        // walkable in the published field of the loaded area holding it, or,
+        // where no loaded area does, reached by the baked Goal.
+        private bool TryOpenCell(int x, int y, int z, string typeName, FlowFieldWorldBakedGoal baked, out float height)
+        {
+            height = 0f;
+            FlowFieldWorldArea area = FindArea(x, y, z);
+            if (area == null)
+                return baked != null && baked.TryGet(x, y, z, out _, out height);
+            FlowFieldSession session = SessionOf(area, typeName);
+            if (session == null || !session.TryGetPublishedField(out FlowFieldField field)
+                || !area.TryCell(x, y, z, out int index) || !Walkable(field, index))
+                return false;
+            height = Height(field, index);
+            return true;
         }
 
         // The walkable cell nearest the local cell, by squared cell distance,
@@ -618,23 +671,8 @@ namespace Common.FlowField
         private static bool Walkable(FlowFieldField field, int index)
             => !field.Agent.Blocked[index] && (field.Scene == null || field.Scene.Surface.IsSurfaceValid(index));
 
-        private static bool Connects(FlowFieldField a, int i, FlowFieldField b, int j, float step)
-            => a.Scene.Surface.IsSurfaceValid(i)
-                && b.Scene.Surface.IsSurfaceValid(j)
-                && Math.Abs(a.Scene.Surface.Heights[i] - b.Scene.Surface.Heights[j]) <= step;
-
         private static float Height(FlowFieldField field, int index)
             => field.Scene != null ? field.Scene.Surface.Heights[index] : 0f;
-
-        // The published field of this type's session holding a lattice cell.
-        private bool TryWorldCell(int x, int y, int z, string typeName, out FlowFieldField field, out int index)
-        {
-            field = null;
-            index = -1;
-            FlowFieldWorldArea area = FindArea(x, y, z);
-            FlowFieldSession session = area != null ? SessionOf(area, typeName) : null;
-            return session != null && session.TryGetPublishedField(out field) && area.TryCell(x, y, z, out index);
-        }
 
         private FlowFieldWorldArea FindArea(int x, int y, int z)
         {
@@ -656,8 +694,5 @@ namespace Common.FlowField
                 ? (int)Math.Floor(((double)position.y - grid.Origin.y) / grid.CellSize)
                 : 0;
         }
-
-        private static int LatticeCell(float position, float origin, float cellSize)
-            => (int)Math.Floor(((double)position - origin) / cellSize);
     }
 }

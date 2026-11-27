@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -7,7 +8,9 @@ namespace Common.FlowField
     /// A world of areas: Managers that reference this asset and stitch their fields where their
     /// grids touch, across scenes loaded additively. Every area uses this Space Mode and Cell
     /// Size, puts its grid on this lattice, and overlaps no other area. Init joins a Manager to
-    /// its world and Release, disabling the scene or destroying it removes it again.
+    /// its world and Release, disabling the scene or destroying it removes it again. The world
+    /// bake, run in the Editor with the world's scenes open, searches the Bake Goals across every
+    /// area, so a world Goal in one of their cells leads through scenes that are not loaded.
     /// </summary>
     [CreateAssetMenu(fileName = "FlowFieldWorld", menuName = "FlowField/World")]
     public sealed class FlowFieldWorld : ScriptableObject
@@ -18,6 +21,10 @@ namespace Common.FlowField
         private float _cellSize = 0.5f;
         [SerializeField, Tooltip("A corner of the lattice every area's grid starts on. Surface2D aligns X and Z, Volume3D all three axes.")]
         private Vector3 _latticeOrigin;
+        [SerializeField, Tooltip("Positions the world bake searches across the areas of the open scenes. A world Goal in the cell of one leads through areas that are not loaded the way the bake found, instead of by a straight-line estimate. Bake again after a scene of the world changes.")]
+        private Vector3[] _bakeGoals = Array.Empty<Vector3>();
+        [SerializeField, HideInInspector]
+        private FlowFieldWorldBake _bake;
 
         /// <summary>The Space Mode every area uses.</summary>
         public FlowFieldSpaceMode SpaceMode => _spaceMode;
@@ -27,6 +34,36 @@ namespace Common.FlowField
         public Vector3 LatticeOrigin => _latticeOrigin;
 
         internal FlowFieldWorldAreas Areas => FlowFieldWorldAreas.For(this);
+
+        internal IReadOnlyList<Vector3> BakeGoals => _bakeGoals ?? Array.Empty<Vector3>();
+
+        // The last world bake, or null; the Editor bake writes it.
+        internal FlowFieldWorldBake Bake
+        {
+            get => _bake;
+            set => _bake = value;
+        }
+
+        /// <summary>
+        /// The baked steps toward a Goal at the position for the agent type,
+        /// or null when the bake searched no Goal in its lattice cell or ran
+        /// with other world settings.
+        /// </summary>
+        internal FlowFieldWorldBakedGoal FindBakedGoal(Vector3 position, string agentType)
+        {
+            if (_bake == null || !_bake.Matches(this))
+                return null;
+            FlowFieldWorldAreas.LatticeCell(this, position, out int x, out int y, out int z);
+            return _bake.Find(x, y, z, agentType);
+        }
+
+        // Whether an area of the bake holds the lattice cell, under this world's settings.
+        internal bool BakeCovers(int x, int y, int z)
+            => _bake != null && _bake.Matches(this) && _bake.Covers(x, y, z);
+
+        // Whether the bake holds an area at exactly this box.
+        internal bool BakeHasArea(in FlowFieldLatticeBox box)
+            => _bake != null && _bake.Matches(this) && _bake.HasArea(in box);
 
         /// <summary>The Managers that joined this world, in the order they joined.</summary>
         public IReadOnlyList<FlowFieldManager> Managers => Areas.Managers;
@@ -46,7 +83,8 @@ namespace Common.FlowField
         /// Adds a Goal of the whole world. Every area builds a field toward it, the area holding it
         /// from its cell and the others from the steps their touching areas need, so a mover follows
         /// it across the areas. While no loaded area holds it, each area leads to its outer border
-        /// nearest the Goal by a straight-line estimate and stops there. Areas that join later build
+        /// and stops there: the way the world bake found when it searched a Bake Goal in the Goal's
+        /// cell, else by a straight-line estimate toward the Goal. Areas that join later build
         /// it too. A StaticBaked area searches it on its baked cells, with no Physics. Read it with
         /// <see cref="TrySample"/> or each area's Manager, which knows the same handle.
         /// </summary>
@@ -199,6 +237,5 @@ namespace Common.FlowField
                 throw new System.InvalidOperationException("FlowField World Goals run only in Play Mode.");
         }
 
-        internal static string NameOf(Object owner) => owner != null ? owner.name : "(destroyed)";
     }
 }
