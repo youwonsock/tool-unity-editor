@@ -87,7 +87,7 @@ public sealed class TransformPathReadmeExample : MonoBehaviour
 | `PathShapeProvider` | `MovementSettings`. 하위 클래스가 `TryPrepare`, `Evaluate`를 구현 |
 | 공통 (`PathData`, `MultiPathData`, `PathShapeProvider`) | `IsReady`, `PathLength`, `Revision`, `PathChanged`, `Rebuild()`, `Sample(progress)` |
 - `SetControlPoints(positions)`는 Transform 목록 대신 월드 좌표로 경로를 만듭니다. 점이 2개 미만이거나 유한하지 않으면 아무것도 바꾸기 전에 예외를 던지고, 좌표는 직렬화하지 않으며, `SetPathPoints`를 부르면 Transform 목록으로 돌아갑니다. `CopyControlPoints`는 이 좌표를 먼저 돌려줍니다. 점이 없는 `PathData`는 Awake에서 빌드하지 않고 점을 받을 때 빌드합니다. 그런 구간 경로를 가진 `MultiPathData`도 Awake에서 오류를 내지 않고 기다렸다가, 그 경로가 점을 받아 빌드되면 함께 빌드합니다.
-- 런타임에 제어점이나 `PathEventSettingSO`를 바꾸면 `path.Rebuild()`를 호출합니다. `MovementSettings`, `CurveType`, `SegmentCount` 속성은 한 번이라도 빌드된 경로라면 바꿀 때 다시 빌드합니다(빌드 전이면 첫 빌드에 반영). 기하만 바뀌면 재생이 이어지고, 이동 설정·이벤트·구간 구성이 바뀌면 멈춥니다.
+- 런타임에 제어점이나 `PathEventSettingSO`를 바꾸면 `path.Rebuild()`를 호출합니다. `MovementSettings`, `CurveType`, `SegmentCount` 속성은 한 번이라도 빌드된 경로라면 바꿀 때 다시 빌드합니다(빌드 전이면 첫 빌드에 반영). 기하만 바뀌면 재생이 이어지고, 이동 설정·이벤트·구간 구성이 바뀌면 멈춥니다. 꺼져 있는 속도·Duration 변경의 값만 고친 것은 바뀐 것으로 보지 않습니다.
 - 콜백(`StateChanged`, `SegmentChanged`, `Completed`, `EventReached`, Queue 알림, 이벤트 수신기)은 그것을 일으킨 작업이 끝난 뒤 순서대로 호출됩니다. 콜백 안에서 모든 명령을 쓸 수 있고, 예외는 Console에 기록만 됩니다.
 
 ## 사용자 정의 경로
@@ -161,7 +161,7 @@ _member.StartQueuedPlayback(_manager, PathPlaybackRequest.Single(_path));
   <img src="Docs/Images/feature-multipath-seek.png" alt="MultiPath Seek 화면" width="48%">
 </p>
 
-**Editor 작성:** 제어점은 Scene View에서, 이벤트는 Inspector에서 편집합니다. 연결점과 그룹 동기화는 Undo/Redo를 지원하고 Prefab Mode에서도 동작하며, 씬이나 Prefab을 여는 것만으로는 점을 옮기지 않습니다. **Snap to Ground**는 경로가 있는 씬의 콜라이더에 붙습니다(Trigger 제외. Prefab Mode에서는 Prefab 내용, In Context면 그다음 주변 씬). 각 점의 0.5 m 위에서 아래로 찾으므로 지면 바로 아래의 점도 올라오고(점 자신의 콜라이더는 지면으로 보지 않음), 같은 Transform이 두 번 있으면 한 번만 옮깁니다. `MultiPathData` Inspector의 **Apply Drawing Sizes To All Paths**와 **Assign Distinct Path Colors**로 구간 경로의 미리보기 모양을 맞춥니다. `PathShapeProvider`는 샘플한 모양을 Scene View에 그립니다(오른쪽 화면 가장자리의 원).
+**Editor 작성:** 제어점은 Scene View에서, 이벤트는 Inspector에서 편집합니다. 연결점과 그룹 동기화는 Undo/Redo를 지원하고 Prefab Mode에서도 동작하며, 씬이나 Prefab을 여는 것만으로는 점을 옮기지 않습니다. **Snap to Ground**는 경로가 있는 씬의 콜라이더에 붙습니다(Trigger 제외. Prefab Mode에서는 Prefab 내용, In Context면 그다음 주변 씬). 각 점의 0.5 m 위에서 아래로 찾으므로 지면 바로 아래의 점도 올라오고(점 자신의 콜라이더는 지면으로 보지 않음), 같은 Transform이 두 번 있으면 한 번만 옮깁니다. 스냅 직전에 물리 Transform을 동기화하므로 방금 옮긴 지면에도 붙습니다. **Refresh Path Points from Children**은 이름이 `PathPoint`로 시작하는 자손을 점으로 쓰고, 2개 미만이면 점을 바꾸지 않습니다. `MultiPathData` Inspector의 **Apply Drawing Sizes To All Paths**와 **Assign Distinct Path Colors**로 구간 경로의 미리보기 모양을 맞춥니다. `PathShapeProvider`는 샘플한 모양을 Scene View에 그립니다(오른쪽 화면 가장자리의 원).
 
 <p align="center">
   <img src="Docs/Images/feature-editor-authoring.png" alt="Scene View의 경로 작성 화면" width="48%">
