@@ -54,7 +54,9 @@ namespace Common.OptimizeTool.MeshOptimization
 
         /// <summary>
         /// Every mesh asset this baker saved. A later bake replaces them without the overwrite setting while no MeshFilter
-        /// outside that bake shows them. A duplicate of this component copies the list.
+        /// outside that bake shows them. Undoing a bake keeps the files it created listed, because those files stay; a file
+        /// it overwrote leaves the list with Undo, which gives the file its old content back. A duplicate of this component
+        /// copies the list.
         /// </summary>
         internal List<Mesh> BakedMeshes
         {

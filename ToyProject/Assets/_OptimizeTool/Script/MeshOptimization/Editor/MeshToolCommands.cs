@@ -180,11 +180,15 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
                 paths[i] = $"{folder}/{filters[i].name}_BackfaceCulled.asset";
             }
             var ownOutputs = new HashSet<Mesh>();
-            foreach (string path in AssetFileTransaction.ValidateAssetPaths(paths))
+            string[] normalized = AssetFileTransaction.ValidateAssetPaths(paths);
+            var created = new bool[normalized.Length];
+            for (int i = 0; i < normalized.Length; i++)
             {
+                Object existing = AssetDatabase.LoadMainAssetAtPath(normalized[i]);
+                created[i] = existing == null;
                 // This baker's own outputs are replaced without the overwrite setting, unless another MeshFilter shows them.
-                if (AssetDatabase.LoadMainAssetAtPath(path) is Mesh existing && IsOwnOutput(baker, existing)) ownOutputs.Add(existing);
-                else AssetFileTransaction.ValidateOutputTarget(path, typeof(Mesh), baker.OverwriteExistingAssets);
+                if (existing is Mesh mesh && IsOwnOutput(baker, mesh)) ownOutputs.Add(mesh);
+                else AssetFileTransaction.ValidateOutputTarget(normalized[i], typeof(Mesh), baker.OverwriteExistingAssets);
             }
             if (ownOutputs.Count > 0 && !baker.OverwriteExistingAssets) RequireUnshared(baker, filters, ownOutputs);
             var staged = new List<Mesh>();
@@ -204,14 +208,18 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
                     finally { Object.DestroyImmediate(readable); }
                 }
                 Mesh[] saved;
+                List<Mesh> previousOutputs = baker.BakedMeshes;
                 try
                 {
                     saved = MeshAssetTransaction.Save(staged, paths, true, "Bake backfaces",
-                        baked => AssignBaked(baker, filters, originals, baked, edit));
+                        baked => AssignBaked(baker, filters, originals, baked, created, edit));
                 }
                 catch
                 {
                     edit.Revert();
+                    // AssignBaked lists the created outputs outside Undo, so a failed save takes them off here.
+                    baker.BakedMeshes = previousOutputs;
+                    edit.Changed(baker);
                     throw;
                 }
                 edit.Commit();
@@ -238,6 +246,7 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
                         SetMesh(record.Filter, record.Original, edit, "Restore original mesh");
                 baker.OriginalMeshes = new List<BakedMeshOriginal>();
                 edit.Changed(baker);
+                edit.RecordFinalState("Restore original meshes");
             }
             catch
             {
@@ -318,8 +327,12 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
         }
 
         private static void AssignBaked(BackfaceCullMeshBaker baker, MeshFilter[] filters, Mesh[] originals, Mesh[] baked,
-            MeshSceneEdit edit)
+            bool[] created, MeshSceneEdit edit)
         {
+            // A file this save created stays when the bake is undone, so it joins the own outputs before the Undo record
+            // and stays own after an Undo. A file it overwrote gets its old content back with Undo, so it joins after the
+            // record and leaves the list with Undo.
+            baker.BakedMeshes = WithOutputs(baker.BakedMeshes, baked, created);
             RecordBaker(baker, edit, "Record original meshes");
             // Build the new record on the side, like the combiner's ledger, and assign it after the scene changes.
             var records = new List<BakedMeshOriginal>();
@@ -331,16 +344,27 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
                 SetMesh(filters[i], baked[i], edit, "Assign baked mesh");
                 records.Add(new BakedMeshOriginal { Filter = filters[i], Original = originals[i], Baked = baked[i] });
             }
-            var outputs = new List<Mesh>();
-            foreach (Mesh mesh in baker.BakedMeshes)
-                if (mesh != null && Array.IndexOf(baked, mesh) < 0) outputs.Add(mesh);
-            outputs.AddRange(baked);
             baker.OriginalMeshes = records;
-            baker.BakedMeshes = outputs;
+            baker.BakedMeshes = WithOutputs(baker.BakedMeshes, baked, null);
             edit.Changed(baker);
+            edit.RecordFinalState("Assign baked mesh");
         }
 
-        /// <summary>Bakes and restores replace both lists as a whole, so keeping the old ones reverts them.</summary>
+        /// <summary>
+        /// The live entries of <paramref name="outputs"/> followed by the baked meshes that <paramref name="include"/> marks,
+        /// or all of them without it, each once.
+        /// </summary>
+        private static List<Mesh> WithOutputs(List<Mesh> outputs, Mesh[] baked, bool[] include)
+        {
+            var list = new List<Mesh>();
+            foreach (Mesh mesh in outputs)
+                if (mesh != null && !list.Contains(mesh)) list.Add(mesh);
+            for (int i = 0; i < baked.Length; i++)
+                if ((include == null || include[i]) && !list.Contains(baked[i])) list.Add(baked[i]);
+            return list;
+        }
+
+        /// <summary>Bakes and restores replace both lists as a whole, so keeping the current ones reverts to them.</summary>
         private static void RecordBaker(BackfaceCullMeshBaker baker, MeshSceneEdit edit, string undoName)
         {
             List<BakedMeshOriginal> records = baker.OriginalMeshes;

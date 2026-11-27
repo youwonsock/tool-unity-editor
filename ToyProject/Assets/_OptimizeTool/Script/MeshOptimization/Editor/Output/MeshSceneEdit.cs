@@ -16,6 +16,7 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
     internal sealed class MeshSceneEdit
     {
         private readonly List<Action> _reverts = new List<Action>();
+        private readonly List<Object> _recorded = new List<Object>();
         private readonly List<GameObject> _created = new List<GameObject>();
         private readonly List<KeyValuePair<GameObject, bool>> _removed = new List<KeyValuePair<GameObject, bool>>();
         private readonly int _undoGroup = -1;
@@ -51,8 +52,24 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
         /// <summary>Call before changing <paramref name="target"/>. <paramref name="revert"/> undoes a Temporary change.</summary>
         internal void Record(Object target, string undoName, Action revert)
         {
-            if (IsPersistent) Undo.RegisterCompleteObjectUndo(target, undoName);
-            else _reverts.Add(revert);
+            if (!IsPersistent) _reverts.Add(revert);
+            else
+            {
+                Undo.RegisterCompleteObjectUndo(target, undoName);
+                if (!_recorded.Contains(target)) _recorded.Add(target);
+            }
+        }
+
+        /// <summary>
+        /// Call after the last change of a command: records every object recorded so far once more, in its final state
+        /// and after any created object. Redo of a group that recorded two components of one GameObject separately
+        /// restores only one of them, and a reference to a created object resolves only in a record made after it.
+        /// </summary>
+        internal void RecordFinalState(string undoName)
+        {
+            if (!IsPersistent) return;
+            _recorded.RemoveAll(target => target == null);
+            if (_recorded.Count > 0) Undo.RegisterCompleteObjectUndo(_recorded.ToArray(), undoName);
         }
 
         /// <summary>Call after changing <paramref name="target"/>, so a Persistent change of a Prefab instance is kept.</summary>
@@ -123,6 +140,7 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
         private void Clear()
         {
             _reverts.Clear();
+            _recorded.Clear();
             _created.Clear();
             _removed.Clear();
         }

@@ -44,11 +44,10 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
                     else states.Add(new MeshSourceRendererState { Renderer = renderer, Enabled = renderer.enabled });
                     SetEnabled(renderer, false, edit);
                 }
-            // Recorded again after the result objects exist, so Redo restores the reference to them.
-            edit.Record(combiner, "Assign combined result", () => { });
             combiner.GeneratedRoot = root;
             combiner.SourceRendererStates = states;
             edit.Changed(combiner);
+            edit.RecordFinalState("Assign combined result");
         }
 
         /// <summary>
@@ -65,6 +64,7 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
             combiner.GeneratedRoot = null;
             combiner.SourceRendererStates = new List<MeshSourceRendererState>();
             edit.Changed(combiner);
+            edit.RecordFinalState("Restore combined sources");
         }
 
         /// <summary>Both operations replace the root and the ledger as a whole, so keeping the old ones reverts them.</summary>
