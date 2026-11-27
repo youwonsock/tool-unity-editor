@@ -34,6 +34,7 @@ namespace Common.TransformPath
         [SerializeField] private bool _enableGradualSlowdown = true;
         [Tooltip("Distance beyond the spacing over which a member slows down. 0 stops it at the spacing without slowing.")]
         [SerializeField, Min(0f)] private float _slowdownRange = PathConstants.DEFAULT_SLOWDOWN_RANGE;
+        [Tooltip("Speed multiplier at the spacing end of the slowdown range. Short of the spacing a member keeps at least 0.01, so it reaches the gap.")]
         [SerializeField, Range(0f, 1f)] private float _minSpeedMultiplier = PathConstants.DEFAULT_MIN_SPEED_MULTIPLIER;
         [Tooltip("Speed multiplier weight over the slowdown range, 0 at the spacing and 1 at its end. Empty means linear.")]
         [SerializeField] private AnimationCurve _slowdownCurve = AnimationCurve.Linear(0f, 0f, 1f, 1f);

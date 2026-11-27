@@ -458,6 +458,23 @@ namespace Common.TransformPath.Tests
         }
 
         [Test]
+        public void MemberTakenOutFromUnderItsManager_HasNoManagerToStartIn()
+        {
+            PathData path = Line(10f, 2f);
+            QueuedPathManager manager = CreateManager(path);
+            PathQueueMember member = CreateMember();
+            member.transform.SetParent(manager.transform);
+            WakeMember(member);
+            member.transform.SetParent(null);
+
+            Assert.IsNull(member.Manager);
+            var error = Assert.Throws<System.InvalidOperationException>(
+                () => member.StartQueuedPlayback(PathPlaybackRequest.Single(path)));
+            StringAssert.Contains("has no manager", error.Message);
+            Assert.AreEqual(EPathFollowerState.Ready, member.Follower.State);
+        }
+
+        [Test]
         public void PlayOnStart_SkipsAQueueMemberWhoseManagerIsOnAParent()
         {
             PathData path = Line(10f, 2f);

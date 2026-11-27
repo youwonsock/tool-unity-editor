@@ -42,7 +42,8 @@ namespace Common.TransformPath.Editor
             EditorGUI.EndDisabledGroup();
             if (GUILayout.Button(new GUIContent(
                     "Refresh Path Points from Children",
-                    "Sets _pathPoints to the descendants whose names start with PathPoint, in hierarchy order.")))
+                    "Sets _pathPoints to the descendants whose names start with PathPoint, in hierarchy order. "
+                    + "With fewer than two of them the points stay as they are.")))
                 PathPointTools.RefreshFromChildren(paths);
             EditorGUI.EndDisabledGroup();
 

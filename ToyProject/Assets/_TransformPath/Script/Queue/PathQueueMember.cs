@@ -180,9 +180,11 @@ namespace Common.TransformPath
         /// </summary>
         public bool StartQueuedPlayback(QueuedPathManager manager, PathPlaybackRequest request, float maxProgress = 1f)
         {
-            if (manager != null)
-                manager.InitializeBeforeAwake();
-            if (manager == null || !manager.IsEnabledInHierarchy || !manager.IsInitialized)
+            if (manager == null)
+                throw new InvalidOperationException(
+                    $"PathQueueMember '{name}' has no manager: assign one or place the member under a QueuedPathManager.");
+            manager.InitializeBeforeAwake();
+            if (!manager.IsEnabledInHierarchy || !manager.IsInitialized)
                 throw new InvalidOperationException("QueuedPathManager must be initialized before starting a queued move.");
             // A disabled member would never hear the queue or leave it. Not isActiveAndEnabled:
             // that is still false while an earlier component's OnEnable runs on reactivation.

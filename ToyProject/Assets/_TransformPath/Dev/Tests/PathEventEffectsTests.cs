@@ -126,18 +126,18 @@ namespace Common.TransformPath.Tests
         }
 
         [Test]
-        public void ZeroDelayChildThatChangesSomething_DefersTheRestOfTheList()
+        public void ZeroDelayChildThatChangesSomething_KeepsTheRestOfTheList()
         {
             PathEventSettingSO pause = Event("p");
             pause.Lifecycle = EPathEventLifecycle.Pause;
-            Run(Event("a", (0f, pause), (0f, Event("n")), (2f * STEP, Event("later"))));
-            CollectionAssert.AreEqual(new[] { "a", "p", "pause" }, _target.Log);
+            PathEventSettingSO resume = Event("r");
+            resume.Lifecycle = EPathEventLifecycle.Resume;
+            Run(Event("a", (0f, pause), (0f, resume), (0f, Event("n")), (STEP, Event("later"))));
+            CollectionAssert.AreEqual(new[] { "a", "p", "pause", "r", "resume", "n" }, _target.Log);
 
             Tick();
-            CollectionAssert.AreEqual(new[] { "a", "p", "pause", "n" }, _target.Log);
-            Tick();
 
-            CollectionAssert.AreEqual(new[] { "a", "p", "pause", "n", "later" }, _target.Log);
+            CollectionAssert.AreEqual(new[] { "a", "p", "pause", "r", "resume", "n", "later" }, _target.Log);
             Assert.IsFalse(_effects.HasPending);
         }
 

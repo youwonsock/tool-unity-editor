@@ -145,22 +145,15 @@ namespace Common.TransformPath
 
             // Pause, Resume and value changes keep the playback, so this holds for the whole chain.
             bool hasPlayback = _target.PlaybackId != 0;
-            bool zeroDelayChanged = false;
             IReadOnlyList<PathDelayedEventDefinition> delayed = definition.DelayedEvents;
             for (int i = 0; i < delayed.Count; i++)
             {
                 PathDelayedEventDefinition entry = delayed[i];
-                // A zero-delay entry runs now. After one that changed something, the
-                // later ones wait for the next tick, as a frame's delayed events do;
-                // the rest of the list is still scheduled.
-                if (entry.Delay <= 0f && !zeroDelayChanged)
+                // A zero-delay entry is part of its event: it runs now, in list order,
+                // whatever an earlier entry changed, and the rest is still scheduled.
+                if (entry.Delay <= 0f)
                 {
-                    if (Process(entry.Definition))
-                    {
-                        changed = true;
-                        // Without a playback nothing ticks, and nothing moves between them.
-                        zeroDelayChanged = hasPlayback;
-                    }
+                    changed |= Process(entry.Definition);
                     continue;
                 }
                 // Without a playback nothing would ever tick the delay.
@@ -169,7 +162,7 @@ namespace Common.TransformPath
                 _delayed.Add(new DelayedEvent
                 {
                     Definition = entry.Definition,
-                    RemainingTime = Mathf.Max(0f, entry.Delay),
+                    RemainingTime = entry.Delay,
                     StartFrame = CurrentEffectsFrame(),
                     Order = ++_delayedOrder,
                 });
