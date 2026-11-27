@@ -105,7 +105,7 @@ Play Mode에서는 Awake에서 스스로 빌드하고, 모양이 읽는 값을 �
 _member.StartQueuedPlayback(_manager, PathPlaybackRequest.Single(_path));
 ```
 
-`PathQueueMember`는 `PathFollower`와 같은 GameObject에 하나만 두고 그 Follower만 씁니다. 그래서 Follower 하나가 두 Queue에 들어가지 않습니다. 멤버와 그 Follower가 켜져 있을 때만 참여하고(꺼져 있으면 `StartQueuedPlayback`이 던짐), 멤버가 꺼지거나 파괴되면 Queue를 떠납니다(Follower는 제한 없이 계속 재생). Follower가 꺼지면 재생이 멈추고 다음 프레임에 `Stopped`로 빠집니다. 멤버와 Manager는 같은 Provider 인스턴스를 씁니다. Manager의 **Route**에 지정한 경로는 첫 `StartQueuedPlayback`이나 첫 프레임에 빌드해 구성하므로, 런타임에 제어점을 받는 경로도 쓸 수 있습니다. 세 번째 인자로 최대 진행률을 지정하면 그 지점에서 멈추며 완료되지 않습니다. 재생 제어(Pause, Seek, Stop)는 `member.Follower`로 합니다. Seek한 멤버는 새로 출발할 때처럼 재출발 지연을 기다립니다.
+`PathQueueMember`는 `PathFollower`와 같은 GameObject에 하나만 두고 그 Follower만 씁니다. 그래서 Follower 하나가 두 Queue에 들어가지 않습니다. 멤버와 그 Follower가 켜져 있을 때만 참여하고(꺼져 있으면 `StartQueuedPlayback`이 던짐), 멤버가 꺼지거나 파괴되면 Queue를 떠납니다(Follower는 제한 없이 계속 재생). Follower가 꺼지면 재생이 멈추고 다음 프레임에 `Stopped`로 빠집니다. 멤버와 Manager는 같은 Provider 인스턴스를 씁니다. `StartQueuedPlayback(request)`는 멤버의 **Manager**, 비어 있으면 그때 부모에 있는 Manager로 시작하고, 둘 다 없으면 던집니다. Manager의 **Route**에 지정한 경로는 첫 `StartQueuedPlayback`이나 첫 프레임에 빌드해 구성하므로, 런타임에 제어점을 받는 경로도 쓸 수 있습니다. 세 번째 인자로 최대 진행률을 지정하면 그 지점에서 멈추며 완료되지 않습니다. 재생 제어(Pause, Seek, Stop)는 `member.Follower`로 합니다. Seek한 멤버는 새로 출발할 때처럼 재출발 지연을 기다립니다.
 
 | 명령 | 의미 |
 | --- | --- |
@@ -133,7 +133,7 @@ _member.StartQueuedPlayback(_manager, PathPlaybackRequest.Single(_path));
 `PathData`의 이벤트(`0..0.995` 위치)는 빌드 때 복사되어 위치순으로 실행됩니다. 이벤트 에셋(`PathEventSettingSO`)은 다음을 담습니다.
 
 - **Lifecycle**: `Pause`는 재생을 멈추고, `Resume`은 이벤트가 멈춘 재생을 재개합니다. `PathFollower.Pause()`로 멈춘 재생은 이벤트의 Resume으로 풀리지 않고 `Resume()`으로만 풀립니다.
-- **속도 변경, Duration 변경**: 현재 구간이 SpeedBased면 속도 변경만, TimeBased면 Duration 변경만 적용합니다. 보간 시간과 곡선을 지정할 수 있습니다.
+- **속도 변경, Duration 변경**: 현재 구간이 SpeedBased면 속도 변경만, TimeBased면 Duration 변경만 적용합니다. 보간 시간과 곡선을 지정할 수 있습니다. 보간 없는 변경은 진행 중인 같은 채널의 보간을 끝냅니다.
 - **지연 이벤트**: 게임 시간으로 지연한 뒤 다른 이벤트 에셋을 실행합니다. Pause 뒤 자동 재개는 지연된 Resume 이벤트로 만듭니다. 경로에서 닿거나 `TriggerEvent`로 실행한 이벤트가 Lifecycle, 값 변경, 지연 이벤트 중 하나를 가지면 앞 이벤트가 남긴 지연 이벤트가 취소되고, 이름만 알리는 이벤트는 취소하지 않습니다. 지연 이벤트끼리는 취소하지 않으므로 지연 목록 하나에 Pause와 Resume을 함께 둘 수 있습니다.
 
 이벤트는 자기 위치에서 실행됩니다. 이동은 그 위치에서 멈춰 이벤트를 실행한 뒤 남은 시간으로 이어지므로, Pause 이벤트는 정확히 그 위치에서 멈추고 값 변경은 그 지점부터 적용됩니다. 같은 위치의 이벤트는 작성 순서대로 실행하고, Pause가 멈추면 나머지는 재개한 뒤 실행합니다.
