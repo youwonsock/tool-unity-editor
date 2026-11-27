@@ -91,8 +91,12 @@ namespace Common.TransformPath
 
         internal static bool AreSame(PathValueChange left, PathValueChange right)
         {
-            return left.Enabled == right.Enabled
-                && Mathf.Approximately(left.Target, right.Target)
+            if (left.Enabled != right.Enabled)
+                return false;
+            // A disabled change plays nothing, so editing its values changes no playback.
+            if (!left.Enabled)
+                return true;
+            return Mathf.Approximately(left.Target, right.Target)
                 && Mathf.Approximately(left.BlendTime, right.BlendTime)
                 && PathValueUtility.AreSameCurve(left._curve, right._curve);
         }
