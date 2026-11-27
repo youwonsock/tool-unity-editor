@@ -11,7 +11,7 @@ MeshFilter 수집 → 설정·입력 검증 → Readable·Normal 처리
   → 설정된 Assets/ 하위 출력 폴더에 Mesh 에셋 저장
 
 물리 기록 (Play Mode 캡처는 Runtime, 저장은 Editor)
-설정·계층 검증 → 첫 물리 스텝(t=0)부터 스텝별 또는 표본 간격별 localPosition / localRotation 관찰
+설정·계층 검증 → 첫 물리 스텝(t=0)부터 스텝별 또는 표본 간격별 localPosition / localRotation 관찰, 스텝마다 GameObject 활성 상태 확인
   (새로 생긴 Rigidbody는 track으로 추가) → 보간 오차 기준 키 축약 → Legacy 또는 Generic 클립 생성
   → (Legacy) 물리·게임플레이 컴포넌트를 제거한 Prefab 생성
   → .anim (+ Legacy면 .prefab, 선택한 경우 .reference.asset) 동기 저장 또는 실패 복원 → Result와 Metrics 게시
@@ -115,21 +115,21 @@ flowchart LR
 | MeshOptimization.Editor | `MeshGeometry` | 원본 Mesh와 importer를 바꾸지 않는 기하 연산: Readable 복사, 원시 정점 버퍼를 옮기는 SubMesh 추출, Backface 제거(카메라·관찰 방향 overload, 구현 하나), 변환, 정점 채널을 맞춘 결합, 라이트맵 UV 배치 |
 | MeshOptimization.Editor | `MeshOcclusion` | 카메라에서 표본 점(Vertex와 삼각형 중심)으로 Raycast해 보이는 비율로 가림 판정. 대상 자신과 표본 점을 품은 조상 Collider는 제외 |
 | MeshOptimization.Editor | `MeshProcessing` | 공개 메시 연산 facade. 인자(null, Readable, 삼각형 토폴로지, 유한 값, 각도·Occlusion 범위, 씬 소속)를 검사한 뒤 internal `MeshGeometry`·`MeshOcclusion`에 넘김. `TransformMesh`는 저장된 에셋을 거부하고, `IsOccluded`는 조회 전에 `Physics.SyncTransforms`를 부름 |
-| MeshOptimization.Editor | `MeshAssetTransaction` | 모든 Mesh 출력 경로와 출력 자리를 쓰기 전에 검증하고, GUID를 유지해 저장(Edit Mode에서는 Undo 한 단계). 실패하면 메모리 안 백업으로 기존 Mesh를 되돌리고 새로 만든 에셋을 지움. 콜백이 쓰는 다른 파일은 호출자가 `AssetFileTransaction.Execute`로 감쌈 |
+| MeshOptimization.Editor | `MeshAssetTransaction` | 모든 Mesh 출력 경로와 출력 자리를 쓰기 전에 검증하고(Play Mode에서는 `PlayModeMeshGuard`가 지키는 경로도 거부), GUID를 유지해 저장(Edit Mode에서는 Undo 한 단계). 실패하면 메모리 안 백업으로 기존 Mesh를 되돌리고 새로 만든 에셋을 지움. 콜백이 쓰는 다른 파일은 호출자가 `AssetFileTransaction.Execute`로 감쌈 |
 | MeshOptimization.Editor | `MeshSceneOutput` | `MeshSceneEdit`를 거쳐 결과 Renderer를 만들고 원본 Renderer를 비활성화. 끈 원본의 기록과 `Restore`, Prefab 인스턴스 안의 결과 거부 |
-| MeshOptimization.Editor | `PlayModeMeshGuard` | 컴포넌트마다 Play Mode의 첫 명령에서, 결과가 바뀌기 전에 결과가 쓰던 Mesh 에셋 경로(Edit Mode 결과)를 기록하고 Play Mode 동안 그 경로에 쓰는 것을 거부. 기록은 `SessionState`에 두어 Play Mode 중 도메인 리로드에도 유지하고, Play Mode가 끝나면 비움 |
-| MeshOptimization.Editor | `MeshSceneEdit` | 씬 변경 방식을 Editor 모드로 한 곳에서 정함. Edit Mode는 Undo와 Prefab 오버라이드 기록, Play Mode는 기록 없이 바꾼 값을 들고 있다가 실패하면 직접 되돌리고 성공하면 숨겨 둔 이전 결과를 지움 |
+| MeshOptimization.Editor | `PlayModeMeshGuard` | Play Mode를 시작할 때 로드된 씬의 파일이 참조하는 `.asset`과 MeshFilter가 보여 주던 `.asset` Mesh 경로(Edit Mode 결과)를 기록하고, Play Mode 동안 어느 저장이든 그 경로에 쓰는 것을 거부. Play Mode 중에 로드한 씬은 다음 명령 때 기록. 기록은 `SessionState`에 두어 Play Mode 중 도메인 리로드에도 유지하고, Play Mode가 끝나면 비움 |
+| MeshOptimization.Editor | `MeshSceneEdit` | 씬 변경 방식을 Editor 모드로 한 곳에서 정함. Edit Mode는 Undo와 Prefab 오버라이드 기록과 명령 끝의 최종 상태 기록(`RecordFinalState`), Play Mode는 기록 없이 바꾼 값을 들고 있다가 실패하면 직접 되돌리고 성공하면 숨겨 둔 이전 결과를 지움 |
 | OptimizeTool.Editor | `AssetFileTransaction` | 공용 출력 규칙: Edit Mode 확인, Play Mode 전환 중 거부, `Assets/` 아래 경로·이름 검증(`ValidateAssetPath`, 같은 에셋을 두 번 적은 목록을 거부하는 `ValidateAssetPaths`), 출력 자리 검사(`ValidateOutputTarget`), 폴더 생성, GUID를 유지하는 `CreateOrReplace`, 선언한 파일의 백업과 실패 시 복원(`Execute`) |
 | PhysicsRecording | `PhysicsRecorder` / `PhysicsTakeSettings` / `PhysicsRecordingResult` | take 시작·종료·취소, 설정 스냅샷과 경로, fixed time 기준, 표본 간격, 녹화 중 생긴 Rigidbody 추가, 저장 직전 계층 검증, 결과 게시 |
 | PhysicsRecording | `PhysicsClipFormat` / `PhysicsRecordingMetrics` | 저장 형식(Legacy Prefab, Generic 클립)과 저장된 take의 프레임·track·키 수, 생략한 track 수, 최대 오차 |
-| PhysicsRecording | `PhysicsTake` | 기록한 스텝의 track별 원본 관찰값, 표본 사이에 들고 있는 마지막 스텝, 녹화 중 추가된 track과 보이기 시작한 시각, 회전 부호 연속성, 요청한 종료 시각의 보간. Reference에는 frame-major로 씀 |
+| PhysicsRecording | `PhysicsTake` | 기록한 스텝의 track별 원본 관찰값, 표본 사이에 들고 있는 마지막 스텝, 녹화 중 추가된 track, track마다 시작 활성 상태와 켜고 끈 스텝, 회전 부호 연속성, 요청한 종료 시각의 보간. Reference에는 frame-major로 씀 |
 | PhysicsRecording | `IPhysicsRecordingExporter` | Runtime 녹화가 Editor 저장을 부르는 경계: 검증, 리로드 잠금, 저장 |
 | PhysicsRecording | `PhysicsRecordingReference` | 축약 전 원본 관찰값, Transform 경로, 클립·계층 검증. Player에서도 읽음 |
 | PhysicsRecording | `PhysicsPoseMath` | 원본 보간(Slerp)과 커브 재생 보간(성분별 선형 + 정규화), 회전 차이 |
 | PhysicsRecording | `PhysicsPlaybackPolicy` | 출력 시 제거하고 재생 시 거부하는 물리·게임플레이 컴포넌트 규칙과 재생 검증 |
 | PhysicsRecording.Editor | `PhysicsRecordingEditorExporter` | `[InitializeOnLoad]` 등록, 경로 규칙 검증, `LockReloadAssemblies` |
-| PhysicsRecording.Editor | `PhysicsClipBuilder` | 보간 오차 기준 키 축약과 선형 커브, Legacy·Generic 클립 생성, 정지한 루트와 (옵션) 정지한 track의 커브 생략, 숨김 구간의 GameObject 활성 커브, Metrics 계산 |
-| PhysicsRecording.Editor | `PhysicsRecordingAssetWriter` / `PhysicsPlaybackStripper` | Legacy 재생용 복제본의 의존성 순서 제거와 생략한 track의 첫 자세, 에셋을 한 트랜잭션으로 저장하고 서로 연결됐는지 확인 |
+| PhysicsRecording.Editor | `PhysicsClipBuilder` | 보간 오차 기준 키 축약과 선형 커브, Legacy·Generic 클립 생성, 정지한 루트와 (옵션) 정지한 track의 커브 생략, 녹화한 켜고 끄기의 GameObject 활성 계단 커브, Metrics 계산 |
+| PhysicsRecording.Editor | `PhysicsRecordingAssetWriter` / `PhysicsPlaybackStripper` | Legacy 재생용 복제본의 의존성 순서 제거, track마다 시작 활성 상태와 생략한 track의 첫 자세, 에셋을 한 트랜잭션으로 저장하고 서로 연결됐는지 확인 |
 | Samples | `PhysicsPrefabPlayback` | 검증한 Prefab 인스턴스 1개와 Animation 표본 재생·파괴 |
 | Samples | `OptimizeToolPhysicsDemo` | 녹화·비교 상태, 원본 Rigidbody 정지, 코루틴과 재컴파일 정리 |
 | Samples | `OptimizeToolOverviewController` / `OptimizeToolShowcaseUI` | 다섯 모드 선택, 상태 갱신, 버튼 상태와 소유 리스너 관리 |
@@ -144,7 +144,8 @@ flowchart LR
 - 같은 Material의 SubMesh를 `CombineInstance`로 묶고, `_combineAllIntoSingleMesh`가 켜지면 하나의 Mesh로 다시 결합합니다. `_optimizeMesh`는 정점·인덱스 재정렬이며 폴리곤 단순화가 아닙니다.
 - 병합 입력은 Layer·그림자·Probe·정렬·Rendering Layer·Motion Vector·Static Flag·Receive GI·Ray Tracing Mode·Renderer Priority·Static Shadow Caster·Stitch Seams·Lightmap Parameters·Scale In Lightmap 설정이 같아야 하며, 지원하는 설정은 출력 Renderer에 복사합니다. PropertyBlock, Additional Vertex Streams, 할당된 Lightmap, LODGroup, forceRenderingOff는 저장 전에 거부합니다.
 - `_createSceneOutput`은 결과 MeshFilter·MeshRenderer와 Material 배열을 만들고, `_disableSourceRenderers`는 원본 Renderer만 끕니다(Collider 유지). 재실행 시 도구가 만든 결과는 자식 수집에서 제외합니다.
-- 재빌드에서는 다음 입력에도 남는 원본 Renderer를 계속 끄고, 제거된 원본만 기록해 둔 활성 상태로 복원합니다. 이 기록은 컴포넌트에 직렬화되어 Undo/Redo와 Prefab 인스턴스에도 유지됩니다. Combiner는 결과 오브젝트를 만든 뒤 한 번 더 Undo에 기록하므로 Redo도 결과 오브젝트 참조를 되찾습니다.
+- 재빌드에서는 다음 입력에도 남는 원본 Renderer를 계속 끄고, 제거된 원본만 기록해 둔 활성 상태로 복원합니다. 이 기록은 컴포넌트에 직렬화되어 Undo/Redo와 Prefab 인스턴스에도 유지됩니다.
+- **Undo/Redo:** 결합·복원과 Baker의 베이크·복원은 모든 변경을 마친 뒤 바꾼 오브젝트를 한 번 더 Undo에 기록합니다(`MeshSceneEdit.RecordFinalState`). 한 Undo 단계가 같은 GameObject의 컴포넌트 둘(Baker와 그 MeshFilter, 원본이기도 한 Combiner와 그 Renderer)을 따로 기록하면 Redo가 그중 하나만 되돌리고, 새로 만든 결과 오브젝트의 참조는 그 뒤에 한 기록에서만 되찾기 때문입니다.
 - `RestoreSources()`(Inspector의 **Restore Sources**)는 결과 오브젝트를 지우고 기록한 모든 원본을 원래 활성 상태로 되돌린 뒤 기록을 비웁니다. Edit Mode에서는 Undo 한 단계이며 저장한 Mesh 에셋은 지우지 않습니다. 결과 오브젝트가 Prefab 인스턴스의 일부(추가 오버라이드가 아닌 것)이면 다시 굽기와 복원 모두 아무것도 바꾸기 전에 거부합니다.
 - 출력 좌표는 Combiner의 로컬 공간입니다. 조명은 결합한 결과 Renderer를 대상으로 베이크합니다.
 - 입력이 Lightmap Static(Contribute GI)이고 Receive GI가 Lightmaps이면, `_packLightmapUvs`(기본 켬)가 소스마다 라이트맵 UV(UV2, 없으면 UV0)를 [0,1] 안의 같은 크기 칸으로 옮겨 결합 결과의 라이트맵이 겹치지 않게 합니다. 정점 수는 그대로이고 결과는 결정적입니다. 칸 크기가 같아서 소스 크기가 다르면 라이트맵 해상도가 고르지 않습니다. UV2가 없는 소스는 UV0이 자기 자신과 겹칠 수 있어 경고합니다. 끄면 UV를 그대로 두고 겹침을 경고합니다.
@@ -152,7 +153,7 @@ flowchart LR
 - 결과 이름은 `_combineAllIntoSingleMesh`를 켜면 `_meshName.asset`이고, 끄면 Material별로 `_meshName_0.asset`, `_meshName_1.asset`, ...입니다. Material이 하나여도 `_0`이 붙습니다. 기존 에셋은 `_overwriteExistingAssets`가 켜진 경우에만 GUID를 유지해 갱신합니다. 이번 저장이 쓰지 않은 같은 이름의 이전 출력(예: 결과가 3개에서 2개로 줄어 남은 `_meshName_2.asset`)이 폴더에 있으면 지우지 않고 경고로 알립니다.
 - 저장에 실패하면 Mesh 에셋과 씬 변경을 복원하고, 복구 오류가 나도 나머지 복구를 계속한 뒤 원래 오류와 함께 보고합니다. Undo 시 새로 만든 에셋 파일은 남습니다.
 - **Play Mode:** 결합, Restore Sources, Backface 베이크와 복원은 Editor Play Mode에서도 동작합니다. `MeshSceneEdit`가 `EditorApplication.isPlaying`으로 모드를 정하고, `isPlaying`과 `isPlayingOrWillChangePlaymode`가 다르면(Play Mode에 들어가거나 나가는 중) 거부합니다. Play Mode에서는 Undo와 Prefab 오버라이드를 기록하지 않고, 이전 결과 오브젝트를 비활성으로만 두었다가 저장이 성공한 뒤 지웁니다. 실패하면 새 결과를 지우고 이전 결과, Renderer 활성 상태, Combiner·Baker 기록을 직접 되돌립니다. 덮어쓴 Mesh 에셋은 Edit Mode와 같이 메모리 백업으로 되돌립니다. 장면 변경은 Play Mode를 나가면 사라지고 저장한 에셋은 남습니다.
-- Play Mode에서는 Play Mode를 시작할 때 결과가 쓰던 Mesh 에셋 경로에 쓰지 않습니다. 그 에셋은 저장된 씬이 참조하는 Edit Mode 결과라서, 덮으면 저장된 씬이 조용히 바뀌기 때문입니다. `PlayModeMeshGuard`가 컴포넌트마다 그 Play 세션의 첫 결합·복원(Baker는 첫 베이크·복원)에서, 결과를 바꾸기 전에 결과 오브젝트(Baker는 기록과 대상 MeshFilter)가 보여 주는 Mesh 경로를 기록하고 세션이 끝날 때까지 지킵니다. 지금 결과가 그 Mesh를 더 쓰지 않아도 거부합니다. 같은 세션에서 Play Mode 명령이 쓴 출력은 일반 출력이라서, 기존 파일은 Edit Mode와 같은 덮어쓰기 규칙으로 다시 씁니다. 기록은 `SessionState`에 두므로 Play Mode 중 도메인 리로드(Recompile And Continue Playing의 스크립트 변경 등)에도 남고, 인스턴스 ID는 리로드를 지나도 같습니다. Play Mode가 끝나면 기록을 비웁니다. `isPartOfStaticBatch`인 Renderer는 Play Mode에서 sharedMesh가 배치 Mesh이므로 입력에서 거부합니다.
+- Play Mode에서는 Play Mode를 시작할 때 로드된 씬이 보여 주던 Mesh 에셋에 쓰지 않습니다. 그 에셋은 저장된 씬이 참조하는 Edit Mode 결과라서, 덮으면 저장된 씬이 조용히 바뀌기 때문입니다. `PlayModeMeshGuard`가 Play Mode에 들어갈 때 로드된 모든 씬에서 두 가지를 기록하고, `MeshAssetTransaction.Save`가 Play Mode에서 그 경로를 쓰기 전에 거부합니다. 하나는 씬 파일이 직접 또는 Prefab을 거쳐 참조하는 `.asset`(`AssetDatabase.GetDependencies`)으로, Play Mode에서 MeshFilter가 그 에셋을 더 보여 주지 않는 오브젝트(정적 배칭으로 배치 Mesh를 보여 주는 Renderer, Awake에서 DontDestroyOnLoad로 옮긴 오브젝트)까지 덮습니다. 다른 하나는 MeshFilter(비활성 포함)가 보여 주는 `.asset` Mesh로, 저장하지 않은 변경과 저장한 적 없는 씬을 덮습니다. 그래서 같은 Save Path를 쓰는 다른 Baker, 씬 출력을 끈 Combiner, 결과를 지운 뒤의 명령, 공개 API로 저장하는 도구도 덮어쓰기 설정과 관계없이 거부됩니다. Play Mode 중에 로드한 씬은 다음 결합·베이크·복원 명령이 아무것도 바꾸기 전에 기록합니다(씬 handle로 한 번만). 지금 결과가 그 Mesh를 더 쓰지 않아도 거부합니다. 그 밖의 경로, 예를 들어 같은 세션에서 Play Mode 저장이 만든 출력은 일반 출력이라서 Edit Mode와 같은 덮어쓰기 규칙으로 다시 씁니다. 기록은 `SessionState`에 두므로 Play Mode 중 도메인 리로드(Recompile And Continue Playing의 스크립트 변경 등)에도 남고, Play Mode가 끝나면 비웁니다. Play Mode에 들어갈 때마다 로드된 씬의 의존 에셋과 MeshFilter를 한 번 훑습니다. `isPartOfStaticBatch`인 Renderer는 Play Mode에서 sharedMesh가 배치 Mesh이므로 입력에서 거부합니다.
 - `MeshBuildResult.Warnings`와 Inspector 진단은 Collider 기반 Occlusion, 투명·양면 재질, 다른 카메라·그림자·반사와 Probe 샘플 위치의 한계를 설명합니다. `using` 범위를 벗어난 결과의 `Parts[i].Mesh`를 보관하거나 MeshFilter에 할당하면 안 됩니다. 결과 Renderer에는 `RendererSettings.ApplyTo(renderer, part.Materials)`로 Material과 설정을 적용하고, 메시는 저장된 에셋을 직접 할당합니다. 완전히 제거된 입력은 `RemovedSources`에 있습니다.
 
 ## Occlusion과 Backface
@@ -163,7 +164,7 @@ flowchart LR
 - 관찰자 쪽 방향은 카메라 overload에서 Perspective면 삼각형 중심에서 카메라 위치로, Orthographic이면 `-camera.forward`입니다. 방향 overload는 `-viewDirection.normalized`를 모든 삼각형에 씁니다. 방향은 유한하고 0이 아니어야 합니다. 비균일·음수 Scale은 법선 역전치 변환과 winding 보정으로 처리합니다.
 - **제자리 베이크:** `BakeBackfaces`는 폴더, 각도, 카메라 또는 방향을 먼저 검증하고, 모든 MeshFilter의 결과를 계산한 뒤 한 번에 저장·교체합니다. 원본은 MeshFilter가 아직 이 Baker의 출력을 쓰고 있을 때만 기록(`_originalMeshes`)에서 가져오고, 아니면 지금 Mesh를 새 원본으로 씁니다. 그래서 다시 베이크해도 이미 깎은 Mesh를 또 깎지 않습니다. 모든 삼각형이 제거되는 입력, 겹치는 출력 이름, 덮어쓰기가 꺼졌을 때 이 Baker가 쓰지 않은 기존 출력은 바꾸기 전에 거부합니다. Mesh 교체와 기록은 Undo와 Prefab 인스턴스 오버라이드로 남습니다.
 - **공유된 출력:** 덮어쓰기가 꺼져 있어도 `_bakedMeshes`에 있는 출력은 다시 쓰지만, 이번 베이크 대상이 아닌 MeshFilter가 그 Mesh를 보여 주면 거부합니다(`RequireUnshared`). `_bakedMeshes`는 직렬화 필드라서 Edit > Duplicate로 만든 복제본이나 같은 Prefab의 다른 인스턴스도 같은 목록을 갖고, 복제한 자식 MeshFilter는 이름이 같아 출력 경로도 같습니다. 그래서 목록만 보면 복제본이 원본의 출력을 자기 것으로 알고 덮어, 원본이 복제본의 면을 보여 줍니다. 확인 범위는 로드된 모든 씬의 MeshFilter(비활성 포함)이고, Baker가 Prefab Mode에 있으면 그 Prefab 씬만 봅니다. 씬의 인스턴스는 편집 중인 Prefab을 따르기 때문입니다. 대상 MeshFilter끼리만 보여 주는 출력은 그대로 다시 쓰므로, Save Path를 바꾼 복제본은 그 뒤로 덮어쓰기 없이 다시 베이크합니다. 반대로 덮어쓰기를 켜면 공유된 출력도 다른 기존 파일처럼 교체합니다.
-- `RestoreOriginalMeshes`는 출력을 아직 쓰는 MeshFilter에만 원본을 돌려주고 기록을 비우며, Undo 한 단계입니다. 손으로 바꾼 Mesh는 그대로 둡니다. 저장한 출력은 `_bakedMeshes`에 남아, 대상 밖 MeshFilter가 보여 주지 않으면 다음 베이크가 덮어쓰기 설정 없이 다시 씁니다.
+- `RestoreOriginalMeshes`는 출력을 아직 쓰는 MeshFilter에만 원본을 돌려주고 기록을 비우며, Undo 한 단계입니다. 손으로 바꾼 Mesh는 그대로 둡니다. 저장한 출력은 `_bakedMeshes`에 남아, 대상 밖 MeshFilter가 보여 주지 않으면 다음 베이크가 덮어쓰기 설정 없이 다시 씁니다. Undo는 새로 만든 파일을 지우지 않으므로, 베이크는 그 저장이 새로 만든 출력을 Undo 기록보다 먼저 `_bakedMeshes`에 넣어 베이크를 Undo한 뒤에도 그 파일을 자기 출력으로 둡니다. 덮어쓴 기존 파일은 Undo가 이전 내용을 돌려주므로 Undo 기록 뒤에 넣어, Undo와 함께 목록에서도 빠집니다(다시 쓰려면 덮어쓰기를 켜야 함). 저장이 실패하면 목록을 이전 것으로 되돌립니다. Prefab 인스턴스에서는 이 목록이 인스턴스 오버라이드로 남아, 씬을 저장하고 다시 열어도 같습니다.
 - Target Camera가 비어 있고 컬링이 켜져 있으면 `MeshToolCommands`가 Combiner의 씬에서 대체 카메라를 고릅니다. 켜진 `MainCamera` 태그 카메라가 먼저이고, 없으면 루트부터 깊이 우선으로 훑어 처음 만난 켜진 카메라입니다. `FindObjectsByType`는 순서를 보장하지 않으므로 쓰지 않습니다. 고른 카메라 이름은 `LastBuildWarnings`에 남습니다. `MeshBuildPipeline.Build`와 `MeshBuildSettings`는 대체하지 않고 카메라를 요구합니다.
 
 ## PhysicsRecorder
@@ -178,7 +179,7 @@ flowchart LR
 - 키 축약은 첫·끝 표본을 남긴 뒤, 구간 안 모든 물리 스텝의 재생 오차를 재고 허용치를 가장 많이 넘는 스텝에서 구간을 나눕니다. 재생 오차는 Legacy와 Generic 재생이 모두 쓰는 성분별 선형 보간 + 정규화로 계산하므로, 저장된 클립은 모든 관찰 시각에서 허용치 이내입니다. `Metrics`의 최대 오차도 같은 방식으로 모든 기록 프레임에서 잽니다. 스텝 사이 렌더 프레임의 오차는 보장하지 않습니다.
 - 키의 tangent는 이웃 키로의 기울기를 직접 넣어 선형으로 재생하므로, 편집기용 커브(`m_EditorCurves`·`m_EulerEditorCurves`)를 따로 저장하지 않습니다.
 - `StartRecording`은 설정을 스냅샷으로 고정하고 중복 시작·중복 계층 경로를 거부합니다. 기록한 Transform의 삭제, 이름·부모·스케일 변경은 저장 직전에 한 번 검사해 실패로 처리하므로, 기록 중 바뀌었다가 되돌아온 변경은 잡지 못합니다. 새로 생긴 Transform은 허용하고, 새 Rigidbody는 이미 track입니다. 기록 중 Transform이 파괴되거나 새 track의 경로가 겹치면 `StopReason.Failed`로 즉시 끝납니다.
-- 활성 상태는 두 경우만 클립에 넣습니다. 녹화 중 생긴 track은 생긴 시각까지, 시작할 때 꺼져 있던 자식은 take 내내 GameObject `m_IsActive` 계단 커브로 숨깁니다. Legacy Animation과 Animator 모두 이 커브를 재생합니다(Editor에서 `SampleAnimation`, `Animation.Sample`, 일반 재생으로 확인). 그 밖의 켜고 끄기는 기록하지 않습니다.
+- **활성 상태:** 루트를 뺀 모든 track의 `activeSelf`를 물리 스텝마다(표본 간격으로 건너뛴 스텝 포함) 확인합니다. 첫 스텝의 값이 시작 상태이고, 그 뒤 바뀐 값은 그것을 처음 본 스텝의 시각으로 `PhysicsTake`에 남습니다. 녹화 중 생긴 track은 꺼진 채로 시작해 생긴 스텝에 켜집니다(첫 스텝에 생긴 track은 처음부터 켜짐). 종료 시각을 넘은 스텝에서 본 변화는 버립니다. 시작부터 끝까지 켜져 있던 track을 뺀 모든 track에 GameObject `m_IsActive` 계단 커브(시작 상태, 바뀐 스텝마다 한 키, 끝 키)를 씁니다. Legacy Animation과 Animator 모두 이 커브를 재생합니다(Editor에서 `SampleAnimation`, `Animation.Sample`, 일반 재생으로 확인). 루트 자신의 상태는 기록하지 않는데, 루트를 끄면 그 Animation도 멈춰 다시 켤 수 없기 때문입니다. 재생용 복제본은 take가 끝난 뒤 만들므로, 저장 전에 track마다 시작 활성 상태로 되돌립니다. 두 스텝 사이에 껐다 다시 켠 것은 남지 않습니다.
 - `_omitStillTracks`를 켜면 모든 프레임이 0번 프레임의 위치·회전 허용치 안에 있는 track의 커브를 빼고, 저장할 Prefab 사본에 그 track의 0번 자세를 넣습니다. 끝 자세를 남기면 오차가 허용치의 2배까지 커질 수 있기 때문입니다. 루트는 이 옵션과 관계없이 같은 규칙으로 커브를 뺍니다. 허용치가 0이면 정확히 같은 자세만 정지로 봅니다. Transform 커브가 하나도 남지 않으면 루트 커브를 남겨 클립 길이가 take와 맞게 합니다.
 - 실패는 그 take의 `Result.Error`로만 남고 다음 `StartRecording`은 그대로 동작합니다. 실패한 take의 `Result`는 이전 녹화의 에셋을 게시하지 않습니다.
 - Prefab은 비활성 임시 계층에서 복제해 원본 스크립트의 Awake/OnEnable 실행을 막고, MonoBehaviour(누락 스크립트 포함), Rigidbody·Rigidbody2D·ArticulationBody, Collider·Collider2D, Joint·Joint2D, ConstantForce·ConstantForce2D, Cloth, 기존 Animator/Animation을 `RequireComponent`가 막지 않는 순서로 제거하고, ParticleSystem의 Collision·Trigger 모듈을 끕니다.
