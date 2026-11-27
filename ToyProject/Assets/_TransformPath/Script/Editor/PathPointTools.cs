@@ -26,6 +26,9 @@ namespace Common.TransformPath.Editor
                 if (pathData == null)
                     continue;
 
+                // Edit Mode runs no physics step, and with auto sync off the colliders
+                // still sit where the last sync left them: a floor moved since would be missed.
+                Physics.SyncTransforms();
                 List<Transform> pathPoints = PathEditorSerializationUtility.GetPathPoints(pathData);
                 if (pathPoints.Count == 0)
                 {
@@ -154,7 +157,10 @@ namespace Common.TransformPath.Editor
         public static bool CanCreatePoints(PathData pathData) =>
             pathData != null && !EditorUtility.IsPersistent(pathData);
 
-        /// <summary>Uses the descendants whose names start with PathPoint, in hierarchy order.</summary>
+        /// <summary>
+        /// Uses the descendants whose names start with PathPoint, in hierarchy order.
+        /// A path with fewer than two of them keeps its points.
+        /// </summary>
         public static void RefreshFromChildren(IReadOnlyList<PathData> paths)
         {
             for (int i = 0; i < paths.Count; i++)
@@ -168,15 +174,19 @@ namespace Common.TransformPath.Editor
                     pathData.transform,
                     collected,
                     PATH_POINT_NAME_PREFIX);
-                SetPathPoints(pathData, collected);
-                if (collected.Count < 2)
+                // Too few matches would leave a path that cannot build; keep the current points.
+                if (collected.Count < PathConstants.MIN_PATH_POINTS)
+                {
                     Debug.LogWarning(
-                        $"PathData: {collected.Count} descendant(s) start with '{PATH_POINT_NAME_PREFIX}'; a path needs at least 2.",
+                        $"PathData: {collected.Count} descendant(s) start with '{PATH_POINT_NAME_PREFIX}'; "
+                        + $"a path needs at least {PathConstants.MIN_PATH_POINTS}, so its points were kept.",
                         pathData);
-                else
-                    Debug.Log(
-                        $"PathData: set _pathPoints to {collected.Count} descendant(s).",
-                        pathData);
+                    continue;
+                }
+                SetPathPoints(pathData, collected);
+                Debug.Log(
+                    $"PathData: set _pathPoints to {collected.Count} descendant(s).",
+                    pathData);
             }
             PathEditorUndoUtility.RepaintScene();
         }
