@@ -431,6 +431,79 @@ namespace Common.TransformPath.Tests
         }
 
         [Test]
+        public void MemberMovedOrCopiedUnderAnotherManager_StartsInThatManager()
+        {
+            PathData first = Line(10f, 2f);
+            PathData second = Line(12f, 2f);
+            QueuedPathManager firstManager = CreateManager(first);
+            QueuedPathManager secondManager = CreateManager(second);
+            PathQueueMember member = CreateMember();
+            member.transform.SetParent(firstManager.transform);
+            WakeMember(member);
+
+            member.transform.SetParent(secondManager.transform);
+            Assert.AreSame(secondManager, member.Manager);
+            Assert.IsTrue(member.StartQueuedPlayback(PathPlaybackRequest.Single(second)));
+            Assert.AreSame(secondManager, member.ActiveManager);
+
+            member.transform.SetParent(firstManager.transform);
+            GameObject copyHost = Object.Instantiate(member.gameObject, secondManager.transform);
+            _objects.Add(copyHost);
+            var copy = copyHost.GetComponent<PathQueueMember>();
+            copy.Follower.Initialize();
+            _driver.Register(copy.Follower);
+            Assert.AreSame(secondManager, copy.Manager);
+            Assert.IsTrue(copy.StartQueuedPlayback(PathPlaybackRequest.Single(second)));
+            Assert.AreSame(secondManager, copy.ActiveManager);
+        }
+
+        [Test]
+        public void PlayOnStart_SkipsAQueueMemberWhoseManagerIsOnAParent()
+        {
+            PathData path = Line(10f, 2f);
+            QueuedPathManager manager = CreateManager(path);
+            PathQueueMember member = CreateMember();
+            member.transform.SetParent(manager.transform);
+            SetPlayOnStart(member.Follower, path);
+
+            LogAssert.Expect(LogType.Warning, new Regex("skips Play On Start"));
+            Assert.IsFalse(member.Follower.TryPlayOnStart());
+            Assert.AreEqual(EPathFollowerState.Ready, member.Follower.State);
+        }
+
+        [Test]
+        public void EditingADisabledValueChange_KeepsThePlayback()
+        {
+            PathData path = Line(30f, 3f);
+            PathEventSettingSO setting = _scene.CreateEvent("quiet");
+            _scene.SetEvents(path, (0.8f, setting));
+            path.Rebuild();
+            QueuedPathManager manager = CreateManager(path);
+            PathQueueMember member = CreateMember();
+            member.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+            PathFollower follower = CreateFollower();
+            follower.Play(PathPlaybackRequest.Single(path));
+            Frames(10);
+            int definition = path.DefinitionRevision;
+
+            setting.SpeedTarget = 3f;
+            setting.SpeedBlendTime = 0.4f;
+            setting.SpeedBlendCurve = AnimationCurve.Linear(0f, 0f, 1f, 1f);
+            setting.DurationTarget = 2f;
+            setting.DurationBlendTime = 1f;
+            path.Rebuild();
+            Frames(2);
+
+            Assert.AreEqual(definition, path.DefinitionRevision);
+            Assert.AreEqual(EPathFollowerState.Moving, follower.State);
+            Assert.IsTrue(member.IsInQueue);
+
+            setting.UseSpeedChange = true;
+            path.Rebuild();
+            Assert.AreEqual(definition + 1, path.DefinitionRevision);
+        }
+
+        [Test]
         public void PlayOnStart_PlaysItsProvider_ButNotForAQueueMemberWithAManager()
         {
             PathData path = Line(10f, 2f);
@@ -1394,6 +1467,35 @@ namespace Common.TransformPath.Tests
         }
 
         [Test]
+        public void MemberWithMinimumSpeedZero_ReachesTheGapAndIsBlocked()
+        {
+            foreach (float length in new[] { 5f, 10f, 30f })
+            {
+                PathData path = Line(length, 3f);
+                QueuedPathManager manager = CreateManager(path);
+                manager.MinSpeedMultiplier = 0f;
+                var serialized = new UnityEditor.SerializedObject(manager);
+                serialized.FindProperty("_slowdownCurve").animationCurveValue = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+                PathQueueMember leader = CreateMember();
+                PathQueueMember member = CreateMember();
+                leader.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+                leader.Follower.Seek(0.6f);
+                leader.Hold();
+                member.StartQueuedPlayback(manager, PathPlaybackRequest.Single(path));
+                member.Follower.Seek(0.1f);
+                Frames(900);
+                float settled = member.Follower.Progress;
+                Frames(10);
+
+                Assert.AreEqual(settled, member.Follower.Progress, 1e-7f, $"Not stopped yet at length {length}");
+                Assert.IsTrue(manager.TryGetMemberStatus(member, out PathQueueStatus status));
+                Assert.IsTrue(status.IsBlocked, $"Status not blocked at length {length}");
+                Assert.IsTrue(member.IsBlocked, $"Member not blocked at length {length}");
+            }
+        }
+
+        [Test]
         public void MemberStoppedAtTheGap_IsBlocked_WhateverTheRouteLength()
         {
             var random = new System.Random(7);
@@ -1794,6 +1896,12 @@ namespace Common.TransformPath.Tests
                 .Invoke(provider, null);
             Object.DestroyImmediate(provider.gameObject);
         }
+
+        // What Play Mode runs when a member wakes, if it declares an Awake; Edit Mode does not.
+        private static void WakeMember(PathQueueMember member) =>
+            typeof(PathQueueMember)
+                .GetMethod("Awake", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                ?.Invoke(member, null);
 
         private static void DestroyMember(PathQueueMember member)
         {

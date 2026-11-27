@@ -154,6 +154,28 @@ namespace Common.TransformPath.Tests
         }
 
         [Test]
+        public void ZeroDelayPauseAndDelayedResumeInOneList_Resumes()
+        {
+            PathData path = Line(PathMovementSettings.Speed(2f));
+            PathEventSettingSO pause = _scene.CreateEvent("pause");
+            pause.Lifecycle = EPathEventLifecycle.Pause;
+            PathEventSettingSO resume = _scene.CreateEvent("resume");
+            resume.Lifecycle = EPathEventLifecycle.Resume;
+            PathEventSettingSO stop = _scene.CreateEvent("stop");
+            stop.DelayedEvents.Add(new PathEventSettingSO.DelayedEventEntry { Delay = 0f, EventSetting = pause });
+            stop.DelayedEvents.Add(new PathEventSettingSO.DelayedEventEntry { Delay = 0.5f, EventSetting = resume });
+            _scene.SetEvents(path, (0.1f, stop));
+            var recorder = new RecordingPlayback();
+            recorder.Playback.Play(PathPlaybackRequest.Single(path));
+
+            recorder.Frames(40);
+            Assert.AreEqual(EPathFollowerState.Paused, recorder.Playback.State);
+            recorder.Frames(40);
+
+            Assert.AreEqual(EPathFollowerState.Moving, recorder.Playback.State);
+        }
+
+        [Test]
         public void PauseEvent_ResumesThroughItsDelayedEvent_WithTheResumeValue()
         {
             PathData path = Line(PathMovementSettings.Time(6f));

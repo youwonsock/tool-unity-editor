@@ -9,6 +9,17 @@ namespace Common.TransformPath.Tests
             new PathQueueStatus(null, distance, 1.5f, blocked, multiplier, 1f);
 
         [Test]
+        public void SpeedMultiplier_ShortOfTheSpacing_KeepsAnApproachSpeed()
+        {
+            AnimationCurve ease = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
+
+            Assert.AreEqual(0f, PathQueueCoordinator.CalculateSpeedMultiplier(true, 1.5f, 1.5f, 1.5f, 0f, ease));
+            Assert.AreEqual(PathConstants.MIN_APPROACH_SPEED_MULTIPLIER,
+                PathQueueCoordinator.CalculateSpeedMultiplier(true, 1.501f, 1.5f, 1.5f, 0f, ease), 1e-6f);
+            Assert.AreEqual(0.5f, PathQueueCoordinator.CalculateSpeedMultiplier(true, 2.25f, 1.5f, 1.5f, 0f, ease), 1e-5f);
+        }
+
+        [Test]
         public void SpeedMultiplier_SlowsBetweenSpacingAndSlowdownDistance()
         {
             AnimationCurve linear = AnimationCurve.Linear(0f, 0f, 1f, 1f);

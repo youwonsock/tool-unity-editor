@@ -74,6 +74,45 @@ namespace Common.TransformPath.Tests
         }
 
         [Test]
+        public void SnapToGround_FindsGroundMovedSinceTheLastPhysicsSync()
+        {
+            bool autoSync = Physics.autoSyncTransforms;
+            Physics.autoSyncTransforms = false;
+            try
+            {
+                GameObject ground = Track(GameObject.CreatePrimitive(PrimitiveType.Cube));
+                ground.transform.position = Away + new Vector3(0f, -0.5f, 0f);
+                ground.transform.localScale = new Vector3(20f, 1f, 20f);
+                PathData path = PathAt(Away + new Vector3(0f, 5f, 0f), Away + new Vector3(5f, 5f, 0f));
+                Physics.SyncTransforms();
+                ground.transform.position = Away + new Vector3(0f, 1.5f, 0f);
+
+                PathPointTools.SnapToGround(new List<PathData> { path });
+
+                foreach (Transform point in path.PathPoints)
+                    Assert.AreEqual(2f, point.position.y, 1e-4f);
+            }
+            finally
+            {
+                Physics.autoSyncTransforms = autoSync;
+            }
+        }
+
+        [Test]
+        public void RefreshFromChildren_WithFewerThanTwoMatches_KeepsThePoints()
+        {
+            PathData path = PathAt(Away, Away + new Vector3(5f, 0f, 0f));
+            var points = new List<Transform>(path.PathPoints);
+            var only = new GameObject("PathPoint Only");
+            only.transform.SetParent(path.transform, false);
+
+            LogAssert.Expect(LogType.Warning, new Regex("points were kept"));
+            PathPointTools.RefreshFromChildren(new List<PathData> { path });
+
+            CollectionAssert.AreEqual(points, path.PathPoints);
+        }
+
+        [Test]
         public void SnapToGround_PassesThroughTriggers()
         {
             GameObject ground = Track(GameObject.CreatePrimitive(PrimitiveType.Cube));
