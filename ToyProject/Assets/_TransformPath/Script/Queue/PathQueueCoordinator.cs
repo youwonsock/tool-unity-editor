@@ -53,7 +53,9 @@ namespace Common.TransformPath
             float t = Mathf.Clamp01((distance.Value - spacing) / slowdownRange);
             // An empty curve, as Unity loads an unset one, slows down linearly.
             float curveValue = PathValueUtility.IsUsableCurve(slowdownCurve) ? Mathf.Clamp01(slowdownCurve.Evaluate(t)) : t;
-            return Mathf.Lerp(minSpeedMultiplier, 1f, curveValue);
+            // Short of the spacing it keeps a little speed: with a minimum of 0 and a
+            // curve that flattens at 0 it would otherwise only creep toward the gap.
+            return Mathf.Max(PathConstants.MIN_APPROACH_SPEED_MULTIPLIER, Mathf.Lerp(minSpeedMultiplier, 1f, curveValue));
         }
 
         /// <summary>

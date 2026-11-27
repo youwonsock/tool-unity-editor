@@ -70,12 +70,13 @@ namespace Common.TransformPath
         }
 
         /// <summary>
-        /// The manager <see cref="StartQueuedPlayback(PathPlaybackRequest)"/> uses.
-        /// Unset, a start uses the one on a parent, which Awake assigns here.
+        /// The manager <see cref="StartQueuedPlayback(PathPlaybackRequest)"/> uses: the
+        /// assigned one, or else the one on a parent now, so a member moved or copied
+        /// under another manager starts there.
         /// </summary>
         public QueuedPathManager Manager
         {
-            get => _manager;
+            get => ResolveManager();
             set => _manager = value;
         }
 
@@ -145,11 +146,8 @@ namespace Common.TransformPath
             remove => _invalidated.Remove(value);
         }
 
-        private void Awake() => _manager = ResolveManager();
-
-        // Without an assigned manager, the one on a parent. A sibling's OnEnable or
-        // another object's Awake can start this member before its own Awake, so a
-        // start looks it up too, without writing the serialized field.
+        // Without an assigned manager, the one on a parent at the time of asking. It
+        // is never written back, so the serialized field keeps only an assignment.
         private QueuedPathManager ResolveManager() =>
             _manager != null ? _manager : GetComponentInParent<QueuedPathManager>();
 
@@ -172,7 +170,7 @@ namespace Common.TransformPath
 
         #region Commands
 
-        /// <summary>Plays in the Inspector's manager.</summary>
+        /// <summary>Plays in <see cref="Manager"/>: the assigned manager, or else the one on a parent.</summary>
         public bool StartQueuedPlayback(PathPlaybackRequest request) => StartQueuedPlayback(ResolveManager(), request);
 
         /// <summary>

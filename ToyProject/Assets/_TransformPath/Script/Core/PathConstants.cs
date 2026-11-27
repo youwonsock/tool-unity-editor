@@ -22,6 +22,8 @@ namespace Common.TransformPath
         /// <summary>Distance beyond the spacing over which a queue member slows down.</summary>
         public const float DEFAULT_SLOWDOWN_RANGE = 1.5f;
         public const float DEFAULT_MIN_SPEED_MULTIPLIER = 0.1f;
+        /// <summary>Lowest speed multiplier of a queue member still short of its spacing, so it reaches the gap.</summary>
+        public const float MIN_APPROACH_SPEED_MULTIPLIER = 0.01f;
         public const float DEFAULT_RESUME_DELAY = 0.1f;
         public const float DEFAULT_UNBLOCK_HYSTERESIS = 0.3f;
         public const float DEFAULT_SPEED_SMOOTH_RATE = 5f;
