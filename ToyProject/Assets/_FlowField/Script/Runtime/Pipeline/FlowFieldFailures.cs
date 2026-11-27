@@ -37,6 +37,11 @@ namespace Common.FlowField
         internal static InvalidOperationException DestroyedCollider()
             => new InvalidOperationException("Cannot register a destroyed Collider.");
 
+        /// <summary>A world Goal is the world's: its areas keep it, so a Manager cannot move or remove it.</summary>
+        internal static InvalidOperationException WorldGoalChange()
+            => new InvalidOperationException(
+                "A world Goal changes only through its FlowFieldWorld: call FlowFieldWorld.SetGoal or RemoveGoal.");
+
         internal static InvalidOperationException ModifierNotRegistered()
             => new InvalidOperationException("Modifier is not registered.");
 

@@ -13,8 +13,9 @@ namespace Common.FlowField.Tests
     /// Goal with the same steps as one Manager over both, in both space modes;
     /// a mover following the world's samples crosses the border and arrives;
     /// a change notified across the border stops the step into it at once; a
-    /// Goal no area holds leads to the outer border nearest it; and an area
-    /// that leaves takes its field with it while the others keep theirs.
+    /// Goal no area holds leads to the outer border nearest it; an area that
+    /// leaves takes its field with it while the others keep theirs; and an
+    /// area Manager refuses to move or remove a world Goal.
     /// </summary>
     [TestFixture, Category("World")]
     internal sealed class WorldGoalTests : FlowFieldPlayTestBase
@@ -176,6 +177,35 @@ namespace Common.FlowField.Tests
                 reached = fieldB != null
                     && fieldB.Goal.Distances[fieldB.Grid.ToFlatIndex(9, 5)] != FlowFieldGoalLayer.Unreachable;
             }
+        }
+
+        // An area Manager reads a world Goal with its handle but refuses to
+        // move or remove it; the world removes it from every area.
+        [UnityTest, Timeout(300000)]
+        public IEnumerator AreaManagerRefusesWorldGoalChanges()
+        {
+            yield return EnterEmptyPlayMode();
+            FlowFieldWorld world = CreateWorld(FlowFieldSpaceMode.Surface2D);
+            CreateGround();
+            FlowFieldManager a = CreateManager("A", FlowFieldSpaceMode.Surface2D, Vector3.zero, new Vector3(10f, 4f, 10f), world);
+            FlowFieldManager b = CreateManager("B", FlowFieldSpaceMode.Surface2D, new Vector3(10f, 0f, 0f), new Vector3(10f, 4f, 10f), world);
+            yield return WaitUntilSettled(a, b);
+            FlowFieldGoalHandle goal = world.AddGoal(FlowFieldGoalKind.Shared, FlowFieldGoalRequest.Position(new Vector3(1.5f, 0f, 5.5f)));
+            yield return WaitUntilSettled(a, b, world, goal);
+
+            const string refused = "A world Goal changes only through its FlowFieldWorld: call FlowFieldWorld.SetGoal or RemoveGoal.";
+            var remove = Assert.Throws<System.InvalidOperationException>(() => b.RemoveGoal(goal));
+            Assert.That(remove.Message, Is.EqualTo(refused));
+            var move = Assert.Throws<System.InvalidOperationException>(
+                () => b.SetGoal(goal, FlowFieldGoalRequest.Position(new Vector3(15.5f, 0f, 5.5f))));
+            Assert.That(move.Message, Is.EqualTo(refused));
+            Assert.That(b.Session.Goals.Find(goal.Id), Is.Not.Null, "The refused call removed the Goal.");
+            Assert.That(b.IsGoalReady(goal), Is.True);
+
+            Assert.That(world.RemoveGoal(goal), Is.True);
+            yield return null;
+            Assert.That(a.IsGoalReady(goal) || b.IsGoalReady(goal), Is.False, "The world left the Goal in an area.");
+            Assert.That(b.RemoveGoal(goal), Is.False, "The handle names no Goal after the world removed it.");
         }
 
         private static Vector3 Flat(Vector3 position, bool volume) => volume ? position : new Vector3(position.x, 0f, position.z);

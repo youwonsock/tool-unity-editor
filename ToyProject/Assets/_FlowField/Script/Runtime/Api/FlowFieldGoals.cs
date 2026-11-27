@@ -22,7 +22,8 @@ namespace Common.FlowField
     /// An additional Goal of a Manager, besides its default Goal. Each one gets its own field on
     /// the same ground and obstacles. The default value names no Goal, and a handle stops naming
     /// its Goal once it is removed or the session is released; it never names a later Goal or a
-    /// Goal of another Manager.
+    /// Goal of another Manager. A world Goal's handle, from <see cref="FlowFieldWorld.AddGoal"/>,
+    /// names that Goal in every area of the world.
     /// </summary>
     public readonly struct FlowFieldGoalHandle : IEquatable<FlowFieldGoalHandle>
     {

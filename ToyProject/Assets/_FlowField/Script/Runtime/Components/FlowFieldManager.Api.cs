@@ -251,6 +251,7 @@ namespace Common.FlowField
                 throw MissingGoal(nameof(request));
             if (!goal.IsValid)
                 return false;
+            ThrowIfWorldGoal(goal);
             using (EnterFanOut())
             {
                 if (!ActiveSession.SetGoalCommand(goal.Id, request))
@@ -272,6 +273,7 @@ namespace Common.FlowField
                 ThrowIfLifecycleUnavailable();
             if (!goal.IsValid)
                 return false;
+            ThrowIfWorldGoal(goal);
             using (EnterFanOut())
             {
                 if (!ActiveSession.RemoveGoalCommand(goal.Id))
@@ -280,6 +282,14 @@ namespace Common.FlowField
                     _agentSessions[i].RemoveGoalCommand(goal.Id);
                 return true;
             }
+        }
+
+        // A world Goal is in every area under one handle and its world adds it
+        // back to an area that lacks it, so only the world moves or removes it.
+        private void ThrowIfWorldGoal(FlowFieldGoalHandle goal)
+        {
+            if (ActiveSession?.Goals.Find(goal.Id) is { World: true })
+                throw FlowFieldFailures.WorldGoalChange();
         }
 
         /// <inheritdoc/>

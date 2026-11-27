@@ -334,7 +334,7 @@ Manager의 Obstacle Clearance, Max Slope, Max Step Height가 `Default` 유형입
   - Init이 world에 들어가고 Release와 파괴(장면 내림 포함)가 나옵니다. World 칸은 Release 뒤에만 바뀌고, Play 중 설정 편집으로 격자가 움직이면 영역도 움직입니다.
   - 두 영역의 상자가 한 셀 안에서 만나면 닿는 영역이고, 그 사이 이웃 걸음(경계 칸 쌍, `FlowFieldWorldAreas`)을 미리 찾아 둡니다.
 - **World Goal:**
-  - `FlowFieldWorld.AddGoal`이 만든 Goal은 모든 영역의 모든 Agent 유형 세션에 같은 번호의 [추가 Goal](#추가-goal)이 됩니다. 그래서 world의 `TrySample`이나 각 영역 Manager가 같은 핸들로 읽습니다. 영향 반경은 0이어야 합니다.
+  - `FlowFieldWorld.AddGoal`이 만든 Goal은 모든 영역의 모든 Agent 유형 세션에 같은 번호의 [추가 Goal](#추가-goal)이 됩니다. 그래서 world의 `TrySample`이나 각 영역 Manager가 같은 핸들로 읽습니다. 영향 반경은 0이어야 합니다. 옮기고 지우는 것은 world만 합니다. world가 없는 영역에 Goal을 다시 넣으므로, 영역 Manager의 `SetGoal`·`RemoveGoal`은 world Goal 핸들을 거부합니다.
   - 탐색은 seed(`FlowFieldGoalSeeds`)에서 시작합니다. Goal을 품은 영역은 Goal 칸에서, 모든 영역은 닿는 영역의 걸음 수 + 1에서 시작합니다. 경계를 넘는 걸음은 그 유형의 연결 규칙을 따릅니다. Surface2D는 두 칸 모두 걸을 수 있고 Max Step Height 안이며 대각선은 양옆 칸까지, Volume3D는 두 칸이 열려 있고 대각선은 지나는 모서리 칸까지입니다.
   - Goal 칸이 막혔거나 지면이 없으면, Goal을 품은 영역 안에서 가장 가까운(칸 거리 제곱, 같으면 낮은 번호) 걸을 수 있는 칸에서 시작합니다.
   - 풀이는 seed를 비용 순으로 큐 사이에 넣어 한 출발점 탐색처럼 칸을 비용 순으로 내보냅니다. 영역 안에 더 가까운 칸이 없는 seed 칸은 경계 너머로 걷습니다(`FlowFieldNextCell.Portal`). 그래서 닿는 두 영역은 둘을 덮는 Manager 하나와 모든 칸의 걸음 수가 같습니다. 방향은 경계 칸에서 다를 수 있습니다. 영역 안의 같은 걸음 수 칸을 경계 너머 걸음보다 먼저 고르기 때문입니다.

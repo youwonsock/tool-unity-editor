@@ -80,7 +80,8 @@ namespace Common.FlowField
         /// <returns>False when the handle names no Goal of this Manager.</returns>
         /// <exception cref="System.ArgumentException"><paramref name="request"/> has no Goal.</exception>
         /// <exception cref="System.InvalidOperationException">
-        /// Not initialized, faulted, or called from Modifier code.
+        /// Not initialized, faulted, called from Modifier code, or the handle names a world Goal,
+        /// which moves through <see cref="FlowFieldWorld.SetGoal"/>.
         /// </exception>
         bool SetGoal(FlowFieldGoalHandle goal, in FlowFieldGoalRequest request);
         /// <summary>
@@ -89,7 +90,8 @@ namespace Common.FlowField
         /// </summary>
         /// <returns>False when the handle names no Goal of this Manager.</returns>
         /// <exception cref="System.InvalidOperationException">
-        /// Not initialized and not faulted, or called from Modifier code.
+        /// Not initialized and not faulted, called from Modifier code, or the handle names a world
+        /// Goal, which leaves through <see cref="FlowFieldWorld.RemoveGoal"/>.
         /// </exception>
         bool RemoveGoal(FlowFieldGoalHandle goal);
         /// <summary>
