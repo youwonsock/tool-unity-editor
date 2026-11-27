@@ -6,7 +6,8 @@ using UnityEngine;
 namespace Common.OptimizeTool.PhysicsRecording
 {
     /// <summary>
-    /// Records the local poses of a Rigidbody hierarchy after physics steps in editor Play Mode, then saves its clip
+    /// Records the local poses of a Rigidbody hierarchy after physics steps in editor Play Mode, and the steps at which
+    /// its GameObjects turn on or off, then saves its clip
     /// (a Legacy clip with a physics-free prefab that plays it, or a Generic clip for an Animator) and, optionally,
     /// the unreduced observations as a reference.
     /// </summary>
@@ -112,15 +113,12 @@ namespace Common.OptimizeTool.PhysicsRecording
             // Include parents without a Rigidbody too, so their motion is preserved in local space.
             Transform[] tracks = _root.GetComponentsInChildren<Transform>(true);
             var paths = new string[tracks.Length];
-            var hidden = new bool[tracks.Length];
             var unique = new HashSet<string>(StringComparer.Ordinal);
             for (int i = 0; i < tracks.Length; i++)
             {
                 paths[i] = AnimationPath(tracks[i], _root);
                 if (tracks[i].name.Contains("/") || !unique.Add(paths[i]))
                     throw new InvalidOperationException($"Animation paths must be unique and names cannot contain '/': {paths[i]}");
-                // The clip keeps an inactive child hidden; active state changes during the take are not recorded.
-                hidden[i] = i > 0 && !tracks[i].gameObject.activeSelf;
             }
 
             Result = null;
@@ -131,7 +129,7 @@ namespace Common.OptimizeTool.PhysicsRecording
             _paths.UnionWith(paths);
             foreach (Transform tf in tracks) _snapshots.Add(new TrackSnapshot(tf));
             _started = false;
-            _take = new PhysicsTake(paths, hidden);
+            _take = new PhysicsTake(paths);
             _exporter = exporter;
             exporter.BeginTake();
             _routine = StartCoroutine(RecordAfterPhysics());
@@ -181,6 +179,7 @@ namespace Common.OptimizeTool.PhysicsRecording
                     }
                     float elapsed = (float)(Time.fixedTimeAsDouble - _startTime);
                     AddSpawnedTracks(elapsed);
+                    _take.ObserveActive(elapsed, _tracks);
                     end = elapsed >= _duration;
                     if (end || _take.IsDue(elapsed, _settings.SampleInterval, tolerance))
                     {
@@ -209,7 +208,7 @@ namespace Common.OptimizeTool.PhysicsRecording
 
         /// <summary>
         /// Adds every active Rigidbody that appeared under the root since the last step, with the new Transforms
-        /// above it. Each is hidden in the clip until the time it appeared.
+        /// above it. Each is hidden in the clip until the step it appeared.
         /// </summary>
         private void AddSpawnedTracks(float elapsed)
         {

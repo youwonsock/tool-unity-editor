@@ -49,7 +49,7 @@ namespace Common.OptimizeTool.PhysicsRecording.Editor
                 {
                     previewScene = EditorSceneManager.NewPreviewScene();
                     playback = CreatePlaybackCopy(root, previewScene, settings.ClipName);
-                    HoldFirstPoses(playback.transform, take, built.Omitted);
+                    ApplyStartState(playback.transform, take, built.Omitted);
                     clip.SampleAnimation(playback, 0f);
                 }
                 if (settings.SaveReference)
@@ -128,15 +128,20 @@ namespace Common.OptimizeTool.PhysicsRecording.Editor
             return playback;
         }
 
-        /// <summary>A track without curves keeps the first recorded pose, which its error is measured against.</summary>
-        private static void HoldFirstPoses(Transform playback, PhysicsTake take, bool[] omitted)
+        /// <summary>
+        /// Gives the copy, which was cloned at the end of the take, the take's first frame: every child's start active
+        /// state, and the first recorded pose of each track without curves, which its error is measured against.
+        /// </summary>
+        private static void ApplyStartState(Transform playback, PhysicsTake take, bool[] omitted)
         {
             for (int track = 0; track < take.TrackCount; track++)
             {
-                if (!omitted[track]) continue;
                 string path = take.Paths[track];
                 Transform tf = path.Length == 0 ? playback : playback.Find(path);
                 if (tf == null) throw new InvalidOperationException($"The recorded Transform '{path}' is missing from the playback copy.");
+                // The root is activated when its Animation is attached.
+                if (path.Length > 0) tf.gameObject.SetActive(take.StartsActive(track));
+                if (!omitted[track]) continue;
                 Pose first = take.PoseAt(track, 0);
                 tf.SetLocalPositionAndRotation(first.position, first.rotation);
             }

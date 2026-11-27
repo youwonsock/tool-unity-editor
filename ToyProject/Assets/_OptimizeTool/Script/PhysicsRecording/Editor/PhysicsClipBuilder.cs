@@ -65,7 +65,7 @@ namespace Common.OptimizeTool.PhysicsRecording.Editor
                         omittedCount++;
                         error.MeasureStill(take, track);
                     }
-                    if (take.VisibleFrom(track) > 0f) SetVisibility(clip, take, track);
+                    SetActiveCurve(clip, take, track);
                 }
                 return new PhysicsClip
                 {
@@ -194,17 +194,23 @@ namespace Common.OptimizeTool.PhysicsRecording.Editor
             (values[k + 1] - values[k]) / (take.TimeAt(keys[k + 1]) - take.TimeAt(keys[k]));
 
         /// <summary>
-        /// Hides a track with a stepped GameObject active curve: until the time it appeared, or for the whole take when
-        /// it was inactive at the start.
+        /// Plays the track's recorded on and off steps with a stepped GameObject active curve from its start state to the
+        /// end of the take. A track that stays active the whole take gets no curve.
         /// </summary>
-        private static void SetVisibility(AnimationClip clip, PhysicsTake take, int track)
+        private static void SetActiveCurve(AnimationClip clip, PhysicsTake take, int track)
         {
-            float visibleFrom = take.VisibleFrom(track), end = take.Duration;
-            AnimationCurve curve;
-            if (float.IsPositiveInfinity(visibleFrom))
-                curve = end > 0f ? new AnimationCurve(Step(0f, 0f), Step(end, 0f)) : new AnimationCurve(Step(0f, 0f));
-            else curve = new AnimationCurve(Step(0f, 0f), Step(Mathf.Min(visibleFrom, end), 1f));
-            clip.SetCurve(take.Paths[track], typeof(GameObject), "m_IsActive", curve);
+            bool active = take.StartsActive(track);
+            IReadOnlyList<PhysicsTake.ActiveChange> changes = take.ActiveChanges(track);
+            if (active && changes.Count == 0) return;
+            float end = take.Duration;
+            var keys = new List<Keyframe> { Step(0f, active ? 1f : 0f) };
+            foreach (PhysicsTake.ActiveChange change in changes)
+            {
+                active = change.Active;
+                keys.Add(Step(change.Time, active ? 1f : 0f));
+            }
+            if (keys[keys.Count - 1].time < end) keys.Add(Step(end, active ? 1f : 0f));
+            clip.SetCurve(take.Paths[track], typeof(GameObject), "m_IsActive", new AnimationCurve(keys.ToArray()));
         }
 
         private static Keyframe Step(float time, float value) =>
