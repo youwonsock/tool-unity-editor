@@ -80,11 +80,6 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
                 Mesh[] meshes = result.GetMeshes();
                 List<string> paths = OutputPaths(folder, combiner.MeshName, meshes.Length, settings.CombineAllIntoSingleMesh);
                 MeshSceneEdit edit = MeshSceneEdit.Begin();
-                if (!edit.IsPersistent)
-                {
-                    PlayModeMeshGuard.Capture(combiner, ResultFilters(combiner));
-                    PlayModeMeshGuard.RequireUnprotected(combiner, paths);
-                }
                 // Without a scene output there is no callback, so each new asset is serialized once.
                 Action<Mesh[]> apply = combiner.CreateSceneOutput
                     ? written => MeshSceneOutput.Apply(combiner, written, result, edit)
@@ -138,8 +133,8 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
         public static void RestoreSources(this MeshCombiner combiner)
         {
             MeshSceneEdit edit = MeshSceneEdit.Begin("Restore combined sources");
-            // The Edit Mode result stays protected after Restore removes it from the Play Mode scene.
-            if (!edit.IsPersistent) PlayModeMeshGuard.Capture(combiner, ResultFilters(combiner));
+            // A scene loaded during Play Mode is recorded before Restore removes its Edit Mode result.
+            if (!edit.IsPersistent) PlayModeMeshGuard.RecordLoadedScenes();
             try { MeshSceneOutput.Restore(combiner, edit); }
             catch
             {
@@ -147,20 +142,6 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
                 throw;
             }
             edit.Commit();
-        }
-
-        private static IEnumerable<MeshFilter> ResultFilters(MeshCombiner combiner) => combiner.GeneratedRoot != null
-            ? combiner.GeneratedRoot.GetComponentsInChildren<MeshFilter>(true) : Array.Empty<MeshFilter>();
-
-        /// <summary>The MeshFilters a bake or restore of this baker can change: its records and its current targets.</summary>
-        private static IEnumerable<MeshFilter> BakerFilters(BackfaceCullMeshBaker baker)
-        {
-            foreach (BakedMeshOriginal record in baker.OriginalMeshes)
-                if (record.Filter != null) yield return record.Filter;
-            MeshFilter[] targets = baker.CollectChildMeshes ? baker.GetComponentsInChildren<MeshFilter>() : baker.TargetMeshFilters;
-            if (targets == null) yield break;
-            foreach (MeshFilter filter in targets)
-                if (filter != null) yield return filter;
         }
 
         /// <summary>
@@ -197,11 +178,6 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
             {
                 originals[i] = BakeSource(baker, filters[i]);
                 paths[i] = $"{folder}/{filters[i].name}_BackfaceCulled.asset";
-            }
-            if (!edit.IsPersistent)
-            {
-                PlayModeMeshGuard.Capture(baker, BakerFilters(baker));
-                PlayModeMeshGuard.RequireUnprotected(baker, paths);
             }
             var ownOutputs = new HashSet<Mesh>();
             foreach (string path in AssetFileTransaction.ValidateAssetPaths(paths))
@@ -252,7 +228,8 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
         public static void RestoreOriginalMeshes(this BackfaceCullMeshBaker baker)
         {
             MeshSceneEdit edit = MeshSceneEdit.Begin("Restore original meshes");
-            if (!edit.IsPersistent) PlayModeMeshGuard.Capture(baker, BakerFilters(baker));
+            // A scene loaded during Play Mode is recorded before the restore takes its Edit Mode result off.
+            if (!edit.IsPersistent) PlayModeMeshGuard.RecordLoadedScenes();
             try
             {
                 RecordBaker(baker, edit, "Restore original meshes");

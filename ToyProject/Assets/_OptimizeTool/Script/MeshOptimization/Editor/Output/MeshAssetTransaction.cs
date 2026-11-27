@@ -16,8 +16,9 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
         /// meshes. Existing meshes are overwritten in place so their GUIDs survive. If anything fails, the meshes are
         /// restored. In Edit Mode the call is one Undo step and every Undo-recorded change of <paramref name="apply"/> is
         /// reverted too; in Play Mode nothing is recorded with Undo, so the caller puts back what
-        /// <paramref name="apply"/> changed. When <paramref name="apply"/> also writes other asset files, wrap this call
-        /// in <see cref="AssetFileTransaction.Execute"/> with their paths.
+        /// <paramref name="apply"/> changed, and a path a loaded scene showed when Play Mode began is refused before any
+        /// write. When <paramref name="apply"/> also writes other asset files, wrap this call in
+        /// <see cref="AssetFileTransaction.Execute"/> with their paths.
         /// </summary>
         /// <param name="keepReadable">Keep Read/Write on the saved meshes. Off frees their CPU copy in Players.</param>
         public static Mesh[] Save(IList<Mesh> staged, IList<string> paths, bool overwrite, string undoName,
@@ -25,6 +26,7 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
         {
             bool undo = MeshSceneEdit.CurrentIsPersistent;
             var save = new Transaction(staged, paths, overwrite) { KeepReadable = keepReadable, RecordsUndo = undo };
+            if (!undo) PlayModeMeshGuard.RequireUnprotected(save.Paths);
             if (undo)
             {
                 Undo.IncrementCurrentGroup();
@@ -58,6 +60,7 @@ namespace Common.OptimizeTool.MeshOptimization.Editor
             private readonly List<string> _created = new List<string>();
 
             internal Mesh[] Saved { get; }
+            internal IReadOnlyList<string> Paths => _paths;
             internal int UndoGroup { get; set; }
             internal bool KeepReadable { get; set; }
             internal bool RecordsUndo { get; set; }
